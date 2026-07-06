@@ -246,6 +246,24 @@ body {
   color: var(--hr);
   border-color: rgba(251, 191, 36, 0.4);
 }
+.bulk-toggles {
+  display: flex;
+  gap: 8px;
+}
+.bulk-toggle {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.bulk-toggle:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
 
 /* ---- States ---- */
 .error-banner {
@@ -352,6 +370,27 @@ body {
 .remove-btn:hover {
   color: var(--strikeout);
   border-color: var(--strikeout);
+}
+.player-toggle {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+}
+.player-toggle:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.player-toggle .chevron {
+  /* .chevron defaults to margin-left: auto for flex-row toggles elsewhere;
+     this button centers it via place-items instead. */
+  margin-left: 0;
 }
 
 /* ---- Stat pills ---- */

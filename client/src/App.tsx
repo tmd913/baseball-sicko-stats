@@ -90,6 +90,7 @@ export default function App() {
   const [reports, setReports] = useState<PlayerReport[]>([]);
   const [reportLoading, setReportLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [collapsedIds, setCollapsedIds] = useState<Set<number>>(new Set());
 
   // Load the season's player list once, for search/autocomplete.
   useEffect(() => {
@@ -137,6 +138,17 @@ export default function App() {
   const onRemove = async (id: number) => {
     setWatchlist(await api.removePlayer(id));
   };
+
+  const toggleCollapsed = (id: number) => {
+    setCollapsedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const expandAll = () => setCollapsedIds(new Set());
+  const collapseAll = () => setCollapsedIds(new Set(reports.map((r) => r.id)));
 
   const totals = useMemo(() => {
     const played = reports.filter((r) => r.found);
@@ -215,6 +227,16 @@ export default function App() {
           <span className="chip accent">{totals.hits} hits</span>
           <span className="chip hr">{totals.hrs} HR</span>
         </div>
+        {reports.length > 0 && (
+          <div className="bulk-toggles">
+            <button type="button" className="bulk-toggle" onClick={expandAll}>
+              Expand all
+            </button>
+            <button type="button" className="bulk-toggle" onClick={collapseAll}>
+              Collapse all
+            </button>
+          </div>
+        )}
       </section>
 
       {error && <div className="error-banner">⚠ {error}</div>}
@@ -235,7 +257,13 @@ export default function App() {
 
       <main className="player-list">
         {reports.map((r) => (
-          <PlayerCard key={r.id} report={r} onRemove={onRemove} />
+          <PlayerCard
+            key={r.id}
+            report={r}
+            onRemove={onRemove}
+            collapsed={collapsedIds.has(r.id)}
+            onToggleCollapsed={() => toggleCollapsed(r.id)}
+          />
         ))}
       </main>
     </div>
