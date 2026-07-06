@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { PlateAppearance } from '../types';
 import { api } from '../api';
 import {
@@ -11,28 +11,34 @@ import {
 import { StrikeZone } from './StrikeZone';
 
 function VideoClip({ playId, gamePk }: { playId: string; gamePk: number }) {
-  const [state, setState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [state, setState] = useState<'checking' | 'available' | 'unavailable' | 'watching'>(
+    'checking',
+  );
   const [url, setUrl] = useState<string | null>(null);
 
-  const open = async () => {
-    if (url) {
-      setState('ready'); // already resolved — reopen instantly, no refetch
-      return;
-    }
-    setState('loading');
-    try {
-      setUrl(await api.video(playId, gamePk));
-      setState('ready');
-    } catch {
-      setState('error');
-    }
-  };
+  useEffect(() => {
+    let cancelled = false;
+    setState('checking');
+    api
+      .video(playId, gamePk)
+      .then((resolved) => {
+        if (cancelled) return;
+        setUrl(resolved);
+        setState('available');
+      })
+      .catch(() => {
+        if (!cancelled) setState('unavailable');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [playId, gamePk]);
 
-  if (state === 'ready' && url) {
+  if (state === 'watching' && url) {
     return (
       <div className="pa-video">
         <div className="pa-video-bar">
-          <button className="pa-hide" onClick={() => setState('idle')}>
+          <button className="pa-hide" onClick={() => setState('available')}>
             ✕ Hide video
           </button>
         </div>
@@ -41,19 +47,16 @@ function VideoClip({ playId, gamePk }: { playId: string; gamePk: number }) {
       </div>
     );
   }
-  return (
-    <button
-      className="pa-watch"
-      onClick={open}
-      disabled={state === 'loading'}
-    >
-      {state === 'loading'
-        ? 'Loading video…'
-        : state === 'error'
-          ? 'Video unavailable'
-          : '▶ Watch'}
-    </button>
-  );
+  if (state === 'available') {
+    return (
+      <button className="pa-watch" onClick={() => setState('watching')}>
+        ▶ Watch
+      </button>
+    );
+  }
+  // 'checking' and 'unavailable' render nothing — no button for clips that
+  // don't exist in either the official MLB highlights or the Savant fallback.
+  return null;
 }
 
 function PitchRow({

@@ -355,7 +355,7 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
       const pd = ev.pitchData;
       const hd = ev.hitData;
       if (hd) lastHit = hd;
-      if (ev.details?.isInPlay && ev.playId) lastPlayId = ev.playId;
+      if (ev.playId) lastPlayId = ev.playId;
       pitches.push({
         pitchNumber: ev.pitchNumber ?? pitches.length + 1,
         pitchType: pitchTypeName(ev.details?.type?.code, ev.details?.type?.description),
