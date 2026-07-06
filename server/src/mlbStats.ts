@@ -528,6 +528,14 @@ const BROWSER_UA =
 const MP4_RE = /https:\/\/sporty-clips\.mlb\.com\/[^"'\s)]+?\.mp4/;
 const videoCache = new Map<string, string | null>();
 
+/** Savant embeds the clip URL HTML-escaped (e.g. "=" as "&#x3D;"); undo that. */
+function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(parseInt(dec, 10)))
+    .replace(/&amp;/g, '&');
+}
+
 async function scrapeSavantVideoUrl(playId: string): Promise<string | null> {
   const res = await fetch(
     `https://baseballsavant.mlb.com/sporty-videos?playId=${encodeURIComponent(playId)}`,
@@ -535,7 +543,8 @@ async function scrapeSavantVideoUrl(playId: string): Promise<string | null> {
   );
   if (!res.ok) return null;
   const html = await res.text();
-  return html.match(MP4_RE)?.[0] ?? null;
+  const match = html.match(MP4_RE)?.[0];
+  return match ? decodeHtmlEntities(match) : null;
 }
 
 /**
