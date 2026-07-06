@@ -121,7 +121,7 @@ export function PlayerCard({
             )}
             <div className="pa-grid">
               {g.plateAppearances.map((pa) => (
-                <PlateAppearanceCard key={pa.atBatNumber} pa={pa} />
+                <PlateAppearanceCard key={pa.atBatNumber} pa={pa} gamePk={g.gamePk} />
               ))}
             </div>
           </div>

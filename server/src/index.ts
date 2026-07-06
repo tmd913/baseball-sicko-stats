@@ -117,7 +117,12 @@ app.get(
       res.status(400).json({ error: 'invalid playId' });
       return;
     }
-    const url = await resolveVideoUrl(playId);
+    const gamePk = Number(req.query.gamePk);
+    if (!Number.isInteger(gamePk) || gamePk <= 0) {
+      res.status(400).json({ error: 'gamePk (positive integer) required' });
+      return;
+    }
+    const url = await resolveVideoUrl(playId, gamePk);
     if (!url) {
       res.status(404).json({ error: 'no video for this play' });
       return;

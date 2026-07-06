@@ -41,8 +41,10 @@ export const api = {
   async report(date: string): Promise<{ date: string; players: PlayerReport[] }> {
     return json(await fetch(`/api/report?date=${date}`));
   },
-  async video(playId: string): Promise<string> {
-    const r = await json<{ url: string }>(await fetch(`/api/video/${playId}`));
+  async video(playId: string, gamePk: number): Promise<string> {
+    const r = await json<{ url: string }>(
+      await fetch(`/api/video/${playId}?gamePk=${gamePk}`),
+    );
     return r.url;
   },
 };

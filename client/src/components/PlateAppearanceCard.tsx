@@ -10,7 +10,7 @@ import {
 } from '../lib';
 import { StrikeZone } from './StrikeZone';
 
-function VideoClip({ playId }: { playId: string }) {
+function VideoClip({ playId, gamePk }: { playId: string; gamePk: number }) {
   const [state, setState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [url, setUrl] = useState<string | null>(null);
 
@@ -21,7 +21,7 @@ function VideoClip({ playId }: { playId: string }) {
     }
     setState('loading');
     try {
-      setUrl(await api.video(playId));
+      setUrl(await api.video(playId, gamePk));
       setState('ready');
     } catch {
       setState('error');
@@ -85,7 +85,13 @@ function PitchRow({
   );
 }
 
-export function PlateAppearanceCard({ pa }: { pa: PlateAppearance }) {
+export function PlateAppearanceCard({
+  pa,
+  gamePk,
+}: {
+  pa: PlateAppearance;
+  gamePk: number;
+}) {
   const kind = outcomeKind(pa.event);
   const contact = contactHighlight(pa);
   const inningLabel = `${pa.half === 'Top' ? '▲' : '▼'} ${pa.inning}`;
@@ -117,7 +123,7 @@ export function PlateAppearanceCard({ pa }: { pa: PlateAppearance }) {
         </div>
       )}
 
-      {pa.playId && <VideoClip playId={pa.playId} />}
+      {pa.playId && <VideoClip playId={pa.playId} gamePk={gamePk} />}
 
       <div className="pa-body">
         <div className="pa-pitches">

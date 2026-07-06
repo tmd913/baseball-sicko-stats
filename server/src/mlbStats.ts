@@ -417,30 +417,81 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
 
 // ---- Play video resolution -------------------------------------------------
 
+// The MLB Stats API's own game/content endpoint carries direct mp4/HLS URLs
+// for "highlight" plays (homers, notable hits/Ks, etc.) — the same endpoint
+// that powers mlb.com/gameday's video clips. Each highlight's `guid` is the
+// same Statcast playId already threaded through the rest of this app, so we
+// can join on it directly instead of scraping. Coverage is curated, though —
+// routine outs generally don't get a highlight clip — so this is tried first
+// and we fall back to scraping Baseball Savant's sporty-videos page (which
+// has a clip for essentially every play) when a playId has no highlight.
+interface ContentPlayback {
+  name?: string;
+  url?: string;
+}
+interface ContentHighlightItem {
+  guid?: string;
+  playbacks?: ContentPlayback[];
+}
+interface ContentResponse {
+  highlights?: { highlights?: { items?: ContentHighlightItem[] } };
+}
+
+const highlightMemCache = new Map<number, Map<string, string>>();
+
+async function getHighlightVideosByPlayId(gamePk: number): Promise<Map<string, string>> {
+  const cached = highlightMemCache.get(gamePk);
+  if (cached) return cached;
+  const text = await fetchCached(
+    `https://statsapi.mlb.com/api/v1/game/${gamePk}/content`,
+    `content-${gamePk}.json`,
+  );
+  const data = JSON.parse(text) as ContentResponse;
+  const items = data.highlights?.highlights?.items ?? [];
+  const byPlayId = new Map<string, string>();
+  for (const item of items) {
+    if (!item.guid) continue;
+    const mp4 = item.playbacks?.find((p) => p.name === 'mp4Avc')?.url;
+    if (mp4) byPlayId.set(item.guid, mp4);
+  }
+  highlightMemCache.set(gamePk, byPlayId);
+  return byPlayId;
+}
+
 const BROWSER_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
   '(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 const MP4_RE = /https:\/\/sporty-clips\.mlb\.com\/[^"'\s)]+?\.mp4/;
 const videoCache = new Map<string, string | null>();
 
-/**
- * Resolve the direct .mp4 URL for a Statcast playId by scraping the Savant
- * sporty-videos page. Cached (including negative results) since the mapping is
- * stable. Returns null if no clip is available.
- */
-export async function resolveVideoUrl(playId: string): Promise<string | null> {
-  const cached = videoCache.get(playId);
-  if (cached !== undefined) return cached;
+async function scrapeSavantVideoUrl(playId: string): Promise<string | null> {
   const res = await fetch(
     `https://baseballsavant.mlb.com/sporty-videos?playId=${encodeURIComponent(playId)}`,
     { headers: { 'User-Agent': BROWSER_UA } },
   );
-  if (!res.ok) {
-    videoCache.set(playId, null);
-    return null;
-  }
+  if (!res.ok) return null;
   const html = await res.text();
-  const url = html.match(MP4_RE)?.[0] ?? null;
+  return html.match(MP4_RE)?.[0] ?? null;
+}
+
+/**
+ * Resolve the direct video URL for a Statcast playId within a given game.
+ * Tries the official MLB game-content highlights first, falling back to
+ * scraping Baseball Savant for plays that weren't cut into a highlight.
+ * Cached (including negative results) since the mapping is stable.
+ */
+export async function resolveVideoUrl(playId: string, gamePk: number): Promise<string | null> {
+  const cached = videoCache.get(playId);
+  if (cached !== undefined) return cached;
+
+  let url: string | null = null;
+  try {
+    url = (await getHighlightVideosByPlayId(gamePk)).get(playId) ?? null;
+  } catch (err) {
+    console.error(`game content fetch failed for game ${gamePk}:`, err);
+  }
+  if (!url) url = await scrapeSavantVideoUrl(playId);
+
   videoCache.set(playId, url);
   return url;
 }
