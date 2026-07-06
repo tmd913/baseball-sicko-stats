@@ -73,6 +73,38 @@ export function isBigDay(line: BattingLine): boolean {
   return line.hr > 0 || line.hits >= 3 || line.totalBases >= 5;
 }
 
+/** Sum per-game batting lines into one aggregate line (e.g. across a date range). */
+export function combineLines(lines: BattingLine[]): BattingLine {
+  const sum = (f: (l: BattingLine) => number) => lines.reduce((s, l) => s + f(l), 0);
+  const max = (f: (l: BattingLine) => number | null) => {
+    const vals = lines.map(f).filter((v): v is number => v !== null && v > 0);
+    return vals.length ? Math.max(...vals) : null;
+  };
+  const runValues = lines.map((l) => l.runValue).filter((v): v is number => v !== null);
+  return {
+    pa: sum((l) => l.pa),
+    ab: sum((l) => l.ab),
+    hits: sum((l) => l.hits),
+    singles: sum((l) => l.singles),
+    doubles: sum((l) => l.doubles),
+    triples: sum((l) => l.triples),
+    hr: sum((l) => l.hr),
+    bb: sum((l) => l.bb),
+    so: sum((l) => l.so),
+    hbp: sum((l) => l.hbp),
+    runs: sum((l) => l.runs),
+    rbi: sum((l) => l.rbi),
+    sb: sum((l) => l.sb),
+    cs: sum((l) => l.cs),
+    totalBases: sum((l) => l.totalBases),
+    hardHits: sum((l) => l.hardHits),
+    avgExitVelo: null,
+    maxExitVelo: max((l) => l.maxExitVelo),
+    maxDistance: max((l) => l.maxDistance),
+    runValue: runValues.length ? runValues.reduce((a, b) => a + b, 0) : null,
+  };
+}
+
 export function fmt(n: number | null, digits = 0, suffix = ''): string {
   if (n === null || n === undefined || Number.isNaN(n)) return '—';
   return `${n.toFixed(digits)}${suffix}`;
@@ -121,6 +153,14 @@ export function isSwing(description: string): boolean {
   );
 }
 
+/** Short "Jul 3" style date, for disambiguating games across a date range. */
+export function prettyGameDate(date: string): string {
+  return new Date(`${date}T12:00:00`).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
 export function describePitch(description: string): string {
   return description.replace(/_/g, ' ');
 }
@@ -132,4 +172,11 @@ export function contactHighlight(pa: PlateAppearance): string | null {
   if (pa.launchAngle !== null) bits.push(`${pa.launchAngle}°`);
   if (pa.hitDistance !== null && pa.hitDistance > 0) bits.push(`${pa.hitDistance} ft`);
   return bits.join(' · ');
+}
+
+/** Bat speed on the PA's final, decisive swing (if tracked), for a one-line summary. */
+export function finalSwingBatSpeed(pa: PlateAppearance): number | null {
+  const last = pa.pitches[pa.pitches.length - 1];
+  if (!last || !isSwing(last.description) || last.batSpeed === null) return null;
+  return last.batSpeed;
 }

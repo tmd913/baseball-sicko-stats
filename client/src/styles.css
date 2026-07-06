@@ -85,7 +85,36 @@ body {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 4px;
+  gap: 8px;
+}
+.date-presets {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.date-preset {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.date-preset:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.date-preset.active {
+  color: var(--bg);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.date-range-inputs {
+  display: flex;
+  gap: 8px;
 }
 .date-control label {
   display: flex;
@@ -358,30 +387,56 @@ body {
   margin-top: 3px;
 }
 
-.toggle-pas {
-  margin-top: 14px;
-  background: none;
-  border: 1px solid var(--border);
-  color: var(--muted);
-  padding: 7px 14px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
+/* Shared rotating disclosure indicator for .game-sub-toggle and .pa-summary-row. */
+.chevron {
+  font-size: 11px;
+  color: var(--faint);
+  margin-left: auto;
+  display: inline-block;
+  transition: transform 0.15s;
+  flex-shrink: 0;
 }
-.toggle-pas:hover {
-  color: var(--text);
-  border-color: var(--accent);
+.chevron.expanded {
+  transform: rotate(90deg);
+  color: var(--muted);
 }
 
 /* ---- Game block / PA grid ---- */
 .game-block {
   margin-top: 14px;
 }
-.game-sub {
+.game-sub-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
   color: var(--muted);
   font-size: 13px;
-  margin-bottom: 10px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.game-sub-toggle:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.game-sub-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.game-sub-info {
+  flex: 1 1 auto;
+}
+.game-sub-line {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
 }
 .pa-grid {
   display: grid;
@@ -389,6 +444,10 @@ body {
      instead of a 400px track that overflows the viewport. */
   grid-template-columns: repeat(auto-fill, minmax(min(400px, 100%), 1fr));
   gap: 14px;
+  /* Rows are implicit/auto-sized; without this, grid's default stretch would
+     force a still-collapsed card to match the height of a taller expanded
+     card sharing its row. */
+  align-items: start;
 }
 
 /* ---- PA card ---- */
@@ -418,15 +477,30 @@ body {
 .pa-card.kind-other {
   border-left-color: var(--faint);
 }
-.pa-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.pa-outcome {
+.pa-summary-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.pa-summary-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+.pa-detail {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
 }
 .pa-badge {
   font-size: 12px;
@@ -572,13 +646,15 @@ body {
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
-.pitch-row {
-  display: grid;
-  grid-template-columns: 18px 30px 30px 40px 1fr 40px auto;
-  gap: 6px;
-  align-items: center;
+.pitch-row-wrap {
   padding: 3px 4px;
   border-radius: 5px;
+}
+.pitch-row {
+  display: grid;
+  grid-template-columns: 18px 30px 30px 40px 1fr;
+  gap: 6px;
+  align-items: center;
 }
 .pitch-head {
   color: var(--faint);
@@ -586,6 +662,7 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   border-bottom: 1px solid var(--border);
+  padding: 3px 4px;
 }
 .pitch-row .pitch-num {
   color: var(--faint);
@@ -597,22 +674,39 @@ body {
 .pitch-velo {
   color: var(--text);
 }
-.pitch-batspeed {
-  color: var(--muted);
-}
 .pitch-desc {
   color: var(--muted);
   overflow-wrap: anywhere;
   line-height: 1.25;
 }
-.pitch-ev {
-  color: var(--inplay);
-  font-weight: 700;
+.pitch-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 3px 0 1px 60px;
 }
-.pitch-row.desc-hit {
+.metric {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.metric-bat {
+  color: var(--foul);
+  background: rgba(251, 191, 36, 0.12);
+}
+.metric-ev {
+  color: var(--inplay);
+  background: rgba(52, 211, 153, 0.14);
+}
+.pitch-row-wrap.desc-hit {
   background: rgba(52, 211, 153, 0.08);
 }
-.pitch-row.desc-swinging {
+.pitch-row-wrap.desc-swinging {
   background: rgba(248, 113, 113, 0.07);
 }
 

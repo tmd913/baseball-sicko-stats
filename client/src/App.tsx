@@ -20,11 +20,27 @@ function easternDate(d: Date): string {
   return `${get('year')}-${get('month')}-${get('day')}`;
 }
 
-function previousDay(): string {
-  const [y, m, day] = easternDate(new Date()).split('-').map(Number);
+function addDays(date: string, delta: number): string {
+  const [y, m, day] = date.split('-').map(Number);
   const dt = new Date(Date.UTC(y, m - 1, day));
-  dt.setUTCDate(dt.getUTCDate() - 1);
+  dt.setUTCDate(dt.getUTCDate() + delta);
   return dt.toISOString().slice(0, 10);
+}
+
+function todayEt(): string {
+  return easternDate(new Date());
+}
+
+function previousDay(): string {
+  return addDays(todayEt(), -1);
+}
+
+/** Most recent Monday on or before the given date (i.e. start of that week). */
+function mondayOnOrBefore(date: string): string {
+  const [y, m, day] = date.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, day));
+  const daysSinceMonday = (dt.getUTCDay() + 6) % 7;
+  return addDays(date, -daysSinceMonday);
 }
 
 function prettyDate(date: string): string {
@@ -37,8 +53,37 @@ function prettyDate(date: string): string {
   });
 }
 
+function prettyShort(date: string): string {
+  const d = new Date(date + 'T12:00:00');
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function prettyRange(start: string, end: string): string {
+  return start === end ? prettyDate(start) : `${prettyShort(start)} – ${prettyDate(end)}`;
+}
+
+interface DatePreset {
+  label: string;
+  start: string;
+  end: string;
+}
+
+function datePresets(): DatePreset[] {
+  const today = todayEt();
+  const yesterday = previousDay();
+  return [
+    { label: 'Today', start: today, end: today },
+    { label: 'Yesterday', start: yesterday, end: yesterday },
+    { label: 'This week', start: mondayOnOrBefore(today), end: today },
+    { label: 'Last 15 days', start: addDays(today, -14), end: today },
+  ];
+}
+
 export default function App() {
-  const [date, setDate] = useState(previousDay());
+  const [start, setStart] = useState(previousDay());
+  const [end, setEnd] = useState(previousDay());
+  const presets = useMemo(datePresets, []);
+  const today = useMemo(todayEt, []);
   const [seasonPlayers, setSeasonPlayers] = useState<SeasonPlayer[]>([]);
   const [playersLoading, setPlayersLoading] = useState(true);
   const [watchlist, setWatchlist] = useState<WatchPlayer[]>([]);
@@ -75,11 +120,11 @@ export default function App() {
   const loadReport = useCallback(() => {
     setReportLoading(true);
     api
-      .report(date)
+      .report(start, end)
       .then((r) => setReports(r.players))
       .catch((e: Error) => setError(e.message))
       .finally(() => setReportLoading(false));
-  }, [date]);
+  }, [start, end]);
 
   // Refresh report when date or watchlist changes.
   useEffect(() => {
@@ -117,16 +162,43 @@ export default function App() {
           </div>
         </div>
         <div className="date-control">
-          <label>
-            Game date
-            <input
-              type="date"
-              value={date}
-              max={previousDay()}
-              onChange={(e) => setDate(e.target.value || previousDay())}
-            />
-          </label>
-          <span className="date-pretty">{prettyDate(date)}</span>
+          <div className="date-presets">
+            {presets.map((p) => (
+              <button
+                key={p.label}
+                type="button"
+                className={`date-preset${start === p.start && end === p.end ? ' active' : ''}`}
+                onClick={() => {
+                  setStart(p.start);
+                  setEnd(p.end);
+                }}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <div className="date-range-inputs">
+            <label>
+              From
+              <input
+                type="date"
+                value={start}
+                max={end}
+                onChange={(e) => setStart(e.target.value || start)}
+              />
+            </label>
+            <label>
+              To
+              <input
+                type="date"
+                value={end}
+                min={start}
+                max={today}
+                onChange={(e) => setEnd(e.target.value || end)}
+              />
+            </label>
+          </div>
+          <span className="date-pretty">{prettyRange(start, end)}</span>
         </div>
       </header>
 
@@ -151,8 +223,8 @@ export default function App() {
         <div className="empty-state">
           <p className="empty-title">Your watchlist is empty</p>
           <p>
-            Search for a player above to start tracking their previous-day
-            plate appearances, pitch sequences, and Statcast contact quality.
+            Search for a player above to start tracking their plate
+            appearances, pitch sequences, and Statcast contact quality.
           </p>
         </div>
       )}

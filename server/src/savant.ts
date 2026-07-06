@@ -405,18 +405,48 @@ export async function getDay(date: string): Promise<ParsedDay> {
   return parsed;
 }
 
+/** Inclusive list of YYYY-MM-DD dates from start to end. */
+function enumerateDates(start: string, end: string): string[] {
+  const [sy, sm, sd] = start.split('-').map(Number);
+  const [ey, em, ed] = end.split('-').map(Number);
+  const endMs = Date.UTC(ey, em - 1, ed);
+  const dates: string[] = [];
+  for (let cur = Date.UTC(sy, sm - 1, sd); cur <= endMs; cur += 86_400_000) {
+    dates.push(new Date(cur).toISOString().slice(0, 10));
+  }
+  return dates;
+}
+
+function findPlayerDay(day: ParsedDay, p: WatchPlayer): PlayerReport | undefined {
+  const found = day.reports.get(p.id);
+  if (found) return found;
+  // Fall back to name match if the id changed / not present.
+  for (const rep of day.reports.values()) {
+    if (rep.savantName.toLowerCase() === p.savantName.toLowerCase()) return rep;
+  }
+  return undefined;
+}
+
+/**
+ * Build each watched player's games across an inclusive date range (a single
+ * day is just startDate === endDate). Games from every day are merged and
+ * sorted chronologically, since a player's card already knows how to render
+ * multiple games (originally added for doubleheaders).
+ */
 export async function getReport(
-  date: string,
+  startDate: string,
+  endDate: string,
   players: WatchPlayer[],
 ): Promise<PlayerReport[]> {
-  const day = await getDay(date);
+  const days = await Promise.all(enumerateDates(startDate, endDate).map(getDay));
+
   return players.map((p) => {
-    const found = day.reports.get(p.id);
-    if (found) return found;
-    // Fall back to name match if the id changed / not present.
-    for (const rep of day.reports.values()) {
-      if (rep.savantName.toLowerCase() === p.savantName.toLowerCase()) return rep;
+    const games: PlayerGame[] = [];
+    for (const day of days) {
+      const found = findPlayerDay(day, p);
+      if (found) games.push(...found.games);
     }
-    return { ...p, found: false, games: [] };
+    games.sort((a, b) => (a.date === b.date ? a.gamePk - b.gamePk : a.date < b.date ? -1 : 1));
+    return { ...p, found: games.length > 0, games };
   });
 }

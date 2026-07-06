@@ -35,9 +35,27 @@ function previousDay(): string {
   return dt.toISOString().slice(0, 10);
 }
 
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 function resolveDate(q: unknown): string {
-  if (typeof q === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(q)) return q;
+  if (typeof q === 'string' && DATE_RE.test(q)) return q;
   return previousDay();
+}
+
+/** Max span for a single /api/report request, to bound how many days we fetch. */
+const MAX_RANGE_DAYS = 62;
+
+function dayCount(start: string, end: string): number {
+  const [sy, sm, sd] = start.split('-').map(Number);
+  const [ey, em, ed] = end.split('-').map(Number);
+  return Math.round((Date.UTC(ey, em - 1, ed) - Date.UTC(sy, sm - 1, sd)) / 86_400_000) + 1;
+}
+
+/** Resolve a start/end query pair, defaulting to previous day and swapping if reversed. */
+function resolveDateRange(startQ: unknown, endQ: unknown): { start: string; end: string } {
+  const start = resolveDate(startQ);
+  const end = resolveDate(endQ);
+  return start <= end ? { start, end } : { start: end, end: start };
 }
 
 function asyncRoute(
@@ -97,14 +115,19 @@ app.delete(
   }),
 );
 
-// The main report: every watchlisted player's events for the date.
+// The main report: every watchlisted player's events across a date range
+// (a single day is just start === end).
 app.get(
   '/api/report',
   asyncRoute(async (req, res) => {
-    const date = resolveDate(req.query.date);
+    const { start, end } = resolveDateRange(req.query.start ?? req.query.date, req.query.end ?? req.query.date);
+    if (dayCount(start, end) > MAX_RANGE_DAYS) {
+      res.status(400).json({ error: `date range too large (max ${MAX_RANGE_DAYS} days)` });
+      return;
+    }
     const watchlist = await getWatchlist();
-    const players = await getReport(date, watchlist);
-    res.json({ date, players });
+    const players = await getReport(start, end, watchlist);
+    res.json({ start, end, players });
   }),
 );
 
