@@ -2,7 +2,7 @@ import { parse } from 'csv-parse/sync';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getGameEvents, type GameEvents } from './mlbStats.js';
+import { getGamesForDate, getStatsApiGame } from './mlbStats.js';
 import type {
   Pitch,
   PlateAppearance,
@@ -16,7 +16,12 @@ import type {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CACHE_DIR = path.join(__dirname, '..', 'data', 'cache');
 
-/** Build the Baseball Savant CSV export URL for a single date (YYYY-MM-DD). */
+/**
+ * Build the Baseball Savant CSV export URL for a single date (YYYY-MM-DD).
+ * This is now only used to enrich the primary MLB Stats API model with the
+ * handful of Statcast fields that have no public Stats API equivalent:
+ * bat speed, swing length, expected BA/wOBA, and per-pitch run value.
+ */
 function savantUrl(date: string): string {
   const params = new URLSearchParams({
     hfGT: 'R|',
@@ -48,13 +53,13 @@ const int = (v: string | undefined): number | null => {
   return n === null ? null : Math.round(n);
 };
 
-/** "Last, First" -> "First Last" */
-function displayName(savantName: string): string {
-  const idx = savantName.indexOf(',');
-  if (idx === -1) return savantName;
-  const last = savantName.slice(0, idx).trim();
-  const first = savantName.slice(idx + 1).trim();
-  return `${first} ${last}`.trim();
+/** "First Last" -> "Last, First" (mirrors the format the watchlist stores). */
+function toSavantName(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length < 2) return fullName;
+  const last = parts[parts.length - 1];
+  const first = parts.slice(0, -1).join(' ');
+  return `${last}, ${first}`;
 }
 
 interface ParsedDay {
@@ -76,7 +81,7 @@ async function downloadCsv(date: string): Promise<string> {
     // not cached yet
   }
   const res = await fetch(savantUrl(date), {
-    headers: { 'User-Agent': 'previous-day-player-events/1.0' },
+    headers: { 'User-Agent': 'baseball-sicko-stats/1.0' },
   });
   if (!res.ok) {
     throw new Error(`Baseball Savant returned ${res.status} ${res.statusText}`);
@@ -153,7 +158,7 @@ function buildLine(pas: PlateAppearance[]): BattingLine {
     if (pa.event === 'walk') line.bb++;
     if (pa.event === 'strikeout' || pa.event === 'strikeout_double_play') line.so++;
     if (pa.event === 'hit_by_pitch') line.hbp++;
-    // RBI (and SB/CS) come from the MLB Stats API during report enrichment.
+    line.rbi += pa.rbi;
     if (pa.launchSpeed !== null) {
       evs.push(pa.launchSpeed);
       if (pa.launchSpeed >= 95) line.hardHits++;
@@ -174,7 +179,25 @@ function buildLine(pas: PlateAppearance[]): BattingLine {
   return line;
 }
 
-function parseDay(date: string, csvText: string): ParsedDay {
+// ---- CSV enrichment: bat speed, swing length, xBA/xwOBA, run value -------
+
+interface PitchExtras {
+  batSpeed: number | null;
+  swingLength: number | null;
+}
+interface PaExtras {
+  xba: number | null;
+  xwoba: number | null;
+  deltaRunExp: number | null;
+}
+interface CsvEnrichment {
+  pitchExtras: Map<string, PitchExtras>;
+  paExtras: Map<string, PaExtras>;
+}
+
+const EMPTY_ENRICHMENT: CsvEnrichment = { pitchExtras: new Map(), paExtras: new Map() };
+
+function parseCsvEnrichment(csvText: string): CsvEnrichment {
   const records: Record<string, string>[] = parse(csvText, {
     columns: true,
     skip_empty_lines: true,
@@ -182,160 +205,162 @@ function parseDay(date: string, csvText: string): ParsedDay {
     relax_column_count: true,
   });
 
-  // Group rows: batterId -> gamePk -> atBatNumber -> pitches
-  interface GameAccum {
-    gamePk: number;
-    homeTeam: string;
-    awayTeam: string;
-    pas: Map<number, Record<string, string>[]>;
-  }
-  const byBatter = new Map<
-    number,
-    { savantName: string; games: Map<number, GameAccum> }
-  >();
+  const pitchExtras = new Map<string, PitchExtras>();
+  const paRows = new Map<string, Record<string, string>[]>();
 
   for (const r of records) {
     const batterId = int(r.batter);
-    if (batterId === null) continue;
     const gamePk = int(r.game_pk);
-    if (gamePk === null) continue;
     const atBat = int(r.at_bat_number);
-    if (atBat === null) continue;
+    if (batterId === null || gamePk === null || atBat === null) continue;
+    const paKey = `${batterId}|${gamePk}|${atBat}`;
 
-    let b = byBatter.get(batterId);
-    if (!b) {
-      b = { savantName: r.player_name, games: new Map() };
-      byBatter.set(batterId, b);
+    const pitchNum = int(r.pitch_number);
+    if (pitchNum !== null) {
+      pitchExtras.set(`${paKey}|${pitchNum}`, {
+        batSpeed: num(r.bat_speed),
+        swingLength: num(r.swing_length),
+      });
     }
-    let g = b.games.get(gamePk);
-    if (!g) {
-      g = {
-        gamePk,
-        homeTeam: r.home_team,
-        awayTeam: r.away_team,
-        pas: new Map(),
-      };
-      b.games.set(gamePk, g);
+
+    let rows = paRows.get(paKey);
+    if (!rows) {
+      rows = [];
+      paRows.set(paKey, rows);
     }
-    let paRows = g.pas.get(atBat);
-    if (!paRows) {
-      paRows = [];
-      g.pas.set(atBat, paRows);
-    }
-    paRows.push(r);
+    rows.push(r);
   }
 
-  const reports = new Map<number, PlayerReport>();
-  const roster: RosterEntry[] = [];
+  const paExtras = new Map<string, PaExtras>();
+  for (const [key, rows] of paRows) {
+    const last = rows
+      .slice()
+      .sort((a, c) => (int(a.pitch_number) ?? 0) - (int(c.pitch_number) ?? 0))
+      .at(-1)!;
+    paExtras.set(key, {
+      xba: num(last.estimated_ba_using_speedangle),
+      xwoba: num(last.estimated_woba_using_speedangle),
+      deltaRunExp: num(last.delta_run_exp),
+    });
+  }
 
-  for (const [batterId, b] of byBatter) {
-    const games: PlayerGame[] = [];
-    for (const g of b.games.values()) {
-      const paNumbers = [...g.pas.keys()].sort((a, c) => a - c);
-      const plateAppearances: PlateAppearance[] = [];
-      let stand: string | null = null;
-      let isHome = false;
+  return { pitchExtras, paExtras };
+}
 
-      for (const abNum of paNumbers) {
-        const rows = g.pas
-          .get(abNum)!
-          .slice()
-          .sort((a, c) => (int(a.pitch_number) ?? 0) - (int(c.pitch_number) ?? 0));
-        const last = rows[rows.length - 1];
-        const half = last.inning_topbot || '';
-        // Top of inning = away team batting.
-        const batterIsHome = half.toLowerCase().startsWith('bot');
-        isHome = batterIsHome;
-        stand = last.stand || stand;
+function applyCsvEnrichment(
+  batterId: number,
+  gamePk: number,
+  pas: PlateAppearance[],
+  enrichment: CsvEnrichment,
+): void {
+  for (const pa of pas) {
+    const paKey = `${batterId}|${gamePk}|${pa.atBatNumber}`;
+    const paExtra = enrichment.paExtras.get(paKey);
+    pa.xba = paExtra?.xba ?? null;
+    pa.xwoba = paExtra?.xwoba ?? null;
+    pa.deltaRunExp = paExtra?.deltaRunExp ?? null;
+    for (const pitch of pa.pitches) {
+      const pitchExtra = enrichment.pitchExtras.get(`${paKey}|${pitch.pitchNumber}`);
+      pitch.batSpeed = pitchExtra?.batSpeed ?? null;
+      pitch.swingLength = pitchExtra?.swingLength ?? null;
+    }
+  }
+}
 
-        const pitches: Pitch[] = rows.map((p) => ({
-          pitchNumber: int(p.pitch_number) ?? 0,
-          pitchType: p.pitch_name || null,
-          releaseSpeed: num(p.release_speed),
-          spinRate: num(p.release_spin_rate),
-          description: p.description || '',
-          balls: int(p.balls),
-          strikes: int(p.strikes),
-          plateX: num(p.plate_x),
-          plateZ: num(p.plate_z),
-          szTop: num(p.sz_top),
-          szBot: num(p.sz_bot),
-          zone: int(p.zone),
-          launchSpeed: num(p.launch_speed),
-          launchAngle: num(p.launch_angle),
-          hitDistance: num(p.hit_distance_sc),
-          bbType: p.bb_type || null,
-          batSpeed: num(p.bat_speed),
-          swingLength: num(p.swing_length),
-        }));
+// ---- Primary day builder (MLB Stats API) ---------------------------------
 
-        plateAppearances.push({
-          atBatNumber: abNum,
-          inning: int(last.inning) ?? 0,
-          half,
-          outsWhenUp: int(last.outs_when_up),
-          stand: last.stand || null,
-          pThrows: last.p_throws || null,
-          event: last.events || null,
-          description: last.des || '',
-          rbi: 0, // filled from the MLB Stats API during report enrichment
-          playId: null, // filled from the MLB Stats API during report enrichment
-          launchSpeed: num(last.launch_speed),
-          launchAngle: num(last.launch_angle),
-          hitDistance: num(last.hit_distance_sc),
-          bbType: last.bb_type || null,
-          xba: num(last.estimated_ba_using_speedangle),
-          xwoba: num(last.estimated_woba_using_speedangle),
-          deltaRunExp: num(last.delta_run_exp),
-          deltaWinExp: num(last.delta_home_win_exp),
-          pitches,
-        });
+async function buildStatsApiDay(date: string): Promise<{
+  byBatter: Map<number, { name: string; games: PlayerGame[] }>;
+}> {
+  const gamePks = await getGamesForDate(date);
+  const games = await Promise.all(
+    gamePks.map(async (pk) => {
+      try {
+        return await getStatsApiGame(pk);
+      } catch (err) {
+        console.error(`live feed fetch failed for game ${pk}:`, err);
+        return null;
       }
+    }),
+  );
 
-      // Only count real PAs (those with an outcome) toward the line.
-      const completedPas = plateAppearances.filter((p) => p.event);
-      const sample = g.pas.get(paNumbers[0])![0];
-      const batterTeam = isHome ? g.homeTeam : g.awayTeam;
-      const opponent = isHome ? g.awayTeam : g.homeTeam;
+  const byBatter = new Map<number, { name: string; games: PlayerGame[] }>();
 
-      games.push({
+  for (const g of games) {
+    if (!g) continue;
+    for (const bg of g.batters.values()) {
+      const plateAppearances: PlateAppearance[] = bg.plateAppearances.map((pa) => ({
+        atBatNumber: pa.atBatNumber,
+        inning: pa.inning,
+        half: pa.half,
+        outsWhenUp: pa.outsWhenUp,
+        stand: pa.stand,
+        pThrows: pa.pThrows,
+        event: pa.event,
+        description: pa.description,
+        rbi: pa.rbi,
+        playId: pa.playId,
+        launchSpeed: pa.launchSpeed,
+        launchAngle: pa.launchAngle,
+        hitDistance: pa.hitDistance,
+        bbType: pa.bbType,
+        xba: null,
+        xwoba: null,
+        deltaRunExp: null,
+        deltaWinExp: pa.deltaWinExp,
+        pitches: pa.pitches.map((p): Pitch => ({
+          pitchNumber: p.pitchNumber,
+          pitchType: p.pitchType,
+          releaseSpeed: p.releaseSpeed,
+          spinRate: p.spinRate,
+          description: p.description,
+          balls: p.balls,
+          strikes: p.strikes,
+          plateX: p.plateX,
+          plateZ: p.plateZ,
+          szTop: p.szTop,
+          szBot: p.szBot,
+          zone: p.zone,
+          launchSpeed: p.launchSpeed,
+          launchAngle: p.launchAngle,
+          hitDistance: p.hitDistance,
+          bbType: p.bbType,
+          batSpeed: null,
+          swingLength: null,
+        })),
+      }));
+
+      const batterTeam = bg.isHome ? g.homeTeam : g.awayTeam;
+      const opponent = bg.isHome ? g.awayTeam : g.homeTeam;
+
+      const playerGame: PlayerGame = {
         gamePk: g.gamePk,
         date,
         homeTeam: g.homeTeam,
         awayTeam: g.awayTeam,
         batterTeam,
         opponent,
-        isHome,
-        stand,
+        isHome: bg.isHome,
+        stand: bg.stand,
         plateAppearances,
-        line: buildLine(completedPas),
-      });
-      void sample;
+        // line is finalized after CSV enrichment is merged in (below), since
+        // run value / avg exit velo depend on fields the enrichment fills in.
+        line: buildLine(plateAppearances.filter((p) => p.event)),
+      };
+      playerGame.line.runs = g.runsByRunner.get(bg.batterId) ?? 0;
+      playerGame.line.sb = g.sbByRunner.get(bg.batterId) ?? 0;
+      playerGame.line.cs = g.csByRunner.get(bg.batterId) ?? 0;
+
+      let b = byBatter.get(bg.batterId);
+      if (!b) {
+        b = { name: bg.batterName, games: [] };
+        byBatter.set(bg.batterId, b);
+      }
+      b.games.push(playerGame);
     }
-
-    games.sort((a, c) => a.gamePk - c.gamePk);
-    const name = displayName(b.savantName);
-    reports.set(batterId, {
-      id: batterId,
-      savantName: b.savantName,
-      name,
-      found: true,
-      games,
-    });
-
-    const g0 = games[0];
-    roster.push({
-      id: batterId,
-      savantName: b.savantName,
-      name,
-      team: g0?.batterTeam ?? '',
-      opponent: g0?.opponent ?? '',
-      pa: games.reduce((s, g) => s + g.line.pa, 0),
-    });
   }
 
-  roster.sort((a, b) => a.name.localeCompare(b.name));
-  return { date, reports, roster, fetchedAt: Date.now() };
+  return { byBatter };
 }
 
 /** How long a "today" fetch stays fresh before we re-download (ms). */
@@ -347,8 +372,57 @@ export async function getDay(date: string): Promise<ParsedDay> {
   if (cached && (!isToday || Date.now() - cached.fetchedAt < TODAY_TTL)) {
     return cached;
   }
-  const csvText = await downloadCsv(date);
-  const parsed = parseDay(date, csvText);
+
+  const { byBatter } = await buildStatsApiDay(date);
+
+  let enrichment = EMPTY_ENRICHMENT;
+  try {
+    enrichment = parseCsvEnrichment(await downloadCsv(date));
+  } catch (err) {
+    console.error(`Savant CSV enrichment unavailable for ${date}:`, err);
+  }
+
+  const reports = new Map<number, PlayerReport>();
+  const roster: RosterEntry[] = [];
+
+  for (const [batterId, b] of byBatter) {
+    for (const g of b.games) {
+      applyCsvEnrichment(batterId, g.gamePk, g.plateAppearances, enrichment);
+      // Run value depends on deltaRunExp, which only the CSV enrichment fills
+      // in (exit-velo stats already came from the Stats API's hitData above).
+      let runExp = 0;
+      let hasRunExp = false;
+      for (const pa of g.plateAppearances) {
+        if (!pa.event || pa.deltaRunExp === null) continue;
+        runExp += pa.deltaRunExp;
+        hasRunExp = true;
+      }
+      g.line.runValue = hasRunExp ? Math.round(runExp * 100) / 100 : null;
+    }
+
+    b.games.sort((a, c) => a.gamePk - c.gamePk);
+    const savantName = toSavantName(b.name);
+    reports.set(batterId, {
+      id: batterId,
+      savantName,
+      name: b.name,
+      found: true,
+      games: b.games,
+    });
+
+    const g0 = b.games[0];
+    roster.push({
+      id: batterId,
+      savantName,
+      name: b.name,
+      team: g0?.batterTeam ?? '',
+      opponent: g0?.opponent ?? '',
+      pa: b.games.reduce((s, g) => s + g.line.pa, 0),
+    });
+  }
+
+  roster.sort((a, b) => a.name.localeCompare(b.name));
+  const parsed: ParsedDay = { date, reports, roster, fetchedAt: Date.now() };
   memCache.set(date, parsed);
   return parsed;
 }
@@ -362,7 +436,7 @@ export async function getReport(
   players: WatchPlayer[],
 ): Promise<PlayerReport[]> {
   const day = await getDay(date);
-  const reports = players.map((p) => {
+  return players.map((p) => {
     const found = day.reports.get(p.id);
     if (found) return found;
     // Fall back to name match if the id changed / not present.
@@ -371,45 +445,4 @@ export async function getReport(
     }
     return { ...p, found: false, games: [] };
   });
-  await enrichWithStatsApi(reports);
-  return reports;
-}
-
-/**
- * Fill in RBI (per PA + total) and SB/CS from the MLB Stats API play-by-play,
- * which carries official scoring. Best-effort: a failed game fetch leaves that
- * game's derived stats at 0 rather than failing the whole report.
- */
-async function enrichWithStatsApi(reports: PlayerReport[]): Promise<void> {
-  const gamePks = new Set<number>();
-  for (const r of reports) {
-    if (r.found) for (const g of r.games) gamePks.add(g.gamePk);
-  }
-
-  const eventsByGame = new Map<number, GameEvents>();
-  await Promise.all(
-    [...gamePks].map(async (pk) => {
-      try {
-        eventsByGame.set(pk, await getGameEvents(pk));
-      } catch (err) {
-        console.error(`play-by-play fetch failed for game ${pk}:`, err);
-      }
-    }),
-  );
-
-  for (const r of reports) {
-    if (!r.found) continue;
-    for (const g of r.games) {
-      const ev = eventsByGame.get(g.gamePk);
-      if (!ev) continue;
-      for (const pa of g.plateAppearances) {
-        pa.rbi = ev.rbiByAtBat.get(pa.atBatNumber) ?? 0;
-        pa.playId = ev.playIdByAtBat.get(pa.atBatNumber) ?? null;
-      }
-      g.line.runs = ev.runsByRunner.get(r.id) ?? 0;
-      g.line.rbi = ev.rbiByBatter.get(r.id) ?? 0;
-      g.line.sb = ev.sbByRunner.get(r.id) ?? 0;
-      g.line.cs = ev.csByRunner.get(r.id) ?? 0;
-    }
-  }
 }

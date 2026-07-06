@@ -1,0 +1,2122 @@
+openapi: 3.0.3
+info:
+  title: MLB Stats API
+  version: "1.0.0"
+  description: >
+    OpenAPI description of the public MLB Stats API endpoints wrapped by the
+    `MLB-StatsAPI` Python SDK (`../../MLB-StatsAPI/statsapi/endpoints.py`).
+    See `mlb-stats-api-endpoints.md` in this folder for prose documentation,
+    conventions (`hydrate`, `fields`, response envelope), and worked examples.
+
+    All requests are public, unauthenticated GETs and the API sends
+    `Access-Control-Allow-Origin: *`, so "Try it out" below executes real
+    requests against the live API from your browser.
+
+    Two endpoints exist in the real API but are NOT included here because
+    they require authentication the SDK doesn't support: `v1/analytics` and
+    `v1/game/{gamePk}/guids` (Statcast tracking data).
+servers:
+  - url: https://statsapi.mlb.com/api
+tags:
+  - name: Game data
+    description: Live feed, boxscore, linescore, play-by-play, and other per-game endpoints.
+  - name: People
+    description: Player bios, stats, free agents, and roster search.
+  - name: Teams
+    description: Team info, rosters, stats, coaches, and affiliates.
+  - name: Schedule
+    description: Game schedules, postseason schedules, and tied-game lookups.
+  - name: Stats & Leaders
+    description: League/team stat queries, leaderboards, and streaks.
+  - name: League & Org
+    description: Leagues, divisions, sports, seasons, and standings.
+  - name: Misc
+    description: Attendance, awards, draft, jobs, transactions, venues, and the meta lookup endpoint.
+
+components:
+  schemas:
+    ApiEnvelope:
+      type: object
+      description: Every response is wrapped like this; payload key varies per endpoint.
+      properties:
+        copyright:
+          type: string
+      additionalProperties: true
+
+    # ── Shared fragments (derived from captured live examples) ──
+    IdName:
+      type: object
+      description: Common stub for team/league/division/venue references.
+      properties:
+        id: { type: integer }
+        name: { type: string }
+    PersonStub:
+      type: object
+      properties:
+        id: { type: integer }
+        fullName: { type: string }
+    CodeDescription:
+      type: object
+      properties:
+        code: { type: string }
+        description: { type: string }
+    StatLine:
+      type: object
+      description: Shape observed for both `batting` and `pitching` stat blocks when pruned with `fields`.
+      properties:
+        runs: { type: integer }
+        homeRuns: { type: integer }
+        strikeOuts: { type: integer }
+        hits: { type: integer }
+
+    # ── Per-endpoint response schemas (endpoints with a captured example) ──
+    GameFeedLiveResponse:
+      type: object
+      properties:
+        gameData:
+          type: object
+          properties:
+            game:
+              type: object
+              properties:
+                pk: { type: integer }
+            status:
+              type: object
+              properties:
+                detailedState: { type: string }
+            teams:
+              type: object
+              properties:
+                away: { type: object, properties: { name: { type: string } } }
+                home: { type: object, properties: { name: { type: string } } }
+        liveData:
+          type: object
+          properties:
+            plays:
+              type: object
+              properties:
+                currentPlay:
+                  type: object
+                  properties:
+                    result:
+                      type: object
+                      properties:
+                        description: { type: string }
+            linescore:
+              type: object
+              properties:
+                innings:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      num: { type: integer }
+                      home: { type: object, properties: { runs: { type: integer } } }
+                      away: { type: object, properties: { runs: { type: integer } } }
+                teams:
+                  type: object
+                  properties:
+                    home: { type: object, properties: { runs: { type: integer } } }
+                    away: { type: object, properties: { runs: { type: integer } } }
+
+    BoxscorePlayer:
+      type: object
+      properties:
+        jerseyNumber: { type: string }
+        stats:
+          type: object
+          properties:
+            batting: { $ref: '#/components/schemas/StatLine' }
+            pitching: { $ref: '#/components/schemas/StatLine' }
+        seasonStats:
+          type: object
+          properties:
+            batting: { $ref: '#/components/schemas/StatLine' }
+            pitching: { $ref: '#/components/schemas/StatLine' }
+    BoxscoreTeamSide:
+      type: object
+      properties:
+        teamStats:
+          type: object
+          properties:
+            batting: { $ref: '#/components/schemas/StatLine' }
+            pitching: { $ref: '#/components/schemas/StatLine' }
+        players:
+          type: object
+          description: Keyed by `"ID<personId>"`, e.g. `"ID518617"`.
+          additionalProperties:
+            $ref: '#/components/schemas/BoxscorePlayer'
+    GameBoxscoreResponse:
+      type: object
+      properties:
+        teams:
+          type: object
+          properties:
+            away: { $ref: '#/components/schemas/BoxscoreTeamSide' }
+            home: { $ref: '#/components/schemas/BoxscoreTeamSide' }
+
+    Person:
+      type: object
+      properties:
+        id: { type: integer }
+        fullName: { type: string }
+        primaryPosition:
+          type: object
+          properties:
+            code: { type: string }
+            name: { type: string }
+            abbreviation: { type: string }
+        batSide: { $ref: '#/components/schemas/CodeDescription' }
+        pitchHand: { $ref: '#/components/schemas/CodeDescription' }
+        mlbDebutDate: { type: string, format: date }
+        strikeZoneTop: { type: number }
+        strikeZoneBottom: { type: number }
+    PersonResponse:
+      type: object
+      properties:
+        people:
+          type: array
+          description: Always an array, even when looking up a single personId.
+          items: { $ref: '#/components/schemas/Person' }
+
+    Team:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        abbreviation: { type: string }
+        teamName: { type: string }
+        locationName: { type: string }
+        venue: { $ref: '#/components/schemas/IdName' }
+        league: { $ref: '#/components/schemas/IdName' }
+        division: { $ref: '#/components/schemas/IdName' }
+        firstYearOfPlay: { type: string }
+    TeamResponse:
+      type: object
+      properties:
+        teams:
+          type: array
+          description: Always an array, even when looking up a single teamId.
+          items: { $ref: '#/components/schemas/Team' }
+
+    ScheduleTeamSide:
+      type: object
+      properties:
+        team: { $ref: '#/components/schemas/IdName' }
+        score: { type: integer }
+        isWinner: { type: boolean }
+    ScheduleGame:
+      type: object
+      properties:
+        gamePk: { type: integer }
+        gameDate: { type: string, format: date-time }
+        status:
+          type: object
+          properties:
+            abstractGameState: { type: string }
+            detailedState: { type: string }
+        teams:
+          type: object
+          properties:
+            away: { $ref: '#/components/schemas/ScheduleTeamSide' }
+            home: { $ref: '#/components/schemas/ScheduleTeamSide' }
+    ScheduleDate:
+      type: object
+      properties:
+        date: { type: string, format: date }
+        games:
+          type: array
+          items: { $ref: '#/components/schemas/ScheduleGame' }
+    ScheduleResponse:
+      type: object
+      properties:
+        totalItems: { type: integer }
+        totalGames: { type: integer }
+        dates:
+          type: array
+          items: { $ref: '#/components/schemas/ScheduleDate' }
+
+    TeamRecord:
+      type: object
+      properties:
+        team: { $ref: '#/components/schemas/IdName' }
+        divisionRank: { type: string }
+        wins: { type: integer }
+        losses: { type: integer }
+        gamesBack: { type: string }
+        wildCardRank: { type: string }
+        wildCardGamesBack: { type: string }
+    StandingsRecord:
+      type: object
+      properties:
+        standingsType: { type: string }
+        teamRecords:
+          type: array
+          items: { $ref: '#/components/schemas/TeamRecord' }
+    StandingsResponse:
+      type: object
+      properties:
+        records:
+          type: array
+          items: { $ref: '#/components/schemas/StandingsRecord' }
+
+    LeaderEntry:
+      type: object
+      properties:
+        rank: { type: integer }
+        value: { type: string }
+        team: { $ref: '#/components/schemas/IdName' }
+        league: { $ref: '#/components/schemas/IdName' }
+        person: { $ref: '#/components/schemas/PersonStub' }
+    LeaderCategoryBlock:
+      type: object
+      properties:
+        leaderCategory: { type: string }
+        season: { type: string }
+        statGroup: { type: string }
+        leaders:
+          type: array
+          items: { $ref: '#/components/schemas/LeaderEntry' }
+        totalSplits: { type: integer }
+    StatsLeadersResponse:
+      type: object
+      properties:
+        leagueLeaders:
+          type: array
+          items: { $ref: '#/components/schemas/LeaderCategoryBlock' }
+
+  parameters:
+    Fields:
+      name: fields
+      in: query
+      schema: { type: string }
+      description: Comma-separated allowlist of key names (any nesting depth) to prune the response.
+    Hydrate:
+      name: hydrate
+      in: query
+      schema: { type: string }
+      description: >
+        Comma-separated (or parenthesized/parameterized, e.g. `stats(group=hitting,type=season)`)
+        list of sub-objects to embed inline instead of returning just an id + link.
+    Season:
+      name: season
+      in: query
+      schema: { type: string, example: "2024" }
+    SportId:
+      name: sportId
+      in: query
+      schema: { type: integer, default: 1 }
+      description: 1 = MLB. See `meta` type `sportId` values for minor leagues, WBC, etc.
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer }
+    GameType:
+      name: gameType
+      in: query
+      schema: { type: string }
+      description: e.g. R (regular season), P (postseason), S (spring training)
+    Date:
+      name: date
+      in: query
+      schema: { type: string, format: date }
+    StartDate:
+      name: startDate
+      in: query
+      schema: { type: string, format: date }
+    EndDate:
+      name: endDate
+      in: query
+      schema: { type: string, format: date }
+    Timecode:
+      name: timecode
+      in: query
+      schema: { type: string }
+      description: Filter the live feed to the state as of this timecode.
+    TeamIdPath:
+      name: teamId
+      in: path
+      required: true
+      schema: { type: integer, example: 147 }
+    PersonIdPath:
+      name: personId
+      in: path
+      required: true
+      schema: { type: integer, example: 592450 }
+    GamePkPath:
+      name: gamePk
+      in: path
+      required: true
+      schema: { type: integer, example: 744834 }
+    LeagueIdPath:
+      name: leagueId
+      in: path
+      required: true
+      schema: { type: integer, example: 103 }
+
+paths:
+  # ── Game data ─────────────────────────────────────────────
+  /v1.1/game/{gamePk}/feed/live:
+    get:
+      operationId: game
+      tags: [Game data]
+      summary: Full live game feed
+      description: >
+        The "everything about this game" endpoint — `gameData` (rosters, venue,
+        status) + `liveData` (full play-by-play, linescore, boxscore) in one
+        tree. Unfiltered this is very large; always use `fields` unless you
+        need the whole thing.
+      parameters:
+        - $ref: '#/components/parameters/GamePkPath'
+        - $ref: '#/components/parameters/Timecode'
+        - $ref: '#/components/parameters/Hydrate'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Live game feed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GameFeedLiveResponse' }
+              example:
+                gameData:
+                  game: { pk: 744834 }
+                  status: { detailedState: "Final" }
+                  teams:
+                    away: { name: "New York Mets" }
+                    home: { name: "Washington Nationals" }
+                liveData:
+                  plays:
+                    currentPlay:
+                      result: { description: "Brandon Nimmo strikes out swinging." }
+                  linescore:
+                    innings:
+                      - { num: 1, home: { runs: 0 }, away: { runs: 0 } }
+                    teams:
+                      home: { runs: 1 }
+                      away: { runs: 0 }
+
+  /v1.1/game/{gamePk}/feed/live/diffPatch:
+    get:
+      operationId: game_diff
+      tags: [Game data]
+      summary: Diff of the live feed between two timecodes
+      parameters:
+        - $ref: '#/components/parameters/GamePkPath'
+        - name: startTimecode
+          in: query
+          required: true
+          schema: { type: string }
+        - name: endTimecode
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Diff patch
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1.1/game/{gamePk}/feed/live/timestamps:
+    get:
+      operationId: game_timestamps
+      tags: [Game data]
+      summary: Valid timecodes for a game
+      description: Returns an array of timecode strings usable with `game` / `game_diff`.
+      parameters:
+        - $ref: '#/components/parameters/GamePkPath'
+      responses:
+        "200":
+          description: Array of timecodes
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: string }
+
+  /v1/game/changes:
+    get:
+      operationId: game_changes
+      tags: [Game data]
+      summary: Games updated since a timestamp
+      parameters:
+        - name: updatedSince
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - $ref: '#/components/parameters/SportId'
+        - $ref: '#/components/parameters/GameType'
+        - $ref: '#/components/parameters/Season'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Changed games
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/game/{gamePk}/contextMetrics:
+    get:
+      operationId: game_contextMetrics
+      tags: [Game data]
+      summary: Win probability & context metrics
+      parameters:
+        - $ref: '#/components/parameters/GamePkPath'
+        - $ref: '#/components/parameters/Timecode'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Context metrics
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/game/{gamePk}/winProbability:
+    get:
+      operationId: game_winProbability
+      tags: [Game data]
+      summary: Win probability by play
+      description: For just the current win probability, prefer `game_contextMetrics` instead.
+      parameters:
+        - $ref: '#/components/parameters/GamePkPath'
+        - $ref: '#/components/parameters/Timecode'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Win probability by play
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/game/{gamePk}/boxscore:
+    get:
+      operationId: game_boxscore
+      tags: [Game data]
+      summary: Batting/pitching boxscore
+      parameters:
+        - $ref: '#/components/parameters/GamePkPath'
+        - $ref: '#/components/parameters/Timecode'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Boxscore
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GameBoxscoreResponse' }
+              example:
+                teams:
+                  away:
+                    teamStats:
+                      batting: { runs: 0, homeRuns: 0, strikeOuts: 10, hits: 1 }
+                      pitching: { runs: 1, homeRuns: 1, strikeOuts: 3, hits: 5 }
+                    players:
+                      ID518617:
+                        jerseyNumber: "30"
+                        stats: { batting: {}, pitching: {} }
+                        seasonStats:
+                          batting: { runs: 0, homeRuns: 0, strikeOuts: 0, hits: 0 }
+                          pitching: { runs: 18, homeRuns: 3, strikeOuts: 31, hits: 15 }
+
+  /v1/game/{gamePk}/content:
+    get:
+      operationId: game_content
+      tags: [Game data]
+      summary: Media/highlights for a game
+      parameters:
+        - $ref: '#/components/parameters/GamePkPath'
+        - name: highlightLimit
+          in: query
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Game content
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/game/{gamePk}/feed/color:
+    get:
+      operationId: game_color
+      tags: [Game data]
+      summary: Legacy "color" feed variant of the live feed
+      parameters:
+        - $ref: '#/components/parameters/GamePkPath'
+        - $ref: '#/components/parameters/Timecode'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Color feed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/game/{gamePk}/feed/color/diffPatch:
+    get:
+      operationId: game_color_diff
+      tags: [Game data]
+      summary: Legacy variant of game_diff
+      parameters:
+        - $ref: '#/components/parameters/GamePkPath'
+        - name: startTimecode
+          in: query
+          required: true
+          schema: { type: string }
+        - name: endTimecode
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Color feed diff
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/game/{gamePk}/feed/color/timestamps:
+    get:
+      operationId: game_color_timestamps
+      tags: [Game data]
+      summary: Legacy variant of game_timestamps
+      parameters:
+        - $ref: '#/components/parameters/GamePkPath'
+      responses:
+        "200":
+          description: Array of timecodes
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: string }
+
+  /v1/game/{gamePk}/linescore:
+    get:
+      operationId: game_linescore
+      tags: [Game data]
+      summary: Inning-by-inning line score
+      parameters:
+        - $ref: '#/components/parameters/GamePkPath'
+        - $ref: '#/components/parameters/Timecode'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Linescore
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/game/{gamePk}/playByPlay:
+    get:
+      operationId: game_playByPlay
+      tags: [Game data]
+      summary: Full play-by-play
+      parameters:
+        - $ref: '#/components/parameters/GamePkPath'
+        - $ref: '#/components/parameters/Timecode'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Play-by-play
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/uniforms/game:
+    get:
+      operationId: game_uniforms
+      tags: [Game data]
+      summary: Uniforms worn in given game(s)
+      parameters:
+        - name: gamePks
+          in: query
+          required: true
+          schema: { type: string }
+          description: Comma-separated gamePks.
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Uniforms
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/gamePace:
+    get:
+      operationId: gamePace
+      tags: [Game data]
+      summary: Pace-of-play stats
+      parameters:
+        - $ref: '#/components/parameters/Season'
+        - name: teamIds
+          in: query
+          schema: { type: string }
+        - name: leagueIds
+          in: query
+          schema: { type: string }
+        - name: leagueListId
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/SportId'
+        - $ref: '#/components/parameters/GameType'
+        - $ref: '#/components/parameters/StartDate'
+        - $ref: '#/components/parameters/EndDate'
+        - name: venueIds
+          in: query
+          schema: { type: string }
+        - name: orgType
+          in: query
+          schema: { type: string }
+        - name: includeChildren
+          in: query
+          schema: { type: boolean }
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Game pace stats
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/highLow/{orgType}:
+    get:
+      operationId: highLow
+      tags: [Game data]
+      summary: Statistical high/low extremes
+      parameters:
+        - name: orgType
+          in: path
+          required: true
+          schema: { type: string, enum: [player, team, division, league, sport, types] }
+        - name: statGroup
+          in: query
+          schema: { type: string }
+        - name: sortStat
+          in: query
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/Season'
+        - $ref: '#/components/parameters/GameType'
+        - name: teamId
+          in: query
+          schema: { type: integer }
+        - name: leagueId
+          in: query
+          schema: { type: integer }
+        - name: sportIds
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: High/low stats
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/homeRunDerby/{gamePk}:
+    get:
+      operationId: homeRunDerby
+      tags: [Game data]
+      summary: Home Run Derby results
+      parameters:
+        - $ref: '#/components/parameters/GamePkPath'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Home Run Derby results
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/homeRunDerby/{gamePk}/bracket:
+    get:
+      operationId: homeRunDerby_bracket
+      tags: [Game data]
+      summary: Home Run Derby bracket
+      parameters:
+        - $ref: '#/components/parameters/GamePkPath'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Home Run Derby bracket
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/homeRunDerby/{gamePk}/pool:
+    get:
+      operationId: homeRunDerby_pool
+      tags: [Game data]
+      summary: Home Run Derby pool
+      parameters:
+        - $ref: '#/components/parameters/GamePkPath'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Home Run Derby pool
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  # ── People ────────────────────────────────────────────────
+  /v1/people:
+    get:
+      operationId: people
+      tags: [People]
+      summary: Bulk player lookup by ID
+      parameters:
+        - name: personIds
+          in: query
+          required: true
+          schema: { type: string }
+          description: Comma-separated personIds.
+        - $ref: '#/components/parameters/Hydrate'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: People
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/people/{personId}:
+    get:
+      operationId: person
+      tags: [People]
+      summary: Single player bio
+      description: >
+        No stats included by default — add
+        `hydrate=stats(group=[hitting],type=season)` to embed season/career numbers.
+      parameters:
+        - $ref: '#/components/parameters/PersonIdPath'
+        - $ref: '#/components/parameters/Hydrate'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Player bio (always wrapped in a `people` array, even for one ID)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PersonResponse' }
+              example:
+                people:
+                  - id: 592450
+                    fullName: "Aaron Judge"
+                    primaryPosition: { code: "9", name: "Outfielder", abbreviation: "RF" }
+                    batSide: { code: "R", description: "Right" }
+                    pitchHand: { code: "R", description: "Right" }
+                    mlbDebutDate: "2016-08-13"
+                    strikeZoneTop: 3.523
+                    strikeZoneBottom: 1.778
+
+  /v1/people/{personId}/stats/game/{gamePk}:
+    get:
+      operationId: person_stats
+      tags: [People]
+      summary: A player's stats for one game
+      description: Pass `current` as `gamePk` for a player's in-progress game stats.
+      parameters:
+        - $ref: '#/components/parameters/PersonIdPath'
+        - name: gamePk
+          in: path
+          required: true
+          schema: { type: string, example: "744834" }
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Player game stats
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/people/changes:
+    get:
+      operationId: people_changes
+      tags: [People]
+      summary: People updated since a timestamp
+      parameters:
+        - name: updatedSince
+          in: query
+          schema: { type: string, format: date-time }
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Changed people
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/people/freeAgents:
+    get:
+      operationId: people_freeAgents
+      tags: [People]
+      summary: Free agent list
+      parameters:
+        - name: order
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/Hydrate'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Free agents
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/sports/{sportId}/players:
+    get:
+      operationId: sports_players
+      tags: [People]
+      summary: All players for a sport/season
+      description: >
+        No server-side name filter exists — the SDK's `lookup_player()` pulls
+        this full list and filters client-side.
+      parameters:
+        - name: sportId
+          in: path
+          required: true
+          schema: { type: integer, default: 1 }
+        - $ref: '#/components/parameters/Season'
+        - $ref: '#/components/parameters/GameType'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Players
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  # ── Teams ─────────────────────────────────────────────────
+  /v1/teams:
+    get:
+      operationId: teams
+      tags: [Teams]
+      summary: List teams
+      parameters:
+        - $ref: '#/components/parameters/Season'
+        - name: activeStatus
+          in: query
+          schema: { type: string }
+        - name: leagueIds
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/SportId'
+        - name: sportIds
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/GameType'
+        - $ref: '#/components/parameters/Hydrate'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Teams
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/teams/{teamId}:
+    get:
+      operationId: team
+      tags: [Teams]
+      summary: Single team info
+      parameters:
+        - $ref: '#/components/parameters/TeamIdPath'
+        - $ref: '#/components/parameters/Season'
+        - $ref: '#/components/parameters/SportId'
+        - $ref: '#/components/parameters/Hydrate'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Team info
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeamResponse' }
+              example:
+                teams:
+                  - id: 147
+                    name: "New York Yankees"
+                    abbreviation: "NYY"
+                    teamName: "Yankees"
+                    locationName: "Bronx"
+                    venue: { id: 3313, name: "Yankee Stadium" }
+                    league: { id: 103, name: "American League" }
+                    division: { id: 201, name: "American League East" }
+                    firstYearOfPlay: "1903"
+
+  /v1/teams/history:
+    get:
+      operationId: teams_history
+      tags: [Teams]
+      summary: Historical team org/name data
+      parameters:
+        - name: teamIds
+          in: query
+          required: true
+          schema: { type: string }
+        - name: startSeason
+          in: query
+          schema: { type: string }
+        - name: endSeason
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Team history
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/teams/stats:
+    get:
+      operationId: teams_stats
+      tags: [Teams]
+      summary: League-wide team stats
+      description: Use `meta('statGroups')`/`meta('statTypes')` for valid `group`/`stats` values.
+      parameters:
+        - $ref: '#/components/parameters/Season'
+        - name: sportIds
+          in: query
+          schema: { type: string }
+        - name: group
+          in: query
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/GameType'
+        - name: stats
+          in: query
+          required: true
+          schema: { type: string }
+        - name: order
+          in: query
+          schema: { type: string }
+        - name: sortStat
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/Fields'
+        - $ref: '#/components/parameters/StartDate'
+        - $ref: '#/components/parameters/EndDate'
+      responses:
+        "200":
+          description: Team stats
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/teams/affiliates:
+    get:
+      operationId: teams_affiliates
+      tags: [Teams]
+      summary: Farm system affiliates
+      parameters:
+        - name: teamIds
+          in: query
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/SportId'
+        - $ref: '#/components/parameters/Season'
+        - $ref: '#/components/parameters/Hydrate'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Affiliates
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/teams/{teamId}/alumni:
+    get:
+      operationId: team_alumni
+      tags: [Teams]
+      summary: Team alumni
+      parameters:
+        - $ref: '#/components/parameters/TeamIdPath'
+        - name: season
+          in: query
+          required: true
+          schema: { type: string }
+        - name: group
+          in: query
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/Hydrate'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Alumni
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/teams/{teamId}/coaches:
+    get:
+      operationId: team_coaches
+      tags: [Teams]
+      summary: Coaching staff
+      parameters:
+        - $ref: '#/components/parameters/TeamIdPath'
+        - $ref: '#/components/parameters/Season'
+        - $ref: '#/components/parameters/Date'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Coaches
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/teams/{teamId}/personnel:
+    get:
+      operationId: team_personnel
+      tags: [Teams]
+      summary: Front office/personnel
+      parameters:
+        - $ref: '#/components/parameters/TeamIdPath'
+        - $ref: '#/components/parameters/Date'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Personnel
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/teams/{teamId}/leaders:
+    get:
+      operationId: team_leaders
+      tags: [Teams]
+      summary: Team stat leaders
+      parameters:
+        - $ref: '#/components/parameters/TeamIdPath'
+        - name: leaderCategories
+          in: query
+          required: true
+          schema: { type: string }
+        - name: season
+          in: query
+          required: true
+          schema: { type: string }
+        - name: leaderGameTypes
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/Hydrate'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Team leaders
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/teams/{teamId}/roster:
+    get:
+      operationId: team_roster
+      tags: [Teams]
+      summary: Team roster
+      parameters:
+        - $ref: '#/components/parameters/TeamIdPath'
+        - name: rosterType
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/Season'
+        - $ref: '#/components/parameters/Date'
+        - $ref: '#/components/parameters/Hydrate'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Roster
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/teams/{teamId}/stats:
+    get:
+      operationId: team_stats
+      tags: [Teams]
+      summary: Single-team stats
+      description: >
+        Use `meta('statGroups')`/`meta('statTypes')`/`meta('situationCodes')`
+        for valid values. `sitCodes` is used with `stats=statSplits`.
+      parameters:
+        - $ref: '#/components/parameters/TeamIdPath'
+        - name: season
+          in: query
+          required: true
+          schema: { type: string }
+        - name: group
+          in: query
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/GameType'
+        - name: stats
+          in: query
+          schema: { type: string }
+        - name: sportIds
+          in: query
+          schema: { type: string }
+        - name: sitCodes
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Team stats
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/uniforms/team:
+    get:
+      operationId: team_uniforms
+      tags: [Teams]
+      summary: Uniforms for given team(s)
+      parameters:
+        - name: teamIds
+          in: query
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/Season'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Uniforms
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  # ── Schedule ──────────────────────────────────────────────
+  /v1/schedule:
+    get:
+      operationId: schedule
+      tags: [Schedule]
+      summary: Main schedule query
+      description: >
+        Requires at least one of `sportId`, `gamePk`, or `gamePks`. Add
+        `hydrate=linescore,decisions,probablePitcher(note),broadcasts,seriesStatus`
+        to enrich each game inline instead of following `link`s (this is what
+        the SDK's `schedule()` convenience function does).
+      parameters:
+        - name: scheduleType
+          in: query
+          schema: { type: string }
+        - name: eventTypes
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/Hydrate'
+        - name: teamId
+          in: query
+          schema: { type: integer }
+        - name: leagueId
+          in: query
+          schema: { type: integer }
+        - $ref: '#/components/parameters/SportId'
+        - name: gamePk
+          in: query
+          schema: { type: integer }
+        - name: gamePks
+          in: query
+          schema: { type: string }
+        - name: venueIds
+          in: query
+          schema: { type: string }
+        - name: gameTypes
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/Date'
+        - $ref: '#/components/parameters/StartDate'
+        - $ref: '#/components/parameters/EndDate'
+        - name: opponentId
+          in: query
+          schema: { type: integer }
+        - $ref: '#/components/parameters/Fields'
+        - $ref: '#/components/parameters/Season'
+      responses:
+        "200":
+          description: Schedule
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ScheduleResponse' }
+              example:
+                totalItems: 15
+                totalGames: 15
+                dates:
+                  - date: "2024-07-04"
+                    games:
+                      - gamePk: 744834
+                        gameDate: "2024-07-04T15:05:00Z"
+                        status: { abstractGameState: "Final", detailedState: "Final" }
+                        teams:
+                          away: { team: { id: 121, name: "New York Mets" }, score: 0, isWinner: false }
+                          home: { team: { id: 120, name: "Washington Nationals" }, score: 1, isWinner: true }
+
+  /v1/schedule/games/tied:
+    get:
+      operationId: schedule_tied
+      tags: [Schedule]
+      summary: Games that ended tied
+      parameters:
+        - name: gameTypes
+          in: query
+          schema: { type: string }
+        - name: season
+          in: query
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/Hydrate'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Tied games
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/schedule/postseason:
+    get:
+      operationId: schedule_postseason
+      tags: [Schedule]
+      summary: Postseason schedule
+      parameters:
+        - name: gameTypes
+          in: query
+          schema: { type: string }
+        - name: seriesNumber
+          in: query
+          schema: { type: integer }
+        - name: teamId
+          in: query
+          schema: { type: integer }
+        - $ref: '#/components/parameters/SportId'
+        - $ref: '#/components/parameters/Season'
+        - $ref: '#/components/parameters/Hydrate'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Postseason schedule
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/schedule/postseason/series:
+    get:
+      operationId: schedule_postseason_series
+      tags: [Schedule]
+      summary: Postseason series info
+      parameters:
+        - name: gameTypes
+          in: query
+          schema: { type: string }
+        - name: seriesNumber
+          in: query
+          schema: { type: integer }
+        - name: teamId
+          in: query
+          schema: { type: integer }
+        - $ref: '#/components/parameters/SportId'
+        - $ref: '#/components/parameters/Season'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Postseason series
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/schedule/postseason/tuneIn:
+    get:
+      operationId: schedule_postseason_tuneIn
+      tags: [Schedule]
+      summary: Broadcast tune-in info
+      description: Per SDK source note, this endpoint appears to return no data.
+      parameters:
+        - name: teamId
+          in: query
+          schema: { type: integer }
+        - $ref: '#/components/parameters/SportId'
+        - $ref: '#/components/parameters/Season'
+        - $ref: '#/components/parameters/Hydrate'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Tune-in info
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  # ── Stats & Leaders ───────────────────────────────────────
+  /v1/stats:
+    get:
+      operationId: stats
+      tags: [Stats & Leaders]
+      summary: General player/team stats query
+      description: If no `limit` is given, the response is capped at 50 records.
+      parameters:
+        - name: stats
+          in: query
+          required: true
+          schema: { type: string }
+        - name: playerPool
+          in: query
+          schema: { type: string }
+        - name: position
+          in: query
+          schema: { type: string }
+        - name: teamId
+          in: query
+          schema: { type: integer }
+        - name: leagueId
+          in: query
+          schema: { type: integer }
+        - $ref: '#/components/parameters/Limit'
+        - name: offset
+          in: query
+          schema: { type: integer }
+        - name: group
+          in: query
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/GameType'
+        - $ref: '#/components/parameters/Season'
+        - name: sportIds
+          in: query
+          schema: { type: string }
+        - name: sortStat
+          in: query
+          schema: { type: string }
+        - name: order
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/Hydrate'
+        - $ref: '#/components/parameters/Fields'
+        - name: personId
+          in: query
+          schema: { type: integer }
+        - name: metrics
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/StartDate'
+        - $ref: '#/components/parameters/EndDate'
+      responses:
+        "200":
+          description: Stats
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/stats/leaders:
+    get:
+      operationId: stats_leaders
+      tags: [Stats & Leaders]
+      summary: League leaderboards
+      description: >
+        **Gotcha (confirmed live):** omitting `statGroup` returns multiple
+        leader blocks for the same category (e.g. `homeRuns` without
+        `statGroup` returns separate `hitting`, `catching`, and `pitching`
+        blocks — pitchers can hit home runs off too). Pass `statGroup=hitting`
+        explicitly unless you want all of them. For all-time leaders
+        (omitting `season`), include `statType=statsSingleSeason` or you'll
+        likely get no results.
+      parameters:
+        - name: leaderCategories
+          in: query
+          required: true
+          schema: { type: string, example: homeRuns }
+        - name: playerPool
+          in: query
+          schema: { type: string }
+        - name: leaderGameTypes
+          in: query
+          schema: { type: string }
+        - name: statGroup
+          in: query
+          schema: { type: string, example: hitting }
+        - $ref: '#/components/parameters/Season'
+        - name: leagueId
+          in: query
+          schema: { type: integer }
+        - $ref: '#/components/parameters/SportId'
+        - $ref: '#/components/parameters/Hydrate'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Fields'
+        - name: statType
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: League leaders
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StatsLeadersResponse' }
+              example:
+                leagueLeaders:
+                  - leaderCategory: "homeRuns"
+                    season: "2024"
+                    statGroup: "hitting"
+                    leaders:
+                      - rank: 1
+                        value: "58"
+                        team: { id: 147, name: "New York Yankees" }
+                        league: { id: 103, name: "AL" }
+                        person: { id: 592450, fullName: "Aaron Judge" }
+                    totalSplits: 522
+
+  /v1/stats/streaks:
+    get:
+      operationId: stats_streaks
+      tags: [Stats & Leaders]
+      summary: Hitting/on-base streaks
+      description: >
+        `streakType`: hittingStreakOverall/Home/Away, onBaseOverall/Home/Away.
+        `streakSpan`: career, season, currentStreak, currentStreakInSeason,
+        notable, notableInSeason.
+      parameters:
+        - name: streakType
+          in: query
+          required: true
+          schema: { type: string }
+        - name: streakSpan
+          in: query
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/GameType'
+        - name: season
+          in: query
+          required: true
+          schema: { type: string }
+        - name: sportId
+          in: query
+          required: true
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          required: true
+          schema: { type: integer }
+        - $ref: '#/components/parameters/Hydrate'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Streaks
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  # ── League & Org ──────────────────────────────────────────
+  /v1/league:
+    get:
+      operationId: league
+      tags: [League & Org]
+      summary: League info
+      description: Requires `sportId` or `leagueIds`.
+      parameters:
+        - $ref: '#/components/parameters/SportId'
+        - name: leagueIds
+          in: query
+          schema: { type: string }
+        - name: seasons
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: League info
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/league/{leagueId}/allStarBallot:
+    get:
+      operationId: league_allStarBallot
+      tags: [League & Org]
+      summary: All-Star ballot
+      parameters:
+        - $ref: '#/components/parameters/LeagueIdPath'
+        - name: season
+          in: query
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: All-Star ballot
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/league/{leagueId}/allStarWriteIns:
+    get:
+      operationId: league_allStarWriteIns
+      tags: [League & Org]
+      summary: All-Star write-in votes
+      parameters:
+        - $ref: '#/components/parameters/LeagueIdPath'
+        - name: season
+          in: query
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: All-Star write-ins
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/league/{leagueId}/allStarFinalVote:
+    get:
+      operationId: league_allStarFinalVote
+      tags: [League & Org]
+      summary: All-Star final vote
+      parameters:
+        - $ref: '#/components/parameters/LeagueIdPath'
+        - name: season
+          in: query
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: All-Star final vote
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/divisions:
+    get:
+      operationId: divisions
+      tags: [League & Org]
+      summary: Divisions
+      description: Call with no params to list all divisions.
+      parameters:
+        - name: divisionId
+          in: query
+          schema: { type: integer }
+        - name: leagueId
+          in: query
+          schema: { type: integer }
+        - $ref: '#/components/parameters/SportId'
+        - $ref: '#/components/parameters/Season'
+      responses:
+        "200":
+          description: Divisions
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/conferences:
+    get:
+      operationId: conferences
+      tags: [League & Org]
+      summary: Conferences
+      parameters:
+        - name: conferenceId
+          in: query
+          schema: { type: integer }
+        - $ref: '#/components/parameters/Season'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Conferences
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/sports:
+    get:
+      operationId: sports
+      tags: [League & Org]
+      summary: Sports (MLB, AAA, etc.)
+      parameters:
+        - $ref: '#/components/parameters/SportId'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Sports
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/seasons:
+    get:
+      operationId: seasons
+      tags: [League & Org]
+      summary: Season metadata (single sport/division/league)
+      description: Requires `sportId`, `divisionId`, or `leagueId`.
+      parameters:
+        - $ref: '#/components/parameters/Season'
+        - $ref: '#/components/parameters/SportId'
+        - name: divisionId
+          in: query
+          schema: { type: integer }
+        - name: leagueId
+          in: query
+          schema: { type: integer }
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Seasons
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/seasons/all:
+    get:
+      operationId: seasons_all
+      tags: [League & Org]
+      summary: All seasons
+      description: Supports `divisionId`/`leagueId` filters same as `seasons`.
+      parameters:
+        - $ref: '#/components/parameters/SportId'
+        - name: divisionId
+          in: query
+          schema: { type: integer }
+        - name: leagueId
+          in: query
+          schema: { type: integer }
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: All seasons
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/seasons/{seasonId}:
+    get:
+      operationId: season
+      tags: [League & Org]
+      summary: Single season's info
+      parameters:
+        - name: seasonId
+          in: path
+          required: true
+          schema: { type: string, example: "2024" }
+        - name: sportId
+          in: query
+          required: true
+          schema: { type: integer, default: 1 }
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Season info
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/standings:
+    get:
+      operationId: standings
+      tags: [League & Org]
+      summary: Standings by league
+      description: Add `hydrate=team(division)` to get division names inline instead of just IDs.
+      parameters:
+        - name: leagueId
+          in: query
+          required: true
+          schema: { type: string, example: "103,104" }
+        - $ref: '#/components/parameters/Season'
+        - name: standingsTypes
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/Date'
+        - $ref: '#/components/parameters/Hydrate'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Standings
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StandingsResponse' }
+              example:
+                records:
+                  - standingsType: "regularSeason"
+                    teamRecords:
+                      - team: { id: 147, name: "New York Yankees" }
+                        divisionRank: "1"
+                        wins: 94
+                        losses: 68
+                        gamesBack: "-"
+                        wildCardRank: "1"
+                        wildCardGamesBack: "-"
+
+  # ── Misc ──────────────────────────────────────────────────
+  /v1/attendance:
+    get:
+      operationId: attendance
+      tags: [Misc]
+      summary: Attendance figures
+      description: Requires `teamId`, `leagueId`, or `leagueListId`.
+      parameters:
+        - name: teamId
+          in: query
+          schema: { type: integer }
+        - name: leagueId
+          in: query
+          schema: { type: integer }
+        - $ref: '#/components/parameters/Season'
+        - $ref: '#/components/parameters/Date'
+        - name: leagueListId
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/GameType'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Attendance
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/awards:
+    get:
+      operationId: awards
+      tags: [Misc]
+      summary: List award IDs
+      description: Call with no parameters to return a list of valid awardIds.
+      parameters:
+        - $ref: '#/components/parameters/SportId'
+        - name: leagueId
+          in: query
+          schema: { type: integer }
+        - $ref: '#/components/parameters/Season'
+        - $ref: '#/components/parameters/Hydrate'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Award IDs
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/awards/{awardId}:
+    get:
+      operationId: awards_byId
+      tags: [Misc]
+      summary: Award info
+      parameters:
+        - name: awardId
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/SportId'
+        - name: leagueId
+          in: query
+          schema: { type: integer }
+        - $ref: '#/components/parameters/Season'
+        - $ref: '#/components/parameters/Hydrate'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Award info
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/awards/{awardId}/recipients:
+    get:
+      operationId: awards_recipients
+      tags: [Misc]
+      summary: Award recipients
+      parameters:
+        - name: awardId
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/SportId'
+        - name: leagueId
+          in: query
+          schema: { type: integer }
+        - $ref: '#/components/parameters/Season'
+        - $ref: '#/components/parameters/Hydrate'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Award recipients
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/draft:
+    get:
+      operationId: draft
+      tags: [Misc]
+      summary: Draft results
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Fields'
+        - name: round
+          in: query
+          schema: { type: string }
+        - name: name
+          in: query
+          schema: { type: string }
+        - name: school
+          in: query
+          schema: { type: string }
+        - name: state
+          in: query
+          schema: { type: string }
+        - name: country
+          in: query
+          schema: { type: string }
+        - name: position
+          in: query
+          schema: { type: string }
+        - name: teamId
+          in: query
+          schema: { type: integer }
+        - name: playerId
+          in: query
+          schema: { type: integer }
+        - name: bisPlayerId
+          in: query
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Draft results
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/draft/prospects:
+    get:
+      operationId: draft_prospects
+      tags: [Misc]
+      summary: Draft prospects
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Fields'
+        - name: round
+          in: query
+          schema: { type: string }
+        - name: name
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Draft prospects
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/draft/{year}:
+    get:
+      operationId: draft_year
+      tags: [Misc]
+      summary: Draft results for a year
+      parameters:
+        - name: year
+          in: path
+          required: true
+          schema: { type: string, example: "2024" }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Fields'
+        - name: round
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Draft results for year
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/draft/{year}/latest:
+    get:
+      operationId: draft_latest
+      tags: [Misc]
+      summary: Latest draft picks for a year
+      description: Query params are ignored when `latest` is used (year is still required).
+      parameters:
+        - name: year
+          in: path
+          required: true
+          schema: { type: string, example: "2024" }
+      responses:
+        "200":
+          description: Latest draft picks
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/jobs:
+    get:
+      operationId: jobs
+      tags: [Misc]
+      summary: Personnel job listings
+      parameters:
+        - name: jobType
+          in: query
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/SportId'
+        - $ref: '#/components/parameters/Date'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Jobs
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/jobs/umpires:
+    get:
+      operationId: jobs_umpires
+      tags: [Misc]
+      summary: Umpire assignments
+      parameters:
+        - $ref: '#/components/parameters/SportId'
+        - $ref: '#/components/parameters/Date'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Umpire assignments
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/jobs/umpires/games/{umpireId}:
+    get:
+      operationId: jobs_umpire_games
+      tags: [Misc]
+      summary: Games worked by an umpire
+      parameters:
+        - name: umpireId
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: season
+          in: query
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Umpire games
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/jobs/datacasters:
+    get:
+      operationId: jobs_datacasters
+      tags: [Misc]
+      summary: Datacaster assignments
+      parameters:
+        - $ref: '#/components/parameters/SportId'
+        - $ref: '#/components/parameters/Date'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Datacaster assignments
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/jobs/officialScorers:
+    get:
+      operationId: jobs_officialScorers
+      tags: [Misc]
+      summary: Official scorer assignments
+      parameters:
+        - $ref: '#/components/parameters/Timecode'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Official scorer assignments
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/transactions:
+    get:
+      operationId: transactions
+      tags: [Misc]
+      summary: Trades, signings, roster moves
+      description: Requires one of `teamId`, `playerId`, `date`, or `startDate`+`endDate`.
+      parameters:
+        - name: teamId
+          in: query
+          schema: { type: integer }
+        - name: playerId
+          in: query
+          schema: { type: integer }
+        - $ref: '#/components/parameters/Date'
+        - $ref: '#/components/parameters/StartDate'
+        - $ref: '#/components/parameters/EndDate'
+        - $ref: '#/components/parameters/SportId'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Transactions
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/venues:
+    get:
+      operationId: venue
+      tags: [Misc]
+      summary: Venue info
+      parameters:
+        - name: venueIds
+          in: query
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/Season'
+        - $ref: '#/components/parameters/Hydrate'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        "200":
+          description: Venues
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+
+  /v1/{type}:
+    get:
+      operationId: meta
+      tags: [Misc]
+      summary: Lookup tables for enum values used by other endpoints
+      description: >
+        Use this to validate/discover values passed to other endpoints (e.g.
+        `group`/`stats` for `team_stats`, `sitCodes` for `stats=statSplits`).
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema:
+            type: string
+            enum:
+              - awards
+              - baseballStats
+              - eventTypes
+              - gameStatus
+              - gameTypes
+              - hitTrajectories
+              - jobTypes
+              - languages
+              - leagueLeaderTypes
+              - logicalEvents
+              - metrics
+              - pitchCodes
+              - pitchTypes
+              - platforms
+              - positions
+              - reviewReasons
+              - rosterTypes
+              - scheduleEventTypes
+              - situationCodes
+              - sky
+              - standingsTypes
+              - statGroups
+              - statTypes
+              - windDirection
+      responses:
+        "200":
+          description: Lookup values
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object, additionalProperties: true }

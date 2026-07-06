@@ -25,7 +25,6 @@
       "Bash(pkill -f \"concurrently\")",
       "Bash(pkill -f \"node_modules/.bin/vite\")",
       "Bash(xargs kill -9)",
-      "Bash(\"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome\" --headless=new --disable-gpu --hide-scrollbars --force-device-scale-factor=2 --window-size=1200,1150 --virtual-time-budget=9000 --screenshot=\"docs/screenshot.png\" \"http://localhost:5173/\")",
       "Bash(npm init *)",
       "Bash(npm i *)",
       "Bash(echo \"install exit=$?\")",
@@ -35,8 +34,6 @@
       "Bash(curl -s -o /dev/null -w \"5173=%{http_code}\\\\n\" http://localhost:5173/)",
       "Bash(echo \"pid $!\")",
       "Bash(node record-gif.mjs)",
-      "Bash(ls -la /Users/tom/projects/mlb/previous-day-player-events/docs/add-player.gif)",
-      "Bash(file /Users/tom/projects/mlb/previous-day-player-events/docs/add-player.gif)",
       "Bash(curl -s \"http://localhost:4000/api/roster?date=2026-07-02\")",
       "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\([p['name'] for p in d['players'] if 'teel' in p['name'].lower\\(\\)]\\)\")",
       "Bash(node -e \"for \\(const p of ['express','typescript','react','react-dom','@types/express','@types/react','@types/react-dom']\\) { try { console.log\\(p, require\\(require.resolve\\(p+'/package.json',{paths:[process.cwd\\(\\),process.cwd\\(\\)+'/server',process.cwd\\(\\)+'/client']}\\)\\).version\\) } catch\\(e\\){ console.log\\(p,'?'\\) } }\")",
@@ -60,7 +57,8 @@
       "Bash(curl -s -r 0-99 -o /dev/null -w 'http=%{http_code} type=%{content_type}\\\\n' -A 'Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/126.0 Safari/537.36' https://sporty-clips.mlb.com/d2V3OGdfWGw0TUFRPT1fQlFKVEFWZFZYd0lBQ3dRQVZRQUhVQVlDQUFBR1VGWUFBRlZRVmxJRUJBSlJWQVpS.mp4)",
       "Bash(curl -s -r 0-99 -o /dev/null -w 'http=%{http_code} type=%{content_type}\\\\n' -A 'Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/126.0 Safari/537.36' -e https://baseballsavant.mlb.com/ https://sporty-clips.mlb.com/d2V3OGdfWGw0TUFRPT1fQlFKVEFWZFZYd0lBQ3dRQVZRQUhVQVlDQUFBR1VGWUFBRlZRVmxJRUJBSlJWQVpS.mp4)",
       "Bash(curl -s -r 0-99 -o /dev/null -w 'http=%{http_code} type=%{content_type}\\\\n' -A 'Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/126.0 Safari/537.36' -e https://sporty-clips.mlb.com/ https://sporty-clips.mlb.com/d2V3OGdfWGw0TUFRPT1fQlFKVEFWZFZYd0lBQ3dRQVZRQUhVQVlDQUFBR1VGWUFBRlZRVmxJRUJBSlJWQVpS.mp4)",
-      "Bash(curl -s -r 0-99 -o /dev/null -w 'http=%{http_code} type=%{content_type}\\\\n' -A 'Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/126.0 Safari/537.36' -H 'Origin: https://baseballsavant.mlb.com' https://sporty-clips.mlb.com/d2V3OGdfWGw0TUFRPT1fQlFKVEFWZFZYd0lBQ3dRQVZRQUhVQVlDQUFBR1VGWUFBRlZRVmxJRUJBSlJWQVpS.mp4)"
+      "Bash(curl -s -r 0-99 -o /dev/null -w 'http=%{http_code} type=%{content_type}\\\\n' -A 'Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/126.0 Safari/537.36' -H 'Origin: https://baseballsavant.mlb.com' https://sporty-clips.mlb.com/d2V3OGdfWGw0TUFRPT1fQlFKVEFWZFZYd0lBQ3dRQVZRQUhVQVlDQUFBR1VGWUFBRlZRVmxJRUJBSlJWQVpS.mp4)",
+      "Bash(curl -s \"https://baseballsavant.mlb.com/schedule?date=2026-07-05\" -o schedule.json)"
     ]
   }
 }

@@ -1,10 +1,8 @@
-# Previous-Day Player Events
+# Baseball Sicko Stats
 
 A full-stack TypeScript app for visualizing **previous-day MLB batting events** for a
 watchlist of players, powered by Baseball Savant / Statcast pitch-level data, with
 official scoring (runs, RBI, SB, CS) from the MLB Stats API.
-
-![Previous-Day Player Events — the app showing a watchlist with per-player stat pills, plate-appearance cards, and strike-zone pitch plots](docs/screenshot.png)
 
 Add players to your watchlist and instantly see, for any game date:
 
@@ -22,25 +20,12 @@ Add players to your watchlist and instantly see, for any game date:
 Search your day's roster and add a player in one click — their events load
 instantly.
 
-![Adding a player: typing a name, selecting from the autocomplete, and the player's plate-appearance card appearing](docs/add-player.gif)
-
 ### Anatomy of a plate appearance
 
 Each plate appearance is a single card: a color-coded outcome badge, the play
 description, the batted-ball line (exit velo · launch angle · distance + xwOBA),
 the full pitch sequence, and a strike-zone plot where every pitch is a numbered
 dot colored by result (in-play, whiff, foul, called strike, ball).
-
-<table>
-  <tr>
-    <td width="62%"><img src="docs/close-plate-appearance.png" alt="A single plate-appearance card: a home run with exit velocity, launch angle, distance, xwOBA, and the pitch sequence"></td>
-    <td width="38%"><img src="docs/close-strike-zone.png" alt="Strike-zone plot with each pitch as a numbered, color-coded dot"></td>
-  </tr>
-  <tr>
-    <td align="center"><em>One plate appearance — outcome, contact metrics, pitch table</em></td>
-    <td align="center"><em>Strike-zone plot (numbered, color-coded pitches)</em></td>
-  </tr>
-</table>
 
 ## Stack
 
@@ -118,7 +103,7 @@ flowchart TD
 ### Module map
 
 ```
-previous-day-player-events/
+baseball-sicko-stats/
 ├─ package.json            workspaces + dev/build/start scripts
 ├─ server/                 Express API (TypeScript, ESM)
 │  ├─ src/

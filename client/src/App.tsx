@@ -112,7 +112,7 @@ export default function App() {
         <div className="brand">
           <div className="brand-mark">⚾</div>
           <div>
-            <h1>Previous-Day Player Events</h1>
+            <h1>Baseball Sicko Stats</h1>
             <p className="brand-sub">Statcast batting events for your watchlist</p>
           </div>
         </div>
