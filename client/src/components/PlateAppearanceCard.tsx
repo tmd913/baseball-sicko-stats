@@ -5,6 +5,7 @@ import {
   contactHighlight,
   describePitch,
   eventLabel,
+  isSwing,
   outcomeKind,
   pitchAbbr,
 } from '../lib';
@@ -79,6 +80,11 @@ function PitchRow({
         {pitch.releaseSpeed !== null ? `${pitch.releaseSpeed.toFixed(1)}` : '—'}
       </span>
       <span className="pitch-desc">{describePitch(pitch.description)}</span>
+      <span className="pitch-batspeed">
+        {pitch.batSpeed !== null && isSwing(pitch.description)
+          ? pitch.batSpeed.toFixed(1)
+          : ''}
+      </span>
       <span className="pitch-ev">
         {pitch.launchSpeed !== null && pitch.description === 'hit_into_play'
           ? `${pitch.launchSpeed.toFixed(0)} mph`
@@ -136,6 +142,7 @@ export function PlateAppearanceCard({
             <span className="pitch-type">Pit</span>
             <span className="pitch-velo">MPH</span>
             <span className="pitch-desc">Result</span>
+            <span className="pitch-batspeed">Bat</span>
             <span className="pitch-ev" />
           </div>
           {pa.pitches.map((p) => (

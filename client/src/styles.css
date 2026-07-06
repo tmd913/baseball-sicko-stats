@@ -574,7 +574,7 @@ body {
 }
 .pitch-row {
   display: grid;
-  grid-template-columns: 18px 30px 30px 40px 1fr auto;
+  grid-template-columns: 18px 30px 30px 40px 1fr 40px auto;
   gap: 6px;
   align-items: center;
   padding: 3px 4px;
@@ -596,6 +596,9 @@ body {
 }
 .pitch-velo {
   color: var(--text);
+}
+.pitch-batspeed {
+  color: var(--muted);
 }
 .pitch-desc {
   color: var(--muted);
