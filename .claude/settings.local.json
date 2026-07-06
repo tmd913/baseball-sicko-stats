@@ -54,7 +54,13 @@
       "Bash(curl -s -w \"http=%{http_code} size=%{size_download}\\\\n\" \"https://statsapi.mlb.com/api/v1/game/823442/playByPlay\" -o t2.json)",
       "Bash(python3 -c \"import json; d=json.load\\(open\\('t2.json'\\)\\); print\\('allPlays:', len\\(d.get\\('allPlays',[]\\)\\)\\)\")",
       "Bash(xargs -I{} curl -s \"https://statsapi.mlb.com/api/v1/game/{}/playByPlay\" -o \"pbp_{}.json\")",
-      "Bash(curl -s \"http://localhost:4000/api/report?date=2026-07-01\")"
+      "Bash(curl -s \"http://localhost:4000/api/report?date=2026-07-01\")",
+      "Bash(curl -s https://baseballsavant.mlb.com/sporty-videos?playId=__TRACKED_VAR__ -o sporty.html)",
+      "Bash(curl -s -I https://sporty-clips.mlb.com/d2V3OGdfWGw0TUFRPT1fQlFKVEFWZFZYd0lBQ3dRQVZRQUhVQVlDQUFBR1VGWUFBRlZRVmxJRUJBSlJWQVpS.mp4)",
+      "Bash(curl -s -r 0-99 -o /dev/null -w 'http=%{http_code} type=%{content_type}\\\\n' -A 'Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/126.0 Safari/537.36' https://sporty-clips.mlb.com/d2V3OGdfWGw0TUFRPT1fQlFKVEFWZFZYd0lBQ3dRQVZRQUhVQVlDQUFBR1VGWUFBRlZRVmxJRUJBSlJWQVpS.mp4)",
+      "Bash(curl -s -r 0-99 -o /dev/null -w 'http=%{http_code} type=%{content_type}\\\\n' -A 'Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/126.0 Safari/537.36' -e https://baseballsavant.mlb.com/ https://sporty-clips.mlb.com/d2V3OGdfWGw0TUFRPT1fQlFKVEFWZFZYd0lBQ3dRQVZRQUhVQVlDQUFBR1VGWUFBRlZRVmxJRUJBSlJWQVpS.mp4)",
+      "Bash(curl -s -r 0-99 -o /dev/null -w 'http=%{http_code} type=%{content_type}\\\\n' -A 'Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/126.0 Safari/537.36' -e https://sporty-clips.mlb.com/ https://sporty-clips.mlb.com/d2V3OGdfWGw0TUFRPT1fQlFKVEFWZFZYd0lBQ3dRQVZRQUhVQVlDQUFBR1VGWUFBRlZRVmxJRUJBSlJWQVpS.mp4)",
+      "Bash(curl -s -r 0-99 -o /dev/null -w 'http=%{http_code} type=%{content_type}\\\\n' -A 'Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/126.0 Safari/537.36' -H 'Origin: https://baseballsavant.mlb.com' https://sporty-clips.mlb.com/d2V3OGdfWGw0TUFRPT1fQlFKVEFWZFZYd0lBQ3dRQVZRQUhVQVlDQUFBR1VGWUFBRlZRVmxJRUJBSlJWQVpS.mp4)"
     ]
   }
 }

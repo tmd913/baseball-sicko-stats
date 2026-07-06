@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getReport, getRoster } from './savant.js';
+import { resolveVideoUrl } from './mlbStats.js';
 import { addPlayer, getWatchlist, removePlayer } from './store.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -104,6 +105,24 @@ app.get(
     const watchlist = await getWatchlist();
     const players = await getReport(date, watchlist);
     res.json({ date, players });
+  }),
+);
+
+// Resolve the direct .mp4 URL for a play's Statcast video (lazy, on demand).
+app.get(
+  '/api/video/:playId',
+  asyncRoute(async (req, res) => {
+    const playId = String(req.params.playId);
+    if (!/^[0-9a-f-]{20,40}$/i.test(playId)) {
+      res.status(400).json({ error: 'invalid playId' });
+      return;
+    }
+    const url = await resolveVideoUrl(playId);
+    if (!url) {
+      res.status(404).json({ error: 'no video for this play' });
+      return;
+    }
+    res.json({ url });
   }),
 );
 

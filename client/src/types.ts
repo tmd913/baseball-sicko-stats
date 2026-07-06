@@ -29,6 +29,7 @@ export interface PlateAppearance {
   event: string | null;
   description: string;
   rbi: number;
+  playId: string | null;
   launchSpeed: number | null;
   launchAngle: number | null;
   hitDistance: number | null;

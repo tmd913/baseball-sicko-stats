@@ -33,7 +33,8 @@ export interface PlateAppearance {
   pThrows: string | null; // pitcher handedness L/R
   event: string | null; // single, home_run, strikeout, walk, field_out, ...
   description: string; // human-readable play description (des)
-  rbi: number; // runs batted in on this PA (batting team's score delta)
+  rbi: number; // runs batted in on this PA (official scoring)
+  playId: string | null; // Statcast video id (present when ball in play)
   // Final batted-ball summary (when contact was made)
   launchSpeed: number | null;
   launchAngle: number | null;

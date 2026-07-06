@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import type { PlateAppearance } from '../types';
+import { api } from '../api';
 import {
   contactHighlight,
   describePitch,
@@ -7,6 +9,52 @@ import {
   pitchAbbr,
 } from '../lib';
 import { StrikeZone } from './StrikeZone';
+
+function VideoClip({ playId }: { playId: string }) {
+  const [state, setState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [url, setUrl] = useState<string | null>(null);
+
+  const open = async () => {
+    if (url) {
+      setState('ready'); // already resolved — reopen instantly, no refetch
+      return;
+    }
+    setState('loading');
+    try {
+      setUrl(await api.video(playId));
+      setState('ready');
+    } catch {
+      setState('error');
+    }
+  };
+
+  if (state === 'ready' && url) {
+    return (
+      <div className="pa-video">
+        <div className="pa-video-bar">
+          <button className="pa-hide" onClick={() => setState('idle')}>
+            ✕ Hide video
+          </button>
+        </div>
+        {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+        <video className="pa-video-el" src={url} controls autoPlay playsInline />
+      </div>
+    );
+  }
+  return (
+    <button
+      className="pa-watch"
+      onClick={open}
+      disabled={state === 'loading'}
+    >
+      {state === 'loading'
+        ? 'Loading video…'
+        : state === 'error'
+          ? 'Video unavailable'
+          : '▶ Watch'}
+    </button>
+  );
+}
 
 function PitchRow({
   pitch,
@@ -68,6 +116,8 @@ export function PlateAppearanceCard({ pa }: { pa: PlateAppearance }) {
           )}
         </div>
       )}
+
+      {pa.playId && <VideoClip playId={pa.playId} />}
 
       <div className="pa-body">
         <div className="pa-pitches">

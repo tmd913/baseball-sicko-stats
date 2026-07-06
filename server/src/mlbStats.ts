@@ -11,6 +11,8 @@ export interface GameEvents {
   rbiByAtBat: Map<number, number>;
   /** Total official RBI keyed by batter id. */
   rbiByBatter: Map<number, number>;
+  /** Statcast video playId of the in-play pitch, keyed by at-bat number. */
+  playIdByAtBat: Map<number, string>;
   /** Runs scored keyed by runner id. */
   runsByRunner: Map<number, number>;
   /** Stolen bases keyed by runner id. */
@@ -24,11 +26,16 @@ interface PbpRunner {
   movement?: { end?: string | null };
   details?: { eventType?: string; runner?: { id?: number } };
 }
+interface PbpPlayEvent {
+  playId?: string;
+  details?: { isInPlay?: boolean };
+}
 interface PbpPlay {
   result?: { rbi?: number };
   about?: { atBatIndex?: number };
   matchup?: { batter?: { id?: number } };
   runners?: PbpRunner[];
+  playEvents?: PbpPlayEvent[];
 }
 interface Pbp {
   allPlays?: PbpPlay[];
@@ -68,6 +75,7 @@ function parsePlayByPlay(pbp: Pbp): GameEvents {
   const ev: GameEvents = {
     rbiByAtBat: new Map(),
     rbiByBatter: new Map(),
+    playIdByAtBat: new Map(),
     runsByRunner: new Map(),
     sbByRunner: new Map(),
     csByRunner: new Map(),
@@ -76,7 +84,14 @@ function parsePlayByPlay(pbp: Pbp): GameEvents {
     const rbi = play.result?.rbi ?? 0;
     const atBatIndex = play.about?.atBatIndex;
     const batterId = play.matchup?.batter?.id;
-    if (typeof atBatIndex === 'number') ev.rbiByAtBat.set(atBatIndex + 1, rbi);
+    if (typeof atBatIndex === 'number') {
+      ev.rbiByAtBat.set(atBatIndex + 1, rbi);
+      // The pitch put in play carries the Statcast video playId.
+      const inPlay = (play.playEvents ?? []).find(
+        (e) => e.details?.isInPlay && e.playId,
+      );
+      if (inPlay?.playId) ev.playIdByAtBat.set(atBatIndex + 1, inPlay.playId);
+    }
     if (typeof batterId === 'number' && rbi) {
       ev.rbiByBatter.set(batterId, (ev.rbiByBatter.get(batterId) ?? 0) + rbi);
     }
@@ -104,4 +119,34 @@ export async function getGameEvents(gamePk: number): Promise<GameEvents> {
   const parsed = parsePlayByPlay(await downloadPlayByPlay(gamePk));
   memCache.set(gamePk, parsed);
   return parsed;
+}
+
+// ---- Play video resolution -------------------------------------------------
+
+const BROWSER_UA =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
+  '(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+const MP4_RE = /https:\/\/sporty-clips\.mlb\.com\/[^"'\s)]+?\.mp4/;
+const videoCache = new Map<string, string | null>();
+
+/**
+ * Resolve the direct .mp4 URL for a Statcast playId by scraping the Savant
+ * sporty-videos page. Cached (including negative results) since the mapping is
+ * stable. Returns null if no clip is available.
+ */
+export async function resolveVideoUrl(playId: string): Promise<string | null> {
+  const cached = videoCache.get(playId);
+  if (cached !== undefined) return cached;
+  const res = await fetch(
+    `https://baseballsavant.mlb.com/sporty-videos?playId=${encodeURIComponent(playId)}`,
+    { headers: { 'User-Agent': BROWSER_UA } },
+  );
+  if (!res.ok) {
+    videoCache.set(playId, null);
+    return null;
+  }
+  const html = await res.text();
+  const url = html.match(MP4_RE)?.[0] ?? null;
+  videoCache.set(playId, url);
+  return url;
 }

@@ -507,6 +507,61 @@ body {
   border-radius: 6px;
 }
 
+/* ---- Play video ---- */
+.pa-watch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  color: var(--accent);
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.pa-watch:hover:not(:disabled) {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: var(--accent);
+}
+.pa-watch:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.pa-video {
+  margin-bottom: 10px;
+}
+.pa-video-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 6px;
+}
+.pa-hide {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.pa-hide:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.pa-video-el {
+  width: 100%;
+  max-height: 300px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: #000;
+  display: block;
+}
+
 .pa-body {
   display: grid;
   grid-template-columns: 1fr 130px;

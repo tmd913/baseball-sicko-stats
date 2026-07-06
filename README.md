@@ -13,6 +13,7 @@ Add players to your watchlist and instantly see, for any game date:
 - **Every plate appearance** as a card: outcome, play description, pitcher/batter handedness
 - The **pitch sequence** (type, velocity, count, result) with exit velocity on contact
 - A **strike-zone plot** of every pitch, color-coded by result
+- **Watch the play** — for any ball in play, the Statcast video embeds inline on demand
 - **Statcast quality-of-contact** stats: exit velo, max distance, run value, xwOBA
 - A link out to each player's Baseball Savant page
 
@@ -123,7 +124,7 @@ previous-day-player-events/
 │  ├─ src/
 │  │  ├─ index.ts          routes, error wrapping, static client in prod
 │  │  ├─ savant.ts         Savant URL, download+cache, CSV → nested model
-│  │  ├─ mlbStats.ts       Stats API play-by-play → RBI · SB · CS (cached)
+│  │  ├─ mlbStats.ts       Stats API play-by-play → runs · RBI · SB · CS · video (cached)
 │  │  ├─ store.ts          watchlist read/write (watchlist.json)
 │  │  └─ types.ts          shared data model
 │  └─ data/                watchlist.json + cache/ (gitignored)
@@ -166,6 +167,7 @@ npm start           # serves API + built client on :4000
 | `POST`   | `/api/watchlist`       | Add `{ id, savantName, name }`              |
 | `DELETE` | `/api/watchlist/:id`   | Remove a player                             |
 | `GET`    | `/api/report?date=`    | Watchlisted players' events for the date    |
+| `GET`    | `/api/video/:playId`   | Resolve a play's Statcast `.mp4` URL        |
 
 `date` defaults to the previous calendar day (`YYYY-MM-DD`).
 
@@ -183,3 +185,8 @@ npm start           # serves API + built client on :4000
   `at_bat_number == atBatIndex + 1`; players by MLB id.
 - The Stats API is intended for non-commercial/personal use and publishes no rate
   limits, so play-by-play is fetched at most once per game and cached to disk.
+- **Play video** uses the in-play pitch's `playId` (also from the play-by-play).
+  `/api/video/:playId` scrapes the Savant `sporty-videos` page for the direct
+  `sporty-clips.mlb.com/*.mp4` URL (resolved lazily, only when a clip is opened,
+  and cached). The clip is hotlink-protected by User-Agent, which a real browser
+  `<video>` satisfies — so it streams directly with no byte-proxying.

@@ -279,6 +279,7 @@ function parseDay(date: string, csvText: string): ParsedDay {
           event: last.events || null,
           description: last.des || '',
           rbi: 0, // filled from the MLB Stats API during report enrichment
+          playId: null, // filled from the MLB Stats API during report enrichment
           launchSpeed: num(last.launch_speed),
           launchAngle: num(last.launch_angle),
           hitDistance: num(last.hit_distance_sc),
@@ -403,6 +404,7 @@ async function enrichWithStatsApi(reports: PlayerReport[]): Promise<void> {
       if (!ev) continue;
       for (const pa of g.plateAppearances) {
         pa.rbi = ev.rbiByAtBat.get(pa.atBatNumber) ?? 0;
+        pa.playId = ev.playIdByAtBat.get(pa.atBatNumber) ?? null;
       }
       g.line.runs = ev.runsByRunner.get(r.id) ?? 0;
       g.line.rbi = ev.rbiByBatter.get(r.id) ?? 0;
