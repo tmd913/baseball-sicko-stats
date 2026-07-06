@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from './api';
-import type { PlayerReport, RosterEntry, WatchPlayer } from './types';
+import type { PlayerReport, SeasonPlayer, WatchPlayer } from './types';
 import { PlayerAdder } from './components/PlayerAdder';
 import { PlayerCard } from './components/PlayerCard';
 
@@ -39,33 +39,33 @@ function prettyDate(date: string): string {
 
 export default function App() {
   const [date, setDate] = useState(previousDay());
-  const [roster, setRoster] = useState<RosterEntry[]>([]);
-  const [rosterLoading, setRosterLoading] = useState(true);
+  const [seasonPlayers, setSeasonPlayers] = useState<SeasonPlayer[]>([]);
+  const [playersLoading, setPlayersLoading] = useState(true);
   const [watchlist, setWatchlist] = useState<WatchPlayer[]>([]);
   const [reports, setReports] = useState<PlayerReport[]>([]);
   const [reportLoading, setReportLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load roster whenever the date changes.
+  // Load the season's player list once, for search/autocomplete.
   useEffect(() => {
     let cancelled = false;
-    setRosterLoading(true);
+    setPlayersLoading(true);
     setError(null);
     api
-      .roster(date)
+      .players()
       .then((r) => {
-        if (!cancelled) setRoster(r.players);
+        if (!cancelled) setSeasonPlayers(r.players);
       })
       .catch((e: Error) => {
         if (!cancelled) setError(e.message);
       })
       .finally(() => {
-        if (!cancelled) setRosterLoading(false);
+        if (!cancelled) setPlayersLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [date]);
+  }, []);
 
   // Load watchlist once.
   useEffect(() => {
@@ -132,10 +132,10 @@ export default function App() {
 
       <section className="controls">
         <PlayerAdder
-          roster={roster}
+          players={seasonPlayers}
           watchlist={watchlist}
           onAdd={onAdd}
-          loading={rosterLoading}
+          loading={playersLoading}
         />
         <div className="summary-chips">
           <span className="chip">{watchlist.length} watched</span>

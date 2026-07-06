@@ -1,8 +1,8 @@
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getReport, getRoster } from './savant.js';
-import { resolveVideoUrl } from './mlbStats.js';
+import { getReport } from './savant.js';
+import { getSeasonPlayers, resolveVideoUrl } from './mlbStats.js';
 import { addPlayer, getWatchlist, removePlayer } from './store.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -57,13 +57,13 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true });
 });
 
-// Full roster of batters who played on a date (for search / adding players).
+// All players rostered for the current season (for search / adding players).
 app.get(
-  '/api/roster',
-  asyncRoute(async (req, res) => {
-    const date = resolveDate(req.query.date);
-    const roster = await getRoster(date);
-    res.json({ date, players: roster });
+  '/api/players',
+  asyncRoute(async (_req, res) => {
+    const season = new Date().getFullYear();
+    const players = await getSeasonPlayers(season);
+    res.json({ season, players });
   }),
 );
 

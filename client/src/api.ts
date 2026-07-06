@@ -1,4 +1,4 @@
-import type { PlayerReport, RosterEntry, WatchPlayer } from './types';
+import type { PlayerReport, SeasonPlayer, WatchPlayer } from './types';
 
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -15,8 +15,8 @@ async function json<T>(res: Response): Promise<T> {
 }
 
 export const api = {
-  async roster(date: string): Promise<{ date: string; players: RosterEntry[] }> {
-    return json(await fetch(`/api/roster?date=${date}`));
+  async players(): Promise<{ season: number; players: SeasonPlayer[] }> {
+    return json(await fetch('/api/players'));
   },
   async watchlist(): Promise<WatchPlayer[]> {
     const r = await json<{ players: WatchPlayer[] }>(await fetch('/api/watchlist'));

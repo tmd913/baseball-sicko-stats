@@ -3,12 +3,12 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getGamesForDate, getStatsApiGame } from './mlbStats.js';
+import { toSavantName } from './names.js';
 import type {
   Pitch,
   PlateAppearance,
   PlayerGame,
   PlayerReport,
-  RosterEntry,
   BattingLine,
   WatchPlayer,
 } from './types.js';
@@ -53,19 +53,9 @@ const int = (v: string | undefined): number | null => {
   return n === null ? null : Math.round(n);
 };
 
-/** "First Last" -> "Last, First" (mirrors the format the watchlist stores). */
-function toSavantName(fullName: string): string {
-  const parts = fullName.trim().split(/\s+/);
-  if (parts.length < 2) return fullName;
-  const last = parts[parts.length - 1];
-  const first = parts.slice(0, -1).join(' ');
-  return `${last}, ${first}`;
-}
-
 interface ParsedDay {
   date: string;
   reports: Map<number, PlayerReport>; // by batter id
-  roster: RosterEntry[];
   fetchedAt: number;
 }
 
@@ -383,7 +373,6 @@ export async function getDay(date: string): Promise<ParsedDay> {
   }
 
   const reports = new Map<number, PlayerReport>();
-  const roster: RosterEntry[] = [];
 
   for (const [batterId, b] of byBatter) {
     for (const g of b.games) {
@@ -409,26 +398,11 @@ export async function getDay(date: string): Promise<ParsedDay> {
       found: true,
       games: b.games,
     });
-
-    const g0 = b.games[0];
-    roster.push({
-      id: batterId,
-      savantName,
-      name: b.name,
-      team: g0?.batterTeam ?? '',
-      opponent: g0?.opponent ?? '',
-      pa: b.games.reduce((s, g) => s + g.line.pa, 0),
-    });
   }
 
-  roster.sort((a, b) => a.name.localeCompare(b.name));
-  const parsed: ParsedDay = { date, reports, roster, fetchedAt: Date.now() };
+  const parsed: ParsedDay = { date, reports, fetchedAt: Date.now() };
   memCache.set(date, parsed);
   return parsed;
-}
-
-export async function getRoster(date: string): Promise<RosterEntry[]> {
-  return (await getDay(date)).roster;
 }
 
 export async function getReport(

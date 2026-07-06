@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react';
-import type { RosterEntry, WatchPlayer } from '../types';
+import type { SeasonPlayer, WatchPlayer } from '../types';
 
 export function PlayerAdder({
-  roster,
+  players,
   watchlist,
   onAdd,
   loading,
 }: {
-  roster: RosterEntry[];
+  players: SeasonPlayer[];
   watchlist: WatchPlayer[];
   onAdd: (p: WatchPlayer) => void;
   loading: boolean;
@@ -20,16 +20,16 @@ export function PlayerAdder({
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
-    return roster
+    return players
       .filter((p) => !watchedIds.has(p.id))
       .filter(
         (p) =>
           p.name.toLowerCase().includes(q) || p.savantName.toLowerCase().includes(q),
       )
       .slice(0, 8);
-  }, [query, roster, watchedIds]);
+  }, [query, players, watchedIds]);
 
-  const select = (p: RosterEntry) => {
+  const select = (p: SeasonPlayer) => {
     onAdd({ id: p.id, savantName: p.savantName, name: p.name });
     setQuery('');
   };
@@ -41,8 +41,8 @@ export function PlayerAdder({
           className="adder-input"
           placeholder={
             loading
-              ? 'Loading roster…'
-              : `Add a player (${roster.length} played this day)…`
+              ? 'Loading players…'
+              : `Add a player (${players.length} active this season)…`
           }
           value={query}
           disabled={loading}
@@ -63,7 +63,8 @@ export function PlayerAdder({
               <button className="adder-option" onMouseDown={() => select(p)}>
                 <span className="opt-name">{p.name}</span>
                 <span className="opt-meta">
-                  {p.team} {p.opponent ? `vs ${p.opponent}` : ''} · {p.pa} PA
+                  {p.team}
+                  {p.position ? ` · ${p.position}` : ''}
                 </span>
               </button>
             </li>

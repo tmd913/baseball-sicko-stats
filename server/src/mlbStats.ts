@@ -1,6 +1,8 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { toSavantName } from './names.js';
+import type { SeasonPlayer } from './types.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CACHE_DIR = path.join(__dirname, '..', 'data', 'cache');
@@ -48,6 +50,68 @@ export async function getGamesForDate(date: string): Promise<number[]> {
     for (const g of d.games ?? []) gamePks.push(g.gamePk);
   }
   return gamePks;
+}
+
+// ---- Season player list (for watchlist search/autocomplete) -----------
+
+interface SportsPlayersPerson {
+  id: number;
+  fullName: string;
+  primaryPosition?: { code?: string; abbreviation?: string };
+  currentTeam?: { id?: number };
+}
+interface SportsPlayersResponse {
+  people?: SportsPlayersPerson[];
+}
+interface TeamsResponse {
+  teams?: { id: number; name: string }[];
+}
+
+/** MLB Stats API's player payload only carries currentTeam.id, not its name. */
+async function getTeamNamesById(): Promise<Map<number, string>> {
+  const url = 'https://statsapi.mlb.com/api/v1/teams?sportId=1&fields=teams,id,name';
+  const res = await fetch(url, { headers: UA });
+  if (!res.ok) {
+    throw new Error(`MLB Stats API teams returned ${res.status}`);
+  }
+  const data = (await res.json()) as TeamsResponse;
+  return new Map((data.teams ?? []).map((t) => [t.id, t.name]));
+}
+
+/** How long a season's player list stays fresh before we re-download (ms). */
+const SEASON_PLAYERS_TTL = 60 * 60 * 1000;
+const seasonPlayersCache = new Map<number, { players: SeasonPlayer[]; fetchedAt: number }>();
+
+/** Every non-pitcher rostered for a season (for watchlist search — this app only tracks batting). */
+export async function getSeasonPlayers(
+  season: number = new Date().getFullYear(),
+): Promise<SeasonPlayer[]> {
+  const cached = seasonPlayersCache.get(season);
+  if (cached && Date.now() - cached.fetchedAt < SEASON_PLAYERS_TTL) {
+    return cached.players;
+  }
+
+  const url =
+    `https://statsapi.mlb.com/api/v1/sports/1/players?season=${season}` +
+    `&fields=people,id,fullName,primaryPosition,code,abbreviation,currentTeam,id`;
+  const [res, teamNames] = await Promise.all([fetch(url, { headers: UA }), getTeamNamesById()]);
+  if (!res.ok) {
+    throw new Error(`MLB Stats API sports/players returned ${res.status} for season ${season}`);
+  }
+  const data = (await res.json()) as SportsPlayersResponse;
+
+  const players: SeasonPlayer[] = (data.people ?? [])
+    .filter((p) => p.primaryPosition?.code !== '1')
+    .map((p) => ({
+      id: p.id,
+      name: p.fullName,
+      savantName: toSavantName(p.fullName),
+      team: (p.currentTeam?.id !== undefined && teamNames.get(p.currentTeam.id)) || '',
+      position: p.primaryPosition?.abbreviation ?? '',
+    }));
+
+  seasonPlayersCache.set(season, { players, fetchedAt: Date.now() });
+  return players;
 }
 
 // ---- Live feed (pitch-by-pitch + Statcast-style pitch/hit data) -------

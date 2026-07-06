@@ -96,9 +96,8 @@ export interface PlayerReport extends WatchPlayer {
   games: PlayerGame[];
 }
 
-/** Lightweight roster entry for search/autocomplete. */
-export interface RosterEntry extends WatchPlayer {
+/** A rostered player for the season, used for search/autocomplete. */
+export interface SeasonPlayer extends WatchPlayer {
   team: string;
-  opponent: string;
-  pa: number;
+  position: string;
 }

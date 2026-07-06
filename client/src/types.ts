@@ -88,8 +88,7 @@ export interface PlayerReport extends WatchPlayer {
   games: PlayerGame[];
 }
 
-export interface RosterEntry extends WatchPlayer {
+export interface SeasonPlayer extends WatchPlayer {
   team: string;
-  opponent: string;
-  pa: number;
+  position: string;
 }
