@@ -71,7 +71,6 @@ function PitchRow({
       ? `${pitch.balls}-${pitch.strikes}`
       : '';
   const showBatSpeed = pitch.batSpeed !== null && isSwing(pitch.description);
-  const showExitVelo = pitch.launchSpeed !== null && pitch.description === 'hit_into_play';
   return (
     <div className={`pitch-row-wrap desc-${pitch.description.split('_')[0]}`}>
       <div className="pitch-row">
@@ -84,20 +83,10 @@ function PitchRow({
           {pitch.releaseSpeed !== null ? `${pitch.releaseSpeed.toFixed(1)}` : '—'}
         </span>
         <span className="pitch-desc">{describePitch(pitch.description)}</span>
+        {showBatSpeed && (
+          <span className="metric metric-bat">SW {pitch.batSpeed!.toFixed(1)} mph</span>
+        )}
       </div>
-      {(showBatSpeed || showExitVelo) && (
-        <div className="pitch-metrics">
-          {showBatSpeed && (
-            <span className="metric metric-bat">SW {pitch.batSpeed!.toFixed(1)} mph</span>
-          )}
-          {showExitVelo && (
-            <span className="metric metric-ev">
-              EV {pitch.launchSpeed!.toFixed(0)} mph
-              {pitch.launchAngle !== null ? ` · ${pitch.launchAngle}°` : ''}
-            </span>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -109,14 +98,14 @@ export function PlateAppearanceCard({
   pa: PlateAppearance;
   gamePk: number;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const kind = outcomeKind(pa.event);
   const contact = contactHighlight(pa);
   const swingSpeed = finalSwingBatSpeed(pa);
   const inningLabel = `${pa.half === 'Top' ? '▲' : '▼'} ${pa.inning}`;
 
   return (
-    <div className={`pa-card kind-${kind}`}>
+    <div className={`pa-card kind-${kind}${expanded ? ' expanded' : ''}`}>
       <button
         type="button"
         className="pa-summary-row"
@@ -141,32 +130,34 @@ export function PlateAppearanceCard({
             </div>
           )}
 
-          <p className="pa-des">{pa.description || '—'}</p>
-
-          {contact && (
-            <div className="pa-contact">
-              <span className="pa-contact-main">{contact}</span>
-              {pa.bbType && <span className="pa-bbtype">{pa.bbType.replace(/_/g, ' ')}</span>}
-              {pa.xwoba !== null && (
-                <span className="pa-xwoba">xwOBA {pa.xwoba.toFixed(3)}</span>
-              )}
-            </div>
-          )}
-
-          {pa.playId && <VideoClip playId={pa.playId} gamePk={gamePk} />}
-
           <div className="pa-body">
-            <div className="pa-pitches">
-              <div className="pitch-row pitch-head">
-                <span className="pitch-num">#</span>
-                <span className="pitch-count">Cnt</span>
-                <span className="pitch-type">Pit</span>
-                <span className="pitch-velo">MPH</span>
-                <span className="pitch-desc">Result</span>
+            <div className="pa-main">
+              <p className="pa-des">{pa.description || '—'}</p>
+
+              {contact && (
+                <div className="pa-contact">
+                  <span className="pa-contact-main">{contact}</span>
+                  {pa.bbType && <span className="pa-bbtype">{pa.bbType.replace(/_/g, ' ')}</span>}
+                  {pa.xwoba !== null && (
+                    <span className="pa-xwoba">xwOBA {pa.xwoba.toFixed(3)}</span>
+                  )}
+                </div>
+              )}
+
+              {pa.playId && <VideoClip playId={pa.playId} gamePk={gamePk} />}
+
+              <div className="pa-pitches">
+                <div className="pitch-row pitch-head">
+                  <span className="pitch-num">#</span>
+                  <span className="pitch-count">Cnt</span>
+                  <span className="pitch-type">Pit</span>
+                  <span className="pitch-velo">MPH</span>
+                  <span className="pitch-desc">Result</span>
+                </div>
+                {pa.pitches.map((p) => (
+                  <PitchRow key={p.pitchNumber} pitch={p} />
+                ))}
               </div>
-              {pa.pitches.map((p) => (
-                <PitchRow key={p.pitchNumber} pitch={p} />
-              ))}
             </div>
             <StrikeZone pitches={pa.pitches} />
           </div>

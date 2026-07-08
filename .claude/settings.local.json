@@ -58,7 +58,18 @@
       "Bash(curl -s -r 0-99 -o /dev/null -w 'http=%{http_code} type=%{content_type}\\\\n' -A 'Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/126.0 Safari/537.36' -e https://baseballsavant.mlb.com/ https://sporty-clips.mlb.com/d2V3OGdfWGw0TUFRPT1fQlFKVEFWZFZYd0lBQ3dRQVZRQUhVQVlDQUFBR1VGWUFBRlZRVmxJRUJBSlJWQVpS.mp4)",
       "Bash(curl -s -r 0-99 -o /dev/null -w 'http=%{http_code} type=%{content_type}\\\\n' -A 'Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/126.0 Safari/537.36' -e https://sporty-clips.mlb.com/ https://sporty-clips.mlb.com/d2V3OGdfWGw0TUFRPT1fQlFKVEFWZFZYd0lBQ3dRQVZRQUhVQVlDQUFBR1VGWUFBRlZRVmxJRUJBSlJWQVpS.mp4)",
       "Bash(curl -s -r 0-99 -o /dev/null -w 'http=%{http_code} type=%{content_type}\\\\n' -A 'Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/126.0 Safari/537.36' -H 'Origin: https://baseballsavant.mlb.com' https://sporty-clips.mlb.com/d2V3OGdfWGw0TUFRPT1fQlFKVEFWZFZYd0lBQ3dRQVZRQUhVQVlDQUFBR1VGWUFBRlZRVmxJRUJBSlJWQVpS.mp4)",
-      "Bash(curl -s \"https://baseballsavant.mlb.com/schedule?date=2026-07-05\" -o schedule.json)"
+      "Bash(curl -s \"https://baseballsavant.mlb.com/schedule?date=2026-07-05\" -o schedule.json)",
+      "Read(//Users/tom/.nvm/versions/**)",
+      "Read(//usr/local/bin/**)",
+      "Read(//Users/tom/.volta/bin/**)",
+      "Bash(command -v fnm)",
+      "Bash(/opt/homebrew/bin/node ./node_modules/typescript/bin/tsc -b)",
+      "Bash(PATH=/opt/homebrew/bin:__TRACKED_VAR__ /Users/tom/projects/mlb/baseball-sicko-stats/node_modules/.bin/tsc -b)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(PATH=/opt/homebrew/bin:__TRACKED_VAR__ ./node_modules/.bin/tsc -p tsconfig.json --noEmit)",
+      "Bash(PATH=/opt/homebrew/bin:__TRACKED_VAR__ ../node_modules/.bin/tsc -p tsconfig.json --noEmit)",
+      "Bash(git check-ignore *)",
+      "Bash(git add *)"
     ]
   }
 }

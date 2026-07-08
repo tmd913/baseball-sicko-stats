@@ -121,6 +121,11 @@ export function savantPlayerUrl(name: string, id: number): string {
   return `https://baseballsavant.mlb.com/savant-player/${slug}-${id}?stats=statcast-r-hitting-mlb`;
 }
 
+/** MLB headshot for a player id (transparent PNG, ~120px). */
+export function headshotUrl(id: number): string {
+  return `https://midfield.mlbstatic.com/v1/people/${id}/spots/120`;
+}
+
 const PITCH_ABBR: Record<string, string> = {
   '4-Seam Fastball': 'FF',
   Sinker: 'SI',

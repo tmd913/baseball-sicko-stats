@@ -9,21 +9,34 @@ const CACHE_DIR = path.join(__dirname, '..', 'data', 'cache');
 const UA = { 'User-Agent': 'baseball-sicko-stats/1.0' };
 
 async function fetchCached(url: string, cacheFile: string): Promise<string> {
-  await fs.mkdir(CACHE_DIR, { recursive: true });
-  const file = path.join(CACHE_DIR, cacheFile);
+  const hit = await readCache(cacheFile);
+  if (hit !== null) return hit;
+  const text = await fetchText(url);
+  await writeCache(cacheFile, text);
+  return text;
+}
+
+async function readCache(cacheFile: string): Promise<string | null> {
   try {
-    const cached = await fs.readFile(file, 'utf8');
+    const cached = await fs.readFile(path.join(CACHE_DIR, cacheFile), 'utf8');
     if (cached.trim().length > 0) return cached;
   } catch {
     // not cached yet
   }
+  return null;
+}
+
+async function writeCache(cacheFile: string, text: string): Promise<void> {
+  await fs.mkdir(CACHE_DIR, { recursive: true });
+  await fs.writeFile(path.join(CACHE_DIR, cacheFile), text, 'utf8');
+}
+
+async function fetchText(url: string): Promise<string> {
   const res = await fetch(url, { headers: UA });
   if (!res.ok) {
     throw new Error(`MLB Stats API returned ${res.status} for ${url}`);
   }
-  const text = await res.text();
-  await fs.writeFile(file, text, 'utf8');
-  return text;
+  return res.text();
 }
 
 // ---- Schedule ---------------------------------------------------------
@@ -118,6 +131,9 @@ export async function getSeasonPlayers(
 
 const FEED_FIELDS = [
   'gameData',
+  'status',
+  'abstractGameState',
+  'codedGameState',
   'teams',
   'away',
   'home',
@@ -219,17 +235,42 @@ interface FeedPlay {
   playEvents?: FeedPlayEvent[];
 }
 interface LiveFeed {
-  gameData?: { teams?: { home?: { abbreviation?: string }; away?: { abbreviation?: string } } };
+  // The full (unfiltered) feed carries metaData.timeStamp, which is the
+  // startTimecode for the next diffPatch request while a game is live.
+  metaData?: { timeStamp?: string };
+  gameData?: {
+    status?: { abstractGameState?: string; codedGameState?: string };
+    teams?: { home?: { abbreviation?: string }; away?: { abbreviation?: string } };
+  };
   liveData?: { plays?: { allPlays?: FeedPlay[] } };
 }
 
-async function getLiveFeed(gamePk: number): Promise<LiveFeed> {
-  const text = await fetchCached(
-    `https://statsapi.mlb.com/api/v1.1/game/${gamePk}/feed/live?fields=${FEED_FIELDS}`,
-    `game-${gamePk}.json`,
+/**
+ * A game is "final" once it's over (Final/Game Over/Completed Early). Only final
+ * games are safe to cache permanently — an in-progress game keeps accruing
+ * plays, so its feed must be re-fetched rather than frozen at first read.
+ */
+function isFinalFeed(feed: LiveFeed): boolean {
+  const status = feed.gameData?.status;
+  return (
+    status?.abstractGameState === 'Final' ||
+    status?.codedGameState === 'F' ||
+    status?.codedGameState === 'O'
   );
-  return JSON.parse(text) as LiveFeed;
 }
+
+// Compact (field-filtered) feed — used for reads of completed games we persist.
+const feedUrl = (gamePk: number) =>
+  `https://statsapi.mlb.com/api/v1.1/game/${gamePk}/feed/live?fields=${FEED_FIELDS}`;
+// Full (unfiltered) feed — the base snapshot a diffPatch stream applies onto.
+// diffPatch paths reference the whole document, so its base can't be filtered.
+const fullFeedUrl = (gamePk: number) =>
+  `https://statsapi.mlb.com/api/v1.1/game/${gamePk}/feed/live`;
+const diffPatchUrl = (gamePk: number, startTimecode: string) =>
+  `https://statsapi.mlb.com/api/v1.1/game/${gamePk}/feed/live/diffPatch` +
+  `?startTimecode=${startTimecode}`;
+const winProbabilityUrl = (gamePk: number) =>
+  `https://statsapi.mlb.com/api/v1/game/${gamePk}/winProbability`;
 
 // ---- Win probability (per-play win expectancy added) -------------------
 
@@ -238,11 +279,7 @@ interface WinProbabilityPlay {
   homeTeamWinProbabilityAdded?: number;
 }
 
-async function getWinProbabilityByAtBat(gamePk: number): Promise<Map<number, number>> {
-  const text = await fetchCached(
-    `https://statsapi.mlb.com/api/v1/game/${gamePk}/winProbability`,
-    `wp-${gamePk}.json`,
-  );
+function parseWinProbability(text: string): Map<number, number> {
   const plays = JSON.parse(text) as WinProbabilityPlay[];
   const byAtBat = new Map<number, number>();
   for (const p of plays) {
@@ -252,6 +289,99 @@ async function getWinProbabilityByAtBat(gamePk: number): Promise<Map<number, num
     }
   }
   return byAtBat;
+}
+
+// ---- Live feed via diffPatch ------------------------------------------
+//
+// A live game keeps accruing plays, so rather than re-pulling the whole feed we
+// keep the last full snapshot in memory and ask the diffPatch endpoint for just
+// the JSON-Patch (RFC 6902) deltas since our snapshot's timeStamp. Any failure
+// (stale timecode, unexpected shape, bad patch) falls back to a full re-fetch,
+// so correctness never depends on the diff path.
+
+type PatchOp = { op: string; path: string; value?: unknown; from?: string };
+
+// RFC 6901 JSON pointer -> path tokens (with ~1/~0 unescaping).
+function pointerTokens(pointer: string): string[] {
+  if (pointer === '') return [];
+  return pointer
+    .split('/')
+    .slice(1)
+    .map((t) => t.replace(/~1/g, '/').replace(/~0/g, '~'));
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function resolvePointer(doc: any, tokens: string[]): any {
+  let node = doc;
+  for (const t of tokens) {
+    if (node == null) return undefined;
+    node = node[t];
+  }
+  return node;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyPatch(doc: any, ops: PatchOp[]): void {
+  for (const op of ops) {
+    const tokens = pointerTokens(op.path);
+    const last = tokens[tokens.length - 1];
+    const parent = resolvePointer(doc, tokens.slice(0, -1));
+    if (parent == null) throw new Error(`diffPatch: no parent for ${op.path}`);
+    switch (op.op) {
+      case 'add':
+        if (Array.isArray(parent)) {
+          if (last === '-') parent.push(op.value);
+          else parent.splice(Number(last), 0, op.value);
+        } else parent[last] = op.value;
+        break;
+      case 'replace':
+        parent[last] = op.value;
+        break;
+      case 'remove':
+        if (Array.isArray(parent)) parent.splice(Number(last), 1);
+        else delete parent[last];
+        break;
+      case 'move':
+      case 'copy': {
+        const fromTokens = pointerTokens(op.from ?? '');
+        const value = resolvePointer(doc, fromTokens);
+        if (op.op === 'move') {
+          const fromParent = resolvePointer(doc, fromTokens.slice(0, -1));
+          const fromLast = fromTokens[fromTokens.length - 1];
+          if (Array.isArray(fromParent)) fromParent.splice(Number(fromLast), 1);
+          else delete fromParent[fromLast];
+        }
+        applyPatch(doc, [{ op: 'add', path: op.path, value }]);
+        break;
+      }
+      case 'test':
+        break; // advisory only
+      default:
+        throw new Error(`diffPatch: unsupported op ${op.op}`);
+    }
+  }
+}
+
+interface DiffPatchResult {
+  diffs: PatchOp[][];
+  full?: LiveFeed;
+}
+
+async function fetchDiffPatch(gamePk: number, startTimecode: string): Promise<DiffPatchResult> {
+  const data = JSON.parse(await fetchText(diffPatchUrl(gamePk, startTimecode))) as unknown;
+  const items = Array.isArray(data) ? data : [data];
+  const diffs: PatchOp[][] = [];
+  for (const item of items) {
+    if (!item || typeof item !== 'object') continue;
+    const obj = item as Record<string, unknown>;
+    if (Array.isArray(obj.diff)) {
+      diffs.push(obj.diff as PatchOp[]);
+    } else if ('gameData' in obj || 'liveData' in obj) {
+      // Timecode too old to diff: the API returns the whole feed instead.
+      return { diffs: [], full: obj as LiveFeed };
+    }
+  }
+  return { diffs };
 }
 
 // ---- Pitch type / call-code normalization (to match Savant vocabulary) -
@@ -367,16 +497,98 @@ export interface StatsApiGame {
   csByRunner: Map<number, number>;
 }
 
+// Final games are immutable, so they're memoized (and disk-cached) forever.
+// In-progress games are held in memory as a full feed snapshot that we advance
+// with diffPatch deltas, refreshed at most once per LIVE_GAME_TTL.
+const LIVE_GAME_TTL = 10 * 1000;
 const gameMemCache = new Map<number, StatsApiGame>();
 
-export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
-  const cached = gameMemCache.get(gamePk);
-  if (cached) return cached;
+interface LiveEntry {
+  feed: LiveFeed;
+  timeStamp: string;
+  winExp: Map<number, number>;
+  fetchedAt: number;
+}
+const liveState = new Map<number, LiveEntry>();
 
-  const [feed, winExpByAtBat] = await Promise.all([
-    getLiveFeed(gamePk),
-    getWinProbabilityByAtBat(gamePk).catch(() => new Map<number, number>()),
-  ]);
+/**
+ * Up-to-date feed + win expectancy for an in-progress game. Uses the diffPatch
+ * endpoint to advance a retained snapshot when possible, falling back to a full
+ * fetch. Throttled to one refresh per LIVE_GAME_TTL so repeated report requests
+ * within that window reuse the snapshot.
+ */
+async function getLiveData(gamePk: number): Promise<{ feed: LiveFeed; winExp: Map<number, number> }> {
+  const entry = liveState.get(gamePk);
+  if (entry && Date.now() - entry.fetchedAt < LIVE_GAME_TTL) {
+    return { feed: entry.feed, winExp: entry.winExp };
+  }
+
+  let feed: LiveFeed;
+  if (entry?.timeStamp) {
+    try {
+      const res = await fetchDiffPatch(gamePk, entry.timeStamp);
+      if (res.full) {
+        feed = res.full;
+      } else {
+        for (const ops of res.diffs) applyPatch(entry.feed, ops);
+        feed = entry.feed;
+      }
+      if (!feed.metaData?.timeStamp) throw new Error('diffPatch: missing timeStamp');
+    } catch {
+      feed = JSON.parse(await fetchText(fullFeedUrl(gamePk))) as LiveFeed;
+    }
+  } else {
+    feed = JSON.parse(await fetchText(fullFeedUrl(gamePk))) as LiveFeed;
+  }
+
+  // Win probability has no diff endpoint, so re-fetch it alongside each refresh.
+  const winExp = await fetchText(winProbabilityUrl(gamePk))
+    .then(parseWinProbability)
+    .catch(() => new Map<number, number>());
+
+  liveState.set(gamePk, {
+    feed,
+    timeStamp: feed.metaData?.timeStamp ?? '',
+    winExp,
+    fetchedAt: Date.now(),
+  });
+  return { feed, winExp };
+}
+
+export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
+  const finalCached = gameMemCache.get(gamePk);
+  if (finalCached) return finalCached;
+
+  const feedFile = `game-${gamePk}.json`;
+  const wpFile = `wp-${gamePk}.json`;
+
+  // A cached file on disk only ever exists for a completed game, so a hit means
+  // we can skip the network; otherwise resolve the live snapshot via diffPatch.
+  const feedCached = await readCache(feedFile);
+  let feed: LiveFeed;
+  let winExpByAtBat: Map<number, number>;
+  if (feedCached !== null) {
+    feed = JSON.parse(feedCached) as LiveFeed;
+    winExpByAtBat = parseWinProbability((await readCache(wpFile)) ?? '[]');
+  } else {
+    const live = await getLiveData(gamePk);
+    feed = live.feed;
+    winExpByAtBat = live.winExp;
+  }
+
+  const isFinal = isFinalFeed(feed);
+
+  // Once the game is over, persist a compact (field-filtered) snapshot so the
+  // on-disk cache stays small, then drop the live snapshot from memory.
+  if (isFinal && feedCached === null) {
+    const [compact, wpText] = await Promise.all([
+      fetchText(feedUrl(gamePk)).catch(() => null),
+      fetchText(winProbabilityUrl(gamePk)).catch(() => null),
+    ]);
+    if (compact) await writeCache(feedFile, compact);
+    if (wpText) await writeCache(wpFile, wpText);
+    liveState.delete(gamePk);
+  }
 
   const homeTeam = feed.gameData?.teams?.home?.abbreviation ?? '';
   const awayTeam = feed.gameData?.teams?.away?.abbreviation ?? '';
@@ -475,7 +687,9 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
   }
 
   const game: StatsApiGame = { gamePk, homeTeam, awayTeam, batters, runsByRunner, sbByRunner, csByRunner };
-  gameMemCache.set(gamePk, game);
+  // Final games are immutable — memoize forever. Live games are rebuilt each
+  // request from the (throttled) snapshot in liveState, so don't cache them here.
+  if (isFinal) gameMemCache.set(gamePk, game);
   return game;
 }
 
