@@ -2,18 +2,20 @@ import { useState } from 'react';
 import type { PlayerGame, PlayerReport } from '../types';
 import {
   combineLines,
-  fmt,
+  gameStatusView,
+  handThrows,
   headshotUrl,
-  isBigDay,
   lineSummary,
   prettyGameDate,
   savantPlayerUrl,
+  seasonStatsSummary,
 } from '../lib';
+import { BaseDiamond } from './BaseDiamond';
 import { PlateAppearanceCard } from './PlateAppearanceCard';
 
-function StatPill({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+function StatPill({ label, value }: { label: string; value: string }) {
   return (
-    <div className={`stat-pill${accent ? ' accent' : ''}`}>
+    <div className="stat-pill">
       <div className="stat-value">{value}</div>
       <div className="stat-label">{label}</div>
     </div>
@@ -21,10 +23,84 @@ function StatPill({ label, value, accent }: { label: string; value: string; acce
 }
 
 /**
- * One game's plate appearances, independently collapsible. When a player has
- * only one game in view, the matchup/line score are already shown in the
- * card header above, so the toggle is a plain "Plate appearances" bar instead
- * of repeating them.
+ * Compact game-state chip: start time (scheduled), score + inning (live), or
+ * "Final". With `withMatchup`, a not-yet-started game also shows the opponent
+ * and home/away inside the bubble (used where no score badge reveals the teams).
+ */
+function GameStatusBadge({ game, withMatchup }: { game: PlayerGame; withMatchup?: boolean }) {
+  const { kind, score, detail } = gameStatusView(game);
+  const matchup =
+    withMatchup && kind === 'scheduled' ? `${game.isHome ? 'vs' : '@'} ${game.opponent}` : null;
+  return (
+    <span className={`game-status ${kind}`}>
+      {kind === 'live' && <span className="live-dot" aria-hidden="true" />}
+      {score && <span className="game-score">{score}</span>}
+      <span className="game-status-detail">{detail}</span>
+      {matchup && <span className="game-matchup">{matchup}</span>}
+      {kind === 'live' && game.status.bases && (
+        <BaseDiamond
+          bases={game.status.bases}
+          outs={game.status.outs ?? 0}
+          className="status-bases"
+        />
+      )}
+    </span>
+  );
+}
+
+/** The opposing probable starter for a not-yet-started game. */
+function ProbablePitcher({ game }: { game: PlayerGame }) {
+  const p = game.probablePitcher;
+  if (game.status.state !== 'scheduled' || !p) return null;
+  return (
+    <span className="game-prob-pitcher" title="Probable starting pitcher">
+      vs {handThrows(p.hand)} {p.name}
+    </span>
+  );
+}
+
+/**
+ * For a not-yet-started game, the batter's season line against pitchers of the
+ * probable starter's hand (e.g. their vs-RHP split when facing a righty).
+ */
+function PlatoonSplit({ report, game }: { report: PlayerReport; game: PlayerGame }) {
+  const hand = game.probablePitcher?.hand;
+  if (game.status.state !== 'scheduled' || (hand !== 'R' && hand !== 'L')) return null;
+  const split = hand === 'R' ? report.splitVsRight : report.splitVsLeft;
+  const label = `Season vs ${handThrows(hand)}`;
+
+  if (!split || split.pa === 0) {
+    return (
+      <div className="split-block">
+        <div className="split-head">{label}</div>
+        <div className="split-empty">No plate appearances vs {handThrows(hand)} this season.</div>
+      </div>
+    );
+  }
+  return (
+    <div className="split-block">
+      <div className="split-head">
+        {label} · {split.pa} PA
+      </div>
+      <div className="stat-row">
+        <StatPill label="AVG" value={split.avg} />
+        <StatPill label="OBP" value={split.obp} />
+        <StatPill label="SLG" value={split.slg} />
+        <StatPill label="OPS" value={split.ops} />
+        <StatPill label="HR" value={`${split.hr}`} />
+        <StatPill label="RBI" value={`${split.rbi}`} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * One game's plate appearances. Clicking the bar collapses/expands the whole
+ * game; when multiple games are in view they start collapsed so the card stays
+ * scannable. Each PA is individually collapsible. When a player has only one
+ * game in view, the matchup/line score are already shown in the card header
+ * above, so the bar is a plain "Plate appearances" label instead of repeating
+ * them.
  */
 function GameBlock({
   game,
@@ -35,33 +111,80 @@ function GameBlock({
   showMatchup: boolean;
   spansMultipleDays: boolean;
 }) {
-  const [expanded, setExpanded] = useState(true);
+  // Show most recent plate appearances first (highest at-bat number).
+  const pas = [...game.plateAppearances].sort((a, b) => b.atBatNumber - a.atBatNumber);
+  const hasPas = pas.length > 0;
+  // Multiple games (showMatchup) start collapsed; a lone game stays open.
+  const [collapsed, setCollapsed] = useState(showMatchup);
+  // PAs start collapsed; clicking an individual row opens it.
+  const [openIds, setOpenIds] = useState<Set<number>>(() => new Set());
+  const togglePa = (id: number) =>
+    setOpenIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const matchup = (
+    <span className="game-sub-info">
+      {spansMultipleDays && <span className="game-date">{prettyGameDate(game.date)} · </span>}
+      {game.batterTeam} {game.isHome ? 'vs' : '@'} {game.opponent}
+    </span>
+  );
+
+  // A game the player hasn't batted in yet (scheduled or just underway): no PAs
+  // to collapse into, so the bar is a static matchup + status, no toggle/grid.
+  if (!hasPas) {
+    return (
+      <div className="game-block">
+        <div className="game-sub-bar static">
+          {matchup}
+          <GameStatusBadge game={game} />
+          <ProbablePitcher game={game} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="game-block">
-      <button
-        type="button"
-        className="game-sub-toggle"
-        aria-expanded={expanded}
-        onClick={() => setExpanded((v) => !v)}
+      <div
+        className="game-sub-bar"
+        role="button"
+        tabIndex={0}
+        aria-expanded={!collapsed}
+        title={collapsed ? 'Expand game' : 'Collapse game'}
+        onClick={() => setCollapsed((v) => !v)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setCollapsed((v) => !v);
+          }
+        }}
       >
-        <span className="game-sub-info">
-          {showMatchup ? (
-            <>
-              {spansMultipleDays && <span className="game-date">{prettyGameDate(game.date)} · </span>}
-              {game.batterTeam} {game.isHome ? 'vs' : '@'} {game.opponent}
-            </>
-          ) : (
-            `Plate appearances (${game.plateAppearances.length})`
-          )}
-        </span>
+        {showMatchup ? (
+          <>
+            {matchup}
+            <GameStatusBadge game={game} />
+          </>
+        ) : (
+          <span className="game-sub-info">
+            {`Plate appearances (${game.plateAppearances.length})`}
+          </span>
+        )}
         {showMatchup && <span className="game-sub-line">{lineSummary(game.line)}</span>}
-        <span className={`chevron${expanded ? ' expanded' : ''}`}>▸</span>
-      </button>
-      {expanded && (
+      </div>
+      {!collapsed && (
         <div className="pa-grid">
-          {game.plateAppearances.map((pa) => (
-            <PlateAppearanceCard key={pa.atBatNumber} pa={pa} gamePk={game.gamePk} />
+          {pas.map((pa) => (
+            <PlateAppearanceCard
+              key={pa.atBatNumber}
+              pa={pa}
+              gamePk={game.gamePk}
+              open={openIds.has(pa.atBatNumber)}
+              onToggle={() => togglePa(pa.atBatNumber)}
+            />
           ))}
         </div>
       )}
@@ -69,18 +192,34 @@ function GameBlock({
   );
 }
 
-/** Player headshot that quietly hides itself if MLB has no image for the id. */
+/**
+ * Player headshot, linking to the player's Baseball Savant page. Falls back to a
+ * blank circle when MLB has no image for the id. stopPropagation keeps a click
+ * from also toggling the (collapsible) card header it sits in.
+ */
 function Headshot({ id, name }: { id: number; name: string }) {
   const [failed, setFailed] = useState(false);
-  if (failed) return <div className="player-photo player-photo-empty" aria-hidden="true" />;
   return (
-    <img
-      className="player-photo"
-      src={headshotUrl(id)}
-      alt={name}
-      loading="lazy"
-      onError={() => setFailed(true)}
-    />
+    <a
+      className="player-photo-link"
+      href={savantPlayerUrl(name, id)}
+      target="_blank"
+      rel="noreferrer"
+      title={`${name} on Baseball Savant`}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {failed ? (
+        <div className="player-photo player-photo-empty" aria-hidden="true" />
+      ) : (
+        <img
+          className="player-photo"
+          src={headshotUrl(id)}
+          alt={name}
+          loading="lazy"
+          onError={() => setFailed(true)}
+        />
+      )}
+    </a>
   );
 }
 
@@ -98,23 +237,18 @@ export function PlayerCard({
   onToggleCollapsed: () => void;
 }) {
   if (!report.found || report.games.length === 0) {
+    const meta = [position, report.seasonStats ? seasonStatsSummary(report.seasonStats) : null]
+      .filter(Boolean)
+      .join(' · ');
     return (
       <div className="player-card empty" id={`player-${report.id}`}>
         <div className="player-head">
           <Headshot id={report.id} name={report.name} />
           <div className="player-id">
-            <a
-              className="player-name"
-              href={savantPlayerUrl(report.name, report.id)}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {report.name}
-            </a>
-            <span className="player-dnp">
-              {position ? `${position} · ` : ''}Did not appear
-            </span>
+            <span className="player-name">{report.name}</span>
+            {meta && <span className="player-meta">{meta}</span>}
           </div>
+          <span className="dnp-badge">Did not appear</span>
           <button className="remove-btn" onClick={() => onRemove(report.id)} title="Remove">
             ✕
           </button>
@@ -123,18 +257,22 @@ export function PlayerCard({
     );
   }
 
-  // Combine lines across games (usually one).
-  const games = report.games;
-  const big = games.some((g) => isBigDay(g.line));
+  // Combine lines across games (usually one). Show most recent games first.
+  const games = [...report.games].sort(
+    (a, b) => b.date.localeCompare(a.date) || b.gamePk - a.gamePk,
+  );
   const combined = combineLines(games.map((g) => g.line));
 
   const primary = games[0];
   const summary = lineSummary(combined);
   const spansMultipleDays = new Set(games.map((g) => g.date)).size > 1;
+  // A player may be in view only for an upcoming/just-started game with no plate
+  // appearances yet — then the batting line is all zeros and not worth showing.
+  const hasAnyPa = games.some((g) => g.plateAppearances.length > 0);
 
   return (
     <div
-      className={`player-card${big ? ' big-day' : ''}${collapsed ? ' collapsed' : ''}`}
+      className={`player-card${collapsed ? ' collapsed' : ''}`}
       id={`player-${report.id}`}
     >
       {/* The whole header toggles collapse; inner link/buttons stop propagation. */}
@@ -154,25 +292,22 @@ export function PlayerCard({
       >
         <Headshot id={report.id} name={report.name} />
         <div className="player-id">
-          <a
-            className="player-name"
-            href={savantPlayerUrl(report.name, report.id)}
-            target="_blank"
-            rel="noreferrer"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {report.name}
-          </a>
+          <span className="player-name">{report.name}</span>
           <span className="player-meta">
             {position ? `${position} · ` : ''}
-            {games.length > 1
-              ? `${primary.batterTeam} · ${games.length} games`
-              : `${primary.batterTeam} ${primary.isHome ? 'vs' : '@'} ${primary.opponent}`}
+            {report.seasonStats
+              ? seasonStatsSummary(report.seasonStats)
+              : games.length > 1
+                ? `${primary.batterTeam} · ${games.length} games`
+                : `${primary.batterTeam} ${primary.isHome ? 'vs' : '@'} ${primary.opponent}`}
           </span>
         </div>
         <div className="player-summary">
-          <span className="summary-line">{summary}</span>
-          {big && <span className="big-flag">🔥</span>}
+          {hasAnyPa && <span className="summary-line">{summary}</span>}
+          {games.length === 1 && <ProbablePitcher game={primary} />}
+          {/* A not-yet-started game has no score badge to reveal the teams, so
+              the badge also carries the opponent and home/away (withMatchup). */}
+          {games.length === 1 && <GameStatusBadge game={primary} withMatchup />}
         </div>
         <button
           className="remove-btn"
@@ -188,39 +323,25 @@ export function PlayerCard({
 
       {!collapsed && (
         <>
-          <div className="stat-row">
-            <StatPill label="H-AB" value={`${combined.hits}-${combined.ab}`} accent={combined.hits >= 2} />
-            <StatPill label="R" value={`${combined.runs}`} accent={combined.runs >= 2} />
-            <StatPill label="HR" value={`${combined.hr}`} accent={combined.hr > 0} />
-            <StatPill label="RBI" value={`${combined.rbi}`} accent={combined.rbi >= 2} />
-            <StatPill label="SB-CS" value={`${combined.sb}-${combined.cs}`} accent={combined.sb > 0} />
-            <StatPill label="BB" value={`${combined.bb}`} />
-            <StatPill label="K" value={`${combined.so}`} />
-            <StatPill
-              label="Max EV"
-              value={fmt(combined.maxExitVelo, 1, '')}
-              accent={(combined.maxExitVelo ?? 0) >= 105}
-            />
-            <StatPill label="Max Dist" value={fmt(combined.maxDistance, 0, ' ft')} />
-            <StatPill
-              label="Run Value"
-              value={
-                combined.runValue !== null
-                  ? (combined.runValue > 0 ? '+' : '') + combined.runValue.toFixed(2)
-                  : '—'
-              }
-              accent={combined.runValue !== null && combined.runValue > 0.5}
-            />
-          </div>
+          {/* Not-yet-started games: show the batter's split vs the starter's hand. */}
+          {games
+            .filter((g) => g.status.state === 'scheduled')
+            .map((g) => (
+              <PlatoonSplit key={`split-${g.gamePk}`} report={report} game={g} />
+            ))}
 
-          {games.map((g) => (
-            <GameBlock
-              key={g.gamePk}
-              game={g}
-              showMatchup={games.length > 1}
-              spansMultipleDays={spansMultipleDays}
-            />
-          ))}
+          {games
+            // A lone no-PA game is fully described by the header's status badge,
+            // so skip its empty block; keep it when several games share the card.
+            .filter((g) => g.plateAppearances.length > 0 || games.length > 1)
+            .map((g) => (
+              <GameBlock
+                key={g.gamePk}
+                game={g}
+                showMatchup={games.length > 1}
+                spansMultipleDays={spansMultipleDays}
+              />
+            ))}
         </>
       )}
     </div>

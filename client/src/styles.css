@@ -124,32 +124,165 @@ body {
   background: var(--accent);
   border-color: var(--accent);
 }
-.date-range-inputs {
-  display: flex;
-  gap: 8px;
-}
-.date-control label {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--faint);
-  gap: 4px;
-}
-.date-control input[type='date'] {
+/* The preset <select> replaces the pill row on phones (see the media query
+   below); it's hidden on desktop where the pills are shown instead. */
+.date-presets-select {
+  display: none;
   background: var(--panel);
   border: 1px solid var(--border);
   color: var(--text);
   border-radius: 10px;
-  padding: 8px 12px;
+  padding: 8px 14px;
   font-size: 15px;
-  color-scheme: dark;
+  font-weight: 600;
+  cursor: pointer;
 }
-.date-pretty {
+.date-presets-select:hover {
+  border-color: var(--accent);
+}
+/* On phones the header wraps and the date control spans the full width. Swap the
+   pill row (which would overflow off-screen) for a compact dropdown, and
+   left-align the whole control so it reads naturally. */
+@media (max-width: 640px) {
+  .date-control {
+    align-items: stretch;
+    width: 100%;
+  }
+  .date-row {
+    justify-content: flex-start;
+  }
+  .date-presets {
+    display: none;
+  }
+  .date-presets-select {
+    display: block;
+  }
+}
+/* ---- Date range picker ---- */
+.drp {
+  position: relative;
+}
+.drp-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 15px;
+  cursor: pointer;
+}
+.drp-field:hover {
+  border-color: var(--accent);
+}
+.drp-icon {
   color: var(--muted);
+  flex-shrink: 0;
+}
+.drp-value {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.drp-popover {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 8px);
+  right: 0;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  width: 260px;
+}
+.drp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.drp-month {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+.drp-nav {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  width: 28px;
+  height: 28px;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.drp-nav:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.drp-nav:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.drp-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+.drp-weekdays {
+  margin-bottom: 4px;
+}
+.drp-weekday {
+  text-align: center;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--faint);
+  padding: 2px 0;
+}
+.drp-day {
+  background: transparent;
+  border: none;
+  color: var(--text);
   font-size: 13px;
+  height: 32px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.drp-day:hover:not(:disabled) {
+  background: var(--border);
+}
+.drp-day:disabled {
+  color: var(--faint);
+  opacity: 0.4;
+  cursor: default;
+}
+.drp-day.in-range {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  border-radius: 0;
+}
+.drp-day.edge {
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: 700;
+}
+.drp-day.edge.start {
+  border-top-left-radius: 8px;
+  border-bottom-left-radius: 8px;
+}
+.drp-day.edge.end {
+  border-top-right-radius: 8px;
+  border-bottom-right-radius: 8px;
+}
+.drp-foot {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
 }
 
 /* ---- Controls ---- */
@@ -258,24 +391,6 @@ body {
   color: var(--hr);
   border-color: rgba(251, 191, 36, 0.4);
 }
-.bulk-toggles {
-  display: flex;
-  gap: 8px;
-}
-.bulk-toggle {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  color: var(--muted);
-  padding: 7px 12px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.bulk-toggle:hover {
-  color: var(--text);
-  border-color: var(--accent);
-}
 
 /* ---- States ---- */
 .error-banner {
@@ -356,14 +471,20 @@ body {
 .player-nav {
   position: sticky;
   top: 18px;
-  flex: 0 0 200px;
-  width: 200px;
+  /* Size to the widest row so player names and game status are shown in full,
+     never truncated. Bounded so one long entry can't dominate the layout; the
+     text still ellipsis-truncates past the cap as a safety. On narrow screens
+     the media query below swaps this for an image-only rail. */
+  flex: 0 0 auto;
+  width: max-content;
+  min-width: 180px;
+  max-width: 320px;
   max-height: calc(100vh - 36px);
   overflow-y: auto;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 14px 12px;
+  padding: 22px 12px;
 }
 .player-nav-title {
   font-size: 12px;
@@ -381,7 +502,6 @@ body {
 .player-nav-link {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
   padding: 7px 8px;
   border-radius: 8px;
@@ -391,19 +511,201 @@ body {
   line-height: 1.3;
   transition: background 0.12s ease;
 }
+.player-nav-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+/* Hidden in the normal (text) layout; shown only in the narrow image-only rail. */
+.player-nav-photo {
+  display: none;
+}
+.player-nav-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+/* Narrow screens: collapse the nav to an image-only rail — drop the text and
+   title, center a headshot avatar per player. */
+@media (max-width: 820px) {
+  .player-nav {
+    width: auto;
+    min-width: 0;
+    max-width: none;
+  }
+  .player-nav-title {
+    display: none;
+  }
+  .player-nav-link {
+    justify-content: center;
+    padding: 5px 0;
+  }
+  .player-nav-body {
+    display: none;
+  }
+  .player-nav-photo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    object-fit: cover;
+    object-position: top center;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+  }
+  .player-nav-photo-empty {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--muted);
+  }
+  /* Keep the live-role signal as a colored ring on the avatar. */
+  .player-nav-link.role-at-bat .player-nav-photo {
+    border-color: var(--strikeout);
+    box-shadow: 0 0 0 1px var(--strikeout);
+  }
+  .player-nav-link.role-on-deck .player-nav-photo {
+    border-color: var(--hr);
+    box-shadow: 0 0 0 1px var(--hr);
+  }
+  .player-nav-link.role-on-base .player-nav-photo {
+    border-color: #c084fc;
+    box-shadow: 0 0 0 1px #c084fc;
+  }
+}
+/* Phones: lay the avatar rail out as a horizontal, side-scrolling strip across
+   the top of the content instead of a column down the side. */
+@media (max-width: 640px) {
+  .content-layout {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .player-nav {
+    /* Full-bleed opaque toolbar pinned to the very top; it covers the cards as
+       they scroll behind it. Flush to the screen edges (so there's no seam
+       against the page background), with the avatar pill inset inside it. */
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    width: auto;
+    max-height: none;
+    overflow: visible;
+    margin: 0 -22px;
+    padding: 14px 22px;
+    background: var(--bg);
+    border: none;
+    border-radius: 0;
+  }
+  /* The avatar row is the visible pill: panel background inset from the toolbar
+     edges by its padding, so it has clear space on the top, bottom, and sides
+     and never sits right at the screen edge. */
+  .player-nav nav {
+    flex-direction: row;
+    gap: 6px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px;
+  }
+  .player-nav-link {
+    flex: 0 0 auto;
+    padding: 2px;
+  }
+}
 .player-nav-link:hover {
   background: var(--panel-2);
 }
-.player-nav-link.dnp {
-  color: var(--faint);
+/* Second line under a nav name: start time / score+inning / final, with a
+   runners-on-base diamond for live games. */
+.nav-game {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
 }
-.player-nav-name {
+.nav-game.live {
+  color: var(--hit);
+}
+.nav-game.scheduled {
+  color: var(--accent);
+}
+.nav-game-text {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.player-nav-flag {
+.nav-game .live-dot {
   flex: none;
+}
+.nav-game .base-diamond {
+  flex: none;
+  width: 12px;
+  height: 14px;
+}
+.nav-game .base-diamond .base,
+.nav-game .base-diamond .out {
+  stroke: currentColor;
+  opacity: 0.85;
+}
+.nav-game .base-diamond .base.on,
+.nav-game .base-diamond .out.on {
+  fill: currentColor;
+  stroke: currentColor;
+  opacity: 1;
+}
+.player-nav-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Live-situation highlight: at bat (red), on deck (yellow), on base (purple). */
+.player-nav-role {
+  flex: none;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.player-nav-link.role-at-bat .player-nav-name {
+  color: var(--strikeout);
+  font-weight: 700;
+}
+.player-nav-link.role-on-deck .player-nav-name {
+  color: var(--hr);
+  font-weight: 700;
+}
+.player-nav-link.role-on-base .player-nav-name {
+  color: #c084fc;
+  font-weight: 700;
+}
+.role-at-bat .player-nav-role {
+  color: var(--strikeout);
+  background: rgba(248, 113, 113, 0.15);
+}
+.role-on-deck .player-nav-role {
+  color: var(--hr);
+  background: rgba(251, 191, 36, 0.15);
+}
+.role-on-base .player-nav-role {
+  color: #c084fc;
+  background: rgba(192, 132, 252, 0.15);
 }
 
 /* ---- Player list ---- */
@@ -424,22 +726,27 @@ body {
   container-type: inline-size;
 }
 
-@media (max-width: 820px) {
-  .player-nav {
-    display: none;
-  }
-}
-.player-card.big-day {
-  border-color: rgba(251, 191, 36, 0.55);
-  box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.25), var(--shadow);
-}
 /* Collapsed cards show only the header, whose own padding provides the bottom
    spacing — drop the card's bottom padding so it isn't doubled. */
 .player-card.collapsed {
   padding-bottom: 0;
 }
+/* A no-game card stays fully readable; a dashed border + "Did not appear" badge
+   signal the state instead of dimming the whole card. */
 .player-card.empty {
-  opacity: 0.72;
+  border-style: dashed;
+}
+.dnp-badge {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 10px;
+  white-space: nowrap;
 }
 .player-head {
   display: flex;
@@ -480,6 +787,21 @@ body {
   /* Placeholder ring shown when a headshot fails to load. */
   display: inline-block;
 }
+/* The headshot is the link to the player's Baseball Savant page. */
+.player-photo-link {
+  display: block;
+  flex-shrink: 0;
+  line-height: 0;
+  border-radius: 50%;
+  cursor: pointer;
+}
+.player-photo-link:hover .player-photo {
+  border-color: var(--accent);
+}
+.player-photo-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .player-id {
   display: flex;
   flex-direction: column;
@@ -490,17 +812,9 @@ body {
   font-weight: 800;
   letter-spacing: -0.01em;
   color: var(--text);
-  text-decoration: none;
-}
-.player-name:hover {
-  color: var(--accent);
 }
 .player-meta {
   color: var(--muted);
-  font-size: 13px;
-}
-.player-dnp {
-  color: var(--faint);
   font-size: 13px;
 }
 .player-summary {
@@ -515,8 +829,124 @@ body {
   font-variant-numeric: tabular-nums;
   color: var(--text);
 }
-.big-flag {
-  font-size: 18px;
+
+/* ---- Game status chip (start time / live score+inning / final) ---- */
+.game-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+  color: var(--muted);
+}
+.game-status .game-score {
+  color: var(--text);
+  font-weight: 700;
+}
+.game-status.live {
+  border-color: rgba(52, 211, 153, 0.5);
+  background: rgba(52, 211, 153, 0.1);
+  color: var(--hit);
+}
+.game-status.live .game-status-detail {
+  color: var(--hit);
+}
+.game-status.scheduled {
+  color: var(--accent);
+  border-color: rgba(56, 189, 248, 0.4);
+}
+.game-status.final {
+  color: var(--faint);
+}
+.game-prob-pitcher {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+/* Opponent + home/away shown inside the scheduled-game bubble, ahead of the
+   accent-colored start time. */
+.game-matchup {
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/* ---- On-base + outs diamond ---- */
+.base-diamond {
+  /* viewBox is 24×28 (diamond + out dots), so keep that 6:7 aspect. */
+  width: 18px;
+  height: 21px;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+.base-diamond .base {
+  fill: none;
+  stroke: var(--faint);
+  stroke-width: 1.4;
+}
+.base-diamond .base.on {
+  fill: var(--accent);
+  stroke: var(--accent);
+}
+.base-diamond .out {
+  fill: none;
+  stroke: var(--faint);
+  stroke-width: 1.2;
+}
+.base-diamond .out.on {
+  fill: var(--strikeout);
+  stroke: var(--strikeout);
+}
+/* Inside the live status chip, match the chip's own (green) color. */
+.game-status .base-diamond {
+  width: 15px;
+  height: 17.5px;
+}
+.game-status .base-diamond .base,
+.game-status .base-diamond .out {
+  stroke: currentColor;
+  opacity: 0.85;
+}
+.game-status .base-diamond .base.on,
+.game-status .base-diamond .out.on {
+  fill: currentColor;
+  stroke: currentColor;
+  opacity: 1;
+}
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--hit);
+  animation: live-pulse 1.6s ease-in-out infinite;
+}
+@keyframes live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-dot {
+    animation: none;
+  }
+}
+/* A no-PA game bar is informational only — not a collapse toggle. */
+.game-sub-bar.static {
+  cursor: default;
+}
+.game-sub-bar.static:hover {
+  border-color: var(--border);
 }
 .remove-btn {
   background: var(--panel-2);
@@ -531,11 +961,6 @@ body {
 .remove-btn:hover {
   color: var(--strikeout);
   border-color: var(--strikeout);
-}
-/* DNP cards have no summary to push the right cluster over, so flush the
-   remove button to the far right itself. */
-.player-card.empty .remove-btn {
-  margin-left: auto;
 }
 /* When the card is narrow, wrap the batting-line summary onto its own row while
    keeping the remove button up top beside the player name. */
@@ -570,10 +995,6 @@ body {
   padding: 10px 6px;
   text-align: center;
 }
-.stat-pill.accent {
-  border-color: rgba(56, 189, 248, 0.5);
-  background: rgba(56, 189, 248, 0.08);
-}
 .stat-value {
   font-size: 18px;
   font-weight: 800;
@@ -587,35 +1008,38 @@ body {
   margin-top: 3px;
 }
 
-/* Shared rotating disclosure indicator for .game-sub-toggle and .pa-summary-row. */
-/* Drawn with borders rather than the ▸ glyph, which carries uneven side
-   bearings that leave it looking off-center. font-size:0 hides the text node. */
-.chevron {
-  width: 0;
-  height: 0;
-  margin-left: auto;
-  border-top: 4px solid transparent;
-  border-bottom: 4px solid transparent;
-  border-left: 6px solid var(--faint);
-  font-size: 0;
-  display: inline-block;
-  transition: transform 0.15s;
-  flex-shrink: 0;
+/* ---- Platoon split (shown for not-yet-started games) ---- */
+.split-block {
+  margin-top: 14px;
 }
-.chevron.expanded {
-  transform: rotate(90deg);
-  border-left-color: var(--muted);
+.split-head {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.split-block .stat-row {
+  margin: 0;
+}
+.split-empty {
+  font-size: 13px;
+  color: var(--faint);
 }
 
 /* ---- Game block / PA grid ---- */
 .game-block {
   margin-top: 14px;
 }
-.game-sub-toggle {
+.game-sub-bar {
   display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
+  /* Reserve the height of the expand/collapse buttons so the bar doesn't grow
+     when they appear on expand. (border-box: includes padding + border.) */
+  min-height: 42px;
   background: none;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -623,22 +1047,21 @@ body {
   margin-bottom: 10px;
   color: var(--muted);
   font-size: 13px;
-  font: inherit;
-  text-align: left;
   cursor: pointer;
 }
-.game-sub-toggle:hover {
-  color: var(--text);
+.game-sub-bar:hover {
   border-color: var(--accent);
 }
-.game-sub-toggle:focus-visible {
+.game-sub-bar:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 .game-sub-info {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
 }
 .game-sub-line {
+  padding-left: 10px;
+  border-left: 1px solid var(--border);
   font-weight: 700;
   font-size: 13px;
   color: var(--text);
@@ -774,8 +1197,15 @@ body {
   font-variant-numeric: tabular-nums;
 }
 .pa-hand {
+  padding-top: 10px;
   font-size: 11px;
   color: var(--faint);
+}
+.pa-pitcher {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
 }
 .pa-des {
   margin: 9px 0;
@@ -811,7 +1241,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 10px;
+  margin-top: 10px;
   background: rgba(56, 189, 248, 0.12);
   border: 1px solid rgba(56, 189, 248, 0.4);
   color: var(--accent);
@@ -831,25 +1261,31 @@ body {
   cursor: default;
 }
 .pa-video {
-  margin-bottom: 10px;
+  margin-top: 10px;
+  /* Leave a gap below when scrolled into view so it isn't flush to the edge. */
+  scroll-margin-bottom: 24px;
 }
 .pa-video-bar {
   display: flex;
-  justify-content: flex-end;
-  margin-bottom: 6px;
+  justify-content: flex-start;
+  margin-bottom: 10px;
 }
 .pa-hide {
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  color: var(--muted);
-  padding: 4px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  color: var(--accent);
+  padding: 5px 12px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
 }
 .pa-hide:hover {
-  color: var(--text);
+  background: rgba(56, 189, 248, 0.2);
   border-color: var(--accent);
 }
 .pa-video-el {
@@ -927,6 +1363,14 @@ body {
 .pitch-row-wrap.desc-swinging {
   background: rgba(248, 113, 113, 0.07);
 }
+.pitch-row-wrap {
+  cursor: default;
+  transition: box-shadow 0.1s ease, background 0.1s ease;
+}
+.pitch-row-wrap.active {
+  background: var(--bg-2);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
 
 /* ---- Strike zone ---- */
 .strikezone {
@@ -955,6 +1399,24 @@ body {
   font-size: 11px;
   font-weight: 800;
   text-anchor: middle;
+}
+.sz-pitch {
+  cursor: pointer;
+  transition: opacity 0.1s ease;
+}
+.sz-pitch circle {
+  transition: r 0.1s ease;
+}
+.sz-pitch.dimmed {
+  opacity: 0.35;
+}
+.sz-pitch.active text.sz-num {
+  font-size: 12px;
+}
+.sz-ring {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
 }
 .sz-empty {
   fill: var(--faint);

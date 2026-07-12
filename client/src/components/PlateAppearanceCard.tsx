@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { PlateAppearance } from '../types';
 import { api } from '../api';
 import {
@@ -10,6 +10,7 @@ import {
   outcomeKind,
   pitchAbbr,
 } from '../lib';
+import { BaseDiamond } from './BaseDiamond';
 import { StrikeZone } from './StrikeZone';
 
 function VideoClip({ playId, gamePk }: { playId: string; gamePk: number }) {
@@ -17,6 +18,15 @@ function VideoClip({ playId, gamePk }: { playId: string; gamePk: number }) {
     'checking',
   );
   const [url, setUrl] = useState<string | null>(null);
+  const videoRef = useRef<HTMLDivElement>(null);
+
+  // When playback starts, pull the clip into view if it opened off-screen
+  // (block: 'nearest' is a no-op when it's already visible).
+  useEffect(() => {
+    if (state === 'watching') {
+      videoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [state]);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,7 +48,7 @@ function VideoClip({ playId, gamePk }: { playId: string; gamePk: number }) {
 
   if (state === 'watching' && url) {
     return (
-      <div className="pa-video">
+      <div className="pa-video" ref={videoRef}>
         <div className="pa-video-bar">
           <button className="pa-hide" onClick={() => setState('available')}>
             ✕ Hide video
@@ -63,8 +73,14 @@ function VideoClip({ playId, gamePk }: { playId: string; gamePk: number }) {
 
 function PitchRow({
   pitch,
+  active,
+  onHover,
+  onTap,
 }: {
   pitch: PlateAppearance['pitches'][number];
+  active: boolean;
+  onHover: (pitchNumber: number | null) => void;
+  onTap: (pitchNumber: number) => void;
 }) {
   const count =
     pitch.balls !== null && pitch.strikes !== null
@@ -72,7 +88,12 @@ function PitchRow({
       : '';
   const showBatSpeed = pitch.batSpeed !== null && isSwing(pitch.description);
   return (
-    <div className={`pitch-row-wrap desc-${pitch.description.split('_')[0]}`}>
+    <div
+      className={`pitch-row-wrap desc-${pitch.description.split('_')[0]}${active ? ' active' : ''}`}
+      onPointerEnter={(e) => e.pointerType === 'mouse' && onHover(pitch.pitchNumber)}
+      onPointerLeave={(e) => e.pointerType === 'mouse' && onHover(null)}
+      onPointerUp={(e) => e.pointerType !== 'mouse' && onTap(pitch.pitchNumber)}
+    >
       <div className="pitch-row">
         <span className="pitch-num">{pitch.pitchNumber}</span>
         <span className="pitch-count">{count}</span>
@@ -94,39 +115,56 @@ function PitchRow({
 export function PlateAppearanceCard({
   pa,
   gamePk,
+  open,
+  onToggle,
 }: {
   pa: PlateAppearance;
   gamePk: number;
+  open: boolean;
+  onToggle: () => void;
 }) {
-  const [expanded, setExpanded] = useState(true);
+  const [activePitch, setActivePitch] = useState<number | null>(null);
+  // Tap toggles a pin on touch/pen (no hover to rely on); tapping the same
+  // pitch again clears it.
+  const toggleActivePitch = (n: number) => setActivePitch((cur) => (cur === n ? null : n));
   const kind = outcomeKind(pa.event);
   const contact = contactHighlight(pa);
   const swingSpeed = finalSwingBatSpeed(pa);
   const inningLabel = `${pa.half === 'Top' ? '▲' : '▼'} ${pa.inning}`;
 
   return (
-    <div className={`pa-card kind-${kind}${expanded ? ' expanded' : ''}`}>
+    <div className={`pa-card kind-${kind}${open ? ' expanded' : ''}`}>
       <button
         type="button"
         className="pa-summary-row"
-        aria-expanded={expanded}
-        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={open}
+        onClick={onToggle}
       >
         <span className="pa-inning">{inningLabel}</span>
+        <BaseDiamond bases={pa.onBase} outs={pa.outsWhenUp ?? 0} className="pa-bases" />
         <span className={`pa-badge kind-${kind}`}>{eventLabel(pa.event)}</span>
         {pa.rbi > 0 && <span className="pa-rbi">{pa.rbi} RBI</span>}
+        {pa.pitcherName && (
+          <span className="pa-pitcher">
+            vs {pa.pitcherName}
+            {pa.pThrows ? ` (${pa.pThrows}HP)` : ''}
+          </span>
+        )}
         {contact && <span className="pa-contact-main">{contact}</span>}
         {swingSpeed !== null && (
           <span className="metric metric-bat">SW {swingSpeed.toFixed(1)} mph</span>
         )}
-        <span className={`chevron${expanded ? ' expanded' : ''}`}>▸</span>
       </button>
 
-      {expanded && (
+      {open && (
         <div className="pa-detail">
-          {pa.stand && pa.pThrows && (
+          {(pa.pitcherName || (pa.stand && pa.pThrows)) && (
             <div className="pa-hand">
-              {pa.stand}HB vs {pa.pThrows}HP
+              {pa.pitcherName
+                ? `${pa.stand ? `${pa.stand}HB ` : ''}vs ${pa.pitcherName}${
+                    pa.pThrows ? ` (${pa.pThrows}HP)` : ''
+                  }`
+                : `${pa.stand}HB vs ${pa.pThrows}HP`}
             </div>
           )}
 
@@ -144,8 +182,6 @@ export function PlateAppearanceCard({
                 </div>
               )}
 
-              {pa.playId && <VideoClip playId={pa.playId} gamePk={gamePk} />}
-
               <div className="pa-pitches">
                 <div className="pitch-row pitch-head">
                   <span className="pitch-num">#</span>
@@ -155,11 +191,24 @@ export function PlateAppearanceCard({
                   <span className="pitch-desc">Result</span>
                 </div>
                 {pa.pitches.map((p) => (
-                  <PitchRow key={p.pitchNumber} pitch={p} />
+                  <PitchRow
+                    key={p.pitchNumber}
+                    pitch={p}
+                    active={activePitch === p.pitchNumber}
+                    onHover={setActivePitch}
+                    onTap={toggleActivePitch}
+                  />
                 ))}
               </div>
+
+              {pa.playId && <VideoClip playId={pa.playId} gamePk={gamePk} />}
             </div>
-            <StrikeZone pitches={pa.pitches} />
+            <StrikeZone
+              pitches={pa.pitches}
+              activePitch={activePitch}
+              onHoverPitch={setActivePitch}
+              onTapPitch={toggleActivePitch}
+            />
           </div>
         </div>
       )}

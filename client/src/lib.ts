@@ -1,4 +1,11 @@
-import type { BattingLine, PlateAppearance } from './types';
+import type {
+  BaseState,
+  BattingLine,
+  PlateAppearance,
+  PlayerGame,
+  PlayerReport,
+  SeasonStats,
+} from './types';
 
 /** Category used for color-coding an outcome. */
 export type OutcomeKind = 'hr' | 'hit' | 'walk' | 'out' | 'strikeout' | 'other';
@@ -66,11 +73,6 @@ export function lineSummary(line: BattingLine): string {
   if (line.so) extras.push(line.so > 1 ? `${line.so} K` : 'K');
   if (line.hbp) extras.push('HBP');
   return [parts[0], ...extras].join(', ');
-}
-
-/** Did the player have a notable day worth a highlight glow? */
-export function isBigDay(line: BattingLine): boolean {
-  return line.hr > 0 || line.hits >= 3 || line.totalBases >= 5;
 }
 
 /** Sum per-game batting lines into one aggregate line (e.g. across a date range). */
@@ -158,6 +160,44 @@ export function isSwing(description: string): boolean {
   );
 }
 
+/** Local first-pitch time like "7:05 PM" from an ISO datetime (null if unparseable). */
+export function formatStartTime(iso: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+}
+
+export interface GameStatusView {
+  kind: 'scheduled' | 'live' | 'final';
+  /** Away-first line score, e.g. "BOS 2–3 NYY" (null before a game starts). */
+  score: string | null;
+  /** Right-hand label: start time, current inning, or "Final". */
+  detail: string;
+}
+
+/** Presentation of a game's status: start time (scheduled), score + inning (live), or final. */
+export function gameStatusView(game: PlayerGame): GameStatusView {
+  const s = game.status;
+  const score =
+    s.awayScore !== null && s.homeScore !== null
+      ? `${game.awayTeam} ${s.awayScore}–${s.homeScore} ${game.homeTeam}`
+      : null;
+
+  if (s.state === 'scheduled') {
+    const t = formatStartTime(s.startTime);
+    return { kind: 'scheduled', score: null, detail: t ?? (s.detailedState || 'Scheduled') };
+  }
+  if (s.state === 'live') {
+    const inning =
+      s.currentInning !== null
+        ? `${s.inningState ?? ''} ${s.currentInning}`.trim()
+        : s.detailedState || 'Live';
+    return { kind: 'live', score, detail: inning };
+  }
+  return { kind: 'final', score, detail: 'Final' };
+}
+
 /** Short "Jul 3" style date, for disambiguating games across a date range. */
 export function prettyGameDate(date: string): string {
   return new Date(`${date}T12:00:00`).toLocaleDateString(undefined, {
@@ -168,6 +208,50 @@ export function prettyGameDate(date: string): string {
 
 export function describePitch(description: string): string {
   return description.replace(/_/g, ' ');
+}
+
+/** Pitcher-hand code to a throwing label: "R" → "RHP", "L" → "LHP". */
+export function handThrows(hand: string | null): string {
+  return hand === 'R' ? 'RHP' : hand === 'L' ? 'LHP' : 'P';
+}
+
+/** A watched player's current live role, for highlighting them in the nav. */
+export type LiveRole = 'at-bat' | 'on-deck' | 'on-base';
+
+/**
+ * If any of the player's live games has them at bat, on deck, or on base right
+ * now, return that role (checked in that priority order). Null otherwise.
+ */
+export function liveRole(report: PlayerReport): LiveRole | null {
+  for (const g of report.games) {
+    if (g.status.state !== 'live') continue;
+    if (g.status.atBatId === report.id) return 'at-bat';
+    if (g.status.onDeckId === report.id) return 'on-deck';
+    if (g.status.onBaseIds.includes(report.id)) return 'on-base';
+  }
+  return null;
+}
+
+/** Short label for a live role, shown as a nav tag. */
+export function liveRoleLabel(role: LiveRole): string {
+  return role === 'at-bat' ? 'At bat' : role === 'on-deck' ? 'On deck' : 'On base';
+}
+
+/** Human description of a base state, for a diamond's aria-label/tooltip. */
+export function basesLabel(b: BaseState): string {
+  if (b.first && b.second && b.third) return 'Bases loaded';
+  const on = [b.first && '1st', b.second && '2nd', b.third && '3rd'].filter(Boolean);
+  if (on.length === 0) return 'Bases empty';
+  return `Runner${on.length > 1 ? 's' : ''} on ${on.join(' and ')}`;
+}
+
+/**
+ * Compact season line for the card header, e.g.
+ * ".237/.297/.425, 11 HR, 30 RBI, 35 R, 1 SB". Commas separate the groups —
+ * a middot reads ambiguously next to the decimals in the slash line.
+ */
+export function seasonStatsSummary(s: SeasonStats): string {
+  return `${s.avg}/${s.obp}/${s.slg}, ${s.hr} HR, ${s.rbi} RBI, ${s.runs} R, ${s.sb} SB`;
 }
 
 /** Best xwOBA / batted-ball highlight for a PA, if any. */

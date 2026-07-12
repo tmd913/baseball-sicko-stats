@@ -3,6 +3,9 @@ import { describePitch } from '../lib';
 
 interface Props {
   pitches: Pitch[];
+  activePitch?: number | null;
+  onHoverPitch?: (pitchNumber: number | null) => void;
+  onTapPitch?: (pitchNumber: number) => void;
 }
 
 // Feet -> viewBox coordinate mapping (catcher's view).
@@ -26,8 +29,14 @@ function pitchColor(description: string): string {
   return 'var(--ball)'; // ball, blocked_ball
 }
 
-export function StrikeZone({ pitches }: Props) {
+export function StrikeZone({ pitches, activePitch = null, onHoverPitch, onTapPitch }: Props) {
   const located = pitches.filter((p) => p.plateX !== null && p.plateZ !== null);
+  // Render the active pitch last so its circle sits above the others.
+  const ordered = [...located].sort((a, b) => {
+    if (a.pitchNumber === activePitch) return 1;
+    if (b.pitchNumber === activePitch) return -1;
+    return 0;
+  });
   // Average zone bounds for the batter.
   const tops = pitches.map((p) => p.szTop).filter((v): v is number => v !== null);
   const bots = pitches.map((p) => p.szBot).filter((v): v is number => v !== null);
@@ -60,24 +69,32 @@ export function StrikeZone({ pitches }: Props) {
         className="sz-plate"
         points={`${sx(-halfW)},${sy(0.35)} ${sx(halfW)},${sy(0.35)} ${sx(halfW)},${sy(0.2)} ${sx(0)},${sy(0.05)} ${sx(-halfW)},${sy(0.2)}`}
       />
-      {located.map((p) => (
-        <g key={p.pitchNumber} className="sz-pitch">
-          <title>
-            {`#${p.pitchNumber} ${p.pitchType ?? ''} ${
-              p.releaseSpeed ? p.releaseSpeed.toFixed(1) + ' mph' : ''
-            } — ${describePitch(p.description)}`}
-          </title>
-          <circle
-            cx={sx(p.plateX as number)}
-            cy={sy(p.plateZ as number)}
-            r={11}
-            fill={pitchColor(p.description)}
-          />
-          <text x={sx(p.plateX as number)} y={sy(p.plateZ as number) + 3.5} className="sz-num">
-            {p.pitchNumber}
-          </text>
-        </g>
-      ))}
+      {ordered.map((p) => {
+        const active = p.pitchNumber === activePitch;
+        const dimmed = activePitch !== null && !active;
+        const cx = sx(p.plateX as number);
+        const cy = sy(p.plateZ as number);
+        return (
+          <g
+            key={p.pitchNumber}
+            className={`sz-pitch${active ? ' active' : ''}${dimmed ? ' dimmed' : ''}`}
+            onPointerEnter={(e) => e.pointerType === 'mouse' && onHoverPitch?.(p.pitchNumber)}
+            onPointerLeave={(e) => e.pointerType === 'mouse' && onHoverPitch?.(null)}
+            onPointerUp={(e) => e.pointerType !== 'mouse' && onTapPitch?.(p.pitchNumber)}
+          >
+            <title>
+              {`#${p.pitchNumber} ${p.pitchType ?? ''} ${
+                p.releaseSpeed ? p.releaseSpeed.toFixed(1) + ' mph' : ''
+              } — ${describePitch(p.description)}`}
+            </title>
+            {active && <circle className="sz-ring" cx={cx} cy={cy} r={14} />}
+            <circle cx={cx} cy={cy} r={active ? 13 : 11} fill={pitchColor(p.description)} />
+            <text x={cx} y={cy + 3.5} className="sz-num">
+              {p.pitchNumber}
+            </text>
+          </g>
+        );
+      })}
       {located.length === 0 && (
         <text x={W / 2} y={H / 2} className="sz-empty">
           no location data

@@ -1,3 +1,9 @@
+export interface BaseState {
+  first: boolean;
+  second: boolean;
+  third: boolean;
+}
+
 export interface Pitch {
   pitchNumber: number;
   pitchType: string | null;
@@ -24,8 +30,11 @@ export interface PlateAppearance {
   inning: number;
   half: string;
   outsWhenUp: number | null;
+  onBase: BaseState;
   stand: string | null;
   pThrows: string | null;
+  pitcherId: number | null;
+  pitcherName: string | null;
   event: string | null;
   description: string;
   rbi: number;
@@ -64,6 +73,28 @@ export interface BattingLine {
   runValue: number | null;
 }
 
+export interface GameStatus {
+  state: 'scheduled' | 'live' | 'final';
+  detailedState: string;
+  startTime: string | null;
+  homeScore: number | null;
+  awayScore: number | null;
+  currentInning: number | null;
+  inningState: string | null;
+  isTopInning: boolean | null;
+  bases: BaseState | null;
+  outs: number | null;
+  atBatId: number | null;
+  onDeckId: number | null;
+  onBaseIds: number[];
+}
+
+export interface ProbablePitcher {
+  id: number;
+  name: string;
+  hand: string | null;
+}
+
 export interface PlayerGame {
   gamePk: number;
   date: string;
@@ -73,6 +104,8 @@ export interface PlayerGame {
   opponent: string;
   isHome: boolean;
   stand: string | null;
+  status: GameStatus;
+  probablePitcher: ProbablePitcher | null;
   plateAppearances: PlateAppearance[];
   line: BattingLine;
 }
@@ -83,9 +116,27 @@ export interface WatchPlayer {
   name: string;
 }
 
+export interface SeasonStats {
+  gamesPlayed: number;
+  pa: number;
+  avg: string;
+  obp: string;
+  slg: string;
+  ops: string;
+  hr: number;
+  rbi: number;
+  hits: number;
+  atBats: number;
+  runs: number;
+  sb: number;
+}
+
 export interface PlayerReport extends WatchPlayer {
   found: boolean;
   games: PlayerGame[];
+  seasonStats: SeasonStats | null;
+  splitVsLeft: SeasonStats | null;
+  splitVsRight: SeasonStats | null;
 }
 
 export interface SeasonPlayer extends WatchPlayer {

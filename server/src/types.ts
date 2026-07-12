@@ -1,5 +1,12 @@
 // ---- Pitch-level Statcast model -------------------------------------------
 
+/** Which bases are occupied (used per plate appearance and for a live game). */
+export interface BaseState {
+  first: boolean;
+  second: boolean;
+  third: boolean;
+}
+
 /** A single pitch within a plate appearance. */
 export interface Pitch {
   pitchNumber: number;
@@ -29,8 +36,11 @@ export interface PlateAppearance {
   inning: number;
   half: string; // "Top" | "Bot"
   outsWhenUp: number | null;
+  onBase: BaseState; // runners on base when the batter stepped up
   stand: string | null; // batter handedness L/R
   pThrows: string | null; // pitcher handedness L/R
+  pitcherId: number | null;
+  pitcherName: string | null; // pitcher faced in this PA
   event: string | null; // single, home_run, strikeout, walk, field_out, ...
   description: string; // human-readable play description (des)
   rbi: number; // runs batted in on this PA (official scoring)
@@ -70,6 +80,32 @@ export interface BattingLine {
   runValue: number | null; // sum of delta_run_exp
 }
 
+/** Where a game is in its lifecycle, with score/inning (live) or start time (scheduled). */
+export interface GameStatus {
+  state: 'scheduled' | 'live' | 'final';
+  detailedState: string; // MLB's label, e.g. "Warmup", "In Progress", "Final"
+  startTime: string | null; // ISO datetime of first pitch (for scheduled games)
+  homeScore: number | null;
+  awayScore: number | null;
+  currentInning: number | null;
+  inningState: string | null; // "Top" | "Middle" | "Bottom" | "End"
+  isTopInning: boolean | null;
+  bases: BaseState | null; // current runners on base (live games only)
+  outs: number | null; // current outs (live games only)
+  // Live batting-team situation, for highlighting a watched player's current
+  // role. All null/empty unless the game is in progress.
+  atBatId: number | null;
+  onDeckId: number | null;
+  onBaseIds: number[]; // player ids currently on base
+}
+
+/** A game's announced/probable starting pitcher (used before first pitch). */
+export interface ProbablePitcher {
+  id: number;
+  name: string;
+  hand: string | null; // "L" | "R"
+}
+
 export interface PlayerGame {
   gamePk: number;
   date: string;
@@ -79,6 +115,10 @@ export interface PlayerGame {
   opponent: string;
   isHome: boolean;
   stand: string | null;
+  status: GameStatus;
+  // The opposing probable starter — the pitcher this batter is scheduled to
+  // face. Meaningful before the game starts; null once real matchups exist.
+  probablePitcher: ProbablePitcher | null;
   plateAppearances: PlateAppearance[];
   line: BattingLine;
 }
@@ -90,10 +130,31 @@ export interface WatchPlayer {
   name: string; // "First Last"
 }
 
+/** A player's batting line — full-season, or a platoon split (vs L/R pitching). */
+export interface SeasonStats {
+  gamesPlayed: number;
+  pa: number; // plate appearances (sample size, esp. for splits)
+  avg: string; // ".237" (string to preserve the leading-dot baseball format)
+  obp: string;
+  slg: string;
+  ops: string;
+  hr: number;
+  rbi: number;
+  hits: number;
+  atBats: number;
+  runs: number;
+  sb: number;
+}
+
 /** A player as returned in the day's report. */
 export interface PlayerReport extends WatchPlayer {
   found: boolean;
   games: PlayerGame[];
+  seasonStats: SeasonStats | null;
+  // Platoon splits for the season, shown when the player faces a same-handed
+  // probable starter in a not-yet-started game.
+  splitVsLeft: SeasonStats | null; // vs LHP
+  splitVsRight: SeasonStats | null; // vs RHP
 }
 
 /** A rostered player for the season, used for search/autocomplete. */

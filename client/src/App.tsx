@@ -1,9 +1,86 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from './api';
-import type { PlayerReport, SeasonPlayer, WatchPlayer } from './types';
+import type { PlayerGame, PlayerReport, SeasonPlayer, WatchPlayer } from './types';
 import { PlayerAdder } from './components/PlayerAdder';
 import { PlayerCard } from './components/PlayerCard';
-import { isBigDay } from './lib';
+import { BaseDiamond } from './components/BaseDiamond';
+import { DateRangePicker } from './components/DateRangePicker';
+import { formatStartTime, gameStatusView, headshotUrl, liveRole, liveRoleLabel } from './lib';
+
+const SHORT_INNING: Record<string, string> = {
+  Top: 'Top',
+  Bottom: 'Bot',
+  Middle: 'Mid',
+  End: 'End',
+};
+
+/** The game to summarize for a player in the nav: prefer live, then upcoming. */
+function navGame(report: PlayerReport): PlayerGame | null {
+  const games = report.games;
+  if (games.length === 0) return null;
+  return (
+    games.find((g) => g.status.state === 'live') ??
+    games.find((g) => g.status.state === 'scheduled') ??
+    [...games].sort((a, b) => b.date.localeCompare(a.date) || b.gamePk - a.gamePk)[0]
+  );
+}
+
+/** Player headshot for the image-only (narrow) nav; falls back to initials. */
+function NavPhoto({ id, name }: { id: number; name: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    const initials = name
+      .split(/\s+/)
+      .map((p) => p[0])
+      .slice(0, 2)
+      .join('');
+    return (
+      <span className="player-nav-photo player-nav-photo-empty" aria-label={name}>
+        {initials}
+      </span>
+    );
+  }
+  return (
+    <img
+      className="player-nav-photo"
+      src={headshotUrl(id)}
+      alt={name}
+      loading="lazy"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+/** Compact game line for the nav: time (scheduled), score + inning + runners/outs
+ * (live), or final score. */
+function NavGameStatus({ game }: { game: PlayerGame }) {
+  const s = game.status;
+  const { kind, score } = gameStatusView(game);
+  const matchup = `${game.isHome ? 'vs' : '@'} ${game.opponent}`;
+
+  let text: string;
+  if (kind === 'scheduled') {
+    text = `${matchup} · ${formatStartTime(s.startTime) ?? (s.detailedState || 'TBD')}`;
+  } else if (kind === 'live') {
+    const inning =
+      s.currentInning !== null
+        ? `${SHORT_INNING[s.inningState ?? ''] ?? s.inningState ?? ''} ${s.currentInning}`.trim()
+        : s.detailedState;
+    text = `${score ?? matchup} · ${inning}`;
+  } else {
+    text = `${score ?? matchup} · Final`;
+  }
+
+  return (
+    <span className={`nav-game ${kind}`}>
+      {kind === 'live' && <span className="live-dot" aria-hidden="true" />}
+      <span className="nav-game-text">{text}</span>
+      {kind === 'live' && s.bases && (
+        <BaseDiamond bases={s.bases} outs={s.outs ?? 0} className="nav-bases" />
+      )}
+    </span>
+  );
+}
 
 // MLB days are anchored to US Eastern time (games can end after midnight ET),
 // so "previous day" is computed in America/New_York rather than UTC or the
@@ -36,6 +113,10 @@ function previousDay(): string {
   return addDays(todayEt(), -1);
 }
 
+function nextDay(): string {
+  return addDays(todayEt(), 1);
+}
+
 /** Most recent Monday on or before the given date (i.e. start of that week). */
 function mondayOnOrBefore(date: string): string {
   const [y, m, day] = date.split('-').map(Number);
@@ -44,24 +125,6 @@ function mondayOnOrBefore(date: string): string {
   return addDays(date, -daysSinceMonday);
 }
 
-function prettyDate(date: string): string {
-  const d = new Date(date + 'T12:00:00');
-  return d.toLocaleDateString(undefined, {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  });
-}
-
-function prettyShort(date: string): string {
-  const d = new Date(date + 'T12:00:00');
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
-
-function prettyRange(start: string, end: string): string {
-  return start === end ? prettyDate(start) : `${prettyShort(start)} – ${prettyDate(end)}`;
-}
 
 interface DatePreset {
   label: string;
@@ -71,9 +134,13 @@ interface DatePreset {
 
 function datePresets(): DatePreset[] {
   const today = todayEt();
+  const tomorrow = nextDay();
   const yesterday = previousDay();
   return [
     { label: 'Today', start: today, end: today },
+    // Tomorrow surfaces watched players' scheduled games (start times) before
+    // any plate appearances exist.
+    { label: 'Tomorrow', start: tomorrow, end: tomorrow },
     { label: 'Yesterday', start: yesterday, end: yesterday },
     { label: 'This week', start: mondayOnOrBefore(today), end: today },
     { label: 'Last 15 days', start: addDays(today, -14), end: today },
@@ -104,7 +171,8 @@ export default function App() {
     return initialParams.has('start') || initialParams.has('end') ? null : 'Today';
   });
   const presets = useMemo(datePresets, []);
-  const today = useMemo(todayEt, []);
+  // The picker allows up to tomorrow so scheduled games can be viewed ahead.
+  const tomorrow = useMemo(nextDay, []);
   const [seasonPlayers, setSeasonPlayers] = useState<SeasonPlayer[]>([]);
   const [playersLoading, setPlayersLoading] = useState(true);
   const [watchlist, setWatchlist] = useState<WatchPlayer[]>([]);
@@ -118,7 +186,6 @@ export default function App() {
     if (!v) return new Set();
     return new Set(v.split(',').map(Number).filter(Number.isFinite));
   });
-
   // Keep the URL in sync with UI state (replaceState so we don't flood history).
   useEffect(() => {
     const p = new URLSearchParams();
@@ -170,19 +237,35 @@ export default function App() {
     return () => clearTimeout(t);
   }, [reportLoading]);
 
-  const loadReport = useCallback(() => {
-    setReportLoading(true);
-    api
-      .report(start, end)
-      .then((r) => setReports(r.players))
-      .catch((e: Error) => setError(e.message))
-      .finally(() => setReportLoading(false));
-  }, [start, end]);
+  // `quiet` refreshes in the background (live polling) without flashing the
+  // loading UI; the foreground load on date/watchlist change is not quiet.
+  const loadReport = useCallback(
+    (quiet = false) => {
+      if (!quiet) setReportLoading(true);
+      api
+        .report(start, end)
+        .then((r) => setReports(r.players))
+        .catch((e: Error) => setError(e.message))
+        .finally(() => {
+          if (!quiet) setReportLoading(false);
+        });
+    },
+    [start, end],
+  );
 
   // Refresh report when date or watchlist changes.
   useEffect(() => {
     loadReport();
   }, [loadReport, watchlist]);
+
+  // While any game is in progress, quietly re-poll so the live score, bases, and
+  // the nav's at-bat/on-deck/on-base highlights track the game in near-real-time.
+  const hasLiveGame = reports.some((r) => r.games.some((g) => g.status.state === 'live'));
+  useEffect(() => {
+    if (!hasLiveGame) return;
+    const t = setInterval(() => loadReport(true), 20_000);
+    return () => clearInterval(t);
+  }, [hasLiveGame, loadReport]);
 
   // Show a "back to top" button once the user has scrolled down a screenful.
   const [showBackToTop, setShowBackToTop] = useState(false);
@@ -208,9 +291,6 @@ export default function App() {
       return next;
     });
   };
-  const expandAll = () => setCollapsedIds(new Set());
-  const collapseAll = () => setCollapsedIds(new Set(reports.map((r) => r.id)));
-
   // Positions come from the season roster; look them up by id for each report.
   const positionById = useMemo(
     () => new Map(seasonPlayers.map((p) => [p.id, p.position])),
@@ -242,6 +322,8 @@ export default function App() {
         </div>
         <div className="date-control">
           <div className="date-row">
+            {/* Desktop: a row of preset pills. On phones this row is hidden and
+                the equivalent <select> below takes over (see styles.css). */}
             <div className="date-presets">
               {presets.map((p) => (
                 <button
@@ -258,35 +340,40 @@ export default function App() {
                 </button>
               ))}
             </div>
-            <div className="date-range-inputs">
-              <label>
-                From
-                <input
-                  type="date"
-                  value={start}
-                  max={end}
-                  onChange={(e) => {
-                    setStart(e.target.value || start);
-                    setActivePreset(null);
-                  }}
-                />
-              </label>
-              <label>
-                To
-                <input
-                  type="date"
-                  value={end}
-                  min={start}
-                  max={today}
-                  onChange={(e) => {
-                    setEnd(e.target.value || end);
-                    setActivePreset(null);
-                  }}
-                />
-              </label>
-            </div>
+            {/* Phone-only equivalent of the pill row. A custom range (no active
+                preset) shows the disabled placeholder option. */}
+            <select
+              className="date-presets-select"
+              value={activePreset ?? ''}
+              onChange={(e) => {
+                const p = presets.find((x) => x.label === e.target.value);
+                if (!p) return;
+                setStart(p.start);
+                setEnd(p.end);
+                setActivePreset(p.label);
+              }}
+              aria-label="Date range preset"
+            >
+              <option value="" disabled>
+                Custom range
+              </option>
+              {presets.map((p) => (
+                <option key={p.label} value={p.label}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+            <DateRangePicker
+              start={start}
+              end={end}
+              max={tomorrow}
+              onChange={(s, e) => {
+                setStart(s);
+                setEnd(e);
+                setActivePreset(null);
+              }}
+            />
           </div>
-          <span className="date-pretty">{prettyRange(start, end)}</span>
         </div>
       </header>
 
@@ -303,16 +390,6 @@ export default function App() {
           <span className="chip accent">{totals.hits} hits</span>
           <span className="chip hr">{totals.hrs} HR</span>
         </div>
-        {reports.length > 0 && (
-          <div className="bulk-toggles">
-            <button type="button" className="bulk-toggle" onClick={expandAll}>
-              Expand all
-            </button>
-            <button type="button" className="bulk-toggle" onClick={collapseAll}>
-              Collapse all
-            </button>
-          </div>
-        )}
       </section>
 
       {error && <div className="error-banner">⚠ {error}</div>}
@@ -338,19 +415,22 @@ export default function App() {
         </div>
       )}
 
-      <div className={`content-layout${showLoading && reports.length > 0 ? ' is-loading' : ''}`}>
+      <div
+        className={`content-layout${showLoading && reports.length > 0 ? ' is-loading' : ''}`}
+      >
         {reports.length > 0 && (
           <aside className="player-nav">
             <div className="player-nav-title">Players</div>
             <nav>
               {reports.map((r) => {
-                const played = r.found && r.games.length > 0;
-                const big = played && r.games.some((g) => isBigDay(g.line));
+                const role = liveRole(r);
+                const game = navGame(r);
                 return (
                   <a
                     key={r.id}
-                    className={`player-nav-link${played ? '' : ' dnp'}`}
+                    className={`player-nav-link${role ? ` role-${role}` : ''}`}
                     href={`#player-${r.id}`}
+                    title={r.name}
                     onClick={(e) => {
                       e.preventDefault();
                       document
@@ -358,8 +438,18 @@ export default function App() {
                         ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                     }}
                   >
-                    <span className="player-nav-name">{r.name}</span>
-                    {big && <span className="player-nav-flag">🔥</span>}
+                    <NavPhoto id={r.id} name={r.name} />
+                    <div className="player-nav-body">
+                      <div className="player-nav-top">
+                        <span className="player-nav-name">{r.name}</span>
+                        {role && <span className="player-nav-role">{liveRoleLabel(role)}</span>}
+                      </div>
+                      {game ? (
+                        <NavGameStatus game={game} />
+                      ) : (
+                        <span className="nav-game">Did not appear</span>
+                      )}
+                    </div>
                   </a>
                 );
               })}

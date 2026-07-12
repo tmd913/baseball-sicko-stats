@@ -69,7 +69,8 @@
       "Bash(PATH=/opt/homebrew/bin:__TRACKED_VAR__ ./node_modules/.bin/tsc -p tsconfig.json --noEmit)",
       "Bash(PATH=/opt/homebrew/bin:__TRACKED_VAR__ ../node_modules/.bin/tsc -p tsconfig.json --noEmit)",
       "Bash(git check-ignore *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit *)"
     ]
   }
 }

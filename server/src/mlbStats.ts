@@ -2,7 +2,13 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { toSavantName } from './names.js';
-import type { SeasonPlayer } from './types.js';
+import type {
+  BaseState,
+  GameStatus,
+  ProbablePitcher,
+  SeasonPlayer,
+  SeasonStats,
+} from './types.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CACHE_DIR = path.join(__dirname, '..', 'data', 'cache');
@@ -127,6 +133,111 @@ export async function getSeasonPlayers(
   return players;
 }
 
+// ---- Season batting stats + platoon splits (shown on each player's card) ----
+
+interface PeopleStatsPerson {
+  id: number;
+  stats?: {
+    type?: { displayName?: string };
+    splits?: { split?: { code?: string }; stat?: Record<string, unknown> }[];
+  }[];
+}
+interface PeopleStatsResponse {
+  people?: PeopleStatsPerson[];
+}
+
+/** Season line plus vs-LHP / vs-RHP splits for one player. */
+export interface PlayerStats {
+  season: SeasonStats | null;
+  vsLeft: SeasonStats | null; // vs LHP
+  vsRight: SeasonStats | null; // vs RHP
+}
+
+const EMPTY_PLAYER_STATS: PlayerStats = { season: null, vsLeft: null, vsRight: null };
+
+const s = (v: unknown): string => (typeof v === 'string' ? v : '.---');
+const n = (v: unknown): number => (typeof v === 'number' ? v : 0);
+
+function toSeasonStats(stat: Record<string, unknown>): SeasonStats {
+  return {
+    gamesPlayed: n(stat.gamesPlayed),
+    pa: n(stat.plateAppearances),
+    avg: s(stat.avg),
+    obp: s(stat.obp),
+    slg: s(stat.slg),
+    ops: s(stat.ops),
+    hr: n(stat.homeRuns),
+    rbi: n(stat.rbi),
+    hits: n(stat.hits),
+    atBats: n(stat.atBats),
+    runs: n(stat.runs),
+    sb: n(stat.stolenBases),
+  };
+}
+
+/** Fold one person's hydrated stat groups into a season line + L/R splits. */
+function parsePlayerStats(p: PeopleStatsPerson): PlayerStats {
+  const out: PlayerStats = { season: null, vsLeft: null, vsRight: null };
+  for (const grp of p.stats ?? []) {
+    const type = grp.type?.displayName;
+    for (const sp of grp.splits ?? []) {
+      if (!sp.stat) continue;
+      if (type === 'season') out.season = toSeasonStats(sp.stat);
+      else if (type === 'statSplits') {
+        if (sp.split?.code === 'vl') out.vsLeft = toSeasonStats(sp.stat);
+        else if (sp.split?.code === 'vr') out.vsRight = toSeasonStats(sp.stat);
+      }
+    }
+  }
+  return out;
+}
+
+/** Per-player stats stay fresh for 30 min — they only move once a day. */
+const SEASON_STATS_TTL = 30 * 60 * 1000;
+const playerStatsCache = new Map<number, { stats: PlayerStats; fetchedAt: number }>();
+
+/**
+ * Season hitting line and vs-LHP/vs-RHP platoon splits for each id, batched into
+ * one people?hydrate=stats request for the ids whose cache entry is missing or
+ * stale. Missing groups (e.g. a player who hasn't hit yet) map to null.
+ */
+export async function getPlayerStats(
+  ids: number[],
+  season: number = new Date().getFullYear(),
+): Promise<Map<number, PlayerStats>> {
+  const now = Date.now();
+  const stale = ids.filter((id) => {
+    const c = playerStatsCache.get(id);
+    return !c || now - c.fetchedAt >= SEASON_STATS_TTL;
+  });
+
+  if (stale.length > 0) {
+    const url =
+      `https://statsapi.mlb.com/api/v1/people?personIds=${stale.join(',')}` +
+      `&hydrate=${encodeURIComponent(
+        `stats(group=[hitting],type=[season,statSplits],sitCodes=[vr,vl],season=${season})`,
+      )}`;
+    try {
+      const res = await fetch(url, { headers: UA });
+      if (!res.ok) throw new Error(`people/stats returned ${res.status}`);
+      const data = (await res.json()) as PeopleStatsResponse;
+      const seen = new Set<number>();
+      for (const p of data.people ?? []) {
+        playerStatsCache.set(p.id, { stats: parsePlayerStats(p), fetchedAt: now });
+        seen.add(p.id);
+      }
+      // Cache empties for ids the response omitted so we don't refetch in a loop.
+      for (const id of stale) {
+        if (!seen.has(id)) playerStatsCache.set(id, { stats: EMPTY_PLAYER_STATS, fetchedAt: now });
+      }
+    } catch (err) {
+      console.error('player stats fetch failed:', err);
+    }
+  }
+
+  return new Map(ids.map((id) => [id, playerStatsCache.get(id)?.stats ?? EMPTY_PLAYER_STATS]));
+}
+
 // ---- Live feed (pitch-by-pitch + Statcast-style pitch/hit data) -------
 
 const FEED_FIELDS = [
@@ -134,11 +245,19 @@ const FEED_FIELDS = [
   'status',
   'abstractGameState',
   'codedGameState',
+  'detailedState',
+  'datetime',
+  'dateTime',
   'teams',
   'away',
   'home',
   'abbreviation',
   'liveData',
+  'linescore',
+  'currentInning',
+  'inningState',
+  'isTopInning',
+  'runs',
   'plays',
   'allPlays',
   'about',
@@ -152,6 +271,11 @@ const FEED_FIELDS = [
   'outs',
   'matchup',
   'batter',
+  'pitcher',
+  'probablePitchers',
+  'postOnFirst',
+  'postOnSecond',
+  'postOnThird',
   'id',
   'fullName',
   'batSide',
@@ -227,8 +351,13 @@ interface FeedPlay {
   count?: { outs?: number };
   matchup?: {
     batter?: { id?: number; fullName?: string };
+    pitcher?: { id?: number; fullName?: string };
     batSide?: { code?: string };
     pitchHand?: { code?: string };
+    // Present (a runner object) when the base is occupied at the END of the PA.
+    postOnFirst?: { id?: number } | null;
+    postOnSecond?: { id?: number } | null;
+    postOnThird?: { id?: number } | null;
   };
   result?: { event?: string; eventType?: string; description?: string; rbi?: number };
   runners?: FeedRunner[];
@@ -239,10 +368,41 @@ interface LiveFeed {
   // startTimecode for the next diffPatch request while a game is live.
   metaData?: { timeStamp?: string };
   gameData?: {
-    status?: { abstractGameState?: string; codedGameState?: string };
+    status?: { abstractGameState?: string; codedGameState?: string; detailedState?: string };
     teams?: { home?: { abbreviation?: string }; away?: { abbreviation?: string } };
+    datetime?: { dateTime?: string };
+    probablePitchers?: {
+      home?: { id?: number; fullName?: string };
+      away?: { id?: number; fullName?: string };
+    };
+    // Present only in the full (unfiltered) feed used for live/scheduled games —
+    // the source for a probable pitcher's throwing hand.
+    players?: Record<string, { pitchHand?: { code?: string } }>;
   };
-  liveData?: { plays?: { allPlays?: FeedPlay[] } };
+  liveData?: {
+    plays?: { allPlays?: FeedPlay[] };
+    linescore?: {
+      currentInning?: number;
+      inningState?: string;
+      isTopInning?: boolean;
+      outs?: number;
+      teams?: { home?: { runs?: number }; away?: { runs?: number } };
+      // Current on-base runners + batter/on-deck (full feed only).
+      offense?: {
+        batter?: { id?: number } | null;
+        onDeck?: { id?: number } | null;
+        first?: { id?: number } | null;
+        second?: { id?: number } | null;
+        third?: { id?: number } | null;
+      };
+    };
+    boxscore?: {
+      teams?: {
+        home?: { players?: Record<string, { person?: { id?: number } }> };
+        away?: { players?: Record<string, { person?: { id?: number } }> };
+      };
+    };
+  };
 }
 
 /**
@@ -465,8 +625,11 @@ export interface StatsApiPlateAppearance {
   inning: number;
   half: string;
   outsWhenUp: number;
+  onBase: BaseState;
   stand: string | null;
   pThrows: string | null;
+  pitcherId: number | null;
+  pitcherName: string | null;
   event: string | null;
   description: string;
   rbi: number;
@@ -491,10 +654,77 @@ export interface StatsApiGame {
   gamePk: number;
   homeTeam: string;
   awayTeam: string;
+  status: GameStatus;
+  homeProbablePitcher: ProbablePitcher | null;
+  awayProbablePitcher: ProbablePitcher | null;
+  // Active-roster player ids per side (from the boxscore) so a watched player
+  // can be tied to a scheduled/in-progress game before their first plate
+  // appearance. Empty for cached final games, where every appearance is known.
+  homePlayerIds: Set<number>;
+  awayPlayerIds: Set<number>;
   batters: Map<number, StatsApiBatterGame>;
   runsByRunner: Map<number, number>;
   sbByRunner: Map<number, number>;
   csByRunner: Map<number, number>;
+}
+
+const EMPTY_BASES: BaseState = { first: false, second: false, third: false };
+
+/** A base is occupied when its runner slot holds an object rather than null. */
+const baseState = (a: unknown, b: unknown, c: unknown): BaseState => ({
+  first: a != null,
+  second: b != null,
+  third: c != null,
+});
+
+function buildGameStatus(feed: LiveFeed): GameStatus {
+  const s = feed.gameData?.status;
+  const state: GameStatus['state'] = isFinalFeed(feed)
+    ? 'final'
+    : s?.abstractGameState === 'Live'
+      ? 'live'
+      : 'scheduled';
+  const ls = feed.liveData?.linescore;
+  const o = ls?.offense;
+  const live = state === 'live';
+  return {
+    state,
+    detailedState: s?.detailedState ?? '',
+    startTime: feed.gameData?.datetime?.dateTime ?? null,
+    homeScore: ls?.teams?.home?.runs ?? null,
+    awayScore: ls?.teams?.away?.runs ?? null,
+    currentInning: ls?.currentInning ?? null,
+    inningState: ls?.inningState ?? null,
+    isTopInning: ls?.isTopInning ?? null,
+    // Only meaningful mid-game; between innings/at rest there are no runners.
+    bases: live ? baseState(o?.first, o?.second, o?.third) : null,
+    outs: live ? ls?.outs ?? 0 : null,
+    atBatId: live ? o?.batter?.id ?? null : null,
+    onDeckId: live ? o?.onDeck?.id ?? null : null,
+    onBaseIds: live
+      ? [o?.first?.id, o?.second?.id, o?.third?.id].filter((x): x is number => typeof x === 'number')
+      : [],
+  };
+}
+
+function probablePitcher(
+  feed: LiveFeed,
+  p: { id?: number; fullName?: string } | undefined,
+): ProbablePitcher | null {
+  if (typeof p?.id !== 'number' || !p.fullName) return null;
+  // Handedness lives in gameData.players (full feed only); null if unavailable.
+  const hand = feed.gameData?.players?.[`ID${p.id}`]?.pitchHand?.code ?? null;
+  return { id: p.id, name: p.fullName, hand };
+}
+
+function rosterIds(
+  team: { players?: Record<string, { person?: { id?: number } }> } | undefined,
+): Set<number> {
+  const ids = new Set<number>();
+  for (const p of Object.values(team?.players ?? {})) {
+    if (typeof p.person?.id === 'number') ids.add(p.person.id);
+  }
+  return ids;
 }
 
 // Final games are immutable, so they're memoized (and disk-cached) forever.
@@ -592,12 +822,20 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
 
   const homeTeam = feed.gameData?.teams?.home?.abbreviation ?? '';
   const awayTeam = feed.gameData?.teams?.away?.abbreviation ?? '';
+  const status = buildGameStatus(feed);
+  const homeProbablePitcher = probablePitcher(feed, feed.gameData?.probablePitchers?.home);
+  const awayProbablePitcher = probablePitcher(feed, feed.gameData?.probablePitchers?.away);
+  const homePlayerIds = rosterIds(feed.liveData?.boxscore?.teams?.home);
+  const awayPlayerIds = rosterIds(feed.liveData?.boxscore?.teams?.away);
   const batters = new Map<number, StatsApiBatterGame>();
   const runsByRunner = new Map<number, number>();
   const sbByRunner = new Map<number, number>();
   const csByRunner = new Map<number, number>();
 
   let outsInHalf = 0;
+  // The base state a batter comes up to equals the previous PA's end state in
+  // the same half-inning (empty to start the half). postOnX gives that end state.
+  let basesWhenUp: BaseState = EMPTY_BASES;
   let currentHalfKey = '';
 
   for (const play of feed.liveData?.plays?.allPlays ?? []) {
@@ -607,9 +845,13 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
     if (halfKey !== currentHalfKey) {
       currentHalfKey = halfKey;
       outsInHalf = 0;
+      basesWhenUp = EMPTY_BASES;
     }
     const outsWhenUp = outsInHalf;
     outsInHalf = play.count?.outs ?? outsInHalf;
+    const onBase = basesWhenUp;
+    const m = play.matchup;
+    basesWhenUp = baseState(m?.postOnFirst, m?.postOnSecond, m?.postOnThird);
 
     const batterId = play.matchup?.batter?.id;
     const batterName = play.matchup?.batter?.fullName;
@@ -671,8 +913,11 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
       inning: play.about?.inning ?? 0,
       half: play.about?.halfInning?.toLowerCase() === 'top' ? 'Top' : 'Bot',
       outsWhenUp,
+      onBase,
       stand: play.matchup?.batSide?.code ?? null,
       pThrows: play.matchup?.pitchHand?.code ?? null,
+      pitcherId: play.matchup?.pitcher?.id ?? null,
+      pitcherName: play.matchup?.pitcher?.fullName ?? null,
       event: play.result?.eventType ?? null,
       description: play.result?.description ?? '',
       rbi: play.result?.rbi ?? 0,
@@ -686,7 +931,20 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
     });
   }
 
-  const game: StatsApiGame = { gamePk, homeTeam, awayTeam, batters, runsByRunner, sbByRunner, csByRunner };
+  const game: StatsApiGame = {
+    gamePk,
+    homeTeam,
+    awayTeam,
+    status,
+    homeProbablePitcher,
+    awayProbablePitcher,
+    homePlayerIds,
+    awayPlayerIds,
+    batters,
+    runsByRunner,
+    sbByRunner,
+    csByRunner,
+  };
   // Final games are immutable — memoize forever. Live games are rebuilt each
   // request from the (throttled) snapshot in liveState, so don't cache them here.
   if (isFinal) gameMemCache.set(gamePk, game);

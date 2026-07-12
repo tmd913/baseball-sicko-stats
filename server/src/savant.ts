@@ -2,7 +2,7 @@ import { parse } from 'csv-parse/sync';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getGamesForDate, getStatsApiGame } from './mlbStats.js';
+import { getGamesForDate, getPlayerStats, getStatsApiGame } from './mlbStats.js';
 import { toSavantName } from './names.js';
 import type {
   Pitch,
@@ -10,6 +10,8 @@ import type {
   PlayerGame,
   PlayerReport,
   BattingLine,
+  GameStatus,
+  ProbablePitcher,
   WatchPlayer,
 } from './types.js';
 
@@ -53,9 +55,24 @@ const int = (v: string | undefined): number | null => {
   return n === null ? null : Math.round(n);
 };
 
+/** A game on a given day, with rosters — lets a watched player be tied to a
+ * scheduled/in-progress game they haven't batted in yet. */
+interface DayGame {
+  gamePk: number;
+  date: string;
+  homeTeam: string;
+  awayTeam: string;
+  status: GameStatus;
+  homeProbablePitcher: ProbablePitcher | null;
+  awayProbablePitcher: ProbablePitcher | null;
+  homePlayerIds: number[];
+  awayPlayerIds: number[];
+}
+
 interface ParsedDay {
   date: string;
   reports: Map<number, PlayerReport>; // by batter id
+  games: DayGame[];
   fetchedAt: number;
 }
 
@@ -261,6 +278,7 @@ function applyCsvEnrichment(
 
 async function buildStatsApiDay(date: string): Promise<{
   byBatter: Map<number, { name: string; games: PlayerGame[] }>;
+  dayGames: DayGame[];
 }> {
   const gamePks = await getGamesForDate(date);
   const games = await Promise.all(
@@ -275,17 +293,32 @@ async function buildStatsApiDay(date: string): Promise<{
   );
 
   const byBatter = new Map<number, { name: string; games: PlayerGame[] }>();
+  const dayGames: DayGame[] = [];
 
   for (const g of games) {
     if (!g) continue;
+    dayGames.push({
+      gamePk: g.gamePk,
+      date,
+      homeTeam: g.homeTeam,
+      awayTeam: g.awayTeam,
+      status: g.status,
+      homeProbablePitcher: g.homeProbablePitcher,
+      awayProbablePitcher: g.awayProbablePitcher,
+      homePlayerIds: [...g.homePlayerIds],
+      awayPlayerIds: [...g.awayPlayerIds],
+    });
     for (const bg of g.batters.values()) {
       const plateAppearances: PlateAppearance[] = bg.plateAppearances.map((pa) => ({
         atBatNumber: pa.atBatNumber,
         inning: pa.inning,
         half: pa.half,
         outsWhenUp: pa.outsWhenUp,
+        onBase: pa.onBase,
         stand: pa.stand,
         pThrows: pa.pThrows,
+        pitcherId: pa.pitcherId,
+        pitcherName: pa.pitcherName,
         event: pa.event,
         description: pa.description,
         rbi: pa.rbi,
@@ -332,6 +365,9 @@ async function buildStatsApiDay(date: string): Promise<{
         opponent,
         isHome: bg.isHome,
         stand: bg.stand,
+        status: g.status,
+        // The batter faces the opposing team's starter.
+        probablePitcher: bg.isHome ? g.awayProbablePitcher : g.homeProbablePitcher,
         plateAppearances,
         // line is finalized after CSV enrichment is merged in (below), since
         // run value / avg exit velo depend on fields the enrichment fills in.
@@ -350,20 +386,49 @@ async function buildStatsApiDay(date: string): Promise<{
     }
   }
 
-  return { byBatter };
+  return { byBatter, dayGames };
 }
 
-/** How long a "today" fetch stays fresh before we re-download (ms). */
+/** How long a current/future-day fetch stays fresh before we re-download (ms).
+ *  Drops to LIVE_DAY_TTL while any game that day is in progress so reloads keep
+ *  up with live scores (the underlying feed refreshes on its own 10s cadence). */
 const TODAY_TTL = 10 * 60 * 1000;
+const LIVE_DAY_TTL = 15 * 1000;
+
+/** Today's date (YYYY-MM-DD) in US Eastern — MLB days are anchored to ET, and a
+ *  UTC "today" rolls over mid-evening while ET games are still live, which would
+ *  misclassify the live game day as a frozen past date. Matches index.ts. */
+function easternToday(): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const get = (t: string) => parts.find((p) => p.type === t)!.value;
+  return `${get('year')}-${get('month')}-${get('day')}`;
+}
 
 export async function getDay(date: string): Promise<ParsedDay> {
   const cached = memCache.get(date);
-  const isToday = date === new Date().toISOString().slice(0, 10);
-  if (cached && (!isToday || Date.now() - cached.fetchedAt < TODAY_TTL)) {
-    return cached;
+  // Today and future dates are still mutable (scores accrue, lineups/rosters get
+  // posted closer to first pitch), so they honor the TTL. Past dates are frozen.
+  const isMutable = date >= easternToday();
+  if (cached && !isMutable) return cached;
+  if (cached) {
+    const states = cached.games.map((g) => g.status.state);
+    // Once every game that day is final, nothing will change until the date
+    // rolls over (final games are cached permanently), so freeze like a past
+    // day. Empty schedules still honor the TTL in case games post late.
+    const allFinal = states.length > 0 && states.every((s) => s === 'final');
+    if (allFinal) return cached;
+    // Any in-progress game shortens the TTL so reloads track live scores;
+    // otherwise a scheduled day polls for first pitch / lineups.
+    const ttl = states.some((s) => s === 'live') ? LIVE_DAY_TTL : TODAY_TTL;
+    if (Date.now() - cached.fetchedAt < ttl) return cached;
   }
 
-  const { byBatter } = await buildStatsApiDay(date);
+  const { byBatter, dayGames } = await buildStatsApiDay(date);
 
   let enrichment = EMPTY_ENRICHMENT;
   try {
@@ -397,10 +462,14 @@ export async function getDay(date: string): Promise<ParsedDay> {
       name: b.name,
       found: true,
       games: b.games,
+      // Filled in by getReport, which fetches season stats per watched player.
+      seasonStats: null,
+      splitVsLeft: null,
+      splitVsRight: null,
     });
   }
 
-  const parsed: ParsedDay = { date, reports, fetchedAt: Date.now() };
+  const parsed: ParsedDay = { date, reports, games: dayGames, fetchedAt: Date.now() };
   memCache.set(date, parsed);
   return parsed;
 }
@@ -428,25 +497,78 @@ function findPlayerDay(day: ParsedDay, p: WatchPlayer): PlayerReport | undefined
 }
 
 /**
+ * A placeholder game for a watched player who is on a scheduled/in-progress
+ * game's roster but hasn't come to the plate yet — so the card can show the
+ * start time (or live score/inning) before any plate appearances exist.
+ */
+function upcomingGame(dg: DayGame, isHome: boolean): PlayerGame {
+  return {
+    gamePk: dg.gamePk,
+    date: dg.date,
+    homeTeam: dg.homeTeam,
+    awayTeam: dg.awayTeam,
+    batterTeam: isHome ? dg.homeTeam : dg.awayTeam,
+    opponent: isHome ? dg.awayTeam : dg.homeTeam,
+    isHome,
+    stand: null,
+    status: dg.status,
+    probablePitcher: isHome ? dg.awayProbablePitcher : dg.homeProbablePitcher,
+    plateAppearances: [],
+    line: buildLine([]),
+  };
+}
+
+/**
  * Build each watched player's games across an inclusive date range (a single
  * day is just startDate === endDate). Games from every day are merged and
  * sorted chronologically, since a player's card already knows how to render
- * multiple games (originally added for doubleheaders).
+ * multiple games (originally added for doubleheaders). A player rostered for a
+ * scheduled/in-progress game they haven't batted in yet gets a placeholder game
+ * so the card can still surface the start time or live score.
  */
 export async function getReport(
   startDate: string,
   endDate: string,
   players: WatchPlayer[],
 ): Promise<PlayerReport[]> {
-  const days = await Promise.all(enumerateDates(startDate, endDate).map(getDay));
+  const [days, playerStats] = await Promise.all([
+    Promise.all(enumerateDates(startDate, endDate).map(getDay)),
+    getPlayerStats(players.map((p) => p.id)),
+  ]);
 
   return players.map((p) => {
     const games: PlayerGame[] = [];
+    const seen = new Set<number>();
     for (const day of days) {
       const found = findPlayerDay(day, p);
-      if (found) games.push(...found.games);
+      if (found) {
+        for (const g of found.games) {
+          games.push(g);
+          seen.add(g.gamePk);
+        }
+      }
+    }
+    // Surface not-yet-batted games (scheduled or just underway) the player is
+    // rostered for. Final games are skipped — a rostered player who never
+    // appeared in a completed game should stay "did not appear", not show up.
+    for (const day of days) {
+      for (const dg of day.games) {
+        if (dg.status.state === 'final' || seen.has(dg.gamePk)) continue;
+        const isHome = dg.homePlayerIds.includes(p.id);
+        if (!isHome && !dg.awayPlayerIds.includes(p.id)) continue;
+        seen.add(dg.gamePk);
+        games.push(upcomingGame(dg, isHome));
+      }
     }
     games.sort((a, b) => (a.date === b.date ? a.gamePk - b.gamePk : a.date < b.date ? -1 : 1));
-    return { ...p, found: games.length > 0, games };
+    const st = playerStats.get(p.id);
+    return {
+      ...p,
+      found: games.length > 0,
+      games,
+      seasonStats: st?.season ?? null,
+      splitVsLeft: st?.vsLeft ?? null,
+      splitVsRight: st?.vsRight ?? null,
+    };
   });
 }
