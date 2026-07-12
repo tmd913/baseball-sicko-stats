@@ -486,13 +486,85 @@ body {
   border-radius: var(--radius);
   padding: 22px 12px;
 }
+.player-nav-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 8px 8px;
+}
 .player-nav-title {
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--muted);
   font-weight: 700;
-  padding: 0 8px 8px;
+}
+.player-nav-edit {
+  flex: none;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.player-nav-edit:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.player-nav.editing .player-nav-edit {
+  color: var(--bg);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+/* Edit toggle that rides at the end of the phone strip (see the phone media
+   query, where the header's Edit button is hidden and this one is shown). */
+.player-nav-edit-inline {
+  display: none;
+}
+/* Edit mode: draggable rows with a grip and a delete button. touch-action: none
+   lets a touch drag reorder instead of scrolling the strip. */
+.player-nav-link.editing {
+  position: relative;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+.player-nav-link.editing:active {
+  cursor: grabbing;
+}
+/* The dragged item fades and ignores pointer hit-testing, so elementFromPoint
+   resolves to the item underneath the pointer (the drop target). */
+.player-nav-link.dragging {
+  opacity: 0.4;
+  pointer-events: none;
+}
+.player-nav-grip {
+  flex: none;
+  color: var(--faint);
+  font-size: 14px;
+  line-height: 1;
+}
+.player-nav-delete {
+  flex: none;
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+.player-nav-delete:hover {
+  color: var(--strikeout);
+  border-color: var(--strikeout);
 }
 .player-nav nav {
   display: flex;
@@ -577,6 +649,23 @@ body {
     border-color: #c084fc;
     box-shadow: 0 0 0 1px #c084fc;
   }
+  /* Avatar-only rail edit mode: no room for a grip; the delete button becomes a
+     small badge on the avatar's corner. */
+  .player-nav-grip {
+    display: none;
+  }
+  .player-nav-link.editing .player-nav-delete {
+    position: absolute;
+    top: 0;
+    right: 0;
+    margin: 0;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--strikeout);
+    border-color: var(--strikeout);
+    color: var(--bg);
+  }
 }
 /* Phones: lay the avatar rail out as a horizontal, side-scrolling strip across
    the top of the content instead of a column down the side. */
@@ -617,6 +706,31 @@ body {
   .player-nav-link {
     flex: 0 0 auto;
     padding: 2px;
+  }
+  /* The header (and its Edit button) is replaced by the inline icon below. */
+  .player-nav-header {
+    display: none;
+  }
+  .player-nav-edit-inline {
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .player-nav-edit-inline:hover {
+    color: var(--text);
+    border-color: var(--accent);
+  }
+  .player-nav.editing .player-nav-edit-inline {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg);
   }
 }
 .player-nav-link:hover {
@@ -948,29 +1062,10 @@ body {
 .game-sub-bar.static:hover {
   border-color: var(--border);
 }
-.remove-btn {
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  color: var(--muted);
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.remove-btn:hover {
-  color: var(--strikeout);
-  border-color: var(--strikeout);
-}
-/* When the card is narrow, wrap the batting-line summary onto its own row while
-   keeping the remove button up top beside the player name. */
+/* When the card is narrow, wrap the batting-line summary onto its own row. */
 @container (max-width: 480px) {
   .player-head {
     flex-wrap: wrap;
-  }
-  .remove-btn {
-    order: 1;
-    margin-left: auto;
   }
   .player-summary {
     order: 2;

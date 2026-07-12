@@ -45,3 +45,24 @@ export async function removePlayer(id: number): Promise<WatchPlayer[]> {
   await persist(next);
   return next;
 }
+
+/**
+ * Reorder the watchlist to match the given id order. Ids not present are
+ * ignored; any current players missing from `ids` are appended (preserving
+ * their existing order) so a stale client can't accidentally drop players.
+ */
+export async function reorderPlayers(ids: number[]): Promise<WatchPlayer[]> {
+  const list = await load();
+  const byId = new Map(list.map((p) => [p.id, p]));
+  const next: WatchPlayer[] = [];
+  for (const id of ids) {
+    const p = byId.get(id);
+    if (p) {
+      next.push(p);
+      byId.delete(id);
+    }
+  }
+  for (const p of list) if (byId.has(p.id)) next.push(p);
+  await persist(next);
+  return next;
+}

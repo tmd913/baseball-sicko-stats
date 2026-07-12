@@ -38,6 +38,16 @@ export const api = {
     );
     return r.players;
   },
+  async reorderPlayers(ids: number[]): Promise<WatchPlayer[]> {
+    const r = await json<{ players: WatchPlayer[] }>(
+      await fetch('/api/watchlist/order', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      }),
+    );
+    return r.players;
+  },
   async report(
     start: string,
     end: string,

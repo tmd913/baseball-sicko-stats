@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getReport } from './savant.js';
 import { getSeasonPlayers, resolveVideoUrl } from './mlbStats.js';
-import { addPlayer, getWatchlist, removePlayer } from './store.js';
+import { addPlayer, getWatchlist, removePlayer, reorderPlayers } from './store.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -102,6 +102,20 @@ app.post(
       return;
     }
     const players = await addPlayer({ id, savantName, name });
+    res.json({ players });
+  }),
+);
+
+// Persist a new watchlist order (drag-to-reorder in the nav's edit mode).
+app.put(
+  '/api/watchlist/order',
+  asyncRoute(async (req, res) => {
+    const ids = req.body?.ids;
+    if (!Array.isArray(ids) || !ids.every((n) => typeof n === 'number')) {
+      res.status(400).json({ error: 'ids (number[]) required' });
+      return;
+    }
+    const players = await reorderPlayers(ids);
     res.json({ players });
   }),
 );

@@ -226,13 +226,11 @@ function Headshot({ id, name }: { id: number; name: string }) {
 export function PlayerCard({
   report,
   position,
-  onRemove,
   collapsed,
   onToggleCollapsed,
 }: {
   report: PlayerReport;
   position?: string;
-  onRemove: (id: number) => void;
   collapsed: boolean;
   onToggleCollapsed: () => void;
 }) {
@@ -249,9 +247,6 @@ export function PlayerCard({
             {meta && <span className="player-meta">{meta}</span>}
           </div>
           <span className="dnp-badge">Did not appear</span>
-          <button className="remove-btn" onClick={() => onRemove(report.id)} title="Remove">
-            ✕
-          </button>
         </div>
       </div>
     );
@@ -309,16 +304,6 @@ export function PlayerCard({
               the badge also carries the opponent and home/away (withMatchup). */}
           {games.length === 1 && <GameStatusBadge game={primary} withMatchup />}
         </div>
-        <button
-          className="remove-btn"
-          onClick={(e) => {
-            e.stopPropagation();
-            onRemove(report.id);
-          }}
-          title="Remove"
-        >
-          ✕
-        </button>
       </div>
 
       {!collapsed && (

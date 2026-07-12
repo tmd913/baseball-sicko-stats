@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api';
 import type { PlayerGame, PlayerReport, SeasonPlayer, WatchPlayer } from './types';
 import { PlayerAdder } from './components/PlayerAdder';
@@ -186,6 +186,14 @@ export default function App() {
     if (!v) return new Set();
     return new Set(v.split(',').map(Number).filter(Number.isFinite));
   });
+  // Nav edit mode: reveal per-player delete buttons and enable drag-to-reorder.
+  const [editMode, setEditMode] = useState(false);
+  const [draggingId, setDraggingId] = useState<number | null>(null);
+  const dragId = useRef<number | null>(null);
+  // Always-current reports, so the drag-end handler reads the latest order
+  // without being recreated (and re-bound) on every reorder.
+  const reportsRef = useRef(reports);
+  reportsRef.current = reports;
   // Keep the URL in sync with UI state (replaceState so we don't flood history).
   useEffect(() => {
     const p = new URLSearchParams();
@@ -281,6 +289,63 @@ export default function App() {
   };
   const onRemove = async (id: number) => {
     setWatchlist(await api.removePlayer(id));
+  };
+
+  // Drag-to-reorder in the nav, via Pointer Events so it works with both mouse
+  // and touch (the phone strip). The list is reordered live as the dragged item
+  // passes over another; the final order is persisted when the pointer is
+  // released. The order ref is updated synchronously so chained moves — and the
+  // release commit — always see the latest order, independent of render timing.
+  const reorderTo = useCallback((targetId: number) => {
+    const from = dragId.current;
+    if (from === null || from === targetId) return;
+    const prev = reportsRef.current;
+    const fi = prev.findIndex((r) => r.id === from);
+    const ti = prev.findIndex((r) => r.id === targetId);
+    if (fi === -1 || ti === -1 || fi === ti) return;
+    const next = prev.slice();
+    const [moved] = next.splice(fi, 1);
+    next.splice(ti, 0, moved);
+    reportsRef.current = next;
+    setReports(next);
+  }, []);
+
+  const dragMove = useCallback(
+    (e: PointerEvent) => {
+      // The dragged item has pointer-events: none (see .dragging), so this finds
+      // the item under the pointer, not the one being dragged.
+      const link = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest(
+        '.player-nav-link',
+      ) as HTMLElement | null;
+      const id = link?.dataset.id;
+      if (id) reorderTo(Number(id));
+    },
+    [reorderTo],
+  );
+
+  const endDrag = useCallback(() => {
+    window.removeEventListener('pointermove', dragMove);
+    window.removeEventListener('pointerup', endDrag);
+    window.removeEventListener('pointercancel', endDrag);
+    dragId.current = null;
+    setDraggingId(null);
+    // Persist the new order; setWatchlist keeps the server's copy in sync (and
+    // triggers a cached report refetch, which returns the same order).
+    api
+      .reorderPlayers(reportsRef.current.map((r) => r.id))
+      .then(setWatchlist)
+      .catch((e: Error) => setError(e.message));
+  }, [dragMove]);
+
+  const startDrag = (e: React.PointerEvent, id: number) => {
+    // A press on the delete button shouldn't begin a drag.
+    if ((e.target as HTMLElement).closest('.player-nav-delete')) return;
+    e.preventDefault();
+    dragId.current = id;
+    setDraggingId(id);
+    window.addEventListener('pointermove', dragMove);
+    window.addEventListener('pointerup', endDrag);
+    window.addEventListener('pointercancel', endDrag);
   };
 
   const toggleCollapsed = (id: number) => {
@@ -419,12 +484,70 @@ export default function App() {
         className={`content-layout${showLoading && reports.length > 0 ? ' is-loading' : ''}`}
       >
         {reports.length > 0 && (
-          <aside className="player-nav">
-            <div className="player-nav-title">Players</div>
+          <aside className={`player-nav${editMode ? ' editing' : ''}`}>
+            <div className="player-nav-header">
+              <span className="player-nav-title">Players</span>
+              <button
+                type="button"
+                className="player-nav-edit"
+                onClick={() => setEditMode((v) => !v)}
+                title={editMode ? 'Finish editing' : 'Reorder or remove players'}
+              >
+                {editMode ? 'Done' : 'Edit'}
+              </button>
+            </div>
             <nav>
               {reports.map((r) => {
                 const role = liveRole(r);
                 const game = navGame(r);
+                const body = (
+                  <>
+                    <NavPhoto id={r.id} name={r.name} />
+                    <div className="player-nav-body">
+                      <div className="player-nav-top">
+                        <span className="player-nav-name">{r.name}</span>
+                        {role && <span className="player-nav-role">{liveRoleLabel(role)}</span>}
+                      </div>
+                      {game ? (
+                        <NavGameStatus game={game} />
+                      ) : (
+                        <span className="nav-game">Did not appear</span>
+                      )}
+                    </div>
+                  </>
+                );
+                if (editMode) {
+                  // In edit mode the item isn't a link — it's a draggable row with
+                  // a delete button. Dragging (mouse or touch) reorders the list as
+                  // the item passes over its peers; data-id lets a pointer move map
+                  // the element under the finger back to a player.
+                  return (
+                    <div
+                      key={r.id}
+                      data-id={r.id}
+                      className={
+                        `player-nav-link editing${role ? ` role-${role}` : ''}` +
+                        (draggingId === r.id ? ' dragging' : '')
+                      }
+                      title={r.name}
+                      onPointerDown={(e) => startDrag(e, r.id)}
+                    >
+                      <span className="player-nav-grip" aria-hidden="true">
+                        ⠿
+                      </span>
+                      {body}
+                      <button
+                        type="button"
+                        className="player-nav-delete"
+                        onClick={() => onRemove(r.id)}
+                        title={`Remove ${r.name}`}
+                        aria-label={`Remove ${r.name}`}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  );
+                }
                 return (
                   <a
                     key={r.id}
@@ -438,21 +561,51 @@ export default function App() {
                         ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                     }}
                   >
-                    <NavPhoto id={r.id} name={r.name} />
-                    <div className="player-nav-body">
-                      <div className="player-nav-top">
-                        <span className="player-nav-name">{r.name}</span>
-                        {role && <span className="player-nav-role">{liveRoleLabel(role)}</span>}
-                      </div>
-                      {game ? (
-                        <NavGameStatus game={game} />
-                      ) : (
-                        <span className="nav-game">Did not appear</span>
-                      )}
-                    </div>
+                    {body}
                   </a>
                 );
               })}
+              {/* Phone strip only: the edit toggle rides at the end of the list as
+                  an icon (the header above is hidden). Hidden on wider screens,
+                  where the header's Edit button is used instead. */}
+              <button
+                type="button"
+                className="player-nav-edit-inline"
+                onClick={() => setEditMode((v) => !v)}
+                title={editMode ? 'Finish editing' : 'Reorder or remove players'}
+                aria-label={editMode ? 'Finish editing' : 'Edit players'}
+              >
+                {editMode ? (
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="18"
+                    height="18"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                ) : (
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="18"
+                    height="18"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 20h9" />
+                    <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                  </svg>
+                )}
+              </button>
             </nav>
           </aside>
         )}
@@ -463,7 +616,6 @@ export default function App() {
               key={r.id}
               report={r}
               position={positionById.get(r.id)}
-              onRemove={onRemove}
               collapsed={collapsedIds.has(r.id)}
               onToggleCollapsed={() => toggleCollapsed(r.id)}
             />
