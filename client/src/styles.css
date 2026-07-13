@@ -1860,7 +1860,7 @@ body {
 }
 .pct-value {
   text-align: right;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--text);
@@ -1872,6 +1872,9 @@ body {
     padding: 16px 12px 20px;
   }
   .pct-label {
+    font-size: 11px;
+  }
+  .pct-value {
     font-size: 11px;
   }
 }
