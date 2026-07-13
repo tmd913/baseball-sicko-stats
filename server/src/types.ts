@@ -162,3 +162,27 @@ export interface SeasonPlayer extends WatchPlayer {
   team: string;
   position: string;
 }
+
+// ---- Statcast percentile rankings -----------------------------------------
+
+/** One metric in the Savant-style percentile chart (e.g. xwOBA at the 99th pct). */
+export interface PercentileMetric {
+  key: string;
+  label: string;
+  percentile: number | null; // 0-100 league rank; null when the player has no data
+  value: string | null; // the raw stat, pre-formatted for display (".415", "94.1")
+}
+
+/** A labeled group of metrics (Value, Batting, Running, Fielding). */
+export interface PercentileSection {
+  title: string;
+  metrics: PercentileMetric[];
+}
+
+/** A player's full percentile-ranking card for one season, scraped from Savant. */
+export interface PlayerPercentiles {
+  playerId: number;
+  year: number;
+  sections: PercentileSection[];
+  updatedAt: string; // ISO timestamp of when the data was fetched
+}

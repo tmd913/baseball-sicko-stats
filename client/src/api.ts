@@ -1,4 +1,4 @@
-import type { PlayerReport, SeasonPlayer, WatchPlayer } from './types';
+import type { PlayerPercentiles, PlayerReport, SeasonPlayer, WatchPlayer } from './types';
 
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -53,6 +53,9 @@ export const api = {
     end: string,
   ): Promise<{ start: string; end: string; players: PlayerReport[] }> {
     return json(await fetch(`/api/report?start=${start}&end=${end}`));
+  },
+  async percentiles(playerId: number): Promise<PlayerPercentiles> {
+    return json(await fetch(`/api/percentiles/${playerId}`));
   },
   async video(playId: string, gamePk: number): Promise<string> {
     const r = await json<{ url: string }>(

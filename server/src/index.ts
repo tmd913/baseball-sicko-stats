@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getReport } from './savant.js';
+import { getPercentiles } from './percentiles.js';
 import { getSeasonPlayers, resolveVideoUrl } from './mlbStats.js';
 import { addPlayer, getWatchlist, removePlayer, reorderPlayers } from './store.js';
 
@@ -142,6 +143,21 @@ app.get(
     const watchlist = await getWatchlist();
     const players = await getReport(start, end, watchlist);
     res.json({ start, end, players });
+  }),
+);
+
+// A player's Savant-style Statcast percentile-ranking card, for the details view.
+app.get(
+  '/api/percentiles/:playerId',
+  asyncRoute(async (req, res) => {
+    const playerId = Number(req.params.playerId);
+    if (!Number.isInteger(playerId) || playerId <= 0) {
+      res.status(400).json({ error: 'invalid playerId' });
+      return;
+    }
+    const yearQ = Number(req.query.year);
+    const year = Number.isInteger(yearQ) && yearQ >= 2015 ? yearQ : undefined;
+    res.json(await getPercentiles(playerId, year));
   }),
 );
 

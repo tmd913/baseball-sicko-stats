@@ -8,7 +8,6 @@ import {
   headshotUrl,
   lineSummary,
   prettyGameDate,
-  savantPlayerUrl,
   seasonStatsSummary,
 } from '../lib';
 import { BaseDiamond } from './BaseDiamond';
@@ -215,20 +214,23 @@ function GameBlock({
 }
 
 /**
- * Player headshot, linking to the player's Baseball Savant page. Falls back to a
- * blank circle when MLB has no image for the id. stopPropagation keeps a click
- * from also toggling the (collapsible) card header it sits in.
+ * Player headshot, opening the player's details view (percentile rankings) on
+ * click. Falls back to a blank circle when MLB has no image for the id.
+ * stopPropagation keeps a click from also toggling the (collapsible) card header
+ * it sits in.
  */
-function Headshot({ id, name }: { id: number; name: string }) {
+function Headshot({ id, name, onOpen }: { id: number; name: string; onOpen: () => void }) {
   const [failed, setFailed] = useState(false);
   return (
-    <a
+    <button
+      type="button"
       className="player-photo-link"
-      href={savantPlayerUrl(name, id)}
-      target="_blank"
-      rel="noreferrer"
-      title={`${name} on Baseball Savant`}
-      onClick={(e) => e.stopPropagation()}
+      title={`${name} — Statcast details`}
+      aria-label={`${name} — Statcast details`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpen();
+      }}
     >
       {failed ? (
         <div className="player-photo player-photo-empty" aria-hidden="true" />
@@ -241,7 +243,7 @@ function Headshot({ id, name }: { id: number; name: string }) {
           onError={() => setFailed(true)}
         />
       )}
-    </a>
+    </button>
   );
 }
 
@@ -261,12 +263,14 @@ export function PlayerCard({
   singleDay,
   collapsed,
   onToggleCollapsed,
+  onOpenDetails,
 }: {
   report: PlayerReport;
   position?: string;
   singleDay: boolean;
   collapsed: boolean;
   onToggleCollapsed: () => void;
+  onOpenDetails: (id: number) => void;
 }) {
   if (didNotAppear(report)) {
     const meta = report.seasonStats ? seasonStatsSummary(report.seasonStats) : null;
@@ -278,7 +282,7 @@ export function PlayerCard({
     return (
       <div className="player-card empty" id={`player-${report.id}`}>
         <div className="player-head">
-          <Headshot id={report.id} name={report.name} />
+          <Headshot id={report.id} name={report.name} onOpen={() => onOpenDetails(report.id)} />
           <div className="player-id">
             <PlayerName name={report.name} position={position} />
             {meta && <span className="player-meta">{meta}</span>}
@@ -327,7 +331,7 @@ export function PlayerCard({
           }
         }}
       >
-        <Headshot id={report.id} name={report.name} />
+        <Headshot id={report.id} name={report.name} onOpen={() => onOpenDetails(report.id)} />
         <div className="player-id">
           <PlayerName name={report.name} position={position} />
           <span className="player-meta">

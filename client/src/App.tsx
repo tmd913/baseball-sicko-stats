@@ -3,6 +3,7 @@ import { api } from './api';
 import type { PlayerGame, PlayerReport, SeasonPlayer, WatchPlayer } from './types';
 import { PlayerAdder } from './components/PlayerAdder';
 import { PlayerCard } from './components/PlayerCard';
+import { PlayerDetails } from './components/PlayerDetails';
 import { BaseDiamond } from './components/BaseDiamond';
 import { DateRangePicker } from './components/DateRangePicker';
 import {
@@ -193,6 +194,12 @@ export default function App() {
     if (!v) return new Set();
     return new Set(v.split(',').map(Number).filter(Number.isFinite));
   });
+  // The player whose details view (percentile rankings) is open, seeded from the
+  // URL so a shared/reloaded link reopens it once that player's report loads.
+  const [detailsId, setDetailsId] = useState<number | null>(() => {
+    const n = Number(initialParams.get('player'));
+    return Number.isInteger(n) && n > 0 ? n : null;
+  });
   // Nav edit mode: reveal per-player delete buttons and enable drag-to-reorder.
   const [editMode, setEditMode] = useState(false);
   const [draggingId, setDraggingId] = useState<number | null>(null);
@@ -208,8 +215,9 @@ export default function App() {
     p.set('end', end);
     if (activePreset) p.set('preset', activePreset);
     if (collapsedIds.size) p.set('collapsed', [...collapsedIds].join(','));
+    if (detailsId) p.set('player', String(detailsId));
     window.history.replaceState(null, '', `?${p.toString()}`);
-  }, [start, end, activePreset, collapsedIds]);
+  }, [start, end, activePreset, collapsedIds, detailsId]);
 
   // Load the season's player list once, for search/autocomplete.
   useEffect(() => {
@@ -367,6 +375,11 @@ export default function App() {
   const positionById = useMemo(
     () => new Map(seasonPlayers.map((p) => [p.id, p.position])),
     [seasonPlayers],
+  );
+  // The report backing an open details view (may be absent until reports load).
+  const detailsReport = useMemo(
+    () => (detailsId ? reports.find((r) => r.id === detailsId) ?? null : null),
+    [detailsId, reports],
   );
 
   const totals = useMemo(() => {
@@ -616,6 +629,7 @@ export default function App() {
               singleDay={start === end}
               collapsed={collapsedIds.has(r.id)}
               onToggleCollapsed={() => toggleCollapsed(r.id)}
+              onOpenDetails={setDetailsId}
             />
           ))}
         </main>
@@ -630,6 +644,15 @@ export default function App() {
       >
         ↑
       </button>
+
+      {detailsReport && (
+        <PlayerDetails
+          playerId={detailsReport.id}
+          name={detailsReport.name}
+          position={positionById.get(detailsReport.id)}
+          onClose={() => setDetailsId(null)}
+        />
+      )}
     </div>
   );
 }

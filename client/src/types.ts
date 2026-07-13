@@ -143,3 +143,24 @@ export interface SeasonPlayer extends WatchPlayer {
   team: string;
   position: string;
 }
+
+// ---- Statcast percentile rankings -----------------------------------------
+
+export interface PercentileMetric {
+  key: string;
+  label: string;
+  percentile: number | null; // 0-100 league rank; null when the player has no data
+  value: string | null; // the raw stat, pre-formatted for display (".415", "94.1")
+}
+
+export interface PercentileSection {
+  title: string;
+  metrics: PercentileMetric[];
+}
+
+export interface PlayerPercentiles {
+  playerId: number;
+  year: number;
+  sections: PercentileSection[];
+  updatedAt: string;
+}

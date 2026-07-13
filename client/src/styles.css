@@ -902,6 +902,12 @@ body {
   line-height: 0;
   border-radius: 50%;
   cursor: pointer;
+  /* Reset UA button chrome — this is a <button> styled as a bare headshot. */
+  padding: 0;
+  border: none;
+  background: none;
+  -webkit-appearance: none;
+  appearance: none;
 }
 .player-photo-link:hover .player-photo {
   border-color: var(--accent);
@@ -1676,5 +1682,214 @@ body {
   .back-to-top {
     transition: opacity 0.18s ease;
     transform: none;
+  }
+}
+
+/* ---- Player details view (Statcast percentile rankings) ------------------ */
+/* Full-screen overlay reached by clicking a player's headshot. */
+.details-view {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  overflow-y: auto;
+  background: var(--bg);
+  padding: 20px 16px 64px;
+}
+.details-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 20px;
+  max-width: 680px;
+  margin: 0 auto 20px;
+}
+.details-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 7px 14px 7px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.details-back:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.details-id {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.details-photo {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+}
+.details-name {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.details-savant-link {
+  display: inline-block;
+  margin-top: 3px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-decoration: none;
+}
+.details-savant-link:hover {
+  color: var(--accent);
+}
+.details-status {
+  max-width: 680px;
+  margin: 40px auto;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+.details-error {
+  color: var(--strikeout);
+}
+
+/* The percentile card: a fixed label column, a flexible plot, a value column. */
+.pct-card {
+  --pct-label-w: 152px;
+  --pct-value-w: 48px;
+  max-width: 680px;
+  margin: 0 auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 22px 24px;
+}
+.pct-card-head {
+  text-align: center;
+  margin-bottom: 6px;
+}
+.pct-card-title {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.pct-section {
+  margin-top: 14px;
+}
+.pct-section-title {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  border-bottom: 2px solid var(--border);
+  padding-bottom: 5px;
+}
+.pct-row {
+  display: grid;
+  grid-template-columns: var(--pct-label-w) 1fr var(--pct-value-w);
+  align-items: center;
+  column-gap: 12px;
+  height: 34px;
+}
+.pct-label {
+  text-align: right;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* The plot track for one metric. The dashed guide at 50% (::before) stacks
+   row-to-row into one continuous "Average" line down the card. */
+.pct-track {
+  position: relative;
+  height: 20px;
+}
+.pct-track::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -7px;
+  bottom: -7px;
+  border-left: 1px dashed var(--border);
+}
+.pct-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: 999px;
+  min-width: 4px;
+  opacity: 0.55;
+}
+.pct-bubble {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 0 0 2px var(--panel);
+  z-index: 2;
+}
+.pct-value {
+  text-align: right;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+/* Poor / Average / Great axis legend, aligned to the plot column. */
+.pct-legend {
+  height: 22px;
+}
+.pct-scale {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.pct-scale-poor {
+  color: rgb(80, 120, 190);
+}
+.pct-scale-avg {
+  color: var(--muted);
+}
+.pct-scale-great {
+  color: rgb(216, 70, 96);
+}
+@media (max-width: 560px) {
+  .pct-card {
+    --pct-label-w: 116px;
+    --pct-value-w: 42px;
+    padding: 16px 14px 20px;
+  }
+  .pct-label {
+    font-size: 12px;
   }
 }
