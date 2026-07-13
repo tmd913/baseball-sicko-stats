@@ -384,15 +384,21 @@ export default function App() {
 
   const totals = useMemo(() => {
     const played = reports.filter((r) => !didNotAppear(r));
-    const hrs = played.reduce(
-      (s, r) => s + r.games.reduce((a, g) => a + g.line.hr, 0),
-      0,
-    );
-    const hits = played.reduce(
-      (s, r) => s + r.games.reduce((a, g) => a + g.line.hits, 0),
-      0,
-    );
-    return { played: played.length, hrs, hits };
+    // Sum a per-game BattingLine field across every played player's games.
+    const sum = (pick: (l: PlayerGame['line']) => number) =>
+      played.reduce((s, r) => s + r.games.reduce((a, g) => a + pick(g.line), 0), 0);
+    return {
+      played: played.length,
+      hits: sum((l) => l.hits),
+      doubles: sum((l) => l.doubles),
+      triples: sum((l) => l.triples),
+      hrs: sum((l) => l.hr),
+      rbi: sum((l) => l.rbi),
+      runs: sum((l) => l.runs),
+      bb: sum((l) => l.bb),
+      so: sum((l) => l.so),
+      sb: sum((l) => l.sb),
+    };
   }, [reports]);
 
   return (
@@ -473,7 +479,14 @@ export default function App() {
           <span className="chip">{watchlist.length} watched</span>
           <span className="chip">{totals.played} played</span>
           <span className="chip accent">{totals.hits} hits</span>
+          {totals.doubles > 0 && <span className="chip">{totals.doubles} 2B</span>}
+          {totals.triples > 0 && <span className="chip">{totals.triples} 3B</span>}
           <span className="chip hr">{totals.hrs} HR</span>
+          {totals.rbi > 0 && <span className="chip">{totals.rbi} RBI</span>}
+          {totals.runs > 0 && <span className="chip">{totals.runs} R</span>}
+          {totals.bb > 0 && <span className="chip">{totals.bb} BB</span>}
+          {totals.so > 0 && <span className="chip">{totals.so} SO</span>}
+          {totals.sb > 0 && <span className="chip">{totals.sb} SB</span>}
         </div>
       </section>
 
