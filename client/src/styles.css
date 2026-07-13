@@ -1804,16 +1804,14 @@ body {
   grid-template-columns: var(--pct-label-w) 1fr var(--pct-value-w);
   align-items: center;
   column-gap: 12px;
-  height: 34px;
+  min-height: 34px;
 }
 .pct-label {
   text-align: right;
   font-size: 13px;
   font-weight: 600;
   color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.15;
 }
 /* The plot track for one metric. The full-width rail shows the max (100th
    percentile) the colored fill is measured against; the dashed guide at 50%
@@ -1869,11 +1867,11 @@ body {
 }
 @media (max-width: 560px) {
   .pct-card {
-    --pct-label-w: 116px;
-    --pct-value-w: 42px;
-    padding: 16px 14px 20px;
+    --pct-label-w: 112px;
+    --pct-value-w: 40px;
+    padding: 16px 12px 20px;
   }
   .pct-label {
-    font-size: 12px;
+    font-size: 11px;
   }
 }
