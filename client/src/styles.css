@@ -1845,12 +1845,12 @@ body {
   position: absolute;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: 24px;
-  height: 24px;
+  width: 19px;
+  height: 19px;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 11px;
+  font-size: 9.5px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   color: #fff;
