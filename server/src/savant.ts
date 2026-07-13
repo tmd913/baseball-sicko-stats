@@ -497,11 +497,12 @@ function findPlayerDay(day: ParsedDay, p: WatchPlayer): PlayerReport | undefined
 }
 
 /**
- * A placeholder game for a watched player who is on a scheduled/in-progress
- * game's roster but hasn't come to the plate yet — so the card can show the
- * start time (or live score/inning) before any plate appearances exist.
+ * A placeholder game for a watched player who is on a game's roster but has no
+ * plate appearances of their own — either the game hasn't started (show the
+ * start time / live score) or it finished without them batting (show the final
+ * score alongside "did not appear").
  */
-function upcomingGame(dg: DayGame, isHome: boolean): PlayerGame {
+function rosterGame(dg: DayGame, isHome: boolean): PlayerGame {
   return {
     gamePk: dg.gamePk,
     date: dg.date,
@@ -548,16 +549,17 @@ export async function getReport(
         }
       }
     }
-    // Surface not-yet-batted games (scheduled or just underway) the player is
-    // rostered for. Final games are skipped — a rostered player who never
-    // appeared in a completed game should stay "did not appear", not show up.
+    // Surface games the player is rostered for but has no plate appearances in —
+    // whether not-yet-started (show start time / live score) or already final
+    // (show the final score next to "did not appear"). Games they batted in are
+    // already in `seen`.
     for (const day of days) {
       for (const dg of day.games) {
-        if (dg.status.state === 'final' || seen.has(dg.gamePk)) continue;
+        if (seen.has(dg.gamePk)) continue;
         const isHome = dg.homePlayerIds.includes(p.id);
         if (!isHome && !dg.awayPlayerIds.includes(p.id)) continue;
         seen.add(dg.gamePk);
-        games.push(upcomingGame(dg, isHome));
+        games.push(rosterGame(dg, isHome));
       }
     }
     games.sort((a, b) => (a.date === b.date ? a.gamePk - b.gamePk : a.date < b.date ? -1 : 1));

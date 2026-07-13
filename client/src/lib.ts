@@ -215,6 +215,18 @@ export function handThrows(hand: string | null): string {
   return hand === 'R' ? 'RHP' : hand === 'L' ? 'LHP' : 'P';
 }
 
+/**
+ * True when a watched player never came to the plate: either their team didn't
+ * play (no games) or they were rostered for a completed game but didn't bat. A
+ * player with a still-pending game (scheduled/live) hasn't "not appeared" yet.
+ */
+export function didNotAppear(report: PlayerReport): boolean {
+  if (!report.found || report.games.length === 0) return true;
+  return !report.games.some(
+    (g) => g.plateAppearances.length > 0 || g.status.state !== 'final',
+  );
+}
+
 /** A watched player's current live role, for highlighting them in the nav. */
 export type LiveRole = 'at-bat' | 'on-deck' | 'on-base';
 

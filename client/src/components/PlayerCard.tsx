@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { PlayerGame, PlayerReport } from '../types';
 import {
   combineLines,
+  didNotAppear,
   gameStatusView,
   handThrows,
   headshotUrl,
@@ -106,10 +107,12 @@ function GameBlock({
   game,
   showMatchup,
   spansMultipleDays,
+  singleDay,
 }: {
   game: PlayerGame;
   showMatchup: boolean;
   spansMultipleDays: boolean;
+  singleDay: boolean;
 }) {
   // Show most recent plate appearances first (highest at-bat number).
   const pas = [...game.plateAppearances].sort((a, b) => b.atBatNumber - a.atBatNumber);
@@ -126,11 +129,18 @@ function GameBlock({
       return next;
     });
 
-  const matchup = (
-    <span className="game-sub-info">
-      {spansMultipleDays && <span className="game-date">{prettyGameDate(game.date)} · </span>}
-      {game.batterTeam} {game.isHome ? 'vs' : '@'} {game.opponent}
-    </span>
+  // The bar echoes the card's own header (player-head): an identity block
+  // (matchup as the "name", date as the "meta") on the left, and a summary
+  // (line + game-status badge) on the right.
+  const gameId = (
+    <div className="game-sub-id">
+      <span className="game-sub-title">
+        {game.batterTeam} {game.isHome ? 'vs' : '@'} {game.opponent}
+      </span>
+      {spansMultipleDays && (
+        <span className="game-sub-meta">{prettyGameDate(game.date)}</span>
+      )}
+    </div>
   );
 
   // A game the player hasn't batted in yet (scheduled or just underway): no PAs
@@ -139,43 +149,55 @@ function GameBlock({
     return (
       <div className="game-block">
         <div className="game-sub-bar static">
-          {matchup}
-          <GameStatusBadge game={game} />
-          <ProbablePitcher game={game} />
+          {gameId}
+          <div className="game-sub-summary">
+            <ProbablePitcher game={game} />
+            <GameStatusBadge game={game} />
+          </div>
         </div>
       </div>
     );
   }
 
+  // On a single-day view a lone game's bar is just a redundant "Plate
+  // appearances (N)" toggle — the card header already carries the matchup and
+  // line — so drop it and show the PAs directly. With several games in view the
+  // bar still earns its place (it distinguishes them and toggles each).
+  const hideBar = singleDay && !showMatchup;
+
   return (
     <div className="game-block">
-      <div
-        className="game-sub-bar"
-        role="button"
-        tabIndex={0}
-        aria-expanded={!collapsed}
-        title={collapsed ? 'Expand game' : 'Collapse game'}
-        onClick={() => setCollapsed((v) => !v)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            setCollapsed((v) => !v);
-          }
-        }}
-      >
-        {showMatchup ? (
-          <>
-            {matchup}
-            <GameStatusBadge game={game} />
-          </>
-        ) : (
-          <span className="game-sub-info">
-            {`Plate appearances (${game.plateAppearances.length})`}
-          </span>
-        )}
-        {showMatchup && <span className="game-sub-line">{lineSummary(game.line)}</span>}
-      </div>
-      {!collapsed && (
+      {!hideBar && (
+        <div
+          className="game-sub-bar"
+          role="button"
+          tabIndex={0}
+          aria-expanded={!collapsed}
+          title={collapsed ? 'Expand game' : 'Collapse game'}
+          onClick={() => setCollapsed((v) => !v)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setCollapsed((v) => !v);
+            }
+          }}
+        >
+          {showMatchup ? (
+            <>
+              {gameId}
+              <div className="game-sub-summary">
+                <span className="game-sub-line">{lineSummary(game.line)}</span>
+                <GameStatusBadge game={game} />
+              </div>
+            </>
+          ) : (
+            <span className="game-sub-info">
+              {`Plate appearances (${game.plateAppearances.length})`}
+            </span>
+          )}
+        </div>
+      )}
+      {(hideBar || !collapsed) && (
         <div className="pa-grid">
           {pas.map((pa) => (
             <PlateAppearanceCard
@@ -223,30 +245,50 @@ function Headshot({ id, name }: { id: number; name: string }) {
   );
 }
 
+/** Player name with the fielding position as a small tag beside it. */
+function PlayerName({ name, position }: { name: string; position?: string }) {
+  return (
+    <span className="player-name">
+      {name}
+      {position && <span className="player-pos">{position}</span>}
+    </span>
+  );
+}
+
 export function PlayerCard({
   report,
   position,
+  singleDay,
   collapsed,
   onToggleCollapsed,
 }: {
   report: PlayerReport;
   position?: string;
+  singleDay: boolean;
   collapsed: boolean;
   onToggleCollapsed: () => void;
 }) {
-  if (!report.found || report.games.length === 0) {
-    const meta = [position, report.seasonStats ? seasonStatsSummary(report.seasonStats) : null]
-      .filter(Boolean)
-      .join(' · ');
+  if (didNotAppear(report)) {
+    const meta = report.seasonStats ? seasonStatsSummary(report.seasonStats) : null;
+    // Any games here are ones the player was rostered for but didn't bat in —
+    // show their final score(s) so the card still carries the game info.
+    const dnpGames = [...report.games].sort(
+      (a, b) => b.date.localeCompare(a.date) || b.gamePk - a.gamePk,
+    );
     return (
       <div className="player-card empty" id={`player-${report.id}`}>
         <div className="player-head">
           <Headshot id={report.id} name={report.name} />
           <div className="player-id">
-            <span className="player-name">{report.name}</span>
+            <PlayerName name={report.name} position={position} />
             {meta && <span className="player-meta">{meta}</span>}
           </div>
-          <span className="dnp-badge">Did not appear</span>
+          <div className="player-summary">
+            {dnpGames.map((g) => (
+              <GameStatusBadge key={g.gamePk} game={g} withMatchup />
+            ))}
+            <span className="dnp-badge">Did not appear</span>
+          </div>
         </div>
       </div>
     );
@@ -287,9 +329,8 @@ export function PlayerCard({
       >
         <Headshot id={report.id} name={report.name} />
         <div className="player-id">
-          <span className="player-name">{report.name}</span>
+          <PlayerName name={report.name} position={position} />
           <span className="player-meta">
-            {position ? `${position} · ` : ''}
             {report.seasonStats
               ? seasonStatsSummary(report.seasonStats)
               : games.length > 1
@@ -325,6 +366,7 @@ export function PlayerCard({
                 game={g}
                 showMatchup={games.length > 1}
                 spansMultipleDays={spansMultipleDays}
+                singleDay={singleDay}
               />
             ))}
         </>

@@ -254,6 +254,12 @@ const FEED_FIELDS = [
   'abbreviation',
   'liveData',
   'linescore',
+  // Boxscore rosters — the per-side player ids, so a watched player can be tied
+  // to a game they were rostered for even if they never batted (e.g. benched in
+  // a final game → "did not appear" with the score still shown).
+  'boxscore',
+  'players',
+  'person',
   'currentInning',
   'inningState',
   'isTopInning',

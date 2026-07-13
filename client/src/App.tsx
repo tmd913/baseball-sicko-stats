@@ -5,7 +5,14 @@ import { PlayerAdder } from './components/PlayerAdder';
 import { PlayerCard } from './components/PlayerCard';
 import { BaseDiamond } from './components/BaseDiamond';
 import { DateRangePicker } from './components/DateRangePicker';
-import { formatStartTime, gameStatusView, headshotUrl, liveRole, liveRoleLabel } from './lib';
+import {
+  didNotAppear,
+  formatStartTime,
+  gameStatusView,
+  headshotUrl,
+  liveRole,
+  liveRoleLabel,
+} from './lib';
 
 const SHORT_INNING: Record<string, string> = {
   Top: 'Top',
@@ -363,7 +370,7 @@ export default function App() {
   );
 
   const totals = useMemo(() => {
-    const played = reports.filter((r) => r.found);
+    const played = reports.filter((r) => !didNotAppear(r));
     const hrs = played.reduce(
       (s, r) => s + r.games.reduce((a, g) => a + g.line.hr, 0),
       0,
@@ -485,17 +492,6 @@ export default function App() {
       >
         {reports.length > 0 && (
           <aside className={`player-nav${editMode ? ' editing' : ''}`}>
-            <div className="player-nav-header">
-              <span className="player-nav-title">Players</span>
-              <button
-                type="button"
-                className="player-nav-edit"
-                onClick={() => setEditMode((v) => !v)}
-                title={editMode ? 'Finish editing' : 'Reorder or remove players'}
-              >
-                {editMode ? 'Done' : 'Edit'}
-              </button>
-            </div>
             <nav>
               {reports.map((r) => {
                 const role = liveRole(r);
@@ -508,7 +504,7 @@ export default function App() {
                         <span className="player-nav-name">{r.name}</span>
                         {role && <span className="player-nav-role">{liveRoleLabel(role)}</span>}
                       </div>
-                      {game ? (
+                      {game && !didNotAppear(r) ? (
                         <NavGameStatus game={game} />
                       ) : (
                         <span className="nav-game">Did not appear</span>
@@ -565,9 +561,9 @@ export default function App() {
                   </a>
                 );
               })}
-              {/* Phone strip only: the edit toggle rides at the end of the list as
-                  an icon (the header above is hidden). Hidden on wider screens,
-                  where the header's Edit button is used instead. */}
+              {/* The edit toggle rides at the end of the list — a text pill at the
+                  bottom of the wide side rail, or an icon on the narrow avatar
+                  rail / end of the phone strip (CSS swaps text ↔ icon by width). */}
               <button
                 type="button"
                 className="player-nav-edit-inline"
@@ -575,36 +571,37 @@ export default function App() {
                 title={editMode ? 'Finish editing' : 'Reorder or remove players'}
                 aria-label={editMode ? 'Finish editing' : 'Edit players'}
               >
-                {editMode ? (
-                  <svg
-                    viewBox="0 0 24 24"
-                    width="18"
-                    height="18"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M20 6 9 17l-5-5" />
-                  </svg>
-                ) : (
-                  <svg
-                    viewBox="0 0 24 24"
-                    width="18"
-                    height="18"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M12 20h9" />
-                    <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                  </svg>
-                )}
+                <span className="player-nav-edit-text">{editMode ? 'Done' : 'Edit'}</span>
+                <span className="player-nav-edit-icon" aria-hidden="true">
+                  {editMode ? (
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="18"
+                      height="18"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M20 6 9 17l-5-5" />
+                    </svg>
+                  ) : (
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="18"
+                      height="18"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M12 20h9" />
+                      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                    </svg>
+                  )}
+                </span>
               </button>
             </nav>
           </aside>
@@ -616,6 +613,7 @@ export default function App() {
               key={r.id}
               report={r}
               position={positionById.get(r.id)}
+              singleDay={start === end}
               collapsed={collapsedIds.has(r.id)}
               onToggleCollapsed={() => toggleCollapsed(r.id)}
             />
