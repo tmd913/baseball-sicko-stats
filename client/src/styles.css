@@ -1865,27 +1865,6 @@ body {
   font-variant-numeric: tabular-nums;
   color: var(--text);
 }
-/* Poor / Average / Great axis legend, aligned to the plot column. */
-.pct-legend {
-  height: 22px;
-}
-.pct-scale {
-  display: flex;
-  justify-content: space-between;
-  font-size: 11px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-.pct-scale-poor {
-  color: rgb(80, 120, 190);
-}
-.pct-scale-avg {
-  color: var(--muted);
-}
-.pct-scale-great {
-  color: rgb(216, 70, 96);
-}
 @media (max-width: 560px) {
   .pct-card {
     --pct-label-w: 116px;

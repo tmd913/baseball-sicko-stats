@@ -139,16 +139,6 @@ export function PlayerDetails({
           <div className="pct-card-head">
             <span className="pct-card-title">{data.year} MLB Percentile Rankings</span>
           </div>
-          {/* Legend/axis: the poles of the diverging scale, aligned to the track. */}
-          <div className="pct-row pct-legend" aria-hidden="true">
-            <span className="pct-label" />
-            <div className="pct-scale">
-              <span className="pct-scale-poor">▲ Poor</span>
-              <span className="pct-scale-avg">▲ Average</span>
-              <span className="pct-scale-great">Great ▲</span>
-            </div>
-            <span className="pct-value" />
-          </div>
           {data.sections.map((sec) => (
             <div className="pct-section" key={sec.title}>
               <h2 className="pct-section-title">{sec.title}</h2>
