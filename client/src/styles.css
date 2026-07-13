@@ -1815,11 +1815,14 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* The plot track for one metric. The dashed guide at 50% (::before) stacks
-   row-to-row into one continuous "Average" line down the card. */
+/* The plot track for one metric. The full-width rail shows the max (100th
+   percentile) the colored fill is measured against; the dashed guide at 50%
+   (::before) stacks row-to-row into one continuous "Average" line down the card. */
 .pct-track {
   position: relative;
   height: 20px;
+  background: rgba(255, 255, 255, 0.07);
+  border-radius: 999px;
 }
 .pct-track::before {
   content: '';
