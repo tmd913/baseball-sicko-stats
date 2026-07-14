@@ -61,25 +61,20 @@ body {
   gap: 14px;
 }
 .brand-mark {
-  font-size: 34px;
-  width: 58px;
-  height: 58px;
+  font-size: 24px;
+  width: 42px;
+  height: 42px;
   display: grid;
   place-items: center;
   background: linear-gradient(145deg, var(--panel-2), var(--panel));
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 12px;
   box-shadow: var(--shadow);
 }
 .app-header h1 {
   margin: 0;
-  font-size: 24px;
+  font-size: 19px;
   letter-spacing: -0.02em;
-}
-.brand-sub {
-  margin: 3px 0 0;
-  color: var(--muted);
-  font-size: 13px;
 }
 .date-control {
   display: flex;
@@ -128,11 +123,18 @@ body {
    below); it's hidden on desktop where the pills are shown instead. */
 .date-presets-select {
   display: none;
-  background: var(--panel);
+  /* Custom chevron (native arrow can't be inset from the edge): draw it as a
+     background image positioned 14px in, and reserve room for it on the right. */
+  appearance: none;
+  -webkit-appearance: none;
+  background:
+    var(--panel)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238ea0c4' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")
+    no-repeat right 11px center;
   border: 1px solid var(--border);
   color: var(--text);
   border-radius: 10px;
-  padding: 8px 14px;
+  padding: 8px 32px 8px 14px;
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
@@ -833,6 +835,15 @@ body {
   box-shadow: var(--shadow);
   container-type: inline-size;
 }
+/* On phones the nav is a sticky toolbar pinned to the top of the viewport, so a
+   card scrolled to via a nav link must clear the toolbar's full height (padding
+   + avatar pill) instead of the side-rail's small 18px offset. This must sit
+   after the base rule above — equal specificity, so source order decides. */
+@media (max-width: 640px) {
+  .player-card {
+    scroll-margin-top: 104px;
+  }
+}
 
 /* Collapsed cards show only the header, whose own padding provides the bottom
    spacing — drop the card's bottom padding so it isn't doubled. */
@@ -1022,6 +1033,11 @@ body {
   height: 21px;
   flex-shrink: 0;
   vertical-align: middle;
+}
+/* The per-plate-appearance summary row has room for a slightly larger glyph. */
+.pa-bases {
+  width: 22px;
+  height: 25.7px;
 }
 .base-diamond .base {
   fill: none;
@@ -1386,9 +1402,28 @@ body {
   border-radius: 6px;
 }
 .pa-inning {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 12px;
   color: var(--faint);
   font-variant-numeric: tabular-nums;
+}
+.pa-inning-arrow {
+  width: 9px;
+  height: 7.5px;
+  flex-shrink: 0;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 .pa-hand {
   padding-top: 10px;
@@ -1838,6 +1873,12 @@ body {
   border-radius: 999px;
   min-width: 4px;
   opacity: 0.55;
+  transition: opacity 0.12s ease;
+}
+/* On a paired row, the expected fill recedes as the dumbbell is revealed so the
+   two bare markers read cleanly. */
+.pct-row-pair.is-revealed .pct-fill {
+  opacity: 0.14;
 }
 .pct-bubble {
   position: absolute;
@@ -1864,6 +1905,65 @@ body {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--text);
+}
+/* The dumbbell's actual-side extras (the ring marker and the connector) are
+   hidden until the row is hovered/tapped, then fade in. Kept out of the layout
+   flow (absolute) so the reveal is a pure opacity transition. */
+.pct-actual {
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  pointer-events: none;
+}
+.pct-row-pair.is-revealed .pct-actual {
+  opacity: 1;
+}
+/* Connector segment spanning the actual↔expected gap, below the markers. */
+.pct-connector {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 3px;
+  border-radius: 999px;
+  background: var(--muted);
+  z-index: 1;
+}
+/* Actual marker: hollow ring (vs the solid expected bubble). Colour is set
+   inline per percentile; the panel-filled centre keeps its number legible. */
+.pct-bubble-x {
+  background: var(--panel);
+  border: 2px solid currentColor;
+  text-shadow: none;
+}
+/* When actual and expected sit within a bubble-width, split them into two
+   vertical lanes so both numbers stay legible (actual up, expected down). */
+.pct-bubble--up {
+  transform: translate(-50%, calc(-50% - 9px));
+}
+.pct-bubble--down {
+  transform: translate(-50%, calc(-50% + 9px));
+}
+/* Paired-row values: expected shown prominently by default; once the dumbbell
+   is revealed it demotes to a muted subline under the actual value. */
+.pct-value-pair {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  line-height: 1.15;
+}
+.pct-value-actual {
+  font-size: 12px;
+  font-weight: 700;
+}
+.pct-value-expected {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+}
+.pct-row-pair.is-revealed .pct-value-expected {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
 }
 @media (max-width: 560px) {
   .pct-card {

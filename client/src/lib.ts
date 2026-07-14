@@ -60,6 +60,26 @@ export function eventLabel(event: string | null): string {
 }
 
 /** A compact box-score style line, e.g. "2-4, HR, BB". */
+/**
+ * OPS for a batting line (a single game or an aggregated range). Sacrifice
+ * flies aren't tracked on the line, so the OBP denominator is AB+BB+HBP (a hair
+ * high when SFs occurred). Returns null when there's no on-base opportunity to
+ * divide by (e.g. a line of only sacrifices).
+ */
+export function lineOps(line: BattingLine): number | null {
+  const obpDen = line.ab + line.bb + line.hbp;
+  if (obpDen === 0) return null;
+  const obp = (line.hits + line.bb + line.hbp) / obpDen;
+  const slg = line.ab > 0 ? line.totalBases / line.ab : 0;
+  return obp + slg;
+}
+
+/** A rate stat printed the baseball way: three decimals, no leading zero (".812", "1.250"). */
+function rate(n: number): string {
+  const s = n.toFixed(3);
+  return s.startsWith('0.') ? s.slice(1) : s;
+}
+
 export function lineSummary(line: BattingLine): string {
   const parts: string[] = [`${line.hits}-${line.ab}`];
   const extras: string[] = [];
@@ -72,6 +92,8 @@ export function lineSummary(line: BattingLine): string {
   if (line.bb) extras.push(line.bb > 1 ? `${line.bb} BB` : 'BB');
   if (line.so) extras.push(line.so > 1 ? `${line.so} K` : 'K');
   if (line.hbp) extras.push('HBP');
+  const ops = lineOps(line);
+  if (ops !== null) extras.push(`${rate(ops)} OPS`);
   return [parts[0], ...extras].join(', ');
 }
 
@@ -259,11 +281,10 @@ export function basesLabel(b: BaseState): string {
 
 /**
  * Compact season line for the card header, e.g.
- * ".237/.297/.425, 11 HR, 30 RBI, 35 R, 1 SB". Commas separate the groups —
- * a middot reads ambiguously next to the decimals in the slash line.
+ * ".722 OPS, 11 HR, 30 RBI, 35 R, 1 SB". Commas separate the groups.
  */
 export function seasonStatsSummary(s: SeasonStats): string {
-  return `${s.avg}/${s.obp}/${s.slg}, ${s.hr} HR, ${s.rbi} RBI, ${s.runs} R, ${s.sb} SB`;
+  return `${s.ops} OPS, ${s.hr} HR, ${s.rbi} RBI, ${s.runs} R, ${s.sb} SB`;
 }
 
 /** Best xwOBA / batted-ball highlight for a PA, if any. */

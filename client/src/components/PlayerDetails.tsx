@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { api } from '../api';
 import type { PlayerPercentiles, PercentileMetric } from '../types';
 import { headshotUrl, savantPlayerUrl } from '../lib';
@@ -55,6 +55,121 @@ function MetricRow({ metric }: { metric: PercentileMetric }) {
   );
 }
 
+/** Actual-stat key → its expected (x-) counterpart. When both are present in a
+ * section they collapse into one dumbbell row instead of two stacked bars. */
+const EXPECTED_OF: Record<string, string> = {
+  woba: 'xwoba',
+  ba: 'xba',
+  obp: 'xobp',
+  slg: 'xslg',
+  iso: 'xiso',
+};
+
+/**
+ * A combined actual/expected row. At rest it reads as a normal row for the
+ * EXPECTED stat — a filled bar with a solid bubble at the expected percentile —
+ * so the card is calm by default. On hover (mouse) or tap (touch) it reveals the
+ * dumbbell: the fill recedes and the ACTUAL percentile appears as a ring joined
+ * to the expected bubble by a connector, so the actual↔expected gap (over/under-
+ * performance) is on-demand rather than always-on. Values follow suit: expected
+ * shown by default, actual stacked above it once revealed.
+ *
+ * When revealed and the two percentiles fall within a bubble-width of each other
+ * (`overlapPct`, from the live track width) the markers would collide, so they
+ * split into two vertical lanes (actual up, expected down) to stay legible.
+ */
+function PairRow({
+  actual,
+  expected,
+  overlapPct,
+}: {
+  actual: PercentileMetric;
+  expected: PercentileMetric;
+  overlapPct: number;
+}) {
+  const a = actual.percentile;
+  const e = expected.percentile;
+  const aColor = a !== null ? pctColor(a) : undefined;
+  const eColor = e !== null ? pctColor(e) : undefined;
+  const both = a !== null && e !== null;
+  const [revealed, setRevealed] = useState(false);
+  const staggered = revealed && both && Math.abs(a - e) < overlapPct;
+  const title =
+    `${actual.label} — actual ${a ?? '–'}th pct (${actual.value ?? '–'}), ` +
+    `expected ${e ?? '–'}th pct (${expected.value ?? '–'})`;
+  return (
+    <div
+      className={`pct-row pct-row-pair${revealed ? ' is-revealed' : ''}`}
+      title={title}
+      // Mouse hovers reveal; touch/pen taps toggle (hover doesn't exist there).
+      onPointerEnter={(ev) => ev.pointerType === 'mouse' && setRevealed(true)}
+      onPointerLeave={(ev) => ev.pointerType === 'mouse' && setRevealed(false)}
+      onPointerDown={(ev) => ev.pointerType !== 'mouse' && setRevealed((r) => !r)}
+    >
+      {/* At rest the row is the expected stat, so it wears the expected label
+          (e.g. "xwOBA"); revealing the dumbbell promotes the actual, so the
+          label falls back to the base stat ("wOBA"). */}
+      <span className="pct-label">{revealed ? actual.label : expected.label}</span>
+      <div className="pct-track">
+        {e !== null && (
+          <span className="pct-fill" style={{ width: `${e}%`, background: eColor }} />
+        )}
+        {both && (
+          <span
+            className="pct-connector pct-actual"
+            style={{ left: `${Math.min(a, e)}%`, width: `${Math.abs(a - e)}%` }}
+          />
+        )}
+        {e !== null && (
+          <span
+            className={`pct-bubble${staggered ? ' pct-bubble--down' : ''}`}
+            style={{ left: `${e}%`, background: eColor }}
+          >
+            {e}
+          </span>
+        )}
+        {a !== null && (
+          <span
+            className={`pct-bubble pct-bubble-x pct-actual${staggered ? ' pct-bubble--up' : ''}`}
+            style={{ left: `${a}%`, color: aColor, borderColor: aColor }}
+          >
+            {a}
+          </span>
+        )}
+      </div>
+      <span className="pct-value pct-value-pair">
+        {revealed && a !== null && <span className="pct-value-actual">{actual.value ?? '–'}</span>}
+        {/* The "x" only appears once revealed, where it disambiguates the muted
+            expected subline from the actual; at rest the label already says so. */}
+        <span className="pct-value-expected">
+          {revealed ? 'x' : ''}
+          {expected.value ?? '–'}
+        </span>
+      </span>
+    </div>
+  );
+}
+
+/** Render a section's metrics, collapsing each actual/expected pair (when both
+ * are present) into a single dumbbell row; everything else stays a normal row. */
+function renderMetricRows(metrics: PercentileMetric[], overlapPct: number): ReactElement[] {
+  const byKey = new Map(metrics.map((m) => [m.key, m]));
+  const consumed = new Set<string>();
+  const rows: ReactElement[] = [];
+  for (const m of metrics) {
+    if (consumed.has(m.key)) continue;
+    const xKey = EXPECTED_OF[m.key];
+    const expected = xKey ? byKey.get(xKey) : undefined;
+    if (expected) {
+      consumed.add(xKey);
+      rows.push(<PairRow key={m.key} actual={m} expected={expected} overlapPct={overlapPct} />);
+    } else {
+      rows.push(<MetricRow key={m.key} metric={m} />);
+    }
+  }
+  return rows;
+}
+
 export function PlayerDetails({
   playerId,
   name,
@@ -69,6 +184,25 @@ export function PlayerDetails({
   const [data, setData] = useState<PlayerPercentiles | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // The percentile-point distance below which two paired bubbles would overlap,
+  // measured from the live track width (~a bubble diameter's worth of the rail)
+  // so the stagger threshold stays correct across desktop and mobile widths.
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const [overlapPct, setOverlapPct] = useState(8);
+  useEffect(() => {
+    const card = cardRef.current;
+    if (!card) return;
+    const measure = () => {
+      const track = card.querySelector('.pct-track');
+      const w = track?.clientWidth ?? 0;
+      if (w > 0) setOverlapPct(Math.min(40, (23 / w) * 100)); // 23px ≈ bubble + breathing room
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(card);
+    return () => ro.disconnect();
+  }, [data]);
 
   // Close on Escape, matching a modal/back affordance.
   useEffect(() => {
@@ -135,16 +269,14 @@ export function PlayerDetails({
         </div>
       )}
       {data && !loading && (
-        <div className="pct-card">
+        <div className="pct-card" ref={cardRef}>
           <div className="pct-card-head">
             <span className="pct-card-title">{data.year} MLB Percentile Rankings</span>
           </div>
           {data.sections.map((sec) => (
             <div className="pct-section" key={sec.title}>
               <h2 className="pct-section-title">{sec.title}</h2>
-              {sec.metrics.map((m) => (
-                <MetricRow key={m.key} metric={m} />
-              ))}
+              {renderMetricRows(sec.metrics, overlapPct)}
             </div>
           ))}
           {data.sections.length === 0 && (

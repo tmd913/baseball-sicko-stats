@@ -78,12 +78,26 @@ interface ParsedDay {
 
 const memCache = new Map<string, ParsedDay>();
 
+/** True if the CSV has at least one data row (not just the header line). A
+ *  headers-only export is what Savant returns for a date whose Statcast data
+ *  hasn't posted yet (e.g. fetched mid-game); it must NOT be cached permanently
+ *  or fields like bat speed stay null forever once real data lands. */
+function hasDataRows(csvText: string): boolean {
+  const trimmed = csvText.trim();
+  if (trimmed.length === 0) return false;
+  const nl = trimmed.indexOf('\n');
+  return nl !== -1 && trimmed.slice(nl + 1).trim().length > 0;
+}
+
 async function downloadCsv(date: string): Promise<string> {
   await fs.mkdir(CACHE_DIR, { recursive: true });
   const file = path.join(CACHE_DIR, `${date}.csv`);
   try {
     const cached = await fs.readFile(file, 'utf8');
-    if (cached.trim().length > 0) return cached;
+    // Only trust a cached file that actually has data rows. A headers-only file
+    // means the previous fetch ran before Statcast data posted; re-fetch so the
+    // enrichment (bat speed, swing length, xBA/xwOBA) fills in once it's live.
+    if (hasDataRows(cached)) return cached;
   } catch {
     // not cached yet
   }
@@ -94,7 +108,9 @@ async function downloadCsv(date: string): Promise<string> {
     throw new Error(`Baseball Savant returned ${res.status} ${res.statusText}`);
   }
   const text = await res.text();
-  await fs.writeFile(file, text, 'utf8');
+  // Persist only complete exports; an empty (headers-only) result is transient,
+  // so leave it uncached and let the next request try again.
+  if (hasDataRows(text)) await fs.writeFile(file, text, 'utf8');
   return text;
 }
 

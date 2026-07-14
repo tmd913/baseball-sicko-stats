@@ -179,8 +179,9 @@ export default function App() {
     return initialParams.has('start') || initialParams.has('end') ? null : 'Today';
   });
   const presets = useMemo(datePresets, []);
-  // The picker allows up to tomorrow so scheduled games can be viewed ahead.
-  const tomorrow = useMemo(nextDay, []);
+  // The picker allows selecting through the end of the current year so the full
+  // published schedule (scheduled games, probable pitchers) can be viewed ahead.
+  const maxDate = useMemo(() => `${todayEt().slice(0, 4)}-12-31`, []);
   const [seasonPlayers, setSeasonPlayers] = useState<SeasonPlayer[]>([]);
   const [playersLoading, setPlayersLoading] = useState(true);
   const [watchlist, setWatchlist] = useState<WatchPlayer[]>([]);
@@ -189,8 +190,11 @@ export default function App() {
   const [showLoading, setShowLoading] = useState(false);
   const [watchlistLoaded, setWatchlistLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [collapsedIds, setCollapsedIds] = useState<Set<number>>(() => {
-    const v = initialParams.get('collapsed');
+  // Player cards are collapsed by default; the URL tracks the ids the user has
+  // explicitly expanded (so a fresh visit — and any newly-added player — starts
+  // collapsed, while reloads/shared links restore whatever was opened).
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(() => {
+    const v = initialParams.get('expanded');
     if (!v) return new Set();
     return new Set(v.split(',').map(Number).filter(Number.isFinite));
   });
@@ -214,10 +218,10 @@ export default function App() {
     p.set('start', start);
     p.set('end', end);
     if (activePreset) p.set('preset', activePreset);
-    if (collapsedIds.size) p.set('collapsed', [...collapsedIds].join(','));
+    if (expandedIds.size) p.set('expanded', [...expandedIds].join(','));
     if (detailsId) p.set('player', String(detailsId));
     window.history.replaceState(null, '', `?${p.toString()}`);
-  }, [start, end, activePreset, collapsedIds, detailsId]);
+  }, [start, end, activePreset, expandedIds, detailsId]);
 
   // Load the season's player list once, for search/autocomplete.
   useEffect(() => {
@@ -364,7 +368,7 @@ export default function App() {
   };
 
   const toggleCollapsed = (id: number) => {
-    setCollapsedIds((prev) => {
+    setExpandedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -387,17 +391,22 @@ export default function App() {
     // Sum a per-game BattingLine field across every played player's games.
     const sum = (pick: (l: PlayerGame['line']) => number) =>
       played.reduce((s, r) => s + r.games.reduce((a, g) => a + pick(g.line), 0), 0);
+    const ab = sum((l) => l.ab);
+    const hits = sum((l) => l.hits);
+    const bb = sum((l) => l.bb);
+    const hbp = sum((l) => l.hbp);
+    const totalBases = sum((l) => l.totalBases);
+    // OPS = OBP + SLG. No sacrifice-fly field exists, so OBP's denominator is AB+BB+HBP.
+    const onBase = ab + bb + hbp;
+    const obp = onBase > 0 ? (hits + bb + hbp) / onBase : 0;
+    const slg = ab > 0 ? totalBases / ab : 0;
     return {
       played: played.length,
-      hits: sum((l) => l.hits),
-      doubles: sum((l) => l.doubles),
-      triples: sum((l) => l.triples),
+      runs: sum((l) => l.runs),
       hrs: sum((l) => l.hr),
       rbi: sum((l) => l.rbi),
-      runs: sum((l) => l.runs),
-      bb: sum((l) => l.bb),
-      so: sum((l) => l.so),
       sb: sum((l) => l.sb),
+      ops: obp + slg,
     };
   }, [reports]);
 
@@ -408,7 +417,6 @@ export default function App() {
           <div className="brand-mark">⚾</div>
           <div>
             <h1>Baseball Sicko Stats</h1>
-            <p className="brand-sub">Statcast batting events for your watchlist</p>
           </div>
         </div>
         <div className="date-control">
@@ -457,7 +465,7 @@ export default function App() {
             <DateRangePicker
               start={start}
               end={end}
-              max={tomorrow}
+              max={maxDate}
               onChange={(s, e) => {
                 setStart(s);
                 setEnd(e);
@@ -476,17 +484,14 @@ export default function App() {
           loading={playersLoading}
         />
         <div className="summary-chips">
-          <span className="chip">{watchlist.length} watched</span>
-          <span className="chip">{totals.played} played</span>
-          <span className="chip accent">{totals.hits} hits</span>
-          {totals.doubles > 0 && <span className="chip">{totals.doubles} 2B</span>}
-          {totals.triples > 0 && <span className="chip">{totals.triples} 3B</span>}
-          <span className="chip hr">{totals.hrs} HR</span>
-          {totals.rbi > 0 && <span className="chip">{totals.rbi} RBI</span>}
-          {totals.runs > 0 && <span className="chip">{totals.runs} R</span>}
-          {totals.bb > 0 && <span className="chip">{totals.bb} BB</span>}
-          {totals.so > 0 && <span className="chip">{totals.so} SO</span>}
-          {totals.sb > 0 && <span className="chip">{totals.sb} SB</span>}
+          <span className="chip">
+            {totals.played}/{watchlist.length} played
+          </span>
+          <span className="chip">{totals.runs} R</span>
+          <span className="chip">{totals.hrs} HR</span>
+          <span className="chip">{totals.rbi} RBI</span>
+          <span className="chip">{totals.sb} SB</span>
+          <span className="chip">{totals.ops.toFixed(3).replace(/^0\./, '.')} OPS</span>
         </div>
       </section>
 
@@ -640,7 +645,7 @@ export default function App() {
               report={r}
               position={positionById.get(r.id)}
               singleDay={start === end}
-              collapsed={collapsedIds.has(r.id)}
+              collapsed={!expandedIds.has(r.id)}
               onToggleCollapsed={() => toggleCollapsed(r.id)}
               onOpenDetails={setDetailsId}
             />
