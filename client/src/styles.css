@@ -335,7 +335,9 @@ body {
   margin: 6px 0 0;
   padding: 6px;
   position: absolute;
-  z-index: 20;
+  /* Above the sticky player-nav (z-index 20, which on phones is a top toolbar
+     that would otherwise cover this dropdown) and the date popover (30). */
+  z-index: 40;
   width: 100%;
   background: var(--panel-2);
   border: 1px solid var(--border);
