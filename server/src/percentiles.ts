@@ -30,6 +30,10 @@ interface MetricDef {
   pct: string; // field in the statcast record with the 0-100 percentile
   raw: string; // field with the underlying value
   fmt: Fmt;
+  // Metrics where a lower raw value is better (K%, chase, whiff, pop time, …).
+  // Only matters for the estimated-percentile fallback, which otherwise assumes
+  // higher-is-better; Savant's own `percent_rank_` fields already bake this in.
+  lowerBetter?: boolean;
 }
 interface SectionDef {
   title: string;
@@ -62,7 +66,7 @@ const SECTIONS: SectionDef[] = [
       { key: 'xslg', label: 'xSLG', pct: 'percent_rank_xslg', raw: 'xslg', fmt: 'avg' },
       { key: 'iso', label: 'ISO', pct: 'percent_rank_iso', raw: 'iso', fmt: 'avg' },
       { key: 'xiso', label: 'xISO', pct: 'percent_rank_xiso', raw: 'xiso', fmt: 'avg' },
-      { key: 'xhr', label: 'Expected HR', pct: 'percent_rank_xhr', raw: 'xhr', fmt: 'dec1' },
+      { key: 'xhr', label: 'xHR', pct: 'percent_rank_xhr', raw: 'xhr', fmt: 'dec1' },
       // BABIP bridges the slash line into the contact-quality metrics that explain it.
       { key: 'babip', label: 'BABIP', pct: 'percent_rank_babip', raw: 'babip', fmt: 'avg' },
       { key: 'exit_velo', label: 'Avg Exit Velocity', pct: 'percent_rank_exit_velocity_avg', raw: 'exit_velocity_avg', fmt: 'dec1' },
@@ -79,12 +83,12 @@ const SECTIONS: SectionDef[] = [
       { key: 'bat_speed', label: 'Bat Speed', pct: 'percent_rank_swing_speed', raw: 'avg_swing_speed', fmt: 'dec1' },
       { key: 'squared_up', label: 'Squared-Up %', pct: 'percent_rank_squared_up_swing', raw: 'squared_up_swing', fmt: 'dec1' },
       // Chase %'s raw value is the out-of-zone swing rate.
-      { key: 'chase', label: 'Chase %', pct: 'percent_rank_chase_percent', raw: 'oz_swing_percent', fmt: 'dec1' },
-      { key: 'whiff', label: 'Whiff %', pct: 'percent_rank_whiff_percent', raw: 'whiff_percent', fmt: 'dec1' },
-      { key: 'k', label: 'K %', pct: 'percent_rank_k_percent', raw: 'k_percent', fmt: 'dec1' },
+      { key: 'chase', label: 'Chase %', pct: 'percent_rank_chase_percent', raw: 'oz_swing_percent', fmt: 'dec1', lowerBetter: true },
+      { key: 'whiff', label: 'Whiff %', pct: 'percent_rank_whiff_percent', raw: 'whiff_percent', fmt: 'dec1', lowerBetter: true },
+      { key: 'k', label: 'K %', pct: 'percent_rank_k_percent', raw: 'k_percent', fmt: 'dec1', lowerBetter: true },
       { key: 'bb', label: 'BB %', pct: 'percent_rank_bb_percent', raw: 'bb_percent', fmt: 'dec1' },
-      // Strike-zone judgment: Savant's swing-decision run value (`sz_judge`).
-      { key: 'sz_judge', label: 'Strike-Zone Judgment', pct: 'percent_rank_sz_judge', raw: 'sz_judge', fmt: 'dec1' },
+      // Strike-zone judgment: Savant's swing-decision run value (`sz_judge`); lower is better.
+      { key: 'sz_judge', label: 'Strike-Zone Judgment', pct: 'percent_rank_sz_judge', raw: 'sz_judge', fmt: 'dec1', lowerBetter: true },
     ],
   },
   {
@@ -124,7 +128,7 @@ const SECTIONS: SectionDef[] = [
       { key: 'framing_rv', label: 'Framing Run Value', pct: 'percent_rank_fielding_run_value_framing', raw: 'fielding_run_value_framing', fmt: 'int' },
       { key: 'blocks', label: 'Blocks Above Avg', pct: 'percent_rank_blocks_above_average', raw: 'blocks_above_average', fmt: 'int' },
       { key: 'cs', label: 'Caught Stealing Above Avg', pct: 'percent_rank_cs_above_average', raw: 'cs_above_average', fmt: 'int' },
-      { key: 'pop_2b', label: 'Pop Time to 2B (sec)', pct: 'percent_rank_pop_2b', raw: 'pop_2b', fmt: 'dec2' },
+      { key: 'pop_2b', label: 'Pop Time to 2B (sec)', pct: 'percent_rank_pop_2b', raw: 'pop_2b', fmt: 'dec2', lowerBetter: true },
       { key: 'catcher_arm', label: 'Arm Strength on Steals', pct: 'percent_rank_arm_cs_2b', raw: 'arm_cs_2b', fmt: 'dec1' },
     ],
   },
@@ -210,20 +214,148 @@ function pickRow(rows: StatcastRow[], year: number): StatcastRow | null {
   );
 }
 
-// ---- Fast Swing % ---------------------------------------------------------
-// Savant's player page carries the raw `fast_swing_rate` but — unlike every
-// other card metric — no `percent_rank_` field for it. To rank it we pull the
-// bat-tracking leaderboard (all qualified batters) and compute the league
-// percentile ourselves from that distribution. `hard_swing_rate` there is the
-// same stat as the player page's `fast_swing_rate`, expressed as a proportion.
+// ---- Estimated percentiles from the league distribution -------------------
+// Savant leaves `percent_rank_*` null for metrics a player doesn't qualify for
+// (e.g. bat tracking for a part-season hitter) even though it still shows a
+// slider — it computes one from the season's league mean/stddev, which it also
+// embeds as `metricSummaryStats: { "<year>": { "<metric>": {avg,stddev,n} } }`.
+// We do the same to fill those blanks, keyed by year so there's no ambiguity.
 
-interface FastSwingDist {
+type MetricStats = Record<string, unknown>; // { avg_metric, stddev_metric, n }
+type YearSummary = Record<string, Record<string, MetricStats>>;
+
+/** Extract the per-season league mean/stddev map embedded in a player page. */
+function extractMetricSummary(html: string): YearSummary {
+  const marker = 'metricSummaryStats:';
+  const at = html.indexOf(marker);
+  if (at === -1) return {};
+  const start = html.indexOf('{', at);
+  if (start === -1) return {};
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  for (let i = start; i < html.length; i++) {
+    const c = html[i];
+    if (esc) {
+      esc = false;
+      continue;
+    }
+    if (c === '\\') {
+      esc = true;
+      continue;
+    }
+    if (c === '"') inStr = !inStr;
+    if (inStr) continue;
+    if (c === '{') depth++;
+    else if (c === '}') {
+      depth--;
+      if (depth === 0) {
+        try {
+          return JSON.parse(html.slice(start, i + 1)) as YearSummary;
+        } catch {
+          return {};
+        }
+      }
+    }
+  }
+  return {};
+}
+
+/** Standard normal CDF (Abramowitz & Stegun 26.2.17), good to ~1e-7. */
+function normalCdf(z: number): number {
+  const t = 1 / (1 + 0.2316419 * Math.abs(z));
+  const d = 0.3989423 * Math.exp((-z * z) / 2);
+  const p =
+    d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+  return z > 0 ? 1 - p : p;
+}
+
+/** Estimate a percentile for an un-ranked metric from its season league
+ * distribution: a z-score into the normal CDF, flipped for lower-is-better
+ * metrics. Approximate (these stats aren't perfectly normal) but within a few
+ * points of Savant's exact ranks; null when no usable distribution exists. */
+function estimatePercentile(
+  rawValue: number,
+  stats: MetricStats | undefined,
+  lowerBetter: boolean,
+): number | null {
+  if (!stats) return null;
+  const mean = toNum(stats.avg_metric);
+  const sd = toNum(stats.stddev_metric);
+  if (mean === null || sd === null || sd <= 0) return null;
+  let p = normalCdf((rawValue - mean) / sd) * 100;
+  if (lowerBetter) p = 100 - p;
+  return Math.max(0, Math.min(100, Math.round(p)));
+}
+
+// ---- Computed percentiles (Fast Swing %, HR) ------------------------------
+// A few metrics have a raw value on the player page but no Savant `percent_rank_`
+// field, so we rank them ourselves against a qualified-batter leaderboard
+// distribution, fetched and cached the same way the percentile cards are.
+
+interface Dist {
   year: number;
-  rates: number[]; // qualified batters' fast-swing rates, as percent (0-100), ascending
+  values: number[]; // ascending
   updatedAt: string;
 }
 
-const fastSwingMem = new Map<number, FastSwingDist>();
+const distMem = new Map<string, Dist>();
+
+/** Same freshness rule as the percentile cards: past seasons are immutable,
+ * the current season re-fetches past the TTL. */
+function distFresh(d: Dist): boolean {
+  if (d.year !== CURRENT_SEASON) return true;
+  return Date.now() - new Date(d.updatedAt).getTime() < CURRENT_TTL_MS;
+}
+
+/** A qualified-batter distribution for one leaderboard column, sorted ascending
+ * and cached in memory and on disk under `data/cache/{name}-{year}.json`.
+ * `transform` adapts the raw column to the units used on the player page. */
+async function getDistribution(
+  name: string,
+  year: number,
+  url: string,
+  column: string,
+  transform: (v: number) => number = (v) => v,
+): Promise<number[]> {
+  const key = `${name}-${year}`;
+  const mem = distMem.get(key);
+  if (mem && distFresh(mem)) return mem.values;
+
+  const file = path.join(CACHE_DIR, `${name}-${year}.json`);
+  try {
+    const disk = JSON.parse(await fs.readFile(file, 'utf8')) as Dist;
+    if (distFresh(disk)) {
+      distMem.set(key, disk);
+      return disk.values;
+    }
+  } catch {
+    // not cached yet
+  }
+
+  const res = await fetch(url, { headers: { 'User-Agent': BROWSER_UA } });
+  if (!res.ok) {
+    throw new Error(`${name} leaderboard returned ${res.status} ${res.statusText}`);
+  }
+  const records: Record<string, string>[] = parse(await res.text(), {
+    columns: true,
+    skip_empty_lines: true,
+    bom: true,
+    relax_column_count: true,
+  });
+  const values: number[] = [];
+  for (const r of records) {
+    const v = toNum(r[column]);
+    if (v !== null) values.push(transform(v));
+  }
+  values.sort((a, b) => a - b);
+
+  const built: Dist = { year, values, updatedAt: new Date().toISOString() };
+  distMem.set(key, built);
+  await fs.mkdir(CACHE_DIR, { recursive: true });
+  await fs.writeFile(file, JSON.stringify(built), 'utf8');
+  return values;
+}
 
 function batTrackingUrl(year: number): string {
   const params = new URLSearchParams({
@@ -236,70 +368,30 @@ function batTrackingUrl(year: number): string {
   return `https://baseballsavant.mlb.com/leaderboard/bat-tracking?${params.toString()}`;
 }
 
-function fastSwingFile(year: number): string {
-  return path.join(CACHE_DIR, `fast-swing-${year}.json`);
-}
-
-/** Same freshness rule as the percentile cards: past seasons are immutable,
- * the current season re-fetches past the TTL. */
-function fastSwingFresh(d: FastSwingDist): boolean {
-  if (d.year !== CURRENT_SEASON) return true;
-  return Date.now() - new Date(d.updatedAt).getTime() < CURRENT_TTL_MS;
-}
-
-async function fetchFastSwingRates(year: number): Promise<number[]> {
-  const res = await fetch(batTrackingUrl(year), { headers: { 'User-Agent': BROWSER_UA } });
-  if (!res.ok) {
-    throw new Error(`Bat-tracking leaderboard returned ${res.status} ${res.statusText}`);
-  }
-  const records: Record<string, string>[] = parse(await res.text(), {
-    columns: true,
-    skip_empty_lines: true,
-    bom: true,
-    relax_column_count: true,
+function hrLeaderboardUrl(year: number): string {
+  const params = new URLSearchParams({
+    year: String(year), type: 'batter', filter: '', min: 'q',
+    selections: 'home_run,', sort: '1', sortDir: 'desc', csv: 'true',
   });
-  const rates: number[] = [];
-  for (const r of records) {
-    const v = toNum(r.hard_swing_rate);
-    if (v !== null) rates.push(v * 100); // proportion (0.53) -> percent (53.4), to match fast_swing_rate
-  }
-  rates.sort((a, b) => a - b);
-  return rates;
+  return `https://baseballsavant.mlb.com/leaderboard/custom?${params.toString()}`;
 }
 
-/** The qualified-batter fast-swing distribution for a season, cached in memory
- * and on disk under `data/cache/`. Empty array on failure so a missing
- * leaderboard degrades the card (raw value, no bar) instead of failing it. */
-async function getFastSwingDist(year: number): Promise<number[]> {
-  const mem = fastSwingMem.get(year);
-  if (mem && fastSwingFresh(mem)) return mem.rates;
+/** `hard_swing_rate` on the leaderboard is a proportion; scale it to the percent
+ * the player page's `fast_swing_rate` uses. */
+const getFastSwingDist = (year: number) =>
+  getDistribution('fast-swing', year, batTrackingUrl(year), 'hard_swing_rate', (v) => v * 100);
 
-  try {
-    const raw = await fs.readFile(fastSwingFile(year), 'utf8');
-    const disk = JSON.parse(raw) as FastSwingDist;
-    if (fastSwingFresh(disk)) {
-      fastSwingMem.set(year, disk);
-      return disk.rates;
-    }
-  } catch {
-    // not cached yet
-  }
+/** Actual home-run counts among qualified batters, to rank `home_run` against. */
+const getHrDist = (year: number) =>
+  getDistribution('hr-dist', year, hrLeaderboardUrl(year), 'home_run');
 
-  const rates = await fetchFastSwingRates(year);
-  const built: FastSwingDist = { year, rates, updatedAt: new Date().toISOString() };
-  fastSwingMem.set(year, built);
-  await fs.mkdir(CACHE_DIR, { recursive: true });
-  await fs.writeFile(fastSwingFile(year), JSON.stringify(built), 'utf8');
-  return rates;
-}
-
-/** League percentile of `valuePct` within an ascending distribution: the share
- * of the league below it, matching Savant's percent-rank convention. */
-function fastSwingPercentile(valuePct: number, sortedAsc: number[]): number | null {
+/** League percentile of `value` within an ascending distribution: the share of
+ * the league below it, matching Savant's percent-rank convention. */
+function leaguePercentile(value: number, sortedAsc: number[]): number | null {
   if (sortedAsc.length === 0) return null;
   let below = 0;
   for (const v of sortedAsc) {
-    if (v < valuePct) below++;
+    if (v < value) below++;
     else break; // ascending, so nothing further can be below
   }
   return Math.max(0, Math.min(100, Math.round((below / sortedAsc.length) * 100)));
@@ -312,31 +404,69 @@ function fastSwingMetric(row: StatcastRow, sortedRates: number[]): PercentileMet
   return {
     key: 'fast_swing',
     label: 'Fast Swing %',
-    percentile: fastSwingPercentile(raw, sortedRates),
+    percentile: leaguePercentile(raw, sortedRates),
     value: formatValue(raw, 'dec1'),
   };
 }
 
-function buildSections(row: StatcastRow, fastSwingRates: number[]): PercentileSection[] {
+/** The computed actual-HR row, or null if the player has no HR data. Pairs with
+ * the scraped xHR row into a dumbbell on the client. */
+function hrMetric(row: StatcastRow, hrCounts: number[]): PercentileMetric | null {
+  const raw = toNum(row.home_run);
+  if (raw === null) return null;
+  return {
+    key: 'hr',
+    label: 'HR',
+    percentile: leaguePercentile(raw, hrCounts),
+    value: formatValue(raw, 'int'),
+  };
+}
+
+function buildSections(
+  row: StatcastRow,
+  dist: Record<string, MetricStats>,
+  fastSwingRates: number[],
+  hrCounts: number[],
+): PercentileSection[] {
   const sections: PercentileSection[] = [];
   for (const sec of SECTIONS) {
     const metrics: PercentileMetric[] = [];
     for (const m of sec.metrics) {
-      const percentile = toPercentile(row[m.pct]);
+      let percentile = toPercentile(row[m.pct]);
       const value = formatValue(row[m.raw], m.fmt);
+      // Savant left this player un-ranked but still has a value: estimate the
+      // percentile from the season league distribution, the way its own slider
+      // does. Marked `estimated` so the card can flag it as approximate.
+      let estimated = false;
+      if (percentile === null && value !== null) {
+        const rawVal = toNum(row[m.raw]);
+        const est = rawVal === null ? null : estimatePercentile(rawVal, dist[m.raw], !!m.lowerBetter);
+        if (est !== null) {
+          percentile = est;
+          estimated = true;
+        }
+      }
       // Drop rows the player simply has no data for (e.g. fielding value for a
       // full-time DH) so the card doesn't fill with empty tracks.
       if (percentile === null && value === null) continue;
-      metrics.push({ key: m.key, label: m.label, percentile, value });
+      metrics.push({ key: m.key, label: m.label, percentile, value, ...(estimated && { estimated }) });
     }
-    // Fast Swing % is computed, not scraped — slot it next to Bat Speed in the
-    // batting block since they're both bat-tracking metrics.
     if (sec.title === 'Batting') {
+      // Fast Swing % is computed, not scraped — slot it next to Bat Speed since
+      // they're both bat-tracking metrics.
       const fs = fastSwingMetric(row, fastSwingRates);
       if (fs) {
         const at = metrics.findIndex((m) => m.key === 'bat_speed');
         if (at === -1) metrics.push(fs);
         else metrics.splice(at + 1, 0, fs);
+      }
+      // Actual HR is computed too — place it right before the scraped xHR so the
+      // client pairs the two into an expected/actual dumbbell.
+      const hr = hrMetric(row, hrCounts);
+      if (hr) {
+        const at = metrics.findIndex((m) => m.key === 'xhr');
+        if (at === -1) metrics.push(hr);
+        else metrics.splice(at, 0, hr);
       }
     }
     if (metrics.length > 0) sections.push({ title: sec.title, metrics });
@@ -379,18 +509,28 @@ async function scrape(playerId: number, year: number): Promise<PlayerPercentiles
   if (!row) {
     throw new Error(`No Statcast percentile data for ${playerId} in ${year}`);
   }
-  // Fast Swing % has no scraped percentile; rank it against the league. A failed
-  // leaderboard fetch just drops the bar (empty array) rather than the whole card.
+  // The season's league mean/stddev per metric, to estimate percentiles Savant
+  // left un-ranked (empty {} if the page shape changed — then those stay blank).
+  const dist = extractMetricSummary(html)[String(year)] ?? {};
+  // Fast Swing % and actual HR have no scraped percentile; rank them against the
+  // league. A failed leaderboard fetch just drops that bar (empty array) rather
+  // than failing the whole card.
   let fastSwingRates: number[] = [];
+  let hrCounts: number[] = [];
   try {
     fastSwingRates = await getFastSwingDist(year);
   } catch (err) {
     console.error(`Bat-tracking leaderboard unavailable for ${year}:`, err);
   }
+  try {
+    hrCounts = await getHrDist(year);
+  } catch (err) {
+    console.error(`HR leaderboard unavailable for ${year}:`, err);
+  }
   return {
     playerId,
     year,
-    sections: buildSections(row, fastSwingRates),
+    sections: buildSections(row, dist, fastSwingRates, hrCounts),
     updatedAt: new Date().toISOString(),
   };
 }

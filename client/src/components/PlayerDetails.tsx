@@ -25,11 +25,12 @@ function pctColor(p: number): string {
 
 /** One metric row: label · bar with percentile bubble · raw value. */
 function MetricRow({ metric }: { metric: PercentileMetric }) {
-  const { label, percentile, value } = metric;
+  const { label, percentile, value, estimated } = metric;
   const has = percentile !== null;
   const color = has ? pctColor(percentile) : undefined;
   const title = has
-    ? `${label} — ${percentile}th percentile${value ? ` (${value})` : ''}`
+    ? `${label} — ${percentile}th percentile${value ? ` (${value})` : ''}` +
+      (estimated ? ' · estimated from league avg (no exact Savant rank)' : '')
     : `${label} — no data`;
   return (
     <div className="pct-row" title={title}>
@@ -42,7 +43,7 @@ function MetricRow({ metric }: { metric: PercentileMetric }) {
               style={{ width: `${percentile}%`, background: color }}
             />
             <span
-              className="pct-bubble"
+              className={`pct-bubble${estimated ? ' pct-bubble--est' : ''}`}
               style={{ left: `${percentile}%`, background: color }}
             >
               {percentile}
@@ -63,6 +64,7 @@ const EXPECTED_OF: Record<string, string> = {
   obp: 'xobp',
   slg: 'xslg',
   iso: 'xiso',
+  hr: 'xhr',
 };
 
 /**
@@ -96,7 +98,8 @@ function PairRow({
   const staggered = revealed && both && Math.abs(a - e) < overlapPct;
   const title =
     `${actual.label} — actual ${a ?? '–'}th pct (${actual.value ?? '–'}), ` +
-    `expected ${e ?? '–'}th pct (${expected.value ?? '–'})`;
+    `expected ${e ?? '–'}th pct (${expected.value ?? '–'})` +
+    (actual.estimated || expected.estimated ? ' · estimated from league avg' : '');
   return (
     <div
       className={`pct-row pct-row-pair${revealed ? ' is-revealed' : ''}`}
@@ -122,7 +125,7 @@ function PairRow({
         )}
         {e !== null && (
           <span
-            className={`pct-bubble${staggered ? ' pct-bubble--down' : ''}`}
+            className={`pct-bubble${staggered ? ' pct-bubble--down' : ''}${expected.estimated ? ' pct-bubble--est' : ''}`}
             style={{ left: `${e}%`, background: eColor }}
           >
             {e}
@@ -130,7 +133,7 @@ function PairRow({
         )}
         {a !== null && (
           <span
-            className={`pct-bubble pct-bubble-x pct-actual${staggered ? ' pct-bubble--up' : ''}`}
+            className={`pct-bubble pct-bubble-x pct-actual${staggered ? ' pct-bubble--up' : ''}${actual.estimated ? ' pct-bubble--est' : ''}`}
             style={{ left: `${a}%`, color: aColor, borderColor: aColor }}
           >
             {a}

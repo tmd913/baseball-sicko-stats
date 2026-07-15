@@ -171,6 +171,10 @@ export interface PercentileMetric {
   label: string;
   percentile: number | null; // 0-100 league rank; null when the player has no data
   value: string | null; // the raw stat, pre-formatted for display (".415", "94.1")
+  // True when the percentile was estimated from the league mean/stddev (Savant
+  // has no exact rank for this player, e.g. a part-season bat-tracking metric)
+  // rather than read from a `percent_rank_` field. Approximate to a few points.
+  estimated?: boolean;
 }
 
 /** A labeled group of metrics (Value, Batting, Running, Fielding). */

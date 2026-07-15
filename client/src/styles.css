@@ -1942,6 +1942,13 @@ body {
 .pct-bubble--down {
   transform: translate(-50%, calc(-50% + 9px));
 }
+/* Estimated percentile (no exact Savant rank): a dashed ring flags that the
+   number is inferred from the league average rather than an exact leaderboard
+   rank. Uses outline so it doesn't shift the bubble's centered numeral. */
+.pct-bubble--est {
+  outline: 1.5px dashed var(--text);
+  outline-offset: 1px;
+}
 /* Paired-row values: expected shown prominently by default; once the dumbbell
    is revealed it demotes to a muted subline under the actual value. */
 .pct-value-pair {

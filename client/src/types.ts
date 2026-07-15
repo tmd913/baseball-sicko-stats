@@ -151,6 +151,7 @@ export interface PercentileMetric {
   label: string;
   percentile: number | null; // 0-100 league rank; null when the player has no data
   value: string | null; // the raw stat, pre-formatted for display (".415", "94.1")
+  estimated?: boolean; // percentile estimated from the league mean/stddev, not an exact rank
 }
 
 export interface PercentileSection {
