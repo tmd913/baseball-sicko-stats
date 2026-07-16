@@ -208,6 +208,29 @@ export default function App() {
   const [editMode, setEditMode] = useState(false);
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const dragId = useRef<number | null>(null);
+  // The desktop side rail collapses to an image-only strip once it sticks to the
+  // top on scroll; at the top of the page it stays expanded with names/scores.
+  // "Stuck" = its top has reached the sticky offset (18px, matching the CSS).
+  const navRef = useRef<HTMLElement | null>(null);
+  const [navStuck, setNavStuck] = useState(false);
+  useEffect(() => {
+    const el = navRef.current;
+    if (!el) return;
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        setNavStuck(el.getBoundingClientRect().top <= 1);
+      });
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [reports.length]);
   // Always-current reports, so the drag-end handler reads the latest order
   // without being recreated (and re-bound) on every reorder.
   const reportsRef = useRef(reports);
@@ -522,7 +545,10 @@ export default function App() {
         className={`content-layout${showLoading && reports.length > 0 ? ' is-loading' : ''}`}
       >
         {reports.length > 0 && (
-          <aside className={`player-nav${editMode ? ' editing' : ''}`}>
+          <aside
+            ref={navRef}
+            className={`player-nav${editMode ? ' editing' : ''}${navStuck ? ' is-stuck' : ''}`}
+          >
             <nav>
               {reports.map((r) => {
                 const role = liveRole(r);
