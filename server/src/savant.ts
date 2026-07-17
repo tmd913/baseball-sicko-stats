@@ -2,7 +2,7 @@ import { parse } from 'csv-parse/sync';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getGamesForDate, getPlayerStats, getStatsApiGame } from './mlbStats.js';
+import { getGamesForDate, getPlayerStats, getRosterInfo, getStatsApiGame } from './mlbStats.js';
 import { toSavantName } from './names.js';
 import type {
   Pitch,
@@ -62,11 +62,29 @@ interface DayGame {
   date: string;
   homeTeam: string;
   awayTeam: string;
+  homeTeamId: number | null;
+  awayTeamId: number | null;
   status: GameStatus;
   homeProbablePitcher: ProbablePitcher | null;
   awayProbablePitcher: ProbablePitcher | null;
   homePlayerIds: number[];
   awayPlayerIds: number[];
+  homeStarters: number[];
+  awayStarters: number[];
+}
+
+/**
+ * Whether `playerId` is starting, benched, or of unknown lineup status for a
+ * side whose announced starters are `starters`. An empty starters list means
+ * the lineup hasn't posted, so nothing is known yet (null).
+ */
+function lineupStatusFor(
+  playerId: number,
+  starters: number[] | Set<number>,
+): 'starting' | 'bench' | null {
+  const set = starters instanceof Set ? starters : new Set(starters);
+  if (set.size === 0) return null;
+  return set.has(playerId) ? 'starting' : 'bench';
 }
 
 interface ParsedDay {
@@ -318,11 +336,15 @@ async function buildStatsApiDay(date: string): Promise<{
       date,
       homeTeam: g.homeTeam,
       awayTeam: g.awayTeam,
+      homeTeamId: g.homeTeamId,
+      awayTeamId: g.awayTeamId,
       status: g.status,
       homeProbablePitcher: g.homeProbablePitcher,
       awayProbablePitcher: g.awayProbablePitcher,
       homePlayerIds: [...g.homePlayerIds],
       awayPlayerIds: [...g.awayPlayerIds],
+      homeStarters: [...g.homeStarters],
+      awayStarters: [...g.awayStarters],
     });
     for (const bg of g.batters.values()) {
       const plateAppearances: PlateAppearance[] = bg.plateAppearances.map((pa) => ({
@@ -382,6 +404,7 @@ async function buildStatsApiDay(date: string): Promise<{
         isHome: bg.isHome,
         stand: bg.stand,
         status: g.status,
+        lineupStatus: lineupStatusFor(bg.batterId, bg.isHome ? g.homeStarters : g.awayStarters),
         // The batter faces the opposing team's starter.
         probablePitcher: bg.isHome ? g.awayProbablePitcher : g.homeProbablePitcher,
         plateAppearances,
@@ -478,10 +501,12 @@ export async function getDay(date: string): Promise<ParsedDay> {
       name: b.name,
       found: true,
       games: b.games,
-      // Filled in by getReport, which fetches season stats per watched player.
+      // Filled in by getReport, which fetches season stats + roster status per
+      // watched player.
       seasonStats: null,
       splitVsLeft: null,
       splitVsRight: null,
+      rosterStatus: null,
     });
   }
 
@@ -518,7 +543,7 @@ function findPlayerDay(day: ParsedDay, p: WatchPlayer): PlayerReport | undefined
  * start time / live score) or it finished without them batting (show the final
  * score alongside "did not appear").
  */
-function rosterGame(dg: DayGame, isHome: boolean): PlayerGame {
+function rosterGame(dg: DayGame, isHome: boolean, playerId: number): PlayerGame {
   return {
     gamePk: dg.gamePk,
     date: dg.date,
@@ -529,6 +554,7 @@ function rosterGame(dg: DayGame, isHome: boolean): PlayerGame {
     isHome,
     stand: null,
     status: dg.status,
+    lineupStatus: lineupStatusFor(playerId, isHome ? dg.homeStarters : dg.awayStarters),
     probablePitcher: isHome ? dg.awayProbablePitcher : dg.homeProbablePitcher,
     plateAppearances: [],
     line: buildLine([]),
@@ -548,9 +574,11 @@ export async function getReport(
   endDate: string,
   players: WatchPlayer[],
 ): Promise<PlayerReport[]> {
-  const [days, playerStats] = await Promise.all([
+  const ids = players.map((p) => p.id);
+  const [days, playerStats, rosterInfo] = await Promise.all([
     Promise.all(enumerateDates(startDate, endDate).map(getDay)),
-    getPlayerStats(players.map((p) => p.id)),
+    getPlayerStats(ids),
+    getRosterInfo(ids),
   ]);
 
   return players.map((p) => {
@@ -565,17 +593,24 @@ export async function getReport(
         }
       }
     }
-    // Surface games the player is rostered for but has no plate appearances in —
-    // whether not-yet-started (show start time / live score) or already final
-    // (show the final score next to "did not appear"). Games they batted in are
-    // already in `seen`.
+    // Surface games the player didn't bat in but is still tied to — either they
+    // were on the game's boxscore roster (rostered, benched or not-yet-started),
+    // or they're off the active roster (suspended / on the IL / optioned) and so
+    // absent from every boxscore, in which case any game their current team plays
+    // stands in. Either way the card keeps the game info (start time / score),
+    // and the roster status below explains an off-roster absence. Games they
+    // batted in are already in `seen`.
+    const teamId = rosterInfo.get(p.id)?.teamId ?? null;
     for (const day of days) {
       for (const dg of day.games) {
         if (seen.has(dg.gamePk)) continue;
-        const isHome = dg.homePlayerIds.includes(p.id);
-        if (!isHome && !dg.awayPlayerIds.includes(p.id)) continue;
+        const isHome =
+          dg.homePlayerIds.includes(p.id) || (teamId !== null && dg.homeTeamId === teamId);
+        const isAway =
+          dg.awayPlayerIds.includes(p.id) || (teamId !== null && dg.awayTeamId === teamId);
+        if (!isHome && !isAway) continue;
         seen.add(dg.gamePk);
-        games.push(rosterGame(dg, isHome));
+        games.push(rosterGame(dg, isHome, p.id));
       }
     }
     games.sort((a, b) => (a.date === b.date ? a.gamePk - b.gamePk : a.date < b.date ? -1 : 1));
@@ -587,6 +622,7 @@ export async function getReport(
       seasonStats: st?.season ?? null,
       splitVsLeft: st?.vsLeft ?? null,
       splitVsRight: st?.vsRight ?? null,
+      rosterStatus: rosterInfo.get(p.id)?.status ?? null,
     };
   });
 }

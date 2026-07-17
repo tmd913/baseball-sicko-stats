@@ -105,6 +105,7 @@ export interface PlayerGame {
   isHome: boolean;
   stand: string | null;
   status: GameStatus;
+  lineupStatus: 'starting' | 'bench' | null;
   probablePitcher: ProbablePitcher | null;
   plateAppearances: PlateAppearance[];
   line: BattingLine;
@@ -131,12 +132,18 @@ export interface SeasonStats {
   sb: number;
 }
 
+export interface RosterStatus {
+  code: string;
+  description: string;
+}
+
 export interface PlayerReport extends WatchPlayer {
   found: boolean;
   games: PlayerGame[];
   seasonStats: SeasonStats | null;
   splitVsLeft: SeasonStats | null;
   splitVsRight: SeasonStats | null;
+  rosterStatus: RosterStatus | null;
 }
 
 export interface SeasonPlayer extends WatchPlayer {

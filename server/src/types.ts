@@ -116,6 +116,10 @@ export interface PlayerGame {
   isHome: boolean;
   stand: string | null;
   status: GameStatus;
+  // Where the batter sits in this game's lineup, once it's been posted:
+  // 'starting' (in the announced starting nine), 'bench' (on the roster but not
+  // a starter), or null when the lineup isn't out yet / isn't known.
+  lineupStatus: 'starting' | 'bench' | null;
   // The opposing probable starter — the pitcher this batter is scheduled to
   // face. Meaningful before the game starts; null once real matchups exist.
   probablePitcher: ProbablePitcher | null;
@@ -146,6 +150,12 @@ export interface SeasonStats {
   sb: number;
 }
 
+/** A player's current roster status, from their team's 40-man roster. */
+export interface RosterStatus {
+  code: string; // MLB status code, e.g. "A", "D10", "SU", "RM"
+  description: string; // human label, e.g. "Active", "Injured 10-Day", "Suspended # days"
+}
+
 /** A player as returned in the day's report. */
 export interface PlayerReport extends WatchPlayer {
   found: boolean;
@@ -155,6 +165,10 @@ export interface PlayerReport extends WatchPlayer {
   // probable starter in a not-yet-started game.
   splitVsLeft: SeasonStats | null; // vs LHP
   splitVsRight: SeasonStats | null; // vs RHP
+  // Current roster status (IL, suspended, optioned, ...) when the player isn't
+  // plainly active — explains a card whose games come only from the team's
+  // schedule (the player is off the active roster). Null when active/unknown.
+  rosterStatus: RosterStatus | null;
 }
 
 /** A rostered player for the season, used for search/autocomplete. */

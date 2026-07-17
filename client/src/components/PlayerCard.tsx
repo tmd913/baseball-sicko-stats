@@ -1,13 +1,17 @@
 import { useState } from 'react';
-import type { PlayerGame, PlayerReport } from '../types';
+import type { PlayerGame, PlayerReport, RosterStatus } from '../types';
 import {
+  absenceLabel,
   combineLines,
   didNotAppear,
   gameStatusView,
   handThrows,
+  hasDoubleheader,
   headshotUrl,
+  lineupBadge,
   lineSummary,
   prettyGameDate,
+  rosterStatusBadge,
   seasonStatsSummary,
 } from '../lib';
 import { BaseDiamond } from './BaseDiamond';
@@ -46,6 +50,13 @@ function GameStatusBadge({ game, withMatchup }: { game: PlayerGame; withMatchup?
       )}
     </span>
   );
+}
+
+/** "Starting" / "Not in lineup" chip once the game's lineup has been posted. */
+function LineupTag({ game }: { game: PlayerGame }) {
+  const badge = lineupBadge(game);
+  if (!badge) return null;
+  return <span className={`lineup-tag lineup-tag-${badge.tone}`}>{badge.label}</span>;
 }
 
 /** The opposing probable starter for a not-yet-started game. */
@@ -150,6 +161,7 @@ function GameBlock({
         <div className="game-sub-bar static">
           {gameId}
           <div className="game-sub-summary">
+            <LineupTag game={game} />
             <ProbablePitcher game={game} />
             <GameStatusBadge game={game} />
           </div>
@@ -247,12 +259,42 @@ function Headshot({ id, name, onOpen }: { id: number; name: string; onOpen: () =
   );
 }
 
-/** Player name with the fielding position as a small tag beside it. */
-function PlayerName({ name, position }: { name: string; position?: string }) {
+/** A small tag flagging an off-roster status (IL, suspended, optioned). */
+function RosterStatusTag({ status }: { status: RosterStatus | null }) {
+  const badge = rosterStatusBadge(status);
+  if (!badge) return null;
+  return (
+    <span className={`roster-status roster-status-${badge.tone}`} title={badge.title}>
+      {badge.label}
+    </span>
+  );
+}
+
+/** Flags a two-games-in-a-day slate so a collapsed card still signals it. */
+function DoubleheaderTag({ games }: { games: PlayerGame[] }) {
+  if (!hasDoubleheader(games)) return null;
+  return (
+    <span className="dh-badge" title="Two games on one day">
+      Doubleheader
+    </span>
+  );
+}
+
+/** Player name with the fielding position (and any roster-status flag) beside it. */
+function PlayerName({
+  name,
+  position,
+  status,
+}: {
+  name: string;
+  position?: string;
+  status?: RosterStatus | null;
+}) {
   return (
     <span className="player-name">
       {name}
       {position && <span className="player-pos">{position}</span>}
+      <RosterStatusTag status={status ?? null} />
     </span>
   );
 }
@@ -284,14 +326,15 @@ export function PlayerCard({
         <div className="player-head">
           <Headshot id={report.id} name={report.name} onOpen={() => onOpenDetails(report.id)} />
           <div className="player-id">
-            <PlayerName name={report.name} position={position} />
+            <PlayerName name={report.name} position={position} status={report.rosterStatus} />
             {meta && <span className="player-meta">{meta}</span>}
           </div>
           <div className="player-summary">
+            <DoubleheaderTag games={report.games} />
             {dnpGames.map((g) => (
               <GameStatusBadge key={g.gamePk} game={g} withMatchup />
             ))}
-            <span className="dnp-badge">Did not appear</span>
+            <span className="dnp-badge">{absenceLabel(report)}</span>
           </div>
         </div>
       </div>
@@ -333,7 +376,7 @@ export function PlayerCard({
       >
         <Headshot id={report.id} name={report.name} onOpen={() => onOpenDetails(report.id)} />
         <div className="player-id">
-          <PlayerName name={report.name} position={position} />
+          <PlayerName name={report.name} position={position} status={report.rosterStatus} />
           <span className="player-meta">
             {report.seasonStats
               ? seasonStatsSummary(report.seasonStats)
@@ -343,7 +386,10 @@ export function PlayerCard({
           </span>
         </div>
         <div className="player-summary">
+          <DoubleheaderTag games={games} />
           {hasAnyPa && <span className="summary-line">{summary}</span>}
+          {/* Before a player bats, flag whether they're in today's lineup. */}
+          {games.length === 1 && !hasAnyPa && <LineupTag game={primary} />}
           {games.length === 1 && <ProbablePitcher game={primary} />}
           {/* A not-yet-started game has no score badge to reveal the teams, so
               the badge also carries the opponent and home/away (withMatchup). */}

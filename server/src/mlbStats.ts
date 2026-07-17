@@ -6,6 +6,7 @@ import type {
   BaseState,
   GameStatus,
   ProbablePitcher,
+  RosterStatus,
   SeasonPlayer,
   SeasonStats,
 } from './types.js';
@@ -238,6 +239,117 @@ export async function getPlayerStats(
   return new Map(ids.map((id) => [id, playerStatsCache.get(id)?.stats ?? EMPTY_PLAYER_STATS]));
 }
 
+// ---- Roster status + current team (for absent/off-roster players) ------
+
+/** A player's current team id and 40-man roster status (IL, suspended, ...). */
+export interface RosterInfo {
+  teamId: number | null;
+  status: RosterStatus | null;
+}
+
+/** Team ids and rosters move at most day to day, so a 30-min TTL is plenty. */
+const ROSTER_INFO_TTL = 30 * 60 * 1000;
+const playerTeamCache = new Map<number, { teamId: number | null; fetchedAt: number }>();
+
+interface PeopleTeamResponse {
+  people?: { id: number; currentTeam?: { id?: number } }[];
+}
+
+/** Each id's current team id, batched into one people?hydrate=currentTeam call. */
+async function getPlayerTeamIds(ids: number[]): Promise<Map<number, number | null>> {
+  const now = Date.now();
+  const stale = ids.filter((id) => {
+    const c = playerTeamCache.get(id);
+    return !c || now - c.fetchedAt >= ROSTER_INFO_TTL;
+  });
+
+  if (stale.length > 0) {
+    try {
+      const url =
+        `https://statsapi.mlb.com/api/v1/people?personIds=${stale.join(',')}` +
+        `&hydrate=currentTeam&fields=people,id,currentTeam`;
+      const res = await fetch(url, { headers: UA });
+      if (!res.ok) throw new Error(`people/currentTeam returned ${res.status}`);
+      const data = (await res.json()) as PeopleTeamResponse;
+      const seen = new Set<number>();
+      for (const p of data.people ?? []) {
+        playerTeamCache.set(p.id, { teamId: p.currentTeam?.id ?? null, fetchedAt: now });
+        seen.add(p.id);
+      }
+      // Cache misses too, so an unknown id doesn't refetch every request.
+      for (const id of stale) {
+        if (!seen.has(id)) playerTeamCache.set(id, { teamId: null, fetchedAt: now });
+      }
+    } catch (err) {
+      console.error('player team lookup failed:', err);
+    }
+  }
+
+  return new Map(ids.map((id) => [id, playerTeamCache.get(id)?.teamId ?? null]));
+}
+
+interface RosterResponse {
+  roster?: { person?: { id?: number }; status?: { code?: string; description?: string } }[];
+}
+
+const teamRosterCache = new Map<number, { byPlayer: Map<number, RosterStatus>; fetchedAt: number }>();
+
+/**
+ * Every 40-man player's status for one team, by player id. The 40-man roster
+ * (unlike the active roster) still lists players who are on the IL, suspended,
+ * or optioned to the minors — exactly the cases where a watched player has no
+ * game of their own but we still want to explain why.
+ */
+async function getTeamRosterStatus(teamId: number): Promise<Map<number, RosterStatus>> {
+  const cached = teamRosterCache.get(teamId);
+  if (cached && Date.now() - cached.fetchedAt < ROSTER_INFO_TTL) return cached.byPlayer;
+
+  const byPlayer = new Map<number, RosterStatus>();
+  try {
+    const url =
+      `https://statsapi.mlb.com/api/v1/teams/${teamId}/roster?rosterType=40Man` +
+      `&fields=roster,person,id,status,code,description`;
+    const res = await fetch(url, { headers: UA });
+    if (!res.ok) throw new Error(`roster returned ${res.status}`);
+    const data = (await res.json()) as RosterResponse;
+    for (const r of data.roster ?? []) {
+      const id = r.person?.id;
+      const code = r.status?.code;
+      const description = r.status?.description;
+      if (typeof id === 'number' && code && description) byPlayer.set(id, { code, description });
+    }
+  } catch (err) {
+    console.error(`team roster fetch failed for ${teamId}:`, err);
+  }
+
+  teamRosterCache.set(teamId, { byPlayer, fetchedAt: Date.now() });
+  return byPlayer;
+}
+
+/**
+ * Each player's current team id and 40-man roster status. The team id lets a
+ * report tie a watched player to their team's games even when they're off the
+ * active roster (suspended, on the IL, optioned) and therefore absent from every
+ * game's boxscore; the status is surfaced on the card to explain the absence.
+ */
+export async function getRosterInfo(ids: number[]): Promise<Map<number, RosterInfo>> {
+  const teamByPlayer = await getPlayerTeamIds(ids);
+  const teamIds = [...new Set([...teamByPlayer.values()].filter((t): t is number => t !== null))];
+  const rosters = new Map<number, Map<number, RosterStatus>>();
+  await Promise.all(
+    teamIds.map(async (tid) => {
+      rosters.set(tid, await getTeamRosterStatus(tid));
+    }),
+  );
+  return new Map(
+    ids.map((id) => {
+      const teamId = teamByPlayer.get(id) ?? null;
+      const status = teamId !== null ? rosters.get(teamId)?.get(id) ?? null : null;
+      return [id, { teamId, status }];
+    }),
+  );
+}
+
 // ---- Live feed (pitch-by-pitch + Statcast-style pitch/hit data) -------
 
 const FEED_FIELDS = [
@@ -256,10 +368,12 @@ const FEED_FIELDS = [
   'linescore',
   // Boxscore rosters — the per-side player ids, so a watched player can be tied
   // to a game they were rostered for even if they never batted (e.g. benched in
-  // a final game → "did not appear" with the score still shown).
+  // a final game → "did not appear" with the score still shown). battingOrder
+  // (per player, a multiple of 100 for starters) marks the announced lineup.
   'boxscore',
   'players',
   'person',
+  'battingOrder',
   'currentInning',
   'inningState',
   'isTopInning',
@@ -375,7 +489,10 @@ interface LiveFeed {
   metaData?: { timeStamp?: string };
   gameData?: {
     status?: { abstractGameState?: string; codedGameState?: string; detailedState?: string };
-    teams?: { home?: { abbreviation?: string }; away?: { abbreviation?: string } };
+    teams?: {
+      home?: { abbreviation?: string; id?: number };
+      away?: { abbreviation?: string; id?: number };
+    };
     datetime?: { dateTime?: string };
     probablePitchers?: {
       home?: { id?: number; fullName?: string };
@@ -404,8 +521,8 @@ interface LiveFeed {
     };
     boxscore?: {
       teams?: {
-        home?: { players?: Record<string, { person?: { id?: number } }> };
-        away?: { players?: Record<string, { person?: { id?: number } }> };
+        home?: { players?: Record<string, { person?: { id?: number }; battingOrder?: string }> };
+        away?: { players?: Record<string, { person?: { id?: number }; battingOrder?: string }> };
       };
     };
   };
@@ -660,6 +777,8 @@ export interface StatsApiGame {
   gamePk: number;
   homeTeam: string;
   awayTeam: string;
+  homeTeamId: number | null;
+  awayTeamId: number | null;
   status: GameStatus;
   homeProbablePitcher: ProbablePitcher | null;
   awayProbablePitcher: ProbablePitcher | null;
@@ -668,6 +787,10 @@ export interface StatsApiGame {
   // appearance. Empty for cached final games, where every appearance is known.
   homePlayerIds: Set<number>;
   awayPlayerIds: Set<number>;
+  // The announced starting lineup ids per side (a subset of the roster ids).
+  // Empty until the lineup is posted, and for old cached feeds without it.
+  homeStarters: Set<number>;
+  awayStarters: Set<number>;
   batters: Map<number, StatsApiBatterGame>;
   runsByRunner: Map<number, number>;
   sbByRunner: Map<number, number>;
@@ -729,6 +852,25 @@ function rosterIds(
   const ids = new Set<number>();
   for (const p of Object.values(team?.players ?? {})) {
     if (typeof p.person?.id === 'number') ids.add(p.person.id);
+  }
+  return ids;
+}
+
+/**
+ * The ids of a side's announced starting lineup. In the boxscore each player's
+ * `battingOrder` is a string like "100".."900" for the nine starters (a multiple
+ * of 100) and "101", "302", ... for substitutes; players never in the lineup
+ * carry no `battingOrder`. An empty set means the lineup hasn't posted yet.
+ */
+function starterIds(
+  team: { players?: Record<string, { person?: { id?: number }; battingOrder?: string }> } | undefined,
+): Set<number> {
+  const ids = new Set<number>();
+  for (const p of Object.values(team?.players ?? {})) {
+    const id = p.person?.id;
+    if (typeof id === 'number' && p.battingOrder && Number(p.battingOrder) % 100 === 0) {
+      ids.add(id);
+    }
   }
   return ids;
 }
@@ -828,11 +970,15 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
 
   const homeTeam = feed.gameData?.teams?.home?.abbreviation ?? '';
   const awayTeam = feed.gameData?.teams?.away?.abbreviation ?? '';
+  const homeTeamId = feed.gameData?.teams?.home?.id ?? null;
+  const awayTeamId = feed.gameData?.teams?.away?.id ?? null;
   const status = buildGameStatus(feed);
   const homeProbablePitcher = probablePitcher(feed, feed.gameData?.probablePitchers?.home);
   const awayProbablePitcher = probablePitcher(feed, feed.gameData?.probablePitchers?.away);
   const homePlayerIds = rosterIds(feed.liveData?.boxscore?.teams?.home);
   const awayPlayerIds = rosterIds(feed.liveData?.boxscore?.teams?.away);
+  const homeStarters = starterIds(feed.liveData?.boxscore?.teams?.home);
+  const awayStarters = starterIds(feed.liveData?.boxscore?.teams?.away);
   const batters = new Map<number, StatsApiBatterGame>();
   const runsByRunner = new Map<number, number>();
   const sbByRunner = new Map<number, number>();
@@ -941,11 +1087,15 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
     gamePk,
     homeTeam,
     awayTeam,
+    homeTeamId,
+    awayTeamId,
     status,
     homeProbablePitcher,
     awayProbablePitcher,
     homePlayerIds,
     awayPlayerIds,
+    homeStarters,
+    awayStarters,
     batters,
     runsByRunner,
     sbByRunner,

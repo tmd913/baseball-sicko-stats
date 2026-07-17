@@ -7,10 +7,13 @@ import { PlayerDetails } from './components/PlayerDetails';
 import { BaseDiamond } from './components/BaseDiamond';
 import { DateRangePicker } from './components/DateRangePicker';
 import {
+  absenceLabel,
   didNotAppear,
   formatStartTime,
   gameStatusView,
+  hasPlayed,
   headshotUrl,
+  lineupBadge,
   liveRole,
   liveRoleLabel,
 } from './lib';
@@ -410,7 +413,9 @@ export default function App() {
   );
 
   const totals = useMemo(() => {
-    const played = reports.filter((r) => !didNotAppear(r));
+    // "Played" means actually came to the plate — a scheduled/live game a player
+    // hasn't batted in yet (or a benched player) doesn't count.
+    const played = reports.filter((r) => hasPlayed(r));
     // Sum a per-game BattingLine field across every played player's games.
     const sum = (pick: (l: PlayerGame['line']) => number) =>
       played.reduce((s, r) => s + r.games.reduce((a, g) => a + pick(g.line), 0), 0);
@@ -553,18 +558,30 @@ export default function App() {
               {reports.map((r) => {
                 const role = liveRole(r);
                 const game = navGame(r);
+                // For a still-pending game, surface the player's lineup status
+                // (Starting / Not in lineup) where the live role tag would sit.
+                // Once the game is final the bottom row already carries the
+                // absence label, so the pill would just repeat it.
+                const lineup =
+                  game && !hasPlayed(r) && !didNotAppear(r) ? lineupBadge(game) : null;
                 const body = (
                   <>
                     <NavPhoto id={r.id} name={r.name} />
                     <div className="player-nav-body">
                       <div className="player-nav-top">
                         <span className="player-nav-name">{r.name}</span>
-                        {role && <span className="player-nav-role">{liveRoleLabel(role)}</span>}
+                        {role ? (
+                          <span className="player-nav-role">{liveRoleLabel(role)}</span>
+                        ) : lineup ? (
+                          <span className={`player-nav-lineup lineup-tag-${lineup.tone}`}>
+                            {lineup.label}
+                          </span>
+                        ) : null}
                       </div>
                       {game && !didNotAppear(r) ? (
                         <NavGameStatus game={game} />
                       ) : (
-                        <span className="nav-game">Did not appear</span>
+                        <span className="nav-game">{absenceLabel(r)}</span>
                       )}
                     </div>
                   </>

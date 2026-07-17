@@ -4,6 +4,7 @@ import type {
   PlateAppearance,
   PlayerGame,
   PlayerReport,
+  RosterStatus,
   SeasonStats,
 } from './types';
 
@@ -249,6 +250,47 @@ export function didNotAppear(report: PlayerReport): boolean {
   );
 }
 
+/**
+ * True once a player has actually batted — at least one plate appearance in
+ * some game. This is what counts as "played": being rostered or in the lineup
+ * for a scheduled/in-progress game doesn't count until they come to the plate.
+ */
+export function hasPlayed(report: PlayerReport): boolean {
+  return report.games.some((g) => g.plateAppearances.length > 0);
+}
+
+/**
+ * The lineup indicator for a game: "Starting" when the player is in the
+ * announced starting nine, "Not in lineup" when the lineup is out but they're
+ * not in it. Null when the lineup hasn't posted (nothing to show yet).
+ */
+export function lineupBadge(game: PlayerGame): { label: string; tone: 'in' | 'out' } | null {
+  if (game.lineupStatus === 'starting') return { label: 'Starting', tone: 'in' };
+  if (game.lineupStatus === 'bench') return { label: 'Not in lineup', tone: 'out' };
+  return null;
+}
+
+/**
+ * Label for a player who didn't bat: "Not in lineup" when a posted lineup left
+ * them out (benched), otherwise the plain "Did not appear".
+ */
+export function absenceLabel(report: PlayerReport): string {
+  return report.games.some((g) => g.lineupStatus === 'bench')
+    ? 'Not in lineup'
+    : 'Did not appear';
+}
+
+/**
+ * True when the player's team plays two (or more) games on a single date — a
+ * doubleheader. Counts per date so a multi-day range with one game each day
+ * doesn't read as a doubleheader.
+ */
+export function hasDoubleheader(games: PlayerGame[]): boolean {
+  const byDate = new Map<string, number>();
+  for (const g of games) byDate.set(g.date, (byDate.get(g.date) ?? 0) + 1);
+  return [...byDate.values()].some((n) => n >= 2);
+}
+
 /** A watched player's current live role, for highlighting them in the nav. */
 export type LiveRole = 'at-bat' | 'on-deck' | 'on-base';
 
@@ -285,6 +327,37 @@ export function basesLabel(b: BaseState): string {
  */
 export function seasonStatsSummary(s: SeasonStats): string {
   return `${s.ops} OPS, ${s.hr} HR, ${s.rbi} RBI, ${s.runs} R, ${s.sb} SB`;
+}
+
+export type RosterTone = 'il' | 'susp' | 'minors' | 'other';
+
+/**
+ * A short card badge for a roster status that keeps a player off the field —
+ * an IL stint, suspension, or option to the minors. Returns null when the
+ * player is active (or status is unknown), since an active player needs no
+ * badge. `tone` drives the badge color; `title` is the API's full description.
+ */
+export function rosterStatusBadge(
+  status: RosterStatus | null,
+): { label: string; title: string; tone: RosterTone } | null {
+  if (!status) return null;
+  const { code, description } = status;
+  // Active (and the on-roster non-states) need no badge.
+  if (code === 'A' || code === 'RM0' || description === 'Active') return null;
+  // Injured 10/15/60-Day → "IL" with the day count when the label carries one.
+  if (/^D\d/.test(code) || description.startsWith('Injured')) {
+    const days = description.match(/(\d+)-Day/)?.[1];
+    return { label: days ? `${days}-day IL` : 'IL', title: description, tone: 'il' };
+  }
+  if (code === 'SU' || description.startsWith('Suspended')) {
+    return { label: 'Suspended', title: description, tone: 'susp' };
+  }
+  if (code === 'RM' || description.includes('Minors')) {
+    return { label: 'Minors', title: description, tone: 'minors' };
+  }
+  // Anything else (DFA, restricted, paternity, not-yet-reported, ...) shows the
+  // API's own description, trimmed of the "# days" placeholder some carry.
+  return { label: description.replace(/\s*#\s*days?$/i, ''), title: description, tone: 'other' };
 }
 
 /** Best xwOBA / batted-ball highlight for a PA, if any. */

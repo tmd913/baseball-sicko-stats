@@ -802,6 +802,63 @@ body {
   padding: 3px 10px;
   white-space: nowrap;
 }
+/* Doubleheader flag in the card header — accent-tinted so a collapsed card
+   still signals the two-game day at a glance. */
+.dh-badge {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--accent);
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  border-radius: 999px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+/* Lineup indicator: "Starting" (green) once a player is in the announced
+   lineup, or "Not in lineup" (muted) when the card is posted but leaves them
+   out. Shown in a card header / game bar before the player has batted. */
+.lineup-tag {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+.lineup-tag-in {
+  color: var(--hit);
+  background: rgba(52, 211, 153, 0.13);
+  border-color: rgba(52, 211, 153, 0.4);
+}
+.lineup-tag-out {
+  color: var(--muted);
+  background: var(--bg-2);
+  border-color: var(--border);
+}
+/* Same indicator sized for the nav rail, sitting where the live role tag goes. */
+.player-nav-lineup {
+  flex: none;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.player-nav-lineup.lineup-tag-in {
+  color: var(--hit);
+  background: rgba(52, 211, 153, 0.15);
+}
+.player-nav-lineup.lineup-tag-out {
+  color: var(--muted);
+  background: rgba(142, 160, 196, 0.15);
+}
+
 .player-head {
   display: flex;
   align-items: center;
@@ -886,6 +943,35 @@ body {
   border-radius: 6px;
   padding: 2px 7px;
   white-space: nowrap;
+}
+/* Off-roster flag (IL / suspended / optioned) beside the name — a tinted
+   variant of .player-pos, colored by severity via the tone modifier. */
+.roster-status {
+  margin-left: 9px;
+  vertical-align: middle;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 2px 7px;
+  white-space: nowrap;
+}
+.roster-status-il {
+  color: var(--strikeout);
+  background: rgba(248, 113, 113, 0.13);
+  border-color: rgba(248, 113, 113, 0.4);
+}
+.roster-status-susp {
+  color: var(--hr);
+  background: rgba(251, 191, 36, 0.13);
+  border-color: rgba(251, 191, 36, 0.4);
+}
+.roster-status-minors,
+.roster-status-other {
+  color: var(--muted);
+  background: var(--bg-2);
+  border-color: var(--border);
 }
 .player-meta {
   color: var(--muted);
