@@ -271,10 +271,14 @@ export function lineupBadge(game: PlayerGame): { label: string; tone: 'in' | 'ou
 }
 
 /**
- * Label for a player who didn't bat: "Not in lineup" when a posted lineup left
+ * Label for a player with no batting to show. "No game" when their team wasn't
+ * scheduled that day (no game to tie them to at all — getReport gives a rostered
+ * player a placeholder for any game their team plays, so zero games means none
+ * happened). When a game did happen: "Not in lineup" if a posted lineup left
  * them out (benched), otherwise the plain "Did not appear".
  */
 export function absenceLabel(report: PlayerReport): string {
+  if (report.games.length === 0) return 'No game';
   return report.games.some((g) => g.lineupStatus === 'bench')
     ? 'Not in lineup'
     : 'Did not appear';
