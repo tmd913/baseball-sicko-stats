@@ -463,10 +463,23 @@ body {
 
 /* ---- Content layout (top strip + list) ---- */
 .content-layout {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: stretch;
   gap: 16px;
+}
+/* Zero-height marker at the strip's flow origin. An IntersectionObserver watches
+   it (not the sticky strip, whose own rect.top is pinned once stuck) to toggle
+   the collapsed state exactly when the strip reaches the top of the viewport. */
+.nav-sentinel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+  visibility: hidden;
 }
 
 /* The player nav is a horizontal strip pinned to the top of the page at every
@@ -760,6 +773,11 @@ body {
   display: flex;
   flex-direction: column;
   gap: 18px;
+  /* Exclude the cards from scroll-anchor selection. Otherwise, when the sticky
+     nav strip collapses/expands and its height changes, the browser nudges the
+     scroll position to keep a card stationary — which moves the nav back across
+     its stick threshold and makes it oscillate while scrolling slowly. */
+  overflow-anchor: none;
 }
 .player-card {
   scroll-margin-top: 18px;

@@ -211,28 +211,26 @@ export default function App() {
   const [editMode, setEditMode] = useState(false);
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const dragId = useRef<number | null>(null);
-  // The desktop side rail collapses to an image-only strip once it sticks to the
-  // top on scroll; at the top of the page it stays expanded with names/scores.
-  // "Stuck" = its top has reached the sticky offset (18px, matching the CSS).
-  const navRef = useRef<HTMLElement | null>(null);
+  // The nav strip collapses to an image-only bar once it sticks to the top on
+  // scroll; at the top of the page it stays expanded with names/scores.
+  //
+  // We can't watch the strip's own rect.top: a sticky element pins that value to
+  // 0 while stuck, so it never reports "scrolled back up", and any threshold on
+  // it flip-flops every frame once pinned. Instead a zero-height sentinel sits at
+  // the strip's flow origin (absolutely placed at the top of .content-layout) and
+  // an IntersectionObserver flags "stuck" the moment it scrolls out the top.
+  // Because it fires only on real crossings — not per scroll frame — and its
+  // position doesn't move when the strip collapses, there's nothing to oscillate.
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
   const [navStuck, setNavStuck] = useState(false);
   useEffect(() => {
-    const el = navRef.current;
+    const el = sentinelRef.current;
     if (!el) return;
-    let raf = 0;
-    const onScroll = () => {
-      if (raf) return;
-      raf = requestAnimationFrame(() => {
-        raf = 0;
-        setNavStuck(el.getBoundingClientRect().top <= 1);
-      });
-    };
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => {
-      window.removeEventListener('scroll', onScroll);
-      if (raf) cancelAnimationFrame(raf);
-    };
+    const io = new IntersectionObserver(([entry]) => setNavStuck(!entry.isIntersecting), {
+      threshold: 0,
+    });
+    io.observe(el);
+    return () => io.disconnect();
   }, [reports.length]);
   // Always-current reports, so the drag-end handler reads the latest order
   // without being recreated (and re-bound) on every reorder.
@@ -550,8 +548,10 @@ export default function App() {
         className={`content-layout${showLoading && reports.length > 0 ? ' is-loading' : ''}`}
       >
         {reports.length > 0 && (
+          <div ref={sentinelRef} className="nav-sentinel" aria-hidden="true" />
+        )}
+        {reports.length > 0 && (
           <aside
-            ref={navRef}
             className={`player-nav${editMode ? ' editing' : ''}${navStuck ? ' is-stuck' : ''}`}
           >
             <nav>
