@@ -413,7 +413,9 @@ export function PlayerCard({
           {/* Lineup slot: "Batting Nth" for a starter (kept even after they bat,
               to show where they hit), or "Not in lineup" before first pitch. */}
           {games.length === 1 && <LineupTag game={primary} played={hasAnyPa} />}
-          {hasAnyPa && <span className="summary-line">{summary}</span>}
+          {/* A single game's line summarizes the day here; a doubleheader keeps
+              each game's line in its own expandable block instead of combining. */}
+          {games.length === 1 && hasAnyPa && <span className="summary-line">{summary}</span>}
           {games.length === 1 && <ProbablePitcher game={primary} />}
           {/* A not-yet-started game has no score badge to reveal the teams, so
               the badge also carries the opponent and home/away (withMatchup). */}
