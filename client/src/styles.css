@@ -495,8 +495,9 @@ body {
   padding: 12px 22px;
   background: var(--bg);
 }
-/* Edit toggle at the end of the player strip — a round icon button (pencil to
-   reorder/remove, check to finish). */
+/* Edit toggle at the end of the player list. On the wide text rail it's a text
+   pill ("Edit"/"Done") at the bottom; the narrow avatar rail and phone strip
+   swap it for an icon (see the media queries, which hide the text and round it). */
 .player-nav-edit-inline {
   flex: 0 0 auto;
   align-self: center;
@@ -506,7 +507,10 @@ body {
   background: transparent;
   border: 1px solid var(--border);
   color: var(--muted);
-  padding: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 4px 16px;
   border-radius: 999px;
   cursor: pointer;
 }
@@ -519,15 +523,9 @@ body {
   border-color: var(--accent);
   color: var(--bg);
 }
-/* The toggle is an icon-only button (pencil to edit, check to finish); the
-   label is kept for screen readers via aria-label on the button. */
-.player-nav-edit-text {
-  display: none;
-}
+/* Icon is hidden on the wide text rail; shown when the rail collapses. */
 .player-nav-edit-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: none;
 }
 /* Edit mode: draggable rows with a grip and a delete button. touch-action: none
    lets a touch drag reorder instead of scrolling the strip. */
@@ -679,6 +677,34 @@ body {
 @media (max-width: 640px) {
   .controls {
     margin-bottom: 0;
+  }
+  /* Show the strip as avatars only at every scroll position — the same compact
+     treatment as the stuck (collapsed) strip, applied unconditionally so the
+     names/scores never crowd the narrow toolbar. */
+  .player-nav .player-nav-body {
+    display: none;
+  }
+  .player-nav:not(.is-stuck) .player-nav-link {
+    padding: 3px;
+  }
+  .player-nav:not(.is-stuck) .player-nav-photo {
+    width: 34px;
+    height: 34px;
+  }
+  .player-nav .player-nav-grip {
+    display: none;
+  }
+  .player-nav-link.editing .player-nav-delete {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    margin: 0;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--strikeout);
+    border-color: var(--strikeout);
+    color: var(--bg);
   }
 }
 .player-nav-link:hover {
