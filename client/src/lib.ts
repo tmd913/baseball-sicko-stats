@@ -259,13 +259,34 @@ export function hasPlayed(report: PlayerReport): boolean {
   return report.games.some((g) => g.plateAppearances.length > 0);
 }
 
+/** An integer as an English ordinal: 1 -> "1st", 2 -> "2nd", 3 -> "3rd", 4 -> "4th". */
+export function ordinal(n: number): string {
+  const rem100 = n % 100;
+  const suffix =
+    rem100 >= 11 && rem100 <= 13
+      ? 'th'
+      : n % 10 === 1
+        ? 'st'
+        : n % 10 === 2
+          ? 'nd'
+          : n % 10 === 3
+            ? 'rd'
+            : 'th';
+  return `${n}${suffix}`;
+}
+
 /**
- * The lineup indicator for a game: "Starting" when the player is in the
- * announced starting nine, "Not in lineup" when the lineup is out but they're
- * not in it. Null when the lineup hasn't posted (nothing to show yet).
+ * The lineup indicator for a game: "Batting Nth" (with their spot in the order)
+ * when the player is in the announced starting nine, "Not in lineup" when the
+ * lineup is out but they're not in it. Null when the lineup hasn't posted.
  */
 export function lineupBadge(game: PlayerGame): { label: string; tone: 'in' | 'out' } | null {
-  if (game.lineupStatus === 'starting') return { label: 'Starting', tone: 'in' };
+  if (game.lineupStatus === 'starting') {
+    return {
+      label: game.lineupSpot ? `Batting ${ordinal(game.lineupSpot)}` : 'Starting',
+      tone: 'in',
+    };
+  }
   if (game.lineupStatus === 'bench') return { label: 'Not in lineup', tone: 'out' };
   return null;
 }

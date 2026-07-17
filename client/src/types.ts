@@ -106,6 +106,7 @@ export interface PlayerGame {
   stand: string | null;
   status: GameStatus;
   lineupStatus: 'starting' | 'bench' | null;
+  lineupSpot: number | null;
   probablePitcher: ProbablePitcher | null;
   plateAppearances: PlateAppearance[];
   line: BattingLine;

@@ -120,6 +120,8 @@ export interface PlayerGame {
   // 'starting' (in the announced starting nine), 'bench' (on the roster but not
   // a starter), or null when the lineup isn't out yet / isn't known.
   lineupStatus: 'starting' | 'bench' | null;
+  // Batting-order slot (1-9) when starting; null otherwise.
+  lineupSpot: number | null;
   // The opposing probable starter — the pitcher this batter is scheduled to
   // face. Meaningful before the game starts; null once real matchups exist.
   probablePitcher: ProbablePitcher | null;

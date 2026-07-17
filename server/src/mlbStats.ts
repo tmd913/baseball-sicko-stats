@@ -787,10 +787,10 @@ export interface StatsApiGame {
   // appearance. Empty for cached final games, where every appearance is known.
   homePlayerIds: Set<number>;
   awayPlayerIds: Set<number>;
-  // The announced starting lineup ids per side (a subset of the roster ids).
+  // The announced starting lineup per side, as player id -> batting slot (1-9).
   // Empty until the lineup is posted, and for old cached feeds without it.
-  homeStarters: Set<number>;
-  awayStarters: Set<number>;
+  homeStarters: Map<number, number>;
+  awayStarters: Map<number, number>;
   batters: Map<number, StatsApiBatterGame>;
   runsByRunner: Map<number, number>;
   sbByRunner: Map<number, number>;
@@ -857,22 +857,23 @@ function rosterIds(
 }
 
 /**
- * The ids of a side's announced starting lineup. In the boxscore each player's
- * `battingOrder` is a string like "100".."900" for the nine starters (a multiple
- * of 100) and "101", "302", ... for substitutes; players never in the lineup
- * carry no `battingOrder`. An empty set means the lineup hasn't posted yet.
+ * A side's announced starting lineup as player id -> batting-order slot (1-9).
+ * In the boxscore each player's `battingOrder` is a string like "100".."900" for
+ * the nine starters (a multiple of 100, so "300" = batting 3rd) and "101", "302",
+ * ... for substitutes; players never in the lineup carry no `battingOrder`. An
+ * empty map means the lineup hasn't posted yet.
  */
-function starterIds(
+function startingOrder(
   team: { players?: Record<string, { person?: { id?: number }; battingOrder?: string }> } | undefined,
-): Set<number> {
-  const ids = new Set<number>();
+): Map<number, number> {
+  const order = new Map<number, number>();
   for (const p of Object.values(team?.players ?? {})) {
     const id = p.person?.id;
     if (typeof id === 'number' && p.battingOrder && Number(p.battingOrder) % 100 === 0) {
-      ids.add(id);
+      order.set(id, Number(p.battingOrder) / 100);
     }
   }
-  return ids;
+  return order;
 }
 
 // Final games are immutable, so they're memoized (and disk-cached) forever.
@@ -977,8 +978,8 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
   const awayProbablePitcher = probablePitcher(feed, feed.gameData?.probablePitchers?.away);
   const homePlayerIds = rosterIds(feed.liveData?.boxscore?.teams?.home);
   const awayPlayerIds = rosterIds(feed.liveData?.boxscore?.teams?.away);
-  const homeStarters = starterIds(feed.liveData?.boxscore?.teams?.home);
-  const awayStarters = starterIds(feed.liveData?.boxscore?.teams?.away);
+  const homeStarters = startingOrder(feed.liveData?.boxscore?.teams?.home);
+  const awayStarters = startingOrder(feed.liveData?.boxscore?.teams?.away);
   const batters = new Map<number, StatsApiBatterGame>();
   const runsByRunner = new Map<number, number>();
   const sbByRunner = new Map<number, number>();

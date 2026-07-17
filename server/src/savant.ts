@@ -69,22 +69,25 @@ interface DayGame {
   awayProbablePitcher: ProbablePitcher | null;
   homePlayerIds: number[];
   awayPlayerIds: number[];
-  homeStarters: number[];
-  awayStarters: number[];
+  homeStarters: Map<number, number>;
+  awayStarters: Map<number, number>;
 }
 
 /**
- * Whether `playerId` is starting, benched, or of unknown lineup status for a
- * side whose announced starters are `starters`. An empty starters list means
- * the lineup hasn't posted, so nothing is known yet (null).
+ * A player's lineup status and batting slot for a side whose announced starters
+ * (id -> slot 1-9) are `starters`, shaped as the PlayerGame fields so it can be
+ * spread in directly. An empty map means the lineup hasn't posted, so nothing is
+ * known yet (null status).
  */
 function lineupStatusFor(
   playerId: number,
-  starters: number[] | Set<number>,
-): 'starting' | 'bench' | null {
-  const set = starters instanceof Set ? starters : new Set(starters);
-  if (set.size === 0) return null;
-  return set.has(playerId) ? 'starting' : 'bench';
+  starters: Map<number, number>,
+): { lineupStatus: 'starting' | 'bench' | null; lineupSpot: number | null } {
+  if (starters.size === 0) return { lineupStatus: null, lineupSpot: null };
+  const spot = starters.get(playerId);
+  return spot !== undefined
+    ? { lineupStatus: 'starting', lineupSpot: spot }
+    : { lineupStatus: 'bench', lineupSpot: null };
 }
 
 interface ParsedDay {
@@ -343,8 +346,8 @@ async function buildStatsApiDay(date: string): Promise<{
       awayProbablePitcher: g.awayProbablePitcher,
       homePlayerIds: [...g.homePlayerIds],
       awayPlayerIds: [...g.awayPlayerIds],
-      homeStarters: [...g.homeStarters],
-      awayStarters: [...g.awayStarters],
+      homeStarters: g.homeStarters,
+      awayStarters: g.awayStarters,
     });
     for (const bg of g.batters.values()) {
       const plateAppearances: PlateAppearance[] = bg.plateAppearances.map((pa) => ({
@@ -404,7 +407,7 @@ async function buildStatsApiDay(date: string): Promise<{
         isHome: bg.isHome,
         stand: bg.stand,
         status: g.status,
-        lineupStatus: lineupStatusFor(bg.batterId, bg.isHome ? g.homeStarters : g.awayStarters),
+        ...lineupStatusFor(bg.batterId, bg.isHome ? g.homeStarters : g.awayStarters),
         // The batter faces the opposing team's starter.
         probablePitcher: bg.isHome ? g.awayProbablePitcher : g.homeProbablePitcher,
         plateAppearances,
@@ -554,7 +557,7 @@ function rosterGame(dg: DayGame, isHome: boolean, playerId: number): PlayerGame 
     isHome,
     stand: null,
     status: dg.status,
-    lineupStatus: lineupStatusFor(playerId, isHome ? dg.homeStarters : dg.awayStarters),
+    ...lineupStatusFor(playerId, isHome ? dg.homeStarters : dg.awayStarters),
     probablePitcher: isHome ? dg.awayProbablePitcher : dg.homeProbablePitcher,
     plateAppearances: [],
     line: buildLine([]),

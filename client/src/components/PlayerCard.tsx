@@ -52,10 +52,15 @@ function GameStatusBadge({ game, withMatchup }: { game: PlayerGame; withMatchup?
   );
 }
 
-/** "Starting" / "Not in lineup" chip once the game's lineup has been posted. */
-function LineupTag({ game }: { game: PlayerGame }) {
+/**
+ * Lineup chip once the game's lineup has been posted: "Batting Nth" for a
+ * starter (their spot in the order), or "Not in lineup" for a benched player.
+ * With `played` set (the batter has already come up), only the batting-order
+ * chip is kept — "Not in lineup" is a pre-game / did-not-play state.
+ */
+function LineupTag({ game, played }: { game: PlayerGame; played?: boolean }) {
   const badge = lineupBadge(game);
-  if (!badge) return null;
+  if (!badge || (played && badge.tone !== 'in')) return null;
   return <span className={`lineup-tag lineup-tag-${badge.tone}`}>{badge.label}</span>;
 }
 
@@ -197,6 +202,7 @@ function GameBlock({
             <>
               {gameId}
               <div className="game-sub-summary">
+                <LineupTag game={game} played={hasPas} />
                 <span className="game-sub-line">{lineSummary(game.line)}</span>
                 <GameStatusBadge game={game} />
               </div>
@@ -387,9 +393,10 @@ export function PlayerCard({
         </div>
         <div className="player-summary">
           <DoubleheaderTag games={games} />
+          {/* Lineup slot: "Batting Nth" for a starter (kept even after they bat,
+              to show where they hit), or "Not in lineup" before first pitch. */}
+          {games.length === 1 && <LineupTag game={primary} played={hasAnyPa} />}
           {hasAnyPa && <span className="summary-line">{summary}</span>}
-          {/* Before a player bats, flag whether they're in today's lineup. */}
-          {games.length === 1 && !hasAnyPa && <LineupTag game={primary} />}
           {games.length === 1 && <ProbablePitcher game={primary} />}
           {/* A not-yet-started game has no score badge to reveal the teams, so
               the badge also carries the opponent and home/away (withMatchup). */}
