@@ -345,7 +345,7 @@ export function PlayerCard({
             {meta && <span className="player-meta">{meta}</span>}
           </div>
           <div className="player-summary">
-            <DoubleheaderTag games={report.games} />
+            {singleDay && <DoubleheaderTag games={report.games} />}
             {dnpGames.map((g) => (
               <GameStatusBadge key={g.gamePk} game={g} withMatchup />
             ))}
@@ -401,7 +401,10 @@ export function PlayerCard({
           </span>
         </div>
         <div className="player-summary">
-          <DoubleheaderTag games={games} />
+          {/* The doubleheader flag can't say which day it was, so on a collapsed
+              card it only makes sense for a single-day range; when expanded, the
+              game blocks below show the two same-day games regardless. */}
+          {(!collapsed || singleDay) && <DoubleheaderTag games={games} />}
           {/* Lineup slot: "Batting Nth" for a starter (kept even after they bat,
               to show where they hit), or "Not in lineup" before first pitch. */}
           {games.length === 1 && <LineupTag game={primary} played={hasAnyPa} />}
