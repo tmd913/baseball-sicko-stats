@@ -1877,6 +1877,33 @@ body {
   color: var(--strikeout);
 }
 
+/* Tabs switching the details view between percentile rankings and splits. */
+.details-tabs {
+  display: flex;
+  gap: 6px;
+  max-width: 680px;
+  margin: 0 auto 16px;
+  border-bottom: 1px solid var(--border);
+}
+.details-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--muted);
+  cursor: pointer;
+}
+.details-tab:hover {
+  color: var(--text);
+}
+.details-tab.is-active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
 /* The percentile card: a fixed label column, a flexible plot, a value column. */
 .pct-card {
   --pct-label-w: 152px;

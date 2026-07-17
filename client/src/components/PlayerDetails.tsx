@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { api } from '../api';
-import type { PlayerPercentiles, PercentileMetric } from '../types';
+import type { PlayerPercentiles, PercentileMetric, SeasonStats } from '../types';
 import { headshotUrl, savantPlayerUrl } from '../lib';
 
 /**
@@ -173,17 +173,82 @@ function renderMetricRows(metrics: PercentileMetric[], overlapPct: number): Reac
   return rows;
 }
 
+/** One stat cell in a splits block. */
+function StatCell({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="stat-pill">
+      <div className="stat-value">{value}</div>
+      <div className="stat-label">{label}</div>
+    </div>
+  );
+}
+
+/** One platoon split — the player's season line against LHP or RHP. */
+function SplitBlock({ label, split }: { label: string; split: SeasonStats | null }) {
+  if (!split || split.pa === 0) {
+    return (
+      <div className="split-block">
+        <div className="split-head">{label}</div>
+        <div className="split-empty">No plate appearances {label.toLowerCase()} this season.</div>
+      </div>
+    );
+  }
+  return (
+    <div className="split-block">
+      <div className="split-head">
+        {label} · {split.pa} PA
+      </div>
+      <div className="stat-row">
+        <StatCell label="AVG" value={split.avg} />
+        <StatCell label="OBP" value={split.obp} />
+        <StatCell label="SLG" value={split.slg} />
+        <StatCell label="OPS" value={split.ops} />
+        <StatCell label="HR" value={String(split.hr)} />
+        <StatCell label="RBI" value={String(split.rbi)} />
+        <StatCell label="H" value={String(split.hits)} />
+        <StatCell label="AB" value={String(split.atBats)} />
+      </div>
+    </div>
+  );
+}
+
+/** The Splits tab: the player's platoon splits vs LHP and vs RHP. */
+function SplitsPanel({
+  vsLeft,
+  vsRight,
+}: {
+  vsLeft: SeasonStats | null;
+  vsRight: SeasonStats | null;
+}) {
+  return (
+    <div className="pct-card">
+      <div className="pct-card-head">
+        <span className="pct-card-title">Platoon Splits</span>
+      </div>
+      <SplitBlock label="vs LHP" split={vsLeft} />
+      <SplitBlock label="vs RHP" split={vsRight} />
+    </div>
+  );
+}
+
+type DetailsTab = 'percentiles' | 'splits';
+
 export function PlayerDetails({
   playerId,
   name,
   position,
+  splitVsLeft = null,
+  splitVsRight = null,
   onClose,
 }: {
   playerId: number;
   name: string;
   position?: string;
+  splitVsLeft?: SeasonStats | null;
+  splitVsRight?: SeasonStats | null;
   onClose: () => void;
 }) {
+  const [tab, setTab] = useState<DetailsTab>('percentiles');
   const [data, setData] = useState<PlayerPercentiles | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -265,13 +330,40 @@ export function PlayerDetails({
         </div>
       </div>
 
-      {loading && <div className="details-status">Loading percentile rankings…</div>}
-      {error && !loading && (
+      <div className="details-tabs" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'percentiles'}
+          className={`details-tab${tab === 'percentiles' ? ' is-active' : ''}`}
+          onClick={() => setTab('percentiles')}
+        >
+          Percentile Rankings
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'splits'}
+          className={`details-tab${tab === 'splits' ? ' is-active' : ''}`}
+          onClick={() => setTab('splits')}
+        >
+          Splits
+        </button>
+      </div>
+
+      {tab === 'splits' && (
+        <SplitsPanel vsLeft={splitVsLeft} vsRight={splitVsRight} />
+      )}
+
+      {tab === 'percentiles' && loading && (
+        <div className="details-status">Loading percentile rankings…</div>
+      )}
+      {tab === 'percentiles' && error && !loading && (
         <div className="details-status details-error">
           Couldn’t load percentile rankings: {error}
         </div>
       )}
-      {data && !loading && (
+      {tab === 'percentiles' && data && !loading && (
         <div className="pct-card" ref={cardRef}>
           <div className="pct-card-head">
             <span className="pct-card-title">{data.year} MLB Percentile Rankings</span>

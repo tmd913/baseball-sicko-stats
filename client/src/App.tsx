@@ -761,6 +761,8 @@ export default function App() {
           playerId={detailsReport.id}
           name={detailsReport.name}
           position={positionById.get(detailsReport.id)}
+          splitVsLeft={detailsReport.splitVsLeft}
+          splitVsRight={detailsReport.splitVsRight}
           onClose={() => setDetailsId(null)}
         />
       )}
