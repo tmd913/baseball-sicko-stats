@@ -211,18 +211,21 @@ export default function App() {
   const [editMode, setEditMode] = useState(false);
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const dragId = useRef<number | null>(null);
-  // Toggling edit mode swaps each item's element type (<a> link <-> draggable
-  // <div>), which recreates the nodes inside the horizontally-scrolling strip
-  // and snaps its scrollLeft back to 0. Capture the offset on the toggle and
-  // restore it after the re-render so the strip stays put.
+  // The edit toggle rides at the right end of the horizontal strip, so after
+  // tapping it keep that end in view: snap the strip all the way right once the
+  // re-render settles (edit mode widens each item with a grip + delete button,
+  // so this must run after the new layout, not off the pre-toggle width).
   const navScrollEl = useRef<HTMLElement | null>(null);
-  const navScrollLeft = useRef(0);
+  const scrollNavRight = useRef(false);
   const toggleEditMode = useCallback(() => {
-    navScrollLeft.current = navScrollEl.current?.scrollLeft ?? 0;
+    scrollNavRight.current = true;
     setEditMode((v) => !v);
   }, []);
   useLayoutEffect(() => {
-    if (navScrollEl.current) navScrollEl.current.scrollLeft = navScrollLeft.current;
+    if (!scrollNavRight.current) return;
+    scrollNavRight.current = false;
+    const el = navScrollEl.current;
+    if (el) el.scrollLeft = el.scrollWidth; // clamps to the rightmost position
   }, [editMode]);
   // The nav strip collapses to an image-only bar once it sticks to the top on
   // scroll; at the top of the page it stays expanded with names/scores.
