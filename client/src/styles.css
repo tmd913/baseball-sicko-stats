@@ -1199,7 +1199,7 @@ body {
   }
   .player-name {
     grid-area: name;
-    font-size: 19px;
+    font-size: 16px;
   }
   .player-meta {
     grid-area: meta;
