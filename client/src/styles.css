@@ -1557,12 +1557,18 @@ body {
   border-color: var(--accent);
 }
 .pa-video-el {
-  width: 100%;
-  max-height: 300px;
+  /* Size to the clip's own dimensions, bounded by the column width and a height
+     cap. With width/height auto a replaced element keeps its intrinsic aspect
+     ratio while honouring both maxes, so the player box always matches the
+     video instead of letterboxing it inside a fixed frame. */
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 320px;
   border-radius: 10px;
   border: 1px solid var(--border);
   background: #000;
-  display: block;
 }
 
 .pa-body {
