@@ -129,9 +129,11 @@ body {
     no-repeat right 11px center;
   border: 1px solid var(--border);
   color: var(--text);
-  border-radius: 10px;
-  padding: 8px 32px 8px 14px;
-  font-size: 15px;
+  /* Match the date-range picker's box model (.drp-field) so the two controls
+     are the same height where they sit side by side on phones. */
+  border-radius: 9px;
+  padding: 6px 32px 6px 14px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
 }
