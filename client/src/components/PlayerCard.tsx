@@ -61,7 +61,11 @@ function GameStatusBadge({ game, withMatchup }: { game: PlayerGame; withMatchup?
 function LineupTag({ game, played }: { game: PlayerGame; played?: boolean }) {
   const badge = lineupBadge(game);
   if (!badge || (played && badge.tone !== 'in')) return null;
-  return <span className={`lineup-tag lineup-tag-${badge.tone}`}>{badge.label}</span>;
+  return (
+    <span className={`lineup-tag lineup-tag-${badge.tone}`} title={badge.title}>
+      {badge.label}
+    </span>
+  );
 }
 
 /** The opposing probable starter for a not-yet-started game. */

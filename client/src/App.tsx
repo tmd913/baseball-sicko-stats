@@ -573,7 +573,10 @@ export default function App() {
                         {role ? (
                           <span className="player-nav-role">{liveRoleLabel(role)}</span>
                         ) : lineup ? (
-                          <span className={`player-nav-lineup lineup-tag-${lineup.tone}`}>
+                          <span
+                            className={`player-nav-lineup lineup-tag-${lineup.tone}`}
+                            title={lineup.title}
+                          >
                             {lineup.label}
                           </span>
                         ) : null}

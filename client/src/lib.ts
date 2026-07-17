@@ -276,18 +276,21 @@ export function ordinal(n: number): string {
 }
 
 /**
- * The lineup indicator for a game: "Batting Nth" (with their spot in the order)
- * when the player is in the announced starting nine, "Not in lineup" when the
+ * The lineup indicator for a game. For a starter it's just their batting-order
+ * number (with "Batting Nth" as the hover title); "Not in lineup" when the
  * lineup is out but they're not in it. Null when the lineup hasn't posted.
  */
-export function lineupBadge(game: PlayerGame): { label: string; tone: 'in' | 'out' } | null {
+export function lineupBadge(
+  game: PlayerGame,
+): { label: string; title: string; tone: 'in' | 'out' } | null {
   if (game.lineupStatus === 'starting') {
-    return {
-      label: game.lineupSpot ? `Batting ${ordinal(game.lineupSpot)}` : 'Starting',
-      tone: 'in',
-    };
+    return game.lineupSpot
+      ? { label: String(game.lineupSpot), title: `Batting ${ordinal(game.lineupSpot)}`, tone: 'in' }
+      : { label: 'Starting', title: 'Starting', tone: 'in' };
   }
-  if (game.lineupStatus === 'bench') return { label: 'Not in lineup', tone: 'out' };
+  if (game.lineupStatus === 'bench') {
+    return { label: 'Not in lineup', title: 'Not in lineup', tone: 'out' };
+  }
   return null;
 }
 
