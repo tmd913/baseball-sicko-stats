@@ -18,6 +18,9 @@ import {
   liveRoleLabel,
 } from './lib';
 
+// Breathing room between the sticky nav strip and a card scrolled up beneath it.
+const NAV_GAP = 10;
+
 const SHORT_INNING: Record<string, string> = {
   Top: 'Top',
   Bottom: 'Bot',
@@ -238,6 +241,7 @@ export default function App() {
   // Because it fires only on real crossings — not per scroll frame — and its
   // position doesn't move when the strip collapses, there's nothing to oscillate.
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const navAsideRef = useRef<HTMLElement | null>(null);
   const [navStuck, setNavStuck] = useState(false);
   useEffect(() => {
     const el = sentinelRef.current;
@@ -248,6 +252,34 @@ export default function App() {
     io.observe(el);
     return () => io.disconnect();
   }, [reports.length]);
+  // A nav link scrolls its card to the top, but the strip is sticky there and
+  // would cover it. Track the collapsed strip height (the state it's in at any
+  // scrolled destination), measured while stuck, and also publish it as
+  // --nav-offset for scroll-margin on any native (hash) scroll-into-view.
+  const collapsedNavH = useRef(82);
+  useEffect(() => {
+    if (!navStuck) return;
+    const h = navAsideRef.current?.offsetHeight;
+    if (h) {
+      collapsedNavH.current = h;
+      document.documentElement.style.setProperty('--nav-offset', `${h + NAV_GAP}px`);
+    }
+  }, [navStuck]);
+
+  // Scroll a player's card just below the sticky strip. Done manually (not
+  // scrollIntoView) because the strip collapses from its expanded height down to
+  // collapsedNavH as the page scrolls, shifting the card up by that difference —
+  // so we pre-subtract the pending shrink to land the card in the right spot.
+  const scrollToPlayer = useCallback((playerId: number) => {
+    const el = document.getElementById(`player-${playerId}`);
+    if (!el) return;
+    const collapsedH = collapsedNavH.current;
+    const currentH = navAsideRef.current?.offsetHeight ?? collapsedH;
+    const pendingShrink = Math.max(0, currentH - collapsedH);
+    const top =
+      el.getBoundingClientRect().top + window.scrollY - pendingShrink - collapsedH - NAV_GAP;
+    window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+  }, []);
   // Always-current reports, so the drag-end handler reads the latest order
   // without being recreated (and re-bound) on every reorder.
   const reportsRef = useRef(reports);
@@ -568,6 +600,7 @@ export default function App() {
         )}
         {reports.length > 0 && (
           <aside
+            ref={navAsideRef}
             className={`player-nav${editMode ? ' editing' : ''}${navStuck ? ' is-stuck' : ''}`}
           >
             <nav ref={navScrollEl}>
@@ -645,9 +678,7 @@ export default function App() {
                     title={r.name}
                     onClick={(e) => {
                       e.preventDefault();
-                      document
-                        .getElementById(`player-${r.id}`)
-                        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      scrollToPlayer(r.id);
                     }}
                   >
                     {body}
