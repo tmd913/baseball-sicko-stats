@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api';
 import type { PlayerGame, PlayerReport, SeasonPlayer, WatchPlayer } from './types';
 import { PlayerAdder } from './components/PlayerAdder';
@@ -211,6 +211,19 @@ export default function App() {
   const [editMode, setEditMode] = useState(false);
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const dragId = useRef<number | null>(null);
+  // Toggling edit mode swaps each item's element type (<a> link <-> draggable
+  // <div>), which recreates the nodes inside the horizontally-scrolling strip
+  // and snaps its scrollLeft back to 0. Capture the offset on the toggle and
+  // restore it after the re-render so the strip stays put.
+  const navScrollEl = useRef<HTMLElement | null>(null);
+  const navScrollLeft = useRef(0);
+  const toggleEditMode = useCallback(() => {
+    navScrollLeft.current = navScrollEl.current?.scrollLeft ?? 0;
+    setEditMode((v) => !v);
+  }, []);
+  useLayoutEffect(() => {
+    if (navScrollEl.current) navScrollEl.current.scrollLeft = navScrollLeft.current;
+  }, [editMode]);
   // The nav strip collapses to an image-only bar once it sticks to the top on
   // scroll; at the top of the page it stays expanded with names/scores.
   //
@@ -554,7 +567,7 @@ export default function App() {
           <aside
             className={`player-nav${editMode ? ' editing' : ''}${navStuck ? ' is-stuck' : ''}`}
           >
-            <nav>
+            <nav ref={navScrollEl}>
               {reports.map((r) => {
                 const role = liveRole(r);
                 const game = navGame(r);
@@ -644,7 +657,7 @@ export default function App() {
               <button
                 type="button"
                 className="player-nav-edit-inline"
-                onClick={() => setEditMode((v) => !v)}
+                onClick={toggleEditMode}
                 title={editMode ? 'Finish editing' : 'Reorder or remove players'}
                 aria-label={editMode ? 'Finish editing' : 'Edit players'}
               >
