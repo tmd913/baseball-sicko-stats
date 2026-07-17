@@ -169,22 +169,50 @@ function GameBlock({
     </div>
   );
 
-  // A game the player hasn't batted in yet (scheduled or just underway): no PAs
-  // to collapse into, so the bar is a static matchup + status, no toggle/grid.
-  // For a not-yet-started game the platoon split vs that game's starter sits
-  // right under its bar — so a doubleheader shows each game's split in place.
+  // A game the player hasn't batted in yet. When it's scheduled with a known
+  // starter, the bar toggles open to reveal the platoon split vs that starter's
+  // hand — so a not-yet-started doubleheader gives one expandable panel per game.
+  // Otherwise (live but no PAs yet, or no probable pitcher) there's nothing to
+  // reveal, so the bar stays static.
   if (!hasPas) {
+    const hand = game.probablePitcher?.hand;
+    const expandable = game.status.state === 'scheduled' && (hand === 'R' || hand === 'L');
+    const barContent = (
+      <>
+        {gameId}
+        <div className="game-sub-summary">
+          <LineupTag game={game} />
+          <ProbablePitcher game={game} />
+          <GameStatusBadge game={game} />
+        </div>
+      </>
+    );
+    if (!expandable) {
+      return (
+        <div className="game-block">
+          <div className="game-sub-bar static">{barContent}</div>
+        </div>
+      );
+    }
     return (
       <div className="game-block">
-        <div className="game-sub-bar static">
-          {gameId}
-          <div className="game-sub-summary">
-            <LineupTag game={game} />
-            <ProbablePitcher game={game} />
-            <GameStatusBadge game={game} />
-          </div>
+        <div
+          className="game-sub-bar"
+          role="button"
+          tabIndex={0}
+          aria-expanded={!collapsed}
+          title={collapsed ? 'Expand game' : 'Collapse game'}
+          onClick={() => setCollapsed((v) => !v)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setCollapsed((v) => !v);
+            }
+          }}
+        >
+          {barContent}
         </div>
-        <PlatoonSplit report={report} game={game} />
+        {!collapsed && <PlatoonSplit report={report} game={game} />}
       </div>
     );
   }
@@ -413,9 +441,7 @@ export function PlayerCard({
           {/* Lineup slot: "Batting Nth" for a starter (kept even after they bat,
               to show where they hit), or "Not in lineup" before first pitch. */}
           {games.length === 1 && <LineupTag game={primary} played={hasAnyPa} />}
-          {/* A single game's line summarizes the day here; a doubleheader keeps
-              each game's line in its own expandable block instead of combining. */}
-          {games.length === 1 && hasAnyPa && <span className="summary-line">{summary}</span>}
+          {hasAnyPa && <span className="summary-line">{summary}</span>}
           {games.length === 1 && <ProbablePitcher game={primary} />}
           {/* A not-yet-started game has no score badge to reveal the teams, so
               the badge also carries the opponent and home/away (withMatchup). */}
