@@ -13,7 +13,7 @@ import {
   gameStatusView,
   hasPlayed,
   headshotUrl,
-  lineupBadge,
+  lineupCorner,
   liveRole,
   liveRoleLabel,
 } from './lib';
@@ -39,29 +39,51 @@ function navGame(report: PlayerReport): PlayerGame | null {
   );
 }
 
-/** Player headshot for the image-only (narrow) nav; falls back to initials. */
-function NavPhoto({ id, name }: { id: number; name: string }) {
+/**
+ * Player headshot for the image-only (narrow) nav; falls back to initials.
+ * `corner` overlays the lineup spot (or a red "!" when out of the lineup) on the
+ * top-right of the avatar.
+ */
+function NavPhoto({
+  id,
+  name,
+  corner,
+}: {
+  id: number;
+  name: string;
+  corner?: { text: string; title: string; tone: 'in' | 'out' } | null;
+}) {
   const [failed, setFailed] = useState(false);
-  if (failed) {
-    const initials = name
-      .split(/\s+/)
-      .map((p) => p[0])
-      .slice(0, 2)
-      .join('');
-    return (
-      <span className="player-nav-photo player-nav-photo-empty" aria-label={name}>
-        {initials}
-      </span>
-    );
-  }
+  const initials = name
+    .split(/\s+/)
+    .map((p) => p[0])
+    .slice(0, 2)
+    .join('');
   return (
-    <img
-      className="player-nav-photo"
-      src={headshotUrl(id)}
-      alt={name}
-      loading="lazy"
-      onError={() => setFailed(true)}
-    />
+    <span className="player-nav-avatar">
+      {failed ? (
+        <span className="player-nav-photo player-nav-photo-empty" aria-label={name}>
+          {initials}
+        </span>
+      ) : (
+        <img
+          className="player-nav-photo"
+          src={headshotUrl(id)}
+          alt={name}
+          loading="lazy"
+          onError={() => setFailed(true)}
+        />
+      )}
+      {corner && (
+        <span
+          className={`player-nav-spot lineup-tag-${corner.tone}`}
+          title={corner.title}
+          aria-label={corner.tone === 'out' ? 'Not in lineup' : `Batting ${corner.text}`}
+        >
+          {corner.text}
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -626,27 +648,18 @@ export default function App() {
               {reports.map((r) => {
                 const role = liveRole(r);
                 const game = navGame(r);
-                // For a still-pending game, surface the player's lineup status
-                // (Starting / Not in lineup) where the live role tag would sit.
-                // Once the game is final the bottom row already carries the
-                // absence label, so the pill would just repeat it.
-                const lineup =
-                  game && !hasPlayed(r) && !didNotAppear(r) ? lineupBadge(game) : null;
+                // Lineup spot (or a red "!" when benched) rides the avatar's
+                // top-right corner — visible even when the strip collapses to
+                // avatars only — so the name row just carries the live role tag.
+                const corner = game ? lineupCorner(game) : null;
                 const body = (
                   <>
-                    <NavPhoto id={r.id} name={r.name} />
+                    <NavPhoto id={r.id} name={r.name} corner={corner} />
                     <div className="player-nav-body">
                       <div className="player-nav-top">
                         <span className="player-nav-name">{r.name}</span>
                         {role ? (
                           <span className="player-nav-role">{liveRoleLabel(role)}</span>
-                        ) : lineup ? (
-                          <span
-                            className={`player-nav-lineup lineup-tag-${lineup.tone}`}
-                            title={lineup.title}
-                          >
-                            {lineup.label}
-                          </span>
                         ) : null}
                       </div>
                       {game && !didNotAppear(r) ? (

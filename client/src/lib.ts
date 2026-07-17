@@ -295,6 +295,23 @@ export function lineupBadge(
 }
 
 /**
+ * Corner badge for the nav avatar: the batting-order number when the player is
+ * in the lineup, an exclamation mark when a posted lineup left them out. Null
+ * when the lineup hasn't posted (or a starter has no known spot) — nothing to show.
+ */
+export function lineupCorner(
+  game: PlayerGame,
+): { text: string; title: string; tone: 'in' | 'out' } | null {
+  if (game.lineupStatus === 'bench') {
+    return { text: '!', title: 'Not in lineup', tone: 'out' };
+  }
+  if (game.lineupStatus === 'starting' && game.lineupSpot) {
+    return { text: String(game.lineupSpot), title: `Batting ${ordinal(game.lineupSpot)}`, tone: 'in' };
+  }
+  return null;
+}
+
+/**
  * Label for a player with no batting to show. "No game" when their team wasn't
  * scheduled that day (no game to tie them to at all — getReport gives a rostered
  * player a placeholder for any game their team plays, so zero games means none

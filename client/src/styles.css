@@ -629,6 +629,39 @@ body {
   flex-direction: column;
   gap: 2px;
 }
+/* Wraps the headshot so the lineup-spot badge can pin to its top-right corner. */
+.player-nav-avatar {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+}
+/* Lineup spot on the avatar corner: batting-order number (green) or a red "!"
+   bubble when the player is out of the lineup. */
+.player-nav-spot {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  border: 1.5px solid var(--panel);
+  box-sizing: border-box;
+}
+.player-nav-spot.lineup-tag-in {
+  color: var(--bg);
+  background: var(--hit);
+}
+.player-nav-spot.lineup-tag-out {
+  color: #fff;
+  background: var(--strikeout);
+}
 /* The headshot leads every item; it's all that remains once the strip collapses. */
 .player-nav-photo {
   display: flex;
@@ -915,25 +948,6 @@ body {
   color: var(--muted);
   background: var(--bg-2);
   border-color: var(--border);
-}
-/* Same indicator sized for the nav rail, sitting where the live role tag goes. */
-.player-nav-lineup {
-  flex: none;
-  font-size: 10px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 1px 6px;
-  border-radius: 999px;
-  white-space: nowrap;
-}
-.player-nav-lineup.lineup-tag-in {
-  color: var(--hit);
-  background: rgba(52, 211, 153, 0.15);
-}
-.player-nav-lineup.lineup-tag-out {
-  color: var(--muted);
-  background: rgba(142, 160, 196, 0.15);
 }
 
 .player-head {
