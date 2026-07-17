@@ -237,21 +237,31 @@ export function PlayerDetails({
   playerId,
   name,
   position,
-  splitVsLeft = null,
-  splitVsRight = null,
+  isWatched,
+  onAdd,
+  onRemove,
   onClose,
 }: {
   playerId: number;
   name: string;
   position?: string;
-  splitVsLeft?: SeasonStats | null;
-  splitVsRight?: SeasonStats | null;
+  isWatched: boolean;
+  onAdd: () => void;
+  onRemove: () => void;
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<DetailsTab>('percentiles');
   const [data, setData] = useState<PlayerPercentiles | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // Platoon splits are fetched here (not passed in) so the details view works
+  // for any player, whether or not they're on the watchlist.
+  const [splits, setSplits] = useState<{
+    vsLeft: SeasonStats | null;
+    vsRight: SeasonStats | null;
+  } | null>(null);
+  const [splitsError, setSplitsError] = useState<string | null>(null);
+  const [splitsLoading, setSplitsLoading] = useState(true);
 
   // The percentile-point distance below which two paired bubbles would overlap,
   // measured from the live track width (~a bubble diameter's worth of the rail)
@@ -302,6 +312,27 @@ export function PlayerDetails({
     };
   }, [playerId]);
 
+  useEffect(() => {
+    let live = true;
+    setSplitsLoading(true);
+    setSplitsError(null);
+    setSplits(null);
+    api
+      .splits(playerId)
+      .then((d) => {
+        if (live) setSplits(d);
+      })
+      .catch((e: unknown) => {
+        if (live) setSplitsError(e instanceof Error ? e.message : 'Failed to load');
+      })
+      .finally(() => {
+        if (live) setSplitsLoading(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [playerId]);
+
   return (
     <div className="details-view">
       <div className="details-head">
@@ -328,6 +359,39 @@ export function PlayerDetails({
             </a>
           </div>
         </div>
+        {isWatched ? (
+          <div className="details-watch-actions">
+            <span className="details-watched" title={`${name} is on your watchlist`}>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M20 6 9 17l-5-5" />
+              </svg>
+              On watchlist
+            </span>
+            <button
+              type="button"
+              className="details-remove"
+              onClick={onRemove}
+              title={`Remove ${name} from your watchlist`}
+            >
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M18 6 6 18M6 6l12 12" />
+              </svg>
+              Remove
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="details-add"
+            onClick={onAdd}
+            title={`Add ${name} to your watchlist`}
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            Add to watchlist
+          </button>
+        )}
       </div>
 
       <div className="details-tabs" role="tablist">
@@ -351,8 +415,16 @@ export function PlayerDetails({
         </button>
       </div>
 
-      {tab === 'splits' && (
-        <SplitsPanel vsLeft={splitVsLeft} vsRight={splitVsRight} />
+      {tab === 'splits' && splitsLoading && (
+        <div className="details-status">Loading platoon splits…</div>
+      )}
+      {tab === 'splits' && splitsError && !splitsLoading && (
+        <div className="details-status details-error">
+          Couldn’t load platoon splits: {splitsError}
+        </div>
+      )}
+      {tab === 'splits' && splits && !splitsLoading && (
+        <SplitsPanel vsLeft={splits.vsLeft} vsRight={splits.vsRight} />
       )}
 
       {tab === 'percentiles' && loading && (

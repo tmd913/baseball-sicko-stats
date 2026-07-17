@@ -33,7 +33,7 @@ export async function getWatchlist(): Promise<WatchPlayer[]> {
 export async function addPlayer(player: WatchPlayer): Promise<WatchPlayer[]> {
   const list = await load();
   if (!list.some((p) => p.id === player.id)) {
-    list.push(player);
+    list.unshift(player);
     await persist(list);
   }
   return list;

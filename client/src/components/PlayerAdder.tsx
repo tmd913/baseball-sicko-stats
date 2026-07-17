@@ -5,11 +5,13 @@ export function PlayerAdder({
   players,
   watchlist,
   onAdd,
+  onOpenDetails,
   loading,
 }: {
   players: SeasonPlayer[];
   watchlist: WatchPlayer[];
   onAdd: (p: WatchPlayer) => void;
+  onOpenDetails: (id: number) => void;
   loading: boolean;
 }) {
   const [query, setQuery] = useState('');
@@ -34,6 +36,11 @@ export function PlayerAdder({
     setQuery('');
   };
 
+  const openDetails = (p: SeasonPlayer) => {
+    onOpenDetails(p.id);
+    setQuery('');
+  };
+
   return (
     <div className="adder">
       <div className="adder-input-wrap">
@@ -42,7 +49,7 @@ export function PlayerAdder({
           placeholder={
             loading
               ? 'Loading players…'
-              : `Add a player (${players.length} active this season)…`
+              : `Search for a player (${players.length} active this season)…`
           }
           value={query}
           disabled={loading}
@@ -59,13 +66,27 @@ export function PlayerAdder({
       {focused && matches.length > 0 && (
         <ul className="adder-menu">
           {matches.map((p) => (
-            <li key={p.id}>
-              <button className="adder-option" onMouseDown={() => select(p)}>
+            <li key={p.id} className="adder-row">
+              {/* Tapping the name opens the details view (works without adding);
+                  the ＋ button adds the player to the watchlist. */}
+              <button
+                className="adder-option"
+                onMouseDown={() => openDetails(p)}
+                title={`View ${p.name}'s details`}
+              >
                 <span className="opt-name">{p.name}</span>
                 <span className="opt-meta">
                   {p.team}
                   {p.position ? ` · ${p.position}` : ''}
                 </span>
+              </button>
+              <button
+                className="adder-add"
+                onMouseDown={() => select(p)}
+                title={`Add ${p.name} to watchlist`}
+                aria-label={`Add ${p.name} to watchlist`}
+              >
+                +
               </button>
             </li>
           ))}

@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getReport } from './savant.js';
 import { getPercentiles } from './percentiles.js';
-import { getSeasonPlayers, resolveVideoUrl } from './mlbStats.js';
+import { getPlayerStats, getSeasonPlayers, resolveVideoUrl } from './mlbStats.js';
 import { addPlayer, getWatchlist, removePlayer, reorderPlayers } from './store.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -158,6 +158,22 @@ app.get(
     const yearQ = Number(req.query.year);
     const year = Number.isInteger(yearQ) && yearQ >= 2015 ? yearQ : undefined;
     res.json(await getPercentiles(playerId, year));
+  }),
+);
+
+// A player's season platoon splits (vs LHP / vs RHP), for the details view. The
+// report already carries these for watchlisted players; this serves the details
+// view when it's opened for a player who isn't on the watchlist.
+app.get(
+  '/api/players/:playerId/splits',
+  asyncRoute(async (req, res) => {
+    const playerId = Number(req.params.playerId);
+    if (!Number.isInteger(playerId) || playerId <= 0) {
+      res.status(400).json({ error: 'invalid playerId' });
+      return;
+    }
+    const stats = (await getPlayerStats([playerId])).get(playerId);
+    res.json({ vsLeft: stats?.vsLeft ?? null, vsRight: stats?.vsRight ?? null });
   }),
 );
 

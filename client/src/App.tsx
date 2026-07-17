@@ -452,10 +452,28 @@ export default function App() {
     () => new Map(seasonPlayers.map((p) => [p.id, p.position])),
     [seasonPlayers],
   );
-  // The report backing an open details view (may be absent until reports load).
-  const detailsReport = useMemo(
-    () => (detailsId ? reports.find((r) => r.id === detailsId) ?? null : null),
-    [detailsId, reports],
+  // The player backing an open details view. Name comes from the report if the
+  // player is watchlisted, otherwise from the season roster — so details can be
+  // opened for any player, on the watchlist or not. Position always comes from
+  // the roster. Null until whichever source carries the name has loaded.
+  const detailsPlayer = useMemo(() => {
+    if (!detailsId) return null;
+    // Both PlayerReport and SeasonPlayer extend WatchPlayer, so either source
+    // carries the id/name/savantName needed to add the player to the watchlist.
+    const src =
+      reports.find((r) => r.id === detailsId) ??
+      seasonPlayers.find((p) => p.id === detailsId);
+    if (!src) return null;
+    return {
+      id: detailsId,
+      name: src.name,
+      savantName: src.savantName,
+      position: positionById.get(detailsId),
+    };
+  }, [detailsId, reports, seasonPlayers, positionById]);
+  const detailsWatched = useMemo(
+    () => (detailsId ? watchlist.some((p) => p.id === detailsId) : false),
+    [detailsId, watchlist],
   );
 
   const totals = useMemo(() => {
@@ -555,6 +573,7 @@ export default function App() {
           players={seasonPlayers}
           watchlist={watchlist}
           onAdd={onAdd}
+          onOpenDetails={setDetailsId}
           loading={playersLoading}
         />
         <div className="summary-chips">
@@ -756,13 +775,20 @@ export default function App() {
         ↑
       </button>
 
-      {detailsReport && (
+      {detailsPlayer && (
         <PlayerDetails
-          playerId={detailsReport.id}
-          name={detailsReport.name}
-          position={positionById.get(detailsReport.id)}
-          splitVsLeft={detailsReport.splitVsLeft}
-          splitVsRight={detailsReport.splitVsRight}
+          playerId={detailsPlayer.id}
+          name={detailsPlayer.name}
+          position={detailsPlayer.position}
+          isWatched={detailsWatched}
+          onAdd={() =>
+            onAdd({
+              id: detailsPlayer.id,
+              savantName: detailsPlayer.savantName,
+              name: detailsPlayer.name,
+            })
+          }
+          onRemove={() => onRemove(detailsPlayer.id)}
           onClose={() => setDetailsId(null)}
         />
       )}
