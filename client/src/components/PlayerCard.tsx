@@ -124,11 +124,13 @@ function PlatoonSplit({ report, game }: { report: PlayerReport; game: PlayerGame
  */
 function GameBlock({
   game,
+  report,
   showMatchup,
   spansMultipleDays,
   singleDay,
 }: {
   game: PlayerGame;
+  report: PlayerReport;
   showMatchup: boolean;
   spansMultipleDays: boolean;
   singleDay: boolean;
@@ -169,6 +171,8 @@ function GameBlock({
 
   // A game the player hasn't batted in yet (scheduled or just underway): no PAs
   // to collapse into, so the bar is a static matchup + status, no toggle/grid.
+  // For a not-yet-started game the platoon split vs that game's starter sits
+  // right under its bar — so a doubleheader shows each game's split in place.
   if (!hasPas) {
     return (
       <div className="game-block">
@@ -180,6 +184,7 @@ function GameBlock({
             <GameStatusBadge game={game} />
           </div>
         </div>
+        <PlatoonSplit report={report} game={game} />
       </div>
     );
   }
@@ -418,12 +423,11 @@ export function PlayerCard({
 
       {!collapsed && (
         <>
-          {/* Not-yet-started games: show the batter's split vs the starter's hand. */}
-          {games
-            .filter((g) => g.status.state === 'scheduled')
-            .map((g) => (
-              <PlatoonSplit key={`split-${g.gamePk}`} report={report} game={g} />
-            ))}
+          {/* A lone not-yet-started game has no game block of its own (its matchup
+              lives in the header), so its platoon split vs the starter's hand
+              shows here. Multi-game cards render each game's split inside its own
+              block instead (see GameBlock), so a doubleheader pairs them up. */}
+          {games.length === 1 && <PlatoonSplit report={report} game={primary} />}
 
           {games
             // A lone no-PA game is fully described by the header's status badge,
@@ -433,6 +437,7 @@ export function PlayerCard({
               <GameBlock
                 key={g.gamePk}
                 game={g}
+                report={report}
                 showMatchup={games.length > 1}
                 spansMultipleDays={spansMultipleDays}
                 singleDay={singleDay}
