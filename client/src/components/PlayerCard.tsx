@@ -133,8 +133,13 @@ function GameBlock({
   spansMultipleDays: boolean;
   singleDay: boolean;
 }) {
-  // Show most recent plate appearances first (highest at-bat number).
-  const pas = [...game.plateAppearances].sort((a, b) => b.atBatNumber - a.atBatNumber);
+  // While a game is live, show the most recent plate appearance first so the
+  // latest at-bat is at the top; once it's final, read top-to-bottom in the
+  // order they happened.
+  const live = game.status.state === 'live';
+  const pas = [...game.plateAppearances].sort((a, b) =>
+    live ? b.atBatNumber - a.atBatNumber : a.atBatNumber - b.atBatNumber,
+  );
   const hasPas = pas.length > 0;
   // Multiple games (showMatchup) start collapsed; a lone game stays open.
   const [collapsed, setCollapsed] = useState(showMatchup);
