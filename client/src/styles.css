@@ -495,9 +495,8 @@ body {
   padding: 12px 22px;
   background: var(--bg);
 }
-/* Edit toggle at the end of the player list. On the wide text rail it's a text
-   pill ("Edit"/"Done") at the bottom; the narrow avatar rail and phone strip
-   swap it for an icon (see the media queries, which hide the text and round it). */
+/* Edit toggle at the end of the player strip — a round icon button (pencil to
+   reorder/remove, check to finish). */
 .player-nav-edit-inline {
   flex: 0 0 auto;
   align-self: center;
@@ -507,10 +506,7 @@ body {
   background: transparent;
   border: 1px solid var(--border);
   color: var(--muted);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  padding: 4px 16px;
+  padding: 5px;
   border-radius: 999px;
   cursor: pointer;
 }
@@ -523,9 +519,15 @@ body {
   border-color: var(--accent);
   color: var(--bg);
 }
-/* Icon is hidden on the wide text rail; shown when the rail collapses. */
-.player-nav-edit-icon {
+/* The toggle is an icon-only button (pencil to edit, check to finish); the
+   label is kept for screen readers via aria-label on the button. */
+.player-nav-edit-text {
   display: none;
+}
+.player-nav-edit-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 /* Edit mode: draggable rows with a grip and a delete button. touch-action: none
    lets a touch drag reorder instead of scrolling the strip. */
