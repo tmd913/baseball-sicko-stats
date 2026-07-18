@@ -396,10 +396,6 @@ export function PlayerCard({
   onToggleCollapsed: () => void;
   onOpenDetails: (id: number) => void;
 }) {
-  // Expanding the card scrolls it to the top of the screen. (Empty/no-appearance
-  // cards below don't collapse, so their ref stays unused.)
-  const cardRef = useScrollIntoViewOnExpand<HTMLDivElement>(!collapsed);
-
   if (didNotAppear(report)) {
     const meta = report.seasonStats ? seasonStatsSummary(report.seasonStats) : null;
     // Any games here are ones the player was rostered for but didn't bat in —
@@ -493,7 +489,6 @@ export function PlayerCard({
 
   return (
     <div
-      ref={cardRef}
       className={`player-card${expandable && collapsed ? ' collapsed' : ''}`}
       id={`player-${report.id}`}
     >

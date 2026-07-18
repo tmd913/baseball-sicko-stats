@@ -469,16 +469,21 @@ export default function App() {
   };
 
   const toggleCollapsed = (id: number) => {
+    const willExpand = !expandedIds.has(id);
     setExpandedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
+    // Expanding scrolls the card just below the sticky nav. scrollToPlayer is
+    // nav-aware (it pre-subtracts the strip's pending collapse), so the card
+    // isn't cut off when the strip is still in its tall/expanded state — which a
+    // plain scrollIntoView, reserving only the collapsed height, would do.
+    if (willExpand) scrollToPlayer(id);
   };
   // Clicking a player in the nav jumps to their card and opens it (cards are
-  // collapsed by default) — expanding grows the card downward, so its top stays
-  // put and the scroll still lands correctly.
+  // collapsed by default); scrollToPlayer lands it just below the strip.
   const openPlayerCard = (id: number) => {
     setExpandedIds((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
     scrollToPlayer(id);
