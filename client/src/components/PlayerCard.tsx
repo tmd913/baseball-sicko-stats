@@ -41,7 +41,6 @@ function GameStatusBadge({ game, withMatchup }: { game: PlayerGame; withMatchup?
     withMatchup && kind === 'scheduled' ? `${game.isHome ? 'vs' : '@'} ${game.opponent}` : null;
   return (
     <span className={`game-status ${kind}`}>
-      {kind === 'live' && <span className="live-dot" aria-hidden="true" />}
       {score && <span className="game-score">{score}</span>}
       <span className="game-status-detail">{detail}</span>
       {matchup && <span className="game-matchup">{matchup}</span>}

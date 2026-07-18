@@ -830,9 +830,6 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.nav-game .live-dot {
-  flex: none;
-}
 .nav-game .base-diamond {
   flex: none;
   width: 12px;
@@ -1240,27 +1237,6 @@ body {
   fill: currentColor;
   stroke: currentColor;
   opacity: 1;
-}
-.live-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--hit);
-  animation: live-pulse 1.6s ease-in-out infinite;
-}
-@keyframes live-pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.3;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .live-dot {
-    animation: none;
-  }
 }
 /* A no-PA game bar is informational only — not a collapse toggle. */
 .game-sub-bar.static {

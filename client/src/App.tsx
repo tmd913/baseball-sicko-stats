@@ -102,7 +102,6 @@ function NavGameStatus({ game }: { game: PlayerGame }) {
     return (
       <span className="nav-game live">
         <span className="nav-game-line">
-          <span className="live-dot" aria-hidden="true" />
           <span className="nav-game-text">{score ?? matchup}</span>
         </span>
         <span className="nav-game-line nav-game-sub">
