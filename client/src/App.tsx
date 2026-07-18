@@ -93,26 +93,35 @@ function NavGameStatus({ game }: { game: PlayerGame }) {
   const { kind, score } = gameStatusView(game);
   const matchup = `${game.isHome ? 'vs' : '@'} ${game.opponent}`;
 
-  let text: string;
-  if (kind === 'scheduled') {
-    text = `${matchup} · ${formatStartTime(s.startTime) ?? (s.detailedState || 'TBD')}`;
-  } else if (kind === 'live') {
+  if (kind === 'live') {
     const inning =
       s.currentInning !== null
         ? `${SHORT_INNING[s.inningState ?? ''] ?? s.inningState ?? ''} ${s.currentInning}`.trim()
         : s.detailedState;
-    text = `${score ?? matchup} · ${inning}`;
-  } else {
-    text = `${score ?? matchup} · Final`;
+    // Score on top; the inning and the runners/outs diamond stack beneath it.
+    return (
+      <span className="nav-game live">
+        <span className="nav-game-line">
+          <span className="live-dot" aria-hidden="true" />
+          <span className="nav-game-text">{score ?? matchup}</span>
+        </span>
+        <span className="nav-game-line nav-game-sub">
+          <span className="nav-game-text">{inning}</span>
+          {s.bases && (
+            <BaseDiamond bases={s.bases} outs={s.outs ?? 0} className="nav-bases" />
+          )}
+        </span>
+      </span>
+    );
   }
 
+  const text =
+    kind === 'scheduled'
+      ? `${matchup} · ${formatStartTime(s.startTime) ?? (s.detailedState || 'TBD')}`
+      : `${score ?? matchup} · Final`;
   return (
     <span className={`nav-game ${kind}`}>
-      {kind === 'live' && <span className="live-dot" aria-hidden="true" />}
       <span className="nav-game-text">{text}</span>
-      {kind === 'live' && s.bases && (
-        <BaseDiamond bases={s.bases} outs={s.outs ?? 0} className="nav-bases" />
-      )}
     </span>
   );
 }

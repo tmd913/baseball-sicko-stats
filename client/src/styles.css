@@ -803,9 +803,26 @@ body {
 }
 .nav-game.live {
   color: var(--hit);
+  /* Stack the score over the inning + runners/outs rather than running them
+     across one line. */
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
 }
 .nav-game.scheduled {
   color: var(--accent);
+}
+/* One stacked row of the live status (the score line, then the inning line). */
+.nav-game-line {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 100%;
+}
+/* The inning + runners/outs sit a touch quieter beneath the score. */
+.nav-game-sub {
+  opacity: 0.85;
 }
 .nav-game-text {
   min-width: 0;
