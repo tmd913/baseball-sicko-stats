@@ -299,15 +299,22 @@ export default function App() {
   // scrollIntoView) because the strip collapses from its expanded height down to
   // collapsedNavH as the page scrolls, shifting the card up by that difference —
   // so we pre-subtract the pending shrink to land the card in the right spot.
+  //
+  // Deferred a frame because callers expand the card first: expanding grows the
+  // document, and only then is there room to scroll a bottom-of-page card's top
+  // up under the strip. Scrolling before the grow would clamp at the old, shorter
+  // page bottom and stop short.
   const scrollToPlayer = useCallback((playerId: number) => {
-    const el = document.getElementById(`player-${playerId}`);
-    if (!el) return;
-    const collapsedH = collapsedNavH.current;
-    const currentH = navAsideRef.current?.offsetHeight ?? collapsedH;
-    const pendingShrink = Math.max(0, currentH - collapsedH);
-    const top =
-      el.getBoundingClientRect().top + window.scrollY - pendingShrink - collapsedH - NAV_GAP;
-    window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`player-${playerId}`);
+      if (!el) return;
+      const collapsedH = collapsedNavH.current;
+      const currentH = navAsideRef.current?.offsetHeight ?? collapsedH;
+      const pendingShrink = Math.max(0, currentH - collapsedH);
+      const top =
+        el.getBoundingClientRect().top + window.scrollY - pendingShrink - collapsedH - NAV_GAP;
+      window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+    });
   }, []);
   // Always-current reports, so the drag-end handler reads the latest order
   // without being recreated (and re-bound) on every reorder.
