@@ -476,6 +476,13 @@ export default function App() {
       return next;
     });
   };
+  // Clicking a player in the nav jumps to their card and opens it (cards are
+  // collapsed by default) — expanding grows the card downward, so its top stays
+  // put and the scroll still lands correctly.
+  const openPlayerCard = (id: number) => {
+    setExpandedIds((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
+    scrollToPlayer(id);
+  };
   // Positions come from the season roster; look them up by id for each report.
   const positionById = useMemo(
     () => new Map(seasonPlayers.map((p) => [p.id, p.position])),
@@ -717,7 +724,7 @@ export default function App() {
                     title={r.name}
                     onClick={(e) => {
                       e.preventDefault();
-                      scrollToPlayer(r.id);
+                      openPlayerCard(r.id);
                     }}
                   >
                     {body}
