@@ -442,65 +442,86 @@ export function PlayerCard({
   // A player may be in view only for an upcoming/just-started game with no plate
   // appearances yet — then the batting line is all zeros and not worth showing.
   const hasAnyPa = games.some((g) => g.plateAppearances.length > 0);
+  // Whether expanding actually reveals anything: a game the player batted in, a
+  // doubleheader's per-game blocks, or a lone scheduled game's platoon split vs
+  // the probable starter. A started game the player hasn't batted in yet has
+  // nothing to show, so the card is header-only (not expandable/collapsible).
+  const hasScheduledSplit =
+    games.length === 1 &&
+    primary.status.state === 'scheduled' &&
+    (primary.probablePitcher?.hand === 'R' || primary.probablePitcher?.hand === 'L');
+  const expandable = games.length > 1 || hasAnyPa || hasScheduledSplit;
+
+  const head = (
+    <>
+      {/* Lineup slot rides the headshot corner (as in the nav): batting number
+          for a starter — kept even after they bat, to show where they hit — or
+          a red "!" when out of the lineup before first pitch. Only for a lone
+          game; a doubleheader's per-game bars carry their own lineup tags. */}
+      <Headshot
+        id={report.id}
+        name={report.name}
+        onOpen={() => onOpenDetails(report.id)}
+        corner={games.length === 1 ? lineupCorner(primary) : null}
+        role={role}
+      />
+      <div className="player-id">
+        <PlayerName name={report.name} position={position} status={report.rosterStatus} />
+        <span className="player-meta">
+          {report.seasonStats
+            ? seasonStatsSummary(report.seasonStats)
+            : games.length > 1
+              ? `${primary.batterTeam} · ${games.length} games`
+              : `${primary.batterTeam} ${primary.isHome ? 'vs' : '@'} ${primary.opponent}`}
+        </span>
+      </div>
+      <div className="player-summary">
+        {/* Live role (at bat / on deck / on base) leads the summary when active. */}
+        <LiveRoleTag role={role} />
+        {/* The doubleheader flag can't say which day it was, so on a collapsed
+            card it only makes sense for a single-day range; when expanded, the
+            game blocks below show the two same-day games regardless. */}
+        {(!collapsed || singleDay) && <DoubleheaderTag games={games} />}
+        {hasAnyPa && <span className="summary-line">{summary}</span>}
+        {games.length === 1 && <ProbablePitcher game={primary} />}
+        {/* A not-yet-started game has no score badge to reveal the teams, so
+            the badge also carries the opponent and home/away (withMatchup). */}
+        {games.length === 1 && <GameStatusBadge game={primary} withMatchup />}
+      </div>
+    </>
+  );
 
   return (
     <div
       ref={cardRef}
-      className={`player-card${collapsed ? ' collapsed' : ''}`}
+      className={`player-card${expandable && collapsed ? ' collapsed' : ''}`}
       id={`player-${report.id}`}
     >
-      {/* The whole header toggles collapse; inner link/buttons stop propagation. */}
-      <div
-        className="player-head player-head-toggle"
-        role="button"
-        tabIndex={0}
-        aria-expanded={!collapsed}
-        title={collapsed ? 'Expand' : 'Collapse'}
-        onClick={onToggleCollapsed}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            onToggleCollapsed();
-          }
-        }}
-      >
-        {/* Lineup slot rides the headshot corner (as in the nav): batting number
-            for a starter — kept even after they bat, to show where they hit — or
-            a red "!" when out of the lineup before first pitch. Only for a lone
-            game; a doubleheader's per-game bars carry their own lineup tags. */}
-        <Headshot
-          id={report.id}
-          name={report.name}
-          onOpen={() => onOpenDetails(report.id)}
-          corner={games.length === 1 ? lineupCorner(primary) : null}
-          role={role}
-        />
-        <div className="player-id">
-          <PlayerName name={report.name} position={position} status={report.rosterStatus} />
-          <span className="player-meta">
-            {report.seasonStats
-              ? seasonStatsSummary(report.seasonStats)
-              : games.length > 1
-                ? `${primary.batterTeam} · ${games.length} games`
-                : `${primary.batterTeam} ${primary.isHome ? 'vs' : '@'} ${primary.opponent}`}
-          </span>
+      {expandable ? (
+        // The whole header toggles collapse; inner link/buttons stop propagation.
+        <div
+          className="player-head player-head-toggle"
+          role="button"
+          tabIndex={0}
+          aria-expanded={!collapsed}
+          title={collapsed ? 'Expand' : 'Collapse'}
+          onClick={onToggleCollapsed}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onToggleCollapsed();
+            }
+          }}
+        >
+          {head}
         </div>
-        <div className="player-summary">
-          {/* Live role (at bat / on deck / on base) leads the summary when active. */}
-          <LiveRoleTag role={role} />
-          {/* The doubleheader flag can't say which day it was, so on a collapsed
-              card it only makes sense for a single-day range; when expanded, the
-              game blocks below show the two same-day games regardless. */}
-          {(!collapsed || singleDay) && <DoubleheaderTag games={games} />}
-          {hasAnyPa && <span className="summary-line">{summary}</span>}
-          {games.length === 1 && <ProbablePitcher game={primary} />}
-          {/* A not-yet-started game has no score badge to reveal the teams, so
-              the badge also carries the opponent and home/away (withMatchup). */}
-          {games.length === 1 && <GameStatusBadge game={primary} withMatchup />}
-        </div>
-      </div>
+      ) : (
+        // Nothing to reveal (e.g. a live game the player hasn't batted in yet):
+        // a plain, non-interactive header.
+        <div className="player-head">{head}</div>
+      )}
 
-      {!collapsed && (
+      {expandable && !collapsed && (
         <>
           {/* A lone not-yet-started game has no game block of its own (its matchup
               lives in the header), so its platoon split vs the starter's hand
