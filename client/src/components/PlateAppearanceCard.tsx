@@ -132,8 +132,20 @@ export function PlateAppearanceCard({
   const swingSpeed = finalSwingBatSpeed(pa);
   const isTop = pa.half === 'Top';
 
+  // On expand, bring this at-bat to the top of the screen (below the sticky
+  // nav, via scroll-margin-top) so its detail isn't left off-screen below the
+  // fold. Only on the closed→open transition, not on close or re-render.
+  const cardRef = useRef<HTMLDivElement>(null);
+  const wasOpen = useRef(open);
+  useEffect(() => {
+    if (open && !wasOpen.current) {
+      cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    wasOpen.current = open;
+  }, [open]);
+
   return (
-    <div className={`pa-card kind-${kind}${open ? ' expanded' : ''}`}>
+    <div ref={cardRef} className={`pa-card kind-${kind}${open ? ' expanded' : ''}`}>
       <button
         type="button"
         className="pa-summary-row"

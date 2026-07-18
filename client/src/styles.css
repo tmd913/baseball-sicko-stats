@@ -1441,6 +1441,9 @@ body {
   border-radius: 12px;
   padding: 13px 14px;
   container-type: inline-size;
+  /* When expanding scrolls this at-bat to the top, clear the sticky nav strip
+     (same measured offset the player cards use). */
+  scroll-margin-top: var(--nav-offset, 92px);
 }
 .pa-card.kind-hr {
   border-left-color: var(--hr);
