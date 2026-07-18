@@ -15,6 +15,7 @@ import {
   headshotUrl,
   lineupCorner,
   liveRole,
+  mostRecentGameFirst,
 } from './lib';
 
 // Breathing room between the sticky nav strip and a card scrolled up beneath it.
@@ -34,7 +35,7 @@ function navGame(report: PlayerReport): PlayerGame | null {
   return (
     games.find((g) => g.status.state === 'live') ??
     games.find((g) => g.status.state === 'scheduled') ??
-    [...games].sort((a, b) => b.date.localeCompare(a.date) || b.gamePk - a.gamePk)[0]
+    [...games].sort(mostRecentGameFirst)[0]
   );
 }
 

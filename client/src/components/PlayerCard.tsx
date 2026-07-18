@@ -14,6 +14,7 @@ import {
   lineSummary,
   liveRole,
   liveRoleLabel,
+  mostRecentGameFirst,
   prettyGameDate,
   rosterStatusBadge,
   seasonStatsSummary,
@@ -400,9 +401,7 @@ export function PlayerCard({
     const meta = report.seasonStats ? seasonStatsSummary(report.seasonStats) : null;
     // Any games here are ones the player was rostered for but didn't bat in —
     // show their final score(s) so the card still carries the game info.
-    const dnpGames = [...report.games].sort(
-      (a, b) => b.date.localeCompare(a.date) || b.gamePk - a.gamePk,
-    );
+    const dnpGames = [...report.games].sort(mostRecentGameFirst);
     return (
       <div className="player-card empty" id={`player-${report.id}`}>
         <div className="player-head">
@@ -424,9 +423,7 @@ export function PlayerCard({
   }
 
   // Combine lines across games (usually one). Show most recent games first.
-  const games = [...report.games].sort(
-    (a, b) => b.date.localeCompare(a.date) || b.gamePk - a.gamePk,
-  );
+  const games = [...report.games].sort(mostRecentGameFirst);
   const combined = combineLines(games.map((g) => g.line));
 
   const primary = games[0];

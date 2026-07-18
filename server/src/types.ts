@@ -108,6 +108,10 @@ export interface ProbablePitcher {
 
 export interface PlayerGame {
   gamePk: number;
+  // 1 for a single game; 1 or 2 for the halves of a doubleheader. Games are
+  // ordered by this (then gamePk), since gamePk isn't reliably ordered by game
+  // number. Null for older cached games from before this was captured.
+  gameNumber: number | null;
   date: string;
   homeTeam: string;
   awayTeam: string;

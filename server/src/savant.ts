@@ -59,6 +59,7 @@ const int = (v: string | undefined): number | null => {
  * scheduled/in-progress game they haven't batted in yet. */
 interface DayGame {
   gamePk: number;
+  gameNumber: number | null;
   date: string;
   homeTeam: string;
   awayTeam: string;
@@ -95,6 +96,21 @@ interface ParsedDay {
   reports: Map<number, PlayerReport>; // by batter id
   games: DayGame[];
   fetchedAt: number;
+}
+
+/**
+ * Chronological order for a player's games: by date, then game number within a
+ * day (doubleheaders), with gamePk as a last-resort tiebreak. gamePk is NOT a
+ * reliable proxy for game order — a doubleheader's game 2 can carry a lower
+ * gamePk than game 1 — so gameNumber leads. Falls back to gamePk only for older
+ * cached games predating gameNumber (null).
+ */
+function byGameOrder(
+  a: { date: string; gameNumber: number | null; gamePk: number },
+  b: { date: string; gameNumber: number | null; gamePk: number },
+): number {
+  if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+  return (a.gameNumber ?? 0) - (b.gameNumber ?? 0) || a.gamePk - b.gamePk;
 }
 
 const memCache = new Map<string, ParsedDay>();
@@ -336,6 +352,7 @@ async function buildStatsApiDay(date: string): Promise<{
     if (!g) continue;
     dayGames.push({
       gamePk: g.gamePk,
+      gameNumber: g.gameNumber,
       date,
       homeTeam: g.homeTeam,
       awayTeam: g.awayTeam,
@@ -399,6 +416,7 @@ async function buildStatsApiDay(date: string): Promise<{
 
       const playerGame: PlayerGame = {
         gamePk: g.gamePk,
+        gameNumber: g.gameNumber,
         date,
         homeTeam: g.homeTeam,
         awayTeam: g.awayTeam,
@@ -496,7 +514,7 @@ export async function getDay(date: string): Promise<ParsedDay> {
       g.line.runValue = hasRunExp ? Math.round(runExp * 100) / 100 : null;
     }
 
-    b.games.sort((a, c) => a.gamePk - c.gamePk);
+    b.games.sort(byGameOrder);
     const savantName = toSavantName(b.name);
     reports.set(batterId, {
       id: batterId,
@@ -549,6 +567,7 @@ function findPlayerDay(day: ParsedDay, p: WatchPlayer): PlayerReport | undefined
 function rosterGame(dg: DayGame, isHome: boolean, playerId: number): PlayerGame {
   return {
     gamePk: dg.gamePk,
+    gameNumber: dg.gameNumber,
     date: dg.date,
     homeTeam: dg.homeTeam,
     awayTeam: dg.awayTeam,
@@ -616,7 +635,7 @@ export async function getReport(
         games.push(rosterGame(dg, isHome, p.id));
       }
     }
-    games.sort((a, b) => (a.date === b.date ? a.gamePk - b.gamePk : a.date < b.date ? -1 : 1));
+    games.sort(byGameOrder);
     const st = playerStats.get(p.id);
     return {
       ...p,

@@ -259,6 +259,21 @@ export function hasPlayed(report: PlayerReport): boolean {
   return report.games.some((g) => g.plateAppearances.length > 0);
 }
 
+/**
+ * Sort comparator putting a player's most recent game first: by date, then game
+ * number within a day (so a doubleheader's game 2 leads game 1), with gamePk as
+ * a last-resort tiebreak. gamePk alone is NOT reliable — a doubleheader's game 2
+ * can carry a lower gamePk than game 1 — so gameNumber decides. gameNumber is
+ * null only for older cached games, where it falls back to gamePk.
+ */
+export function mostRecentGameFirst(a: PlayerGame, b: PlayerGame): number {
+  return (
+    b.date.localeCompare(a.date) ||
+    (b.gameNumber ?? 0) - (a.gameNumber ?? 0) ||
+    b.gamePk - a.gamePk
+  );
+}
+
 /** An integer as an English ordinal: 1 -> "1st", 2 -> "2nd", 3 -> "3rd", 4 -> "4th". */
 export function ordinal(n: number): string {
   const rem100 = n % 100;

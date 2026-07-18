@@ -358,6 +358,9 @@ const FEED_FIELDS = [
   'abstractGameState',
   'codedGameState',
   'detailedState',
+  // gameData.game.gameNumber — needed to order a day's games (doubleheaders).
+  'game',
+  'gameNumber',
   'datetime',
   'dateTime',
   'teams',
@@ -489,6 +492,10 @@ interface LiveFeed {
   metaData?: { timeStamp?: string };
   gameData?: {
     status?: { abstractGameState?: string; codedGameState?: string; detailedState?: string };
+    // gameNumber is 1 for a single game, 1/2 for the two halves of a
+    // doubleheader — the only reliable way to order a day's games, since gamePk
+    // is NOT monotonic with game order (a DH's game 2 can have a lower gamePk).
+    game?: { gameNumber?: number };
     teams?: {
       home?: { abbreviation?: string; id?: number };
       away?: { abbreviation?: string; id?: number };
@@ -775,6 +782,9 @@ export interface StatsApiBatterGame {
 
 export interface StatsApiGame {
   gamePk: number;
+  // 1 for a single game; 1 or 2 for the halves of a doubleheader. Used to order
+  // a day's games, since gamePk isn't reliably ordered by game number.
+  gameNumber: number | null;
   homeTeam: string;
   awayTeam: string;
   homeTeamId: number | null;
@@ -969,6 +979,7 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
     liveState.delete(gamePk);
   }
 
+  const gameNumber = feed.gameData?.game?.gameNumber ?? null;
   const homeTeam = feed.gameData?.teams?.home?.abbreviation ?? '';
   const awayTeam = feed.gameData?.teams?.away?.abbreviation ?? '';
   const homeTeamId = feed.gameData?.teams?.home?.id ?? null;
@@ -1086,6 +1097,7 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
 
   const game: StatsApiGame = {
     gamePk,
+    gameNumber,
     homeTeam,
     awayTeam,
     homeTeamId,
