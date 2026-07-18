@@ -11,10 +11,13 @@ import {
   lineupBadge,
   lineupCorner,
   lineSummary,
+  liveRole,
+  liveRoleLabel,
   prettyGameDate,
   rosterStatusBadge,
   seasonStatsSummary,
 } from '../lib';
+import type { LiveRole } from '../lib';
 import { BaseDiamond } from './BaseDiamond';
 import { PlateAppearanceCard } from './PlateAppearanceCard';
 
@@ -286,17 +289,19 @@ function Headshot({
   name,
   onOpen,
   corner,
+  role,
 }: {
   id: number;
   name: string;
   onOpen: () => void;
   corner?: { text: string; title: string; tone: 'in' | 'out' } | null;
+  role?: LiveRole | null;
 }) {
   const [failed, setFailed] = useState(false);
   return (
     <button
       type="button"
-      className="player-photo-link"
+      className={`player-photo-link${role ? ` role-${role}` : ''}`}
       title={`${name} — Statcast details`}
       aria-label={`${name} — Statcast details`}
       onClick={(e) => {
@@ -337,6 +342,12 @@ function RosterStatusTag({ status }: { status: RosterStatus | null }) {
       {badge.label}
     </span>
   );
+}
+
+/** Live-game role tag — "At bat" / "On deck" / "On base" — matching the nav. */
+function LiveRoleTag({ role }: { role: LiveRole | null }) {
+  if (!role) return null;
+  return <span className={`live-role role-${role}`}>{liveRoleLabel(role)}</span>;
 }
 
 /** Flags a two-games-in-a-day slate so a collapsed card still signals it. */
@@ -418,6 +429,9 @@ export function PlayerCard({
 
   const primary = games[0];
   const summary = lineSummary(combined);
+  // Live at-bat/on-deck/on-base state (across the player's live games), shown as
+  // a ring on the headshot and a tag in the header, as in the nav.
+  const role = liveRole(report);
   const spansMultipleDays = new Set(games.map((g) => g.date)).size > 1;
   // A player may be in view only for an upcoming/just-started game with no plate
   // appearances yet — then the batting line is all zeros and not worth showing.
@@ -452,6 +466,7 @@ export function PlayerCard({
           name={report.name}
           onOpen={() => onOpenDetails(report.id)}
           corner={games.length === 1 ? lineupCorner(primary) : null}
+          role={role}
         />
         <div className="player-id">
           <PlayerName name={report.name} position={position} status={report.rosterStatus} />
@@ -464,6 +479,8 @@ export function PlayerCard({
           </span>
         </div>
         <div className="player-summary">
+          {/* Live role (at bat / on deck / on base) leads the summary when active. */}
+          <LiveRoleTag role={role} />
           {/* The doubleheader flag can't say which day it was, so on a collapsed
               card it only makes sense for a single-day range; when expanded, the
               game blocks below show the two same-day games regardless. */}

@@ -1031,6 +1031,21 @@ body {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+/* Live-role ring on the headshot, matching the nav avatar (red at bat, amber on
+   deck, purple on base). The hover rule above still recolours the border; the
+   box-shadow keeps the role ring visible through it. */
+.player-photo-link.role-at-bat .player-photo {
+  border-color: var(--strikeout);
+  box-shadow: 0 0 0 2px var(--strikeout);
+}
+.player-photo-link.role-on-deck .player-photo {
+  border-color: var(--hr);
+  box-shadow: 0 0 0 2px var(--hr);
+}
+.player-photo-link.role-on-base .player-photo {
+  border-color: #c084fc;
+  box-shadow: 0 0 0 2px #c084fc;
+}
 .player-id {
   display: flex;
   flex-direction: column;
@@ -1109,6 +1124,29 @@ body {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--text);
+}
+/* Live-role tag in the header summary, matching the nav's role pill. */
+.live-role {
+  flex: none;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.live-role.role-at-bat {
+  color: var(--strikeout);
+  background: rgba(248, 113, 113, 0.15);
+}
+.live-role.role-on-deck {
+  color: var(--hr);
+  background: rgba(251, 191, 36, 0.15);
+}
+.live-role.role-on-base {
+  color: #c084fc;
+  background: rgba(192, 132, 252, 0.15);
 }
 
 /* ---- Game status chip (start time / live score+inning / final) ---- */
