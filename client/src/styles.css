@@ -1360,6 +1360,8 @@ body {
 /* ---- Game block / PA grid ---- */
 .game-block {
   margin-top: 14px;
+  /* When expanding a game scrolls it to the top, clear the sticky nav strip. */
+  scroll-margin-top: var(--nav-offset, 92px);
 }
 /* The multi-game bar mirrors the card's own header (player-head): an identity
    block (matchup + date) on the left, a summary (line + game badge) on the

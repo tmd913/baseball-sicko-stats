@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PlateAppearance } from '../types';
 import { api } from '../api';
+import { useScrollIntoViewOnExpand } from '../hooks';
 import {
   contactHighlight,
   describePitch,
@@ -134,17 +135,9 @@ export function PlateAppearanceCard({
   const swingSpeed = finalSwingBatSpeed(pa);
   const isTop = pa.half === 'Top';
 
-  // On expand, bring this at-bat to the top of the screen (below the sticky
-  // nav, via scroll-margin-top) so its detail isn't left off-screen below the
-  // fold. Only on the closed→open transition, not on close or re-render.
-  const cardRef = useRef<HTMLDivElement>(null);
-  const wasOpen = useRef(open);
-  useEffect(() => {
-    if (open && !wasOpen.current) {
-      cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-    wasOpen.current = open;
-  }, [open]);
+  // On expand, bring this at-bat to the top of the screen so its detail isn't
+  // left off-screen below the fold.
+  const cardRef = useScrollIntoViewOnExpand<HTMLDivElement>(open);
 
   return (
     <div ref={cardRef} className={`pa-card kind-${kind}${open ? ' expanded' : ''}`}>

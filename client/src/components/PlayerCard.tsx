@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { PlayerGame, PlayerReport, RosterStatus } from '../types';
+import { useScrollIntoViewOnExpand } from '../hooks';
 import {
   absenceLabel,
   combineLines,
@@ -148,6 +149,8 @@ function GameBlock({
   const hasPas = pas.length > 0;
   // Multiple games (showMatchup) start collapsed; a lone game stays open.
   const [collapsed, setCollapsed] = useState(showMatchup);
+  // Expanding a game brings it to the top of the screen, like the card and PAs.
+  const blockRef = useScrollIntoViewOnExpand<HTMLDivElement>(!collapsed);
   // PAs start collapsed; clicking an individual row opens it.
   const [openIds, setOpenIds] = useState<Set<number>>(() => new Set());
   const togglePa = (id: number) =>
@@ -192,13 +195,13 @@ function GameBlock({
     );
     if (!expandable) {
       return (
-        <div className="game-block">
+        <div ref={blockRef} className="game-block">
           <div className="game-sub-bar static">{barContent}</div>
         </div>
       );
     }
     return (
-      <div className="game-block">
+      <div ref={blockRef} className="game-block">
         <div
           className="game-sub-bar"
           role="button"
@@ -227,7 +230,7 @@ function GameBlock({
   const hideBar = singleDay && !showMatchup;
 
   return (
-    <div className="game-block">
+    <div ref={blockRef} className="game-block">
       {!hideBar && (
         <div
           className="game-sub-bar"
@@ -393,6 +396,10 @@ export function PlayerCard({
   onToggleCollapsed: () => void;
   onOpenDetails: (id: number) => void;
 }) {
+  // Expanding the card scrolls it to the top of the screen. (Empty/no-appearance
+  // cards below don't collapse, so their ref stays unused.)
+  const cardRef = useScrollIntoViewOnExpand<HTMLDivElement>(!collapsed);
+
   if (didNotAppear(report)) {
     const meta = report.seasonStats ? seasonStatsSummary(report.seasonStats) : null;
     // Any games here are ones the player was rostered for but didn't bat in —
@@ -438,6 +445,7 @@ export function PlayerCard({
 
   return (
     <div
+      ref={cardRef}
       className={`player-card${collapsed ? ' collapsed' : ''}`}
       id={`player-${report.id}`}
     >
