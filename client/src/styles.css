@@ -673,11 +673,12 @@ body {
   height: 17px;
   font-size: 10px;
 }
-/* On the card headshot's corner — larger photo, so a larger pip. */
+/* On the card headshot's corner — larger photo, so a larger pip. Pushed out
+   toward the corner so it clears the player's face rather than sitting on it. */
 .player-photo-spot {
   position: absolute;
-  top: -2px;
-  right: -2px;
+  top: -6px;
+  right: -6px;
   width: 22px;
   height: 22px;
   font-size: 13px;
