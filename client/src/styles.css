@@ -643,11 +643,12 @@ body {
   right: -4px;
   box-sizing: border-box;
   /* Fixed square → identical circle for a single digit or the "!"; batting
-     spots are always 1–9, so it never needs to grow. padding-top nudges the
-     top-heavy glyph (digit/"!") down off the baseline so it reads centered. */
+     spots are always 1–9, so it never needs to grow. The half-pixel padding-top
+     nudges the top-heavy glyph (digit/"!") down off the font baseline so it
+     reads optically centered (a full 1px overshoots and sits low). */
   width: 17px;
   height: 17px;
-  padding-top: 1px;
+  padding-top: 0.5px;
   display: flex;
   align-items: center;
   justify-content: center;
