@@ -1639,8 +1639,9 @@ body {
 }
 .pa-video {
   margin-top: 10px;
-  /* Leave a gap below when scrolled into view so it isn't flush to the edge. */
-  scroll-margin-bottom: 24px;
+  /* When the clip scrolls to the top on play, clear the sticky nav strip (same
+     measured offset the cards and at-bats use). */
+  scroll-margin-top: var(--nav-offset, 92px);
 }
 .pa-video-bar {
   display: flex;

@@ -20,11 +20,13 @@ function VideoClip({ playId, gamePk }: { playId: string; gamePk: number }) {
   const [url, setUrl] = useState<string | null>(null);
   const videoRef = useRef<HTMLDivElement>(null);
 
-  // When playback starts, pull the clip into view if it opened off-screen
-  // (block: 'nearest' is a no-op when it's already visible).
+  // When playback starts, bring the clip to the top of the screen (below the
+  // sticky nav, via scroll-margin-top) so the whole player is in view — 'start'
+  // rather than 'nearest' because the at-bat is often already scrolled to the
+  // top when the clip opens, which left 'nearest' under-scrolling it.
   useEffect(() => {
     if (state === 'watching') {
-      videoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      videoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, [state]);
 
