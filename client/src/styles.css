@@ -657,11 +657,14 @@ body {
   line-height: 1;
   border: 1.5px solid var(--panel);
 }
-.player-nav-spot.lineup-tag-in {
+/* Own modifier classes (not the shared .lineup-tag-* used by the player card,
+   whose later border-color rules would otherwise override this badge's border
+   and leave the two tones looking different sizes). */
+.player-nav-spot.spot-in {
   color: var(--bg);
   background: var(--hit);
 }
-.player-nav-spot.lineup-tag-out {
+.player-nav-spot.spot-out {
   color: #fff;
   background: var(--strikeout);
 }
