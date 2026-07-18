@@ -635,39 +635,52 @@ body {
   flex: none;
   display: inline-flex;
 }
-/* Lineup spot on the avatar corner: batting-order number (green) or a red "!"
-   bubble when the player is out of the lineup. */
-.player-nav-spot {
-  position: absolute;
-  top: -4px;
-  right: -4px;
+/* Lineup-position pip: batting-order number (green) or a red "!" when the
+   player is out of the lineup. A fixed square → an identical circle for any
+   single digit or the "!" (batting spots are always 1–9, so it never grows).
+   Shared by the nav avatar and the card headshot so the two read identically;
+   each caller adds its own position and size below. Its own tone classes
+   (spot-in/out) — NOT the .lineup-tag-* the card's text pill uses, whose later
+   border-color rules would otherwise override this border and make the two
+   tones look different sizes. */
+.lineup-spot {
   box-sizing: border-box;
-  /* Fixed square → identical circle for a single digit or the "!"; batting
-     spots are always 1–9, so it never needs to grow. The half-pixel padding-top
-     nudges the top-heavy glyph (digit/"!") down off the font baseline so it
-     reads optically centered (a full 1px overshoots and sits low). */
-  width: 17px;
-  height: 17px;
-  padding-top: 0.5px;
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Nudge the top-heavy glyph down off the font baseline so it reads optically
+     centered; em-based so it scales with the pip's font-size. */
+  padding-top: 0.05em;
   border-radius: 50%;
-  font-size: 10px;
   font-weight: 700;
   line-height: 1;
   border: 1.5px solid var(--panel);
 }
-/* Own modifier classes (not the shared .lineup-tag-* used by the player card,
-   whose later border-color rules would otherwise override this badge's border
-   and leave the two tones looking different sizes). */
-.player-nav-spot.spot-in {
+.lineup-spot.spot-in {
   color: var(--bg);
   background: var(--hit);
 }
-.player-nav-spot.spot-out {
+.lineup-spot.spot-out {
   color: #fff;
   background: var(--strikeout);
+}
+/* On the nav avatar's corner. */
+.player-nav-spot {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 17px;
+  height: 17px;
+  font-size: 10px;
+}
+/* On the card headshot's corner — larger photo, so a larger pip. */
+.player-photo-spot {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 22px;
+  height: 22px;
+  font-size: 13px;
 }
 /* The headshot leads every item; it's all that remains once the strip collapses. */
 .player-nav-photo {
@@ -998,6 +1011,7 @@ body {
 }
 /* The headshot is the link to the player's Baseball Savant page. */
 .player-photo-link {
+  position: relative;
   display: block;
   flex-shrink: 0;
   line-height: 0;

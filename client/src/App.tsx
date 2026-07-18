@@ -76,7 +76,7 @@ function NavPhoto({
       )}
       {corner && (
         <span
-          className={`player-nav-spot spot-${corner.tone}`}
+          className={`lineup-spot player-nav-spot spot-${corner.tone}`}
           title={corner.title}
           aria-label={corner.tone === 'out' ? 'Not in lineup' : `Batting ${corner.text}`}
         >

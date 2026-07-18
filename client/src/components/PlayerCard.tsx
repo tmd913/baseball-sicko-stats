@@ -9,6 +9,7 @@ import {
   hasDoubleheader,
   headshotUrl,
   lineupBadge,
+  lineupCorner,
   lineSummary,
   prettyGameDate,
   rosterStatusBadge,
@@ -277,9 +278,20 @@ function GameBlock({
  * Player headshot, opening the player's details view (percentile rankings) on
  * click. Falls back to a blank circle when MLB has no image for the id.
  * stopPropagation keeps a click from also toggling the (collapsible) card header
- * it sits in.
+ * it sits in. `corner` pins the lineup-spot pip (batting number, or a red "!"
+ * when out of the lineup) to the top-right, matching the player-nav avatar.
  */
-function Headshot({ id, name, onOpen }: { id: number; name: string; onOpen: () => void }) {
+function Headshot({
+  id,
+  name,
+  onOpen,
+  corner,
+}: {
+  id: number;
+  name: string;
+  onOpen: () => void;
+  corner?: { text: string; title: string; tone: 'in' | 'out' } | null;
+}) {
   const [failed, setFailed] = useState(false);
   return (
     <button
@@ -302,6 +314,15 @@ function Headshot({ id, name, onOpen }: { id: number; name: string; onOpen: () =
           loading="lazy"
           onError={() => setFailed(true)}
         />
+      )}
+      {corner && (
+        <span
+          className={`lineup-spot player-photo-spot spot-${corner.tone}`}
+          title={corner.title}
+          aria-label={corner.tone === 'out' ? 'Not in lineup' : `Batting ${corner.text}`}
+        >
+          {corner.text}
+        </span>
       )}
     </button>
   );
@@ -422,7 +443,16 @@ export function PlayerCard({
           }
         }}
       >
-        <Headshot id={report.id} name={report.name} onOpen={() => onOpenDetails(report.id)} />
+        {/* Lineup slot rides the headshot corner (as in the nav): batting number
+            for a starter — kept even after they bat, to show where they hit — or
+            a red "!" when out of the lineup before first pitch. Only for a lone
+            game; a doubleheader's per-game bars carry their own lineup tags. */}
+        <Headshot
+          id={report.id}
+          name={report.name}
+          onOpen={() => onOpenDetails(report.id)}
+          corner={games.length === 1 ? lineupCorner(primary) : null}
+        />
         <div className="player-id">
           <PlayerName name={report.name} position={position} status={report.rosterStatus} />
           <span className="player-meta">
@@ -438,9 +468,6 @@ export function PlayerCard({
               card it only makes sense for a single-day range; when expanded, the
               game blocks below show the two same-day games regardless. */}
           {(!collapsed || singleDay) && <DoubleheaderTag games={games} />}
-          {/* Lineup slot: "Batting Nth" for a starter (kept even after they bat,
-              to show where they hit), or "Not in lineup" before first pitch. */}
-          {games.length === 1 && <LineupTag game={primary} played={hasAnyPa} />}
           {hasAnyPa && <span className="summary-line">{summary}</span>}
           {games.length === 1 && <ProbablePitcher game={primary} />}
           {/* A not-yet-started game has no score badge to reveal the teams, so
