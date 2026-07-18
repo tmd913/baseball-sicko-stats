@@ -15,7 +15,6 @@ import {
   headshotUrl,
   lineupCorner,
   liveRole,
-  liveRoleLabel,
 } from './lib';
 
 // Breathing room between the sticky nav strip and a card scrolled up beneath it.
@@ -658,9 +657,9 @@ export default function App() {
                     <div className="player-nav-body">
                       <div className="player-nav-top">
                         <span className="player-nav-name">{r.name}</span>
-                        {role ? (
-                          <span className="player-nav-role">{liveRoleLabel(role)}</span>
-                        ) : null}
+                        {/* Live role shows only as the avatar ring + name colour
+                            here (via the role-* class on the link); the text tag
+                            ("At bat"/…) lives on the player card, not the nav. */}
                       </div>
                       {game && !didNotAppear(r) ? (
                         <NavGameStatus game={game} />

@@ -840,17 +840,9 @@ body {
   white-space: nowrap;
 }
 
-/* Live-situation highlight: at bat (red), on deck (yellow), on base (purple). */
-.player-nav-role {
-  flex: none;
-  font-size: 10px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 1px 6px;
-  border-radius: 999px;
-  white-space: nowrap;
-}
+/* Live-situation highlight on the nav name — at bat (red), on deck (yellow), on
+   base (purple). The role also rings the avatar; the spelled-out tag lives on
+   the player card, not the nav. */
 .player-nav-link.role-at-bat .player-nav-name {
   color: var(--strikeout);
   font-weight: 700;
@@ -862,18 +854,6 @@ body {
 .player-nav-link.role-on-base .player-nav-name {
   color: #c084fc;
   font-weight: 700;
-}
-.role-at-bat .player-nav-role {
-  color: var(--strikeout);
-  background: rgba(248, 113, 113, 0.15);
-}
-.role-on-deck .player-nav-role {
-  color: var(--hr);
-  background: rgba(251, 191, 36, 0.15);
-}
-.role-on-base .player-nav-role {
-  color: #c084fc;
-  background: rgba(192, 132, 252, 0.15);
 }
 
 /* ---- Player list ---- */
