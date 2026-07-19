@@ -74,7 +74,7 @@ function LineupTag({ game, played }: { game: PlayerGame; played?: boolean }) {
 }
 
 /** The opposing probable starter for a not-yet-started game. */
-function ProbablePitcher({ game }: { game: PlayerGame }) {
+export function ProbablePitcher({ game }: { game: PlayerGame }) {
   const p = game.probablePitcher;
   if (game.status.state !== 'scheduled' || !p) return null;
   return (
@@ -88,7 +88,7 @@ function ProbablePitcher({ game }: { game: PlayerGame }) {
  * For a not-yet-started game, the batter's season line against pitchers of the
  * probable starter's hand (e.g. their vs-RHP split when facing a righty).
  */
-function PlatoonSplit({ report, game }: { report: PlayerReport; game: PlayerGame }) {
+export function PlatoonSplit({ report, game }: { report: PlayerReport; game: PlayerGame }) {
   const hand = game.probablePitcher?.hand;
   if (game.status.state !== 'scheduled' || (hand !== 'R' && hand !== 'L')) return null;
   const split = hand === 'R' ? report.splitVsRight : report.splitVsLeft;

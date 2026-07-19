@@ -58,23 +58,45 @@ body {
 .brand {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 11px;
 }
+/* A small tilted baseball on a vibrant tile — gives it back a full spin on hover. */
 .brand-mark {
-  font-size: 24px;
-  width: 42px;
-  height: 42px;
+  font-size: 19px;
+  width: 34px;
+  height: 34px;
   display: grid;
   place-items: center;
-  background: linear-gradient(145deg, var(--panel-2), var(--panel));
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: var(--shadow);
+  background: linear-gradient(135deg, var(--accent), #a855f7);
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--border));
+  border-radius: 11px;
+  box-shadow: 0 4px 14px rgba(56, 189, 248, 0.3);
+  transform: rotate(-8deg);
+  transition: transform 0.3s ease;
+}
+.brand:hover .brand-mark {
+  transform: rotate(352deg);
 }
 .app-header h1 {
   margin: 0;
-  font-size: 19px;
+  font-size: 18px;
   letter-spacing: -0.02em;
+}
+/* The playful word gets a cyan→amber gradient, italicized for a bit of motion. */
+.brand-sicko {
+  font-style: italic;
+  font-weight: 900;
+  background: linear-gradient(90deg, var(--accent-2), var(--hr));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+@media (prefers-reduced-motion: reduce) {
+  .brand-mark,
+  .brand:hover .brand-mark {
+    transition: none;
+    transform: rotate(-8deg);
+  }
 }
 .date-control {
   display: flex;
@@ -308,7 +330,9 @@ body {
   border: 1px solid var(--border);
   color: var(--text);
   border-radius: 12px;
-  padding: 13px 40px 13px 16px;
+  /* Slim field: minimal internal padding, with just enough room on the right for
+     the clear (✕) button that appears while typing. */
+  padding: 7px 34px 7px 12px;
   font-size: 15px;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
@@ -619,15 +643,20 @@ body {
   text-decoration: none;
   font-size: 14px;
   line-height: 1.3;
-  transition: background 0.12s ease;
+  /* padding eases so items shrink smoothly as the strip collapses on scroll. */
+  transition: background 0.12s ease, padding 0.2s ease;
 }
-/* Name over game line; capped so one long row can't dominate the strip. */
+/* Name over game line; capped so one long row can't dominate the strip. The
+   body fades out as the strip collapses (its display flips to none only once the
+   fade finishes — see the is-stuck rule — so the item's gap collapses cleanly). */
 .player-nav-body {
   min-width: 0;
   max-width: 150px;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  opacity: 1;
+  transition: opacity 0.16s ease;
 }
 /* Wraps the headshot so the lineup-spot badge can pin to its top-right corner. */
 .player-nav-avatar {
@@ -696,6 +725,8 @@ body {
   object-position: top center;
   background: var(--panel-2);
   border: 1px solid var(--border);
+  /* Eases between the expanded (40px) and collapsed (34px) avatar. */
+  transition: width 0.2s ease, height 0.2s ease;
 }
 .player-nav-photo-empty {
   font-size: 12px;
@@ -730,9 +761,25 @@ body {
   border-color: #c084fc;
   box-shadow: 0 0 0 1px #c084fc;
 }
-/* Stuck (scrolled) strip: collapse each item down to just its avatar. */
+/* Stuck (scrolled) strip: collapse each item down to just its avatar. The body
+   fades first, then display flips to none (allow-discrete) so it leaves layout —
+   collapsing the item's flex gap — only after the fade, not instantly. Browsers
+   without allow-discrete just drop it immediately, as before. */
 .player-nav.is-stuck .player-nav-body {
   display: none;
+  opacity: 0;
+  /* Text fades over 0.16s; the display flip waits the full 0.2s so the body
+     leaves layout in step with the padding/avatar ease — one settle, not two. */
+  transition: opacity 0.16s ease, display 0.2s allow-discrete;
+}
+/* Honor a reduced-motion preference: snap between the two strip states. */
+@media (prefers-reduced-motion: reduce) {
+  .player-nav-link,
+  .player-nav-photo,
+  .player-nav-body,
+  .player-nav.is-stuck .player-nav-body {
+    transition: none;
+  }
 }
 .player-nav.is-stuck .player-nav-link {
   padding: 3px;
@@ -754,11 +801,8 @@ body {
   border-color: var(--strikeout);
   color: var(--bg);
 }
-/* Phones: the strip layout is already the base; just drop the gap above it. */
+/* Phones: the strip layout is already the base (avatars only). */
 @media (max-width: 640px) {
-  .controls {
-    margin-bottom: 0;
-  }
   /* Show the strip as avatars only at every scroll position — the same compact
      treatment as the stuck (collapsed) strip, applied unconditionally so the
      names/scores never crowd the narrow toolbar. */
@@ -1282,16 +1326,20 @@ body {
     grid-area: summary;
     margin-left: 0;
     margin-top: 6px;
-    /* Keep the day's line and the game badge on one row — don't let the badge
-       wrap under the stats or get squeezed. */
-    flex-wrap: nowrap;
+    /* The day's line and game badge share a row when they fit; a wide live badge
+       (score + inning + runners) wraps to its own row rather than crushing the
+       stat line down to a sliver. */
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     column-gap: 10px;
+    row-gap: 6px;
   }
-  /* Allow the stat line to shrink so it and the game badge share the row. */
+  /* The stat line fills the row's free space, with a floor so it stays legible
+     instead of shrinking to a few characters per line when crowded. */
   .summary-line {
-    min-width: 0;
+    flex: 1 1 auto;
+    min-width: 9em;
   }
   .player-summary .game-status {
     flex-shrink: 0;
@@ -2228,12 +2276,59 @@ body {
   }
 }
 
+/* ---- View bar: Players/Feed tabs on the left, the sim toggle on the right ---- */
+.view-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.sim-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  padding: 7px 13px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+}
+.sim-toggle:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.sim-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.sim-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--faint);
+}
+.sim-toggle.active {
+  color: var(--strikeout);
+  border-color: rgba(248, 113, 113, 0.5);
+  background: rgba(248, 113, 113, 0.1);
+}
+.sim-toggle.active .sim-dot {
+  background: var(--strikeout);
+  animation: feed-live-pulse 1.8s ease-out infinite;
+}
+
 /* ---- View switch (Players / Feed) ---- */
 .view-switch {
   display: inline-flex;
   gap: 4px;
   padding: 4px;
-  margin-bottom: 14px;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -2312,30 +2407,33 @@ body {
   }
 }
 
-/* Live section: players currently at bat / on deck / on base. */
+/* Live section: players currently at bat / on deck / on base. Each entry is a
+   feed-item whose header is a role-tinted chip; at-bat / on-base entries carry
+   the batter's current / most recent at-bat card beneath it (on deck has none). */
 .live-rows {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 16px;
 }
-.live-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
+.live-entry .feed-item-head {
+  padding: 10px 12px;
   background: linear-gradient(180deg, var(--panel), var(--bg-2));
   border: 1px solid var(--border);
   border-left-width: 4px;
   border-radius: 12px;
 }
-.live-row.role-at-bat {
+.live-entry.role-at-bat .feed-item-head {
   border-left-color: var(--strikeout);
 }
-.live-row.role-on-deck {
+.live-entry.role-on-deck .feed-item-head {
   border-left-color: var(--hr);
 }
-.live-row.role-on-base {
+.live-entry.role-on-base .feed-item-head {
   border-left-color: #c084fc;
+}
+/* Role tag sits at the right end of the header row. */
+.feed-item-head .live-role {
+  margin-left: auto;
 }
 .live-row-id {
   display: flex;
@@ -2343,8 +2441,78 @@ body {
   gap: 2px;
   min-width: 0;
 }
-.live-row .live-role {
+
+/* Upcoming section: not-yet-started games, earliest first pitch first — each with
+   the batter's platoon split vs the probable starter's hand below the header. */
+.upcoming-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.upcoming-item {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  /* When expanding scrolls this row to the top, clear the sticky nav strip
+     (same measured offset the player and at-bat cards use). */
+  scroll-margin-top: var(--nav-offset, 92px);
+}
+.upcoming-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: linear-gradient(180deg, var(--panel), var(--bg-2));
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-left-color: var(--accent);
+  border-radius: 12px;
+}
+/* Clickable when there's a platoon split to reveal; static otherwise. */
+.upcoming-head:not(.static) {
+  cursor: pointer;
+  transition: border-color 0.14s ease;
+}
+.upcoming-head:not(.static):hover {
+  border-color: var(--accent);
+}
+.upcoming-head:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* Chevron hinting the row expands; rotates to point up when open. */
+.upcoming-caret {
+  flex: none;
+  width: 12px;
+  height: 8px;
+  color: var(--muted);
+  transition: transform 0.16s ease;
+}
+.upcoming-caret.open {
+  transform: rotate(180deg);
+}
+.upcoming-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-left: 4px;
+}
+.upcoming-detail .game-prob-pitcher {
+  font-size: 13px;
+  color: var(--muted);
+}
+.feed-time {
   margin-left: auto;
+  flex: none;
+  font-size: 13px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  padding: 4px 11px;
+  border-radius: 999px;
+  white-space: nowrap;
 }
 
 /* Recent-at-bats section: one row per plate appearance, newest first. */

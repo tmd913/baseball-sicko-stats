@@ -1,13 +1,16 @@
 import { useState } from 'react';
 import type { LiveRole } from '../lib';
 import {
+  formatStartTime,
   headshotUrl,
   liveRoleGame,
   liveRoleLabel,
   mostRecentAtBatFirst,
 } from '../lib';
-import type { PlayerGame, PlayerReport } from '../types';
+import type { PlateAppearance, PlayerGame, PlayerReport } from '../types';
+import { useScrollIntoViewOnExpand } from '../hooks';
 import { PlateAppearanceCard } from './PlateAppearanceCard';
+import { PlatoonSplit, ProbablePitcher } from './PlayerCard';
 
 /** Priority order for the Live section: at bat, then on deck, then on base. */
 const ROLE_ORDER: Record<LiveRole, number> = { 'at-bat': 0, 'on-deck': 1, 'on-base': 2 };
@@ -23,6 +26,32 @@ function liveInning(game: PlayerGame): string {
 /** The matchup line, "NYY vs BOS" / "NYY @ BOS", from the batter's perspective. */
 function matchup(game: PlayerGame): string {
   return `${game.batterTeam} ${game.isHome ? 'vs' : '@'} ${game.opponent}`;
+}
+
+/** The in-progress plate appearance (no final event yet) — the batter's current at-bat. */
+function currentAtBat(game: PlayerGame): PlateAppearance | null {
+  const inProgress = game.plateAppearances.filter((pa) => !pa.event);
+  return inProgress.length ? inProgress[inProgress.length - 1] : null;
+}
+
+/** The batter's most recent completed plate appearance in a game (highest at-bat number). */
+function mostRecentCompleted(game: PlayerGame): PlateAppearance | null {
+  let best: PlateAppearance | null = null;
+  for (const pa of game.plateAppearances) {
+    if (pa.event && (!best || pa.atBatNumber > best.atBatNumber)) best = pa;
+  }
+  return best;
+}
+
+/**
+ * The at-bat to surface for a player's live role: the current (in-progress)
+ * at-bat while they're batting, their most recent completed at-bat (the one that
+ * put them there) while on base. On deck there's nothing to show yet.
+ */
+function roleAtBat(role: LiveRole, game: PlayerGame): PlateAppearance | null {
+  if (role === 'at-bat') return currentAtBat(game);
+  if (role === 'on-base') return mostRecentCompleted(game);
+  return null;
 }
 
 /**
@@ -47,7 +76,11 @@ function FeedHeadshot({
       className={`feed-photo-link${role ? ` role-${role}` : ''}`}
       title={`${name} — Statcast details`}
       aria-label={`${name} — Statcast details`}
-      onClick={onOpen}
+      onClick={(e) => {
+        // Don't also toggle a collapsible row this headshot sits inside.
+        e.stopPropagation();
+        onOpen();
+      }}
     >
       {failed ? (
         <span className="feed-photo feed-photo-empty" aria-hidden="true" />
@@ -64,33 +97,137 @@ function FeedHeadshot({
   );
 }
 
-/** One player currently at bat / on deck / on base, in the Live section. */
-function LiveRow({
+/**
+ * One player in the Live section. The header carries the headshot (role ring),
+ * name, matchup + inning, and the role tag; beneath it, the batter's current
+ * at-bat (while up) or most recent one (while on base) — nothing extra on deck.
+ */
+function LiveEntry({
   report,
   role,
   game,
+  open,
+  onToggle,
   onOpenDetails,
 }: {
   report: PlayerReport;
   role: LiveRole;
   game: PlayerGame;
+  open: boolean;
+  onToggle: () => void;
   onOpenDetails: (id: number) => void;
 }) {
+  const pa = roleAtBat(role, game);
   return (
-    <div className={`live-row role-${role}`}>
-      <FeedHeadshot
-        id={report.id}
-        name={report.name}
-        role={role}
-        onOpen={() => onOpenDetails(report.id)}
-      />
+    <div className={`feed-item live-entry role-${role}`}>
+      <div className="feed-item-head">
+        <FeedHeadshot
+          id={report.id}
+          name={report.name}
+          role={role}
+          onOpen={() => onOpenDetails(report.id)}
+        />
+        <div className="feed-item-id">
+          <span className="feed-player-name">{report.name}</span>
+          <span className="feed-context">
+            {matchup(game)} · {liveInning(game)}
+          </span>
+        </div>
+        <span className={`live-role role-${role}`}>{liveRoleLabel(role)}</span>
+      </div>
+      {pa && (
+        <PlateAppearanceCard pa={pa} gamePk={game.gamePk} open={open} onToggle={onToggle} />
+      )}
+    </div>
+  );
+}
+
+/** Order not-yet-started games by first pitch (earliest first); unknown times last. */
+function byStartTime(
+  a: { game: PlayerGame },
+  b: { game: PlayerGame },
+): number {
+  const ta = a.game.status.startTime;
+  const tb = b.game.status.startTime;
+  if (ta && tb) return ta.localeCompare(tb);
+  if (ta) return -1;
+  if (tb) return 1;
+  return 0;
+}
+
+/**
+ * One not-yet-started game in the Upcoming section: player + matchup + first
+ * pitch. The header collapses/expands the batter's platoon split vs the probable
+ * starter — but only when there's a probable pitcher to reveal; otherwise the
+ * header is static (nothing to show yet).
+ */
+function UpcomingRow({
+  report,
+  game,
+  open,
+  onToggle,
+  onOpenDetails,
+}: {
+  report: PlayerReport;
+  game: PlayerGame;
+  open: boolean;
+  onToggle: () => void;
+  onOpenDetails: (id: number) => void;
+}) {
+  const time = formatStartTime(game.status.startTime);
+  const expandable = !!game.probablePitcher;
+  // On expand, bring the row to the top of the viewport (its scroll-margin-top
+  // clears the sticky nav), matching how the at-bat cards behave.
+  const ref = useScrollIntoViewOnExpand<HTMLDivElement>(expandable && open);
+  const head = (
+    <>
+      <FeedHeadshot id={report.id} name={report.name} onOpen={() => onOpenDetails(report.id)} />
       <div className="live-row-id">
         <span className="feed-player-name">{report.name}</span>
-        <span className="feed-context">
-          {matchup(game)} · {liveInning(game)}
-        </span>
+        <span className="feed-context">{matchup(game)}</span>
       </div>
-      <span className={`live-role role-${role}`}>{liveRoleLabel(role)}</span>
+      <span className="feed-time">{time ?? (game.status.detailedState || 'TBD')}</span>
+      {expandable && (
+        <svg
+          className={`upcoming-caret${open ? ' open' : ''}`}
+          viewBox="0 0 12 8"
+          aria-hidden="true"
+        >
+          <path d="M1 1.5 6 6.5 11 1.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
+        </svg>
+      )}
+    </>
+  );
+
+  return (
+    <div className="upcoming-item" ref={ref}>
+      {expandable ? (
+        <div
+          className="upcoming-head"
+          role="button"
+          tabIndex={0}
+          aria-expanded={open}
+          title={open ? 'Collapse' : 'Expand platoon split'}
+          onClick={onToggle}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onToggle();
+            }
+          }}
+        >
+          {head}
+        </div>
+      ) : (
+        <div className="upcoming-head static">{head}</div>
+      )}
+      {/* The batter's season line against the probable starter's hand. */}
+      {expandable && open && (
+        <div className="upcoming-detail">
+          <ProbablePitcher game={game} />
+          <PlatoonSplit report={report} game={game} />
+        </div>
+      )}
     </div>
   );
 }
@@ -143,6 +280,19 @@ export function LiveFeed({
     )
     .sort(mostRecentAtBatFirst);
 
+  // Not-yet-started games, earliest first pitch first — so the feed still has
+  // something to show before the day's first at-bat (and lists later games while
+  // earlier ones are underway).
+  const upcoming = reports
+    .flatMap((report) =>
+      report.games
+        .filter((game) => game.status.state === 'scheduled')
+        .map((game) => ({ report, game })),
+    )
+    .sort(byStartTime);
+
+  const isEmpty = liveRows.length === 0 && atBats.length === 0 && upcoming.length === 0;
+
   return (
     <div className="live-feed">
       {liveRows.length > 0 && (
@@ -152,24 +302,27 @@ export function LiveFeed({
             Live
           </h2>
           <div className="live-rows">
-            {liveRows.map(({ report, role, game }) => (
-              <LiveRow
-                key={report.id}
-                report={report}
-                role={role}
-                game={game}
-                onOpenDetails={onOpenDetails}
-              />
-            ))}
+            {liveRows.map(({ report, role, game }) => {
+              const key = `live-${report.id}`;
+              return (
+                <LiveEntry
+                  key={report.id}
+                  report={report}
+                  role={role}
+                  game={game}
+                  open={openKeys.has(key)}
+                  onToggle={() => toggle(key)}
+                  onOpenDetails={onOpenDetails}
+                />
+              );
+            })}
           </div>
         </section>
       )}
 
-      <section className="feed-section">
-        <h2 className="feed-heading">Recent at-bats</h2>
-        {atBats.length === 0 ? (
-          <div className="feed-empty">No plate appearances yet.</div>
-        ) : (
+      {atBats.length > 0 && (
+        <section className="feed-section">
+          <h2 className="feed-heading">Recent at-bats</h2>
           <div className="feed-items">
             {atBats.map(({ report, game, pa }) => {
               const key = `${report.id}-${game.gamePk}-${pa.atBatNumber}`;
@@ -196,8 +349,31 @@ export function LiveFeed({
               );
             })}
           </div>
-        )}
-      </section>
+        </section>
+      )}
+
+      {upcoming.length > 0 && (
+        <section className="feed-section">
+          <h2 className="feed-heading">Upcoming</h2>
+          <div className="upcoming-rows">
+            {upcoming.map(({ report, game }) => {
+              const key = `up-${report.id}-${game.gamePk}`;
+              return (
+                <UpcomingRow
+                  key={key}
+                  report={report}
+                  game={game}
+                  open={openKeys.has(key)}
+                  onToggle={() => toggle(key)}
+                  onOpenDetails={onOpenDetails}
+                />
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {isEmpty && <div className="feed-empty">No games for these players.</div>}
     </div>
   );
 }

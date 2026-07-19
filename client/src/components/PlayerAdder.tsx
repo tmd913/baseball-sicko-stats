@@ -46,11 +46,7 @@ export function PlayerAdder({
       <div className="adder-input-wrap">
         <input
           className="adder-input"
-          placeholder={
-            loading
-              ? 'Loading players…'
-              : `Search for a player (${players.length} active this season)…`
-          }
+          placeholder={loading ? 'Loading players…' : 'Search for a player'}
           value={query}
           disabled={loading}
           onChange={(e) => setQuery(e.target.value)}

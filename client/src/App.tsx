@@ -4,6 +4,7 @@ import type { PlayerGame, PlayerReport, SeasonPlayer, WatchPlayer } from './type
 import { PlayerAdder } from './components/PlayerAdder';
 import { PlayerCard } from './components/PlayerCard';
 import { LiveFeed } from './components/LiveFeed';
+import { simulateLiveDay } from './simulate';
 import { PlayerDetails } from './components/PlayerDetails';
 import { BaseDiamond } from './components/BaseDiamond';
 import { DateRangePicker } from './components/DateRangePicker';
@@ -247,6 +248,9 @@ export default function App() {
   const [view, setView] = useState<'players' | 'feed'>(() =>
     initialParams.get('view') === 'feed' ? 'feed' : 'players',
   );
+  // Demo toggle: overlay a synthetic live-day state on the loaded reports so the
+  // live-only UI can be exercised when nothing is actually being played.
+  const [simulate, setSimulate] = useState<boolean>(() => initialParams.get('sim') === '1');
   // Nav edit mode: reveal per-player delete buttons and enable drag-to-reorder.
   const [editMode, setEditMode] = useState(false);
   const [draggingId, setDraggingId] = useState<number | null>(null);
@@ -280,6 +284,12 @@ export default function App() {
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const navAsideRef = useRef<HTMLElement | null>(null);
   const [navStuck, setNavStuck] = useState(false);
+  // Re-attach the observer whenever the sentinel (re)mounts — including on a
+  // view switch, since the feed view unmounts the whole strip. `view` is in the
+  // deps so switching back to the player list disconnects the observer from the
+  // now-detached old sentinel and re-observes the fresh one; without it, the
+  // stale observer fires isIntersecting=false as the old node leaves the DOM and
+  // leaves the strip wrongly collapsed at the top of the page.
   useEffect(() => {
     const el = sentinelRef.current;
     if (!el) return;
@@ -288,7 +298,7 @@ export default function App() {
     });
     io.observe(el);
     return () => io.disconnect();
-  }, [reports.length]);
+  }, [reports.length, view]);
   // A nav link scrolls its card to the top, but the strip is sticky there and
   // would cover it. Track the collapsed strip height (the state it's in at any
   // scrolled destination), measured while stuck, and also publish it as
@@ -296,11 +306,21 @@ export default function App() {
   const collapsedNavH = useRef(82);
   useEffect(() => {
     if (!navStuck) return;
-    const h = navAsideRef.current?.offsetHeight;
-    if (h) {
-      collapsedNavH.current = h;
-      document.documentElement.style.setProperty('--nav-offset', `${h + NAV_GAP}px`);
-    }
+    const measure = () => {
+      const h = navAsideRef.current?.offsetHeight;
+      if (h) {
+        collapsedNavH.current = h;
+        document.documentElement.style.setProperty('--nav-offset', `${h + NAV_GAP}px`);
+      }
+    };
+    // The strip now eases into its collapsed size, so the height is mid-flight
+    // the instant navStuck flips. Measure best-effort now, then again once the
+    // collapse transition has settled so the scroll offset reflects the final
+    // (shorter) strip. (Reduced-motion users have no transition; the first
+    // measurement is already correct for them.)
+    measure();
+    const t = setTimeout(measure, 240);
+    return () => clearTimeout(t);
   }, [navStuck]);
 
   // Scroll a player's card just below the sticky strip. Done manually (not
@@ -337,8 +357,9 @@ export default function App() {
     if (expandedIds.size) p.set('expanded', [...expandedIds].join(','));
     if (detailsId) p.set('player', String(detailsId));
     if (view === 'feed') p.set('view', view);
+    if (simulate) p.set('sim', '1');
     window.history.replaceState(null, '', `?${p.toString()}`);
-  }, [start, end, activePreset, expandedIds, detailsId, view]);
+  }, [start, end, activePreset, expandedIds, detailsId, view, simulate]);
 
   // Load the season's player list once, for search/autocomplete.
   useEffect(() => {
@@ -402,18 +423,26 @@ export default function App() {
     loadReport();
   }, [loadReport, watchlist]);
 
+  // The reports as rendered: the real ones, or a synthetic live-day overlay when
+  // the demo toggle is on. Everything downstream (nav, cards, feed, the live
+  // toggles) reads these; the raw `reports` still back polling and reordering.
+  const displayReports = useMemo(
+    () => (simulate ? simulateLiveDay(reports) : reports),
+    [simulate, reports],
+  );
+
   // While any game is in progress, quietly re-poll so the live score, bases, and
   // the nav's at-bat/on-deck/on-base highlights track the game in near-real-time.
-  const hasLiveGame = reports.some((r) => r.games.some((g) => g.status.state === 'live'));
-  // The per-at-bat feed view is offered while games are active. Once the user is
-  // in it, keep the toggle available even after games go final so the view
-  // doesn't vanish out from under them (they can switch back to Players).
-  const showViewToggle = hasLiveGame || view === 'feed';
+  // Only real live games drive polling — a simulated one has nothing to fetch.
+  const hasRealLiveGame = reports.some((r) => r.games.some((g) => g.status.state === 'live'));
+  // The feed view is always available: besides live at-bats it lists the day's
+  // completed and not-yet-started games, so it's useful before first pitch too.
+  const showViewToggle = displayReports.length > 0;
   useEffect(() => {
-    if (!hasLiveGame) return;
+    if (!hasRealLiveGame) return;
     const t = setInterval(() => loadReport(true), 20_000);
     return () => clearInterval(t);
-  }, [hasLiveGame, loadReport]);
+  }, [hasRealLiveGame, loadReport]);
 
   // Show a "back to top" button once the user has scrolled down a screenful.
   const [showBackToTop, setShowBackToTop] = useState(false);
@@ -567,10 +596,12 @@ export default function App() {
     <div className="app">
       <header className="app-header">
         <div className="brand">
-          <div className="brand-mark">⚾</div>
-          <div>
-            <h1>Baseball Sicko Stats</h1>
+          <div className="brand-mark" aria-hidden="true">
+            ⚾
           </div>
+          <h1>
+            Baseball <span className="brand-sicko">Sicko</span> Stats
+          </h1>
         </div>
         <div className="date-control">
           <div className="date-row">
@@ -672,32 +703,50 @@ export default function App() {
         </div>
       )}
 
-      {showViewToggle && reports.length > 0 && (
-        <div className="view-switch" role="tablist" aria-label="Watchlist view">
+      {showViewToggle && (
+        <div className="view-bar">
+          <div className="view-switch" role="tablist" aria-label="Watchlist view">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={view === 'players'}
+              className={`view-tab${view === 'players' ? ' active' : ''}`}
+              onClick={() => {
+                // Assume expanded: the toggle sits at the top of the page, so the
+                // remounting strip starts unstuck (the observer confirms/corrects
+                // on its next callback). Avoids a frame of stale-collapsed strip.
+                setNavStuck(false);
+                setView('players');
+              }}
+            >
+              Players
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={view === 'feed'}
+              className={`view-tab${view === 'feed' ? ' active' : ''}`}
+              onClick={() => setView('feed')}
+            >
+              Feed
+            </button>
+          </div>
           <button
             type="button"
-            role="tab"
-            aria-selected={view === 'players'}
-            className={`view-tab${view === 'players' ? ' active' : ''}`}
-            onClick={() => setView('players')}
+            className={`sim-toggle${simulate ? ' active' : ''}`}
+            aria-pressed={simulate}
+            onClick={() => setSimulate((v) => !v)}
+            title="Simulate a live day of games — demo the live view when nothing's on"
           >
-            Players
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={view === 'feed'}
-            className={`view-tab${view === 'feed' ? ' active' : ''}`}
-            onClick={() => setView('feed')}
-          >
-            Feed
+            <span className="sim-dot" aria-hidden="true" />
+            {simulate ? 'Simulating live' : 'Simulate live'}
           </button>
         </div>
       )}
 
       {view === 'feed' ? (
-        reports.length > 0 && (
-          <LiveFeed reports={reports} onOpenDetails={setDetailsId} />
+        displayReports.length > 0 && (
+          <LiveFeed reports={displayReports} onOpenDetails={setDetailsId} />
         )
       ) : (
       <div
@@ -712,7 +761,7 @@ export default function App() {
             className={`player-nav${editMode ? ' editing' : ''}${navStuck ? ' is-stuck' : ''}`}
           >
             <nav ref={navScrollEl}>
-              {reports.map((r) => {
+              {displayReports.map((r) => {
                 const role = liveRole(r);
                 const game = navGame(r);
                 // Lineup spot (or a red "!" when benched) rides the avatar's
@@ -831,7 +880,7 @@ export default function App() {
         )}
 
         <main className="player-list">
-          {reports.map((r) => (
+          {displayReports.map((r) => (
             <PlayerCard
               key={r.id}
               report={r}
