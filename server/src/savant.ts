@@ -371,6 +371,7 @@ async function buildStatsApiDay(date: string): Promise<{
         atBatNumber: pa.atBatNumber,
         inning: pa.inning,
         half: pa.half,
+        timestamp: pa.timestamp,
         outsWhenUp: pa.outsWhenUp,
         onBase: pa.onBase,
         stand: pa.stand,

@@ -388,6 +388,10 @@ const FEED_FIELDS = [
   'halfInning',
   'isTopInning',
   'inning',
+  // Per-play timestamps — the sort key for the cross-game "most recent at-bat"
+  // live feed (endTime once the PA is over, startTime while it's in progress).
+  'startTime',
+  'endTime',
   'count',
   'balls',
   'strikes',
@@ -470,7 +474,13 @@ interface FeedRunner {
   details?: { eventType?: string; runner?: { id?: number } };
 }
 interface FeedPlay {
-  about?: { atBatIndex?: number; halfInning?: string; inning?: number };
+  about?: {
+    atBatIndex?: number;
+    halfInning?: string;
+    inning?: number;
+    startTime?: string;
+    endTime?: string;
+  };
   count?: { outs?: number };
   matchup?: {
     batter?: { id?: number; fullName?: string };
@@ -754,6 +764,9 @@ export interface StatsApiPlateAppearance {
   atBatNumber: number;
   inning: number;
   half: string;
+  // ISO time the PA ended (or, for the in-progress at-bat, when it began) — the
+  // recency key for the live feed. Null for older cached feeds without it.
+  timestamp: string | null;
   outsWhenUp: number;
   onBase: BaseState;
   stand: string | null;
@@ -1005,6 +1018,11 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
   for (const play of feed.liveData?.plays?.allPlays ?? []) {
     const atBatIndex = play.about?.atBatIndex;
     if (typeof atBatIndex !== 'number') continue;
+    // Advisory plays (status/delay changes, e.g. "Status Change - Pre-Game")
+    // carry the upcoming batter's matchup but aren't plate appearances — skip
+    // them before touching the outs/bases state so they don't count as at-bats
+    // or blank out the runners the next real batter comes up to.
+    if (play.result?.eventType === 'game_advisory') continue;
     const halfKey = `${play.about?.inning}-${play.about?.halfInning}`;
     if (halfKey !== currentHalfKey) {
       currentHalfKey = halfKey;
@@ -1076,6 +1094,7 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
       atBatNumber: atBatIndex + 1,
       inning: play.about?.inning ?? 0,
       half: play.about?.halfInning?.toLowerCase() === 'top' ? 'Top' : 'Bot',
+      timestamp: play.about?.endTime ?? play.about?.startTime ?? null,
       outsWhenUp,
       onBase,
       stand: play.matchup?.batSide?.code ?? null,

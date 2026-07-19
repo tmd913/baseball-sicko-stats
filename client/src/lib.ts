@@ -373,6 +373,44 @@ export function liveRoleLabel(role: LiveRole): string {
   return role === 'at-bat' ? 'At bat' : role === 'on-deck' ? 'On deck' : 'On base';
 }
 
+/**
+ * The player's current live role together with the live game it's happening in
+ * (checked at bat → on deck → on base, as in `liveRole`). Null when the player
+ * isn't currently in any live game's batter/on-deck/on-base situation. Used by
+ * the live feed's "Live" section, which needs the game for its context line.
+ */
+export function liveRoleGame(
+  report: PlayerReport,
+): { role: LiveRole; game: PlayerGame } | null {
+  for (const g of report.games) {
+    if (g.status.state !== 'live') continue;
+    if (g.status.atBatId === report.id) return { role: 'at-bat', game: g };
+    if (g.status.onDeckId === report.id) return { role: 'on-deck', game: g };
+    if (g.status.onBaseIds.includes(report.id)) return { role: 'on-base', game: g };
+  }
+  return null;
+}
+
+/**
+ * Comparator putting the most recent at-bat first, across every watched player's
+ * games. Prefers the real per-play `timestamp` (both live and cached today games
+ * carry it); falls back to game order + at-bat number when a timestamp is
+ * missing (older cached feeds), so ordering stays stable either way.
+ */
+export function mostRecentAtBatFirst(
+  a: { game: PlayerGame; pa: PlateAppearance },
+  b: { game: PlayerGame; pa: PlateAppearance },
+): number {
+  if (a.pa.timestamp && b.pa.timestamp) {
+    if (a.pa.timestamp !== b.pa.timestamp) return b.pa.timestamp.localeCompare(a.pa.timestamp);
+  }
+  return (
+    b.game.date.localeCompare(a.game.date) ||
+    (b.game.gameNumber ?? 0) - (a.game.gameNumber ?? 0) ||
+    b.pa.atBatNumber - a.pa.atBatNumber
+  );
+}
+
 /** Human description of a base state, for a diamond's aria-label/tooltip. */
 export function basesLabel(b: BaseState): string {
   if (b.first && b.second && b.third) return 'Bases loaded';

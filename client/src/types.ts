@@ -29,6 +29,7 @@ export interface PlateAppearance {
   atBatNumber: number;
   inning: number;
   half: string;
+  timestamp: string | null; // ISO time the PA ended (or began, if in progress)
   outsWhenUp: number | null;
   onBase: BaseState;
   stand: string | null;

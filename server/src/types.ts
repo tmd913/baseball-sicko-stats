@@ -35,6 +35,9 @@ export interface PlateAppearance {
   atBatNumber: number;
   inning: number;
   half: string; // "Top" | "Bot"
+  // ISO time the PA ended (or, for the in-progress at-bat, when it began) — the
+  // recency sort key for the live feed. Null for older cached feeds without it.
+  timestamp: string | null;
   outsWhenUp: number | null;
   onBase: BaseState; // runners on base when the batter stepped up
   stand: string | null; // batter handedness L/R

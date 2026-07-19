@@ -3,6 +3,7 @@ import { api } from './api';
 import type { PlayerGame, PlayerReport, SeasonPlayer, WatchPlayer } from './types';
 import { PlayerAdder } from './components/PlayerAdder';
 import { PlayerCard } from './components/PlayerCard';
+import { LiveFeed } from './components/LiveFeed';
 import { PlayerDetails } from './components/PlayerDetails';
 import { BaseDiamond } from './components/BaseDiamond';
 import { DateRangePicker } from './components/DateRangePicker';
@@ -240,6 +241,12 @@ export default function App() {
     const n = Number(initialParams.get('player'));
     return Number.isInteger(n) && n > 0 ? n : null;
   });
+  // Watchlist display mode: the grouped-by-player cards ('players'), or the flat,
+  // most-recent-first stream of individual at-bats ('feed') for following live
+  // games. Seeded from the URL so a reload/shared link restores the same view.
+  const [view, setView] = useState<'players' | 'feed'>(() =>
+    initialParams.get('view') === 'feed' ? 'feed' : 'players',
+  );
   // Nav edit mode: reveal per-player delete buttons and enable drag-to-reorder.
   const [editMode, setEditMode] = useState(false);
   const [draggingId, setDraggingId] = useState<number | null>(null);
@@ -329,8 +336,9 @@ export default function App() {
     if (activePreset) p.set('preset', activePreset);
     if (expandedIds.size) p.set('expanded', [...expandedIds].join(','));
     if (detailsId) p.set('player', String(detailsId));
+    if (view === 'feed') p.set('view', view);
     window.history.replaceState(null, '', `?${p.toString()}`);
-  }, [start, end, activePreset, expandedIds, detailsId]);
+  }, [start, end, activePreset, expandedIds, detailsId, view]);
 
   // Load the season's player list once, for search/autocomplete.
   useEffect(() => {
@@ -397,6 +405,10 @@ export default function App() {
   // While any game is in progress, quietly re-poll so the live score, bases, and
   // the nav's at-bat/on-deck/on-base highlights track the game in near-real-time.
   const hasLiveGame = reports.some((r) => r.games.some((g) => g.status.state === 'live'));
+  // The per-at-bat feed view is offered while games are active. Once the user is
+  // in it, keep the toggle available even after games go final so the view
+  // doesn't vanish out from under them (they can switch back to Players).
+  const showViewToggle = hasLiveGame || view === 'feed';
   useEffect(() => {
     if (!hasLiveGame) return;
     const t = setInterval(() => loadReport(true), 20_000);
@@ -660,6 +672,34 @@ export default function App() {
         </div>
       )}
 
+      {showViewToggle && reports.length > 0 && (
+        <div className="view-switch" role="tablist" aria-label="Watchlist view">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={view === 'players'}
+            className={`view-tab${view === 'players' ? ' active' : ''}`}
+            onClick={() => setView('players')}
+          >
+            Players
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={view === 'feed'}
+            className={`view-tab${view === 'feed' ? ' active' : ''}`}
+            onClick={() => setView('feed')}
+          >
+            Feed
+          </button>
+        </div>
+      )}
+
+      {view === 'feed' ? (
+        reports.length > 0 && (
+          <LiveFeed reports={reports} onOpenDetails={setDetailsId} />
+        )
+      ) : (
       <div
         className={`content-layout${showLoading && reports.length > 0 ? ' is-loading' : ''}`}
       >
@@ -804,6 +844,7 @@ export default function App() {
           ))}
         </main>
       </div>
+      )}
 
       <button
         type="button"
