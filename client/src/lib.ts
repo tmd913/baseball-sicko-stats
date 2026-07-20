@@ -392,22 +392,41 @@ export function liveRoleGame(
 }
 
 /**
+ * A single recency value (epoch ms) for an at-bat: the real per-play `timestamp`
+ * when present (live and modern cached games carry it), else the game's day as a
+ * stand-in so undated at-bats from older cached feeds still land on the right
+ * date. Returning ONE value per at-bat — rather than switching keys per pair —
+ * is what keeps the comparator a consistent total order.
+ */
+function atBatRecency(entry: { game: PlayerGame; pa: PlateAppearance }): number {
+  if (entry.pa.timestamp) {
+    const t = Date.parse(entry.pa.timestamp);
+    if (!Number.isNaN(t)) return t;
+  }
+  // No per-play time: fall back to the end of the game's date, so it sorts onto
+  // the correct day; within the day gameNumber/atBatNumber break the tie.
+  const d = Date.parse(`${entry.game.date}T23:59:59Z`);
+  return Number.isNaN(d) ? 0 : d;
+}
+
+/**
  * Comparator putting the most recent at-bat first, across every watched player's
- * games. Prefers the real per-play `timestamp` (both live and cached today games
- * carry it); falls back to game order + at-bat number when a timestamp is
- * missing (older cached feeds), so ordering stays stable either way.
+ * games. Sorts by a single recency key (see `atBatRecency`) so it stays a valid
+ * total order even when some at-bats have a timestamp and others don't — mixing
+ * a timestamp comparison for some pairs with a game-order comparison for others
+ * (the previous approach) is non-transitive and scrambles the whole list.
  */
 export function mostRecentAtBatFirst(
   a: { game: PlayerGame; pa: PlateAppearance },
   b: { game: PlayerGame; pa: PlateAppearance },
 ): number {
-  if (a.pa.timestamp && b.pa.timestamp) {
-    if (a.pa.timestamp !== b.pa.timestamp) return b.pa.timestamp.localeCompare(a.pa.timestamp);
-  }
   return (
-    b.game.date.localeCompare(a.game.date) ||
+    atBatRecency(b) - atBatRecency(a) ||
     (b.game.gameNumber ?? 0) - (a.game.gameNumber ?? 0) ||
-    b.pa.atBatNumber - a.pa.atBatNumber
+    b.pa.atBatNumber - a.pa.atBatNumber ||
+    // Final tiebreaker so undated at-bats (older cached games with no timestamp)
+    // from different games on the same day still order deterministically.
+    b.game.gamePk - a.game.gamePk
   );
 }
 

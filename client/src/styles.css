@@ -1887,17 +1887,17 @@ body {
 }
 
 /* ---- Back to top ---- */
-.back-to-top {
+/* Floating round action buttons stacked in the bottom-right corner. Each fades
+   in independently (back-to-top on scroll, collapse-all when anything is open),
+   so hiding one never shifts the other — they sit at fixed offsets. */
+.float-btn {
   position: fixed;
   right: 24px;
-  bottom: 24px;
   width: 46px;
   height: 46px;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 20px;
-  line-height: 1;
   color: var(--text);
   background: var(--panel-2);
   border: 1px solid var(--border);
@@ -1906,20 +1906,34 @@ body {
   opacity: 0;
   transform: translateY(10px);
   pointer-events: none;
-  transition: opacity 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
+  transition: opacity 0.18s ease, transform 0.18s ease, border-color 0.18s ease,
+    color 0.18s ease, bottom 0.18s ease;
   z-index: 20;
 }
-.back-to-top.visible {
+.float-btn.visible {
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;
 }
-.back-to-top:hover {
+.float-btn:hover {
   border-color: var(--accent);
   color: var(--accent);
 }
+.back-to-top {
+  bottom: 24px;
+  font-size: 20px;
+  line-height: 1;
+}
+/* In the corner by default; rises above the back-to-top button when it's shown
+   (so it never floats with an empty gap beneath it). */
+.collapse-all {
+  bottom: 24px;
+}
+.collapse-all.raised {
+  bottom: 80px;
+}
 @media (prefers-reduced-motion: reduce) {
-  .back-to-top {
+  .float-btn {
     transition: opacity 0.18s ease;
     transform: none;
   }
@@ -2364,6 +2378,11 @@ body {
   display: flex;
   flex-direction: column;
   gap: 26px;
+  /* The feed has no sticky nav strip, so when expanding an at-bat / upcoming row
+     (or playing a clip) scrolls it to the top, its scroll-margin-top only needs
+     a little breathing room — not the nav-clearing offset the player view uses.
+     Scoped here so every descendant that reads var(--nav-offset) picks it up. */
+  --nav-offset: 16px;
 }
 .feed-section {
   display: flex;
@@ -2525,6 +2544,9 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  /* Expanding an at-bat scrolls this whole item (player header + card) to the
+     top, so it — not the inner card — carries the top offset. */
+  scroll-margin-top: var(--nav-offset, 92px);
 }
 .feed-item-head {
   display: flex;

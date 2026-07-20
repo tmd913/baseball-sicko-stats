@@ -118,8 +118,11 @@ function LiveEntry({
   onOpenDetails: (id: number) => void;
 }) {
   const pa = roleAtBat(role, game);
+  // Scroll the whole item (player header + at-bat) into view on expand, so the
+  // player info isn't cut off above the viewport — the card itself doesn't scroll.
+  const ref = useScrollIntoViewOnExpand<HTMLDivElement>(open);
   return (
-    <div className={`feed-item live-entry role-${role}`}>
+    <div className={`feed-item live-entry role-${role}`} ref={ref}>
       <div className="feed-item-head">
         <FeedHeadshot
           id={report.id}
@@ -136,8 +139,53 @@ function LiveEntry({
         <span className={`live-role role-${role}`}>{liveRoleLabel(role)}</span>
       </div>
       {pa && (
-        <PlateAppearanceCard pa={pa} gamePk={game.gamePk} open={open} onToggle={onToggle} />
+        <PlateAppearanceCard
+          pa={pa}
+          gamePk={game.gamePk}
+          open={open}
+          onToggle={onToggle}
+          autoScroll={false}
+        />
       )}
+    </div>
+  );
+}
+
+/** One completed at-bat in the Recent section: player header + the at-bat card. */
+function FeedAtBat({
+  report,
+  game,
+  pa,
+  open,
+  onToggle,
+  onOpenDetails,
+}: {
+  report: PlayerReport;
+  game: PlayerGame;
+  pa: PlateAppearance;
+  open: boolean;
+  onToggle: () => void;
+  onOpenDetails: (id: number) => void;
+}) {
+  // Expanding scrolls the whole item to the top so the player header stays in
+  // view above the at-bat detail (the card itself doesn't self-scroll).
+  const ref = useScrollIntoViewOnExpand<HTMLDivElement>(open);
+  return (
+    <div className="feed-item" ref={ref}>
+      <div className="feed-item-head">
+        <FeedHeadshot id={report.id} name={report.name} onOpen={() => onOpenDetails(report.id)} />
+        <div className="feed-item-id">
+          <span className="feed-player-name">{report.name}</span>
+          <span className="feed-context">{matchup(game)}</span>
+        </div>
+      </div>
+      <PlateAppearanceCard
+        pa={pa}
+        gamePk={game.gamePk}
+        open={open}
+        onToggle={onToggle}
+        autoScroll={false}
+      />
     </div>
   );
 }
@@ -243,20 +291,17 @@ function UpcomingRow({
 export function LiveFeed({
   reports,
   onOpenDetails,
+  openKeys,
+  onToggleKey,
 }: {
   reports: PlayerReport[];
   onOpenDetails: (id: number) => void;
+  // Which at-bats / upcoming rows are expanded, keyed by player + game + at-bat
+  // number. Lifted to the parent so a "collapse all" control can clear them.
+  openKeys: Set<string>;
+  onToggleKey: (key: string) => void;
 }) {
-  // At-bats expand in place to reveal the pitch sequence / video, keyed by
-  // player + game + at-bat number (an at-bat number is only unique within a game).
-  const [openKeys, setOpenKeys] = useState<Set<string>>(() => new Set());
-  const toggle = (key: string) =>
-    setOpenKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
+  const toggle = onToggleKey;
 
   // Players currently in a live at-bat/on-deck/on-base situation, highest-
   // priority role first (a player is listed once, for their leading role).
@@ -327,25 +372,15 @@ export function LiveFeed({
             {atBats.map(({ report, game, pa }) => {
               const key = `${report.id}-${game.gamePk}-${pa.atBatNumber}`;
               return (
-                <div className="feed-item" key={key}>
-                  <div className="feed-item-head">
-                    <FeedHeadshot
-                      id={report.id}
-                      name={report.name}
-                      onOpen={() => onOpenDetails(report.id)}
-                    />
-                    <div className="feed-item-id">
-                      <span className="feed-player-name">{report.name}</span>
-                      <span className="feed-context">{matchup(game)}</span>
-                    </div>
-                  </div>
-                  <PlateAppearanceCard
-                    pa={pa}
-                    gamePk={game.gamePk}
-                    open={openKeys.has(key)}
-                    onToggle={() => toggle(key)}
-                  />
-                </div>
+                <FeedAtBat
+                  key={key}
+                  report={report}
+                  game={game}
+                  pa={pa}
+                  open={openKeys.has(key)}
+                  onToggle={() => toggle(key)}
+                  onOpenDetails={onOpenDetails}
+                />
               );
             })}
           </div>

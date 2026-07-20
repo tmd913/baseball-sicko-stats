@@ -453,6 +453,24 @@ export default function App() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
+  // Expanded at-bats / upcoming rows in the feed view, lifted here so "collapse
+  // all" can clear them (the player view collapses via expandedIds instead).
+  const [feedOpenKeys, setFeedOpenKeys] = useState<Set<string>>(() => new Set());
+  const toggleFeedKey = useCallback((key: string) => {
+    setFeedOpenKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+  // Whether the current view has anything expanded to collapse.
+  const hasExpanded = view === 'feed' ? feedOpenKeys.size > 0 : expandedIds.size > 0;
+  const collapseAll = () => {
+    if (view === 'feed') setFeedOpenKeys(new Set());
+    else setExpandedIds(new Set());
+  };
+
   const onAdd = async (p: WatchPlayer) => {
     setWatchlist(await api.addPlayer(p));
   };
@@ -746,7 +764,12 @@ export default function App() {
 
       {view === 'feed' ? (
         displayReports.length > 0 && (
-          <LiveFeed reports={displayReports} onOpenDetails={setDetailsId} />
+          <LiveFeed
+            reports={displayReports}
+            onOpenDetails={setDetailsId}
+            openKeys={feedOpenKeys}
+            onToggleKey={toggleFeedKey}
+          />
         )
       ) : (
       <div
@@ -897,7 +920,28 @@ export default function App() {
 
       <button
         type="button"
-        className={`back-to-top${showBackToTop ? ' visible' : ''}`}
+        className={`float-btn collapse-all${hasExpanded ? ' visible' : ''}${
+          showBackToTop ? ' raised' : ''
+        }`}
+        onClick={collapseAll}
+        aria-label="Collapse all"
+        title="Collapse all"
+      >
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+          <path
+            d="M7 6 12 10 17 6M7 18 12 14 17 18"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </button>
+
+      <button
+        type="button"
+        className={`float-btn back-to-top${showBackToTop ? ' visible' : ''}`}
         onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
         aria-label="Back to top"
         title="Back to top"

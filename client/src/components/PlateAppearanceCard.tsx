@@ -120,11 +120,16 @@ export function PlateAppearanceCard({
   gamePk,
   open,
   onToggle,
+  autoScroll = true,
 }: {
   pa: PlateAppearance;
   gamePk: number;
   open: boolean;
   onToggle: () => void;
+  // When false, expanding doesn't scroll the card itself into view — the caller
+  // scrolls a larger wrapper instead (the feed scrolls the whole player+at-bat
+  // item so the player header isn't left cut off above the viewport).
+  autoScroll?: boolean;
 }) {
   const [activePitch, setActivePitch] = useState<number | null>(null);
   // Tap toggles a pin on touch/pen (no hover to rely on); tapping the same
@@ -136,8 +141,8 @@ export function PlateAppearanceCard({
   const isTop = pa.half === 'Top';
 
   // On expand, bring this at-bat to the top of the screen so its detail isn't
-  // left off-screen below the fold.
-  const cardRef = useScrollIntoViewOnExpand<HTMLDivElement>(open);
+  // left off-screen below the fold. Skipped when the caller owns the scroll.
+  const cardRef = useScrollIntoViewOnExpand<HTMLDivElement>(autoScroll && open);
 
   return (
     <div ref={cardRef} className={`pa-card kind-${kind}${open ? ' expanded' : ''}`}>
