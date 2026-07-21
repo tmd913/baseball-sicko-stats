@@ -82,6 +82,65 @@ body {
   font-size: 18px;
   letter-spacing: -0.02em;
 }
+/* Settings gear next to the title + the popover it opens (holds the simulate
+   toggle). */
+.settings-menu {
+  position: relative;
+  display: inline-flex;
+}
+.settings-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+}
+.settings-btn:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.settings-btn.active {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.settings-btn svg {
+  transition: transform 0.25s ease;
+}
+.settings-btn.active svg {
+  transform: rotate(40deg);
+}
+.settings-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.settings-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 12px;
+  min-width: 180px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+}
+.settings-popover-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
 /* The playful word gets a cyan→amber gradient, italicized for a bit of motion. */
 .brand-sicko {
   font-style: italic;
@@ -308,14 +367,6 @@ body {
 }
 
 /* ---- Controls ---- */
-.controls {
-  display: flex;
-  gap: 16px;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  margin-bottom: 14px;
-}
 .adder {
   position: relative;
   flex: 1;
@@ -2079,6 +2130,21 @@ body {
   font-size: 20px;
   line-height: 1;
 }
+/* The back button is a pill in the bottom-left, not a circle in the right stack. */
+.back-nav {
+  left: 24px;
+  right: auto;
+  bottom: 24px;
+  width: auto;
+  height: 46px;
+  padding: 0 18px 0 13px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 14px;
+  font-weight: 700;
+}
 /* In the corner by default; rises above the back-to-top button when it's shown
    (so it never floats with an empty gap beneath it). */
 .collapse-all {
@@ -2454,6 +2520,275 @@ body {
   flex-wrap: wrap;
   margin-bottom: 14px;
 }
+
+/* ---- Summary view: a full-page, scroll-locked stat table ---- */
+
+/* In summary mode the page itself doesn't scroll — the app becomes a fixed-
+   height flex column (header + view bar + table), and only the table scrolls. */
+.app.summary-mode {
+  height: 100dvh;
+  padding-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+/* The table area may use up to whatever height is left below the header + view
+   bar, but no more. align-items:flex-start keeps the scroll box from being
+   stretched to that full height, so with only a few rows it shrinks to its
+   content instead of leaving dead space below the total row. */
+.summary-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: flex-start;
+}
+.summary-scroll {
+  flex: 1;
+  min-height: 0;
+  /* Grow to content, but cap at the available height and scroll past that. */
+  max-height: 100%;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+}
+.summary-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+  font-size: 13px;
+  color: var(--text);
+}
+.summary-table th,
+.summary-table td {
+  padding: 8px 13px;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+/* Zebra striping so rows are easy to track across the wide table. The sticky
+   headshot cell is included so its background matches its row (a transparent
+   sticky cell would let scrolled columns show through). Hover uses a distinct,
+   later-defined shade so it wins over the stripe. */
+.summary-table tbody tr:nth-child(even) td,
+.summary-table tbody tr:nth-child(even) .sum-img-col,
+.summary-table tbody tr:nth-child(even) .sum-name-col {
+  background: var(--panel);
+}
+/* Numeric columns hug their content (width:1% + nowrap) so the player column
+   absorbs the slack on wide screens; right-aligned with tabular figures. */
+.summary-table .sum-num {
+  width: 1%;
+  min-width: 54px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+/* The headshot column hugs the image; the name column takes the slack. */
+.summary-table .sum-img-col {
+  width: 1%;
+  text-align: center;
+}
+.summary-table .sum-name-col {
+  min-width: 150px;
+  text-align: left;
+}
+/* Breathing room past the last column — a trailing gutter so the rightmost
+   stat isn't flush against the table's edge (and there's space after it when
+   scrolled all the way right). */
+.summary-table th:last-child,
+.summary-table td:last-child {
+  padding-right: 32px;
+}
+/* Header row sticks to the top while scrolling vertically. */
+.summary-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--panel-2);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+/* Only the headshot column sticks to the left while scrolling horizontally — the
+   name scrolls away with the rest, so the stat columns get the room on a narrow
+   screen. The soft right-edge shadow reads as a pinned edge as columns slide
+   underneath. */
+.summary-table .sum-img-col {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--bg);
+  box-shadow: 6px 0 8px -6px rgba(0, 0, 0, 0.5);
+}
+/* Top-left corner: above both the sticky header and the sticky headshot column. */
+.summary-table thead .sum-img-col {
+  z-index: 3;
+  background: var(--panel-2);
+}
+/* Total row pinned to the bottom while scrolling vertically — a touch more
+   vertical padding sets it apart from the data rows. */
+.summary-table tfoot th,
+.summary-table tfoot td {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  padding-top: 13px;
+  padding-bottom: 13px;
+  background: var(--panel-2);
+  border-top: 2px solid var(--border);
+  border-bottom: none;
+  font-weight: 800;
+}
+.summary-table tfoot .sum-img-col {
+  z-index: 3;
+}
+.summary-table tbody tr:hover td,
+.summary-table tbody tr:hover .sum-img-col,
+.summary-table tbody tr:hover .sum-name-col {
+  background: var(--panel-2);
+}
+/* A live player's whole row is tinted by their role (at bat / on deck / on
+   base) — the same colours as the headshot ring, blended into an opaque shade
+   so it also backs the sticky cells and overrides the zebra stripe. Defined
+   after the stripe/hover rules so it wins the same-specificity tie. */
+.summary-table tbody tr.role-at-bat td,
+.summary-table tbody tr.role-at-bat .sum-img-col,
+.summary-table tbody tr.role-at-bat .sum-name-col {
+  background: color-mix(in srgb, var(--strikeout) 22%, var(--bg));
+}
+.summary-table tbody tr.role-on-deck td,
+.summary-table tbody tr.role-on-deck .sum-img-col,
+.summary-table tbody tr.role-on-deck .sum-name-col {
+  background: color-mix(in srgb, var(--hr) 20%, var(--bg));
+}
+.summary-table tbody tr.role-on-base td,
+.summary-table tbody tr.role-on-base .sum-img-col,
+.summary-table tbody tr.role-on-base .sum-name-col {
+  background: color-mix(in srgb, #c084fc 20%, var(--bg));
+}
+.sum-photo-wrap {
+  position: relative;
+  display: inline-flex;
+  line-height: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 50%;
+}
+.sum-photo-wrap:hover .sum-photo {
+  border-color: var(--accent);
+}
+.sum-photo-wrap:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.sum-photo {
+  width: 31px;
+  height: 31px;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: top center;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+/* Lineup-spot pip on the headshot corner (batting number, or a red "!" when
+   benched) — matches the nav avatar's corner. */
+.sum-photo-spot {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 15px;
+  height: 15px;
+  font-size: 9px;
+}
+.sum-photo-empty {
+  display: inline-block;
+}
+/* Live-role ring on the headshot — same colours as the nav and feed. */
+.sum-photo.role-at-bat {
+  border-color: var(--strikeout);
+  box-shadow: 0 0 0 2px var(--strikeout);
+}
+.sum-photo.role-on-deck {
+  border-color: var(--hr);
+  box-shadow: 0 0 0 2px var(--hr);
+}
+.sum-photo.role-on-base {
+  border-color: #c084fc;
+  box-shadow: 0 0 0 2px #c084fc;
+}
+.sum-name {
+  font-weight: 700;
+  white-space: nowrap;
+}
+/* The name doubles as a link to the player's at-bats for the current range. */
+.sum-name-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.sum-name-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.sum-name-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.sum-hab {
+  font-weight: 700;
+}
+.sum-ops {
+  color: var(--accent);
+}
+.sum-total-label {
+  font-weight: 800;
+  color: var(--text);
+}
+/* Opponent / game column: matchup pre-game, live score + inning, or final score. */
+.summary-table .sum-opp-col,
+.summary-table .sum-opp {
+  min-width: 132px;
+  text-align: left;
+}
+.sum-opp-main {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.sum-opp-detail {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 1px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+/* A live game's inning gets the same green accent the app uses elsewhere. */
+.sum-opp-live .sum-opp-detail {
+  color: var(--hit);
+}
+.sum-opp-empty {
+  color: var(--muted);
+}
 .sim-toggle {
   display: inline-flex;
   align-items: center;
@@ -2496,8 +2831,8 @@ body {
 /* ---- View switch (Players / Feed) ---- */
 .view-switch {
   display: inline-flex;
-  gap: 4px;
-  padding: 4px;
+  gap: 3px;
+  padding: 3px;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -2508,7 +2843,7 @@ body {
   color: var(--muted);
   font-size: 14px;
   font-weight: 700;
-  padding: 7px 18px;
+  padding: 6px 13px;
   border-radius: 999px;
   cursor: pointer;
   transition: color 0.14s ease, background 0.14s ease;

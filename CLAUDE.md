@@ -60,8 +60,9 @@ A third source: `server/src/percentiles.ts` **scrapes the Savant player page** f
 
 `App.tsx` holds all top-level state and persists it in the **URL query string** (seeded from `window.location.search` on load, synced via `history.replaceState`) — so a reload or shared link restores the same view. There is no `localStorage`. Params: date range, active preset, expanded player-card ids, open details player, `view=feed`, `sim=1`.
 
-Two views, toggled in the nav:
+Three views, toggled in the nav (persisted as `view=players` / `view=feed`; `summary` is the default and omitted from the URL):
 
+- **summary** (`SummaryTable.tsx`, the default, listed first) — a full-page stat table over the range (one row per player: opponent/score, H/AB, R, HR, RBI, SB, OPS, BB, K; aggregate `Total` row pinned at the bottom). The opponent column shows the matchup pre-game, the live score + inning while a game is on, and the final score once it's over — for a representative game picked the same way the nav does (live, then scheduled, then most recent). Hides the search bar, overall-stats chips, and player-nav; the `.app.summary-mode` class turns the app into a fixed-height flex column so only the table scrolls. Headshot and name are separate columns so only the narrow headshot column sticks on horizontal scroll (the name scrolls away, freeing room for stats on a phone); the header/total rows stick on vertical scroll (pure CSS `position: sticky`). In the table, the headshot opens `PlayerDetails` and the name jumps to that player's at-bats on the players view.
 - **players** — one `PlayerCard` per watchlisted player (stat pills, collapsible), each containing `PlateAppearanceCard`s (outcome badge + pitch table + `StrikeZone` SVG plot). `PlayerDetails` overlays the percentile card + platoon splits. `PlayerAdder` searches the season roster.
 - **feed** (`LiveFeed.tsx`) — a chronological at-bat feed across all watched players, plus the day's completed and upcoming games (so it's useful before first pitch). `BaseDiamond` renders runners on base.
 

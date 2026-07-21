@@ -77,7 +77,7 @@ export function lineOps(line: BattingLine): number | null {
 }
 
 /** A rate stat printed the baseball way: three decimals, no leading zero (".812", "1.250"). */
-function rate(n: number): string {
+export function formatRate(n: number): string {
   const s = n.toFixed(3);
   return s.startsWith('0.') ? s.slice(1) : s;
 }
@@ -95,7 +95,7 @@ export function lineSummary(line: BattingLine): string {
   if (line.so) extras.push(line.so > 1 ? `${line.so} K` : 'K');
   if (line.hbp) extras.push('HBP');
   const ops = lineOps(line);
-  if (ops !== null) extras.push(`${rate(ops)} OPS`);
+  if (ops !== null) extras.push(`${formatRate(ops)} OPS`);
   return [parts[0], ...extras].join(', ');
 }
 

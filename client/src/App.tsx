@@ -4,6 +4,7 @@ import type { PlayerGame, PlayerReport, SeasonPlayer, WatchPlayer } from './type
 import { PlayerAdder } from './components/PlayerAdder';
 import { PlayerCard } from './components/PlayerCard';
 import { LiveFeed } from './components/LiveFeed';
+import { SummaryTable } from './components/SummaryTable';
 import { simulateLiveDay } from './simulate';
 import { PlayerDetails } from './components/PlayerDetails';
 import { BaseDiamond } from './components/BaseDiamond';
@@ -13,7 +14,6 @@ import {
   didNotAppear,
   formatStartTime,
   gameStatusView,
-  hasPlayed,
   headshotUrl,
   lineupCorner,
   liveRole,
@@ -242,15 +242,39 @@ export default function App() {
     const n = Number(initialParams.get('player'));
     return Number.isInteger(n) && n > 0 ? n : null;
   });
-  // Watchlist display mode: the grouped-by-player cards ('players'), or the flat,
+  // Watchlist display mode: the grouped-by-player cards ('players'), the flat,
   // most-recent-first stream of individual at-bats ('feed') for following live
-  // games. Seeded from the URL so a reload/shared link restores the same view.
-  const [view, setView] = useState<'players' | 'feed'>(() =>
-    initialParams.get('view') === 'feed' ? 'feed' : 'players',
-  );
+  // games, or a full-page stat table over the range ('summary'). Seeded from the
+  // URL so a reload/shared link restores the same view.
+  const [view, setView] = useState<'players' | 'feed' | 'summary'>(() => {
+    const v = initialParams.get('view');
+    // Summary is the default view; players/feed are opted into explicitly.
+    return v === 'players' || v === 'feed' ? v : 'summary';
+  });
   // Demo toggle: overlay a synthetic live-day state on the loaded reports so the
   // live-only UI can be exercised when nothing is actually being played.
   const [simulate, setSimulate] = useState<boolean>(() => initialParams.get('sim') === '1');
+  // The settings popover (gear next to the title) — currently holds the simulate
+  // toggle. Closes on outside click or Escape.
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const onDown = (e: PointerEvent) => {
+      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
+        setSettingsOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSettingsOpen(false);
+    };
+    window.addEventListener('pointerdown', onDown);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('pointerdown', onDown);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [settingsOpen]);
   // Nav edit mode: reveal per-player delete buttons and enable drag-to-reorder.
   const [editMode, setEditMode] = useState(false);
   const [draggingId, setDraggingId] = useState<number | null>(null);
@@ -356,7 +380,7 @@ export default function App() {
     if (activePreset) p.set('preset', activePreset);
     if (expandedIds.size) p.set('expanded', [...expandedIds].join(','));
     if (detailsId) p.set('player', String(detailsId));
-    if (view === 'feed') p.set('view', view);
+    if (view !== 'summary') p.set('view', view);
     if (simulate) p.set('sim', '1');
     window.history.replaceState(null, '', `?${p.toString()}`);
   }, [start, end, activePreset, expandedIds, detailsId, view, simulate]);
@@ -464,8 +488,10 @@ export default function App() {
       return next;
     });
   }, []);
-  // Whether the current view has anything expanded to collapse.
-  const hasExpanded = view === 'feed' ? feedOpenKeys.size > 0 : expandedIds.size > 0;
+  // Whether the current view has anything expanded to collapse (the summary
+  // table has no collapsibles).
+  const hasExpanded =
+    view === 'summary' ? false : view === 'feed' ? feedOpenKeys.size > 0 : expandedIds.size > 0;
   const collapseAll = () => {
     if (view === 'feed') setFeedOpenKeys(new Set());
     else setExpandedIds(new Set());
@@ -555,18 +581,49 @@ export default function App() {
     setExpandedIds((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
     scrollToPlayer(id);
   };
-  // From the feed: jump to a player's full day on the players view — switch
-  // views, expand their card, and scroll it below the strip. setNavStuck(false)
-  // matches the Players-tab handler (avoids a frame of stale-collapsed strip on
-  // the remount); the observer corrects it on its next callback.
+  // A link (from the summary/feed) jumped to the players page — remember which
+  // view we came from so a back button can return there. Cleared once we're back,
+  // or when the user navigates explicitly via the tabs. backScroll remembers that
+  // view's scroll offset so going back restores where the user left off — the
+  // summary view scrolls its inner table, the feed scrolls the window.
+  const [backView, setBackView] = useState<'summary' | 'feed' | null>(null);
+  const backScroll = useRef(0);
+  const goBack = () => {
+    if (!backView) return;
+    const dest = backView;
+    const top = backScroll.current;
+    setBackView(null);
+    setView(dest);
+    // Restore the previous scroll once the destination view has re-mounted.
+    requestAnimationFrame(() => {
+      if (dest === 'summary') {
+        const el = document.querySelector('.summary-scroll');
+        if (el) el.scrollTop = top;
+      } else {
+        window.scrollTo(0, top);
+      }
+    });
+  };
+  // From the feed/summary: jump to a player's full day on the players view —
+  // switch views, expand their card, and scroll it below the strip.
+  // setNavStuck(false) matches the Players-tab handler (avoids a frame of
+  // stale-collapsed strip on the remount); the observer corrects it on its next
+  // callback. Record the origin view + its scroll offset for the back button.
   const openPlayerDay = useCallback(
     (id: number) => {
+      const from = view === 'summary' || view === 'feed' ? view : null;
+      if (from === 'summary') {
+        backScroll.current = document.querySelector('.summary-scroll')?.scrollTop ?? 0;
+      } else if (from === 'feed') {
+        backScroll.current = window.scrollY;
+      }
+      setBackView(from);
       setNavStuck(false);
       setView('players');
       setExpandedIds((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
       scrollToPlayer(id);
     },
-    [scrollToPlayer],
+    [scrollToPlayer, view],
   );
   // Positions come from the season roster; look them up by id for each report.
   const positionById = useMemo(
@@ -597,34 +654,8 @@ export default function App() {
     [detailsId, watchlist],
   );
 
-  const totals = useMemo(() => {
-    // "Played" means actually came to the plate — a scheduled/live game a player
-    // hasn't batted in yet (or a benched player) doesn't count.
-    const played = reports.filter((r) => hasPlayed(r));
-    // Sum a per-game BattingLine field across every played player's games.
-    const sum = (pick: (l: PlayerGame['line']) => number) =>
-      played.reduce((s, r) => s + r.games.reduce((a, g) => a + pick(g.line), 0), 0);
-    const ab = sum((l) => l.ab);
-    const hits = sum((l) => l.hits);
-    const bb = sum((l) => l.bb);
-    const hbp = sum((l) => l.hbp);
-    const totalBases = sum((l) => l.totalBases);
-    // OPS = OBP + SLG. No sacrifice-fly field exists, so OBP's denominator is AB+BB+HBP.
-    const onBase = ab + bb + hbp;
-    const obp = onBase > 0 ? (hits + bb + hbp) / onBase : 0;
-    const slg = ab > 0 ? totalBases / ab : 0;
-    return {
-      played: played.length,
-      runs: sum((l) => l.runs),
-      hrs: sum((l) => l.hr),
-      rbi: sum((l) => l.rbi),
-      sb: sum((l) => l.sb),
-      ops: obp + slg,
-    };
-  }, [reports]);
-
   return (
-    <div className="app">
+    <div className={`app${view === 'summary' ? ' summary-mode' : ''}`}>
       <header className="app-header">
         <div className="brand">
           <div className="brand-mark" aria-hidden="true">
@@ -633,6 +664,49 @@ export default function App() {
           <h1>
             Statcast <span className="brand-sicko">Sicko</span>
           </h1>
+          <div className="settings-menu" ref={settingsRef}>
+            <button
+              type="button"
+              className={`settings-btn${settingsOpen ? ' active' : ''}`}
+              aria-haspopup="true"
+              aria-expanded={settingsOpen}
+              aria-label="Settings"
+              title="Settings"
+              onClick={() => setSettingsOpen((v) => !v)}
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                <path
+                  d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                />
+                <path
+                  d="M19.4 13a7.6 7.6 0 0 0 .1-1 7.6 7.6 0 0 0-.1-1l2-1.6-2-3.4-2.4 1a7.3 7.3 0 0 0-1.7-1l-.4-2.5h-4l-.4 2.5a7.3 7.3 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7.6 7.6 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a7.3 7.3 0 0 0 1.7 1l.4 2.5h4l.4-2.5a7.3 7.3 0 0 0 1.7-1l2.4 1 2-3.4-2-1.6Z"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+            {settingsOpen && (
+              <div className="settings-popover" role="menu">
+                <span className="settings-popover-label">Settings</span>
+                <button
+                  type="button"
+                  className={`sim-toggle${simulate ? ' active' : ''}`}
+                  role="menuitemcheckbox"
+                  aria-checked={simulate}
+                  onClick={() => setSimulate((v) => !v)}
+                  title="Simulate a live day of games — demo the live view when nothing's on"
+                >
+                  <span className="sim-dot" aria-hidden="true" />
+                  {simulate ? 'Simulating live' : 'Simulate live'}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
         <div className="date-control">
           <div className="date-row">
@@ -691,25 +765,67 @@ export default function App() {
         </div>
       </header>
 
-      <section className="controls">
-        <PlayerAdder
-          players={seasonPlayers}
-          watchlist={watchlist}
-          onAdd={onAdd}
-          onOpenDetails={setDetailsId}
-          loading={playersLoading}
-        />
-        <div className="summary-chips">
-          <span className="chip">
-            {totals.played}/{watchlist.length} played
-          </span>
-          <span className="chip">{totals.runs} R</span>
-          <span className="chip">{totals.hrs} HR</span>
-          <span className="chip">{totals.rbi} RBI</span>
-          <span className="chip">{totals.sb} SB</span>
-          <span className="chip">{totals.ops.toFixed(3).replace(/^0\./, '.')} OPS</span>
+      {/* Tabs + (players-only) roster search share one row when there's room; the
+          search wraps to its own line when narrow. The row still renders with
+          just the search when there are no reports yet (so an empty watchlist can
+          still add players), and with just the tabs on the feed/summary views. */}
+      {(showViewToggle || view === 'players') && (
+        <div className="view-bar">
+          {showViewToggle && (
+            <div className="view-switch" role="tablist" aria-label="Watchlist view">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={view === 'summary'}
+                className={`view-tab${view === 'summary' ? ' active' : ''}`}
+                onClick={() => {
+                  setBackView(null);
+                  setView('summary');
+                }}
+              >
+                Summary
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={view === 'players'}
+                className={`view-tab${view === 'players' ? ' active' : ''}`}
+                onClick={() => {
+                  // Assume expanded: the toggle sits at the top of the page, so the
+                  // remounting strip starts unstuck (the observer confirms/corrects
+                  // on its next callback). Avoids a frame of stale-collapsed strip.
+                  setNavStuck(false);
+                  setBackView(null);
+                  setView('players');
+                }}
+              >
+                Players
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={view === 'feed'}
+                className={`view-tab${view === 'feed' ? ' active' : ''}`}
+                onClick={() => {
+                  setBackView(null);
+                  setView('feed');
+                }}
+              >
+                Feed
+              </button>
+            </div>
+          )}
+          {view === 'players' && (
+            <PlayerAdder
+              players={seasonPlayers}
+              watchlist={watchlist}
+              onAdd={onAdd}
+              onOpenDetails={setDetailsId}
+              loading={playersLoading}
+            />
+          )}
         </div>
-      </section>
+      )}
 
       {error && <div className="error-banner">⚠ {error}</div>}
 
@@ -734,48 +850,15 @@ export default function App() {
         </div>
       )}
 
-      {showViewToggle && (
-        <div className="view-bar">
-          <div className="view-switch" role="tablist" aria-label="Watchlist view">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={view === 'players'}
-              className={`view-tab${view === 'players' ? ' active' : ''}`}
-              onClick={() => {
-                // Assume expanded: the toggle sits at the top of the page, so the
-                // remounting strip starts unstuck (the observer confirms/corrects
-                // on its next callback). Avoids a frame of stale-collapsed strip.
-                setNavStuck(false);
-                setView('players');
-              }}
-            >
-              Players
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={view === 'feed'}
-              className={`view-tab${view === 'feed' ? ' active' : ''}`}
-              onClick={() => setView('feed')}
-            >
-              Feed
-            </button>
-          </div>
-          <button
-            type="button"
-            className={`sim-toggle${simulate ? ' active' : ''}`}
-            aria-pressed={simulate}
-            onClick={() => setSimulate((v) => !v)}
-            title="Simulate a live day of games — demo the live view when nothing's on"
-          >
-            <span className="sim-dot" aria-hidden="true" />
-            {simulate ? 'Simulating live' : 'Simulate live'}
-          </button>
-        </div>
-      )}
-
-      {view === 'feed' ? (
+      {view === 'summary' ? (
+        displayReports.length > 0 && (
+          <SummaryTable
+            reports={displayReports}
+            onOpenDetails={setDetailsId}
+            onOpenPlayerDay={openPlayerDay}
+          />
+        )
+      ) : view === 'feed' ? (
         displayReports.length > 0 && (
           <LiveFeed
             reports={displayReports}
@@ -931,6 +1014,28 @@ export default function App() {
         </main>
       </div>
       )}
+
+      {/* Bottom-left back button, shown only after a summary/feed link jumped to
+          the players page — returns to whichever view it came from. */}
+      <button
+        type="button"
+        className={`float-btn back-nav${view === 'players' && backView ? ' visible' : ''}`}
+        onClick={goBack}
+        aria-label={`Back to ${backView === 'feed' ? 'feed' : 'summary'}`}
+        title={`Back to ${backView === 'feed' ? 'Feed' : 'Summary'}`}
+      >
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path
+            d="M15 18l-6-6 6-6"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+        Back
+      </button>
 
       <button
         type="button"
