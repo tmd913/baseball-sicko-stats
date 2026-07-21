@@ -22,6 +22,7 @@ import {
 import type { LiveRole } from '../lib';
 import { BaseDiamond } from './BaseDiamond';
 import { PlateAppearanceCard } from './PlateAppearanceCard';
+import { GameReel } from './GameReel';
 
 function StatPill({ label, value }: { label: string; value: string }) {
   return (
@@ -162,6 +163,17 @@ function GameBlock({
       return next;
     });
 
+  // The highlight reel: once the game is final (so all its video exists), every
+  // at-bat's final play in chronological order, stitched into one sequence. Only
+  // at-bats with a playId can have a clip (walks/HBP don't), so gate on those.
+  const [reelOpen, setReelOpen] = useState(false);
+  const reelPas =
+    game.status.state === 'final'
+      ? [...game.plateAppearances]
+          .filter((pa) => pa.playId)
+          .sort((a, b) => a.atBatNumber - b.atBatNumber)
+      : [];
+
   // The bar echoes the card's own header (player-head): an identity block
   // (matchup as the "name", date as the "meta") on the left, and a summary
   // (line + game-status badge) on the right.
@@ -265,6 +277,17 @@ function GameBlock({
       )}
       {(hideBar || !collapsed) && (
         <div className="pa-grid">
+          {reelPas.length > 0 && (
+            <div className="reel-bar">
+              <button type="button" className="reel-open" onClick={() => setReelOpen(true)}>
+                <span className="reel-open-icon" aria-hidden="true">
+                  ▶
+                </span>
+                Highlights
+                <span className="reel-open-count">{reelPas.length}</span>
+              </button>
+            </div>
+          )}
           {pas.map((pa) => (
             <PlateAppearanceCard
               key={pa.atBatNumber}
@@ -275,6 +298,15 @@ function GameBlock({
             />
           ))}
         </div>
+      )}
+      {reelOpen && (
+        <GameReel
+          pas={reelPas}
+          gamePk={game.gamePk}
+          title={report.name}
+          subtitle={`${game.batterTeam} ${game.isHome ? 'vs' : '@'} ${game.opponent}`}
+          onClose={() => setReelOpen(false)}
+        />
       )}
     </div>
   );
