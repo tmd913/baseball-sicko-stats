@@ -29,6 +29,8 @@ The README describes Baseball Savant CSV as the primary source. **The code has s
 
 `savant.ts::getDay(date)` orchestrates both: build the Stats API day, then merge CSV enrichment keyed by `batterId|gamePk|atBatNumber` (and `|pitchNumber` for pitches). `getReport(start, end, watchlist)` fans `getDay` across an inclusive date range and merges each player's games chronologically.
 
+A third source: `server/src/percentiles.ts` **scrapes the Savant player page** for the percentile-ranking card, parsing the `serverVals.statcast` blob embedded in the HTML. The `SECTIONS` table maps each displayed row to its `percent_rank_*` (0–100 rank) and raw-value fields; metrics where lower is better carry `lowerBetter` (only used by the estimated-percentile fallback — Savant's own `percent_rank_` fields already bake direction in). Cached on disk; the current season re-scrapes every 6h, past seasons are immutable.
+
 ### Report join keys
 
 - Stats API at-bats ↔ Savant CSV rows: `at_bat_number == atBatIndex + 1`.
@@ -49,13 +51,26 @@ The README describes Baseball Savant CSV as the primary source. **The code has s
 ### Server routing notes
 
 - All async routes are wrapped in `asyncRoute()`, which catches and returns `502 { error }`. The client's `api.ts` unwraps that `error` field into thrown `Error`s.
+- Endpoints: `/api/players` (season roster), `/api/watchlist` (GET/POST/DELETE `:id`, plus `PUT /order` for drag-to-reorder), `/api/report`, `/api/percentiles/:playerId`, `/api/players/:playerId/splits`, `/api/video/:playId`. The splits route exists only for the details view of a player who **isn't** watchlisted — the report already carries splits for watchlisted players.
+- `store.ts::reorderPlayers` deliberately appends any watchlist players missing from the submitted `ids`, so a stale client can't drop players.
 - Express 5 (path-to-regexp v8) rejects a bare `'*'` route — the SPA fallback is path-less middleware that serves `client/dist/index.html` for non-`/api` GETs.
 - **Video** (`/api/video/:playId`) is resolved lazily: it scrapes Savant's `sporty-videos` page for the direct `sporty-clips.mlb.com/*.mp4` URL only when a clip is opened, then caches it. The clip streams directly to the browser `<video>` (hotlink-protected by User-Agent, which a real browser satisfies) — the server never byte-proxies it.
 
 ### Client
 
-`App.tsx` holds all top-level state and persists date range, active preset, and collapsed player-card ids in the **URL query string** (seeded from `window.location.search` on load, synced via `history.replaceState`) — so a reload or shared link restores the same view. There is no `localStorage`. Components: `PlayerCard` (per-player panel + stat pills, collapsible), `PlateAppearanceCard` (one PA: outcome badge + pitch table), `StrikeZone` (SVG pitch-location plot), `PlayerAdder` (roster search). `lib.ts` holds display helpers (labels, colors, formatting).
+`App.tsx` holds all top-level state and persists it in the **URL query string** (seeded from `window.location.search` on load, synced via `history.replaceState`) — so a reload or shared link restores the same view. There is no `localStorage`. Params: date range, active preset, expanded player-card ids, open details player, `view=feed`, `sim=1`.
+
+Two views, toggled in the nav:
+
+- **players** — one `PlayerCard` per watchlisted player (stat pills, collapsible), each containing `PlateAppearanceCard`s (outcome badge + pitch table + `StrikeZone` SVG plot). `PlayerDetails` overlays the percentile card + platoon splits. `PlayerAdder` searches the season roster.
+- **feed** (`LiveFeed.tsx`) — a chronological at-bat feed across all watched players, plus the day's completed and upcoming games (so it's useful before first pitch). `BaseDiamond` renders runners on base.
+
+Expansion state is split by view: the player view uses `expandedIds` (numeric player ids, in the URL); the feed uses `feedOpenKeys` (string keys, **not** persisted). "Collapse all" clears whichever the active view uses. `hooks.ts::useScrollIntoViewOnExpand` handles the closed→open scroll for every collapsible.
+
+**Live polling:** while any *real* game is in progress (`status.state === 'live'`), `App.tsx` re-polls `/api/report` every 20s to track scores, bases, and the nav's at-bat/on-deck/on-base highlights.
+
+**Simulate mode** (`simulate.ts`, the `sim=1` toggle) overlays a synthetic live day onto the fetched reports so the live-only UI can be demoed when nothing is on. It derives values from player ids (never `Math.random`) so the picture is stable across re-renders, never mutates the source reports, and does **not** drive polling. Everything rendered reads `displayReports`; raw `reports` still back polling and reordering.
 
 ### Season is hardcoded
 
-Savant queries pin `hfSea=2026` in `savant.ts`. Update this (and check date-default logic) when the season rolls over.
+The current season is pinned in **two places** that must stay in sync: `hfSea=2026` in `savant.ts` and `CURRENT_SEASON` in `percentiles.ts`. Update both (and check date-default logic) when the season rolls over.

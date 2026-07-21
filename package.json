@@ -1,5 +1,5 @@
 {
-  "name": "baseball-sicko-stats",
+  "name": "statcast-sicko",
   "version": "1.0.0",
   "private": true,
   "description": "Visualize previous-day MLB batting data for a watchlist of players (Baseball Savant / Statcast).",

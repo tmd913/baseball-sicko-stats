@@ -20,6 +20,7 @@ export function outcomeKind(event: string | null): OutcomeKind {
     case 'triple':
       return 'hit';
     case 'walk':
+    case 'intent_walk':
     case 'hit_by_pitch':
       return 'walk';
     case 'strikeout':

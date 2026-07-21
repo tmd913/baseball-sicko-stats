@@ -555,6 +555,19 @@ export default function App() {
     setExpandedIds((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
     scrollToPlayer(id);
   };
+  // From the feed: jump to a player's full day on the players view — switch
+  // views, expand their card, and scroll it below the strip. setNavStuck(false)
+  // matches the Players-tab handler (avoids a frame of stale-collapsed strip on
+  // the remount); the observer corrects it on its next callback.
+  const openPlayerDay = useCallback(
+    (id: number) => {
+      setNavStuck(false);
+      setView('players');
+      setExpandedIds((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
+      scrollToPlayer(id);
+    },
+    [scrollToPlayer],
+  );
   // Positions come from the season roster; look them up by id for each report.
   const positionById = useMemo(
     () => new Map(seasonPlayers.map((p) => [p.id, p.position])),
@@ -618,7 +631,7 @@ export default function App() {
             ⚾
           </div>
           <h1>
-            Baseball <span className="brand-sicko">Sicko</span> Stats
+            Statcast <span className="brand-sicko">Sicko</span>
           </h1>
         </div>
         <div className="date-control">
@@ -767,6 +780,7 @@ export default function App() {
           <LiveFeed
             reports={displayReports}
             onOpenDetails={setDetailsId}
+            onOpenPlayerDay={openPlayerDay}
             openKeys={feedOpenKeys}
             onToggleKey={toggleFeedKey}
           />

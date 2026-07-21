@@ -1,4 +1,4 @@
-# Baseball Sicko Stats
+# Statcast Sicko
 
 A full-stack TypeScript app for visualizing **previous-day MLB batting events** for a
 watchlist of players, powered by Baseball Savant / Statcast pitch-level data, with

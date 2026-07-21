@@ -139,7 +139,7 @@ async function downloadCsv(date: string): Promise<string> {
     // not cached yet
   }
   const res = await fetch(savantUrl(date), {
-    headers: { 'User-Agent': 'baseball-sicko-stats/1.0' },
+    headers: { 'User-Agent': 'statcast-sicko/1.0' },
   });
   if (!res.ok) {
     throw new Error(`Baseball Savant returned ${res.status} ${res.statusText}`);
@@ -166,6 +166,7 @@ function classifyHit(event: string | null): {
     case 'home_run':
       return { isAb: true, isHit: true, bases: 4 };
     case 'walk':
+    case 'intent_walk':
     case 'hit_by_pitch':
     case 'sac_fly':
     case 'sac_bunt':
@@ -215,7 +216,7 @@ function buildLine(pas: PlateAppearance[]): BattingLine {
     if (pa.event === 'double') line.doubles++;
     if (pa.event === 'triple') line.triples++;
     if (pa.event === 'home_run') line.hr++;
-    if (pa.event === 'walk') line.bb++;
+    if (pa.event === 'walk' || pa.event === 'intent_walk') line.bb++;
     if (pa.event === 'strikeout' || pa.event === 'strikeout_double_play') line.so++;
     if (pa.event === 'hit_by_pitch') line.hbp++;
     line.rbi += pa.rbi;

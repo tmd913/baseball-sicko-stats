@@ -13,7 +13,7 @@ import type {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CACHE_DIR = path.join(__dirname, '..', 'data', 'cache');
-const UA = { 'User-Agent': 'baseball-sicko-stats/1.0' };
+const UA = { 'User-Agent': 'statcast-sicko/1.0' };
 
 async function fetchCached(url: string, cacheFile: string): Promise<string> {
   const hit = await readCache(cacheFile);

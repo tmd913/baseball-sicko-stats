@@ -55,6 +55,35 @@ function roleAtBat(role: LiveRole, game: PlayerGame): PlateAppearance | null {
 }
 
 /**
+ * A player's name in a feed row — a button that jumps to their full day of
+ * at-bats on the players view. stopPropagation so it doesn't also toggle a
+ * collapsible the name sits inside (the live/upcoming row headers).
+ */
+function FeedPlayerName({
+  id,
+  name,
+  onOpen,
+}: {
+  id: number;
+  name: string;
+  onOpen: (id: number) => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="feed-player-name feed-player-name-link"
+      title={`${name} — full day`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpen(id);
+      }}
+    >
+      {name}
+    </button>
+  );
+}
+
+/**
  * A player's headshot, opening their Statcast details on click. A compact
  * variant of the player card's headshot; `role` paints the live-role ring.
  */
@@ -109,6 +138,7 @@ function LiveEntry({
   open,
   onToggle,
   onOpenDetails,
+  onOpenPlayerDay,
 }: {
   report: PlayerReport;
   role: LiveRole;
@@ -116,6 +146,7 @@ function LiveEntry({
   open: boolean;
   onToggle: () => void;
   onOpenDetails: (id: number) => void;
+  onOpenPlayerDay: (id: number) => void;
 }) {
   const pa = roleAtBat(role, game);
   // Scroll the whole item (player header + at-bat) into view on expand, so the
@@ -131,7 +162,7 @@ function LiveEntry({
           onOpen={() => onOpenDetails(report.id)}
         />
         <div className="feed-item-id">
-          <span className="feed-player-name">{report.name}</span>
+          <FeedPlayerName id={report.id} name={report.name} onOpen={onOpenPlayerDay} />
           <span className="feed-context">
             {matchup(game)} · {liveInning(game)}
           </span>
@@ -159,6 +190,7 @@ function FeedAtBat({
   open,
   onToggle,
   onOpenDetails,
+  onOpenPlayerDay,
 }: {
   report: PlayerReport;
   game: PlayerGame;
@@ -166,6 +198,7 @@ function FeedAtBat({
   open: boolean;
   onToggle: () => void;
   onOpenDetails: (id: number) => void;
+  onOpenPlayerDay: (id: number) => void;
 }) {
   // Expanding scrolls the whole item to the top so the player header stays in
   // view above the at-bat detail (the card itself doesn't self-scroll).
@@ -175,7 +208,7 @@ function FeedAtBat({
       <div className="feed-item-head">
         <FeedHeadshot id={report.id} name={report.name} onOpen={() => onOpenDetails(report.id)} />
         <div className="feed-item-id">
-          <span className="feed-player-name">{report.name}</span>
+          <FeedPlayerName id={report.id} name={report.name} onOpen={onOpenPlayerDay} />
           <span className="feed-context">{matchup(game)}</span>
         </div>
       </div>
@@ -215,12 +248,14 @@ function UpcomingRow({
   open,
   onToggle,
   onOpenDetails,
+  onOpenPlayerDay,
 }: {
   report: PlayerReport;
   game: PlayerGame;
   open: boolean;
   onToggle: () => void;
   onOpenDetails: (id: number) => void;
+  onOpenPlayerDay: (id: number) => void;
 }) {
   const time = formatStartTime(game.status.startTime);
   const expandable = !!game.probablePitcher;
@@ -231,7 +266,7 @@ function UpcomingRow({
     <>
       <FeedHeadshot id={report.id} name={report.name} onOpen={() => onOpenDetails(report.id)} />
       <div className="live-row-id">
-        <span className="feed-player-name">{report.name}</span>
+        <FeedPlayerName id={report.id} name={report.name} onOpen={onOpenPlayerDay} />
         <span className="feed-context">{matchup(game)}</span>
       </div>
       <span className="feed-time">{time ?? (game.status.detailedState || 'TBD')}</span>
@@ -291,11 +326,14 @@ function UpcomingRow({
 export function LiveFeed({
   reports,
   onOpenDetails,
+  onOpenPlayerDay,
   openKeys,
   onToggleKey,
 }: {
   reports: PlayerReport[];
   onOpenDetails: (id: number) => void;
+  // Jump to a player's full day of at-bats on the players view.
+  onOpenPlayerDay: (id: number) => void;
   // Which at-bats / upcoming rows are expanded, keyed by player + game + at-bat
   // number. Lifted to the parent so a "collapse all" control can clear them.
   openKeys: Set<string>;
@@ -358,6 +396,7 @@ export function LiveFeed({
                   open={openKeys.has(key)}
                   onToggle={() => toggle(key)}
                   onOpenDetails={onOpenDetails}
+                  onOpenPlayerDay={onOpenPlayerDay}
                 />
               );
             })}
@@ -380,6 +419,7 @@ export function LiveFeed({
                   open={openKeys.has(key)}
                   onToggle={() => toggle(key)}
                   onOpenDetails={onOpenDetails}
+                  onOpenPlayerDay={onOpenPlayerDay}
                 />
               );
             })}
@@ -401,6 +441,7 @@ export function LiveFeed({
                   open={openKeys.has(key)}
                   onToggle={() => toggle(key)}
                   onOpenDetails={onOpenDetails}
+                  onOpenPlayerDay={onOpenPlayerDay}
                 />
               );
             })}
