@@ -35,6 +35,11 @@
 body {
   margin: 0;
   background: radial-gradient(1200px 700px at 80% -10%, #16233f 0%, var(--bg) 55%);
+  /* Anchor the gradient to the viewport, not the document, so it looks the same
+     on every view regardless of page height — a very tall page (the feed) would
+     otherwise push the percentage-positioned gradient up out of sight, leaving a
+     flat background, while a short one (summary) keeps it. */
+  background-attachment: fixed;
   color: var(--text);
   font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -595,7 +600,7 @@ body {
   z-index: 20;
   margin: 0 -22px;
   padding: 12px 22px;
-  background: var(--bg);
+  /* background: var(--bg); */
 }
 /* Edit toggle at the end of the player list. On the wide text rail it's a text
    pill ("Edit"/"Done") at the bottom; the narrow avatar rail and phone strip
@@ -679,7 +684,6 @@ body {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   background: var(--panel);
-  border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 8px;
 }
@@ -988,7 +992,6 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 18px 20px 20px;
-  box-shadow: var(--shadow);
   container-type: inline-size;
 }
 /* Phones can start with a taller strip before the measured offset lands, so use
@@ -1936,6 +1939,16 @@ body {
   border: 1px solid var(--border);
   background: #000;
 }
+/* The feed's directly-shown player: preload="none" means no intrinsic size to
+   grow into, so give it a stable 16:9 frame (the clip fits inside via
+   object-fit) — the box looks right before playback and doesn't jump. */
+.pa-video-inline {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  max-height: 360px;
+  object-fit: contain;
+}
 
 .pa-body {
   display: grid;
@@ -2864,7 +2877,8 @@ body {
 .live-feed {
   max-width: 860px;
   width: 100%;
-  margin: 0 auto;
+  /* Extra top margin so the feed sits clear of the view tabs above it. */
+  margin: 16px auto 0;
   display: flex;
   flex-direction: column;
   gap: 26px;
@@ -3062,6 +3076,42 @@ body {
   font-size: 12px;
   font-weight: 600;
   color: var(--muted);
+}
+/* A base-running feed item (stolen base / run scored): a compact badge row, no
+   pitch card. The left accent mirrors the at-bat card's outcome stripe. */
+.feed-base {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-radius: 12px;
+}
+.feed-base.kind-sb {
+  border-left-color: #c084fc;
+}
+.feed-base.kind-run {
+  border-left-color: var(--hit);
+}
+.feed-base-inning {
+  min-width: 42px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.feed-base-badge {
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.feed-base.kind-sb .feed-base-badge {
+  color: #c084fc;
+}
+.feed-base.kind-run .feed-base-badge {
+  color: var(--hit);
 }
 /* The player's name in a feed row doubles as a link to their full day on the
    players view. Inherits the .feed-player-name text styles; this just strips the

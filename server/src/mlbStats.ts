@@ -739,6 +739,14 @@ const isStolenBase = (et: string): boolean => et.startsWith('stolen_base');
 const isCaughtStealing = (et: string): boolean =>
   et.startsWith('caught_stealing') || et.startsWith('pickoff_caught_stealing');
 
+/** The base taken on a stolen_base_* event type, for the feed label. */
+const stolenBaseTarget = (et: string): string | null => {
+  if (et.endsWith('_2b')) return '2nd';
+  if (et.endsWith('_3b')) return '3rd';
+  if (et.endsWith('_home')) return 'home';
+  return null;
+};
+
 // ---- Public per-game model ----------------------------------------------
 
 export interface StatsApiPitch {
@@ -793,6 +801,18 @@ export interface StatsApiBatterGame {
   plateAppearances: StatsApiPlateAppearance[];
 }
 
+// A base-running event by a runner (not a plate appearance) — a stolen base or a
+// run scored — captured so the feed can interleave them chronologically with
+// at-bats. Keyed by runner id in StatsApiGame.baseEvents.
+export interface StatsApiBaseEvent {
+  kind: 'sb' | 'run';
+  inning: number;
+  half: 'Top' | 'Bot';
+  timestamp: string | null;
+  // For a stolen base, the base taken ("2nd" / "3rd" / "home"); null for a run.
+  base: string | null;
+}
+
 export interface StatsApiGame {
   gamePk: number;
   // 1 for a single game; 1 or 2 for the halves of a doubleheader. Used to order
@@ -818,6 +838,10 @@ export interface StatsApiGame {
   runsByRunner: Map<number, number>;
   sbByRunner: Map<number, number>;
   csByRunner: Map<number, number>;
+  // Per-runner base events (stolen bases, runs scored) in play order — for the
+  // feed's chronological stream. A run scored on the runner's own plate
+  // appearance (a home run) is omitted, since the at-bat already shows it.
+  baseEvents: Map<number, StatsApiBaseEvent[]>;
 }
 
 const EMPTY_BASES: BaseState = { first: false, second: false, third: false };
@@ -1008,6 +1032,12 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
   const runsByRunner = new Map<number, number>();
   const sbByRunner = new Map<number, number>();
   const csByRunner = new Map<number, number>();
+  const baseEvents = new Map<number, StatsApiBaseEvent[]>();
+  const addBaseEvent = (rid: number, ev: StatsApiBaseEvent) => {
+    const list = baseEvents.get(rid);
+    if (list) list.push(ev);
+    else baseEvents.set(rid, [ev]);
+  };
 
   let outsInHalf = 0;
   // The base state a batter comes up to equals the previous PA's end state in
@@ -1076,15 +1106,30 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
       });
     }
 
+    const evInning = play.about?.inning ?? 0;
+    const evHalf = play.about?.halfInning?.toLowerCase() === 'top' ? 'Top' : 'Bot';
+    const evTime = play.about?.endTime ?? play.about?.startTime ?? null;
     for (const r of play.runners ?? []) {
       const et = r.details?.eventType ?? '';
       const rid = r.details?.runner?.id;
       if (typeof rid !== 'number') continue;
       if (r.movement?.end === 'score') {
         runsByRunner.set(rid, (runsByRunner.get(rid) ?? 0) + 1);
+        // Skip a run scored on the runner's own at-bat (a home run) — the plate
+        // appearance already shows it. Baserunner runs are their own feed event.
+        if (rid !== batterId) {
+          addBaseEvent(rid, { kind: 'run', inning: evInning, half: evHalf, timestamp: evTime, base: null });
+        }
       }
       if (isStolenBase(et)) {
         sbByRunner.set(rid, (sbByRunner.get(rid) ?? 0) + 1);
+        addBaseEvent(rid, {
+          kind: 'sb',
+          inning: evInning,
+          half: evHalf,
+          timestamp: evTime,
+          base: stolenBaseTarget(et),
+        });
       } else if (isCaughtStealing(et)) {
         csByRunner.set(rid, (csByRunner.get(rid) ?? 0) + 1);
       }
@@ -1132,6 +1177,7 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
     runsByRunner,
     sbByRunner,
     csByRunner,
+    baseEvents,
   };
   // Final games are immutable — memoize forever. Live games are rebuilt each
   // request from the (throttled) snapshot in liveState, so don't cache them here.

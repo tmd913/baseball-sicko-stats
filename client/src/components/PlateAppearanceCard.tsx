@@ -14,7 +14,7 @@ import {
 import { BaseDiamond } from './BaseDiamond';
 import { StrikeZone } from './StrikeZone';
 
-function VideoClip({ playId, gamePk }: { playId: string; gamePk: number }) {
+export function VideoClip({ playId, gamePk }: { playId: string; gamePk: number }) {
   const [state, setState] = useState<'checking' | 'available' | 'unavailable' | 'watching'>(
     'checking',
   );
@@ -74,6 +74,75 @@ function VideoClip({ playId, gamePk }: { playId: string; gamePk: number }) {
   return null;
 }
 
+/**
+ * The clip shown directly — no "Watch" button, no autoplay — so the user can just
+ * hit play. Used by the feed. Resolves the URL, then loads the clip's metadata
+ * once it nears the viewport (`preload="metadata"`) so the first frame shows as a
+ * preview at the clip's real size — deferred via IntersectionObserver so a feed
+ * full of clips doesn't fetch them all at once. Renders nothing if there's no
+ * clip; a placeholder holds the (16:9) frame until the video is near.
+ */
+export function InlineVideoClip({ playId, gamePk }: { playId: string; gamePk: number }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [near, setNear] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setUrl(null);
+    setNear(false);
+    api
+      .video(playId, gamePk)
+      .then((resolved) => {
+        if (!cancelled) setUrl(resolved);
+      })
+      .catch(() => {
+        // No clip for this play — stay unrendered.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [playId, gamePk]);
+
+  // Load the first frame only once the clip is near the viewport.
+  useEffect(() => {
+    if (!url || near) return;
+    const el = wrapRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setNear(true);
+          io.disconnect();
+        }
+      },
+      { rootMargin: '400px 0px' },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [url, near]);
+
+  if (!url) return null;
+  return (
+    <div className="pa-video" ref={wrapRef}>
+      {near ? (
+        /* eslint-disable-next-line jsx-a11y/media-has-caption */
+        <video
+          // #t=0.1 seeks to the first frame so it paints as the poster (with
+          // preload="metadata" a bare src often stays blank until played).
+          className="pa-video-el pa-video-inline"
+          src={`${url}#t=0.1`}
+          controls
+          playsInline
+          preload="metadata"
+        />
+      ) : (
+        <div className="pa-video-el pa-video-inline pa-video-ph" aria-hidden="true" />
+      )}
+    </div>
+  );
+}
+
 function PitchRow({
   pitch,
   active,
@@ -121,6 +190,7 @@ export function PlateAppearanceCard({
   open,
   onToggle,
   autoScroll = true,
+  showVideo = true,
 }: {
   pa: PlateAppearance;
   gamePk: number;
@@ -130,6 +200,9 @@ export function PlateAppearanceCard({
   // scrolls a larger wrapper instead (the feed scrolls the whole player+at-bat
   // item so the player header isn't left cut off above the viewport).
   autoScroll?: boolean;
+  // When false, the card omits its own (expand-gated, button-triggered) clip —
+  // the feed shows the clip directly below the card instead.
+  showVideo?: boolean;
 }) {
   const [activePitch, setActivePitch] = useState<number | null>(null);
   // Tap toggles a pin on touch/pen (no hover to rely on); tapping the same
@@ -224,7 +297,7 @@ export function PlateAppearanceCard({
                 ))}
               </div>
 
-              {pa.playId && <VideoClip playId={pa.playId} gamePk={gamePk} />}
+              {showVideo && pa.playId && <VideoClip playId={pa.playId} gamePk={gamePk} />}
             </div>
             <StrikeZone
               pitches={pa.pitches}

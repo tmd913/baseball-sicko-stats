@@ -96,6 +96,15 @@ export interface ProbablePitcher {
   hand: string | null;
 }
 
+/** A base-running event (stolen base or run scored) for the feed's stream. */
+export interface BaseEvent {
+  kind: 'sb' | 'run';
+  inning: number;
+  half: string; // "Top" | "Bot"
+  timestamp: string | null;
+  base: string | null; // stolen-base target ("2nd"/"3rd"/"home"); null for a run
+}
+
 export interface PlayerGame {
   gamePk: number;
   // 1 for a single game; 1 or 2 for the halves of a doubleheader. Games are
@@ -114,6 +123,8 @@ export interface PlayerGame {
   lineupSpot: number | null;
   probablePitcher: ProbablePitcher | null;
   plateAppearances: PlateAppearance[];
+  // Stolen bases + runs scored by this player in the game, in play order.
+  baseEvents: BaseEvent[];
   line: BattingLine;
 }
 

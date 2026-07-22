@@ -1,15 +1,9 @@
 import { useState } from 'react';
 import type { LiveRole } from '../lib';
-import {
-  formatStartTime,
-  headshotUrl,
-  liveRoleGame,
-  liveRoleLabel,
-  mostRecentAtBatFirst,
-} from '../lib';
-import type { PlateAppearance, PlayerGame, PlayerReport } from '../types';
+import { formatStartTime, headshotUrl, liveRoleGame, liveRoleLabel } from '../lib';
+import type { BaseEvent, PlateAppearance, PlayerGame, PlayerReport } from '../types';
 import { useScrollIntoViewOnExpand } from '../hooks';
-import { PlateAppearanceCard } from './PlateAppearanceCard';
+import { InlineVideoClip, PlateAppearanceCard } from './PlateAppearanceCard';
 import { PlatoonSplit, ProbablePitcher } from './PlayerCard';
 
 /** Priority order for the Live section: at bat, then on deck, then on base. */
@@ -52,6 +46,23 @@ function roleAtBat(role: LiveRole, game: PlayerGame): PlateAppearance | null {
   if (role === 'at-bat') return currentAtBat(game);
   if (role === 'on-base') return mostRecentCompleted(game);
   return null;
+}
+
+/** A recent-stream item: a completed plate appearance or a base-running event. */
+type FeedEntry =
+  | { type: 'pa'; report: PlayerReport; game: PlayerGame; pa: PlateAppearance }
+  | { type: 'base'; report: PlayerReport; game: PlayerGame; ev: BaseEvent; i: number };
+
+/** Sort key for the recent stream: the item's timestamp, falling back to the end
+ * of the game's date so undated cached items still land on the right day. */
+function entryTime(e: FeedEntry): number {
+  const ts = e.type === 'pa' ? e.pa.timestamp : e.ev.timestamp;
+  if (ts) {
+    const t = Date.parse(ts);
+    if (!Number.isNaN(t)) return t;
+  }
+  const d = Date.parse(`${e.game.date}T23:59:59Z`);
+  return Number.isNaN(d) ? 0 : d;
 }
 
 /**
@@ -176,8 +187,10 @@ function LiveEntry({
           open={open}
           onToggle={onToggle}
           autoScroll={false}
+          showVideo={false}
         />
       )}
+      {pa?.playId && <InlineVideoClip playId={pa.playId} gamePk={game.gamePk} />}
     </div>
   );
 }
@@ -218,7 +231,52 @@ function FeedAtBat({
         open={open}
         onToggle={onToggle}
         autoScroll={false}
+        showVideo={false}
       />
+      {pa.playId && <InlineVideoClip playId={pa.playId} gamePk={game.gamePk} />}
+    </div>
+  );
+}
+
+/** The label for a base-running feed event, e.g. "Stole 2nd" or "Run Scored". */
+function baseEventLabel(ev: BaseEvent): string {
+  if (ev.kind === 'run') return 'Run Scored';
+  return ev.base ? `Stole ${ev.base}` : 'Stolen Base';
+}
+
+/**
+ * One base-running event in the Recent section — a stolen base or a run scored.
+ * Same player header as an at-bat, then a compact badge (no pitch card/video,
+ * since it isn't a plate appearance).
+ */
+function FeedBaseEvent({
+  report,
+  game,
+  ev,
+  onOpenDetails,
+  onOpenPlayerDay,
+}: {
+  report: PlayerReport;
+  game: PlayerGame;
+  ev: BaseEvent;
+  onOpenDetails: (id: number) => void;
+  onOpenPlayerDay: (id: number) => void;
+}) {
+  return (
+    <div className="feed-item">
+      <div className="feed-item-head">
+        <FeedHeadshot id={report.id} name={report.name} onOpen={() => onOpenDetails(report.id)} />
+        <div className="feed-item-id">
+          <FeedPlayerName id={report.id} name={report.name} onOpen={onOpenPlayerDay} />
+          <span className="feed-context">{matchup(game)}</span>
+        </div>
+      </div>
+      <div className={`feed-base kind-${ev.kind}`}>
+        <span className="feed-base-inning">
+          {ev.half} {ev.inning}
+        </span>
+        <span className="feed-base-badge">{baseEventLabel(ev)}</span>
+      </div>
     </div>
   );
 }
@@ -351,17 +409,25 @@ export function LiveFeed({
     .filter((x): x is { report: PlayerReport; role: LiveRole; game: PlayerGame } => x !== null)
     .sort((a, b) => ROLE_ORDER[a.role] - ROLE_ORDER[b.role]);
 
-  // Every completed plate appearance across the watchlist, newest first. The
+  // Every completed plate appearance plus every base-running event (stolen
+  // bases, runs scored) across the watchlist, interleaved newest-first. The
   // in-progress at-bat (no event yet) lives in the Live section above, not here.
-  const atBats = reports
+  const recent = reports
     .flatMap((report) =>
-      report.games.flatMap((game) =>
-        game.plateAppearances
+      report.games.flatMap((game): FeedEntry[] => [
+        ...game.plateAppearances
           .filter((pa) => pa.event)
-          .map((pa) => ({ report, game, pa })),
-      ),
+          .map((pa): FeedEntry => ({ type: 'pa', report, game, pa })),
+        ...game.baseEvents.map((ev, i): FeedEntry => ({ type: 'base', report, game, ev, i })),
+      ]),
     )
-    .sort(mostRecentAtBatFirst);
+    .sort((a, b) => {
+      const t = entryTime(b) - entryTime(a);
+      if (t) return t;
+      const gn = (b.game.gameNumber ?? 0) - (a.game.gameNumber ?? 0);
+      if (gn) return gn;
+      return b.game.gamePk - a.game.gamePk;
+    });
 
   // Not-yet-started games, earliest first pitch first — so the feed still has
   // something to show before the day's first at-bat (and lists later games while
@@ -374,7 +440,7 @@ export function LiveFeed({
     )
     .sort(byStartTime);
 
-  const isEmpty = liveRows.length === 0 && atBats.length === 0 && upcoming.length === 0;
+  const isEmpty = liveRows.length === 0 && recent.length === 0 && upcoming.length === 0;
 
   return (
     <div className="live-feed">
@@ -404,11 +470,25 @@ export function LiveFeed({
         </section>
       )}
 
-      {atBats.length > 0 && (
+      {recent.length > 0 && (
         <section className="feed-section">
-          <h2 className="feed-heading">Recent at-bats</h2>
+          <h2 className="feed-heading">Recent plays</h2>
           <div className="feed-items">
-            {atBats.map(({ report, game, pa }) => {
+            {recent.map((entry) => {
+              if (entry.type === 'base') {
+                const { report, game, ev, i } = entry;
+                return (
+                  <FeedBaseEvent
+                    key={`base-${report.id}-${game.gamePk}-${i}`}
+                    report={report}
+                    game={game}
+                    ev={ev}
+                    onOpenDetails={onOpenDetails}
+                    onOpenPlayerDay={onOpenPlayerDay}
+                  />
+                );
+              }
+              const { report, game, pa } = entry;
               const key = `${report.id}-${game.gamePk}-${pa.atBatNumber}`;
               return (
                 <FeedAtBat

@@ -431,6 +431,13 @@ async function buildStatsApiDay(date: string): Promise<{
         // The batter faces the opposing team's starter.
         probablePitcher: bg.isHome ? g.awayProbablePitcher : g.homeProbablePitcher,
         plateAppearances,
+        baseEvents: (g.baseEvents.get(bg.batterId) ?? []).map((e) => ({
+          kind: e.kind,
+          inning: e.inning,
+          half: e.half,
+          timestamp: e.timestamp,
+          base: e.base,
+        })),
         // line is finalized after CSV enrichment is merged in (below), since
         // run value / avg exit velo depend on fields the enrichment fills in.
         line: buildLine(plateAppearances.filter((p) => p.event)),
@@ -581,6 +588,7 @@ function rosterGame(dg: DayGame, isHome: boolean, playerId: number): PlayerGame 
     ...lineupStatusFor(playerId, isHome ? dg.homeStarters : dg.awayStarters),
     probablePitcher: isHome ? dg.awayProbablePitcher : dg.homeProbablePitcher,
     plateAppearances: [],
+    baseEvents: [],
     line: buildLine([]),
   };
 }
