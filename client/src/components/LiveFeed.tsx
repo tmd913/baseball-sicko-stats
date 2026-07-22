@@ -1,13 +1,25 @@
 import { useState } from 'react';
 import type { LiveRole } from '../lib';
-import { formatStartTime, headshotUrl, liveRoleGame, liveRoleLabel } from '../lib';
-import type { BaseEvent, PlateAppearance, PlayerGame, PlayerReport } from '../types';
+import {
+  eventLabel,
+  formatStartTime,
+  headshotUrl,
+  liveRoleGame,
+  liveRoleLabel,
+  outcomeKind,
+} from '../lib';
+import type { BaseEvent, FacedBatter, PlateAppearance, PlayerGame, PlayerReport } from '../types';
 import { useScrollIntoViewOnExpand } from '../hooks';
 import { InlineVideoClip, PlateAppearanceCard } from './PlateAppearanceCard';
 import { PlatoonSplit, ProbablePitcher } from './PlayerCard';
 
 /** Priority order for the Live section: at bat, then on deck, then on base. */
-const ROLE_ORDER: Record<LiveRole, number> = { 'at-bat': 0, 'on-deck': 1, 'on-base': 2 };
+const ROLE_ORDER: Record<LiveRole, number> = {
+  'at-bat': 0,
+  'on-deck': 1,
+  'on-base': 2,
+  pitching: 3,
+};
 
 /** A player's live game inning, e.g. "Top 7" (falls back to the game's label). */
 function liveInning(game: PlayerGame): string {
@@ -48,15 +60,17 @@ function roleAtBat(role: LiveRole, game: PlayerGame): PlateAppearance | null {
   return null;
 }
 
-/** A recent-stream item: a completed plate appearance or a base-running event. */
+/** A recent-stream item: a plate appearance, a base-running event, or (for a
+ * watched pitcher) a batter they faced. */
 type FeedEntry =
   | { type: 'pa'; report: PlayerReport; game: PlayerGame; pa: PlateAppearance }
-  | { type: 'base'; report: PlayerReport; game: PlayerGame; ev: BaseEvent; i: number };
+  | { type: 'base'; report: PlayerReport; game: PlayerGame; ev: BaseEvent; i: number }
+  | { type: 'faced'; report: PlayerReport; game: PlayerGame; fb: FacedBatter; i: number };
 
 /** Sort key for the recent stream: the item's timestamp, falling back to the end
  * of the game's date so undated cached items still land on the right day. */
 function entryTime(e: FeedEntry): number {
-  const ts = e.type === 'pa' ? e.pa.timestamp : e.ev.timestamp;
+  const ts = e.type === 'pa' ? e.pa.timestamp : e.type === 'faced' ? e.fb.timestamp : e.ev.timestamp;
   if (ts) {
     const t = Date.parse(ts);
     if (!Number.isNaN(t)) return t;
@@ -281,6 +295,51 @@ function FeedBaseEvent({
   );
 }
 
+/** One batter a watched pitcher faced, in the recent stream — the pitcher header
+ * plus the result (no pitch-by-pitch detail). */
+function FeedFacedBatter({
+  report,
+  game,
+  fb,
+  onOpenDetails,
+  onOpenPlayerDay,
+}: {
+  report: PlayerReport;
+  game: PlayerGame;
+  fb: FacedBatter;
+  onOpenDetails: (id: number) => void;
+  onOpenPlayerDay: (id: number) => void;
+}) {
+  const kind = outcomeKind(fb.event);
+  return (
+    <div className="feed-item">
+      <div className="feed-item-head">
+        <FeedHeadshot id={report.id} name={report.name} onOpen={() => onOpenDetails(report.id)} />
+        <div className="feed-item-id">
+          <FeedPlayerName id={report.id} name={report.name} onOpen={onOpenPlayerDay} />
+          <span className="feed-context">
+            {matchup(game)} · pitching
+          </span>
+        </div>
+      </div>
+      <div className={`faced-row kind-${kind}`}>
+        <span className="feed-base-inning">
+          {fb.half} {fb.inning}
+        </span>
+        <span className={`pa-badge kind-${kind}`}>{eventLabel(fb.event)}</span>
+        {fb.rbi > 0 && <span className="pa-rbi">{fb.rbi} RBI</span>}
+        <span className="faced-batter">
+          vs {fb.batterName}
+          {fb.stand ? <span className="faced-hand"> ({fb.stand})</span> : null}
+        </span>
+        {fb.launchSpeed !== null && (
+          <span className="pa-contact-main">{fb.launchSpeed.toFixed(1)} mph</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /** Order not-yet-started games by first pitch (earliest first); unknown times last. */
 function byStartTime(
   a: { game: PlayerGame },
@@ -419,6 +478,10 @@ export function LiveFeed({
           .filter((pa) => pa.event)
           .map((pa): FeedEntry => ({ type: 'pa', report, game, pa })),
         ...game.baseEvents.map((ev, i): FeedEntry => ({ type: 'base', report, game, ev, i })),
+        // A watched pitcher's game contributes each batter they faced.
+        ...(game.pitching?.facedBatters ?? []).map(
+          (fb, i): FeedEntry => ({ type: 'faced', report, game, fb, i }),
+        ),
       ]),
     )
     .sort((a, b) => {
@@ -483,6 +546,19 @@ export function LiveFeed({
                     report={report}
                     game={game}
                     ev={ev}
+                    onOpenDetails={onOpenDetails}
+                    onOpenPlayerDay={onOpenPlayerDay}
+                  />
+                );
+              }
+              if (entry.type === 'faced') {
+                const { report, game, fb, i } = entry;
+                return (
+                  <FeedFacedBatter
+                    key={`faced-${report.id}-${game.gamePk}-${i}`}
+                    report={report}
+                    game={game}
+                    fb={fb}
                     onOpenDetails={onOpenDetails}
                     onOpenPlayerDay={onOpenPlayerDay}
                   />

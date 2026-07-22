@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { api } from '../api';
-import type { PlayerPercentiles, PercentileMetric, SeasonStats, XwobaSeries } from '../types';
+import type {
+  PitcherSeasonStats,
+  PlayerPercentiles,
+  PercentileMetric,
+  SeasonStats,
+  XwobaSeries,
+} from '../types';
 import { headshotUrl, savantPlayerUrl } from '../lib';
 import { RollingXwoba } from './RollingXwoba';
 
@@ -232,12 +238,60 @@ function SplitsPanel({
   );
 }
 
+/** One pitcher platoon split — the line against LHB or RHB. */
+function PitcherSplitBlock({ label, split }: { label: string; split: PitcherSeasonStats | null }) {
+  if (!split || split.battersFaced === 0) {
+    return (
+      <div className="split-block">
+        <div className="split-head">{label}</div>
+        <div className="split-empty">No batters faced {label.toLowerCase()} this season.</div>
+      </div>
+    );
+  }
+  return (
+    <div className="split-block">
+      <div className="split-head">
+        {label} · {split.battersFaced} BF
+      </div>
+      <div className="stat-row">
+        <StatCell label="AVG" value={split.avgAgainst} />
+        <StatCell label="K%" value={split.kRate} />
+        <StatCell label="BB%" value={split.bbRate} />
+        <StatCell label="K" value={String(split.strikeOuts)} />
+        <StatCell label="BB" value={String(split.baseOnBalls)} />
+        <StatCell label="H" value={String(split.hits)} />
+        <StatCell label="HR" value={String(split.homeRuns)} />
+      </div>
+    </div>
+  );
+}
+
+/** The Splits tab for a pitcher: the line against LHB and RHB. */
+function PitcherSplitsPanel({
+  vsLeft,
+  vsRight,
+}: {
+  vsLeft: PitcherSeasonStats | null;
+  vsRight: PitcherSeasonStats | null;
+}) {
+  return (
+    <div className="pct-card">
+      <div className="pct-card-head">
+        <span className="pct-card-title">Platoon Splits (against)</span>
+      </div>
+      <PitcherSplitBlock label="vs LHB" split={vsLeft} />
+      <PitcherSplitBlock label="vs RHB" split={vsRight} />
+    </div>
+  );
+}
+
 type DetailsTab = 'percentiles' | 'splits' | 'rolling';
 
 export function PlayerDetails({
   playerId,
   name,
   position,
+  isPitcher = false,
   isWatched,
   onAdd,
   onRemove,
@@ -246,11 +300,13 @@ export function PlayerDetails({
   playerId: number;
   name: string;
   position?: string;
+  isPitcher?: boolean;
   isWatched: boolean;
   onAdd: () => void;
   onRemove: () => void;
   onClose: () => void;
 }) {
+  const kind = isPitcher ? 'pitcher' : 'batter';
   const [tab, setTab] = useState<DetailsTab>('percentiles');
   const [data, setData] = useState<PlayerPercentiles | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -260,6 +316,10 @@ export function PlayerDetails({
   const [splits, setSplits] = useState<{
     vsLeft: SeasonStats | null;
     vsRight: SeasonStats | null;
+  } | null>(null);
+  const [pitcherSplits, setPitcherSplits] = useState<{
+    vsLeft: PitcherSeasonStats | null;
+    vsRight: PitcherSeasonStats | null;
   } | null>(null);
   const [splitsError, setSplitsError] = useState<string | null>(null);
   const [splitsLoading, setSplitsLoading] = useState(true);
@@ -304,7 +364,7 @@ export function PlayerDetails({
     setError(null);
     setData(null);
     api
-      .percentiles(playerId)
+      .percentiles(playerId, kind)
       .then((d) => {
         if (live) setData(d);
       })
@@ -317,18 +377,22 @@ export function PlayerDetails({
     return () => {
       live = false;
     };
-  }, [playerId]);
+  }, [playerId, kind]);
 
   useEffect(() => {
     let live = true;
     setSplitsLoading(true);
     setSplitsError(null);
     setSplits(null);
-    api
-      .splits(playerId)
-      .then((d) => {
-        if (live) setSplits(d);
-      })
+    setPitcherSplits(null);
+    const req = isPitcher
+      ? api.pitcherSplits(playerId).then((d) => {
+          if (live) setPitcherSplits(d);
+        })
+      : api.splits(playerId).then((d) => {
+          if (live) setSplits(d);
+        });
+    req
       .catch((e: unknown) => {
         if (live) setSplitsError(e instanceof Error ? e.message : 'Failed to load');
       })
@@ -338,7 +402,7 @@ export function PlayerDetails({
     return () => {
       live = false;
     };
-  }, [playerId]);
+  }, [playerId, isPitcher]);
 
   // Reset the (lazily-loaded) rolling series when the player changes.
   useEffect(() => {
@@ -356,7 +420,7 @@ export function PlayerDetails({
     setXwobaLoading(true);
     setXwobaError(null);
     api
-      .xwoba(playerId)
+      .xwoba(playerId, kind)
       .then((d) => {
         if (live) setXwoba(d);
       })
@@ -372,7 +436,7 @@ export function PlayerDetails({
     return () => {
       live = false;
     };
-  }, [tab, playerId]);
+  }, [tab, playerId, kind]);
 
   return (
     <div className="details-view">
@@ -485,7 +549,10 @@ export function PlayerDetails({
           Couldn’t load platoon splits: {splitsError}
         </div>
       )}
-      {tab === 'splits' && splits && !splitsLoading && (
+      {tab === 'splits' && !splitsLoading && isPitcher && pitcherSplits && (
+        <PitcherSplitsPanel vsLeft={pitcherSplits.vsLeft} vsRight={pitcherSplits.vsRight} />
+      )}
+      {tab === 'splits' && !splitsLoading && !isPitcher && splits && (
         <SplitsPanel vsLeft={splits.vsLeft} vsRight={splits.vsRight} />
       )}
 

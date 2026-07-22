@@ -3,6 +3,7 @@ import { api } from './api';
 import type { PlayerGame, PlayerReport, SeasonPlayer, WatchPlayer } from './types';
 import { PlayerAdder } from './components/PlayerAdder';
 import { PlayerCard } from './components/PlayerCard';
+import { PitcherCard } from './components/PitcherCard';
 import { LiveFeed } from './components/LiveFeed';
 import { SummaryTable } from './components/SummaryTable';
 import { simulateLiveDay } from './simulate';
@@ -646,6 +647,7 @@ export default function App() {
       id: detailsId,
       name: src.name,
       savantName: src.savantName,
+      kind: src.kind,
       position: positionById.get(detailsId),
     };
   }, [detailsId, reports, seasonPlayers, positionById]);
@@ -1000,17 +1002,28 @@ export default function App() {
         )}
 
         <main className="player-list">
-          {displayReports.map((r) => (
-            <PlayerCard
-              key={r.id}
-              report={r}
-              position={positionById.get(r.id)}
-              singleDay={start === end}
-              collapsed={!expandedIds.has(r.id)}
-              onToggleCollapsed={() => toggleCollapsed(r.id)}
-              onOpenDetails={setDetailsId}
-            />
-          ))}
+          {displayReports.map((r) =>
+            r.kind === 'pitcher' ? (
+              <PitcherCard
+                key={r.id}
+                report={r}
+                position={positionById.get(r.id)}
+                collapsed={!expandedIds.has(r.id)}
+                onToggleCollapsed={() => toggleCollapsed(r.id)}
+                onOpenDetails={setDetailsId}
+              />
+            ) : (
+              <PlayerCard
+                key={r.id}
+                report={r}
+                position={positionById.get(r.id)}
+                singleDay={start === end}
+                collapsed={!expandedIds.has(r.id)}
+                onToggleCollapsed={() => toggleCollapsed(r.id)}
+                onOpenDetails={setDetailsId}
+              />
+            ),
+          )}
         </main>
       </div>
       )}
@@ -1073,12 +1086,14 @@ export default function App() {
           playerId={detailsPlayer.id}
           name={detailsPlayer.name}
           position={detailsPlayer.position}
+          isPitcher={detailsPlayer.kind === 'pitcher'}
           isWatched={detailsWatched}
           onAdd={() =>
             onAdd({
               id: detailsPlayer.id,
               savantName: detailsPlayer.savantName,
               name: detailsPlayer.name,
+              kind: detailsPlayer.kind,
             })
           }
           onRemove={() => onRemove(detailsPlayer.id)}

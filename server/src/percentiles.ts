@@ -134,6 +134,48 @@ const SECTIONS: SectionDef[] = [
   },
 ];
 
+// Pitcher percentile card (Savant `statcast-r-pitching-mlb` page). `lowerBetter`
+// (only used by the estimated-percentile fallback) flags the results a pitcher
+// wants LOW — the ones they allow. Savant's own `percent_rank_` fields already
+// encode direction, so it rarely fires.
+const PITCHER_SECTIONS: SectionDef[] = [
+  {
+    title: 'Value',
+    metrics: [
+      { key: 'xwoba', label: 'xwOBA', pct: 'percent_rank_xwoba', raw: 'xwoba', fmt: 'avg', lowerBetter: true },
+      { key: 'xera', label: 'xERA', pct: 'percent_rank_xera', raw: 'xera', fmt: 'dec2', lowerBetter: true },
+      { key: 'xba', label: 'xBA', pct: 'percent_rank_xba', raw: 'xba', fmt: 'avg', lowerBetter: true },
+      { key: 'xslg', label: 'xSLG', pct: 'percent_rank_xslg', raw: 'xslg', fmt: 'avg', lowerBetter: true },
+    ],
+  },
+  {
+    title: 'Pitch',
+    metrics: [
+      { key: 'fb_velo', label: 'Fastball Velocity', pct: 'percent_rank_fastball_velo', raw: 'fastball_velo', fmt: 'dec1' },
+      { key: 'fb_spin', label: 'Fastball Spin', pct: 'percent_rank_fastball_spin', raw: 'fastball_spin', fmt: 'int' },
+      { key: 'fb_ext', label: 'Extension', pct: 'percent_rank_fastball_extension', raw: 'fastball_extension', fmt: 'dec1' },
+    ],
+  },
+  {
+    title: 'Plate Discipline',
+    metrics: [
+      { key: 'k', label: 'K %', pct: 'percent_rank_k_percent', raw: 'k_percent', fmt: 'dec1' },
+      { key: 'bb', label: 'BB %', pct: 'percent_rank_bb_percent', raw: 'bb_percent', fmt: 'dec1', lowerBetter: true },
+      { key: 'whiff', label: 'Whiff %', pct: 'percent_rank_whiff_percent', raw: 'whiff_percent', fmt: 'dec1' },
+      { key: 'chase', label: 'Chase %', pct: 'percent_rank_chase_percent', raw: 'chase_percent', fmt: 'dec1' },
+    ],
+  },
+  {
+    title: 'Batted Ball',
+    metrics: [
+      { key: 'exit_velo', label: 'Avg Exit Velocity', pct: 'percent_rank_exit_velocity_avg', raw: 'exit_velocity_avg', fmt: 'dec1', lowerBetter: true },
+      { key: 'barrel', label: 'Barrel %', pct: 'percent_rank_barrel_batted_rate', raw: 'barrel_batted_rate', fmt: 'dec1', lowerBetter: true },
+      { key: 'hard_hit', label: 'Hard-Hit %', pct: 'percent_rank_hard_hit_percent', raw: 'hard_hit_percent', fmt: 'dec1', lowerBetter: true },
+      { key: 'gb', label: 'Groundball %', pct: 'percent_rank_groundballs_percent', raw: 'groundballs_percent', fmt: 'dec1' },
+    ],
+  },
+];
+
 type StatcastRow = Record<string, unknown>;
 
 function toNum(v: unknown): number | null {
@@ -425,11 +467,13 @@ function hrMetric(row: StatcastRow, hrCounts: number[]): PercentileMetric | null
 function buildSections(
   row: StatcastRow,
   dist: Record<string, MetricStats>,
+  defs: SectionDef[],
+  kind: 'batter' | 'pitcher',
   fastSwingRates: number[],
   hrCounts: number[],
 ): PercentileSection[] {
   const sections: PercentileSection[] = [];
-  for (const sec of SECTIONS) {
+  for (const sec of defs) {
     const metrics: PercentileMetric[] = [];
     for (const m of sec.metrics) {
       let percentile = toPercentile(row[m.pct]);
@@ -451,7 +495,7 @@ function buildSections(
       if (percentile === null && value === null) continue;
       metrics.push({ key: m.key, label: m.label, percentile, value, ...(estimated && { estimated }) });
     }
-    if (sec.title === 'Batting') {
+    if (kind === 'batter' && sec.title === 'Batting') {
       // Fast Swing % is computed, not scraped — slot it next to Bat Speed since
       // they're both bat-tracking metrics.
       const fs = fastSwingMetric(row, fastSwingRates);
@@ -476,8 +520,8 @@ function buildSections(
 
 const memCache = new Map<string, PlayerPercentiles>();
 
-function cacheFile(playerId: number, year: number): string {
-  return path.join(CACHE_DIR, `percentiles-${playerId}-${year}.json`);
+function cacheFile(playerId: number, year: number, kind: 'batter' | 'pitcher'): string {
+  return path.join(CACHE_DIR, `percentiles-${kind}-${playerId}-${year}.json`);
 }
 
 /** A cached card is fresh if it's a past season (immutable) or, for the current
@@ -487,19 +531,28 @@ function isFresh(p: PlayerPercentiles, year: number): boolean {
   return Date.now() - new Date(p.updatedAt).getTime() < CURRENT_TTL_MS;
 }
 
-async function readDiskCache(playerId: number, year: number): Promise<PlayerPercentiles | null> {
+async function readDiskCache(
+  playerId: number,
+  year: number,
+  kind: 'batter' | 'pitcher',
+): Promise<PlayerPercentiles | null> {
   try {
-    const raw = await fs.readFile(cacheFile(playerId, year), 'utf8');
+    const raw = await fs.readFile(cacheFile(playerId, year, kind), 'utf8');
     return JSON.parse(raw) as PlayerPercentiles;
   } catch {
     return null;
   }
 }
 
-async function scrape(playerId: number, year: number): Promise<PlayerPercentiles> {
+async function scrape(
+  playerId: number,
+  year: number,
+  kind: 'batter' | 'pitcher',
+): Promise<PlayerPercentiles> {
   // The slug doesn't matter — Savant 301-redirects an id-only slug to the
   // canonical player page.
-  const url = `https://baseballsavant.mlb.com/savant-player/x-${playerId}?stats=statcast-r-hitting-mlb`;
+  const statType = kind === 'pitcher' ? 'pitching' : 'hitting';
+  const url = `https://baseballsavant.mlb.com/savant-player/x-${playerId}?stats=statcast-r-${statType}-mlb`;
   const res = await fetch(url, { headers: { 'User-Agent': BROWSER_UA } });
   if (!res.ok) {
     throw new Error(`Baseball Savant returned ${res.status} ${res.statusText}`);
@@ -509,28 +562,28 @@ async function scrape(playerId: number, year: number): Promise<PlayerPercentiles
   if (!row) {
     throw new Error(`No Statcast percentile data for ${playerId} in ${year}`);
   }
-  // The season's league mean/stddev per metric, to estimate percentiles Savant
-  // left un-ranked (empty {} if the page shape changed — then those stay blank).
   const dist = extractMetricSummary(html)[String(year)] ?? {};
-  // Fast Swing % and actual HR have no scraped percentile; rank them against the
-  // league. A failed leaderboard fetch just drops that bar (empty array) rather
-  // than failing the whole card.
+  const defs = kind === 'pitcher' ? PITCHER_SECTIONS : SECTIONS;
+  // Fast Swing % and actual HR are batter-only computed rows; ranked against a
+  // leaderboard. A failed fetch just drops those bars.
   let fastSwingRates: number[] = [];
   let hrCounts: number[] = [];
-  try {
-    fastSwingRates = await getFastSwingDist(year);
-  } catch (err) {
-    console.error(`Bat-tracking leaderboard unavailable for ${year}:`, err);
-  }
-  try {
-    hrCounts = await getHrDist(year);
-  } catch (err) {
-    console.error(`HR leaderboard unavailable for ${year}:`, err);
+  if (kind === 'batter') {
+    try {
+      fastSwingRates = await getFastSwingDist(year);
+    } catch (err) {
+      console.error(`Bat-tracking leaderboard unavailable for ${year}:`, err);
+    }
+    try {
+      hrCounts = await getHrDist(year);
+    } catch (err) {
+      console.error(`HR leaderboard unavailable for ${year}:`, err);
+    }
   }
   return {
     playerId,
     year,
-    sections: buildSections(row, dist, fastSwingRates, hrCounts),
+    sections: buildSections(row, dist, defs, kind, fastSwingRates, hrCounts),
     updatedAt: new Date().toISOString(),
   };
 }
@@ -543,20 +596,21 @@ async function scrape(playerId: number, year: number): Promise<PlayerPercentiles
 export async function getPercentiles(
   playerId: number,
   year = CURRENT_SEASON,
+  kind: 'batter' | 'pitcher' = 'batter',
 ): Promise<PlayerPercentiles> {
-  const key = `${playerId}-${year}`;
+  const key = `${kind}-${playerId}-${year}`;
   const mem = memCache.get(key);
   if (mem && isFresh(mem, year)) return mem;
 
-  const disk = await readDiskCache(playerId, year);
+  const disk = await readDiskCache(playerId, year, kind);
   if (disk && isFresh(disk, year)) {
     memCache.set(key, disk);
     return disk;
   }
 
-  const fresh = await scrape(playerId, year);
+  const fresh = await scrape(playerId, year, kind);
   memCache.set(key, fresh);
   await fs.mkdir(CACHE_DIR, { recursive: true });
-  await fs.writeFile(cacheFile(playerId, year), JSON.stringify(fresh), 'utf8');
+  await fs.writeFile(cacheFile(playerId, year, kind), JSON.stringify(fresh), 'utf8');
   return fresh;
 }

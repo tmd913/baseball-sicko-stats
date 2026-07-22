@@ -1,8 +1,11 @@
 import { useState } from 'react';
-import type { BattingLine, PlayerGame, PlayerReport } from '../types';
+import type { BattingLine, PitchingLine, PlayerGame, PlayerReport } from '../types';
 import type { LiveRole } from '../lib';
 import {
   combineLines,
+  combinePitchingLines,
+  eraOf,
+  formatIp,
   formatRate,
   gameStatusView,
   headshotUrl,
@@ -47,7 +50,7 @@ function OpponentCell({ game }: { game: PlayerGame | null }) {
   );
 }
 
-/** The player's aggregate line for the range, shown as one table row. */
+/** The player's aggregate batting line for the range, shown as one table row. */
 function StatCells({ line }: { line: BattingLine }) {
   const ops = lineOps(line);
   return (
@@ -64,6 +67,41 @@ function StatCells({ line }: { line: BattingLine }) {
       <td className="sum-num">{line.so}</td>
     </>
   );
+}
+
+/** A pitcher's aggregate line + rates for the range, shown as one table row. */
+function PitchStatCells({ line, csw }: { line: PitchingLine; csw: number | null }) {
+  const whip = line.outs > 0 ? ((line.walks + line.hits) * 3) / line.outs : null;
+  return (
+    <>
+      <td className="sum-num sum-hab">{line.outs > 0 ? formatIp(line.outs) : '—'}</td>
+      <td className="sum-num">{line.hits}</td>
+      <td className="sum-num">{line.runs}</td>
+      <td className="sum-num">{line.earnedRuns}</td>
+      <td className="sum-num">{line.walks}</td>
+      <td className="sum-num">{line.strikeouts}</td>
+      <td className="sum-num">{line.hr}</td>
+      <td className="sum-num sum-ops">{eraOf(line)}</td>
+      <td className="sum-num">{whip === null ? '—' : whip.toFixed(2)}</td>
+      <td className="sum-num">{csw === null ? '—' : `${Math.round(csw * 100)}%`}</td>
+    </>
+  );
+}
+
+/** Aggregate a pitcher's game rates (CSW weighted by pitch count) for the range. */
+function aggregatePitching(report: PlayerReport): { line: PitchingLine; csw: number | null } {
+  const pitched = report.games.filter((g) => g.pitching);
+  const line = combinePitchingLines(pitched.map((g) => g.pitching!.line));
+  let cswNum = 0;
+  let pitches = 0;
+  for (const g of pitched) {
+    const pg = g.pitching!;
+    if (pg.cswRate !== null) {
+      cswNum += pg.cswRate * pg.line.pitchesThrown;
+      pitches += pg.line.pitchesThrown;
+    }
+  }
+  return { line, csw: pitches > 0 ? cswNum / pitches : null };
 }
 
 /**
@@ -118,13 +156,152 @@ function SumPhoto({
   );
 }
 
+interface RowHandlers {
+  onOpenDetails: (id: number) => void;
+  onOpenPlayerDay: (id: number) => void;
+}
+
+/** The shared leading cells of a summary row: headshot, name (link), opponent. */
+function LeadCells({
+  r,
+  game,
+  role,
+  corner,
+  onOpenDetails,
+  onOpenPlayerDay,
+}: {
+  r: PlayerReport;
+  game: PlayerGame | null;
+  role: LiveRole | null;
+  corner: Corner;
+} & RowHandlers) {
+  return (
+    <>
+      <td className="sum-img-col">
+        <SumPhoto id={r.id} name={r.name} role={role} corner={corner} onOpen={onOpenDetails} />
+      </td>
+      <th className="sum-name-col" scope="row">
+        <button
+          type="button"
+          className="sum-name sum-name-link"
+          title={`${r.name} — game log`}
+          onClick={() => onOpenPlayerDay(r.id)}
+        >
+          {r.name}
+        </button>
+      </th>
+      <OpponentCell game={game} />
+    </>
+  );
+}
+
+/** The batter stat table: one row per hitter, with an aggregate total row. */
+function BatterTable({ batters, handlers }: { batters: PlayerReport[]; handlers: RowHandlers }) {
+  const total = combineLines(batters.flatMap((r) => r.games.map((g) => g.line)));
+  const cols = ['H/AB', 'R', 'HR', 'RBI', 'SB', 'OPS', 'BB', 'K'];
+  return (
+    <table className="summary-table">
+      <thead>
+        <tr>
+          <th className="sum-img-col" scope="col">
+            <span className="sr-only">Photo</span>
+          </th>
+          <th className="sum-name-col" scope="col">
+            Batter
+          </th>
+          <th className="sum-opp-col" scope="col">
+            Opponent
+          </th>
+          {cols.map((c) => (
+            <th key={c} className="sum-num" scope="col">
+              {c}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {batters.map((r) => {
+          const game = pickGame(r);
+          const role = liveRole(r);
+          return (
+            <tr key={r.id} className={role ? `role-${role}` : undefined}>
+              <LeadCells r={r} game={game} role={role} corner={game ? lineupCorner(game) : null} {...handlers} />
+              <StatCells line={combineLines(r.games.map((g) => g.line))} />
+            </tr>
+          );
+        })}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td className="sum-img-col" aria-hidden="true" />
+          <th className="sum-name-col" scope="row">
+            <span className="sum-total-label">Total · {batters.length}</span>
+          </th>
+          <td className="sum-opp" aria-hidden="true" />
+          <StatCells line={total} />
+        </tr>
+      </tfoot>
+    </table>
+  );
+}
+
+/** The pitcher stat table: one row per pitcher, with an aggregate total row. */
+function PitcherTable({ pitchers, handlers }: { pitchers: PlayerReport[]; handlers: RowHandlers }) {
+  const totalLine = combinePitchingLines(
+    pitchers.flatMap((r) => r.games.filter((g) => g.pitching).map((g) => g.pitching!.line)),
+  );
+  const cols = ['IP', 'H', 'R', 'ER', 'BB', 'K', 'HR', 'ERA', 'WHIP', 'CSW'];
+  return (
+    <table className="summary-table summary-table-pitchers">
+      <thead>
+        <tr>
+          <th className="sum-img-col" scope="col">
+            <span className="sr-only">Photo</span>
+          </th>
+          <th className="sum-name-col" scope="col">
+            Pitcher
+          </th>
+          <th className="sum-opp-col" scope="col">
+            Opponent
+          </th>
+          {cols.map((c) => (
+            <th key={c} className="sum-num" scope="col">
+              {c}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {pitchers.map((r) => {
+          const game = pickGame(r);
+          const role = liveRole(r);
+          const { line, csw } = aggregatePitching(r);
+          return (
+            <tr key={r.id} className={role ? `role-${role}` : undefined}>
+              <LeadCells r={r} game={game} role={role} corner={null} {...handlers} />
+              <PitchStatCells line={line} csw={csw} />
+            </tr>
+          );
+        })}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td className="sum-img-col" aria-hidden="true" />
+          <th className="sum-name-col" scope="row">
+            <span className="sum-total-label">Total · {pitchers.length}</span>
+          </th>
+          <td className="sum-opp" aria-hidden="true" />
+          <PitchStatCells line={totalLine} csw={null} />
+        </tr>
+      </tfoot>
+    </table>
+  );
+}
+
 /**
- * A full-page stat table over the date range: one row per watched player
- * (hits/AB, R, HR, RBI, SB, OPS, BB, K), with an aggregate total pinned to the
- * bottom. The header row + total row stick while scrolling vertically, and only
- * the (narrow) headshot column sticks while scrolling horizontally — the name
- * scrolls away with the rest so the stat columns get the room on a phone. The
- * headshot and name are separate columns for exactly that reason.
+ * A full-page stat table over the date range — batters and pitchers in separate
+ * stacked tables (each with its own columns + total row). The header/total rows
+ * stick vertically and the headshot column sticks horizontally.
  */
 export function SummaryTable({
   reports,
@@ -132,102 +309,18 @@ export function SummaryTable({
   onOpenPlayerDay,
 }: {
   reports: PlayerReport[];
-  // The headshot opens the player's details (percentiles/splits); the name jumps
-  // to their at-bats for the current range on the players view.
+  // The headshot opens the player's details; the name jumps to their game log.
   onOpenDetails: (id: number) => void;
   onOpenPlayerDay: (id: number) => void;
 }) {
-  const rows = reports.map((r) => {
-    const game = pickGame(r);
-    return {
-      r,
-      line: combineLines(r.games.map((g) => g.line)),
-      game,
-      role: liveRole(r),
-      corner: game ? lineupCorner(game) : null,
-    };
-  });
-  const total = combineLines(reports.flatMap((r) => r.games.map((g) => g.line)));
-
+  const handlers = { onOpenDetails, onOpenPlayerDay };
+  const batters = reports.filter((r) => r.kind !== 'pitcher');
+  const pitchers = reports.filter((r) => r.kind === 'pitcher');
   return (
     <div className="summary-view">
       <div className="summary-scroll">
-        <table className="summary-table">
-          <thead>
-            <tr>
-              <th className="sum-img-col" scope="col">
-                <span className="sr-only">Photo</span>
-              </th>
-              <th className="sum-name-col" scope="col">
-                Player
-              </th>
-              <th className="sum-opp-col" scope="col">
-                Opponent
-              </th>
-              <th className="sum-num" scope="col">
-                H/AB
-              </th>
-              <th className="sum-num" scope="col">
-                R
-              </th>
-              <th className="sum-num" scope="col">
-                HR
-              </th>
-              <th className="sum-num" scope="col">
-                RBI
-              </th>
-              <th className="sum-num" scope="col">
-                SB
-              </th>
-              <th className="sum-num" scope="col">
-                OPS
-              </th>
-              <th className="sum-num" scope="col">
-                BB
-              </th>
-              <th className="sum-num" scope="col">
-                K
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(({ r, line, game, role, corner }) => (
-              <tr key={r.id} className={role ? `role-${role}` : undefined}>
-                <td className="sum-img-col">
-                  <SumPhoto
-                    id={r.id}
-                    name={r.name}
-                    role={role}
-                    corner={corner}
-                    onOpen={onOpenDetails}
-                  />
-                </td>
-                <th className="sum-name-col" scope="row">
-                  <button
-                    type="button"
-                    className="sum-name sum-name-link"
-                    title={`${r.name} — at-bats`}
-                    onClick={() => onOpenPlayerDay(r.id)}
-                  >
-                    {r.name}
-                  </button>
-                </th>
-                <OpponentCell game={game} />
-                <StatCells line={line} />
-              </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr>
-              <td className="sum-img-col" aria-hidden="true" />
-              <th className="sum-name-col" scope="row">
-                <span className="sum-total-label">Total · {reports.length}</span>
-              </th>
-              <td className="sum-opp" aria-hidden="true" />
-              <StatCells line={total} />
-            </tr>
-          </tfoot>
-        </table>
+        {batters.length > 0 && <BatterTable batters={batters} handlers={handlers} />}
+        {pitchers.length > 0 && <PitcherTable pitchers={pitchers} handlers={handlers} />}
       </div>
     </div>
   );

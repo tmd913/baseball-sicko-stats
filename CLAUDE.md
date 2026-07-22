@@ -72,6 +72,13 @@ Expansion state is split by view: the player view uses `expandedIds` (numeric pl
 
 **Simulate mode** (`simulate.ts`, the `sim=1` toggle) overlays a synthetic live day onto the fetched reports so the live-only UI can be demoed when nothing is on. It derives values from player ids (never `Math.random`) so the picture is stable across re-renders, never mutates the source reports, and does **not** drive polling. Everything rendered reads `displayReports`; raw `reports` still back polling and reordering.
 
+### Pitchers on the watchlist
+
+The watchlist holds both batters and pitchers, discriminated by `WatchPlayer.kind` / `PlayerReport.kind` (`'batter' | 'pitcher'`). The whole pipeline is written so **batter code paths are untouched**: `PlayerGame` gained one optional field `pitching: PitcherGame | null` (null for batters), and every client component branches on `report.kind === 'pitcher'`.
+
+- **Server**: `getStatsApiGame` builds a `pitchers` map by regrouping the SAME `allPlays` loop on `matchup.pitcher.id` (faced batters + all pitches); the authoritative per-game line comes from the boxscore (`parsePitchingLines`, needs `stats`/`pitching` in `FEED_FIELDS` — bumping `FEED_CACHE_VERSION` re-fetches cached finals). `savant.ts::buildStatsApiDay` assembles the `PitcherGame` (whiff%/CSW%/pitch-mix from the pitches; season/league arsenal filled per-pitcher in `getReport`). New modules: `pitcherArsenal.ts` (per-pitch-type season avg velo/spin/break — note the feed's `breakHorizontal` = `−pfx_x`, `breakVerticalInduced` = `pfx_z`, both ×12 to inches), `pitchLeague.ts` (a curated league-average table). `getPitcherStats` mirrors `getPlayerStats` with `group=[pitching]`. `percentiles.ts` has a `PITCHER_SECTIONS` table + the `statcast-r-pitching-mlb` page; `xwoba.ts` takes a `kind` for xwOBA-**against**. The percentile/xwoba/splits routes take `?type=pitcher`.
+- **Client**: `PitcherCard.tsx` (faced-batter result rows + aggregate `StatPill`s + arsenal rows with velo/spin/break vs season & league arrows); `SummaryTable` renders a pitcher sub-table; `LiveFeed` interleaves faced-batter entries + a `'pitching'` live role; `PlayerDetails` gains an `isPitcher` prop.
+
 ### Season is hardcoded
 
-The current season is pinned in **three places** that must stay in sync: `hfSea=2026` in `savant.ts`, `CURRENT_SEASON` in `percentiles.ts`, and `SEASON` in `xwoba.ts`. Update all three (and check date-default logic) when the season rolls over.
+The current season is pinned in **four places** that must stay in sync: `hfSea=2026` in `savant.ts`, `CURRENT_SEASON` in `percentiles.ts`, and `SEASON` in both `xwoba.ts` and `pitcherArsenal.ts`. Update all four (and check date-default logic) when the season rolls over.

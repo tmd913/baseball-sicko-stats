@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { getReport } from './savant.js';
 import { getPercentiles } from './percentiles.js';
 import { getXwobaSeries } from './xwoba.js';
-import { getPlayerStats, getSeasonPlayers, resolveVideoUrl } from './mlbStats.js';
+import { getPitcherStats, getPlayerStats, getSeasonPlayers, resolveVideoUrl } from './mlbStats.js';
 import { addPlayer, getWatchlist, removePlayer, reorderPlayers } from './store.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -98,12 +98,17 @@ app.get(
 app.post(
   '/api/watchlist',
   asyncRoute(async (req, res) => {
-    const { id, savantName, name } = req.body ?? {};
+    const { id, savantName, name, kind } = req.body ?? {};
     if (typeof id !== 'number' || typeof savantName !== 'string' || typeof name !== 'string') {
       res.status(400).json({ error: 'id (number), savantName, name required' });
       return;
     }
-    const players = await addPlayer({ id, savantName, name });
+    const players = await addPlayer({
+      id,
+      savantName,
+      name,
+      kind: kind === 'pitcher' ? 'pitcher' : 'batter',
+    });
     res.json({ players });
   }),
 );
@@ -158,7 +163,8 @@ app.get(
     }
     const yearQ = Number(req.query.year);
     const year = Number.isInteger(yearQ) && yearQ >= 2015 ? yearQ : undefined;
-    res.json(await getPercentiles(playerId, year));
+    const kind = req.query.type === 'pitcher' ? 'pitcher' : 'batter';
+    res.json(await getPercentiles(playerId, year, kind));
   }),
 );
 
@@ -173,13 +179,19 @@ app.get(
       res.status(400).json({ error: 'invalid playerId' });
       return;
     }
+    if (req.query.type === 'pitcher') {
+      const stats = (await getPitcherStats([playerId])).get(playerId);
+      res.json({ vsLeft: stats?.vsLeft ?? null, vsRight: stats?.vsRight ?? null, kind: 'pitcher' });
+      return;
+    }
     const stats = (await getPlayerStats([playerId])).get(playerId);
-    res.json({ vsLeft: stats?.vsLeft ?? null, vsRight: stats?.vsRight ?? null });
+    res.json({ vsLeft: stats?.vsLeft ?? null, vsRight: stats?.vsRight ?? null, kind: 'batter' });
   }),
 );
 
 // A player's season per-PA xwOBA sequence, for the details view's rolling-xwOBA
-// chart (the client computes the rolling averages for the selected window).
+// chart (the client computes the rolling averages for the selected window). For a
+// pitcher (?type=pitcher) it's xwOBA allowed.
 app.get(
   '/api/players/:playerId/xwoba',
   asyncRoute(async (req, res) => {
@@ -188,7 +200,8 @@ app.get(
       res.status(400).json({ error: 'invalid playerId' });
       return;
     }
-    res.json(await getXwobaSeries(playerId));
+    const kind = req.query.type === 'pitcher' ? 'pitcher' : 'batter';
+    res.json(await getXwobaSeries(playerId, kind));
   }),
 );
 

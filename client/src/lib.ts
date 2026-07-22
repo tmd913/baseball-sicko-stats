@@ -1,6 +1,8 @@
 import type {
   BaseState,
   BattingLine,
+  PitcherSeasonStats,
+  PitchingLine,
   PlateAppearance,
   PlayerGame,
   PlayerReport,
@@ -131,6 +133,58 @@ export function combineLines(lines: BattingLine[]): BattingLine {
   };
 }
 
+// ---- Pitching helpers ------------------------------------------------------
+
+/** Outs recorded → innings pitched, the baseball way ("17" outs → "5.2"). */
+export function formatIp(outs: number): string {
+  return `${Math.floor(outs / 3)}.${outs % 3}`;
+}
+
+/** Sum per-game pitching lines into one aggregate (for a multi-game card header). */
+export function combinePitchingLines(lines: PitchingLine[]): PitchingLine {
+  const sum = (f: (l: PitchingLine) => number) => lines.reduce((s, l) => s + f(l), 0);
+  return {
+    outs: sum((l) => l.outs),
+    hits: sum((l) => l.hits),
+    runs: sum((l) => l.runs),
+    earnedRuns: sum((l) => l.earnedRuns),
+    walks: sum((l) => l.walks),
+    strikeouts: sum((l) => l.strikeouts),
+    hr: sum((l) => l.hr),
+    battersFaced: sum((l) => l.battersFaced),
+    pitchesThrown: sum((l) => l.pitchesThrown),
+    strikes: sum((l) => l.strikes),
+    balls: sum((l) => l.balls),
+  };
+}
+
+/** ERA over an aggregate line (earned runs × 9 / innings), or "—" with no outs. */
+export function eraOf(line: PitchingLine): string {
+  if (line.outs === 0) return '—';
+  return ((line.earnedRuns * 27) / line.outs).toFixed(2);
+}
+
+/** A compact pitcher season summary for the card header. */
+export function pitcherSeasonSummary(s: PitcherSeasonStats): string {
+  const parts = [`${s.era} ERA`, `${s.whip} WHIP`];
+  if (s.strikeoutsPer9 && s.strikeoutsPer9 !== '—') parts.push(`${s.strikeoutsPer9} K/9`);
+  return parts.join(', ');
+}
+
+/** How a game value compares to a reference (season/league avg), for an arrow. */
+export interface Delta {
+  dir: 'up' | 'down' | 'flat';
+  diff: number; // signed magnitude (game − reference)
+}
+
+/** Compare a game value to a reference; `flatBand` is the |diff| treated as even. */
+export function deltaVs(value: number | null, ref: number | null, flatBand = 0): Delta | null {
+  if (value === null || ref === null) return null;
+  const diff = value - ref;
+  const dir = Math.abs(diff) <= flatBand ? 'flat' : diff > 0 ? 'up' : 'down';
+  return { dir, diff };
+}
+
 export function fmt(n: number | null, digits = 0, suffix = ''): string {
   if (n === null || n === undefined || Number.isNaN(n)) return '—';
   return `${n.toFixed(digits)}${suffix}`;
@@ -247,7 +301,7 @@ export function handThrows(hand: string | null): string {
 export function didNotAppear(report: PlayerReport): boolean {
   if (!report.found || report.games.length === 0) return true;
   return !report.games.some(
-    (g) => g.plateAppearances.length > 0 || g.status.state !== 'final',
+    (g) => g.plateAppearances.length > 0 || g.pitching || g.status.state !== 'final',
   );
 }
 
@@ -257,7 +311,7 @@ export function didNotAppear(report: PlayerReport): boolean {
  * for a scheduled/in-progress game doesn't count until they come to the plate.
  */
 export function hasPlayed(report: PlayerReport): boolean {
-  return report.games.some((g) => g.plateAppearances.length > 0);
+  return report.games.some((g) => g.plateAppearances.length > 0 || g.pitching);
 }
 
 /**
@@ -336,6 +390,7 @@ export function lineupCorner(
  */
 export function absenceLabel(report: PlayerReport): string {
   if (report.games.length === 0) return 'No game';
+  if (report.kind === 'pitcher') return 'Did not pitch';
   return report.games.some((g) => g.lineupStatus === 'bench')
     ? 'Not in lineup'
     : 'Did not appear';
@@ -353,38 +408,42 @@ export function hasDoubleheader(games: PlayerGame[]): boolean {
 }
 
 /** A watched player's current live role, for highlighting them in the nav. */
-export type LiveRole = 'at-bat' | 'on-deck' | 'on-base';
+export type LiveRole = 'at-bat' | 'on-deck' | 'on-base' | 'pitching';
 
 /**
- * If any of the player's live games has them at bat, on deck, or on base right
- * now, return that role (checked in that priority order). Null otherwise.
+ * The player's current live role: a watched pitcher on the mound ('pitching'),
+ * else a batter at bat / on deck / on base (checked in that priority order).
+ * Null otherwise.
  */
 export function liveRole(report: PlayerReport): LiveRole | null {
-  for (const g of report.games) {
-    if (g.status.state !== 'live') continue;
-    if (g.status.atBatId === report.id) return 'at-bat';
-    if (g.status.onDeckId === report.id) return 'on-deck';
-    if (g.status.onBaseIds.includes(report.id)) return 'on-base';
-  }
-  return null;
+  return liveRoleGame(report)?.role ?? null;
 }
 
 /** Short label for a live role, shown as a nav tag. */
 export function liveRoleLabel(role: LiveRole): string {
-  return role === 'at-bat' ? 'At bat' : role === 'on-deck' ? 'On deck' : 'On base';
+  return role === 'at-bat'
+    ? 'At bat'
+    : role === 'on-deck'
+      ? 'On deck'
+      : role === 'on-base'
+        ? 'On base'
+        : 'Pitching';
 }
 
 /**
- * The player's current live role together with the live game it's happening in
- * (checked at bat → on deck → on base, as in `liveRole`). Null when the player
- * isn't currently in any live game's batter/on-deck/on-base situation. Used by
- * the live feed's "Live" section, which needs the game for its context line.
+ * The player's current live role together with the live game it's happening in.
+ * A pitcher is 'pitching' when they're the game's current pitcher; a batter is
+ * at bat → on deck → on base. Used by the live feed's "Live" section.
  */
 export function liveRoleGame(
   report: PlayerReport,
 ): { role: LiveRole; game: PlayerGame } | null {
   for (const g of report.games) {
     if (g.status.state !== 'live') continue;
+    if (report.kind === 'pitcher') {
+      if (g.status.pitchingId === report.id) return { role: 'pitching', game: g };
+      continue;
+    }
     if (g.status.atBatId === report.id) return { role: 'at-bat', game: g };
     if (g.status.onDeckId === report.id) return { role: 'on-deck', game: g };
     if (g.status.onBaseIds.includes(report.id)) return { role: 'on-base', game: g };

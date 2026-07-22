@@ -5,6 +5,8 @@ import { toSavantName } from './names.js';
 import type {
   BaseState,
   GameStatus,
+  PitcherSeasonStats,
+  PitchingLine,
   ProbablePitcher,
   RosterStatus,
   SeasonPlayer,
@@ -102,7 +104,8 @@ async function getTeamNamesById(): Promise<Map<number, string>> {
 const SEASON_PLAYERS_TTL = 60 * 60 * 1000;
 const seasonPlayersCache = new Map<number, { players: SeasonPlayer[]; fetchedAt: number }>();
 
-/** Every non-pitcher rostered for a season (for watchlist search — this app only tracks batting). */
+/** Every player rostered for a season (for watchlist search) — batters and
+ * pitchers alike; the caller distinguishes by `position` ('P' for pitchers). */
 export async function getSeasonPlayers(
   season: number = new Date().getFullYear(),
 ): Promise<SeasonPlayer[]> {
@@ -120,15 +123,14 @@ export async function getSeasonPlayers(
   }
   const data = (await res.json()) as SportsPlayersResponse;
 
-  const players: SeasonPlayer[] = (data.people ?? [])
-    .filter((p) => p.primaryPosition?.code !== '1')
-    .map((p) => ({
-      id: p.id,
-      name: p.fullName,
-      savantName: toSavantName(p.fullName),
-      team: (p.currentTeam?.id !== undefined && teamNames.get(p.currentTeam.id)) || '',
-      position: p.primaryPosition?.abbreviation ?? '',
-    }));
+  const players: SeasonPlayer[] = (data.people ?? []).map((p) => ({
+    id: p.id,
+    name: p.fullName,
+    savantName: toSavantName(p.fullName),
+    kind: p.primaryPosition?.code === '1' ? 'pitcher' : 'batter',
+    team: (p.currentTeam?.id !== undefined && teamNames.get(p.currentTeam.id)) || '',
+    position: p.primaryPosition?.abbreviation ?? '',
+  }));
 
   seasonPlayersCache.set(season, { players, fetchedAt: Date.now() });
   return players;
@@ -237,6 +239,103 @@ export async function getPlayerStats(
   }
 
   return new Map(ids.map((id) => [id, playerStatsCache.get(id)?.stats ?? EMPTY_PLAYER_STATS]));
+}
+
+// ---- Season pitching stats + platoon splits (for watched pitchers) ----------
+
+const str = (v: unknown): string =>
+  typeof v === 'string' ? v : typeof v === 'number' ? String(v) : '—';
+/** A rate to three decimals, no leading zero — ".291". */
+const rate3 = (x: number): string => {
+  const t = x.toFixed(3);
+  return t.startsWith('0.') ? t.slice(1) : t;
+};
+
+/** Season pitching line plus vs-LHB / vs-RHB splits for one pitcher. */
+export interface PitcherStats {
+  season: PitcherSeasonStats | null;
+  vsLeft: PitcherSeasonStats | null; // vs LHB
+  vsRight: PitcherSeasonStats | null; // vs RHB
+}
+const EMPTY_PITCHER_STATS: PitcherStats = { season: null, vsLeft: null, vsRight: null };
+
+function toPitcherSeasonStats(stat: Record<string, unknown>): PitcherSeasonStats {
+  const bf = n(stat.battersFaced);
+  const k = n(stat.strikeOuts);
+  const bb = n(stat.baseOnBalls);
+  const perBf = (num: number) => (bf > 0 ? rate3(num / bf) : '—');
+  return {
+    gamesPlayed: n(stat.gamesPlayed),
+    gamesStarted: n(stat.gamesStarted),
+    battersFaced: bf,
+    inningsPitched: str(stat.inningsPitched),
+    era: str(stat.era),
+    whip: str(stat.whip),
+    strikeOuts: k,
+    baseOnBalls: bb,
+    hits: n(stat.hits),
+    homeRuns: n(stat.homeRuns),
+    strikeoutsPer9: str(stat.strikeoutsPer9Inn),
+    walksPer9: str(stat.walksPer9Inn),
+    kRate: perBf(k),
+    bbRate: perBf(bb),
+    avgAgainst: str(stat.avg),
+  };
+}
+
+function parsePitcherStats(p: PeopleStatsPerson): PitcherStats {
+  const out: PitcherStats = { season: null, vsLeft: null, vsRight: null };
+  for (const grp of p.stats ?? []) {
+    const type = grp.type?.displayName;
+    for (const sp of grp.splits ?? []) {
+      if (!sp.stat) continue;
+      if (type === 'season') out.season = toPitcherSeasonStats(sp.stat);
+      else if (type === 'statSplits') {
+        if (sp.split?.code === 'vl') out.vsLeft = toPitcherSeasonStats(sp.stat);
+        else if (sp.split?.code === 'vr') out.vsRight = toPitcherSeasonStats(sp.stat);
+      }
+    }
+  }
+  return out;
+}
+
+const pitcherStatsCache = new Map<number, { stats: PitcherStats; fetchedAt: number }>();
+
+/** Season pitching line + vs-L/R splits for each id, mirroring getPlayerStats but
+ * hydrating the pitching stat group. */
+export async function getPitcherStats(
+  ids: number[],
+  season: number = new Date().getFullYear(),
+): Promise<Map<number, PitcherStats>> {
+  const now = Date.now();
+  const stale = ids.filter((id) => {
+    const c = pitcherStatsCache.get(id);
+    return !c || now - c.fetchedAt >= SEASON_STATS_TTL;
+  });
+
+  if (stale.length > 0) {
+    const url =
+      `https://statsapi.mlb.com/api/v1/people?personIds=${stale.join(',')}` +
+      `&hydrate=${encodeURIComponent(
+        `stats(group=[pitching],type=[season,statSplits],sitCodes=[vr,vl],season=${season})`,
+      )}`;
+    try {
+      const res = await fetch(url, { headers: UA });
+      if (!res.ok) throw new Error(`people/pitching-stats returned ${res.status}`);
+      const data = (await res.json()) as PeopleStatsResponse;
+      const seen = new Set<number>();
+      for (const p of data.people ?? []) {
+        pitcherStatsCache.set(p.id, { stats: parsePitcherStats(p), fetchedAt: now });
+        seen.add(p.id);
+      }
+      for (const id of stale) {
+        if (!seen.has(id)) pitcherStatsCache.set(id, { stats: EMPTY_PITCHER_STATS, fetchedAt: now });
+      }
+    } catch (err) {
+      console.error('pitcher stats fetch failed:', err);
+    }
+  }
+  return new Map(ids.map((id) => [id, pitcherStatsCache.get(id)?.stats ?? EMPTY_PITCHER_STATS]));
 }
 
 // ---- Roster status + current team (for absent/off-roster players) ------
@@ -440,6 +539,28 @@ const FEED_FIELDS = [
   'trajectory',
   'isInPlay',
   'playId',
+  // Break metrics (children of the already-requested `breaks` object — they come
+  // through even without being named, but list them so the intent is explicit).
+  'breakVertical',
+  'breakVerticalInduced',
+  'breakHorizontal',
+  'spinDirection',
+  // The fielding team's current pitcher (live feed) — for the "Pitching" role.
+  'defense',
+  // Boxscore per-pitcher line — the authoritative IP/H/R/ER/BB/K/HR/pitch counts.
+  // (runs/strikes/balls are already requested above.) `fields` is leaf-name
+  // matched, so naming `stats`+`pitching`+these pulls ONLY the pitching group.
+  'stats',
+  'pitching',
+  'inningsPitched',
+  'hits',
+  'earnedRuns',
+  'baseOnBalls',
+  'strikeOuts',
+  'homeRuns',
+  'numberOfPitches',
+  'battersFaced',
+  'gamesStarted',
 ].join(',');
 
 interface FeedPitchData {
@@ -447,7 +568,13 @@ interface FeedPitchData {
   coordinates?: { pX?: number; pZ?: number };
   strikeZoneTop?: number;
   strikeZoneBottom?: number;
-  breaks?: { spinRate?: number };
+  breaks?: {
+    spinRate?: number;
+    // Induced vertical break and horizontal break, in inches — Statcast movement.
+    breakVerticalInduced?: number;
+    breakHorizontal?: number;
+    spinDirection?: number;
+  };
   zone?: number;
 }
 interface FeedHitData {
@@ -535,14 +662,42 @@ interface LiveFeed {
         second?: { id?: number } | null;
         third?: { id?: number } | null;
       };
+      // The fielding team's current pitcher (full feed only) — drives the
+      // "Pitching" live role for a watched pitcher.
+      defense?: { pitcher?: { id?: number } | null };
     };
     boxscore?: {
-      teams?: {
-        home?: { players?: Record<string, { person?: { id?: number }; battingOrder?: string }> };
-        away?: { players?: Record<string, { person?: { id?: number }; battingOrder?: string }> };
-      };
+      teams?: { home?: BoxTeam; away?: BoxTeam };
     };
   };
+}
+
+/** A boxscore team's players, with each player's pitching line when present. */
+interface BoxTeam {
+  players?: Record<
+    string,
+    {
+      person?: { id?: number };
+      battingOrder?: string;
+      stats?: { pitching?: BoxPitching };
+    }
+  >;
+}
+
+/** The pitching stat line the boxscore carries per pitcher (authoritative). */
+interface BoxPitching {
+  inningsPitched?: string; // "5.2" (5 IP + 2 outs)
+  hits?: number;
+  runs?: number;
+  earnedRuns?: number;
+  baseOnBalls?: number;
+  strikeOuts?: number;
+  homeRuns?: number;
+  numberOfPitches?: number;
+  strikes?: number;
+  balls?: number;
+  battersFaced?: number;
+  gamesStarted?: number;
 }
 
 /**
@@ -766,6 +921,8 @@ export interface StatsApiPitch {
   launchAngle: number | null;
   hitDistance: number | null;
   bbType: string | null;
+  vBreak: number | null; // induced vertical break, inches
+  hBreak: number | null; // horizontal break, inches
 }
 
 export interface StatsApiPlateAppearance {
@@ -799,6 +956,35 @@ export interface StatsApiBatterGame {
   isHome: boolean;
   stand: string | null;
   plateAppearances: StatsApiPlateAppearance[];
+}
+
+/** A batter faced from the pitcher's side (result + the pitches thrown to them). */
+export interface StatsApiFacedBatter {
+  batterId: number;
+  batterName: string;
+  stand: string | null;
+  inning: number;
+  half: string;
+  outsWhenUp: number;
+  onBase: BaseState;
+  event: string | null;
+  description: string;
+  rbi: number;
+  timestamp: string | null;
+  playId: string | null;
+  launchSpeed: number | null;
+  hitDistance: number | null;
+  pitches: StatsApiPitch[];
+}
+
+/** A pitcher's game assembled by regrouping the play loop on the pitcher id. */
+export interface StatsApiPitcherGame {
+  pitcherId: number;
+  pitcherName: string;
+  isHome: boolean; // the pitcher's team is home
+  throws: string | null;
+  facedBatters: StatsApiFacedBatter[];
+  pitches: StatsApiPitch[]; // every pitch thrown, for arsenal/whiff aggregation
 }
 
 // A base-running event by a runner (not a plate appearance) — a stolen base or a
@@ -835,6 +1021,10 @@ export interface StatsApiGame {
   homeStarters: Map<number, number>;
   awayStarters: Map<number, number>;
   batters: Map<number, StatsApiBatterGame>;
+  // Per-pitcher game (regrouped from the same plays), and the authoritative
+  // boxscore pitching line per pitcher id.
+  pitchers: Map<number, StatsApiPitcherGame>;
+  pitchingLines: Map<number, PitchingLine>;
   runsByRunner: Map<number, number>;
   sbByRunner: Map<number, number>;
   csByRunner: Map<number, number>;
@@ -880,6 +1070,7 @@ function buildGameStatus(feed: LiveFeed): GameStatus {
     onBaseIds: live
       ? [o?.first?.id, o?.second?.id, o?.third?.id].filter((x): x is number => typeof x === 'number')
       : [],
+    pitchingId: live ? ls?.defense?.pitcher?.id ?? null : null,
   };
 }
 
@@ -921,6 +1112,43 @@ function startingOrder(
     }
   }
   return order;
+}
+
+/** Innings pitched string "5.2" → outs recorded (5×3 + 2). */
+function ipToOuts(ip: string | undefined): number {
+  if (!ip) return 0;
+  const [whole, frac] = ip.split('.');
+  return (Number(whole) || 0) * 3 + (Number(frac) || 0);
+}
+
+/** The authoritative per-pitcher counting line from the boxscore (the play stream
+ * can't attribute earned vs unearned / inherited runners). Keyed by pitcher id. */
+function parsePitchingLines(feed: LiveFeed): Map<number, PitchingLine> {
+  const out = new Map<number, PitchingLine>();
+  const teams = feed.liveData?.boxscore?.teams;
+  for (const team of [teams?.home, teams?.away]) {
+    for (const p of Object.values(team?.players ?? {})) {
+      const pit = p.stats?.pitching;
+      const id = p.person?.id;
+      if (typeof id !== 'number' || !pit || pit.inningsPitched === undefined) continue;
+      const pitchesThrown = pit.numberOfPitches ?? 0;
+      const strikes = pit.strikes ?? 0;
+      out.set(id, {
+        outs: ipToOuts(pit.inningsPitched),
+        hits: pit.hits ?? 0,
+        runs: pit.runs ?? 0,
+        earnedRuns: pit.earnedRuns ?? 0,
+        walks: pit.baseOnBalls ?? 0,
+        strikeouts: pit.strikeOuts ?? 0,
+        hr: pit.homeRuns ?? 0,
+        battersFaced: pit.battersFaced ?? 0,
+        pitchesThrown,
+        strikes,
+        balls: pit.balls ?? Math.max(0, pitchesThrown - strikes),
+      });
+    }
+  }
+  return out;
 }
 
 // Final games are immutable, so they're memoized (and disk-cached) forever.
@@ -981,11 +1209,15 @@ async function getLiveData(gamePk: number): Promise<{ feed: LiveFeed; winExp: Ma
   return { feed, winExp };
 }
 
+// Bump when the persisted compact feed needs new fields (so cached finals, which
+// were frozen without them, re-fetch). v2 added the boxscore pitching line.
+const FEED_CACHE_VERSION = 2;
+
 export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
   const finalCached = gameMemCache.get(gamePk);
   if (finalCached) return finalCached;
 
-  const feedFile = `game-${gamePk}.json`;
+  const feedFile = `game-${gamePk}-v${FEED_CACHE_VERSION}.json`;
   const wpFile = `wp-${gamePk}.json`;
 
   // A cached file on disk only ever exists for a completed game, so a hit means
@@ -1029,6 +1261,7 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
   const homeStarters = startingOrder(feed.liveData?.boxscore?.teams?.home);
   const awayStarters = startingOrder(feed.liveData?.boxscore?.teams?.away);
   const batters = new Map<number, StatsApiBatterGame>();
+  const pitchers = new Map<number, StatsApiPitcherGame>();
   const runsByRunner = new Map<number, number>();
   const sbByRunner = new Map<number, number>();
   const csByRunner = new Map<number, number>();
@@ -1103,6 +1336,8 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
         launchAngle: hd?.launchAngle ?? null,
         hitDistance: hd?.totalDistance ?? null,
         bbType: hd?.trajectory ?? null,
+        vBreak: pd?.breaks?.breakVerticalInduced ?? null,
+        hBreak: pd?.breaks?.breakHorizontal ?? null,
       });
     }
 
@@ -1157,7 +1392,41 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
       deltaWinExp: winExpByAtBat.get(atBatIndex) ?? null,
       pitches,
     });
+
+    // Pitcher's-eye view: the same play, regrouped under the pitcher who threw it.
+    const pitcherId = play.matchup?.pitcher?.id;
+    const pitcherName = play.matchup?.pitcher?.fullName;
+    if (typeof pitcherId === 'number' && pitcherName) {
+      // The home team pitches in the top of the inning (it fields then).
+      const pIsHome = play.about?.halfInning?.toLowerCase() === 'top';
+      let pg = pitchers.get(pitcherId);
+      if (!pg) {
+        pg = { pitcherId, pitcherName, isHome: pIsHome, throws: null, facedBatters: [], pitches: [] };
+        pitchers.set(pitcherId, pg);
+      }
+      pg.throws = play.matchup?.pitchHand?.code ?? pg.throws;
+      pg.facedBatters.push({
+        batterId,
+        batterName,
+        stand: play.matchup?.batSide?.code ?? null,
+        inning: play.about?.inning ?? 0,
+        half: evHalf,
+        outsWhenUp,
+        onBase,
+        event: play.result?.eventType ?? null,
+        description: play.result?.description ?? '',
+        rbi: play.result?.rbi ?? 0,
+        timestamp: evTime,
+        playId: lastPlayId,
+        launchSpeed: lastHit?.launchSpeed ?? null,
+        hitDistance: lastHit?.totalDistance ?? null,
+        pitches,
+      });
+      for (const p of pitches) pg.pitches.push(p);
+    }
   }
+
+  const pitchingLines = parsePitchingLines(feed);
 
   const game: StatsApiGame = {
     gamePk,
@@ -1174,6 +1443,8 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
     homeStarters,
     awayStarters,
     batters,
+    pitchers,
+    pitchingLines,
     runsByRunner,
     sbByRunner,
     csByRunner,

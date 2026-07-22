@@ -2,10 +2,24 @@ import { parse } from 'csv-parse/sync';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getGamesForDate, getPlayerStats, getRosterInfo, getStatsApiGame } from './mlbStats.js';
+import {
+  getGamesForDate,
+  getPitcherStats,
+  getPlayerStats,
+  getRosterInfo,
+  getStatsApiGame,
+} from './mlbStats.js';
+import type { StatsApiPitch, StatsApiPitcherGame } from './mlbStats.js';
+import { getSeasonArsenal } from './pitcherArsenal.js';
+import type { Arsenal } from './pitcherArsenal.js';
+import { getLeaguePitchAverage } from './pitchLeague.js';
 import { toSavantName } from './names.js';
 import type {
+  FacedBatter,
   Pitch,
+  PitchMix,
+  PitcherGame,
+  PitchingLine,
   PlateAppearance,
   PlayerGame,
   PlayerReport,
@@ -93,7 +107,9 @@ function lineupStatusFor(
 
 interface ParsedDay {
   date: string;
-  reports: Map<number, PlayerReport>; // by batter id
+  // Keyed by `${kind}-${id}` so a two-way player (bats AND pitches) can hold both
+  // a batter report and a pitcher report without colliding.
+  reports: Map<string, PlayerReport>;
   games: DayGame[];
   fetchedAt: number;
 }
@@ -328,10 +344,188 @@ function applyCsvEnrichment(
   }
 }
 
+// ---- Pitcher game aggregation --------------------------------------------
+
+// Swing-and-miss outcomes (Savant counts a foul tip as a whiff), and contact
+// outcomes — together they make up "swings", the whiff-rate denominator.
+const WHIFF_DESC = new Set(['swinging_strike', 'swinging_strike_blocked', 'foul_tip']);
+const CONTACT_DESC = new Set(['foul', 'foul_bunt', 'hit_into_play', 'foul_pitchout']);
+
+// Baserunning / pickoff plays carry the batter who was up but aren't plate
+// appearances, so they're excluded from the "batters faced" result list.
+function isBaserunningEvent(e: string | null): boolean {
+  if (!e) return false;
+  return (
+    e.startsWith('pickoff') ||
+    e.startsWith('caught_stealing') ||
+    e.startsWith('stolen_base') ||
+    e === 'wild_pitch' ||
+    e === 'passed_ball' ||
+    e === 'balk' ||
+    e === 'other_advance' ||
+    e === 'defensive_indiff' ||
+    e === 'runner_double_play' ||
+    e === 'cs_double_play' ||
+    e === 'error' ||
+    e === 'runner_placed'
+  );
+}
+
+const mean = (xs: (number | null)[]): number | null => {
+  const v = xs.filter((x): x is number => x !== null);
+  return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
+};
+const round1 = (x: number | null): number | null => (x === null ? null : Math.round(x * 10) / 10);
+const roundInt = (x: number | null): number | null => (x === null ? null : Math.round(x));
+
+/** A degraded pitching line derived from the play stream when the boxscore line
+ * is missing (old cache) — counting stats only; outs/runs can't be attributed
+ * reliably from plays, so they stay 0 (the boxscore is the real source). */
+function deriveLine(pg: StatsApiPitcherGame): PitchingLine {
+  let hits = 0;
+  let walks = 0;
+  let strikeouts = 0;
+  let hr = 0;
+  for (const fb of pg.facedBatters) {
+    const e = fb.event ?? '';
+    if (e === 'single' || e === 'double' || e === 'triple' || e === 'home_run') hits++;
+    if (e === 'home_run') hr++;
+    if (e === 'walk' || e === 'intent_walk') walks++;
+    if (e === 'strikeout' || e === 'strikeout_double_play') strikeouts++;
+  }
+  let strikes = 0;
+  for (const p of pg.pitches) if (p.description !== 'ball' && p.description !== 'blocked_ball') strikes++;
+  return {
+    outs: 0,
+    hits,
+    runs: 0,
+    earnedRuns: 0,
+    walks,
+    strikeouts,
+    hr,
+    battersFaced: pg.facedBatters.length,
+    pitchesThrown: pg.pitches.length,
+    strikes,
+    balls: pg.pitches.length - strikes,
+  };
+}
+
+/** Build the pitcher's-eye game view: the boxscore line, the batters faced
+ * (result-only), the pitch-type arsenal, and whiff/CSW/strike rates. Season and
+ * league arsenal baselines are filled later (per pitcher) in getReport. */
+function buildPitcherGame(pg: StatsApiPitcherGame, line: PitchingLine | undefined): PitcherGame {
+  const total = pg.pitches.length;
+  let whiffs = 0;
+  let swings = 0;
+  let called = 0;
+  const byType = new Map<string, StatsApiPitch[]>();
+  for (const p of pg.pitches) {
+    const d = p.description;
+    const isWhiff = WHIFF_DESC.has(d);
+    if (isWhiff) whiffs++;
+    if (isWhiff || CONTACT_DESC.has(d)) swings++;
+    if (d === 'called_strike') called++;
+    const name = p.pitchType ?? 'Other';
+    const list = byType.get(name);
+    if (list) list.push(p);
+    else byType.set(name, [p]);
+  }
+
+  const pitchMix: PitchMix[] = [...byType.entries()]
+    .map(([pitchType, ps]): PitchMix => {
+      let w = 0;
+      let s = 0;
+      for (const p of ps) {
+        const isW = WHIFF_DESC.has(p.description);
+        if (isW) w++;
+        if (isW || CONTACT_DESC.has(p.description)) s++;
+      }
+      return {
+        pitchType,
+        count: ps.length,
+        share: total ? ps.length / total : 0,
+        whiffRate: s ? w / s : null,
+        avgVelo: round1(mean(ps.map((p) => p.releaseSpeed))),
+        avgSpin: roundInt(mean(ps.map((p) => p.spinRate))),
+        hBreak: round1(mean(ps.map((p) => p.hBreak))),
+        vBreak: round1(mean(ps.map((p) => p.vBreak))),
+        seasonVelo: null,
+        seasonSpin: null,
+        seasonHBreak: null,
+        seasonVBreak: null,
+        leagueVelo: null,
+        leagueSpin: null,
+        leagueHBreak: null,
+        leagueVBreak: null,
+      };
+    })
+    .sort((a, b) => b.count - a.count);
+
+  const pl = line ?? deriveLine(pg);
+  const facedBatters: FacedBatter[] = pg.facedBatters
+    .filter((fb) => !isBaserunningEvent(fb.event))
+    .map((fb) => ({
+    batterId: fb.batterId,
+    batterName: fb.batterName,
+    stand: fb.stand,
+    inning: fb.inning,
+    half: fb.half,
+    outsWhenUp: fb.outsWhenUp,
+    onBase: fb.onBase,
+    event: fb.event,
+    description: fb.description,
+    rbi: fb.rbi,
+    timestamp: fb.timestamp,
+    playId: fb.playId,
+    launchSpeed: fb.launchSpeed,
+    hitDistance: fb.hitDistance,
+    xwoba: null,
+  }));
+
+  return {
+    line: pl,
+    facedBatters,
+    pitchMix,
+    whiffRate: swings ? whiffs / swings : null,
+    cswRate: total ? (called + whiffs) / total : null,
+    strikePct: pl.pitchesThrown ? pl.strikes / pl.pitchesThrown : total ? (total - (pl.balls || 0)) / total : null,
+    // A starter (or opener) faces the first batter of the game, in the 1st inning.
+    isStart: pg.facedBatters[0]?.inning === 1,
+  };
+}
+
+/** Fill a pitcher game's arsenal with season (his own) and league baselines,
+ * orienting the league horizontal-break magnitude to his own break direction. */
+function attachArsenalBaselines(
+  pitching: PitcherGame,
+  season: Map<string, { velo: number | null; spin: number | null; hBreak: number | null; vBreak: number | null }>,
+): void {
+  for (const m of pitching.pitchMix) {
+    const sea = season.get(m.pitchType);
+    if (sea) {
+      m.seasonVelo = sea.velo;
+      m.seasonSpin = sea.spin;
+      m.seasonHBreak = sea.hBreak;
+      m.seasonVBreak = sea.vBreak;
+    }
+    const lg = getLeaguePitchAverage(m.pitchType);
+    if (lg) {
+      m.leagueVelo = lg.velo;
+      m.leagueSpin = lg.spin;
+      m.leagueVBreak = lg.vBreak;
+      // League hBreak is a magnitude; orient it to this pitcher's own horizontal
+      // direction (his season, else this game) so signed deltas compare cleanly.
+      const dir = (m.seasonHBreak ?? m.hBreak ?? 0) < 0 ? -1 : 1;
+      m.leagueHBreak = lg.hBreak === null ? null : Math.abs(lg.hBreak) * dir;
+    }
+  }
+}
+
 // ---- Primary day builder (MLB Stats API) ---------------------------------
 
 async function buildStatsApiDay(date: string): Promise<{
   byBatter: Map<number, { name: string; games: PlayerGame[] }>;
+  byPitcher: Map<number, { name: string; games: PlayerGame[] }>;
   dayGames: DayGame[];
 }> {
   const gamePks = await getGamesForDate(date);
@@ -347,6 +541,7 @@ async function buildStatsApiDay(date: string): Promise<{
   );
 
   const byBatter = new Map<number, { name: string; games: PlayerGame[] }>();
+  const byPitcher = new Map<number, { name: string; games: PlayerGame[] }>();
   const dayGames: DayGame[] = [];
 
   for (const g of games) {
@@ -441,6 +636,7 @@ async function buildStatsApiDay(date: string): Promise<{
         // line is finalized after CSV enrichment is merged in (below), since
         // run value / avg exit velo depend on fields the enrichment fills in.
         line: buildLine(plateAppearances.filter((p) => p.event)),
+        pitching: null,
       };
       playerGame.line.runs = g.runsByRunner.get(bg.batterId) ?? 0;
       playerGame.line.sb = g.sbByRunner.get(bg.batterId) ?? 0;
@@ -453,9 +649,40 @@ async function buildStatsApiDay(date: string): Promise<{
       }
       b.games.push(playerGame);
     }
+
+    // Pitcher's-eye games, from the same plays regrouped by pitcher.
+    for (const pg of g.pitchers.values()) {
+      const pitcherTeam = pg.isHome ? g.homeTeam : g.awayTeam;
+      const opponent = pg.isHome ? g.awayTeam : g.homeTeam;
+      const pitcherGame: PlayerGame = {
+        gamePk: g.gamePk,
+        gameNumber: g.gameNumber,
+        date,
+        homeTeam: g.homeTeam,
+        awayTeam: g.awayTeam,
+        batterTeam: pitcherTeam,
+        opponent,
+        isHome: pg.isHome,
+        stand: pg.throws, // the pitcher's throwing hand
+        status: g.status,
+        lineupStatus: null,
+        lineupSpot: null,
+        probablePitcher: null,
+        plateAppearances: [],
+        baseEvents: [],
+        line: buildLine([]),
+        pitching: buildPitcherGame(pg, g.pitchingLines.get(pg.pitcherId)),
+      };
+      let pb = byPitcher.get(pg.pitcherId);
+      if (!pb) {
+        pb = { name: pg.pitcherName, games: [] };
+        byPitcher.set(pg.pitcherId, pb);
+      }
+      pb.games.push(pitcherGame);
+    }
   }
 
-  return { byBatter, dayGames };
+  return { byBatter, byPitcher, dayGames };
 }
 
 /** How long a current/future-day fetch stays fresh before we re-download (ms).
@@ -497,7 +724,7 @@ export async function getDay(date: string): Promise<ParsedDay> {
     if (Date.now() - cached.fetchedAt < ttl) return cached;
   }
 
-  const { byBatter, dayGames } = await buildStatsApiDay(date);
+  const { byBatter, byPitcher, dayGames } = await buildStatsApiDay(date);
 
   let enrichment = EMPTY_ENRICHMENT;
   try {
@@ -506,7 +733,7 @@ export async function getDay(date: string): Promise<ParsedDay> {
     console.error(`Savant CSV enrichment unavailable for ${date}:`, err);
   }
 
-  const reports = new Map<number, PlayerReport>();
+  const reports = new Map<string, PlayerReport>();
 
   for (const [batterId, b] of byBatter) {
     for (const g of b.games) {
@@ -524,16 +751,34 @@ export async function getDay(date: string): Promise<ParsedDay> {
     }
 
     b.games.sort(byGameOrder);
-    const savantName = toSavantName(b.name);
-    reports.set(batterId, {
+    reports.set(`batter-${batterId}`, {
       id: batterId,
-      savantName,
+      savantName: toSavantName(b.name),
       name: b.name,
+      kind: 'batter',
       found: true,
       games: b.games,
       // Filled in by getReport, which fetches season stats + roster status per
       // watched player.
       seasonStats: null,
+      pitcherSeasonStats: null,
+      splitVsLeft: null,
+      splitVsRight: null,
+      rosterStatus: null,
+    });
+  }
+
+  for (const [pitcherId, pb] of byPitcher) {
+    pb.games.sort(byGameOrder);
+    reports.set(`pitcher-${pitcherId}`, {
+      id: pitcherId,
+      savantName: toSavantName(pb.name),
+      name: pb.name,
+      kind: 'pitcher',
+      found: true,
+      games: pb.games,
+      seasonStats: null,
+      pitcherSeasonStats: null,
       splitVsLeft: null,
       splitVsRight: null,
       rosterStatus: null,
@@ -558,11 +803,13 @@ function enumerateDates(start: string, end: string): string[] {
 }
 
 function findPlayerDay(day: ParsedDay, p: WatchPlayer): PlayerReport | undefined {
-  const found = day.reports.get(p.id);
+  const found = day.reports.get(`${p.kind}-${p.id}`);
   if (found) return found;
-  // Fall back to name match if the id changed / not present.
+  // Fall back to a same-kind name match if the id changed / isn't present.
   for (const rep of day.reports.values()) {
-    if (rep.savantName.toLowerCase() === p.savantName.toLowerCase()) return rep;
+    if (rep.kind === p.kind && rep.savantName.toLowerCase() === p.savantName.toLowerCase()) {
+      return rep;
+    }
   }
   return undefined;
 }
@@ -590,6 +837,7 @@ function rosterGame(dg: DayGame, isHome: boolean, playerId: number): PlayerGame 
     plateAppearances: [],
     baseEvents: [],
     line: buildLine([]),
+    pitching: null,
   };
 }
 
@@ -607,11 +855,27 @@ export async function getReport(
   players: WatchPlayer[],
 ): Promise<PlayerReport[]> {
   const ids = players.map((p) => p.id);
-  const [days, playerStats, rosterInfo] = await Promise.all([
+  const batterIds = players.filter((p) => p.kind === 'batter').map((p) => p.id);
+  const pitcherIds = players.filter((p) => p.kind === 'pitcher').map((p) => p.id);
+  const [days, playerStats, pitcherStats, rosterInfo] = await Promise.all([
     Promise.all(enumerateDates(startDate, endDate).map(getDay)),
-    getPlayerStats(ids),
+    getPlayerStats(batterIds),
+    getPitcherStats(pitcherIds),
     getRosterInfo(ids),
   ]);
+
+  // Each watched pitcher's season arsenal (fetched once) — for the per-game
+  // velo/spin/break vs season-average comparison on the card.
+  const arsenals = new Map<number, Arsenal>();
+  await Promise.all(
+    pitcherIds.map(async (id) => {
+      try {
+        arsenals.set(id, await getSeasonArsenal(id));
+      } catch (err) {
+        console.error(`pitcher arsenal fetch failed for ${id}:`, err);
+      }
+    }),
+  );
 
   return players.map((p) => {
     const games: PlayerGame[] = [];
@@ -646,15 +910,35 @@ export async function getReport(
       }
     }
     games.sort(byGameOrder);
+    const rosterStatus = rosterInfo.get(p.id)?.status ?? null;
+
+    if (p.kind === 'pitcher') {
+      const arsenal = arsenals.get(p.id);
+      if (arsenal) {
+        for (const g of games) if (g.pitching) attachArsenalBaselines(g.pitching, arsenal);
+      }
+      return {
+        ...p,
+        found: games.length > 0,
+        games,
+        seasonStats: null,
+        pitcherSeasonStats: pitcherStats.get(p.id)?.season ?? null,
+        splitVsLeft: null,
+        splitVsRight: null,
+        rosterStatus,
+      };
+    }
+
     const st = playerStats.get(p.id);
     return {
       ...p,
       found: games.length > 0,
       games,
       seasonStats: st?.season ?? null,
+      pitcherSeasonStats: null,
       splitVsLeft: st?.vsLeft ?? null,
       splitVsRight: st?.vsRight ?? null,
-      rosterStatus: rosterInfo.get(p.id)?.status ?? null,
+      rosterStatus,
     };
   });
 }

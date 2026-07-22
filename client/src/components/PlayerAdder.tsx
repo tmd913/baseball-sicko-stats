@@ -32,7 +32,7 @@ export function PlayerAdder({
   }, [query, players, watchedIds]);
 
   const select = (p: SeasonPlayer) => {
-    onAdd({ id: p.id, savantName: p.savantName, name: p.name });
+    onAdd({ id: p.id, savantName: p.savantName, name: p.name, kind: p.kind });
     setQuery('');
   };
 

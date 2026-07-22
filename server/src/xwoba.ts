@@ -9,14 +9,15 @@ const SEASON = 2026;
 // year to year; a fixed benchmark is fine for "above / below average".
 const LEAGUE_XWOBA = 0.315;
 
-/** Baseball Savant statcast-search CSV for one batter's full regular season —
- * every pitch, from which we take the per-plate-appearance result rows. */
-function seasonXwobaUrl(playerId: number): string {
+/** Baseball Savant statcast-search CSV for one player's full regular season —
+ * every pitch, from which we take the per-plate-appearance result rows. For a
+ * pitcher this is xwOBA *allowed* (the same estimate, keyed to the pitcher). */
+function seasonXwobaUrl(playerId: number, kind: 'batter' | 'pitcher'): string {
   const params = new URLSearchParams({
     hfGT: 'R|',
     hfSea: `${SEASON}|`,
-    player_type: 'batter',
-    'batters_lookup[]': String(playerId),
+    player_type: kind,
+    [`${kind}s_lookup[]`]: String(playerId),
     game_date_gt: `${SEASON}-01-01`,
     game_date_lt: `${SEASON}-12-31`,
     group_by: 'name-event',
@@ -39,7 +40,7 @@ const num = (v: string | undefined): number | null => {
 
 // Current-season data changes daily; re-fetch at most every 6h per player.
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
-const cache = new Map<number, { data: XwobaSeries; fetchedAt: number }>();
+const cache = new Map<string, { data: XwobaSeries; fetchedAt: number }>();
 
 /** Sortable per-PA record before it's trimmed to the wire shape. */
 interface PaRow extends XwobaPa {
@@ -56,11 +57,15 @@ interface PaRow extends XwobaPa {
  * Only rows with a wOBA denominator are kept — that excludes intentional walks
  * and truncated PAs, which don't count in wOBA (matching Savant's convention).
  */
-export async function getXwobaSeries(playerId: number): Promise<XwobaSeries> {
-  const hit = cache.get(playerId);
+export async function getXwobaSeries(
+  playerId: number,
+  kind: 'batter' | 'pitcher' = 'batter',
+): Promise<XwobaSeries> {
+  const key = `${kind}-${playerId}`;
+  const hit = cache.get(key);
   if (hit && Date.now() - hit.fetchedAt < CACHE_TTL_MS) return hit.data;
 
-  const res = await fetch(seasonXwobaUrl(playerId), {
+  const res = await fetch(seasonXwobaUrl(playerId, kind), {
     headers: { 'User-Agent': 'statcast-sicko/1.0' },
   });
   if (!res.ok) {
@@ -97,6 +102,6 @@ export async function getXwobaSeries(playerId: number): Promise<XwobaSeries> {
     pas.length > 0 ? pas.reduce((s, p) => s + p.xwoba, 0) / pas.length : 0;
 
   const data: XwobaSeries = { season: SEASON, seasonXwoba, leagueXwoba: LEAGUE_XWOBA, pas };
-  cache.set(playerId, { data, fetchedAt: Date.now() });
+  cache.set(key, { data, fetchedAt: Date.now() });
   return data;
 }

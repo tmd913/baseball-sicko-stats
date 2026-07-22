@@ -100,6 +100,7 @@ export interface GameStatus {
   atBatId: number | null;
   onDeckId: number | null;
   onBaseIds: number[]; // player ids currently on base
+  pitchingId: number | null; // the pitcher currently on the mound (live only)
 }
 
 /** A game's announced/probable starting pitcher (used before first pitch). */
@@ -116,6 +117,96 @@ export interface BaseEvent {
   half: string; // "Top" | "Bot"
   timestamp: string | null;
   base: string | null; // stolen-base target ("2nd"/"3rd"/"home"); null for a run
+}
+
+// ---- Pitcher model ---------------------------------------------------------
+
+/** One batter a pitcher faced — the RESULT of the PA only (no pitch-by-pitch
+ * detail), framed from the pitcher's side (the batter is named). */
+export interface FacedBatter {
+  batterId: number;
+  batterName: string;
+  stand: string | null; // batter handedness L/R
+  inning: number;
+  half: string; // "Top" | "Bot"
+  outsWhenUp: number | null;
+  onBase: BaseState;
+  event: string | null; // strikeout, single, walk, field_out, ...
+  description: string;
+  rbi: number;
+  timestamp: string | null;
+  playId: string | null;
+  launchSpeed: number | null;
+  hitDistance: number | null;
+  xwoba: number | null;
+}
+
+/** A pitcher's per-game counting line (authoritative, from the boxscore). `outs`
+ * is the aggregation-safe innings field; IP is formatted for display. */
+export interface PitchingLine {
+  outs: number; // innings pitched × 3
+  hits: number;
+  runs: number;
+  earnedRuns: number;
+  walks: number;
+  strikeouts: number;
+  hr: number;
+  battersFaced: number;
+  pitchesThrown: number;
+  strikes: number;
+  balls: number;
+}
+
+/** One pitch type in a pitcher's game arsenal, with the game averages and the
+ * season / league baselines that power the comparison arrows. */
+export interface PitchMix {
+  pitchType: string; // "4-Seam Fastball", "Slider", ...
+  count: number;
+  share: number; // fraction of the game's pitches (0-1)
+  whiffRate: number | null; // whiffs / swings on this pitch type
+  avgVelo: number | null;
+  avgSpin: number | null;
+  hBreak: number | null; // horizontal break, inches
+  vBreak: number | null; // induced vertical break, inches
+  seasonVelo: number | null;
+  seasonSpin: number | null;
+  seasonHBreak: number | null;
+  seasonVBreak: number | null;
+  leagueVelo: number | null;
+  leagueSpin: number | null;
+  leagueHBreak: number | null;
+  leagueVBreak: number | null;
+}
+
+/** A pitcher's game: the counting line, batters faced (result-only), and the
+ * pitch-type arsenal with rate aggregates. */
+export interface PitcherGame {
+  line: PitchingLine;
+  facedBatters: FacedBatter[];
+  pitchMix: PitchMix[];
+  whiffRate: number | null; // whiffs / swings, overall
+  cswRate: number | null; // (called strikes + whiffs) / pitches
+  strikePct: number | null; // strikes / pitches
+  isStart: boolean;
+}
+
+/** A pitcher's season line (and platoon splits vs L/R), for the card header. */
+export interface PitcherSeasonStats {
+  gamesPlayed: number;
+  gamesStarted: number;
+  battersFaced: number; // sample size (esp. for splits)
+  inningsPitched: string; // "84.1"
+  era: string;
+  whip: string;
+  strikeOuts: number;
+  baseOnBalls: number;
+  hits: number;
+  homeRuns: number;
+  strikeoutsPer9: string;
+  walksPer9: string;
+  kRate: string; // K / batters faced, ".291"
+  bbRate: string;
+  avgAgainst: string; // batting average against, ".221"
 }
 
 export interface PlayerGame {
@@ -146,6 +237,8 @@ export interface PlayerGame {
   // feed interleaves them chronologically with at-bats.
   baseEvents: BaseEvent[];
   line: BattingLine;
+  // For a watched pitcher, the pitcher's-eye view of this game; null for batters.
+  pitching: PitcherGame | null;
 }
 
 /** A player saved on the user's watchlist. */
@@ -153,6 +246,7 @@ export interface WatchPlayer {
   id: number;
   savantName: string; // "Last, First"
   name: string; // "First Last"
+  kind: 'batter' | 'pitcher';
 }
 
 /** A player's batting line — full-season, or a platoon split (vs L/R pitching). */
@@ -182,6 +276,8 @@ export interface PlayerReport extends WatchPlayer {
   found: boolean;
   games: PlayerGame[];
   seasonStats: SeasonStats | null;
+  // The pitcher's season line (null for batters; parallel to seasonStats).
+  pitcherSeasonStats: PitcherSeasonStats | null;
   // Platoon splits for the season, shown when the player faces a same-handed
   // probable starter in a not-yet-started game.
   splitVsLeft: SeasonStats | null; // vs LHP

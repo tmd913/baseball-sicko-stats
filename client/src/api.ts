@@ -1,4 +1,5 @@
 import type {
+  PitcherSeasonStats,
   PlayerPercentiles,
   PlayerReport,
   SeasonPlayer,
@@ -61,16 +62,24 @@ export const api = {
   ): Promise<{ start: string; end: string; players: PlayerReport[] }> {
     return json(await fetch(`/api/report?start=${start}&end=${end}`));
   },
-  async percentiles(playerId: number): Promise<PlayerPercentiles> {
-    return json(await fetch(`/api/percentiles/${playerId}`));
+  async percentiles(
+    playerId: number,
+    kind: 'batter' | 'pitcher' = 'batter',
+  ): Promise<PlayerPercentiles> {
+    return json(await fetch(`/api/percentiles/${playerId}?type=${kind}`));
   },
   async splits(
     playerId: number,
   ): Promise<{ vsLeft: SeasonStats | null; vsRight: SeasonStats | null }> {
     return json(await fetch(`/api/players/${playerId}/splits`));
   },
-  async xwoba(playerId: number): Promise<XwobaSeries> {
-    return json(await fetch(`/api/players/${playerId}/xwoba`));
+  async pitcherSplits(
+    playerId: number,
+  ): Promise<{ vsLeft: PitcherSeasonStats | null; vsRight: PitcherSeasonStats | null }> {
+    return json(await fetch(`/api/players/${playerId}/splits?type=pitcher`));
+  },
+  async xwoba(playerId: number, kind: 'batter' | 'pitcher' = 'batter'): Promise<XwobaSeries> {
+    return json(await fetch(`/api/players/${playerId}/xwoba?type=${kind}`));
   },
   async video(playId: string, gamePk: number): Promise<string> {
     const r = await json<{ url: string }>(

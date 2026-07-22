@@ -13,7 +13,9 @@ async function load(): Promise<WatchPlayer[]> {
   if (cache) return cache;
   try {
     const raw = await fs.readFile(FILE, 'utf8');
-    cache = JSON.parse(raw) as WatchPlayer[];
+    const parsed = JSON.parse(raw) as WatchPlayer[];
+    // Migrate pre-pitcher entries (saved before `kind` existed) to batters.
+    cache = parsed.map((p) => ({ ...p, kind: p.kind ?? 'batter' }));
   } catch {
     cache = [];
   }

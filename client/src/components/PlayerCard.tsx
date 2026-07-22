@@ -24,7 +24,7 @@ import { BaseDiamond } from './BaseDiamond';
 import { PlateAppearanceCard } from './PlateAppearanceCard';
 import { GameReel } from './GameReel';
 
-function StatPill({ label, value }: { label: string; value: string }) {
+export function StatPill({ label, value }: { label: string; value: string }) {
   return (
     <div className="stat-pill">
       <div className="stat-value">{value}</div>
@@ -38,7 +38,7 @@ function StatPill({ label, value }: { label: string; value: string }) {
  * "Final". With `withMatchup`, a not-yet-started game also shows the opponent
  * and home/away inside the bubble (used where no score badge reveals the teams).
  */
-function GameStatusBadge({ game, withMatchup }: { game: PlayerGame; withMatchup?: boolean }) {
+export function GameStatusBadge({ game, withMatchup }: { game: PlayerGame; withMatchup?: boolean }) {
   const { kind, score, detail } = gameStatusView(game);
   const matchup =
     withMatchup && kind === 'scheduled' ? `${game.isHome ? 'vs' : '@'} ${game.opponent}` : null;
@@ -319,7 +319,7 @@ function GameBlock({
  * it sits in. `corner` pins the lineup-spot pip (batting number, or a red "!"
  * when out of the lineup) to the top-right, matching the player-nav avatar.
  */
-function Headshot({
+export function Headshot({
   id,
   name,
   onOpen,
@@ -380,13 +380,13 @@ function RosterStatusTag({ status }: { status: RosterStatus | null }) {
 }
 
 /** Live-game role tag — "At bat" / "On deck" / "On base" — matching the nav. */
-function LiveRoleTag({ role }: { role: LiveRole | null }) {
+export function LiveRoleTag({ role }: { role: LiveRole | null }) {
   if (!role) return null;
   return <span className={`live-role role-${role}`}>{liveRoleLabel(role)}</span>;
 }
 
 /** Flags a two-games-in-a-day slate so a collapsed card still signals it. */
-function DoubleheaderTag({ games }: { games: PlayerGame[] }) {
+export function DoubleheaderTag({ games }: { games: PlayerGame[] }) {
   if (!hasDoubleheader(games)) return null;
   return (
     <span className="dh-badge" title="Two games on one day">
@@ -396,7 +396,7 @@ function DoubleheaderTag({ games }: { games: PlayerGame[] }) {
 }
 
 /** Player name with the fielding position (and any roster-status flag) beside it. */
-function PlayerName({
+export function PlayerName({
   name,
   position,
   status,

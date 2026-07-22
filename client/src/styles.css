@@ -1537,6 +1537,149 @@ body {
   align-items: start;
 }
 
+/* ---- Pitcher card ---- */
+.pitcher-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-top: 4px;
+}
+.pitcher-stats.stat-row {
+  gap: 8px;
+}
+/* Arsenal — one row per pitch type, with velo/spin/break vs season & league. */
+.arsenal {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.arsenal-caption {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.arsenal-caption .am-arrow {
+  color: var(--faint);
+}
+.arsenal-row {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 9px 12px;
+}
+.arsenal-id {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.arsenal-type {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text);
+}
+.arsenal-share {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.arsenal-whiff {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.arsenal-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+@container (max-width: 460px) {
+  .arsenal-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.arsenal-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.am-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--faint);
+}
+.am-value {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.am-unit {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-left: 2px;
+}
+.am-refs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  margin-top: 1px;
+}
+.am-ref {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.am-arrow {
+  font-size: 9px;
+}
+.am-ref.dir-up .am-arrow {
+  color: var(--hit);
+}
+.am-ref.dir-down .am-arrow {
+  color: var(--strikeout);
+}
+.am-ref.dir-flat .am-arrow {
+  color: var(--faint);
+}
+/* Batters faced — result-only rows (no pitch table / strike zone). */
+.faced-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.faced-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 7px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-radius: 10px;
+}
+.faced-batter {
+  font-weight: 700;
+  color: var(--text);
+}
+.faced-hand {
+  font-weight: 600;
+  color: var(--muted);
+}
+
 /* ---- PA card ---- */
 .pa-card {
   background: var(--bg);
@@ -1549,22 +1692,28 @@ body {
      (same measured offset the player cards use). */
   scroll-margin-top: var(--nav-offset, 92px);
 }
-.pa-card.kind-hr {
+.pa-card.kind-hr,
+.faced-row.kind-hr {
   border-left-color: var(--hr);
 }
-.pa-card.kind-hit {
+.pa-card.kind-hit,
+.faced-row.kind-hit {
   border-left-color: var(--hit);
 }
-.pa-card.kind-walk {
+.pa-card.kind-walk,
+.faced-row.kind-walk {
   border-left-color: var(--walk);
 }
-.pa-card.kind-strikeout {
+.pa-card.kind-strikeout,
+.faced-row.kind-strikeout {
   border-left-color: var(--strikeout);
 }
-.pa-card.kind-out {
+.pa-card.kind-out,
+.faced-row.kind-out {
   border-left-color: var(--out);
 }
-.pa-card.kind-other {
+.pa-card.kind-other,
+.faced-row.kind-other {
   border-left-color: var(--faint);
 }
 .pa-summary-row {
@@ -2688,6 +2837,10 @@ body {
   width: 100%;
   font-size: 13px;
   color: var(--text);
+}
+/* When both a batter and a pitcher table stack in the scroll box, space them. */
+.summary-table-pitchers {
+  margin-top: 22px;
 }
 .summary-table th,
 .summary-table td {
