@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getReport } from './savant.js';
 import { getPercentiles } from './percentiles.js';
+import { getXwobaSeries } from './xwoba.js';
 import { getPlayerStats, getSeasonPlayers, resolveVideoUrl } from './mlbStats.js';
 import { addPlayer, getWatchlist, removePlayer, reorderPlayers } from './store.js';
 
@@ -174,6 +175,20 @@ app.get(
     }
     const stats = (await getPlayerStats([playerId])).get(playerId);
     res.json({ vsLeft: stats?.vsLeft ?? null, vsRight: stats?.vsRight ?? null });
+  }),
+);
+
+// A player's season per-PA xwOBA sequence, for the details view's rolling-xwOBA
+// chart (the client computes the rolling averages for the selected window).
+app.get(
+  '/api/players/:playerId/xwoba',
+  asyncRoute(async (req, res) => {
+    const playerId = Number(req.params.playerId);
+    if (!Number.isInteger(playerId) || playerId <= 0) {
+      res.status(400).json({ error: 'invalid playerId' });
+      return;
+    }
+    res.json(await getXwobaSeries(playerId));
   }),
 );
 

@@ -225,3 +225,17 @@ export interface PlayerPercentiles {
   sections: PercentileSection[];
   updatedAt: string; // ISO timestamp of when the data was fetched
 }
+
+/** One plate appearance in a season xwOBA series (Savant estimated wOBA). */
+export interface XwobaPa {
+  date: string; // game date, YYYY-MM-DD
+  xwoba: number; // this PA's xwOBA contribution
+}
+
+/** A player's season sequence of per-PA xwOBA, for the rolling-xwOBA chart. */
+export interface XwobaSeries {
+  season: number;
+  seasonXwoba: number; // the player's season average, shown as caption text
+  leagueXwoba: number; // MLB league average, drawn as the reference line
+  pas: XwobaPa[]; // in play order
+}

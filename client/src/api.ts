@@ -4,6 +4,7 @@ import type {
   SeasonPlayer,
   SeasonStats,
   WatchPlayer,
+  XwobaSeries,
 } from './types';
 
 async function json<T>(res: Response): Promise<T> {
@@ -67,6 +68,9 @@ export const api = {
     playerId: number,
   ): Promise<{ vsLeft: SeasonStats | null; vsRight: SeasonStats | null }> {
     return json(await fetch(`/api/players/${playerId}/splits`));
+  },
+  async xwoba(playerId: number): Promise<XwobaSeries> {
+    return json(await fetch(`/api/players/${playerId}/xwoba`));
   },
   async video(playId: string, gamePk: number): Promise<string> {
     const r = await json<{ url: string }>(

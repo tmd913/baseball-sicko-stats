@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { api } from '../api';
-import type { PlayerPercentiles, PercentileMetric, SeasonStats } from '../types';
+import type { PlayerPercentiles, PercentileMetric, SeasonStats, XwobaSeries } from '../types';
 import { headshotUrl, savantPlayerUrl } from '../lib';
+import { RollingXwoba } from './RollingXwoba';
 
 /**
  * Savant's diverging percentile scale: deep blue (poor, 0) → neutral grey
@@ -231,7 +232,7 @@ function SplitsPanel({
   );
 }
 
-type DetailsTab = 'percentiles' | 'splits';
+type DetailsTab = 'percentiles' | 'splits' | 'rolling';
 
 export function PlayerDetails({
   playerId,
@@ -262,6 +263,12 @@ export function PlayerDetails({
   } | null>(null);
   const [splitsError, setSplitsError] = useState<string | null>(null);
   const [splitsLoading, setSplitsLoading] = useState(true);
+  // The season xwOBA series backs the Rolling xwOBA tab. It's a heavier Savant
+  // fetch, so it's loaded lazily — only once that tab is first opened.
+  const [xwoba, setXwoba] = useState<XwobaSeries | null>(null);
+  const [xwobaError, setXwobaError] = useState<string | null>(null);
+  const [xwobaLoading, setXwobaLoading] = useState(false);
+  const xwobaReq = useRef<number | null>(null);
 
   // The percentile-point distance below which two paired bubbles would overlap,
   // measured from the live track width (~a bubble diameter's worth of the rail)
@@ -332,6 +339,40 @@ export function PlayerDetails({
       live = false;
     };
   }, [playerId]);
+
+  // Reset the (lazily-loaded) rolling series when the player changes.
+  useEffect(() => {
+    xwobaReq.current = null;
+    setXwoba(null);
+    setXwobaError(null);
+  }, [playerId]);
+
+  // Fetch the season xwOBA series the first time the Rolling tab is opened for
+  // this player (xwobaReq tracks which player we've already requested).
+  useEffect(() => {
+    if (tab !== 'rolling' || xwobaReq.current === playerId) return;
+    xwobaReq.current = playerId;
+    let live = true;
+    setXwobaLoading(true);
+    setXwobaError(null);
+    api
+      .xwoba(playerId)
+      .then((d) => {
+        if (live) setXwoba(d);
+      })
+      .catch((e: unknown) => {
+        if (live) {
+          setXwobaError(e instanceof Error ? e.message : 'Failed to load');
+          xwobaReq.current = null; // allow a retry on re-open
+        }
+      })
+      .finally(() => {
+        if (live) setXwobaLoading(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [tab, playerId]);
 
   return (
     <div className="details-view">
@@ -407,6 +448,15 @@ export function PlayerDetails({
         <button
           type="button"
           role="tab"
+          aria-selected={tab === 'rolling'}
+          className={`details-tab${tab === 'rolling' ? ' is-active' : ''}`}
+          onClick={() => setTab('rolling')}
+        >
+          Rolling xwOBA
+        </button>
+        <button
+          type="button"
+          role="tab"
           aria-selected={tab === 'splits'}
           className={`details-tab${tab === 'splits' ? ' is-active' : ''}`}
           onClick={() => setTab('splits')}
@@ -414,6 +464,18 @@ export function PlayerDetails({
           Splits
         </button>
       </div>
+
+      {tab === 'rolling' && xwobaLoading && (
+        <div className="details-status">Loading season xwOBA…</div>
+      )}
+      {tab === 'rolling' && xwobaError && !xwobaLoading && (
+        <div className="details-status details-error">
+          Couldn’t load xwOBA: {xwobaError}
+        </div>
+      )}
+      {tab === 'rolling' && xwoba && !xwobaLoading && (
+        <RollingXwoba series={xwoba} name={name} />
+      )}
 
       {tab === 'splits' && splitsLoading && (
         <div className="details-status">Loading platoon splits…</div>
