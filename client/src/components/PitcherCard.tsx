@@ -4,6 +4,7 @@ import { useScrollIntoViewOnExpand } from '../hooks';
 import {
   combinePitchingLines,
   deltaVs,
+  eraOf,
   eventLabel,
   fmt,
   formatIp,
@@ -11,9 +12,13 @@ import {
   mostRecentGameFirst,
   outcomeKind,
   pitcherSeasonSummary,
+  pitchStyle,
   prettyGameDate,
+  whipOf,
 } from '../lib';
 import { BaseDiamond } from './BaseDiamond';
+import { VideoClip } from './PlateAppearanceCard';
+import { PitchSequence } from './PitchSequence';
 import { GameStatusBadge, Headshot, LiveRoleTag, PlayerName, StatPill } from './PlayerCard';
 
 /** A one-line pitching line: "6.0 IP, 4 H, 2 ER, 1 BB, 5 K". */
@@ -29,18 +34,78 @@ function lineSummary(l: PitchingLine): string {
 
 const pct = (x: number | null): string => (x === null ? '—' : `${Math.round(x * 100)}%`);
 
-/** One batter faced — the RESULT only (no pitch-by-pitch detail). */
-function FacedBatterRow({ fb }: { fb: FacedBatter }) {
-  const kind = outcomeKind(fb.event);
-  const isTop = fb.half === 'Top';
+/** Baseball rate line ".265" / "1.250" — drops the leading zero below 1.000. */
+const avg3 = (n: number | null): string => (n === null ? '—' : n.toFixed(3).replace(/^0\./, '.'));
+
+/** One season-result stat in an arsenal row's Results strip. */
+function ResultStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className={`faced-row kind-${kind}`}>
-      <span className="pa-inning">
-        <svg className="pa-inning-arrow" viewBox="0 0 12 10" aria-hidden="true" fill="currentColor">
-          <path d={isTop ? 'M6 0 12 10 0 10Z' : 'M0 0 12 0 6 10Z'} />
-        </svg>
-        {fb.inning}
-      </span>
+    <span className="ars-rstat">
+      <span className="ars-rlabel">{label}</span>
+      <span className="ars-rval">{value}</span>
+    </span>
+  );
+}
+
+/** English ordinal for an inning number: 1 → "1st", 3 → "3rd", 11 → "11th". */
+function ordinal(n: number): string {
+  const s = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`;
+}
+
+/** One inning's worth of a pitcher's results, grouped in encounter order. */
+interface InningGroup {
+  inning: number;
+  half: string;
+  batters: FacedBatter[];
+}
+
+/** Group the batters faced by inning, preserving the order they're passed in
+ * (ascending for a final game, most-recent-first for a live one). */
+function groupByInning(faced: FacedBatter[]): InningGroup[] {
+  const groups: InningGroup[] = [];
+  const idx = new Map<number, number>();
+  for (const fb of faced) {
+    let gi = idx.get(fb.inning);
+    if (gi === undefined) {
+      gi = groups.length;
+      idx.set(fb.inning, gi);
+      groups.push({ inning: fb.inning, half: fb.half, batters: [] });
+    }
+    groups[gi].batters.push(fb);
+  }
+  return groups;
+}
+
+/** The pitcher's line for one inning: batters faced, hits, R, ER, K, BB, pitches. */
+function inningStats(batters: FacedBatter[]) {
+  let h = 0;
+  let r = 0;
+  let er = 0;
+  let k = 0;
+  let bb = 0;
+  let pitches = 0;
+  for (const fb of batters) {
+    const kind = outcomeKind(fb.event);
+    if (kind === 'hit' || kind === 'hr') h++;
+    else if (kind === 'strikeout') k++;
+    else if (kind === 'walk') bb++;
+    r += fb.runs;
+    er += fb.earnedRuns;
+    pitches += fb.pitches.length;
+  }
+  return { bf: batters.length, h, r, er, k, bb, pitches };
+}
+
+/** One batter faced — the result row, expandable to the full pitch sequence. */
+function FacedBatterCard({ fb, gamePk }: { fb: FacedBatter; gamePk: number }) {
+  const [open, setOpen] = useState(false);
+  const kind = outcomeKind(fb.event);
+  const expandable = fb.pitches.length > 0;
+
+  const summary = (
+    <>
       <BaseDiamond bases={fb.onBase} outs={fb.outsWhenUp ?? 0} className="pa-bases" />
       <span className={`pa-badge kind-${kind}`}>{eventLabel(fb.event)}</span>
       {fb.rbi > 0 && <span className="pa-rbi">{fb.rbi} RBI</span>}
@@ -51,33 +116,91 @@ function FacedBatterRow({ fb }: { fb: FacedBatter }) {
       {fb.launchSpeed !== null && (
         <span className="pa-contact-main">{fb.launchSpeed.toFixed(1)} mph</span>
       )}
+      {expandable && (
+        <>
+          <span className="faced-pitches">{fb.pitches.length} P</span>
+          <span className="faced-caret" aria-hidden="true">
+            ▾
+          </span>
+        </>
+      )}
+    </>
+  );
+
+  if (!expandable) {
+    return <div className={`faced-row kind-${kind}`}>{summary}</div>;
+  }
+
+  return (
+    <div className={`faced-card kind-${kind}${open ? ' expanded' : ''}`}>
+      <button
+        type="button"
+        className="faced-row faced-summary"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        {summary}
+      </button>
+      {open && (
+        <div className="faced-detail">
+          {fb.description && <p className="pa-des">{fb.description}</p>}
+          <PitchSequence pitches={fb.pitches} />
+          {fb.playId && <VideoClip playId={fb.playId} gamePk={gamePk} />}
+        </div>
+      )}
     </div>
   );
 }
 
-/** One reference (season / league) with a direction arrow vs the game value. */
-function RefTag({
-  label,
-  game,
-  ref,
-  digits,
-}: {
-  label: string;
-  game: number | null;
-  ref: number | null;
-  digits: number;
-}) {
-  const d = deltaVs(game, ref);
-  if (ref === null) return null;
-  const arrow = d?.dir === 'up' ? '▲' : d?.dir === 'down' ? '▼' : '·';
+/** A collapsible per-inning card: header with the inning's line, then the
+ * expandable result rows for each batter faced that inning. */
+function InningBlock({ group, gamePk }: { group: InningGroup; gamePk: number }) {
+  const [collapsed, setCollapsed] = useState(true);
+  const s = inningStats(group.batters);
+  const isTop = group.half === 'Top';
   return (
-    <span className={`am-ref dir-${d?.dir ?? 'flat'}`}>
-      {label} {fmt(ref, digits)} <span className="am-arrow">{arrow}</span>
-    </span>
+    <div className={`inning-block${collapsed ? ' collapsed' : ''}`}>
+      <button
+        type="button"
+        className="inning-head"
+        aria-expanded={!collapsed}
+        onClick={() => setCollapsed((v) => !v)}
+      >
+        <span className="inning-label">
+          <svg className="pa-inning-arrow" viewBox="0 0 12 10" aria-hidden="true" fill="currentColor">
+            <path d={isTop ? 'M6 0 12 10 0 10Z' : 'M0 0 12 0 6 10Z'} />
+          </svg>
+          {ordinal(group.inning)}
+        </span>
+        <span className="inning-stats">
+          <span className="inning-stat">{s.bf} BF</span>
+          {s.h > 0 && <span className="inning-stat is-h">{s.h} H</span>}
+          {s.r > 0 && (
+            <span className="inning-stat is-r">
+              {s.r} R{s.er !== s.r ? ` (${s.er} ER)` : ''}
+            </span>
+          )}
+          {s.k > 0 && <span className="inning-stat is-k">{s.k} K</span>}
+          {s.bb > 0 && <span className="inning-stat is-bb">{s.bb} BB</span>}
+          <span className="inning-stat is-p">{s.pitches} P</span>
+        </span>
+        <span className="inning-caret" aria-hidden="true">
+          ▾
+        </span>
+      </button>
+      {!collapsed && (
+        <div className="inning-batters">
+          {group.batters.map((fb, i) => (
+            <FacedBatterCard key={`${fb.batterId}-${fb.inning}-${i}`} fb={fb} gamePk={gamePk} />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
-/** One arsenal metric (velo / spin / break) with season + league comparison. */
+/** One arsenal metric (velo / spin / break): the game value with a small ▲▼
+ * delta vs the pitcher's own season average (league avg in the hover title). */
 function ArsenalMetric({
   label,
   value,
@@ -93,36 +216,99 @@ function ArsenalMetric({
   league: number | null;
   digits: number;
 }) {
+  const d = deltaVs(value, season);
+  const arrow = d?.dir === 'up' ? '▲' : d?.dir === 'down' ? '▼' : null;
+  const title = [
+    season !== null ? `season ${fmt(season, digits)}${unit}` : null,
+    league !== null ? `league ${fmt(league, digits)}${unit}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
   return (
-    <div className="arsenal-metric">
-      <span className="am-label">{label}</span>
-      <span className="am-value">
+    <div className="ars-metric" title={title || undefined}>
+      <span className="ars-mlabel">{label}</span>
+      <span className="ars-mval">
         {fmt(value, digits)}
-        {unit && <span className="am-unit">{unit}</span>}
+        {unit && <span className="ars-unit">{unit}</span>}
       </span>
-      <span className="am-refs">
-        <RefTag label="szn" game={value} ref={season} digits={digits} />
-        <RefTag label="lg" game={value} ref={league} digits={digits} />
-      </span>
+      {d && arrow ? (
+        <span className={`ars-delta dir-${d.dir}`}>
+          {arrow} {fmt(Math.abs(d.diff), digits)}
+        </span>
+      ) : (
+        <span className="ars-delta dir-flat">·</span>
+      )}
     </div>
   );
 }
 
-/** One pitch type in the arsenal: usage + whiff%, then velo/spin/break metrics. */
+/** One pitch type as a Savant-style arsenal row: color-coded id + usage bar,
+ * then velo / spin / iVB / HB (vs season) + whiff. */
 function ArsenalRow({ m }: { m: PitchMix }) {
+  const { abbr, color } = pitchStyle(m.pitchType);
+  const share = Math.round(m.share * 100);
   return (
-    <div className="arsenal-row">
-      <div className="arsenal-id">
-        <span className="arsenal-type">{m.pitchType}</span>
-        <span className="arsenal-share">{Math.round(m.share * 100)}%</span>
-        {m.whiffRate !== null && <span className="arsenal-whiff">{pct(m.whiffRate)} whiff</span>}
+    <div className="ars-row" style={{ borderLeftColor: color }}>
+      <div className="ars-head">
+        <span className="ars-dot" style={{ background: color }} />
+        <span className="ars-abbr">{abbr}</span>
+        <span className="ars-name">{m.pitchType}</span>
+        <span className="ars-count">{m.count}</span>
+        <span className="ars-usage">
+          <span className="ars-bar">
+            <span className="ars-bar-fill" style={{ width: `${share}%`, background: color }} />
+          </span>
+          <span className="ars-share">{share}%</span>
+        </span>
       </div>
-      <div className="arsenal-metrics">
+      <div className="ars-metrics">
         <ArsenalMetric label="Velo" value={m.avgVelo} unit=" mph" season={m.seasonVelo} league={m.leagueVelo} digits={1} />
         <ArsenalMetric label="Spin" value={m.avgSpin} unit="" season={m.seasonSpin} league={m.leagueSpin} digits={0} />
         <ArsenalMetric label="iVB" value={m.vBreak} unit='"' season={m.seasonVBreak} league={m.leagueVBreak} digits={1} />
         <ArsenalMetric label="HB" value={m.hBreak} unit='"' season={m.seasonHBreak} league={m.leagueHBreak} digits={1} />
+        <div className="ars-metric ars-metric-whiff">
+          <span className="ars-mlabel">Whiff</span>
+          <span className="ars-mval">{pct(m.whiffRate)}</span>
+          <span className="ars-delta dir-flat" aria-hidden="true">
+            {' '}
+          </span>
+        </div>
       </div>
+      {m.seasonPa !== null && (
+        <div className="ars-results" title={`${m.seasonPa} PA ended on this pitch (season)`}>
+          <span className="ars-rtag">Szn vs</span>
+          <ResultStat label="BA" value={avg3(m.seasonBa)} />
+          <ResultStat label="SLG" value={avg3(m.seasonSlg)} />
+          <ResultStat label="wOBA" value={avg3(m.seasonWoba)} />
+          <ResultStat label="xwOBA" value={avg3(m.seasonXwoba)} />
+          <ResultStat label="PutAway" value={pct(m.seasonPutAway)} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The collapsible Savant-style arsenal table (one row per pitch type). */
+function ArsenalSection({ pitchMix }: { pitchMix: PitchMix[] }) {
+  const [open, setOpen] = useState(true);
+  if (pitchMix.length === 0) return null;
+  return (
+    <div className={`arsenal${open ? '' : ' collapsed'}`}>
+      <button
+        type="button"
+        className="arsenal-caption"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className="arsenal-caption-title">Arsenal</span>
+        <span className="arsenal-caption-sub">
+          game avg · <span className="am-arrow">▲▼</span> vs season
+        </span>
+        <span className="arsenal-caret" aria-hidden="true">
+          ▾
+        </span>
+      </button>
+      {open && pitchMix.map((m) => <ArsenalRow key={m.pitchType} m={m} />)}
     </div>
   );
 }
@@ -183,6 +369,12 @@ function PitcherGameBlock({
         <div className="pitcher-body">
           {/* Game aggregate line */}
           <div className="stat-row pitcher-stats">
+            {pg.decision && (
+              <div className={`stat-pill dec-${pg.decision}`}>
+                <div className="stat-value">{pg.decision}</div>
+                <div className="stat-label">Dec</div>
+              </div>
+            )}
             <StatPill label="IP" value={formatIp(L.outs)} />
             <StatPill label="H" value={String(L.hits)} />
             <StatPill label="R" value={String(L.runs)} />
@@ -190,6 +382,8 @@ function PitcherGameBlock({
             <StatPill label="BB" value={String(L.walks)} />
             <StatPill label="K" value={String(L.strikeouts)} />
             <StatPill label="HR" value={String(L.hr)} />
+            <StatPill label="ERA" value={eraOf(L)} />
+            <StatPill label="WHIP" value={whipOf(L)} />
             <StatPill label="Pit" value={String(L.pitchesThrown)} />
             <StatPill label="Strike" value={pct(pg.strikePct)} />
             <StatPill label="Whiff" value={pct(pg.whiffRate)} />
@@ -197,21 +391,12 @@ function PitcherGameBlock({
           </div>
 
           {/* Arsenal: velo/spin/break per pitch type, vs season & league */}
-          {pg.pitchMix.length > 0 && (
-            <div className="arsenal">
-              <div className="arsenal-caption">
-                Arsenal — game avg (<span className="am-arrow">▲▼</span> vs season / league)
-              </div>
-              {pg.pitchMix.map((m) => (
-                <ArsenalRow key={m.pitchType} m={m} />
-              ))}
-            </div>
-          )}
+          <ArsenalSection pitchMix={pg.pitchMix} />
 
-          {/* Batters faced — result only */}
-          <div className="faced-list">
-            {faced.map((fb, i) => (
-              <FacedBatterRow key={`${fb.batterId}-${fb.inning}-${i}`} fb={fb} />
+          {/* Batters faced — grouped by inning, each result expandable to its pitches */}
+          <div className="innings-list">
+            {groupByInning(faced).map((group) => (
+              <InningBlock key={`${group.inning}-${group.half}`} group={group} gamePk={game.gamePk} />
             ))}
           </div>
         </div>
@@ -280,6 +465,11 @@ export function PitcherCard({
       </div>
       <div className="player-summary">
         <LiveRoleTag role={role} />
+        {pitched.length === 1 && primary.pitching!.decision && (
+          <span className={`dec-tag dec-${primary.pitching!.decision}`}>
+            {primary.pitching!.decision}
+          </span>
+        )}
         <span className="summary-line">{lineSummary(combined)}</span>
         {pitched.length === 1 && <GameStatusBadge game={primary} withMatchup />}
       </div>

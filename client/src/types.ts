@@ -121,11 +121,16 @@ export interface FacedBatter {
   event: string | null;
   description: string;
   rbi: number;
+  // Runs that scored on this play, and how many were earned — per-inning R/ER.
+  runs: number;
+  earnedRuns: number;
   timestamp: string | null;
   playId: string | null;
   launchSpeed: number | null;
   hitDistance: number | null;
   xwoba: number | null;
+  // The pitch-by-pitch sequence the pitcher threw in this PA (in order).
+  pitches: Pitch[];
 }
 
 /** A pitcher's per-game counting line (authoritative, from the boxscore). */
@@ -162,6 +167,14 @@ export interface PitchMix {
   leagueSpin: number | null;
   leagueHBreak: number | null;
   leagueVBreak: number | null;
+  // Season outcomes this pitch type produced (Baseball Savant "Results" columns).
+  seasonPa: number | null; // sample size (PA that ended on this pitch)
+  seasonBa: number | null; // batting average against
+  seasonSlg: number | null; // slugging against
+  seasonWoba: number | null; // wOBA against
+  seasonXwoba: number | null; // expected wOBA against
+  seasonWhiff: number | null; // whiffs / swings (0-1)
+  seasonPutAway: number | null; // 2-strike strikeouts / 2-strike pitches (0-1)
 }
 
 /** A pitcher's game view. */
@@ -173,6 +186,7 @@ export interface PitcherGame {
   cswRate: number | null;
   strikePct: number | null;
   isStart: boolean;
+  decision: 'W' | 'L' | 'S' | null; // this pitcher's W/L/S in the game
 }
 
 /** A pitcher's season line (+ vs L/R splits handled at report level). */

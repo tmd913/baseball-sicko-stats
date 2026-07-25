@@ -514,6 +514,10 @@ const FEED_FIELDS = [
   'rbi',
   'runners',
   'movement',
+  // runners[].details.earned — earned/unearned flag on a scoring runner;
+  // responsiblePitcher — who the run is charged to (inherited-runner attribution).
+  'earned',
+  'responsiblePitcher',
   'end',
   'details',
   'runner',
@@ -561,6 +565,11 @@ const FEED_FIELDS = [
   'numberOfPitches',
   'battersFaced',
   'gamesStarted',
+  // liveData.decisions — the winning / losing / save pitcher (final games).
+  'decisions',
+  'winner',
+  'loser',
+  'save',
 ].join(',');
 
 interface FeedPitchData {
@@ -598,7 +607,16 @@ interface FeedPlayEvent {
 }
 interface FeedRunner {
   movement?: { end?: string | null };
-  details?: { eventType?: string; runner?: { id?: number } };
+  // `earned` is set on a scoring runner (movement.end === 'score'): true when the
+  // run is charged as earned, false when the defense's errors made it unearned.
+  // `responsiblePitcher` is the pitcher charged with the run (an inherited runner
+  // stays charged to the pitcher who allowed him, not the one now on the mound).
+  details?: {
+    eventType?: string;
+    runner?: { id?: number };
+    earned?: boolean;
+    responsiblePitcher?: { id?: number } | null;
+  };
 }
 interface FeedPlay {
   about?: {
@@ -668,6 +686,12 @@ interface LiveFeed {
     };
     boxscore?: {
       teams?: { home?: BoxTeam; away?: BoxTeam };
+    };
+    // The winning / losing / save pitcher for a decided (final) game.
+    decisions?: {
+      winner?: { id?: number };
+      loser?: { id?: number };
+      save?: { id?: number };
     };
   };
 }
@@ -970,6 +994,10 @@ export interface StatsApiFacedBatter {
   event: string | null;
   description: string;
   rbi: number;
+  // Runs that scored on this play (and how many were earned) — the per-PA basis
+  // for the pitcher card's per-inning R/ER line.
+  runs: number;
+  earnedRuns: number;
   timestamp: string | null;
   playId: string | null;
   launchSpeed: number | null;
@@ -1025,6 +1053,8 @@ export interface StatsApiGame {
   // boxscore pitching line per pitcher id.
   pitchers: Map<number, StatsApiPitcherGame>;
   pitchingLines: Map<number, PitchingLine>;
+  // The winning / losing / save pitcher ids for a decided game (null until final).
+  decisions: { win: number | null; loss: number | null; save: number | null };
   runsByRunner: Map<number, number>;
   sbByRunner: Map<number, number>;
   csByRunner: Map<number, number>;
@@ -1210,8 +1240,10 @@ async function getLiveData(gamePk: number): Promise<{ feed: LiveFeed; winExp: Ma
 }
 
 // Bump when the persisted compact feed needs new fields (so cached finals, which
-// were frozen without them, re-fetch). v2 added the boxscore pitching line.
-const FEED_CACHE_VERSION = 2;
+// were frozen without them, re-fetch). v2 added the boxscore pitching line; v3
+// added liveData.decisions (W/L/S) and the per-batter pitch sequence; v4 added
+// runners[].details.earned (per-PA earned-run flag); v5 added responsiblePitcher.
+const FEED_CACHE_VERSION = 5;
 
 export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
   const finalCached = gameMemCache.get(gamePk);
@@ -1344,11 +1376,23 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
     const evInning = play.about?.inning ?? 0;
     const evHalf = play.about?.halfInning?.toLowerCase() === 'top' ? 'Top' : 'Bot';
     const evTime = play.about?.endTime ?? play.about?.startTime ?? null;
+    // Runs (and earned runs) that crossed the plate on this play and are charged
+    // to the pitcher who threw it — the per-inning R/ER basis for the pitcher
+    // card. A run charged to an earlier pitcher (an inherited runner) is skipped,
+    // so a reliever isn't blamed for runners he didn't put on.
+    const playPitcherId = play.matchup?.pitcher?.id;
+    let playRuns = 0;
+    let playEarned = 0;
     for (const r of play.runners ?? []) {
       const et = r.details?.eventType ?? '';
       const rid = r.details?.runner?.id;
       if (typeof rid !== 'number') continue;
       if (r.movement?.end === 'score') {
+        const resp = r.details?.responsiblePitcher?.id;
+        if (resp === undefined || resp === null || resp === playPitcherId) {
+          playRuns++;
+          if (r.details?.earned !== false) playEarned++;
+        }
         runsByRunner.set(rid, (runsByRunner.get(rid) ?? 0) + 1);
         // Skip a run scored on the runner's own at-bat (a home run) — the plate
         // appearance already shows it. Baserunner runs are their own feed event.
@@ -1416,6 +1460,8 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
         event: play.result?.eventType ?? null,
         description: play.result?.description ?? '',
         rbi: play.result?.rbi ?? 0,
+        runs: playRuns,
+        earnedRuns: playEarned,
         timestamp: evTime,
         playId: lastPlayId,
         launchSpeed: lastHit?.launchSpeed ?? null,
@@ -1445,6 +1491,11 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
     batters,
     pitchers,
     pitchingLines,
+    decisions: {
+      win: feed.liveData?.decisions?.winner?.id ?? null,
+      loss: feed.liveData?.decisions?.loser?.id ?? null,
+      save: feed.liveData?.decisions?.save?.id ?? null,
+    },
     runsByRunner,
     sbByRunner,
     csByRunner,

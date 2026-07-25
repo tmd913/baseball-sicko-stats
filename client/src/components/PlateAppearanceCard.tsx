@@ -2,16 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import type { PlateAppearance } from '../types';
 import { api } from '../api';
 import { useScrollIntoViewOnExpand } from '../hooks';
-import {
-  contactHighlight,
-  describePitch,
-  eventLabel,
-  finalSwingBatSpeed,
-  isSwing,
-  outcomeKind,
-  pitchAbbr,
-} from '../lib';
+import { contactHighlight, eventLabel, finalSwingBatSpeed, outcomeKind } from '../lib';
 import { BaseDiamond } from './BaseDiamond';
+import { PitchTable } from './PitchSequence';
 import { StrikeZone } from './StrikeZone';
 
 export function VideoClip({ playId, gamePk }: { playId: string; gamePk: number }) {
@@ -143,47 +136,6 @@ export function InlineVideoClip({ playId, gamePk }: { playId: string; gamePk: nu
   );
 }
 
-function PitchRow({
-  pitch,
-  active,
-  onHover,
-  onTap,
-}: {
-  pitch: PlateAppearance['pitches'][number];
-  active: boolean;
-  onHover: (pitchNumber: number | null) => void;
-  onTap: (pitchNumber: number) => void;
-}) {
-  const count =
-    pitch.balls !== null && pitch.strikes !== null
-      ? `${pitch.balls}-${pitch.strikes}`
-      : '';
-  const showBatSpeed = pitch.batSpeed !== null && isSwing(pitch.description);
-  return (
-    <div
-      className={`pitch-row-wrap desc-${pitch.description.split('_')[0]}${active ? ' active' : ''}`}
-      onPointerEnter={(e) => e.pointerType === 'mouse' && onHover(pitch.pitchNumber)}
-      onPointerLeave={(e) => e.pointerType === 'mouse' && onHover(null)}
-      onPointerUp={(e) => e.pointerType !== 'mouse' && onTap(pitch.pitchNumber)}
-    >
-      <div className="pitch-row">
-        <span className="pitch-num">{pitch.pitchNumber}</span>
-        <span className="pitch-count">{count}</span>
-        <span className="pitch-type" title={pitch.pitchType ?? ''}>
-          {pitchAbbr(pitch.pitchType)}
-        </span>
-        <span className="pitch-velo">
-          {pitch.releaseSpeed !== null ? `${pitch.releaseSpeed.toFixed(1)}` : '—'}
-        </span>
-        <span className="pitch-desc">{describePitch(pitch.description)}</span>
-        {showBatSpeed && (
-          <span className="metric metric-bat">SW {pitch.batSpeed!.toFixed(1)} mph</span>
-        )}
-      </div>
-    </div>
-  );
-}
-
 export function PlateAppearanceCard({
   pa,
   gamePk,
@@ -278,24 +230,12 @@ export function PlateAppearanceCard({
                 </div>
               )}
 
-              <div className="pa-pitches">
-                <div className="pitch-row pitch-head">
-                  <span className="pitch-num">#</span>
-                  <span className="pitch-count">Cnt</span>
-                  <span className="pitch-type">Pit</span>
-                  <span className="pitch-velo">MPH</span>
-                  <span className="pitch-desc">Result</span>
-                </div>
-                {pa.pitches.map((p) => (
-                  <PitchRow
-                    key={p.pitchNumber}
-                    pitch={p}
-                    active={activePitch === p.pitchNumber}
-                    onHover={setActivePitch}
-                    onTap={toggleActivePitch}
-                  />
-                ))}
-              </div>
+              <PitchTable
+                pitches={pa.pitches}
+                activePitch={activePitch}
+                onHover={setActivePitch}
+                onTap={toggleActivePitch}
+              />
 
               {showVideo && pa.playId && <VideoClip playId={pa.playId} gamePk={gamePk} />}
             </div>

@@ -164,6 +164,12 @@ export function eraOf(line: PitchingLine): string {
   return ((line.earnedRuns * 27) / line.outs).toFixed(2);
 }
 
+/** WHIP over an aggregate line ((walks + hits) / innings), or "—" with no outs. */
+export function whipOf(line: PitchingLine): string {
+  if (line.outs === 0) return '—';
+  return (((line.walks + line.hits) * 3) / line.outs).toFixed(2);
+}
+
 /** A compact pitcher season summary for the card header. */
 export function pitcherSeasonSummary(s: PitcherSeasonStats): string {
   const parts = [`${s.era} ERA`, `${s.whip} WHIP`];
@@ -188,6 +194,31 @@ export function deltaVs(value: number | null, ref: number | null, flatBand = 0):
 export function fmt(n: number | null, digits = 0, suffix = ''): string {
   if (n === null || n === undefined || Number.isNaN(n)) return '—';
   return `${n.toFixed(digits)}${suffix}`;
+}
+
+/** Baseball Savant's pitch-type color + abbreviation, keyed by the full pitch
+ * name the feed reports ("4-Seam Fastball"). Used to color-code the arsenal the
+ * way the Savant player page does. Falls back to a neutral gray + 2-letter slug. */
+const PITCH_STYLE: Record<string, { abbr: string; color: string }> = {
+  '4-Seam Fastball': { abbr: 'FF', color: '#d22d49' },
+  Sinker: { abbr: 'SI', color: '#fe9d00' },
+  Cutter: { abbr: 'FC', color: '#933f2c' },
+  Slider: { abbr: 'SL', color: '#c9b200' },
+  Sweeper: { abbr: 'ST', color: '#ddb33a' },
+  Slurve: { abbr: 'SV', color: '#93afd4' },
+  Curveball: { abbr: 'CU', color: '#00d1ed' },
+  'Knuckle Curve': { abbr: 'KC', color: '#6236cd' },
+  'Slow Curve': { abbr: 'CS', color: '#7a5fd0' },
+  Changeup: { abbr: 'CH', color: '#1dbe3a' },
+  Splitter: { abbr: 'FS', color: '#3bacac' },
+  Forkball: { abbr: 'FO', color: '#55ccab' },
+  Screwball: { abbr: 'SC', color: '#60db33' },
+  Knuckleball: { abbr: 'KN', color: '#5b6bb5' },
+  Eephus: { abbr: 'EP', color: '#888888' },
+};
+
+export function pitchStyle(name: string): { abbr: string; color: string } {
+  return PITCH_STYLE[name] ?? { abbr: name.slice(0, 2).toUpperCase(), color: '#8a8f98' };
 }
 
 /** Slug + id for a Baseball Savant player page link. */

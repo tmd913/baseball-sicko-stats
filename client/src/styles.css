@@ -600,7 +600,13 @@ body {
   z-index: 20;
   margin: 0 -22px;
   padding: 12px 22px;
-  /* background: var(--bg); */
+}
+/* Once stuck to the top, the strip must be opaque so player cards scrolling
+   underneath don't show through the gaps around the avatars. Full-bleed (the
+   negative margin) so it covers edge to edge, with a soft shadow to separate. */
+.player-nav.is-stuck {
+  background: var(--bg);
+  box-shadow: 0 6px 16px -8px rgba(0, 0, 0, 0.6);
 }
 /* Edit toggle at the end of the player list. On the wide text rail it's a text
    pill ("Edit"/"Done") at the bottom; the narrow avatar rail and phone strip
@@ -1547,118 +1553,323 @@ body {
 .pitcher-stats.stat-row {
   gap: 8px;
 }
-/* Arsenal — one row per pitch type, with velo/spin/break vs season & league. */
+/* Win / loss / save decision pill — the big value carries the decision color. */
+.stat-pill.dec-W .stat-value {
+  color: var(--hit);
+}
+.stat-pill.dec-L .stat-value {
+  color: var(--strikeout);
+}
+.stat-pill.dec-S .stat-value {
+  color: var(--accent);
+}
+/* Decision chip in the card header (W/L/S), colored to match. */
+.dec-tag {
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  padding: 1px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+.dec-tag.dec-W {
+  color: var(--hit);
+}
+.dec-tag.dec-L {
+  color: var(--strikeout);
+}
+.dec-tag.dec-S {
+  color: var(--accent);
+}
+/* Arsenal — a Savant-style pitch-arsenal table: one color-coded row per pitch
+   type (dot + abbr + name + usage bar), then velo/spin/iVB/HB vs season + whiff. */
 .arsenal {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 7px;
 }
 .arsenal-caption {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--muted);
 }
-.arsenal-caption .am-arrow {
+.arsenal-caption-sub {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: none;
   color: var(--faint);
 }
-.arsenal-row {
+.arsenal-caption .am-arrow {
+  color: var(--faint);
+  font-size: 9px;
+}
+.arsenal-caret {
+  margin-left: auto;
+  align-self: center;
+  font-size: 11px;
+  color: var(--muted);
+  transition: transform 0.15s ease;
+}
+.arsenal.collapsed .arsenal-caret {
+  transform: rotate(-90deg);
+}
+.ars-row {
   background: var(--bg);
   border: 1px solid var(--border);
+  border-left: 3px solid var(--faint);
   border-radius: 10px;
-  padding: 9px 12px;
+  padding: 8px 11px 9px;
 }
-.arsenal-id {
+.ars-head {
   display: flex;
-  align-items: baseline;
-  gap: 10px;
-  margin-bottom: 6px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 7px;
 }
-.arsenal-type {
-  font-size: 14px;
+.ars-dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+}
+.ars-abbr {
+  flex: none;
+  font-size: 12px;
   font-weight: 800;
+  letter-spacing: 0.02em;
   color: var(--text);
-}
-.arsenal-share {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--accent);
   font-variant-numeric: tabular-nums;
 }
-.arsenal-whiff {
-  margin-left: auto;
+.ars-name {
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: 12px;
   font-weight: 600;
   color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ars-count {
+  flex: none;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--faint);
   font-variant-numeric: tabular-nums;
 }
-.arsenal-metrics {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+.ars-usage {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 7px;
 }
-@container (max-width: 460px) {
-  .arsenal-metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+.ars-bar {
+  width: 60px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+  overflow: hidden;
+}
+.ars-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+}
+.ars-share {
+  min-width: 32px;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.ars-metrics {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+@container (max-width: 440px) {
+  .ars-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
-.arsenal-metric {
+.ars-metric {
   display: flex;
   flex-direction: column;
   gap: 1px;
   min-width: 0;
 }
-.am-label {
-  font-size: 10px;
+.ars-mlabel {
+  font-size: 9px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--faint);
 }
-.am-value {
-  font-size: 15px;
+.ars-mval {
+  font-size: 14px;
   font-weight: 800;
   color: var(--text);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.am-unit {
-  font-size: 11px;
+.ars-unit {
+  font-size: 10px;
   font-weight: 600;
   color: var(--muted);
-  margin-left: 2px;
+  margin-left: 1px;
 }
-.am-refs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px 8px;
-  margin-top: 1px;
-}
-.am-ref {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--muted);
+.ars-delta {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--faint);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  min-height: 13px;
 }
-.am-arrow {
-  font-size: 9px;
-}
-.am-ref.dir-up .am-arrow {
+.ars-delta.dir-up {
   color: var(--hit);
 }
-.am-ref.dir-down .am-arrow {
+.ars-delta.dir-down {
   color: var(--strikeout);
 }
-.am-ref.dir-flat .am-arrow {
+.ars-delta.dir-flat {
   color: var(--faint);
 }
+/* Season results strip — BA / SLG / wOBA / xwOBA / PutAway against this pitch. */
+.ars-results {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 13px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+.ars-rtag {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--faint);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+.ars-rstat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.ars-rlabel {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.ars-rval {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
 /* Batters faced — result-only rows (no pitch table / strike zone). */
-.faced-list {
+/* Batters faced, grouped into collapsible per-inning cards. */
+.innings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.inning-block {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.inning-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--bg);
+  border: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.inning-block:not(.collapsed) .inning-head {
+  border-bottom: 1px solid var(--border);
+}
+.inning-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 44px;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.inning-label .pa-inning-arrow {
+  width: 9px;
+  height: 8px;
+  color: var(--muted);
+}
+.inning-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px 9px;
+}
+.inning-stat {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.inning-stat.is-h {
+  color: var(--hit);
+}
+.inning-stat.is-r {
+  color: var(--hr);
+}
+.inning-stat.is-k {
+  color: var(--strikeout);
+}
+.inning-stat.is-bb {
+  color: var(--walk);
+}
+.inning-stat.is-p {
+  color: var(--faint);
+}
+.inning-caret {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+  transition: transform 0.15s ease;
+}
+.inning-block.collapsed .inning-caret {
+  transform: rotate(-90deg);
+}
+.inning-batters {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  padding: 8px;
 }
 .faced-row {
   display: flex;
@@ -1679,6 +1890,57 @@ body {
   font-weight: 600;
   color: var(--muted);
 }
+/* Shrink the batter name on narrow cards so it doesn't crowd the badge/contact. */
+@container (max-width: 440px) {
+  .faced-batter {
+    font-size: 12px;
+  }
+}
+@container (max-width: 360px) {
+  .faced-batter {
+    font-size: 11px;
+  }
+}
+/* An expandable faced-batter card: bordered container + borderless summary button. */
+.faced-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.faced-summary {
+  width: 100%;
+  border: none;
+  border-radius: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.faced-pitches {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+.faced-caret {
+  font-size: 10px;
+  color: var(--muted);
+  transition: transform 0.15s ease;
+}
+.faced-card.expanded .faced-caret {
+  transform: rotate(180deg);
+}
+.faced-detail {
+  padding: 2px 11px 11px;
+  border-top: 1px solid var(--border);
+}
+.faced-detail .pa-des {
+  margin: 9px 0 4px;
+}
 
 /* ---- PA card ---- */
 .pa-card {
@@ -1693,27 +1955,33 @@ body {
   scroll-margin-top: var(--nav-offset, 92px);
 }
 .pa-card.kind-hr,
-.faced-row.kind-hr {
+.faced-row.kind-hr,
+.faced-card.kind-hr {
   border-left-color: var(--hr);
 }
 .pa-card.kind-hit,
-.faced-row.kind-hit {
+.faced-row.kind-hit,
+.faced-card.kind-hit {
   border-left-color: var(--hit);
 }
 .pa-card.kind-walk,
-.faced-row.kind-walk {
+.faced-row.kind-walk,
+.faced-card.kind-walk {
   border-left-color: var(--walk);
 }
 .pa-card.kind-strikeout,
-.faced-row.kind-strikeout {
+.faced-row.kind-strikeout,
+.faced-card.kind-strikeout {
   border-left-color: var(--strikeout);
 }
 .pa-card.kind-out,
-.faced-row.kind-out {
+.faced-row.kind-out,
+.faced-card.kind-out {
   border-left-color: var(--out);
 }
 .pa-card.kind-other,
-.faced-row.kind-other {
+.faced-row.kind-other,
+.faced-card.kind-other {
   border-left-color: var(--faint);
 }
 .pa-summary-row {

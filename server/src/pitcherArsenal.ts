@@ -6,15 +6,60 @@ const SEASON = 2026;
 
 /** A pitch type's season averages, in the same units/convention as the game feed
  * (velo mph, spin rpm, break in inches — vBreak = induced vertical break;
- * hBreak signed to match the feed, i.e. −pfx_x × 12). */
+ * hBreak signed to match the feed, i.e. −pfx_x × 12). This shape is also the
+ * league-average table's row (pitchLeague.ts). */
 export interface ArsenalPitch {
   velo: number | null;
   spin: number | null;
   hBreak: number | null;
   vBreak: number | null;
 }
+
+/** Season outcomes a pitch type produced (the Baseball Savant "Results" columns):
+ * batting line against, whiff%, and put-away% — all over the pitcher's season. */
+export interface PitchResults {
+  pa: number | null; // plate appearances that ended on this pitch type
+  ba: number | null; // batting average against (0-1)
+  slg: number | null; // slugging against (0-4 scale)
+  woba: number | null; // wOBA against (from woba_value / woba_denom)
+  xwoba: number | null; // expected wOBA against (est_woba on BIP, woba weights else)
+  whiff: number | null; // whiffs / swings (0-1)
+  putAway: number | null; // 2-strike strikeouts / 2-strike pitches (0-1)
+}
+
+/** A pitch type's full season profile: movement/velo baseline + results. */
+export interface SeasonPitch extends ArsenalPitch, PitchResults {}
+
 /** A pitcher's season arsenal, keyed by full pitch name ("4-Seam Fastball"). */
-export type Arsenal = Map<string, ArsenalPitch>;
+export type Arsenal = Map<string, SeasonPitch>;
+
+// ---- Statcast event / description vocabularies (CSV `events`/`description`) ---
+
+/** Total bases per hit event, and the set of hits. */
+const HIT_TB: Record<string, number> = { single: 1, double: 2, triple: 3, home_run: 4 };
+/** PA-terminal batting events (excludes baserunning: steals, pickoffs, WP/PB). */
+const BATTING_EVENTS = new Set([
+  'single', 'double', 'triple', 'home_run',
+  'field_out', 'force_out', 'grounded_into_double_play', 'double_play', 'triple_play',
+  'fielders_choice', 'fielders_choice_out', 'field_error', 'other_out',
+  'strikeout', 'strikeout_double_play', 'strikeout_triple_play',
+  'walk', 'intent_walk', 'hit_by_pitch',
+  'sac_fly', 'sac_fly_double_play', 'sac_bunt', 'sac_bunt_double_play',
+  'catcher_interf',
+]);
+/** PA events that are NOT at-bats (excluded from the BA/SLG denominator). */
+const NON_AB = new Set([
+  'walk', 'intent_walk', 'hit_by_pitch', 'catcher_interf',
+  'sac_fly', 'sac_fly_double_play', 'sac_bunt', 'sac_bunt_double_play',
+]);
+const STRIKEOUT_EVENTS = new Set(['strikeout', 'strikeout_double_play', 'strikeout_triple_play']);
+/** A swing: any pitch the batter offered at (whiffs + fouls + balls in play). */
+const isSwing = (d: string): boolean =>
+  d === 'swinging_strike' || d === 'swinging_strike_blocked' || d === 'foul' ||
+  d === 'foul_tip' || d === 'foul_bunt' || d === 'missed_bunt' || d.startsWith('hit_into_play');
+/** A whiff: a swing that missed entirely (foul tips are contact, not whiffs). */
+const isWhiff = (d: string): boolean =>
+  d === 'swinging_strike' || d === 'swinging_strike_blocked' || d === 'missed_bunt';
 
 /** Baseball Savant statcast-search CSV for one pitcher's full regular season —
  * every pitch, for per-pitch-type velo/spin/break season averages. */
@@ -67,13 +112,30 @@ export async function getSeasonArsenal(pitcherId: number): Promise<Arsenal> {
     relax_column_count: true,
   });
 
-  const agg = new Map<string, { velo: number[]; spin: number[]; hb: number[]; vb: number[] }>();
+  interface Acc {
+    velo: number[];
+    spin: number[];
+    hb: number[];
+    vb: number[];
+    pa: number; // PA-terminal batting events
+    ab: number; // at-bats (PA minus walks/HBP/sac/interference)
+    hits: number;
+    tb: number; // total bases
+    wobaVal: number; // Σ woba_value
+    wobaDen: number; // Σ woba_denom
+    xwobaNum: number; // Σ (est_woba on BIP, woba_value otherwise)
+    swings: number;
+    whiffs: number;
+    twoStrike: number; // pitches thrown in a 2-strike count
+    putaways: number; // 2-strike pitches that were strike three
+  }
+  const agg = new Map<string, Acc>();
   for (const r of records) {
     const name = r.pitch_name;
     if (!name || name === 'null') continue;
     let a = agg.get(name);
     if (!a) {
-      a = { velo: [], spin: [], hb: [], vb: [] };
+      a = { velo: [], spin: [], hb: [], vb: [], pa: 0, ab: 0, hits: 0, tb: 0, wobaVal: 0, wobaDen: 0, xwobaNum: 0, swings: 0, whiffs: 0, twoStrike: 0, putaways: 0 };
       agg.set(name, a);
     }
     const velo = num(r.release_speed);
@@ -84,10 +146,43 @@ export async function getSeasonArsenal(pitcherId: number): Promise<Arsenal> {
     if (px !== null) a.hb.push(-px * 12); // −pfx_x → the feed's horizontal-break sign
     const pz = num(r.pfx_z);
     if (pz !== null) a.vb.push(pz * 12); // pfx_z → induced vertical break
+
+    // Whiff / swing (per pitch, on `description`).
+    const d = r.description ?? '';
+    if (isSwing(d)) a.swings++;
+    if (isWhiff(d)) a.whiffs++;
+
+    // Put-away: strike three thrown in a 2-strike count.
+    const strikes = num(r.strikes);
+    const ev = r.events ?? '';
+    if (strikes === 2) {
+      a.twoStrike++;
+      if (STRIKEOUT_EVENTS.has(ev)) a.putaways++;
+    }
+
+    // Results (only PA-terminal batting events carry an outcome).
+    if (BATTING_EVENTS.has(ev)) {
+      a.pa++;
+      if (!NON_AB.has(ev)) a.ab++;
+      const tb = HIT_TB[ev];
+      if (tb !== undefined) {
+        a.hits++;
+        a.tb += tb;
+      }
+      const den = num(r.woba_denom);
+      if (den !== null && den > 0) {
+        a.wobaDen += den;
+        a.wobaVal += num(r.woba_value) ?? 0;
+        const est = num(r.estimated_woba_using_speedangle);
+        // In play → expected wOBA from launch data; else the actual woba weight.
+        a.xwobaNum += r.type === 'X' && est !== null ? est : num(r.woba_value) ?? 0;
+      }
+    }
   }
 
   const mean = (xs: number[]) =>
     xs.length ? Math.round((xs.reduce((s, x) => s + x, 0) / xs.length) * 10) / 10 : null;
+  const r3 = (n: number) => Math.round(n * 1000) / 1000;
   const data: Arsenal = new Map();
   for (const [name, a] of agg) {
     // Skip stray unclassified rows (e.g. pitchouts) with no real sample.
@@ -97,6 +192,13 @@ export async function getSeasonArsenal(pitcherId: number): Promise<Arsenal> {
       spin: a.spin.length ? Math.round(a.spin.reduce((s, x) => s + x, 0) / a.spin.length) : null,
       hBreak: mean(a.hb),
       vBreak: mean(a.vb),
+      pa: a.pa || null,
+      ba: a.ab ? r3(a.hits / a.ab) : null,
+      slg: a.ab ? r3(a.tb / a.ab) : null,
+      woba: a.wobaDen ? r3(a.wobaVal / a.wobaDen) : null,
+      xwoba: a.wobaDen ? r3(a.xwobaNum / a.wobaDen) : null,
+      whiff: a.swings ? r3(a.whiffs / a.swings) : null,
+      putAway: a.twoStrike ? r3(a.putaways / a.twoStrike) : null,
     });
   }
 

@@ -9,7 +9,7 @@ import {
   getRosterInfo,
   getStatsApiGame,
 } from './mlbStats.js';
-import type { StatsApiPitch, StatsApiPitcherGame } from './mlbStats.js';
+import type { StatsApiGame, StatsApiPitch, StatsApiPitcherGame } from './mlbStats.js';
 import { getSeasonArsenal } from './pitcherArsenal.js';
 import type { Arsenal } from './pitcherArsenal.js';
 import { getLeaguePitchAverage } from './pitchLeague.js';
@@ -346,6 +346,32 @@ function applyCsvEnrichment(
 
 // ---- Pitcher game aggregation --------------------------------------------
 
+/** Project an internal Stats API pitch onto the client `Pitch` shape. Statcast
+ * bat-tracking (batSpeed/swingLength) comes only from the Savant CSV enrichment,
+ * so it starts null here (batter PAs fill it in `getDay`). */
+function toClientPitch(p: StatsApiPitch): Pitch {
+  return {
+    pitchNumber: p.pitchNumber,
+    pitchType: p.pitchType,
+    releaseSpeed: p.releaseSpeed,
+    spinRate: p.spinRate,
+    description: p.description,
+    balls: p.balls,
+    strikes: p.strikes,
+    plateX: p.plateX,
+    plateZ: p.plateZ,
+    szTop: p.szTop,
+    szBot: p.szBot,
+    zone: p.zone,
+    launchSpeed: p.launchSpeed,
+    launchAngle: p.launchAngle,
+    hitDistance: p.hitDistance,
+    bbType: p.bbType,
+    batSpeed: null,
+    swingLength: null,
+  };
+}
+
 // Swing-and-miss outcomes (Savant counts a foul tip as a whiff), and contact
 // outcomes — together they make up "swings", the whiff-rate denominator.
 const WHIFF_DESC = new Set(['swinging_strike', 'swinging_strike_blocked', 'foul_tip']);
@@ -410,10 +436,23 @@ function deriveLine(pg: StatsApiPitcherGame): PitchingLine {
   };
 }
 
+/** This pitcher's decision in the game (win, loss, or save), or null. */
+function pitcherDecision(g: StatsApiGame, pitcherId: number): 'W' | 'L' | 'S' | null {
+  const d = g.decisions;
+  if (d.win === pitcherId) return 'W';
+  if (d.loss === pitcherId) return 'L';
+  if (d.save === pitcherId) return 'S';
+  return null;
+}
+
 /** Build the pitcher's-eye game view: the boxscore line, the batters faced
  * (result-only), the pitch-type arsenal, and whiff/CSW/strike rates. Season and
  * league arsenal baselines are filled later (per pitcher) in getReport. */
-function buildPitcherGame(pg: StatsApiPitcherGame, line: PitchingLine | undefined): PitcherGame {
+function buildPitcherGame(
+  pg: StatsApiPitcherGame,
+  line: PitchingLine | undefined,
+  decision: 'W' | 'L' | 'S' | null,
+): PitcherGame {
   const total = pg.pitches.length;
   let whiffs = 0;
   let swings = 0;
@@ -457,6 +496,13 @@ function buildPitcherGame(pg: StatsApiPitcherGame, line: PitchingLine | undefine
         leagueSpin: null,
         leagueHBreak: null,
         leagueVBreak: null,
+        seasonPa: null,
+        seasonBa: null,
+        seasonSlg: null,
+        seasonWoba: null,
+        seasonXwoba: null,
+        seasonWhiff: null,
+        seasonPutAway: null,
       };
     })
     .sort((a, b) => b.count - a.count);
@@ -475,11 +521,14 @@ function buildPitcherGame(pg: StatsApiPitcherGame, line: PitchingLine | undefine
     event: fb.event,
     description: fb.description,
     rbi: fb.rbi,
+    runs: fb.runs,
+    earnedRuns: fb.earnedRuns,
     timestamp: fb.timestamp,
     playId: fb.playId,
     launchSpeed: fb.launchSpeed,
     hitDistance: fb.hitDistance,
     xwoba: null,
+    pitches: fb.pitches.map(toClientPitch),
   }));
 
   return {
@@ -491,15 +540,13 @@ function buildPitcherGame(pg: StatsApiPitcherGame, line: PitchingLine | undefine
     strikePct: pl.pitchesThrown ? pl.strikes / pl.pitchesThrown : total ? (total - (pl.balls || 0)) / total : null,
     // A starter (or opener) faces the first batter of the game, in the 1st inning.
     isStart: pg.facedBatters[0]?.inning === 1,
+    decision,
   };
 }
 
 /** Fill a pitcher game's arsenal with season (his own) and league baselines,
  * orienting the league horizontal-break magnitude to his own break direction. */
-function attachArsenalBaselines(
-  pitching: PitcherGame,
-  season: Map<string, { velo: number | null; spin: number | null; hBreak: number | null; vBreak: number | null }>,
-): void {
+function attachArsenalBaselines(pitching: PitcherGame, season: Arsenal): void {
   for (const m of pitching.pitchMix) {
     const sea = season.get(m.pitchType);
     if (sea) {
@@ -507,6 +554,13 @@ function attachArsenalBaselines(
       m.seasonSpin = sea.spin;
       m.seasonHBreak = sea.hBreak;
       m.seasonVBreak = sea.vBreak;
+      m.seasonPa = sea.pa;
+      m.seasonBa = sea.ba;
+      m.seasonSlg = sea.slg;
+      m.seasonWoba = sea.woba;
+      m.seasonXwoba = sea.xwoba;
+      m.seasonWhiff = sea.whiff;
+      m.seasonPutAway = sea.putAway;
     }
     const lg = getLeaguePitchAverage(m.pitchType);
     if (lg) {
@@ -586,26 +640,7 @@ async function buildStatsApiDay(date: string): Promise<{
         xwoba: null,
         deltaRunExp: null,
         deltaWinExp: pa.deltaWinExp,
-        pitches: pa.pitches.map((p): Pitch => ({
-          pitchNumber: p.pitchNumber,
-          pitchType: p.pitchType,
-          releaseSpeed: p.releaseSpeed,
-          spinRate: p.spinRate,
-          description: p.description,
-          balls: p.balls,
-          strikes: p.strikes,
-          plateX: p.plateX,
-          plateZ: p.plateZ,
-          szTop: p.szTop,
-          szBot: p.szBot,
-          zone: p.zone,
-          launchSpeed: p.launchSpeed,
-          launchAngle: p.launchAngle,
-          hitDistance: p.hitDistance,
-          bbType: p.bbType,
-          batSpeed: null,
-          swingLength: null,
-        })),
+        pitches: pa.pitches.map(toClientPitch),
       }));
 
       const batterTeam = bg.isHome ? g.homeTeam : g.awayTeam;
@@ -671,7 +706,7 @@ async function buildStatsApiDay(date: string): Promise<{
         plateAppearances: [],
         baseEvents: [],
         line: buildLine([]),
-        pitching: buildPitcherGame(pg, g.pitchingLines.get(pg.pitcherId)),
+        pitching: buildPitcherGame(pg, g.pitchingLines.get(pg.pitcherId), pitcherDecision(g, pg.pitcherId)),
       };
       let pb = byPitcher.get(pg.pitcherId);
       if (!pb) {

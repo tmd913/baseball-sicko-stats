@@ -13,6 +13,7 @@ import {
   liveRole,
   lineOps,
   mostRecentGameFirst,
+  whipOf,
 } from '../lib';
 
 /** The lineup-spot pip (batting number, or a red "!" when benched) for a game. */
@@ -71,7 +72,6 @@ function StatCells({ line }: { line: BattingLine }) {
 
 /** A pitcher's aggregate line + rates for the range, shown as one table row. */
 function PitchStatCells({ line, csw }: { line: PitchingLine; csw: number | null }) {
-  const whip = line.outs > 0 ? ((line.walks + line.hits) * 3) / line.outs : null;
   return (
     <>
       <td className="sum-num sum-hab">{line.outs > 0 ? formatIp(line.outs) : '—'}</td>
@@ -82,7 +82,7 @@ function PitchStatCells({ line, csw }: { line: PitchingLine; csw: number | null 
       <td className="sum-num">{line.strikeouts}</td>
       <td className="sum-num">{line.hr}</td>
       <td className="sum-num sum-ops">{eraOf(line)}</td>
-      <td className="sum-num">{whip === null ? '—' : whip.toFixed(2)}</td>
+      <td className="sum-num">{whipOf(line)}</td>
       <td className="sum-num">{csw === null ? '—' : `${Math.round(csw * 100)}%`}</td>
     </>
   );
