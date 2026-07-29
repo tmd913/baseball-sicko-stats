@@ -3250,7 +3250,8 @@ body {
 }
 
 /* ---- View switch (Players / Feed) ---- */
-.view-switch {
+.view-switch,
+.kind-switch {
   display: inline-flex;
   gap: 3px;
   padding: 3px;
@@ -3258,25 +3259,32 @@ body {
   border: 1px solid var(--border);
   border-radius: 999px;
 }
-.view-tab {
+.view-tab,
+.kind-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   border: none;
   background: none;
   color: var(--muted);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
-  padding: 6px 13px;
+  padding: 5px 12px;
   border-radius: 999px;
   cursor: pointer;
   transition: color 0.14s ease, background 0.14s ease;
 }
-.view-tab:hover {
+.view-tab:hover,
+.kind-tab:hover {
   color: var(--text);
 }
-.view-tab.active {
+.view-tab.active,
+.kind-tab.active {
   color: var(--bg);
   background: var(--accent);
 }
-.view-tab:focus-visible {
+.view-tab:focus-visible,
+.kind-tab:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -3333,42 +3341,12 @@ body {
   }
 }
 
-/* Batters / Pitchers tabs at the top of the player list — the list shows one
-   kind at a time. A quieter echo of the top-level .view-switch: same pill shape,
-   sized down a notch so it reads as a filter within the view, not a view swap. */
+/* Batters / Pitchers tabs, above the player list, the summary table and the
+   reorder screen — each shows one kind at a time. Same pill shape as the
+   top-level view tabs (see .view-switch, which shares these rules). */
 .kind-switch {
   align-self: flex-start;
-  display: inline-flex;
-  gap: 3px;
-  padding: 3px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-}
-.kind-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: none;
-  background: none;
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 700;
-  padding: 5px 12px;
-  border-radius: 999px;
-  cursor: pointer;
-  transition: color 0.14s ease, background 0.14s ease;
-}
-.kind-tab:hover {
-  color: var(--text);
-}
-.kind-tab.active {
-  color: var(--bg);
-  background: var(--accent);
-}
-.kind-tab:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  margin-bottom: 2px;
 }
 .kind-tab-count {
   font-size: 11px;

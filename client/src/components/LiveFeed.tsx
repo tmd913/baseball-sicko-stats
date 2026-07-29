@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import type { LiveRole } from '../lib';
+import { playerKey } from '../types';
 import {
   eventLabel,
   formatStartTime,
@@ -85,13 +86,13 @@ function entryTime(e: FeedEntry): number {
  * collapsible the name sits inside (the live/upcoming row headers).
  */
 function FeedPlayerName({
-  id,
+  playerKey: key,
   name,
   onOpen,
 }: {
-  id: number;
+  playerKey: string;
   name: string;
-  onOpen: (id: number) => void;
+  onOpen: (key: string) => void;
 }) {
   return (
     <button
@@ -100,7 +101,7 @@ function FeedPlayerName({
       title={`${name} — full day`}
       onClick={(e) => {
         e.stopPropagation();
-        onOpen(id);
+        onOpen(key);
       }}
     >
       {name}
@@ -170,8 +171,8 @@ function LiveEntry({
   game: PlayerGame;
   open: boolean;
   onToggle: () => void;
-  onOpenDetails: (id: number) => void;
-  onOpenPlayerDay: (id: number) => void;
+  onOpenDetails: (key: string) => void;
+  onOpenPlayerDay: (key: string) => void;
 }) {
   const pa = roleAtBat(role, game);
   // Scroll the whole item (player header + at-bat) into view on expand, so the
@@ -184,10 +185,10 @@ function LiveEntry({
           id={report.id}
           name={report.name}
           role={role}
-          onOpen={() => onOpenDetails(report.id)}
+          onOpen={() => onOpenDetails(playerKey(report))}
         />
         <div className="feed-item-id">
-          <FeedPlayerName id={report.id} name={report.name} onOpen={onOpenPlayerDay} />
+          <FeedPlayerName playerKey={playerKey(report)} name={report.name} onOpen={onOpenPlayerDay} />
           <span className="feed-context">
             {matchup(game)} · {liveInning(game)}
           </span>
@@ -224,8 +225,8 @@ function FeedAtBat({
   pa: PlateAppearance;
   open: boolean;
   onToggle: () => void;
-  onOpenDetails: (id: number) => void;
-  onOpenPlayerDay: (id: number) => void;
+  onOpenDetails: (key: string) => void;
+  onOpenPlayerDay: (key: string) => void;
 }) {
   // Expanding scrolls the whole item to the top so the player header stays in
   // view above the at-bat detail (the card itself doesn't self-scroll).
@@ -233,9 +234,9 @@ function FeedAtBat({
   return (
     <div className="feed-item" ref={ref}>
       <div className="feed-item-head">
-        <FeedHeadshot id={report.id} name={report.name} onOpen={() => onOpenDetails(report.id)} />
+        <FeedHeadshot id={report.id} name={report.name} onOpen={() => onOpenDetails(playerKey(report))} />
         <div className="feed-item-id">
-          <FeedPlayerName id={report.id} name={report.name} onOpen={onOpenPlayerDay} />
+          <FeedPlayerName playerKey={playerKey(report)} name={report.name} onOpen={onOpenPlayerDay} />
           <span className="feed-context">{matchup(game)}</span>
         </div>
       </div>
@@ -273,15 +274,15 @@ function FeedBaseEvent({
   report: PlayerReport;
   game: PlayerGame;
   ev: BaseEvent;
-  onOpenDetails: (id: number) => void;
-  onOpenPlayerDay: (id: number) => void;
+  onOpenDetails: (key: string) => void;
+  onOpenPlayerDay: (key: string) => void;
 }) {
   return (
     <div className="feed-item">
       <div className="feed-item-head">
-        <FeedHeadshot id={report.id} name={report.name} onOpen={() => onOpenDetails(report.id)} />
+        <FeedHeadshot id={report.id} name={report.name} onOpen={() => onOpenDetails(playerKey(report))} />
         <div className="feed-item-id">
-          <FeedPlayerName id={report.id} name={report.name} onOpen={onOpenPlayerDay} />
+          <FeedPlayerName playerKey={playerKey(report)} name={report.name} onOpen={onOpenPlayerDay} />
           <span className="feed-context">{matchup(game)}</span>
         </div>
       </div>
@@ -307,16 +308,16 @@ function FeedFacedBatter({
   report: PlayerReport;
   game: PlayerGame;
   fb: FacedBatter;
-  onOpenDetails: (id: number) => void;
-  onOpenPlayerDay: (id: number) => void;
+  onOpenDetails: (key: string) => void;
+  onOpenPlayerDay: (key: string) => void;
 }) {
   const kind = outcomeKind(fb.event);
   return (
     <div className="feed-item">
       <div className="feed-item-head">
-        <FeedHeadshot id={report.id} name={report.name} onOpen={() => onOpenDetails(report.id)} />
+        <FeedHeadshot id={report.id} name={report.name} onOpen={() => onOpenDetails(playerKey(report))} />
         <div className="feed-item-id">
-          <FeedPlayerName id={report.id} name={report.name} onOpen={onOpenPlayerDay} />
+          <FeedPlayerName playerKey={playerKey(report)} name={report.name} onOpen={onOpenPlayerDay} />
           <span className="feed-context">
             {matchup(game)} · pitching
           </span>
@@ -371,8 +372,8 @@ function UpcomingRow({
   game: PlayerGame;
   open: boolean;
   onToggle: () => void;
-  onOpenDetails: (id: number) => void;
-  onOpenPlayerDay: (id: number) => void;
+  onOpenDetails: (key: string) => void;
+  onOpenPlayerDay: (key: string) => void;
 }) {
   const time = formatStartTime(game.status.startTime);
   const expandable = !!game.probablePitcher;
@@ -381,9 +382,9 @@ function UpcomingRow({
   const ref = useScrollIntoViewOnExpand<HTMLDivElement>(expandable && open);
   const head = (
     <>
-      <FeedHeadshot id={report.id} name={report.name} onOpen={() => onOpenDetails(report.id)} />
+      <FeedHeadshot id={report.id} name={report.name} onOpen={() => onOpenDetails(playerKey(report))} />
       <div className="live-row-id">
-        <FeedPlayerName id={report.id} name={report.name} onOpen={onOpenPlayerDay} />
+        <FeedPlayerName playerKey={playerKey(report)} name={report.name} onOpen={onOpenPlayerDay} />
         <span className="feed-context">{matchup(game)}</span>
       </div>
       <span className="feed-time">{time ?? (game.status.detailedState || 'TBD')}</span>
@@ -478,9 +479,9 @@ export function LiveFeed({
   onToggleKey,
 }: {
   reports: PlayerReport[];
-  onOpenDetails: (id: number) => void;
+  onOpenDetails: (key: string) => void;
   // Jump to a player's full day of at-bats on the players view.
-  onOpenPlayerDay: (id: number) => void;
+  onOpenPlayerDay: (key: string) => void;
   // Which at-bats / upcoming rows are expanded, keyed by player + game + at-bat
   // number. Lifted to the parent so a "collapse all" control can clear them.
   openKeys: Set<string>;

@@ -117,12 +117,14 @@ app.post(
 app.put(
   '/api/watchlist/order',
   asyncRoute(async (req, res) => {
-    const ids = req.body?.ids;
-    if (!Array.isArray(ids) || !ids.every((n) => typeof n === 'number')) {
-      res.status(400).json({ error: 'ids (number[]) required' });
+    // Keys, not ids — "pitcher-592332" — so a two-way player's two entries can
+    // be ordered independently. Usually only one kind's keys are submitted.
+    const keys = req.body?.keys;
+    if (!Array.isArray(keys) || !keys.every((k) => typeof k === 'string')) {
+      res.status(400).json({ error: 'keys (string[]) required' });
       return;
     }
-    const players = await reorderPlayers(ids);
+    const players = await reorderPlayers(keys);
     res.json({ players });
   }),
 );
@@ -131,7 +133,13 @@ app.delete(
   '/api/watchlist/:id',
   asyncRoute(async (req, res) => {
     const id = Number(req.params.id);
-    const players = await removePlayer(id);
+    // `kind` narrows the removal to one half of a two-way player; without it
+    // every entry for the id goes.
+    const kind = req.query.kind;
+    const players = await removePlayer(
+      id,
+      kind === 'pitcher' || kind === 'batter' ? kind : undefined,
+    );
     res.json({ players });
   }),
 );

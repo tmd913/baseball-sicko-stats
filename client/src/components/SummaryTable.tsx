@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { BattingLine, PitchingLine, PlayerGame, PlayerReport } from '../types';
+import { playerKey } from '../types';
 import type { LiveRole } from '../lib';
 import {
   combineLines,
@@ -99,16 +100,18 @@ function aggregatePitching(report: PlayerReport): PitchingLine {
  */
 function SumPhoto({
   id,
+  playerKey: key,
   name,
   role,
   corner,
   onOpen,
 }: {
   id: number;
+  playerKey: string;
   name: string;
   role: LiveRole | null;
   corner: Corner;
-  onOpen: (id: number) => void;
+  onOpen: (key: string) => void;
 }) {
   const [failed, setFailed] = useState(false);
   const cls = `sum-photo${role ? ` role-${role}` : ''}`;
@@ -118,7 +121,7 @@ function SumPhoto({
       className="sum-photo-wrap"
       title={`${name} — details`}
       aria-label={`${name} — details`}
-      onClick={() => onOpen(id)}
+      onClick={() => onOpen(key)}
     >
       {failed ? (
         <span className={`${cls} sum-photo-empty`} aria-hidden="true" />
@@ -145,8 +148,8 @@ function SumPhoto({
 }
 
 interface RowHandlers {
-  onOpenDetails: (id: number) => void;
-  onOpenPlayerDay: (id: number) => void;
+  onOpenDetails: (key: string) => void;
+  onOpenPlayerDay: (key: string) => void;
 }
 
 /** The shared leading cells of a summary row: headshot, name (link), opponent. */
@@ -166,14 +169,14 @@ function LeadCells({
   return (
     <>
       <td className="sum-img-col">
-        <SumPhoto id={r.id} name={r.name} role={role} corner={corner} onOpen={onOpenDetails} />
+        <SumPhoto id={r.id} playerKey={playerKey(r)} name={r.name} role={role} corner={corner} onOpen={onOpenDetails} />
       </td>
       <th className="sum-name-col" scope="row">
         <button
           type="button"
           className="sum-name sum-name-link"
           title={`${r.name} — game log`}
-          onClick={() => onOpenPlayerDay(r.id)}
+          onClick={() => onOpenPlayerDay(playerKey(r))}
         >
           {r.name}
         </button>
@@ -297,8 +300,8 @@ export function SummaryTable({
 }: {
   reports: PlayerReport[];
   // The headshot opens the player's details; the name jumps to their game log.
-  onOpenDetails: (id: number) => void;
-  onOpenPlayerDay: (id: number) => void;
+  onOpenDetails: (key: string) => void;
+  onOpenPlayerDay: (key: string) => void;
 }) {
   const handlers = { onOpenDetails, onOpenPlayerDay };
   const batters = reports.filter((r) => r.kind !== 'pitcher');

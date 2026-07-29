@@ -8,6 +8,7 @@ import type {
   PlayerGame,
   PlayerReport,
 } from '../types';
+import { playerKey } from '../types';
 import { useScrollIntoViewOnExpand } from '../hooks';
 import {
   combinePitchingLines,
@@ -779,7 +780,7 @@ export function PitcherCard({
   position?: string;
   collapsed: boolean;
   onToggleCollapsed: () => void;
-  onOpenDetails: (id: number) => void;
+  onOpenDetails: (key: string) => void;
 }) {
   const games = [...report.games].sort(mostRecentGameFirst);
   const pitched = games.filter((g) => g.pitching);
@@ -790,9 +791,9 @@ export function PitcherCard({
   if (pitched.length === 0) {
     const meta = report.pitcherSeasonStats ? pitcherSeasonSummary(report.pitcherSeasonStats) : null;
     return (
-      <div className="player-card empty" id={`player-${report.id}`}>
+      <div className="player-card empty" id={`player-${playerKey(report)}`}>
         <div className="player-head">
-          <Headshot id={report.id} name={report.name} onOpen={() => onOpenDetails(report.id)} role={role} />
+          <Headshot id={report.id} name={report.name} onOpen={() => onOpenDetails(playerKey(report))} role={role} />
           <div className="player-id">
             <PlayerName name={report.name} position={position ?? 'P'} status={report.rosterStatus} />
             {meta && <span className="player-meta">{meta}</span>}
@@ -817,7 +818,7 @@ export function PitcherCard({
 
   const head = (
     <>
-      <Headshot id={report.id} name={report.name} onOpen={() => onOpenDetails(report.id)} role={role} />
+      <Headshot id={report.id} name={report.name} onOpen={() => onOpenDetails(playerKey(report))} role={role} />
       <div className="player-id">
         <PlayerName name={report.name} position={position ?? 'P'} status={report.rosterStatus} />
         <span className="player-meta">
@@ -842,7 +843,7 @@ export function PitcherCard({
   return (
     <div
       className={`player-card${collapsed ? ' collapsed' : ''}`}
-      id={`player-${report.id}`}
+      id={`player-${playerKey(report)}`}
     >
       <div
         className="player-head player-head-toggle"

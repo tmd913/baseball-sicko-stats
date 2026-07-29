@@ -1,4 +1,5 @@
 import type {
+  PlayerKind,
   PitcherSeasonStats,
   PlayerPercentiles,
   PlayerReport,
@@ -40,18 +41,21 @@ export const api = {
     );
     return r.players;
   },
-  async removePlayer(id: number): Promise<WatchPlayer[]> {
+  // `kind` removes only that half of a two-way player, who is two entries.
+  async removePlayer(id: number, kind: PlayerKind): Promise<WatchPlayer[]> {
     const r = await json<{ players: WatchPlayer[] }>(
-      await fetch(`/api/watchlist/${id}`, { method: 'DELETE' }),
+      await fetch(`/api/watchlist/${id}?kind=${kind}`, { method: 'DELETE' }),
     );
     return r.players;
   },
-  async reorderPlayers(ids: number[]): Promise<WatchPlayer[]> {
+  // Player keys ("pitcher-592332"), usually just one kind's — the server splices
+  // them back into the slots that kind already held.
+  async reorderPlayers(keys: string[]): Promise<WatchPlayer[]> {
     const r = await json<{ players: WatchPlayer[] }>(
       await fetch('/api/watchlist/order', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids }),
+        body: JSON.stringify({ keys }),
       }),
     );
     return r.players;

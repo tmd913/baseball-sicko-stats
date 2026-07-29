@@ -285,11 +285,20 @@ export interface PlayerGame {
 }
 
 /** A player saved on the user's watchlist. */
+/** Batter or pitcher. A two-way player can be watched as both, so this is half
+ * of a watchlist entry's identity — the MLB id alone isn't unique. */
+export type PlayerKind = 'batter' | 'pitcher';
+
 export interface WatchPlayer {
   id: number;
   savantName: string; // "Last, First"
   name: string; // "First Last"
-  kind: 'batter' | 'pitcher';
+  kind: PlayerKind;
+}
+
+/** The identity of a watchlist entry / report: "batter-660271". */
+export function playerKey(p: { id: number; kind: PlayerKind }): string {
+  return `${p.kind}-${p.id}`;
 }
 
 /** A player's batting line — full-season, or a platoon split (vs L/R pitching). */

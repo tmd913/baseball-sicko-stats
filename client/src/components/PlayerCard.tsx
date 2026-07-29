@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { PlayerGame, PlayerReport, RosterStatus } from '../types';
+import { playerKey } from '../types';
 import { useScrollIntoViewOnExpand } from '../hooks';
 import {
   absenceLabel,
@@ -425,7 +426,7 @@ export function PlayerCard({
   singleDay: boolean;
   collapsed: boolean;
   onToggleCollapsed: () => void;
-  onOpenDetails: (id: number) => void;
+  onOpenDetails: (key: string) => void;
 }) {
   if (didNotAppear(report)) {
     const meta = report.seasonStats ? seasonStatsSummary(report.seasonStats) : null;
@@ -433,9 +434,9 @@ export function PlayerCard({
     // show their final score(s) so the card still carries the game info.
     const dnpGames = [...report.games].sort(mostRecentGameFirst);
     return (
-      <div className="player-card empty" id={`player-${report.id}`}>
+      <div className="player-card empty" id={`player-${playerKey(report)}`}>
         <div className="player-head">
-          <Headshot id={report.id} name={report.name} onOpen={() => onOpenDetails(report.id)} />
+          <Headshot id={report.id} name={report.name} onOpen={() => onOpenDetails(playerKey(report))} />
           <div className="player-id">
             <PlayerName name={report.name} position={position} status={report.rosterStatus} />
             {meta && <span className="player-meta">{meta}</span>}
@@ -484,7 +485,7 @@ export function PlayerCard({
       <Headshot
         id={report.id}
         name={report.name}
-        onOpen={() => onOpenDetails(report.id)}
+        onOpen={() => onOpenDetails(playerKey(report))}
         corner={games.length === 1 ? lineupCorner(primary) : null}
         role={role}
       />
@@ -517,7 +518,7 @@ export function PlayerCard({
   return (
     <div
       className={`player-card${expandable && collapsed ? ' collapsed' : ''}`}
-      id={`player-${report.id}`}
+      id={`player-${playerKey(report)}`}
     >
       {expandable ? (
         // The whole header toggles collapse; inner link/buttons stop propagation.

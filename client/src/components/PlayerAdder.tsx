@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { playerKey } from '../types';
 import type { SeasonPlayer, WatchPlayer } from '../types';
 
 export function PlayerAdder({
@@ -11,25 +12,27 @@ export function PlayerAdder({
   players: SeasonPlayer[];
   watchlist: WatchPlayer[];
   onAdd: (p: WatchPlayer) => void;
-  onOpenDetails: (id: number) => void;
+  onOpenDetails: (key: string) => void;
   loading: boolean;
 }) {
   const [query, setQuery] = useState('');
   const [focused, setFocused] = useState(false);
 
-  const watchedIds = useMemo(() => new Set(watchlist.map((p) => p.id)), [watchlist]);
+  // Keyed by kind, not id: a two-way player is offered once per kind, and
+  // watching him as a hitter shouldn't hide the pitcher row.
+  const watchedKeys = useMemo(() => new Set(watchlist.map(playerKey)), [watchlist]);
 
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
     return players
-      .filter((p) => !watchedIds.has(p.id))
+      .filter((p) => !watchedKeys.has(playerKey(p)))
       .filter(
         (p) =>
           p.name.toLowerCase().includes(q) || p.savantName.toLowerCase().includes(q),
       )
       .slice(0, 8);
-  }, [query, players, watchedIds]);
+  }, [query, players, watchedKeys]);
 
   const select = (p: SeasonPlayer) => {
     onAdd({ id: p.id, savantName: p.savantName, name: p.name, kind: p.kind });
@@ -37,7 +40,7 @@ export function PlayerAdder({
   };
 
   const openDetails = (p: SeasonPlayer) => {
-    onOpenDetails(p.id);
+    onOpenDetails(playerKey(p));
     setQuery('');
   };
 

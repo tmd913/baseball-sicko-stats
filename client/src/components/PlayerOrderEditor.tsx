@@ -50,12 +50,13 @@ export function PlayerOrderEditor({
   onMove,
   onCommit,
 }: {
-  players: { id: number; name: string }[];
-  onMove: (fromId: number, toId: number) => void;
+  // Already narrowed to the kind being edited, in watchlist order.
+  players: { id: number; key: string; name: string }[];
+  onMove: (fromKey: string, toKey: string) => void;
   onCommit: () => void;
 }) {
-  const [draggingId, setDraggingId] = useState<number | null>(null);
-  const dragId = useRef<number | null>(null);
+  const [draggingKey, setDraggingKey] = useState<string | null>(null);
+  const dragKey = useRef<string | null>(null);
   // Latest pointer position, read by both the hit test and the auto-scroll loop.
   const point = useRef({ x: 0, y: 0 });
   const rafId = useRef<number | null>(null);
@@ -64,14 +65,14 @@ export function PlayerOrderEditor({
   // row has pointer-events: none (see .order-row.dragging), so elementFromPoint
   // resolves to the row underneath it — the drop target — not to itself.
   const hitTest = useCallback(() => {
-    const from = dragId.current;
+    const from = dragKey.current;
     if (from === null) return;
     const { x, y } = point.current;
     const row = (document.elementFromPoint(x, y) as HTMLElement | null)?.closest(
       '.order-row',
     ) as HTMLElement | null;
-    const id = row?.dataset.id;
-    if (id) onMove(from, Number(id));
+    const key = row?.dataset.key;
+    if (key) onMove(from, key);
   }, [onMove]);
 
   // Auto-scroll: while the pointer is held inside the top/bottom edge zone, keep
@@ -109,16 +110,16 @@ export function PlayerOrderEditor({
     window.removeEventListener('pointercancel', endDrag);
     if (rafId.current !== null) cancelAnimationFrame(rafId.current);
     rafId.current = null;
-    dragId.current = null;
-    setDraggingId(null);
+    dragKey.current = null;
+    setDraggingKey(null);
     onCommit();
   }, [onPointerMove, onCommit]);
 
-  const startDrag = (e: React.PointerEvent, id: number) => {
+  const startDrag = (e: React.PointerEvent, key: string) => {
     e.preventDefault();
-    dragId.current = id;
+    dragKey.current = key;
     point.current = { x: e.clientX, y: e.clientY };
-    setDraggingId(id);
+    setDraggingKey(key);
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', endDrag);
     window.addEventListener('pointercancel', endDrag);
@@ -143,10 +144,10 @@ export function PlayerOrderEditor({
       <ul className="order-list">
         {players.map((p, i) => (
           <li
-            key={p.id}
-            data-id={p.id}
-            className={`order-row${draggingId === p.id ? ' dragging' : ''}`}
-            onPointerDown={(e) => startDrag(e, p.id)}
+            key={p.key}
+            data-key={p.key}
+            className={`order-row${draggingKey === p.key ? ' dragging' : ''}`}
+            onPointerDown={(e) => startDrag(e, p.key)}
           >
             <span className="order-num">{i + 1}</span>
             <OrderPhoto id={p.id} name={p.name} />

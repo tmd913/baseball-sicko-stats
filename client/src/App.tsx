@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api';
-import type { PlayerReport, SeasonPlayer, WatchPlayer } from './types';
+import { playerKey } from './types';
+import type { PlayerKind, PlayerReport, SeasonPlayer, WatchPlayer } from './types';
 import { PlayerAdder } from './components/PlayerAdder';
 import { PlayerOrderEditor } from './components/PlayerOrderEditor';
 import { PlayerCard } from './components/PlayerCard';
@@ -81,6 +82,21 @@ function datePresets(): DatePreset[] {
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+/**
+ * Player keys out of a comma-separated URL param. Bare numbers are links from
+ * before two-way players existed, when the params held ids — read them as
+ * batters, which is what they meant.
+ */
+function readKeys(v: string | null): string[] {
+  if (!v) return [];
+  return v
+    .split(',')
+    .map((k) => k.trim())
+    .filter(Boolean)
+    .map((k) => (/^\d+$/.test(k) ? `batter-${k}` : k))
+    .filter((k) => /^(batter|pitcher)-\d+$/.test(k));
+}
+
 export default function App() {
   // Initial UI state is seeded from the URL query so a reload (or shared link)
   // restores the same date range, active preset, and collapsed cards.
@@ -114,20 +130,17 @@ export default function App() {
   const [showLoading, setShowLoading] = useState(false);
   const [watchlistLoaded, setWatchlistLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Player cards are collapsed by default; the URL tracks the ids the user has
+  // Player cards are collapsed by default; the URL tracks the keys the user has
   // explicitly expanded (so a fresh visit — and any newly-added player — starts
   // collapsed, while reloads/shared links restore whatever was opened).
-  const [expandedIds, setExpandedIds] = useState<Set<number>>(() => {
-    const v = initialParams.get('expanded');
-    if (!v) return new Set();
-    return new Set(v.split(',').map(Number).filter(Number.isFinite));
-  });
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(
+    () => new Set(readKeys(initialParams.get('expanded'))),
+  );
   // The player whose details view (percentile rankings) is open, seeded from the
   // URL so a shared/reloaded link reopens it once that player's report loads.
-  const [detailsId, setDetailsId] = useState<number | null>(() => {
-    const n = Number(initialParams.get('player'));
-    return Number.isInteger(n) && n > 0 ? n : null;
-  });
+  const [detailsKey, setDetailsKey] = useState<string | null>(
+    () => readKeys(initialParams.get('player'))[0] ?? null,
+  );
   // Watchlist display mode: the grouped-by-player cards ('players'), the flat,
   // most-recent-first stream of individual at-bats ('feed') for following live
   // games, or a full-page stat table over the range ('summary'). Seeded from the
@@ -178,9 +191,9 @@ export default function App() {
   // document, and only then is there room to scroll a bottom-of-page card's top
   // up to the top. Scrolling before the grow would clamp at the old, shorter page
   // bottom and stop short.
-  const scrollToPlayer = useCallback((playerId: number) => {
+  const scrollToPlayer = useCallback((key: string) => {
     requestAnimationFrame(() => {
-      const el = document.getElementById(`player-${playerId}`);
+      const el = document.getElementById(`player-${key}`);
       if (!el) return;
       const top = el.getBoundingClientRect().top + window.scrollY - SCROLL_GAP;
       window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
@@ -196,13 +209,13 @@ export default function App() {
     p.set('start', start);
     p.set('end', end);
     if (activePreset) p.set('preset', activePreset);
-    if (expandedIds.size) p.set('expanded', [...expandedIds].join(','));
-    if (detailsId) p.set('player', String(detailsId));
+    if (expandedKeys.size) p.set('expanded', [...expandedKeys].join(','));
+    if (detailsKey) p.set('player', detailsKey);
     if (view !== 'summary') p.set('view', view);
     if (playerKind !== 'batter') p.set('kind', playerKind);
     if (simulate) p.set('sim', '1');
     window.history.replaceState(null, '', `?${p.toString()}`);
-  }, [start, end, activePreset, expandedIds, detailsId, view, playerKind, simulate]);
+  }, [start, end, activePreset, expandedKeys, detailsKey, view, playerKind, simulate]);
 
   // Load the season's player list once, for search/autocomplete.
   useEffect(() => {
@@ -297,7 +310,7 @@ export default function App() {
   }, []);
 
   // Expanded at-bats / upcoming rows in the feed view, lifted here so "collapse
-  // all" can clear them (the player view collapses via expandedIds instead).
+  // all" can clear them (the player view collapses via expandedKeys instead).
   const [feedOpenKeys, setFeedOpenKeys] = useState<Set<string>>(() => new Set());
   const toggleFeedKey = useCallback((key: string) => {
     setFeedOpenKeys((prev) => {
@@ -314,28 +327,28 @@ export default function App() {
       ? false
       : view === 'feed'
         ? feedOpenKeys.size > 0
-        : !editMode && expandedIds.size > 0;
+        : !editMode && expandedKeys.size > 0;
   const collapseAll = () => {
     if (view === 'feed') setFeedOpenKeys(new Set());
-    else setExpandedIds(new Set());
+    else setExpandedKeys(new Set());
   };
 
   const onAdd = async (p: WatchPlayer) => {
     setWatchlist(await api.addPlayer(p));
   };
-  const onRemove = async (id: number) => {
-    setWatchlist(await api.removePlayer(id));
+  const onRemove = async (p: { id: number; kind: PlayerKind }) => {
+    setWatchlist(await api.removePlayer(p.id, p.kind));
   };
 
   // Drag-to-reorder on the edit screen: the list is reordered live as the dragged
   // row passes over another, and the final order is persisted once the pointer is
   // released. The order ref is updated synchronously so chained moves — and the
   // release commit — always see the latest order, independent of render timing.
-  const movePlayer = useCallback((fromId: number, toId: number) => {
-    if (fromId === toId) return;
+  const movePlayer = useCallback((fromKey: string, toKey: string) => {
+    if (fromKey === toKey) return;
     const prev = reportsRef.current;
-    const fi = prev.findIndex((r) => r.id === fromId);
-    const ti = prev.findIndex((r) => r.id === toId);
+    const fi = prev.findIndex((r) => playerKey(r) === fromKey);
+    const ti = prev.findIndex((r) => playerKey(r) === toKey);
     if (fi === -1 || ti === -1 || fi === ti) return;
     const next = prev.slice();
     const [moved] = next.splice(fi, 1);
@@ -348,21 +361,21 @@ export default function App() {
   // a cached report refetch, which returns the same order).
   const commitOrder = useCallback(() => {
     api
-      .reorderPlayers(reportsRef.current.map((r) => r.id))
+      .reorderPlayers(reportsRef.current.map(playerKey))
       .then(setWatchlist)
       .catch((e: Error) => setError(e.message));
   }, []);
 
-  const toggleCollapsed = (id: number) => {
-    const willExpand = !expandedIds.has(id);
-    setExpandedIds((prev) => {
+  const toggleCollapsed = (key: string) => {
+    const willExpand = !expandedKeys.has(key);
+    setExpandedKeys((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
     // Expanding scrolls the card to the top of the viewport.
-    if (willExpand) scrollToPlayer(id);
+    if (willExpand) scrollToPlayer(key);
   };
   // A link (from the summary/feed) jumped to the players page — remember which
   // view we came from so a back button can return there. Cleared once we're back,
@@ -391,7 +404,7 @@ export default function App() {
   // switch views, expand their card, and scroll it to the top. Record the origin
   // view + its scroll offset for the back button.
   const openPlayerDay = useCallback(
-    (id: number) => {
+    (key: string) => {
       const from = view === 'summary' || view === 'feed' ? view : null;
       if (from === 'summary') {
         backScroll.current = document.querySelector('.summary-scroll')?.scrollTop ?? 0;
@@ -403,10 +416,10 @@ export default function App() {
       setView('players');
       // The players view shows one kind at a time, so land on the tab this
       // player is actually in — otherwise the jump scrolls to nothing.
-      const kind = reportsRef.current.find((r) => r.id === id)?.kind;
+      const kind = reportsRef.current.find((r) => playerKey(r) === key)?.kind;
       if (kind === 'pitcher' || kind === 'batter') setPlayerKind(kind);
-      setExpandedIds((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
-      scrollToPlayer(id);
+      setExpandedKeys((prev) => (prev.has(key) ? prev : new Set(prev).add(key)));
+      scrollToPlayer(key);
     },
     [scrollToPlayer, view],
   );
@@ -420,24 +433,24 @@ export default function App() {
   // opened for any player, on the watchlist or not. Position always comes from
   // the roster. Null until whichever source carries the name has loaded.
   const detailsPlayer = useMemo(() => {
-    if (!detailsId) return null;
+    if (!detailsKey) return null;
     // Both PlayerReport and SeasonPlayer extend WatchPlayer, so either source
     // carries the id/name/savantName needed to add the player to the watchlist.
     const src =
-      reports.find((r) => r.id === detailsId) ??
-      seasonPlayers.find((p) => p.id === detailsId);
+      reports.find((r) => playerKey(r) === detailsKey) ??
+      seasonPlayers.find((p) => playerKey(p) === detailsKey);
     if (!src) return null;
     return {
-      id: detailsId,
+      id: src.id,
       name: src.name,
       savantName: src.savantName,
       kind: src.kind,
-      position: positionById.get(detailsId),
+      position: positionById.get(src.id),
     };
-  }, [detailsId, reports, seasonPlayers, positionById]);
+  }, [detailsKey, reports, seasonPlayers, positionById]);
   const detailsWatched = useMemo(
-    () => (detailsId ? watchlist.some((p) => p.id === detailsId) : false),
-    [detailsId, watchlist],
+    () => (detailsKey ? watchlist.some((p) => playerKey(p) === detailsKey) : false),
+    [detailsKey, watchlist],
   );
 
   // The player list is one kind at a time, picked by its own tab row (each half
@@ -449,27 +462,60 @@ export default function App() {
   const showKindTabs = cardBatters.length > 0 && cardPitchers.length > 0;
   const shownKind = showKindTabs || cardPitchers.length === 0 ? playerKind : 'pitcher';
   const kindCards = shownKind === 'pitcher' ? cardPitchers : cardBatters;
-  const renderCard = (r: PlayerReport) =>
-    r.kind === 'pitcher' ? (
+  // One tab row, shared by the player list, the summary table and the reorder
+  // screen — all three show a single kind at a time.
+  const kindTabs = showKindTabs ? (
+    <div className="kind-switch" role="tablist" aria-label="Batters or pitchers">
+      <button
+        type="button"
+        role="tab"
+        aria-selected={shownKind === 'batter'}
+        className={`kind-tab${shownKind === 'batter' ? ' active' : ''}`}
+        onClick={() => setPlayerKind('batter')}
+      >
+        Batters
+        <span className="kind-tab-count">{cardBatters.length}</span>
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={shownKind === 'pitcher'}
+        className={`kind-tab${shownKind === 'pitcher' ? ' active' : ''}`}
+        onClick={() => setPlayerKind('pitcher')}
+      >
+        Pitchers
+        <span className="kind-tab-count">{cardPitchers.length}</span>
+      </button>
+    </div>
+  ) : null;
+  // The reorder screen edits the raw watchlist order, one kind at a time, so it
+  // reads `reports` rather than the simulate-overlaid copy the cards render.
+  const editPlayers = reports
+    .filter((r) => (shownKind === 'pitcher' ? r.kind === 'pitcher' : r.kind !== 'pitcher'))
+    .map((r) => ({ id: r.id, key: playerKey(r), name: r.name }));
+  const renderCard = (r: PlayerReport) => {
+    const key = playerKey(r);
+    return r.kind === 'pitcher' ? (
       <PitcherCard
-        key={r.id}
+        key={key}
         report={r}
         position={positionById.get(r.id)}
-        collapsed={!expandedIds.has(r.id)}
-        onToggleCollapsed={() => toggleCollapsed(r.id)}
-        onOpenDetails={setDetailsId}
+        collapsed={!expandedKeys.has(key)}
+        onToggleCollapsed={() => toggleCollapsed(key)}
+        onOpenDetails={setDetailsKey}
       />
     ) : (
       <PlayerCard
-        key={r.id}
+        key={key}
         report={r}
         position={positionById.get(r.id)}
         singleDay={start === end}
-        collapsed={!expandedIds.has(r.id)}
-        onToggleCollapsed={() => toggleCollapsed(r.id)}
-        onOpenDetails={setDetailsId}
+        collapsed={!expandedKeys.has(key)}
+        onToggleCollapsed={() => toggleCollapsed(key)}
+        onOpenDetails={setDetailsKey}
       />
     );
+  };
 
   return (
     <div className={`app${view === 'summary' ? ' summary-mode' : ''}`}>
@@ -636,7 +682,7 @@ export default function App() {
                 players={seasonPlayers}
                 watchlist={watchlist}
                 onAdd={onAdd}
-                onOpenDetails={setDetailsId}
+                onOpenDetails={setDetailsKey}
                 loading={playersLoading}
               />
               {/* Opens the reorder screen in place of the player list. Hidden
@@ -712,17 +758,20 @@ export default function App() {
 
       {view === 'summary' ? (
         displayReports.length > 0 && (
-          <SummaryTable
-            reports={displayReports}
-            onOpenDetails={setDetailsId}
-            onOpenPlayerDay={openPlayerDay}
-          />
+          <>
+            {kindTabs}
+            <SummaryTable
+              reports={kindCards}
+              onOpenDetails={setDetailsKey}
+              onOpenPlayerDay={openPlayerDay}
+            />
+          </>
         )
       ) : view === 'feed' ? (
         displayReports.length > 0 && (
           <LiveFeed
             reports={displayReports}
-            onOpenDetails={setDetailsId}
+            onOpenDetails={setDetailsKey}
             onOpenPlayerDay={openPlayerDay}
             openKeys={feedOpenKeys}
             onToggleKey={toggleFeedKey}
@@ -733,37 +782,17 @@ export default function App() {
         className={`content-layout${showLoading && reports.length > 0 ? ' is-loading' : ''}`}
       >
         {editMode ? (
-          <PlayerOrderEditor
-            players={reports}
-            onMove={movePlayer}
-            onCommit={commitOrder}
-          />
+          <>
+            {kindTabs}
+            <PlayerOrderEditor
+              players={editPlayers}
+              onMove={movePlayer}
+              onCommit={commitOrder}
+            />
+          </>
         ) : (
         <main className="player-list">
-          {showKindTabs && (
-            <div className="kind-switch" role="tablist" aria-label="Batters or pitchers">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={shownKind === 'batter'}
-                className={`kind-tab${shownKind === 'batter' ? ' active' : ''}`}
-                onClick={() => setPlayerKind('batter')}
-              >
-                Batters
-                <span className="kind-tab-count">{cardBatters.length}</span>
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={shownKind === 'pitcher'}
-                className={`kind-tab${shownKind === 'pitcher' ? ' active' : ''}`}
-                onClick={() => setPlayerKind('pitcher')}
-              >
-                Pitchers
-                <span className="kind-tab-count">{cardPitchers.length}</span>
-              </button>
-            </div>
-          )}
+          {kindTabs}
           {kindCards.map(renderCard)}
         </main>
         )}
@@ -838,8 +867,8 @@ export default function App() {
               kind: detailsPlayer.kind,
             })
           }
-          onRemove={() => onRemove(detailsPlayer.id)}
-          onClose={() => setDetailsId(null)}
+          onRemove={() => onRemove(detailsPlayer)}
+          onClose={() => setDetailsKey(null)}
         />
       )}
     </div>

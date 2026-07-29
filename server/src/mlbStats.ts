@@ -156,14 +156,24 @@ export async function getSeasonPlayers(
   }
   const data = (await res.json()) as SportsPlayersResponse;
 
-  const players: SeasonPlayer[] = (data.people ?? []).map((p) => ({
-    id: p.id,
-    name: p.fullName,
-    savantName: toSavantName(p.fullName),
-    kind: p.primaryPosition?.code === '1' ? 'pitcher' : 'batter',
-    team: (p.currentTeam?.id !== undefined && teamNames.get(p.currentTeam.id)) || '',
-    position: p.primaryPosition?.abbreviation ?? '',
-  }));
+  const players: SeasonPlayer[] = (data.people ?? []).flatMap((p) => {
+    const row = {
+      id: p.id,
+      name: p.fullName,
+      savantName: toSavantName(p.fullName),
+      team: (p.currentTeam?.id !== undefined && teamNames.get(p.currentTeam.id)) || '',
+      position: p.primaryPosition?.abbreviation ?? '',
+    };
+    // A two-way player (position code 'Y') gets a row per kind, so he can be
+    // watched as a hitter, as a pitcher, or both — they're separate entries.
+    if (p.primaryPosition?.code === 'Y') {
+      return [
+        { ...row, kind: 'batter' as const },
+        { ...row, kind: 'pitcher' as const },
+      ];
+    }
+    return [{ ...row, kind: p.primaryPosition?.code === '1' ? ('pitcher' as const) : ('batter' as const) }];
+  });
 
   seasonPlayersCache.set(season, { players, fetchedAt: Date.now() });
   return players;
