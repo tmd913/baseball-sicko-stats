@@ -1277,19 +1277,6 @@ body {
   gap: 14px;
   padding-top: 4px;
 }
-.pitcher-stats.stat-row {
-  gap: 8px;
-}
-/* Win / loss / save decision pill — the big value carries the decision color. */
-.stat-pill.dec-W .stat-value {
-  color: var(--hit);
-}
-.stat-pill.dec-L .stat-value {
-  color: var(--strikeout);
-}
-.stat-pill.dec-S .stat-value {
-  color: var(--accent);
-}
 /* Decision chip in the card header (W/L/S), colored to match. */
 .dec-tag {
   font-size: 12px;
@@ -1314,23 +1301,35 @@ body {
   display: flex;
   flex-direction: column;
   gap: 7px;
+  scroll-margin-top: var(--scroll-offset);
 }
-.arsenal-caption {
+/* Section caption inside a pitcher card — "Line", "Arsenal". The arsenal's is
+   also its collapse toggle, so it's a button; the line's is a static label. */
+.arsenal-caption,
+.pline-caption {
   display: flex;
   align-items: baseline;
   gap: 8px;
   width: 100%;
-  padding: 0;
-  border: none;
-  background: none;
-  cursor: pointer;
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--muted);
 }
-.arsenal-caption-sub {
+.arsenal-caption {
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+.arsenal-caption:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.arsenal-caption-sub,
+.pline-caption-sub {
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.03em;
@@ -1350,6 +1349,44 @@ body {
 }
 .arsenal.collapsed .arsenal-caret {
   transform: rotate(-90deg);
+}
+/* Game line — the outing's totals, built from the arsenal row's parts so the
+   two sections read as one table (caption, color-keyed row, dashed rate strip). */
+.pline {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+/* Innings pitched sits in the arsenal's name slot but reads as the row's
+   headline, so it takes the abbr's weight instead of the name's muted tone. */
+.pline-ip {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.ars-abbr.dec-W {
+  color: var(--hit);
+}
+.ars-abbr.dec-L {
+  color: var(--strikeout);
+}
+.ars-abbr.dec-S {
+  color: var(--accent);
+}
+/* Six counting stats rather than the arsenal's five metrics. (Scoped through
+   .pline so it outranks .ars-metrics wherever that rule ends up.) */
+.pline .ars-metrics {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+@container (max-width: 440px) {
+  .pline .ars-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  /* The head's identity and strike-rate halves stop fitting side by side. */
+  .pline .ars-head {
+    flex-wrap: wrap;
+  }
 }
 .ars-row {
   background: var(--bg);
@@ -1518,25 +1555,28 @@ body {
 .innings-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 .inning-block {
   border: 1px solid var(--border);
   border-radius: 12px;
   overflow: hidden;
+  /* Expanding an inning scrolls it to the top — clear the sticky nav strip. */
+  scroll-margin-top: var(--scroll-offset);
 }
 .inning-head {
   width: 100%;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 12px;
+  padding: 10px 12px;
   background: var(--bg);
   border: none;
   font: inherit;
   color: inherit;
   text-align: left;
   cursor: pointer;
+  transition: background 0.14s ease;
 }
 .inning-block:not(.collapsed) .inning-head {
   border-bottom: 1px solid var(--border);
@@ -1595,19 +1635,19 @@ body {
 .inning-batters {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 8px;
+  gap: 10px;
+  padding: 10px;
 }
 .faced-row {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 7px 12px;
+  padding: 11px 12px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-left-width: 4px;
-  border-radius: 10px;
+  border-radius: 12px;
 }
 .faced-batter {
   font-weight: 700;
@@ -1628,13 +1668,16 @@ body {
     font-size: 11px;
   }
 }
-/* An expandable faced-batter card: bordered container + borderless summary button. */
+/* An expandable faced-batter card: bordered container + borderless summary
+   button — the pitcher's counterpart to a batter's .pa-card, so it carries the
+   same radius, left-border accent, hover tint and focus ring. */
 .faced-card {
   background: var(--bg);
   border: 1px solid var(--border);
   border-left-width: 4px;
-  border-radius: 10px;
+  border-radius: 12px;
   overflow: hidden;
+  scroll-margin-top: var(--scroll-offset);
 }
 .faced-summary {
   width: 100%;
@@ -1645,6 +1688,17 @@ body {
   color: inherit;
   text-align: left;
   cursor: pointer;
+  transition: background 0.14s ease;
+}
+/* Same tint the batter at-bat rows use, on every expandable a pitcher card owns. */
+.inning-head:hover,
+.faced-summary:hover {
+  background: rgba(56, 189, 248, 0.06);
+}
+.inning-head:focus-visible,
+.faced-summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 .faced-pitches {
   margin-left: auto;
@@ -1658,15 +1712,16 @@ body {
   color: var(--muted);
   transition: transform 0.15s ease;
 }
-.faced-card.expanded .faced-caret {
-  transform: rotate(180deg);
+/* Same convention as the inning and arsenal carets: sideways when closed. */
+.faced-card:not(.expanded) .faced-caret {
+  transform: rotate(-90deg);
 }
 .faced-detail {
-  padding: 2px 11px 11px;
+  padding: 0 12px 12px;
   border-top: 1px solid var(--border);
 }
 .faced-detail .pa-des {
-  margin: 9px 0 4px;
+  margin: 10px 0 4px;
 }
 
 /* ---- PA card ---- */

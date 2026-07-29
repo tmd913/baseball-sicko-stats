@@ -1,5 +1,12 @@
 import { useState } from 'react';
-import type { FacedBatter, PitchMix, PitchingLine, PlayerGame, PlayerReport } from '../types';
+import type {
+  FacedBatter,
+  PitcherGame,
+  PitchMix,
+  PitchingLine,
+  PlayerGame,
+  PlayerReport,
+} from '../types';
 import { useScrollIntoViewOnExpand } from '../hooks';
 import {
   combinePitchingLines,
@@ -19,7 +26,7 @@ import {
 import { BaseDiamond } from './BaseDiamond';
 import { VideoClip } from './PlateAppearanceCard';
 import { PitchSequence } from './PitchSequence';
-import { GameStatusBadge, Headshot, LiveRoleTag, PlayerName, StatPill } from './PlayerCard';
+import { GameStatusBadge, Headshot, LiveRoleTag, PlayerName } from './PlayerCard';
 
 /** A one-line pitching line: "6.0 IP, 4 H, 2 ER, 1 BB, 5 K". */
 function lineSummary(l: PitchingLine): string {
@@ -103,6 +110,9 @@ function FacedBatterCard({ fb, gamePk }: { fb: FacedBatter; gamePk: number }) {
   const [open, setOpen] = useState(false);
   const kind = outcomeKind(fb.event);
   const expandable = fb.pitches.length > 0;
+  // On expand, bring this batter to the top of the screen — same as a batter's
+  // at-bat card, so the pitch sequence isn't left below the fold.
+  const cardRef = useScrollIntoViewOnExpand<HTMLDivElement>(open);
 
   const summary = (
     <>
@@ -132,7 +142,7 @@ function FacedBatterCard({ fb, gamePk }: { fb: FacedBatter; gamePk: number }) {
   }
 
   return (
-    <div className={`faced-card kind-${kind}${open ? ' expanded' : ''}`}>
+    <div ref={cardRef} className={`faced-card kind-${kind}${open ? ' expanded' : ''}`}>
       <button
         type="button"
         className="faced-row faced-summary"
@@ -158,8 +168,10 @@ function InningBlock({ group, gamePk }: { group: InningGroup; gamePk: number }) 
   const [collapsed, setCollapsed] = useState(true);
   const s = inningStats(group.batters);
   const isTop = group.half === 'Top';
+  // Expanding an inning brings it to the top of the screen, like a game block.
+  const blockRef = useScrollIntoViewOnExpand<HTMLDivElement>(!collapsed);
   return (
-    <div className={`inning-block${collapsed ? ' collapsed' : ''}`}>
+    <div ref={blockRef} className={`inning-block${collapsed ? ' collapsed' : ''}`}>
       <button
         type="button"
         className="inning-head"
@@ -291,9 +303,10 @@ function ArsenalRow({ m }: { m: PitchMix }) {
 /** The collapsible Savant-style arsenal table (one row per pitch type). */
 function ArsenalSection({ pitchMix }: { pitchMix: PitchMix[] }) {
   const [open, setOpen] = useState(true);
+  const secRef = useScrollIntoViewOnExpand<HTMLDivElement>(open);
   if (pitchMix.length === 0) return null;
   return (
-    <div className={`arsenal${open ? '' : ' collapsed'}`}>
+    <div ref={secRef} className={`arsenal${open ? '' : ' collapsed'}`}>
       <button
         type="button"
         className="arsenal-caption"
@@ -309,6 +322,80 @@ function ArsenalSection({ pitchMix }: { pitchMix: PitchMix[] }) {
         </span>
       </button>
       {open && pitchMix.map((m) => <ArsenalRow key={m.pitchType} m={m} />)}
+    </div>
+  );
+}
+
+/** The color keyed to a decision (W/L/S) — the game line's accent. */
+function decisionColor(d: PitcherGame['decision']): string {
+  if (d === 'W') return 'var(--hit)';
+  if (d === 'L') return 'var(--strikeout)';
+  if (d === 'S') return 'var(--accent)';
+  return 'var(--muted)';
+}
+
+/** One labelled stat in the game line — an arsenal metric without the delta. */
+function LineStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="ars-metric">
+      <span className="ars-mlabel">{label}</span>
+      <span className="ars-mval">{value}</span>
+    </div>
+  );
+}
+
+/**
+ * The outing's aggregate line, laid out as an arsenal row rather than a grid of
+ * stat pills — the two then read as one table. The head strip carries the
+ * decision, innings and pitch count (with strike% as the usage bar), the
+ * counting stats fill the metric grid, and the rates ride in the same dashed
+ * strip the arsenal uses for its season results.
+ */
+function GameLine({ pg }: { pg: PitcherGame }) {
+  const L = pg.line;
+  const color = decisionColor(pg.decision);
+  const strike = pg.strikePct === null ? 0 : Math.round(pg.strikePct * 100);
+  return (
+    <div className="pline">
+      <div className="pline-caption">
+        <span className="pline-caption-title">Line</span>
+        <span className="pline-caption-sub">game totals</span>
+      </div>
+      <div className="ars-row" style={{ borderLeftColor: color }}>
+        <div className="ars-head">
+          <span className="ars-dot" style={{ background: color }} />
+          {pg.decision && <span className={`ars-abbr dec-${pg.decision}`}>{pg.decision}</span>}
+          <span className="ars-name pline-ip">{formatIp(L.outs)} IP</span>
+          <span className="ars-count">{L.pitchesThrown} P</span>
+          {/* Strike rate fills the arsenal's usage bar. Neutral accent, not the
+              decision color — a strike rate isn't good or bad by itself. */}
+          <span className="ars-usage" title={`${strike}% of pitches for strikes`}>
+            <span className="ars-mlabel">Strike</span>
+            <span className="ars-bar">
+              <span
+                className="ars-bar-fill"
+                style={{ width: `${strike}%`, background: 'var(--accent)' }}
+              />
+            </span>
+            <span className="ars-share">{pct(pg.strikePct)}</span>
+          </span>
+        </div>
+        <div className="ars-metrics">
+          <LineStat label="H" value={String(L.hits)} />
+          <LineStat label="R" value={String(L.runs)} />
+          <LineStat label="ER" value={String(L.earnedRuns)} />
+          <LineStat label="BB" value={String(L.walks)} />
+          <LineStat label="K" value={String(L.strikeouts)} />
+          <LineStat label="HR" value={String(L.hr)} />
+        </div>
+        <div className="ars-results">
+          <span className="ars-rtag">Game</span>
+          <ResultStat label="ERA" value={eraOf(L)} />
+          <ResultStat label="WHIP" value={whipOf(L)} />
+          <ResultStat label="Whiff" value={pct(pg.whiffRate)} />
+          <ResultStat label="CSW" value={pct(pg.cswRate)} />
+        </div>
+      </div>
     </div>
   );
 }
@@ -368,30 +455,7 @@ function PitcherGameBlock({
       {(!showMatchup || !collapsed) && (
         <div className="pitcher-body">
           {/* Game aggregate line */}
-          <div className="stat-row pitcher-stats">
-            {pg.decision && (
-              <div className={`stat-pill dec-${pg.decision}`}>
-                <div className="stat-value">{pg.decision}</div>
-                <div className="stat-label">Dec</div>
-              </div>
-            )}
-            <StatPill label="IP" value={formatIp(L.outs)} />
-            <StatPill label="H" value={String(L.hits)} />
-            <StatPill label="R" value={String(L.runs)} />
-            <StatPill label="ER" value={String(L.earnedRuns)} />
-            <StatPill label="BB" value={String(L.walks)} />
-            <StatPill label="K" value={String(L.strikeouts)} />
-            <StatPill label="HR" value={String(L.hr)} />
-            <StatPill label="ERA" value={eraOf(L)} />
-            <StatPill label="WHIP" value={whipOf(L)} />
-            <StatPill label="Pit" value={String(L.pitchesThrown)} />
-            <StatPill label="Strike" value={pct(pg.strikePct)} />
-            <StatPill label="Whiff" value={pct(pg.whiffRate)} />
-            <StatPill label="CSW" value={pct(pg.cswRate)} />
-          </div>
-
-          {/* Arsenal: velo/spin/break per pitch type, vs season & league */}
-          <ArsenalSection pitchMix={pg.pitchMix} />
+          <GameLine pg={pg} />
 
           {/* Batters faced — grouped by inning, each result expandable to its pitches */}
           <div className="innings-list">
@@ -399,6 +463,9 @@ function PitcherGameBlock({
               <InningBlock key={`${group.inning}-${group.half}`} group={group} gamePk={game.gamePk} />
             ))}
           </div>
+
+          {/* Arsenal: velo/spin/break per pitch type, vs season & league */}
+          <ArsenalSection pitchMix={pg.pitchMix} />
         </div>
       )}
     </div>
