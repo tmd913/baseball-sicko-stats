@@ -598,6 +598,16 @@ const FEED_FIELDS = [
   'numberOfPitches',
   'battersFaced',
   'gamesStarted',
+  // The rest of the pitching line: extra-base hits, hit batters, the at-bats
+  // that back BAA, and the reliever's inherited-runner accounting.
+  'doubles',
+  'triples',
+  'hitBatsmen',
+  'atBats',
+  'intentionalWalks',
+  'wildPitches',
+  'inheritedRunners',
+  'inheritedRunnersScored',
   // liveData.decisions — the winning / losing / save pitcher (final games).
   'decisions',
   'winner',
@@ -755,6 +765,14 @@ interface BoxPitching {
   balls?: number;
   battersFaced?: number;
   gamesStarted?: number;
+  doubles?: number;
+  triples?: number;
+  hitBatsmen?: number;
+  atBats?: number;
+  intentionalWalks?: number;
+  wildPitches?: number;
+  inheritedRunners?: number;
+  inheritedRunnersScored?: number;
 }
 
 /**
@@ -1045,7 +1063,9 @@ export interface StatsApiFacedBatter {
   timestamp: string | null;
   playId: string | null;
   launchSpeed: number | null;
+  launchAngle: number | null;
   hitDistance: number | null;
+  bbType: string | null;
   pitches: StatsApiPitch[];
 }
 
@@ -1224,6 +1244,14 @@ function parsePitchingLines(feed: LiveFeed): Map<number, PitchingLine> {
         pitchesThrown,
         strikes,
         balls: pit.balls ?? Math.max(0, pitchesThrown - strikes),
+        doubles: pit.doubles ?? 0,
+        triples: pit.triples ?? 0,
+        hitBatsmen: pit.hitBatsmen ?? 0,
+        atBats: pit.atBats ?? 0,
+        intentionalWalks: pit.intentionalWalks ?? 0,
+        wildPitches: pit.wildPitches ?? 0,
+        inheritedRunners: pit.inheritedRunners ?? 0,
+        inheritedRunnersScored: pit.inheritedRunnersScored ?? 0,
       });
     }
   }
@@ -1292,7 +1320,7 @@ async function getLiveData(gamePk: number): Promise<{ feed: LiveFeed; winExp: Ma
 // were frozen without them, re-fetch). v2 added the boxscore pitching line; v3
 // added liveData.decisions (W/L/S) and the per-batter pitch sequence; v4 added
 // runners[].details.earned (per-PA earned-run flag); v5 added responsiblePitcher.
-const FEED_CACHE_VERSION = 5;
+const FEED_CACHE_VERSION = 6;
 
 export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
   const finalCached = gameMemCache.get(gamePk);
@@ -1514,7 +1542,9 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
         timestamp: evTime,
         playId: lastPlayId,
         launchSpeed: lastHit?.launchSpeed ?? null,
+        launchAngle: lastHit?.launchAngle ?? null,
         hitDistance: lastHit?.totalDistance ?? null,
+        bbType: lastHit?.trajectory ?? null,
         pitches,
       });
       for (const p of pitches) pg.pitches.push(p);

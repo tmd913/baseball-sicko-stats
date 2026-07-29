@@ -127,7 +127,9 @@ export interface FacedBatter {
   timestamp: string | null;
   playId: string | null;
   launchSpeed: number | null;
+  launchAngle: number | null;
   hitDistance: number | null;
+  bbType: string | null;
   xwoba: number | null;
   // The pitch-by-pitch sequence the pitcher threw in this PA (in order).
   pitches: Pitch[];
@@ -146,6 +148,14 @@ export interface PitchingLine {
   pitchesThrown: number;
   strikes: number;
   balls: number;
+  doubles: number;
+  triples: number;
+  hitBatsmen: number;
+  atBats: number; // batters faced minus walks/HBP/sacs — the denominator for BAA
+  intentionalWalks: number; // a subset of `walks`
+  wildPitches: number;
+  inheritedRunners: number;
+  inheritedRunnersScored: number;
 }
 
 /** One pitch type in a pitcher's game arsenal, with game averages + season /

@@ -160,6 +160,14 @@ export interface PitchingLine {
   pitchesThrown: number;
   strikes: number;
   balls: number;
+  doubles: number;
+  triples: number;
+  hitBatsmen: number;
+  atBats: number; // batters faced minus walks/HBP/sacs — the denominator for BAA
+  intentionalWalks: number; // a subset of `walks`
+  wildPitches: number;
+  inheritedRunners: number;
+  inheritedRunnersScored: number;
 }
 
 /** One pitch type in a pitcher's game arsenal, with the game averages and the

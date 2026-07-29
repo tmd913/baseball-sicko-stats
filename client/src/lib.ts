@@ -155,6 +155,14 @@ export function combinePitchingLines(lines: PitchingLine[]): PitchingLine {
     pitchesThrown: sum((l) => l.pitchesThrown),
     strikes: sum((l) => l.strikes),
     balls: sum((l) => l.balls),
+    doubles: sum((l) => l.doubles),
+    triples: sum((l) => l.triples),
+    hitBatsmen: sum((l) => l.hitBatsmen),
+    atBats: sum((l) => l.atBats),
+    intentionalWalks: sum((l) => l.intentionalWalks),
+    wildPitches: sum((l) => l.wildPitches),
+    inheritedRunners: sum((l) => l.inheritedRunners),
+    inheritedRunnersScored: sum((l) => l.inheritedRunnersScored),
   };
 }
 

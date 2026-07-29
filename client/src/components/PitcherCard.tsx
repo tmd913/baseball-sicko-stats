@@ -68,8 +68,8 @@ interface InningGroup {
   batters: FacedBatter[];
 }
 
-/** Group the batters faced by inning, preserving the order they're passed in
- * (ascending for a final game, most-recent-first for a live one). */
+/** Group the batters faced by inning, preserving play order — so both the
+ * innings and the batters within each one read first-to-last. */
 function groupByInning(faced: FacedBatter[]): InningGroup[] {
   const groups: InningGroup[] = [];
   const idx = new Map<number, number>();
@@ -106,7 +106,16 @@ function inningStats(batters: FacedBatter[]) {
 }
 
 /** One batter faced — the result row, expandable to the full pitch sequence. */
-function FacedBatterCard({ fb, gamePk }: { fb: FacedBatter; gamePk: number }) {
+function FacedBatterCard({
+  fb,
+  seq,
+  gamePk,
+}: {
+  fb: FacedBatter;
+  // Where this batter came up within the inning — 1 for the inning's first.
+  seq: number;
+  gamePk: number;
+}) {
   const [open, setOpen] = useState(false);
   const kind = outcomeKind(fb.event);
   const expandable = fb.pitches.length > 0;
@@ -116,6 +125,9 @@ function FacedBatterCard({ fb, gamePk }: { fb: FacedBatter; gamePk: number }) {
 
   const summary = (
     <>
+      <span className="faced-seq" title={`Batter ${seq} of the inning`}>
+        {seq}
+      </span>
       <BaseDiamond bases={fb.onBase} outs={fb.outsWhenUp ?? 0} className="pa-bases" />
       <span className={`pa-badge kind-${kind}`}>{eventLabel(fb.event)}</span>
       {fb.rbi > 0 && <span className="pa-rbi">{fb.rbi} RBI</span>}
@@ -157,14 +169,26 @@ function FacedBatterCard({ fb, gamePk }: { fb: FacedBatter; gamePk: number }) {
 
 /** A collapsible per-inning card: header with the inning's line, then the
  * expandable result rows for each batter faced that inning. */
-function InningBlock({ group, gamePk }: { group: InningGroup; gamePk: number }) {
+function InningBlock({
+  group,
+  gamePk,
+  active,
+}: {
+  group: InningGroup;
+  gamePk: number;
+  // The pitcher is on the mound right now, in this inning.
+  active: boolean;
+}) {
   const [collapsed, setCollapsed] = useState(true);
   const s = inningStats(group.batters);
   const isTop = group.half === 'Top';
   // Expanding an inning brings it to the top of the screen, like a game block.
   const blockRef = useScrollIntoViewOnExpand<HTMLDivElement>(!collapsed);
   return (
-    <div ref={blockRef} className={`inning-block${collapsed ? ' collapsed' : ''}`}>
+    <div
+      ref={blockRef}
+      className={`inning-block${collapsed ? ' collapsed' : ''}${active ? ' active' : ''}`}
+    >
       <button
         type="button"
         className="inning-head"
@@ -177,6 +201,7 @@ function InningBlock({ group, gamePk }: { group: InningGroup; gamePk: number }) 
           </svg>
           {ordinal(group.inning)}
         </span>
+        {active && <span className="inning-live">Live</span>}
         <span className="inning-stats">
           <span className="inning-stat">{s.bf} BF</span>
           {s.h > 0 && <span className="inning-stat is-h">{s.h} H</span>}
@@ -193,7 +218,12 @@ function InningBlock({ group, gamePk }: { group: InningGroup; gamePk: number }) 
       {!collapsed && (
         <div className="inning-batters">
           {group.batters.map((fb, i) => (
-            <FacedBatterCard key={`${fb.batterId}-${fb.inning}-${i}`} fb={fb} gamePk={gamePk} />
+            <FacedBatterCard
+              key={`${fb.batterId}-${fb.inning}-${i}`}
+              fb={fb}
+              seq={i + 1}
+              gamePk={gamePk}
+            />
           ))}
         </div>
       )}
@@ -338,13 +368,59 @@ function decisionColor(d: PitcherGame['decision']): string {
 }
 
 /** One labelled stat in the game line — an arsenal metric without the delta. */
-function LineStat({ label, value }: { label: string; value: string }) {
+function LineStat({ label, value, title }: { label: string; value: string; title?: string }) {
   return (
-    <div className="ars-metric">
+    <div className="ars-metric" title={title}>
       <span className="ars-mlabel">{label}</span>
       <span className="ars-mval">{value}</span>
     </div>
   );
+}
+
+/** Batted-ball threshold Statcast calls "hard hit". */
+const HARD_HIT_MPH = 95;
+
+/**
+ * Contact quality allowed, over the balls the pitcher let the batter put in
+ * play. Derived from the plays rather than the boxscore — the boxscore only
+ * counts batted-ball *outs*, and exit velocity isn't in it at all. A ball
+ * counts as in play once it has either a trajectory or an exit velocity;
+ * Statcast misses one or the other often enough to need both.
+ */
+function battedBallStats(faced: FacedBatter[]) {
+  let bip = 0;
+  let evSum = 0;
+  let evCount = 0;
+  let maxEv: number | null = null;
+  let hard = 0;
+  let gb = 0;
+  let ld = 0;
+  let fly = 0; // fly balls and popups together — the usual "FB%"
+  for (const fb of faced) {
+    const t = fb.bbType;
+    if (!t && fb.launchSpeed === null) continue;
+    bip++;
+    if (fb.launchSpeed !== null) {
+      evSum += fb.launchSpeed;
+      evCount++;
+      if (maxEv === null || fb.launchSpeed > maxEv) maxEv = fb.launchSpeed;
+      if (fb.launchSpeed >= HARD_HIT_MPH) hard++;
+    }
+    if (t?.includes('ground')) gb++;
+    else if (t?.includes('line')) ld++;
+    else if (t?.includes('fly') || t?.includes('popup')) fly++;
+  }
+  const share = (n: number) => (bip ? n / bip : null);
+  return {
+    bip,
+    avgEv: evCount ? evSum / evCount : null,
+    maxEv,
+    // Over the batted balls Statcast actually tracked, not all of them.
+    hardPct: evCount ? hard / evCount : null,
+    gbPct: share(gb),
+    ldPct: share(ld),
+    fbPct: share(fly),
+  };
 }
 
 /**
@@ -358,6 +434,10 @@ function GameLine({ pg }: { pg: PitcherGame }) {
   const L = pg.line;
   const color = decisionColor(pg.decision);
   const strike = pg.strikePct === null ? 0 : Math.round(pg.strikePct * 100);
+  const bb = battedBallStats(pg.facedBatters);
+  // Rates over batters faced, the denominator Savant uses for K%/BB%.
+  const perBf = (n: number) => (L.battersFaced ? n / L.battersFaced : null);
+  const singles = Math.max(0, L.hits - L.doubles - L.triples - L.hr);
   return (
     <CardSection title="Line">
       <div className="pline">
@@ -380,21 +460,52 @@ function GameLine({ pg }: { pg: PitcherGame }) {
               <span className="ars-share">{pct(pg.strikePct)}</span>
             </span>
           </div>
+          {/* Hits broken out by base, then runs, free passes and strikeouts. */}
           <div className="ars-metrics">
-            <LineStat label="H" value={String(L.hits)} />
+            <LineStat label="H" value={String(L.hits)} title={`${singles} singles`} />
+            <LineStat label="2B" value={String(L.doubles)} />
+            <LineStat label="3B" value={String(L.triples)} />
+            <LineStat label="HR" value={String(L.hr)} />
             <LineStat label="R" value={String(L.runs)} />
             <LineStat label="ER" value={String(L.earnedRuns)} />
-            <LineStat label="BB" value={String(L.walks)} />
+            <LineStat
+              label="BB"
+              value={String(L.walks)}
+              title={L.intentionalWalks ? `${L.intentionalWalks} intentional` : undefined}
+            />
+            <LineStat label="HBP" value={String(L.hitBatsmen)} />
             <LineStat label="K" value={String(L.strikeouts)} />
-            <LineStat label="HR" value={String(L.hr)} />
           </div>
           <div className="ars-results">
-            <span className="ars-rtag">Game</span>
+            <span className="ars-rtag">Rates</span>
             <ResultStat label="ERA" value={eraOf(L)} />
             <ResultStat label="WHIP" value={whipOf(L)} />
+            <ResultStat label="BAA" value={avg3(L.atBats ? L.hits / L.atBats : null)} />
+            <ResultStat label="K%" value={pct(perBf(L.strikeouts))} />
+            <ResultStat label="BB%" value={pct(perBf(L.walks))} />
             <ResultStat label="Whiff" value={pct(pg.whiffRate)} />
             <ResultStat label="CSW" value={pct(pg.cswRate)} />
+            {/* Only worth the space when they actually happened. */}
+            {L.wildPitches > 0 && <ResultStat label="WP" value={String(L.wildPitches)} />}
+            {L.inheritedRunners > 0 && (
+              <ResultStat
+                label="IR scored"
+                value={`${L.inheritedRunnersScored}/${L.inheritedRunners}`}
+              />
+            )}
           </div>
+          {bb.bip > 0 && (
+            <div className="ars-results" title={`${bb.bip} balls in play`}>
+              <span className="ars-rtag">Contact</span>
+              <ResultStat label="BIP" value={String(bb.bip)} />
+              <ResultStat label="EV" value={bb.avgEv === null ? '—' : bb.avgEv.toFixed(1)} />
+              <ResultStat label="Max" value={bb.maxEv === null ? '—' : bb.maxEv.toFixed(1)} />
+              <ResultStat label={`${HARD_HIT_MPH}+`} value={pct(bb.hardPct)} />
+              <ResultStat label="GB" value={pct(bb.gbPct)} />
+              <ResultStat label="LD" value={pct(bb.ldPct)} />
+              <ResultStat label="FB" value={pct(bb.fbPct)} />
+            </div>
+          )}
         </div>
       </div>
     </CardSection>
@@ -404,10 +515,12 @@ function GameLine({ pg }: { pg: PitcherGame }) {
 /** One game a watched pitcher threw in: aggregate stats + arsenal + batters faced. */
 function PitcherGameBlock({
   game,
+  pitcherId,
   showMatchup,
   spansMultipleDays,
 }: {
   game: PlayerGame;
+  pitcherId: number;
   showMatchup: boolean;
   spansMultipleDays: boolean;
 }) {
@@ -415,9 +528,14 @@ function PitcherGameBlock({
   const L = pg.line;
   const [collapsed, setCollapsed] = useState(showMatchup);
   const blockRef = useScrollIntoViewOnExpand<HTMLDivElement>(!collapsed);
-  // Live: most recent batter first; final: in play order.
-  const live = game.status.state === 'live';
-  const faced = live ? [...pg.facedBatters].reverse() : pg.facedBatters;
+  // Always in play order, live or final — an outing reads first inning down.
+  const faced = pg.facedBatters;
+  // While this pitcher is the one on the mound, the half-inning he's throwing
+  // gets a live accent. Null once the game is over or he's been pulled.
+  const st = game.status;
+  const onMound = st.state === 'live' && st.pitchingId === pitcherId;
+  const activeInning = onMound ? st.currentInning : null;
+  const activeIsTop = st.isTopInning;
 
   const gameId = (
     <div className="game-sub-id">
@@ -466,6 +584,9 @@ function PitcherGameBlock({
                   key={`${group.inning}-${group.half}`}
                   group={group}
                   gamePk={game.gamePk}
+                  active={
+                    group.inning === activeInning && (group.half === 'Top') === activeIsTop
+                  }
                 />
               ))}
             </div>
@@ -577,6 +698,7 @@ export function PitcherCard({
           <PitcherGameBlock
             key={g.gamePk}
             game={g}
+            pitcherId={report.id}
             showMatchup={showMatchup}
             spansMultipleDays={spansMultipleDays}
           />

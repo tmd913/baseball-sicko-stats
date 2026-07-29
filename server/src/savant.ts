@@ -410,14 +410,34 @@ const roundInt = (x: number | null): number | null => (x === null ? null : Math.
 function deriveLine(pg: StatsApiPitcherGame): PitchingLine {
   let hits = 0;
   let walks = 0;
+  let intentionalWalks = 0;
   let strikeouts = 0;
   let hr = 0;
+  let doubles = 0;
+  let triples = 0;
+  let hitBatsmen = 0;
+  let notAtBats = 0; // walks, HBP and sacrifices — everything BAA excludes
   for (const fb of pg.facedBatters) {
     const e = fb.event ?? '';
     if (e === 'single' || e === 'double' || e === 'triple' || e === 'home_run') hits++;
+    if (e === 'double') doubles++;
+    if (e === 'triple') triples++;
     if (e === 'home_run') hr++;
     if (e === 'walk' || e === 'intent_walk') walks++;
+    if (e === 'intent_walk') intentionalWalks++;
+    if (e === 'hit_by_pitch') hitBatsmen++;
     if (e === 'strikeout' || e === 'strikeout_double_play') strikeouts++;
+    if (
+      e === 'walk' ||
+      e === 'intent_walk' ||
+      e === 'hit_by_pitch' ||
+      e === 'sac_fly' ||
+      e === 'sac_bunt' ||
+      e === 'sac_fly_double_play' ||
+      e === 'sac_bunt_double_play' ||
+      e === 'catcher_interf'
+    )
+      notAtBats++;
   }
   let strikes = 0;
   for (const p of pg.pitches) if (p.description !== 'ball' && p.description !== 'blocked_ball') strikes++;
@@ -433,6 +453,15 @@ function deriveLine(pg: StatsApiPitcherGame): PitchingLine {
     pitchesThrown: pg.pitches.length,
     strikes,
     balls: pg.pitches.length - strikes,
+    doubles,
+    triples,
+    hitBatsmen,
+    atBats: Math.max(0, pg.facedBatters.length - notAtBats),
+    intentionalWalks,
+    // Not derivable from the play loop — they only come off the boxscore.
+    wildPitches: 0,
+    inheritedRunners: 0,
+    inheritedRunnersScored: 0,
   };
 }
 
@@ -526,7 +555,9 @@ function buildPitcherGame(
     timestamp: fb.timestamp,
     playId: fb.playId,
     launchSpeed: fb.launchSpeed,
+    launchAngle: fb.launchAngle,
     hitDistance: fb.hitDistance,
+    bbType: fb.bbType,
     xwoba: null,
     pitches: fb.pitches.map(toClientPitch),
   }));

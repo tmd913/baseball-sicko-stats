@@ -21,6 +21,10 @@
   --whiff: #f87171;
   --foul: #fbbf24;
   --called: #a78bfa;
+
+  /* The live/on-base purple — the ring on an active player, and now the accent
+     on the inning a watched pitcher is currently throwing. */
+  --live-purple: #c084fc;
   --ball: #475569;
 
   /* Breathing room left above anything scrolled to the top of the viewport
@@ -865,8 +869,8 @@ body {
   box-shadow: 0 0 0 2px var(--hr);
 }
 .player-photo-link.role-on-base .player-photo {
-  border-color: #c084fc;
-  box-shadow: 0 0 0 2px #c084fc;
+  border-color: var(--live-purple);
+  box-shadow: 0 0 0 2px var(--live-purple);
 }
 .player-id {
   display: flex;
@@ -967,7 +971,7 @@ body {
   background: rgba(251, 191, 36, 0.15);
 }
 .live-role.role-on-base {
-  color: #c084fc;
+  color: var(--live-purple);
   background: rgba(192, 132, 252, 0.15);
 }
 
@@ -1340,10 +1344,16 @@ body {
 .ars-abbr.dec-S {
   color: var(--accent);
 }
-/* Six counting stats rather than the arsenal's five metrics. (Scoped through
-   .pline so it outranks .ars-metrics wherever that rule ends up.) */
+/* Nine counting stats rather than the arsenal's five metrics, stepping down to
+   two then three rows as the card narrows. (Scoped through .pline so it outranks
+   .ars-metrics wherever that rule ends up.) */
 .pline .ars-metrics {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+}
+@container (max-width: 700px) {
+  .pline .ars-metrics {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
 }
 @container (max-width: 440px) {
   .pline .ars-metrics {
@@ -1353,6 +1363,12 @@ body {
   .pline .ars-head {
     flex-wrap: wrap;
   }
+}
+/* A second strip (Contact) sits under the first — the dashed rule already
+   separates them, so it doesn't need the full top margin again. */
+.pline .ars-results + .ars-results {
+  margin-top: 6px;
+  padding-top: 6px;
 }
 .ars-row {
   background: var(--bg);
@@ -1589,6 +1605,29 @@ body {
 .inning-stat.is-p {
   color: var(--faint);
 }
+/* The half-inning this pitcher is throwing right now — the live purple the
+   at-bat/on-base rings use, so "active" reads the same everywhere. */
+.inning-block.active {
+  border-color: var(--live-purple);
+}
+.inning-block.active .inning-head {
+  background: color-mix(in srgb, var(--live-purple) 12%, var(--bg));
+}
+.inning-block.active .inning-label,
+.inning-block.active .inning-label .pa-inning-arrow {
+  color: var(--live-purple);
+}
+.inning-live {
+  flex: none;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--live-purple);
+  border: 1px solid var(--live-purple);
+  border-radius: 5px;
+  padding: 1px 5px;
+}
 .inning-batters {
   display: flex;
   flex-direction: column;
@@ -1605,6 +1644,16 @@ body {
   border: 1px solid var(--border);
   border-left-width: 4px;
   border-radius: 12px;
+}
+/* Where this batter came up in the inning — the faced row's counterpart to the
+   inning number a batter's at-bat card leads with. */
+.faced-seq {
+  flex: none;
+  min-width: 14px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
 }
 .faced-batter {
   font-weight: 700;
@@ -2998,7 +3047,7 @@ body {
 .summary-table tbody tr.role-on-base td,
 .summary-table tbody tr.role-on-base .sum-img-col,
 .summary-table tbody tr.role-on-base .sum-name-col {
-  background: color-mix(in srgb, #c084fc 20%, var(--bg));
+  background: color-mix(in srgb, var(--live-purple) 20%, var(--bg));
 }
 .sum-photo-wrap {
   position: relative;
@@ -3052,8 +3101,8 @@ body {
   box-shadow: 0 0 0 2px var(--hr);
 }
 .sum-photo.role-on-base {
-  border-color: #c084fc;
-  box-shadow: 0 0 0 2px #c084fc;
+  border-color: var(--live-purple);
+  box-shadow: 0 0 0 2px var(--live-purple);
 }
 .sum-name {
   font-weight: 700;
@@ -3296,7 +3345,7 @@ body {
   border-left-color: var(--hr);
 }
 .live-entry.role-on-base .feed-item-head {
-  border-left-color: #c084fc;
+  border-left-color: var(--live-purple);
 }
 /* Role tag sits at the right end of the header row. */
 .feed-item-head .live-role {
@@ -3434,7 +3483,7 @@ body {
   border-radius: 12px;
 }
 .feed-base.kind-sb {
-  border-left-color: #c084fc;
+  border-left-color: var(--live-purple);
 }
 .feed-base.kind-run {
   border-left-color: var(--hit);
@@ -3452,7 +3501,7 @@ body {
   letter-spacing: 0.03em;
 }
 .feed-base.kind-sb .feed-base-badge {
-  color: #c084fc;
+  color: var(--live-purple);
 }
 .feed-base.kind-run .feed-base-badge {
   color: var(--hit);
@@ -3532,6 +3581,6 @@ body {
   box-shadow: 0 0 0 2px var(--hr);
 }
 .feed-photo-link.role-on-base .feed-photo {
-  border-color: #c084fc;
-  box-shadow: 0 0 0 2px #c084fc;
+  border-color: var(--live-purple);
+  box-shadow: 0 0 0 2px var(--live-purple);
 }
