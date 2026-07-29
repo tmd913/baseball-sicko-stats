@@ -4,10 +4,12 @@ import type {
   PitcherSeasonStats,
   PlayerPercentiles,
   PercentileMetric,
+  SeasonArsenalPitch,
   SeasonStats,
   XwobaSeries,
 } from '../types';
 import { headshotUrl, savantPlayerUrl } from '../lib';
+import { SeasonArsenalRow } from './Arsenal';
 import { RollingXwoba } from './RollingXwoba';
 
 /**
@@ -285,7 +287,7 @@ function PitcherSplitsPanel({
   );
 }
 
-type DetailsTab = 'percentiles' | 'splits' | 'rolling';
+type DetailsTab = 'percentiles' | 'splits' | 'rolling' | 'arsenal';
 
 export function PlayerDetails({
   playerId,
@@ -328,6 +330,12 @@ export function PlayerDetails({
   const [xwoba, setXwoba] = useState<XwobaSeries | null>(null);
   const [xwobaError, setXwobaError] = useState<string | null>(null);
   const [xwobaLoading, setXwobaLoading] = useState(false);
+  // The season arsenal backs the pitcher-only Arsenal tab — another heavy Savant
+  // fetch, so it's lazy in the same way.
+  const [arsenal, setArsenal] = useState<SeasonArsenalPitch[] | null>(null);
+  const [arsenalError, setArsenalError] = useState<string | null>(null);
+  const [arsenalLoading, setArsenalLoading] = useState(false);
+  const arsenalReq = useRef<number | null>(null);
   const xwobaReq = useRef<number | null>(null);
 
   // The percentile-point distance below which two paired bubbles would overlap,
@@ -409,7 +417,36 @@ export function PlayerDetails({
     xwobaReq.current = null;
     setXwoba(null);
     setXwobaError(null);
+    arsenalReq.current = null;
+    setArsenal(null);
+    setArsenalError(null);
   }, [playerId]);
+
+  // Same lazy load for the Arsenal tab.
+  useEffect(() => {
+    if (tab !== 'arsenal' || arsenalReq.current === playerId) return;
+    arsenalReq.current = playerId;
+    let live = true;
+    setArsenalLoading(true);
+    setArsenalError(null);
+    api
+      .arsenal(playerId)
+      .then((d) => {
+        if (live) setArsenal(d);
+      })
+      .catch((e: unknown) => {
+        if (live) {
+          setArsenalError(e instanceof Error ? e.message : 'Failed to load');
+          arsenalReq.current = null; // allow a retry on re-open
+        }
+      })
+      .finally(() => {
+        if (live) setArsenalLoading(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [tab, playerId]);
 
   // Fetch the season xwOBA series the first time the Rolling tab is opened for
   // this player (xwobaReq tracks which player we've already requested).
@@ -518,6 +555,17 @@ export function PlayerDetails({
         >
           Rolling xwOBA
         </button>
+        {isPitcher && (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'arsenal'}
+            className={`details-tab${tab === 'arsenal' ? ' is-active' : ''}`}
+            onClick={() => setTab('arsenal')}
+          >
+            Arsenal
+          </button>
+        )}
         <button
           type="button"
           role="tab"
@@ -528,6 +576,32 @@ export function PlayerDetails({
           Splits
         </button>
       </div>
+
+      {tab === 'arsenal' && arsenalLoading && (
+        <div className="details-status">Loading season arsenal…</div>
+      )}
+      {tab === 'arsenal' && arsenalError && !arsenalLoading && (
+        <div className="details-status details-error">⚠ {arsenalError}</div>
+      )}
+      {tab === 'arsenal' &&
+        arsenal &&
+        !arsenalLoading &&
+        (arsenal.length === 0 ? (
+          <div className="details-status">No Statcast pitches this season.</div>
+        ) : (
+          <div className="details-arsenal">
+            <p className="details-note">
+              Season averages per pitch type. <span className="am-arrow">▲▼</span> compares him
+              to the league average for that pitch — green means better for that pitch, so a
+              four-seamer wants more ride and a changeup more drop.
+            </p>
+            <div className="arsenal">
+              {arsenal.map((p) => (
+                <SeasonArsenalRow key={p.pitchType} p={p} />
+              ))}
+            </div>
+          </div>
+        ))}
 
       {tab === 'rolling' && xwobaLoading && (
         <div className="details-status">Loading season xwOBA…</div>

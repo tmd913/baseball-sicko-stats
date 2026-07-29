@@ -2543,6 +2543,25 @@ body {
 .details-error {
   color: var(--strikeout);
 }
+/* The details view's Arsenal tab (pitchers): the same .arsenal rows the pitcher
+   card uses, over the whole season instead of one game. Boxed to the reading
+   width the other tabs use, and given a container so the rows' @container
+   queries (metric columns, break-point layout) still fire here. */
+.details-arsenal {
+  max-width: 860px;
+  margin: 18px auto 0;
+  container-type: inline-size;
+}
+.details-note {
+  margin: 0 0 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--faint);
+}
+.details-note .am-arrow {
+  font-size: 10px;
+  color: var(--muted);
+}
 
 /* Tabs switching the details view between percentile rankings and splits. */
 .details-tabs {
@@ -2973,9 +2992,6 @@ body {
   color: var(--text);
 }
 /* When both a batter and a pitcher table stack in the scroll box, space them. */
-.summary-table-pitchers {
-  margin-top: 22px;
-}
 .summary-table th,
 .summary-table td {
   padding: 8px 13px;
@@ -3347,6 +3363,11 @@ body {
 .kind-switch {
   align-self: flex-start;
   margin-bottom: 2px;
+}
+/* On the summary view the tabs sit directly above the table's own border, which
+   reads as cramped without a gap the card lists don't need. */
+.summary-mode .kind-switch {
+  margin-bottom: 14px;
 }
 .kind-tab-count {
   font-size: 11px;

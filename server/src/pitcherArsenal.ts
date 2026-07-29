@@ -27,11 +27,32 @@ export interface PitchResults {
   putAway: number | null; // 2-strike strikeouts / 2-strike pitches (0-1)
 }
 
-/** A pitch type's full season profile: movement/velo baseline + results. */
-export interface SeasonPitch extends ArsenalPitch, PitchResults {}
+/** How often a pitch type was thrown, and how often it was a strike. Only the
+ * pitcher's own season carries this — the league table is movement-only. */
+export interface PitchUsage {
+  count: number; // pitches of this type thrown this season
+  strikes: number; // of those, the ones not ruled a ball (CSV `type` !== 'B')
+}
+
+/** A pitch type's full season profile: usage + movement/velo baseline + results. */
+export interface SeasonPitch extends ArsenalPitch, PitchResults, PitchUsage {}
 
 /** A pitcher's season arsenal, keyed by full pitch name ("4-Seam Fastball"). */
 export type Arsenal = Map<string, SeasonPitch>;
+
+/**
+ * Savant's CSV and the MLB feed disagree on a couple of pitch names. The arsenal
+ * is keyed by the feed's spelling, since that's what a game's `PitchMix` carries
+ * and what `pitchStyle()` colors by — without this, a splitter's season baselines
+ * and Results never attach to its game row.
+ */
+const CSV_PITCH_NAME: Record<string, string> = {
+  'Split-Finger': 'Splitter',
+};
+
+function feedPitchName(csvName: string | undefined): string | undefined {
+  return csvName === undefined ? undefined : (CSV_PITCH_NAME[csvName] ?? csvName);
+}
 
 // ---- Statcast event / description vocabularies (CSV `events`/`description`) ---
 
@@ -113,6 +134,8 @@ export async function getSeasonArsenal(pitcherId: number): Promise<Arsenal> {
   });
 
   interface Acc {
+    count: number;
+    strikes: number;
     velo: number[];
     spin: number[];
     hb: number[];
@@ -131,13 +154,17 @@ export async function getSeasonArsenal(pitcherId: number): Promise<Arsenal> {
   }
   const agg = new Map<string, Acc>();
   for (const r of records) {
-    const name = r.pitch_name;
+    const name = feedPitchName(r.pitch_name);
     if (!name || name === 'null') continue;
     let a = agg.get(name);
     if (!a) {
-      a = { velo: [], spin: [], hb: [], vb: [], pa: 0, ab: 0, hits: 0, tb: 0, wobaVal: 0, wobaDen: 0, xwobaNum: 0, swings: 0, whiffs: 0, twoStrike: 0, putaways: 0 };
+      a = { count: 0, strikes: 0, velo: [], spin: [], hb: [], vb: [], pa: 0, ab: 0, hits: 0, tb: 0, wobaVal: 0, wobaDen: 0, xwobaNum: 0, swings: 0, whiffs: 0, twoStrike: 0, putaways: 0 };
       agg.set(name, a);
     }
+    a.count++;
+    // Savant's `type`: B = ball, S = strike, X = in play — which counts as a
+    // strike, the same split the boxscore's balls/strikes uses.
+    if (r.type !== 'B') a.strikes++;
     const velo = num(r.release_speed);
     if (velo !== null) a.velo.push(velo);
     const spin = num(r.release_spin_rate);
@@ -188,6 +215,8 @@ export async function getSeasonArsenal(pitcherId: number): Promise<Arsenal> {
     // Skip stray unclassified rows (e.g. pitchouts) with no real sample.
     if (a.velo.length < 2) continue;
     data.set(name, {
+      count: a.count,
+      strikes: a.strikes,
       velo: mean(a.velo),
       spin: a.spin.length ? Math.round(a.spin.reduce((s, x) => s + x, 0) / a.spin.length) : null,
       hBreak: mean(a.hb),

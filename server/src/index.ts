@@ -4,6 +4,9 @@ import { fileURLToPath } from 'node:url';
 import { getReport } from './savant.js';
 import { getPercentiles } from './percentiles.js';
 import { getXwobaSeries } from './xwoba.js';
+import { getSeasonArsenal } from './pitcherArsenal.js';
+import { getLeaguePitchAverage } from './pitchLeague.js';
+import type { SeasonArsenalPitch } from './types.js';
 import { getPitcherStats, getPlayerStats, getSeasonPlayers, resolveVideoUrl } from './mlbStats.js';
 import { addPlayer, getWatchlist, removePlayer, reorderPlayers } from './store.js';
 
@@ -210,6 +213,53 @@ app.get(
     }
     const kind = req.query.type === 'pitcher' ? 'pitcher' : 'batter';
     res.json(await getXwobaSeries(playerId, kind));
+  }),
+);
+
+// A pitcher's season pitch arsenal, for the details view's Arsenal tab: usage,
+// velo/spin/break vs the league, and the season results each pitch produced.
+// (The per-game version rides along on the report as `PitchMix`.)
+app.get(
+  '/api/players/:playerId/arsenal',
+  asyncRoute(async (req, res) => {
+    const playerId = Number(req.params.playerId);
+    if (!Number.isInteger(playerId) || playerId <= 0) {
+      res.status(400).json({ error: 'invalid playerId' });
+      return;
+    }
+    const arsenal = await getSeasonArsenal(playerId);
+    const total = [...arsenal.values()].reduce((sum, p) => sum + p.count, 0);
+    const pitches: SeasonArsenalPitch[] = [...arsenal.entries()]
+      .map(([pitchType, p]) => {
+        const lg = getLeaguePitchAverage(pitchType);
+        // League hBreak is a magnitude; orient it to this pitcher's own
+        // direction so the signed comparison reads correctly (same as the
+        // per-game baselines in savant.ts::attachArsenalBaselines).
+        const dir = (p.hBreak ?? 0) < 0 ? -1 : 1;
+        return {
+          pitchType,
+          count: p.count,
+          strikes: p.strikes,
+          share: total ? p.count / total : 0,
+          velo: p.velo,
+          spin: p.spin,
+          hBreak: p.hBreak,
+          vBreak: p.vBreak,
+          leagueVelo: lg?.velo ?? null,
+          leagueSpin: lg?.spin ?? null,
+          leagueHBreak: lg?.hBreak == null ? null : Math.abs(lg.hBreak) * dir,
+          leagueVBreak: lg?.vBreak ?? null,
+          pa: p.pa,
+          ba: p.ba,
+          slg: p.slg,
+          woba: p.woba,
+          xwoba: p.xwoba,
+          whiff: p.whiff,
+          putAway: p.putAway,
+        };
+      })
+      .sort((a, b) => b.count - a.count);
+    res.json({ pitches });
   }),
 );
 

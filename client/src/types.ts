@@ -217,6 +217,35 @@ export interface PitcherGame {
   decision: 'W' | 'L' | 'S' | null; // this pitcher's W/L/S in the game
 }
 
+/**
+ * One pitch type in a pitcher's **season** arsenal — what the details view's
+ * Arsenal tab renders. The per-game `PitchMix` is the same idea for one outing;
+ * here the pitcher's own season is the value and the league is the baseline
+ * (rather than the game being the value and his season the baseline).
+ */
+export interface SeasonArsenalPitch {
+  pitchType: string;
+  count: number; // pitches thrown this season
+  strikes: number; // of those, the ones not ruled a ball (balls = count - strikes)
+  share: number; // fraction of his season's pitches (0-1)
+  velo: number | null;
+  spin: number | null;
+  hBreak: number | null; // horizontal break, inches
+  vBreak: number | null; // induced vertical break, inches
+  leagueVelo: number | null;
+  leagueSpin: number | null;
+  leagueHBreak: number | null; // oriented to his own break direction
+  leagueVBreak: number | null;
+  // Season outcomes against this pitch (Savant's "Results" columns).
+  pa: number | null;
+  ba: number | null;
+  slg: number | null;
+  woba: number | null;
+  xwoba: number | null;
+  whiff: number | null;
+  putAway: number | null;
+}
+
 /** A pitcher's season line (+ vs L/R splits handled at report level). */
 export interface PitcherSeasonStats {
   gamesPlayed: number;
