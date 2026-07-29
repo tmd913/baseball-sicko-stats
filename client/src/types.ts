@@ -163,6 +163,7 @@ export interface PitchingLine {
 export interface PitchMix {
   pitchType: string;
   count: number;
+  strikes: number; // pitches of this type not ruled a ball (balls = count - strikes)
   share: number; // 0-1
   whiffRate: number | null;
   avgVelo: number | null;

@@ -274,24 +274,62 @@ function ArsenalMetric({
   );
 }
 
-/** One pitch type as a Savant-style arsenal row: color-coded id + usage bar,
- * then velo / spin / iVB / HB (vs season) + whiff. */
+/**
+ * A labelled rate bar — the arsenal row's usage share and strike rate, and the
+ * game line's strike rate. `counts` spells out the numbers behind the
+ * percentage (pitches thrown, or strikes and balls).
+ */
+function RateBar({
+  label,
+  pct: value,
+  color,
+  counts,
+  title,
+}: {
+  label: string;
+  // 0-100, already rounded.
+  pct: number | null;
+  color: string;
+  counts: string;
+  title?: string;
+}) {
+  return (
+    <span className="ars-usage" title={title}>
+      <span className="ars-mlabel">{label}</span>
+      <span className="ars-bar">
+        <span className="ars-bar-fill" style={{ width: `${value ?? 0}%`, background: color }} />
+      </span>
+      <span className="ars-share">{value === null ? '—' : `${value}%`}</span>
+      <span className="ars-count">{counts}</span>
+    </span>
+  );
+}
+
+/** One pitch type as a Savant-style arsenal row: color-coded id + usage and
+ * strike bars, then velo / spin / iVB / HB (vs season) + whiff. */
 function ArsenalRow({ m }: { m: PitchMix }) {
   const { abbr, color } = pitchStyle(m.pitchType);
   const share = Math.round(m.share * 100);
+  const balls = m.count - m.strikes;
   return (
     <div className="ars-row" style={{ borderLeftColor: color }}>
       <div className="ars-head">
         <span className="ars-dot" style={{ background: color }} />
         <span className="ars-abbr">{abbr}</span>
         <span className="ars-name">{m.pitchType}</span>
-        <span className="ars-count">{m.count}</span>
-        <span className="ars-usage">
-          <span className="ars-bar">
-            <span className="ars-bar-fill" style={{ width: `${share}%`, background: color }} />
-          </span>
-          <span className="ars-share">{share}%</span>
-        </span>
+        <RateBar
+          label="Usage"
+          pct={share}
+          color={color}
+          counts={`${m.count} P`}
+          title={`${m.count} of the game's pitches`}
+        />
+        <RateBar
+          label="Strike"
+          pct={m.count ? Math.round((m.strikes / m.count) * 100) : null}
+          color="var(--accent)"
+          counts={`${m.strikes} S · ${balls} B`}
+        />
       </div>
       <div className="ars-metrics">
         <ArsenalMetric label="Velo" value={m.avgVelo} unit=" mph" season={m.seasonVelo} league={m.leagueVelo} digits={1} />
@@ -437,18 +475,15 @@ function GameLine({ pg }: { pg: PitcherGame }) {
             {pg.decision && <span className={`ars-abbr dec-${pg.decision}`}>{pg.decision}</span>}
             <span className="ars-name pline-ip">{formatIp(L.outs)} IP</span>
             <span className="ars-count">{L.pitchesThrown} P</span>
-            {/* Strike rate fills the arsenal's usage bar. Neutral accent, not the
-                decision color — a strike rate isn't good or bad by itself. */}
-            <span className="ars-usage" title={`${strike}% of pitches for strikes`}>
-              <span className="ars-mlabel">Strike</span>
-              <span className="ars-bar">
-                <span
-                  className="ars-bar-fill"
-                  style={{ width: `${strike}%`, background: 'var(--accent)' }}
-                />
-              </span>
-              <span className="ars-share">{pct(pg.strikePct)}</span>
-            </span>
+            {/* The arsenal's rate bar, so the line and the rows read alike.
+                Neutral accent, not the decision color — a strike rate isn't
+                good or bad by itself. */}
+            <RateBar
+              label="Strike"
+              pct={pg.strikePct === null ? null : strike}
+              color="var(--accent)"
+              counts={`${L.strikes} S · ${L.balls} B`}
+            />
           </div>
           {/* Hits broken out by base, then runs, free passes and strikeouts. */}
           <div className="ars-results">

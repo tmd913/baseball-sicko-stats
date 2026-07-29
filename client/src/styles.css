@@ -1371,7 +1371,10 @@ body {
 .ars-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  /* Two rate bars ride at the right; on a narrow card they drop to their own
+     line rather than squeezing the pitch name to nothing. */
+  flex-wrap: wrap;
+  gap: 8px 10px;
   margin-bottom: 7px;
 }
 .ars-dot {
@@ -1406,11 +1409,12 @@ body {
   color: var(--faint);
   font-variant-numeric: tabular-nums;
 }
+/* A labelled rate bar: label, track, percentage, then the raw counts. */
 .ars-usage {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
 }
 .ars-bar {
   width: 60px;

@@ -140,7 +140,9 @@ export interface FacedBatter {
   timestamp: string | null;
   playId: string | null;
   launchSpeed: number | null;
+  launchAngle: number | null;
   hitDistance: number | null;
+  bbType: string | null; // ground_ball, line_drive, fly_ball, popup
   xwoba: number | null;
   // The pitch-by-pitch sequence the pitcher threw in this PA (in order).
   pitches: Pitch[];
@@ -175,6 +177,7 @@ export interface PitchingLine {
 export interface PitchMix {
   pitchType: string; // "4-Seam Fastball", "Slider", ...
   count: number;
+  strikes: number; // pitches of this type not ruled a ball (balls = count - strikes)
   share: number; // fraction of the game's pitches (0-1)
   whiffRate: number | null; // whiffs / swings on this pitch type
   avgVelo: number | null;

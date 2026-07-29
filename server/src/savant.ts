@@ -376,6 +376,17 @@ function toClientPitch(p: StatsApiPitch): Pitch {
 // outcomes — together they make up "swings", the whiff-rate denominator.
 const WHIFF_DESC = new Set(['swinging_strike', 'swinging_strike_blocked', 'foul_tip']);
 const CONTACT_DESC = new Set(['foul', 'foul_bunt', 'hit_into_play', 'foul_pitchout']);
+// Everything that isn't ruled a ball is a strike — called, swinging, foul, in
+// play — which is the same split the boxscore's balls/strikes counts use.
+const BALL_DESC = new Set([
+  'ball',
+  'blocked_ball',
+  'intent_ball',
+  'automatic_ball',
+  'pitchout',
+  'hit_by_pitch',
+]);
+const isStrikePitch = (description: string): boolean => !BALL_DESC.has(description);
 
 // Baserunning / pickoff plays carry the batter who was up but aren't plate
 // appearances, so they're excluded from the "batters faced" result list.
@@ -440,7 +451,7 @@ function deriveLine(pg: StatsApiPitcherGame): PitchingLine {
       notAtBats++;
   }
   let strikes = 0;
-  for (const p of pg.pitches) if (p.description !== 'ball' && p.description !== 'blocked_ball') strikes++;
+  for (const p of pg.pitches) if (isStrikePitch(p.description)) strikes++;
   return {
     outs: 0,
     hits,
@@ -503,14 +514,17 @@ function buildPitcherGame(
     .map(([pitchType, ps]): PitchMix => {
       let w = 0;
       let s = 0;
+      let strikes = 0;
       for (const p of ps) {
         const isW = WHIFF_DESC.has(p.description);
         if (isW) w++;
         if (isW || CONTACT_DESC.has(p.description)) s++;
+        if (isStrikePitch(p.description)) strikes++;
       }
       return {
         pitchType,
         count: ps.length,
+        strikes,
         share: total ? ps.length / total : 0,
         whiffRate: s ? w / s : null,
         avgVelo: round1(mean(ps.map((p) => p.releaseSpeed))),
