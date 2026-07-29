@@ -189,9 +189,26 @@ export interface PitchMix {
 }
 
 /** A pitcher's game view. */
+/**
+ * One game's work against a single batter handedness. Derived from the plays,
+ * not the boxscore (which doesn't split) — so `line.outs` is 0 and the counting
+ * stats are per batter faced. Everything else aggregates like the whole outing.
+ */
+export interface PitcherSplit {
+  line: PitchingLine;
+  pitchMix: PitchMix[];
+  whiffRate: number | null;
+  cswRate: number | null;
+  strikePct: number | null;
+}
+
 export interface PitcherGame {
   line: PitchingLine;
   facedBatters: FacedBatter[];
+  // The same view restricted to right- / left-handed batters. Null when he
+  // faced nobody of that hand.
+  vsRight: PitcherSplit | null;
+  vsLeft: PitcherSplit | null;
   pitchMix: PitchMix[];
   whiffRate: number | null;
   cswRate: number | null;

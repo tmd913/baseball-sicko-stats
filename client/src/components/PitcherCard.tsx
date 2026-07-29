@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import type {
   FacedBatter,
   PitcherGame,
+  PitcherSplit,
   PitchMix,
   PitchingLine,
   PlayerGame,
@@ -383,13 +384,63 @@ function CardSection({ title, children }: { title: string; children: ReactNode }
   );
 }
 
-/** The Savant-style arsenal table (one row per pitch type). */
-function ArsenalSection({ pitchMix }: { pitchMix: PitchMix[] }) {
-  if (pitchMix.length === 0) return null;
+/** Which batters a section is showing: everyone, or one handedness. */
+type SplitKey = 'all' | 'R' | 'L';
+
+/**
+ * Overall / vs RHB / vs LHB selector. Only offers a hand the pitcher actually
+ * faced, and renders nothing when that leaves one option — a lone "Overall"
+ * tab is just a label.
+ */
+function SplitTabs({
+  pg,
+  value,
+  onChange,
+}: {
+  pg: PitcherGame;
+  value: SplitKey;
+  onChange: (v: SplitKey) => void;
+}) {
+  const opts: { key: SplitKey; label: string }[] = [{ key: 'all', label: 'Overall' }];
+  if (pg.vsRight) opts.push({ key: 'R', label: 'vs RHB' });
+  if (pg.vsLeft) opts.push({ key: 'L', label: 'vs LHB' });
+  if (opts.length < 2) return null;
+  return (
+    <div className="split-switch" role="tablist" aria-label="Batter handedness">
+      {opts.map((o) => (
+        <button
+          key={o.key}
+          type="button"
+          role="tab"
+          aria-selected={value === o.key}
+          className={`split-tab${value === o.key ? ' active' : ''}`}
+          onClick={() => onChange(o.key)}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** The selected handedness split, or null for the whole outing. */
+function splitOf(pg: PitcherGame, key: SplitKey): PitcherSplit | null {
+  if (key === 'R') return pg.vsRight;
+  if (key === 'L') return pg.vsLeft;
+  return null;
+}
+
+/** The Savant-style arsenal table (one row per pitch type), for the whole
+ * outing or one batter handedness. */
+function ArsenalSection({ pg }: { pg: PitcherGame }) {
+  const [split, setSplit] = useState<SplitKey>('all');
+  if (pg.pitchMix.length === 0) return null;
+  const mix = splitOf(pg, split)?.pitchMix ?? pg.pitchMix;
   return (
     <CardSection title="Arsenal">
+      <SplitTabs pg={pg} value={split} onChange={setSplit} />
       <div className="arsenal">
-        {pitchMix.map((m) => (
+        {mix.map((m) => (
           <ArsenalRow key={m.pitchType} m={m} />
         ))}
       </div>
@@ -459,28 +510,40 @@ function battedBallStats(faced: FacedBatter[]) {
  * strip the arsenal uses for its season results.
  */
 function GameLine({ pg }: { pg: PitcherGame }) {
-  const L = pg.line;
-  const color = decisionColor(pg.decision);
-  const strike = pg.strikePct === null ? 0 : Math.round(pg.strikePct * 100);
-  const bb = battedBallStats(pg.facedBatters);
+  const [split, setSplit] = useState<SplitKey>('all');
+  const sp = splitOf(pg, split);
+  // A split's line is derived from the plays, so it has no innings, and the
+  // decision belongs to the game as a whole — both are Overall-only.
+  const L = sp ? sp.line : pg.line;
+  const rates = sp ?? pg;
+  const color = sp ? 'var(--accent)' : decisionColor(pg.decision);
+  const strike = rates.strikePct === null ? 0 : Math.round(rates.strikePct * 100);
+  const bb = battedBallStats(
+    split === 'all' ? pg.facedBatters : pg.facedBatters.filter((f) => f.stand === split),
+  );
   // Rates over batters faced, the denominator Savant uses for K%/BB%.
   const perBf = (n: number) => (L.battersFaced ? n / L.battersFaced : null);
   const singles = Math.max(0, L.hits - L.doubles - L.triples - L.hr);
   return (
     <CardSection title="Line">
+      <SplitTabs pg={pg} value={split} onChange={setSplit} />
       <div className="pline">
         <div className="ars-row" style={{ borderLeftColor: color }}>
           <div className="ars-head">
             <span className="ars-dot" style={{ background: color }} />
-            {pg.decision && <span className={`ars-abbr dec-${pg.decision}`}>{pg.decision}</span>}
-            <span className="ars-name pline-ip">{formatIp(L.outs)} IP</span>
+            {!sp && pg.decision && (
+              <span className={`ars-abbr dec-${pg.decision}`}>{pg.decision}</span>
+            )}
+            <span className="ars-name pline-ip">
+              {sp ? `${L.battersFaced} BF` : `${formatIp(L.outs)} IP`}
+            </span>
             <span className="ars-count">{L.pitchesThrown} P</span>
             {/* The arsenal's rate bar, so the line and the rows read alike.
                 Neutral accent, not the decision color — a strike rate isn't
                 good or bad by itself. */}
             <RateBar
               label="Strike"
-              pct={pg.strikePct === null ? null : strike}
+              pct={rates.strikePct === null ? null : strike}
               color="var(--accent)"
               counts={`${L.strikes} S · ${L.balls} B`}
             />
@@ -492,7 +555,11 @@ function GameLine({ pg }: { pg: PitcherGame }) {
             <ResultStat label="2B" value={String(L.doubles)} />
             <ResultStat label="3B" value={String(L.triples)} />
             <ResultStat label="HR" value={String(L.hr)} />
-            <ResultStat label="R" value={String(L.runs)} />
+            <ResultStat
+              label="R"
+              value={String(L.runs)}
+              title={sp ? 'Runs that scored on these plays' : undefined}
+            />
             <ResultStat label="ER" value={String(L.earnedRuns)} />
             <ResultStat
               label="BB"
@@ -504,13 +571,14 @@ function GameLine({ pg }: { pg: PitcherGame }) {
           </div>
           <div className="ars-results">
             <span className="ars-rtag">Rates</span>
-            <ResultStat label="ERA" value={eraOf(L)} />
-            <ResultStat label="WHIP" value={whipOf(L)} />
+            {/* Both are per-inning, and a split has no innings of its own. */}
+            {!sp && <ResultStat label="ERA" value={eraOf(L)} />}
+            {!sp && <ResultStat label="WHIP" value={whipOf(L)} />}
             <ResultStat label="BAA" value={avg3(L.atBats ? L.hits / L.atBats : null)} />
             <ResultStat label="K%" value={pct(perBf(L.strikeouts))} />
             <ResultStat label="BB%" value={pct(perBf(L.walks))} />
-            <ResultStat label="Whiff" value={pct(pg.whiffRate)} />
-            <ResultStat label="CSW" value={pct(pg.cswRate)} />
+            <ResultStat label="Whiff" value={pct(rates.whiffRate)} />
+            <ResultStat label="CSW" value={pct(rates.cswRate)} />
             {/* Only worth the space when they actually happened. */}
             {L.wildPitches > 0 && <ResultStat label="WP" value={String(L.wildPitches)} />}
             {L.inheritedRunners > 0 && (
@@ -619,7 +687,7 @@ function PitcherGameBlock({
           </CardSection>
 
           {/* Arsenal: velo/spin/break per pitch type, vs season & league */}
-          <ArsenalSection pitchMix={pg.pitchMix} />
+          <ArsenalSection pg={pg} />
         </div>
       )}
     </div>

@@ -1325,6 +1325,42 @@ body {
   /* Expanding a section scrolls it to the top — clear the sticky nav strip. */
   scroll-margin-top: var(--scroll-offset);
 }
+/* Overall / vs RHB / vs LHB, inside the Line and Arsenal sections. The quietest
+   tier of the app's three pill switches (view → kind → split): no fill on the
+   track, just a tinted active pill, so it reads as a filter on the section
+   below rather than another level of navigation. */
+.split-switch {
+  display: inline-flex;
+  gap: 2px;
+  margin-bottom: 9px;
+  padding: 2px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+.split-tab {
+  border: none;
+  background: none;
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 4px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.14s ease, background 0.14s ease;
+}
+.split-tab:hover {
+  color: var(--text);
+}
+.split-tab.active {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.split-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 /* Game line — the outing's totals, built from the arsenal row's parts so the
    two sections read as one table (color-keyed row + dashed rate strip). */
 /* Innings pitched sits in the arsenal's name slot but reads as the row's

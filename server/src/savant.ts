@@ -9,7 +9,12 @@ import {
   getRosterInfo,
   getStatsApiGame,
 } from './mlbStats.js';
-import type { StatsApiGame, StatsApiPitch, StatsApiPitcherGame } from './mlbStats.js';
+import type {
+  StatsApiFacedBatter,
+  StatsApiGame,
+  StatsApiPitch,
+  StatsApiPitcherGame,
+} from './mlbStats.js';
 import { getSeasonArsenal } from './pitcherArsenal.js';
 import type { Arsenal } from './pitcherArsenal.js';
 import { getLeaguePitchAverage } from './pitchLeague.js';
@@ -19,6 +24,7 @@ import type {
   Pitch,
   PitchMix,
   PitcherGame,
+  PitcherSplit,
   PitchingLine,
   PlateAppearance,
   PlayerGame,
@@ -415,10 +421,14 @@ const mean = (xs: (number | null)[]): number | null => {
 const round1 = (x: number | null): number | null => (x === null ? null : Math.round(x * 10) / 10);
 const roundInt = (x: number | null): number | null => (x === null ? null : Math.round(x));
 
-/** A degraded pitching line derived from the play stream when the boxscore line
- * is missing (old cache) — counting stats only; outs/runs can't be attributed
- * reliably from plays, so they stay 0 (the boxscore is the real source). */
-function deriveLine(pg: StatsApiPitcherGame): PitchingLine {
+/**
+ * A pitching line counted off the play stream. Used both as the fallback when
+ * the boxscore line is missing (old cache) and as the only way to build the
+ * vs-RHB / vs-LHB splits, which the boxscore doesn't carry. Counting stats
+ * only: outs and runs can't be attributed reliably from plays, so they stay 0
+ * (the boxscore is the real source for those).
+ */
+function deriveLine(faced: StatsApiFacedBatter[], pitches: StatsApiPitch[]): PitchingLine {
   let hits = 0;
   let walks = 0;
   let intentionalWalks = 0;
@@ -427,9 +437,15 @@ function deriveLine(pg: StatsApiPitcherGame): PitchingLine {
   let doubles = 0;
   let triples = 0;
   let hitBatsmen = 0;
+  let runs = 0;
+  let earnedRuns = 0;
   let notAtBats = 0; // walks, HBP and sacrifices — everything BAA excludes
-  for (const fb of pg.facedBatters) {
+  for (const fb of faced) {
     const e = fb.event ?? '';
+    // Runs that scored on this play and were charged to this pitcher. Sums to
+    // the boxscore's total only when he left no runners behind for a reliever.
+    runs += fb.runs;
+    earnedRuns += fb.earnedRuns;
     if (e === 'single' || e === 'double' || e === 'triple' || e === 'home_run') hits++;
     if (e === 'double') doubles++;
     if (e === 'triple') triples++;
@@ -451,23 +467,25 @@ function deriveLine(pg: StatsApiPitcherGame): PitchingLine {
       notAtBats++;
   }
   let strikes = 0;
-  for (const p of pg.pitches) if (isStrikePitch(p.description)) strikes++;
+  for (const p of pitches) if (isStrikePitch(p.description)) strikes++;
   return {
+    // Outs can't be attributed reliably from the play stream — the boxscore is
+    // the only source, and a handedness split has no meaningful innings anyway.
     outs: 0,
     hits,
-    runs: 0,
-    earnedRuns: 0,
+    runs,
+    earnedRuns,
     walks,
     strikeouts,
     hr,
-    battersFaced: pg.facedBatters.length,
-    pitchesThrown: pg.pitches.length,
+    battersFaced: faced.length,
+    pitchesThrown: pitches.length,
     strikes,
-    balls: pg.pitches.length - strikes,
+    balls: pitches.length - strikes,
     doubles,
     triples,
     hitBatsmen,
-    atBats: Math.max(0, pg.facedBatters.length - notAtBats),
+    atBats: Math.max(0, faced.length - notAtBats),
     intentionalWalks,
     // Not derivable from the play loop — they only come off the boxscore.
     wildPitches: 0,
@@ -488,17 +506,17 @@ function pitcherDecision(g: StatsApiGame, pitcherId: number): 'W' | 'L' | 'S' | 
 /** Build the pitcher's-eye game view: the boxscore line, the batters faced
  * (result-only), the pitch-type arsenal, and whiff/CSW/strike rates. Season and
  * league arsenal baselines are filled later (per pitcher) in getReport. */
-function buildPitcherGame(
-  pg: StatsApiPitcherGame,
-  line: PitchingLine | undefined,
-  decision: 'W' | 'L' | 'S' | null,
-): PitcherGame {
-  const total = pg.pitches.length;
+function aggregatePitches(pitches: StatsApiPitch[]): {
+  pitchMix: PitchMix[];
+  whiffRate: number | null;
+  cswRate: number | null;
+} {
+  const total = pitches.length;
   let whiffs = 0;
   let swings = 0;
   let called = 0;
   const byType = new Map<string, StatsApiPitch[]>();
-  for (const p of pg.pitches) {
+  for (const p of pitches) {
     const d = p.description;
     const isWhiff = WHIFF_DESC.has(d);
     if (isWhiff) whiffs++;
@@ -550,10 +568,45 @@ function buildPitcherGame(
     })
     .sort((a, b) => b.count - a.count);
 
-  const pl = line ?? deriveLine(pg);
-  const facedBatters: FacedBatter[] = pg.facedBatters
-    .filter((fb) => !isBaserunningEvent(fb.event))
-    .map((fb) => ({
+  return {
+    pitchMix,
+    whiffRate: swings ? whiffs / swings : null,
+    cswRate: total ? (called + whiffs) / total : null,
+  };
+}
+
+/**
+ * The outing restricted to the batters of one handedness — the same aggregation
+ * over just their plate appearances and the pitches thrown in them.
+ */
+function buildSplit(faced: StatsApiFacedBatter[]): PitcherSplit {
+  const pitches = faced.flatMap((fb) => fb.pitches);
+  const line = deriveLine(faced, pitches);
+  return {
+    line,
+    ...aggregatePitches(pitches),
+    strikePct: pitches.length ? line.strikes / pitches.length : null,
+  };
+}
+
+/** Build the pitcher's-eye game view: the boxscore line, the batters faced
+ * (result-only), the pitch-type arsenal, whiff/CSW/strike rates, and the same
+ * view split by batter handedness. Season and league arsenal baselines are
+ * filled later (per pitcher) in getReport. */
+function buildPitcherGame(
+  pg: StatsApiPitcherGame,
+  line: PitchingLine | undefined,
+  decision: 'W' | 'L' | 'S' | null,
+): PitcherGame {
+  const overall = aggregatePitches(pg.pitches);
+  // Baserunning-only plays (pickoffs, steals) carry a batter but aren't plate
+  // appearances, so they're out of both the result list and the splits.
+  const faced = pg.facedBatters.filter((fb) => !isBaserunningEvent(fb.event));
+  const byHand = (stand: string) => faced.filter((fb) => fb.stand === stand);
+  const hasHand = (stand: string) => faced.some((fb) => fb.stand === stand);
+
+  const pl = line ?? deriveLine(pg.facedBatters, pg.pitches);
+  const facedBatters: FacedBatter[] = faced.map((fb) => ({
     batterId: fb.batterId,
     batterName: fb.batterName,
     stand: fb.stand,
@@ -576,12 +629,15 @@ function buildPitcherGame(
     pitches: fb.pitches.map(toClientPitch),
   }));
 
+  const total = pg.pitches.length;
   return {
     line: pl,
     facedBatters,
-    pitchMix,
-    whiffRate: swings ? whiffs / swings : null,
-    cswRate: total ? (called + whiffs) / total : null,
+    vsRight: hasHand('R') ? buildSplit(byHand('R')) : null,
+    vsLeft: hasHand('L') ? buildSplit(byHand('L')) : null,
+    pitchMix: overall.pitchMix,
+    whiffRate: overall.whiffRate,
+    cswRate: overall.cswRate,
     strikePct: pl.pitchesThrown ? pl.strikes / pl.pitchesThrown : total ? (total - (pl.balls || 0)) / total : null,
     // A starter (or opener) faces the first batter of the game, in the 1st inning.
     isStart: pg.facedBatters[0]?.inning === 1,
@@ -590,9 +646,15 @@ function buildPitcherGame(
 }
 
 /** Fill a pitcher game's arsenal with season (his own) and league baselines,
- * orienting the league horizontal-break magnitude to his own break direction. */
+ * orienting the league horizontal-break magnitude to his own break direction.
+ * The handedness splits carry their own copy of the mix, so they get it too —
+ * the baselines are season-wide either way. */
 function attachArsenalBaselines(pitching: PitcherGame, season: Arsenal): void {
-  for (const m of pitching.pitchMix) {
+  for (const m of [
+    ...pitching.pitchMix,
+    ...(pitching.vsRight?.pitchMix ?? []),
+    ...(pitching.vsLeft?.pitchMix ?? []),
+  ]) {
     const sea = season.get(m.pitchType);
     if (sea) {
       m.seasonVelo = sea.velo;
