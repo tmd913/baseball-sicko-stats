@@ -23,11 +23,13 @@ import {
 } from '../lib';
 import {
   ArsenalRow,
+  SplitTabs,
   ResultStat,
   RateBar,
   avg3,
   pct,
 } from './Arsenal';
+import type { SplitKey } from './Arsenal';
 import { BaseDiamond } from './BaseDiamond';
 import { VideoClip } from './PlateAppearanceCard';
 import { PitchSequence } from './PitchSequence';
@@ -246,45 +248,6 @@ function CardSection({ title, children }: { title: string; children: ReactNode }
   );
 }
 
-/** Which batters a section is showing: everyone, or one handedness. */
-type SplitKey = 'all' | 'R' | 'L';
-
-/**
- * Overall / vs RHB / vs LHB selector. Only offers a hand the pitcher actually
- * faced, and renders nothing when that leaves one option — a lone "Overall"
- * tab is just a label.
- */
-function SplitTabs({
-  pg,
-  value,
-  onChange,
-}: {
-  pg: PitcherGame;
-  value: SplitKey;
-  onChange: (v: SplitKey) => void;
-}) {
-  const opts: { key: SplitKey; label: string }[] = [{ key: 'all', label: 'Overall' }];
-  if (pg.vsRight) opts.push({ key: 'R', label: 'vs RHB' });
-  if (pg.vsLeft) opts.push({ key: 'L', label: 'vs LHB' });
-  if (opts.length < 2) return null;
-  return (
-    <div className="split-switch" role="tablist" aria-label="Batter handedness">
-      {opts.map((o) => (
-        <button
-          key={o.key}
-          type="button"
-          role="tab"
-          aria-selected={value === o.key}
-          className={`split-tab${value === o.key ? ' active' : ''}`}
-          onClick={() => onChange(o.key)}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 /** The selected handedness split, or null for the whole outing. */
 function splitOf(pg: PitcherGame, key: SplitKey): PitcherSplit | null {
   if (key === 'R') return pg.vsRight;
@@ -300,7 +263,7 @@ function ArsenalSection({ pg }: { pg: PitcherGame }) {
   const mix = splitOf(pg, split)?.pitchMix ?? pg.pitchMix;
   return (
     <CardSection title="Arsenal">
-      <SplitTabs pg={pg} value={split} onChange={setSplit} />
+      <SplitTabs hasRight={!!pg.vsRight} hasLeft={!!pg.vsLeft} value={split} onChange={setSplit} />
       <div className="arsenal">
         {mix.map((m) => (
           <ArsenalRow key={m.pitchType} m={m} />
@@ -388,7 +351,7 @@ function GameLine({ pg }: { pg: PitcherGame }) {
   const singles = Math.max(0, L.hits - L.doubles - L.triples - L.hr);
   return (
     <CardSection title="Line">
-      <SplitTabs pg={pg} value={split} onChange={setSplit} />
+      <SplitTabs hasRight={!!pg.vsRight} hasLeft={!!pg.vsLeft} value={split} onChange={setSplit} />
       <div className="pline">
         <div className="ars-row" style={{ borderLeftColor: color }}>
           <div className="ars-head">

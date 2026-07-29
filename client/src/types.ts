@@ -217,6 +217,14 @@ export interface PitcherGame {
   decision: 'W' | 'L' | 'S' | null; // this pitcher's W/L/S in the game
 }
 
+/** A pitcher's season arsenal: the whole season, plus the batter-handedness
+ * splits (null when he's faced nobody of that hand). */
+export interface SeasonArsenal {
+  pitches: SeasonArsenalPitch[];
+  vsRight: SeasonArsenalPitch[] | null;
+  vsLeft: SeasonArsenalPitch[] | null;
+}
+
 /**
  * One pitch type in a pitcher's **season** arsenal — what the details view's
  * Arsenal tab renders. The per-game `PitchMix` is the same idea for one outing;

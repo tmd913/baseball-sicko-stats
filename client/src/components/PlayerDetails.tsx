@@ -4,12 +4,13 @@ import type {
   PitcherSeasonStats,
   PlayerPercentiles,
   PercentileMetric,
-  SeasonArsenalPitch,
+  SeasonArsenal,
   SeasonStats,
   XwobaSeries,
 } from '../types';
 import { headshotUrl, savantPlayerUrl } from '../lib';
-import { SeasonArsenalRow } from './Arsenal';
+import { SeasonArsenalRow, SplitTabs } from './Arsenal';
+import type { SplitKey } from './Arsenal';
 import { RollingXwoba } from './RollingXwoba';
 
 /**
@@ -289,6 +290,48 @@ function PitcherSplitsPanel({
 
 type DetailsTab = 'percentiles' | 'splits' | 'rolling' | 'arsenal';
 
+/**
+ * The Arsenal tab: a pitcher's season pitch mix, overall or against one batter
+ * handedness. Usage share is relative to the selected view, so a split's shares
+ * still add to 100% — that's the point of the split, since who he faces changes
+ * what he throws.
+ */
+function ArsenalTab({
+  arsenal,
+  split,
+  onSplit,
+}: {
+  arsenal: SeasonArsenal;
+  split: SplitKey;
+  onSplit: (v: SplitKey) => void;
+}) {
+  const pitches =
+    (split === 'R' ? arsenal.vsRight : split === 'L' ? arsenal.vsLeft : null) ?? arsenal.pitches;
+  if (arsenal.pitches.length === 0) {
+    return <div className="details-status">No Statcast pitches this season.</div>;
+  }
+  return (
+    <div className="details-arsenal">
+      <p className="details-note">
+        Season averages per pitch type. <span className="am-arrow">▲▼</span> compares him to the
+        league average for that pitch — green means better for that pitch, so a four-seamer wants
+        more ride and a changeup more drop.
+      </p>
+      <SplitTabs
+        hasRight={!!arsenal.vsRight}
+        hasLeft={!!arsenal.vsLeft}
+        value={split}
+        onChange={onSplit}
+      />
+      <div className="arsenal">
+        {pitches.map((p) => (
+          <SeasonArsenalRow key={p.pitchType} p={p} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function PlayerDetails({
   playerId,
   name,
@@ -332,7 +375,8 @@ export function PlayerDetails({
   const [xwobaLoading, setXwobaLoading] = useState(false);
   // The season arsenal backs the pitcher-only Arsenal tab — another heavy Savant
   // fetch, so it's lazy in the same way.
-  const [arsenal, setArsenal] = useState<SeasonArsenalPitch[] | null>(null);
+  const [arsenal, setArsenal] = useState<SeasonArsenal | null>(null);
+  const [arsenalSplit, setArsenalSplit] = useState<SplitKey>('all');
   const [arsenalError, setArsenalError] = useState<string | null>(null);
   const [arsenalLoading, setArsenalLoading] = useState(false);
   const arsenalReq = useRef<number | null>(null);
@@ -420,6 +464,7 @@ export function PlayerDetails({
     arsenalReq.current = null;
     setArsenal(null);
     setArsenalError(null);
+    setArsenalSplit('all');
   }, [playerId]);
 
   // Same lazy load for the Arsenal tab.
@@ -583,25 +628,9 @@ export function PlayerDetails({
       {tab === 'arsenal' && arsenalError && !arsenalLoading && (
         <div className="details-status details-error">⚠ {arsenalError}</div>
       )}
-      {tab === 'arsenal' &&
-        arsenal &&
-        !arsenalLoading &&
-        (arsenal.length === 0 ? (
-          <div className="details-status">No Statcast pitches this season.</div>
-        ) : (
-          <div className="details-arsenal">
-            <p className="details-note">
-              Season averages per pitch type. <span className="am-arrow">▲▼</span> compares him
-              to the league average for that pitch — green means better for that pitch, so a
-              four-seamer wants more ride and a changeup more drop.
-            </p>
-            <div className="arsenal">
-              {arsenal.map((p) => (
-                <SeasonArsenalRow key={p.pitchType} p={p} />
-              ))}
-            </div>
-          </div>
-        ))}
+      {tab === 'arsenal' && arsenal && !arsenalLoading && (
+        <ArsenalTab arsenal={arsenal} split={arsenalSplit} onSplit={setArsenalSplit} />
+      )}
 
       {tab === 'rolling' && xwobaLoading && (
         <div className="details-status">Loading season xwOBA…</div>

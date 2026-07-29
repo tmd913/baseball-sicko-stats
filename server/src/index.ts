@@ -5,6 +5,7 @@ import { getReport } from './savant.js';
 import { getPercentiles } from './percentiles.js';
 import { getXwobaSeries } from './xwoba.js';
 import { getSeasonArsenal } from './pitcherArsenal.js';
+import type { Arsenal } from './pitcherArsenal.js';
 import { getLeaguePitchAverage } from './pitchLeague.js';
 import type { SeasonArsenalPitch } from './types.js';
 import { getPitcherStats, getPlayerStats, getSeasonPlayers, resolveVideoUrl } from './mlbStats.js';
@@ -227,39 +228,48 @@ app.get(
       res.status(400).json({ error: 'invalid playerId' });
       return;
     }
-    const arsenal = await getSeasonArsenal(playerId);
-    const total = [...arsenal.values()].reduce((sum, p) => sum + p.count, 0);
-    const pitches: SeasonArsenalPitch[] = [...arsenal.entries()]
-      .map(([pitchType, p]) => {
-        const lg = getLeaguePitchAverage(pitchType);
-        // League hBreak is a magnitude; orient it to this pitcher's own
-        // direction so the signed comparison reads correctly (same as the
-        // per-game baselines in savant.ts::attachArsenalBaselines).
-        const dir = (p.hBreak ?? 0) < 0 ? -1 : 1;
-        return {
-          pitchType,
-          count: p.count,
-          strikes: p.strikes,
-          share: total ? p.count / total : 0,
-          velo: p.velo,
-          spin: p.spin,
-          hBreak: p.hBreak,
-          vBreak: p.vBreak,
-          leagueVelo: lg?.velo ?? null,
-          leagueSpin: lg?.spin ?? null,
-          leagueHBreak: lg?.hBreak == null ? null : Math.abs(lg.hBreak) * dir,
-          leagueVBreak: lg?.vBreak ?? null,
-          pa: p.pa,
-          ba: p.ba,
-          slg: p.slg,
-          woba: p.woba,
-          xwoba: p.xwoba,
-          whiff: p.whiff,
-          putAway: p.putAway,
-        };
-      })
-      .sort((a, b) => b.count - a.count);
-    res.json({ pitches });
+    const arsenals = await getSeasonArsenal(playerId);
+    const toPitches = (arsenal: Arsenal): SeasonArsenalPitch[] => {
+      const total = [...arsenal.values()].reduce((sum, p) => sum + p.count, 0);
+      return [...arsenal.entries()]
+        .map(([pitchType, p]) => {
+          const lg = getLeaguePitchAverage(pitchType);
+          // League hBreak is a magnitude; orient it to this pitcher's own
+          // direction so the signed comparison reads correctly (same as the
+          // per-game baselines in savant.ts::attachArsenalBaselines).
+          const dir = (p.hBreak ?? 0) < 0 ? -1 : 1;
+          return {
+            pitchType,
+            count: p.count,
+            strikes: p.strikes,
+            // Share of the pitches in THIS view, so a split's usage adds to 100%.
+            share: total ? p.count / total : 0,
+            velo: p.velo,
+            spin: p.spin,
+            hBreak: p.hBreak,
+            vBreak: p.vBreak,
+            leagueVelo: lg?.velo ?? null,
+            leagueSpin: lg?.spin ?? null,
+            leagueHBreak: lg?.hBreak == null ? null : Math.abs(lg.hBreak) * dir,
+            leagueVBreak: lg?.vBreak ?? null,
+            pa: p.pa,
+            ba: p.ba,
+            slg: p.slg,
+            woba: p.woba,
+            xwoba: p.xwoba,
+            whiff: p.whiff,
+            putAway: p.putAway,
+          };
+        })
+        .sort((a, b) => b.count - a.count);
+    };
+    res.json({
+      pitches: toPitches(arsenals.all),
+      // Null rather than empty when he's faced nobody of that hand, so the
+      // client knows not to offer the tab at all.
+      vsRight: arsenals.vsRight.size ? toPitches(arsenals.vsRight) : null,
+      vsLeft: arsenals.vsLeft.size ? toPitches(arsenals.vsLeft) : null,
+    });
   }),
 );
 

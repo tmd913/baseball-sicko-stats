@@ -1,5 +1,5 @@
 import type {
-  SeasonArsenalPitch,
+  SeasonArsenal,
   PlayerKind,
   PitcherSeasonStats,
   PlayerPercentiles,
@@ -84,11 +84,8 @@ export const api = {
     return json(await fetch(`/api/players/${playerId}/splits?type=pitcher`));
   },
   // A pitcher's season pitch arsenal (details view's Arsenal tab).
-  async arsenal(playerId: number): Promise<SeasonArsenalPitch[]> {
-    const r = await json<{ pitches: SeasonArsenalPitch[] }>(
-      await fetch(`/api/players/${playerId}/arsenal`),
-    );
-    return r.pitches;
+  async arsenal(playerId: number): Promise<SeasonArsenal> {
+    return json<SeasonArsenal>(await fetch(`/api/players/${playerId}/arsenal`));
   },
   async xwoba(playerId: number, kind: 'batter' | 'pitcher' = 'batter'): Promise<XwobaSeries> {
     return json(await fetch(`/api/players/${playerId}/xwoba?type=${kind}`));

@@ -40,6 +40,14 @@ export interface SeasonPitch extends ArsenalPitch, PitchResults, PitchUsage {}
 /** A pitcher's season arsenal, keyed by full pitch name ("4-Seam Fastball"). */
 export type Arsenal = Map<string, SeasonPitch>;
 
+/** The season arsenal, whole and split by the batter's side. A split is empty
+ * (not absent) when he's faced nobody of that hand. */
+export interface SeasonArsenals {
+  all: Arsenal;
+  vsRight: Arsenal;
+  vsLeft: Arsenal;
+}
+
 /**
  * Savant's CSV and the MLB feed disagree on a couple of pitch names. The arsenal
  * is keyed by the feed's spelling, since that's what a game's `PitchMix` carries
@@ -110,7 +118,7 @@ const num = (v: string | undefined): number | null => {
 };
 
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // current-season data moves daily
-const cache = new Map<number, { data: Arsenal; fetchedAt: number }>();
+const cache = new Map<number, { data: SeasonArsenals; fetchedAt: number }>();
 
 /**
  * A pitcher's season arsenal averages (velo, spin, induced vertical break,
@@ -118,7 +126,7 @@ const cache = new Map<number, { data: Arsenal; fetchedAt: number }>();
  * of Savant `pfx_x`, and `breakVerticalInduced` equals `pfx_z`; both are ×12 to
  * convert feet→inches so the season baseline matches the per-game feed values.
  */
-export async function getSeasonArsenal(pitcherId: number): Promise<Arsenal> {
+export async function getSeasonArsenal(pitcherId: number): Promise<SeasonArsenals> {
   const hit = cache.get(pitcherId);
   if (hit && Date.now() - hit.fetchedAt < CACHE_TTL_MS) return hit.data;
 
@@ -133,6 +141,19 @@ export async function getSeasonArsenal(pitcherId: number): Promise<Arsenal> {
     relax_column_count: true,
   });
 
+  const data: SeasonArsenals = {
+    all: aggregate(records),
+    // `stand` is the BATTER's side, so these are the pitcher's arsenal against
+    // righties / lefties.
+    vsRight: aggregate(records.filter((r) => r.stand === 'R')),
+    vsLeft: aggregate(records.filter((r) => r.stand === 'L')),
+  };
+  cache.set(pitcherId, { data, fetchedAt: Date.now() });
+  return data;
+}
+
+/** Roll a set of season pitch rows up into a per-pitch-type arsenal. */
+function aggregate(records: Record<string, string>[]): Arsenal {
   interface Acc {
     count: number;
     strikes: number;
@@ -231,6 +252,5 @@ export async function getSeasonArsenal(pitcherId: number): Promise<Arsenal> {
     });
   }
 
-  cache.set(pitcherId, { data, fetchedAt: Date.now() });
   return data;
 }

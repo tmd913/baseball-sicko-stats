@@ -282,3 +282,45 @@ export function SeasonArsenalRow({ p }: { p: SeasonArsenalPitch }) {
     </div>
   );
 }
+
+/** Which batters a section is showing: everyone, or one handedness. */
+export type SplitKey = 'all' | 'R' | 'L';
+
+/**
+ * Overall / vs RHB / vs LHB selector, shared by the pitcher card's Line and
+ * Arsenal sections and the details view's Arsenal tab. Only offers a hand the
+ * pitcher actually faced, and renders nothing when that leaves one option — a
+ * lone "Overall" tab is just a label.
+ */
+export function SplitTabs({
+  hasRight,
+  hasLeft,
+  value,
+  onChange,
+}: {
+  hasRight: boolean;
+  hasLeft: boolean;
+  value: SplitKey;
+  onChange: (v: SplitKey) => void;
+}) {
+  const opts: { key: SplitKey; label: string }[] = [{ key: 'all', label: 'Overall' }];
+  if (hasRight) opts.push({ key: 'R', label: 'vs RHB' });
+  if (hasLeft) opts.push({ key: 'L', label: 'vs LHB' });
+  if (opts.length < 2) return null;
+  return (
+    <div className="split-switch" role="tablist" aria-label="Batter handedness">
+      {opts.map((o) => (
+        <button
+          key={o.key}
+          type="button"
+          role="tab"
+          aria-selected={value === o.key}
+          className={`split-tab${value === o.key ? ' active' : ''}`}
+          onClick={() => onChange(o.key)}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}

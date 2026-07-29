@@ -1019,7 +1019,9 @@ export async function getReport(
   await Promise.all(
     pitcherIds.map(async (id) => {
       try {
-        arsenals.set(id, await getSeasonArsenal(id));
+        // The game card compares against his season vs everyone; the details
+        // view is where the handedness splits are read.
+        arsenals.set(id, (await getSeasonArsenal(id)).all);
       } catch (err) {
         console.error(`pitcher arsenal fetch failed for ${id}:`, err);
       }
