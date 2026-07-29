@@ -1317,20 +1317,6 @@ body {
   letter-spacing: 0.06em;
   color: var(--muted);
 }
-/* Stands in for the section's body while it's closed. */
-.section-sub {
-  min-width: 0;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--faint);
-  font-variant-numeric: tabular-nums;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.section-sub .am-arrow {
-  font-size: 9px;
-}
 .card-section {
   /* Expanding a section scrolls it to the top — clear the sticky nav strip. */
   scroll-margin-top: var(--scroll-offset);
@@ -1603,15 +1589,6 @@ body {
 .inning-stat.is-p {
   color: var(--faint);
 }
-.inning-caret {
-  margin-left: auto;
-  font-size: 11px;
-  color: var(--muted);
-  transition: transform 0.15s ease;
-}
-.inning-block.collapsed .inning-caret {
-  transform: rotate(-90deg);
-}
 .inning-batters {
   display: flex;
   flex-direction: column;
@@ -1686,15 +1663,6 @@ body {
   font-weight: 700;
   color: var(--faint);
   font-variant-numeric: tabular-nums;
-}
-.faced-caret {
-  font-size: 10px;
-  color: var(--muted);
-  transition: transform 0.15s ease;
-}
-/* Same convention as the inning and arsenal carets: sideways when closed. */
-.faced-card:not(.expanded) .faced-caret {
-  transform: rotate(-90deg);
 }
 .faced-detail {
   padding: 0 12px 12px;

@@ -126,14 +126,7 @@ function FacedBatterCard({ fb, gamePk }: { fb: FacedBatter; gamePk: number }) {
       {fb.launchSpeed !== null && (
         <span className="pa-contact-main">{fb.launchSpeed.toFixed(1)} mph</span>
       )}
-      {expandable && (
-        <>
-          <span className="faced-pitches">{fb.pitches.length} P</span>
-          <span className="faced-caret" aria-hidden="true">
-            ▾
-          </span>
-        </>
-      )}
+      {expandable && <span className="faced-pitches">{fb.pitches.length} P</span>}
     </>
   );
 
@@ -195,9 +188,6 @@ function InningBlock({ group, gamePk }: { group: InningGroup; gamePk: number }) 
           {s.k > 0 && <span className="inning-stat is-k">{s.k} K</span>}
           {s.bb > 0 && <span className="inning-stat is-bb">{s.bb} BB</span>}
           <span className="inning-stat is-p">{s.pitches} P</span>
-        </span>
-        <span className="inning-caret" aria-hidden="true">
-          ▾
         </span>
       </button>
       {!collapsed && (
@@ -303,19 +293,10 @@ function ArsenalRow({ m }: { m: PitchMix }) {
 /**
  * One collapsible section of a pitcher card — Line, Innings, Arsenal. The bar
  * reuses the batter card's game bar (`.game-sub-bar`) so the two cards' toggles
- * share one format: a label and a summary that stands in for the body while
- * it's closed — and, like that bar, no caret. Expanding scrolls it to the top,
+ * share one format: a bare label, no caret. Expanding scrolls it to the top,
  * like every other collapsible in the app.
  */
-function CardSection({
-  title,
-  sub,
-  children,
-}: {
-  title: string;
-  sub?: ReactNode;
-  children: ReactNode;
-}) {
+function CardSection({ title, children }: { title: string; children: ReactNode }) {
   const [open, setOpen] = useState(true);
   const secRef = useScrollIntoViewOnExpand<HTMLDivElement>(open);
   return (
@@ -328,7 +309,6 @@ function CardSection({
         onClick={() => setOpen((v) => !v)}
       >
         <span className="section-title">{title}</span>
-        {sub && <span className="section-sub">{sub}</span>}
       </button>
       {open && children}
     </div>
@@ -339,14 +319,7 @@ function CardSection({
 function ArsenalSection({ pitchMix }: { pitchMix: PitchMix[] }) {
   if (pitchMix.length === 0) return null;
   return (
-    <CardSection
-      title="Arsenal"
-      sub={
-        <>
-          game avg · <span className="am-arrow">▲▼</span> vs season
-        </>
-      }
-    >
+    <CardSection title="Arsenal">
       <div className="arsenal">
         {pitchMix.map((m) => (
           <ArsenalRow key={m.pitchType} m={m} />
@@ -385,10 +358,8 @@ function GameLine({ pg }: { pg: PitcherGame }) {
   const L = pg.line;
   const color = decisionColor(pg.decision);
   const strike = pg.strikePct === null ? 0 : Math.round(pg.strikePct * 100);
-  // The bar's summary is "game totals", not the line itself — the card header
-  // (or, on a multi-game card, the game bar) already carries it right above.
   return (
-    <CardSection title="Line" sub="game totals">
+    <CardSection title="Line">
       <div className="pline">
         <div className="ars-row" style={{ borderLeftColor: color }}>
           <div className="ars-head">
@@ -488,10 +459,7 @@ function PitcherGameBlock({
           <GameLine pg={pg} />
 
           {/* Batters faced — grouped by inning, each result expandable to its pitches */}
-          <CardSection
-            title="Innings"
-            sub={`${faced.length} batter${faced.length === 1 ? '' : 's'} faced`}
-          >
+          <CardSection title="Innings">
             <div className="innings-list">
               {groupByInning(faced).map((group) => (
                 <InningBlock
