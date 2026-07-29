@@ -303,9 +303,9 @@ function ArsenalRow({ m }: { m: PitchMix }) {
 /**
  * One collapsible section of a pitcher card — Line, Innings, Arsenal. The bar
  * reuses the batter card's game bar (`.game-sub-bar`) so the two cards' toggles
- * share one format: label on the left, a summary that stands in for the body
- * while it's closed, caret on the right. Expanding scrolls it to the top, like
- * every other collapsible in the app.
+ * share one format: a label and a summary that stands in for the body while
+ * it's closed — and, like that bar, no caret. Expanding scrolls it to the top,
+ * like every other collapsible in the app.
  */
 function CardSection({
   title,
@@ -319,7 +319,7 @@ function CardSection({
   const [open, setOpen] = useState(true);
   const secRef = useScrollIntoViewOnExpand<HTMLDivElement>(open);
   return (
-    <div ref={secRef} className={`card-section${open ? '' : ' collapsed'}`}>
+    <div ref={secRef} className="card-section">
       <button
         type="button"
         className="game-sub-bar section-bar"
@@ -329,9 +329,6 @@ function CardSection({
       >
         <span className="section-title">{title}</span>
         {sub && <span className="section-sub">{sub}</span>}
-        <span className="section-caret" aria-hidden="true">
-          ▾
-        </span>
       </button>
       {open && children}
     </div>

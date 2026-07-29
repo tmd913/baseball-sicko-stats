@@ -1331,18 +1331,9 @@ body {
 .section-sub .am-arrow {
   font-size: 9px;
 }
-.section-caret {
-  margin-left: auto;
-  font-size: 11px;
-  color: var(--muted);
-  transition: transform 0.15s ease;
-}
 .card-section {
   /* Expanding a section scrolls it to the top — clear the sticky nav strip. */
   scroll-margin-top: var(--scroll-offset);
-}
-.card-section.collapsed .section-caret {
-  transform: rotate(-90deg);
 }
 /* Game line — the outing's totals, built from the arsenal row's parts so the
    two sections read as one table (color-keyed row + dashed rate strip). */
