@@ -137,6 +137,12 @@ export default function App() {
     // Summary is the default view; players/feed are opted into explicitly.
     return v === 'players' || v === 'feed' ? v : 'summary';
   });
+  // Which half of the watchlist the players view is showing. Its own tab row,
+  // since a batter card and a pitcher card have nothing in common to scan down.
+  // Only surfaced when both kinds are watched; batters are the default.
+  const [playerKind, setPlayerKind] = useState<'batter' | 'pitcher'>(() =>
+    initialParams.get('kind') === 'pitcher' ? 'pitcher' : 'batter',
+  );
   // Demo toggle: overlay a synthetic live-day state on the loaded reports so the
   // live-only UI can be exercised when nothing is actually being played.
   const [simulate, setSimulate] = useState<boolean>(() => initialParams.get('sim') === '1');
@@ -193,9 +199,10 @@ export default function App() {
     if (expandedIds.size) p.set('expanded', [...expandedIds].join(','));
     if (detailsId) p.set('player', String(detailsId));
     if (view !== 'summary') p.set('view', view);
+    if (playerKind !== 'batter') p.set('kind', playerKind);
     if (simulate) p.set('sim', '1');
     window.history.replaceState(null, '', `?${p.toString()}`);
-  }, [start, end, activePreset, expandedIds, detailsId, view, simulate]);
+  }, [start, end, activePreset, expandedIds, detailsId, view, playerKind, simulate]);
 
   // Load the season's player list once, for search/autocomplete.
   useEffect(() => {
@@ -394,6 +401,10 @@ export default function App() {
       setBackView(from);
       setEditMode(false);
       setView('players');
+      // The players view shows one kind at a time, so land on the tab this
+      // player is actually in — otherwise the jump scrolls to nothing.
+      const kind = reportsRef.current.find((r) => r.id === id)?.kind;
+      if (kind === 'pitcher' || kind === 'batter') setPlayerKind(kind);
       setExpandedIds((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
       scrollToPlayer(id);
     },
@@ -429,12 +440,15 @@ export default function App() {
     [detailsId, watchlist],
   );
 
-  // The player list is split into a hitters half and a pitchers half (each
-  // keeping the watchlist's order). The headings only show when both kinds are
-  // watched — with one kind there's nothing to tell apart.
+  // The player list is one kind at a time, picked by its own tab row (each half
+  // keeping the watchlist's order). The tabs only appear when both kinds are
+  // watched; with one kind there's nothing to switch between, so the list just
+  // shows it — even if the URL asked for the empty half.
   const cardBatters = displayReports.filter((r) => r.kind !== 'pitcher');
   const cardPitchers = displayReports.filter((r) => r.kind === 'pitcher');
-  const showKindHeadings = cardBatters.length > 0 && cardPitchers.length > 0;
+  const showKindTabs = cardBatters.length > 0 && cardPitchers.length > 0;
+  const shownKind = showKindTabs || cardPitchers.length === 0 ? playerKind : 'pitcher';
+  const kindCards = shownKind === 'pitcher' ? cardPitchers : cardBatters;
   const renderCard = (r: PlayerReport) =>
     r.kind === 'pitcher' ? (
       <PitcherCard
@@ -726,10 +740,31 @@ export default function App() {
           />
         ) : (
         <main className="player-list">
-          {showKindHeadings && <h2 className="kind-heading">Batters</h2>}
-          {cardBatters.map(renderCard)}
-          {showKindHeadings && <h2 className="kind-heading">Pitchers</h2>}
-          {cardPitchers.map(renderCard)}
+          {showKindTabs && (
+            <div className="kind-switch" role="tablist" aria-label="Batters or pitchers">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={shownKind === 'batter'}
+                className={`kind-tab${shownKind === 'batter' ? ' active' : ''}`}
+                onClick={() => setPlayerKind('batter')}
+              >
+                Batters
+                <span className="kind-tab-count">{cardBatters.length}</span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={shownKind === 'pitcher'}
+                className={`kind-tab${shownKind === 'pitcher' ? ' active' : ''}`}
+                onClick={() => setPlayerKind('pitcher')}
+              >
+                Pitchers
+                <span className="kind-tab-count">{cardPitchers.length}</span>
+              </button>
+            </div>
+          )}
+          {kindCards.map(renderCard)}
         </main>
         )}
       </div>

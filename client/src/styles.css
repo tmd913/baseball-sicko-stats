@@ -1344,28 +1344,19 @@ body {
 .ars-abbr.dec-S {
   color: var(--accent);
 }
-/* Nine counting stats rather than the arsenal's five metrics, stepping down to
-   two then three rows as the card narrows. (Scoped through .pline so it outranks
-   .ars-metrics wherever that rule ends up.) */
-.pline .ars-metrics {
-  grid-template-columns: repeat(9, minmax(0, 1fr));
-}
-@container (max-width: 700px) {
-  .pline .ars-metrics {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-  }
+/* The line has no metric grid — every stat rides in a results strip (Results,
+   Rates, Contact), so the head runs straight into the first dashed rule. */
+.pline .ars-head {
+  margin-bottom: 0;
 }
 @container (max-width: 440px) {
-  .pline .ars-metrics {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
   /* The head's identity and strike-rate halves stop fitting side by side. */
   .pline .ars-head {
     flex-wrap: wrap;
   }
 }
-/* A second strip (Contact) sits under the first — the dashed rule already
-   separates them, so it doesn't need the full top margin again. */
+/* Strips after the first — the dashed rule already separates them, so they
+   don't need the full top margin again. */
 .pline .ars-results + .ars-results {
   margin-top: 6px;
   padding-top: 6px;
@@ -3296,10 +3287,58 @@ body {
   }
 }
 
-/* "Batters" / "Pitchers" divider — splits the player list, and each feed
-   section, into its two halves. Only rendered when both kinds are watched, so
-   it never appears as a lone label over a single group. The trailing rule runs
-   out to the full width to read as a section break rather than a row label. */
+/* Batters / Pitchers tabs at the top of the player list — the list shows one
+   kind at a time. A quieter echo of the top-level .view-switch: same pill shape,
+   sized down a notch so it reads as a filter within the view, not a view swap. */
+.kind-switch {
+  align-self: flex-start;
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+.kind-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.14s ease, background 0.14s ease;
+}
+.kind-tab:hover {
+  color: var(--text);
+}
+.kind-tab.active {
+  color: var(--bg);
+  background: var(--accent);
+}
+.kind-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.kind-tab-count {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+.kind-tab.active .kind-tab-count {
+  color: var(--bg);
+  opacity: 0.65;
+}
+
+/* "Batters" / "Pitchers" divider — splits each feed section into its two
+   halves. Only rendered when that section holds both kinds, so it never appears
+   as a lone label over a single group. The trailing rule runs out to the full
+   width to read as a section break rather than a row label. */
 .kind-heading {
   display: flex;
   align-items: center;

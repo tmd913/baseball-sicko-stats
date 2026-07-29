@@ -44,10 +44,10 @@ const pct = (x: number | null): string => (x === null ? '—' : `${Math.round(x 
 /** Baseball rate line ".265" / "1.250" — drops the leading zero below 1.000. */
 const avg3 = (n: number | null): string => (n === null ? '—' : n.toFixed(3).replace(/^0\./, '.'));
 
-/** One season-result stat in an arsenal row's Results strip. */
-function ResultStat({ label, value }: { label: string; value: string }) {
+/** One labelled stat in a results strip — the arsenal's, or the game line's. */
+function ResultStat({ label, value, title }: { label: string; value: string; title?: string }) {
   return (
-    <span className="ars-rstat">
+    <span className="ars-rstat" title={title}>
       <span className="ars-rlabel">{label}</span>
       <span className="ars-rval">{value}</span>
     </span>
@@ -367,16 +367,6 @@ function decisionColor(d: PitcherGame['decision']): string {
   return 'var(--muted)';
 }
 
-/** One labelled stat in the game line — an arsenal metric without the delta. */
-function LineStat({ label, value, title }: { label: string; value: string; title?: string }) {
-  return (
-    <div className="ars-metric" title={title}>
-      <span className="ars-mlabel">{label}</span>
-      <span className="ars-mval">{value}</span>
-    </div>
-  );
-}
-
 /** Batted-ball threshold Statcast calls "hard hit". */
 const HARD_HIT_MPH = 95;
 
@@ -461,20 +451,21 @@ function GameLine({ pg }: { pg: PitcherGame }) {
             </span>
           </div>
           {/* Hits broken out by base, then runs, free passes and strikeouts. */}
-          <div className="ars-metrics">
-            <LineStat label="H" value={String(L.hits)} title={`${singles} singles`} />
-            <LineStat label="2B" value={String(L.doubles)} />
-            <LineStat label="3B" value={String(L.triples)} />
-            <LineStat label="HR" value={String(L.hr)} />
-            <LineStat label="R" value={String(L.runs)} />
-            <LineStat label="ER" value={String(L.earnedRuns)} />
-            <LineStat
+          <div className="ars-results">
+            <span className="ars-rtag">Results</span>
+            <ResultStat label="H" value={String(L.hits)} title={`${singles} singles`} />
+            <ResultStat label="2B" value={String(L.doubles)} />
+            <ResultStat label="3B" value={String(L.triples)} />
+            <ResultStat label="HR" value={String(L.hr)} />
+            <ResultStat label="R" value={String(L.runs)} />
+            <ResultStat label="ER" value={String(L.earnedRuns)} />
+            <ResultStat
               label="BB"
               value={String(L.walks)}
               title={L.intentionalWalks ? `${L.intentionalWalks} intentional` : undefined}
             />
-            <LineStat label="HBP" value={String(L.hitBatsmen)} />
-            <LineStat label="K" value={String(L.strikeouts)} />
+            <ResultStat label="HBP" value={String(L.hitBatsmen)} />
+            <ResultStat label="K" value={String(L.strikeouts)} />
           </div>
           <div className="ars-results">
             <span className="ars-rtag">Rates</span>
