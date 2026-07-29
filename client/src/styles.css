@@ -1516,13 +1516,16 @@ body {
   white-space: nowrap;
   min-height: 13px;
 }
-.ars-delta.dir-up {
+/* Green/red is whether the change is an improvement for THIS pitch type — not
+   whether the number went up (a changeup that dropped more is better, and its
+   iVB went down). Metrics with no clear better direction stay flat. */
+.ars-delta.tone-good {
   color: var(--hit);
 }
-.ars-delta.dir-down {
+.ars-delta.tone-bad {
   color: var(--strikeout);
 }
-.ars-delta.dir-flat {
+.ars-delta.tone-flat {
   color: var(--faint);
 }
 /* Season results strip — BA / SLG / wOBA / xwOBA / PutAway against this pitch. */
@@ -1686,7 +1689,10 @@ body {
   color: var(--faint);
   font-variant-numeric: tabular-nums;
 }
+/* Sized just under the row's exit-velo readout — the batter's name identifies
+   the row, but the result badge beside it is what's being scanned. */
 .faced-batter {
+  font-size: 13px;
   font-weight: 700;
   color: var(--text);
 }
@@ -1694,7 +1700,7 @@ body {
   font-weight: 600;
   color: var(--muted);
 }
-/* Shrink the batter name on narrow cards so it doesn't crowd the badge/contact. */
+/* Shrink further on narrow cards so it doesn't crowd the badge/contact. */
 @container (max-width: 440px) {
   .faced-batter {
     font-size: 12px;

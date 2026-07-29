@@ -232,8 +232,67 @@ function InningBlock({
   );
 }
 
+/**
+ * Which way an arsenal metric has to move, for a given pitch type, to read as
+ * an improvement on the pitcher's own season norm:
+ *
+ * - `up` / `down` — a rise / a drop is the better outcome.
+ * - `more` — bigger either way. Horizontal break's sign is only arm side vs
+ *   glove side (and flips with handedness), so what matters is how much the
+ *   pitch moved, not which way the number went.
+ * - `none` — the change isn't a quality signal, so it stays uncolored.
+ */
+type BetterWay = 'up' | 'down' | 'more' | 'none';
+
+interface PitchDirections {
+  velo: BetterWay;
+  spin: BetterWay;
+  ivb: BetterWay;
+  hb: BetterWay;
+}
+
+/**
+ * Per pitch type, because "better" isn't the same for all of them: a four-seamer
+ * wants to ride (more iVB), while a changeup, splitter or curveball wants to
+ * drop (less). Sliders and sweepers live near zero iVB by design, so a wobble
+ * there says nothing. Offspeed velo is judged against the fastball it's paired
+ * with — which isn't in view on this row — so it stays neutral rather than
+ * calling a faster changeup an improvement. Same for changeup/splitter spin,
+ * where low spin is what kills lift and produces the drop.
+ */
+const NEUTRAL: PitchDirections = { velo: 'up', spin: 'none', ivb: 'none', hb: 'more' };
+const RIDING: PitchDirections = { velo: 'up', spin: 'up', ivb: 'up', hb: 'more' };
+const BREAKING: PitchDirections = { velo: 'up', spin: 'up', ivb: 'down', hb: 'more' };
+const OFFSPEED: PitchDirections = { velo: 'none', spin: 'down', ivb: 'down', hb: 'more' };
+const GYRO: PitchDirections = { velo: 'up', spin: 'up', ivb: 'none', hb: 'more' };
+
+const PITCH_DIRECTIONS: Record<string, PitchDirections> = {
+  '4-Seam Fastball': RIDING,
+  Cutter: GYRO,
+  Slider: GYRO,
+  Sweeper: GYRO,
+  // Sinker spin is about axis more than rate, so only its drop and run are read.
+  Sinker: { velo: 'up', spin: 'none', ivb: 'down', hb: 'more' },
+  Slurve: BREAKING,
+  Curveball: BREAKING,
+  'Knuckle Curve': BREAKING,
+  'Slow Curve': { ...BREAKING, velo: 'none' },
+  Screwball: { ...BREAKING, velo: 'none' },
+  Changeup: OFFSPEED,
+  Splitter: OFFSPEED,
+  Forkball: OFFSPEED,
+  // Nothing about a knuckleball or an eephus is better for being more of it.
+  Knuckleball: { velo: 'none', spin: 'down', ivb: 'none', hb: 'none' },
+  Eephus: { velo: 'none', spin: 'none', ivb: 'none', hb: 'none' },
+};
+
+function pitchDirections(pitchType: string): PitchDirections {
+  return PITCH_DIRECTIONS[pitchType] ?? NEUTRAL;
+}
+
 /** One arsenal metric (velo / spin / break): the game value with a small ▲▼
- * delta vs the pitcher's own season average (league avg in the hover title). */
+ * delta vs the pitcher's own season average (league avg in the hover title).
+ * Green/red says whether the change is an improvement *for this pitch type*. */
 function ArsenalMetric({
   label,
   value,
@@ -241,6 +300,7 @@ function ArsenalMetric({
   season,
   league,
   digits,
+  better,
 }: {
   label: string;
   value: number | null;
@@ -248,12 +308,25 @@ function ArsenalMetric({
   season: number | null;
   league: number | null;
   digits: number;
+  better: BetterWay;
 }) {
-  const d = deltaVs(value, season);
+  // For `more`, compare how far the pitch broke rather than the signed number,
+  // so a lefty's -14" vs a -12" norm reads as more break, not less.
+  const magnitude = better === 'more' && value !== null && season !== null;
+  const d = magnitude
+    ? deltaVs(Math.abs(value as number), Math.abs(season as number))
+    : deltaVs(value, season);
   const arrow = d?.dir === 'up' ? '▲' : d?.dir === 'down' ? '▼' : null;
+  const tone =
+    !d || d.dir === 'flat' || better === 'none'
+      ? 'flat'
+      : (d.dir === 'down') === (better === 'down')
+        ? 'good'
+        : 'bad';
   const title = [
     season !== null ? `season ${fmt(season, digits)}${unit}` : null,
     league !== null ? `league ${fmt(league, digits)}${unit}` : null,
+    magnitude ? 'compared by amount of break, not side' : null,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -265,11 +338,11 @@ function ArsenalMetric({
         {unit && <span className="ars-unit">{unit}</span>}
       </span>
       {d && arrow ? (
-        <span className={`ars-delta dir-${d.dir}`}>
+        <span className={`ars-delta tone-${tone}`}>
           {arrow} {fmt(Math.abs(d.diff), digits)}
         </span>
       ) : (
-        <span className="ars-delta dir-flat">·</span>
+        <span className="ars-delta tone-flat">·</span>
       )}
     </div>
   );
@@ -312,6 +385,7 @@ function ArsenalRow({ m }: { m: PitchMix }) {
   const { abbr, color } = pitchStyle(m.pitchType);
   const share = Math.round(m.share * 100);
   const balls = m.count - m.strikes;
+  const better = pitchDirections(m.pitchType);
   return (
     <div className="ars-row" style={{ borderLeftColor: color }}>
       <div className="ars-head">
@@ -333,14 +407,14 @@ function ArsenalRow({ m }: { m: PitchMix }) {
         />
       </div>
       <div className="ars-metrics">
-        <ArsenalMetric label="Velo" value={m.avgVelo} unit=" mph" season={m.seasonVelo} league={m.leagueVelo} digits={1} />
-        <ArsenalMetric label="Spin" value={m.avgSpin} unit="" season={m.seasonSpin} league={m.leagueSpin} digits={0} />
-        <ArsenalMetric label="iVB" value={m.vBreak} unit='"' season={m.seasonVBreak} league={m.leagueVBreak} digits={1} />
-        <ArsenalMetric label="HB" value={m.hBreak} unit='"' season={m.seasonHBreak} league={m.leagueHBreak} digits={1} />
+        <ArsenalMetric label="Velo" value={m.avgVelo} unit=" mph" season={m.seasonVelo} league={m.leagueVelo} digits={1} better={better.velo} />
+        <ArsenalMetric label="Spin" value={m.avgSpin} unit="" season={m.seasonSpin} league={m.leagueSpin} digits={0} better={better.spin} />
+        <ArsenalMetric label="iVB" value={m.vBreak} unit='"' season={m.seasonVBreak} league={m.leagueVBreak} digits={1} better={better.ivb} />
+        <ArsenalMetric label="HB" value={m.hBreak} unit='"' season={m.seasonHBreak} league={m.leagueHBreak} digits={1} better={better.hb} />
         <div className="ars-metric ars-metric-whiff">
           <span className="ars-mlabel">Whiff</span>
           <span className="ars-mval">{pct(m.whiffRate)}</span>
-          <span className="ars-delta dir-flat" aria-hidden="true">
+          <span className="ars-delta tone-flat" aria-hidden="true">
             {' '}
           </span>
         </div>
