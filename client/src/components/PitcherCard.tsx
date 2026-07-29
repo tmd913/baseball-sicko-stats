@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import type {
   FacedBatter,
   PitcherGame,
@@ -300,29 +300,62 @@ function ArsenalRow({ m }: { m: PitchMix }) {
   );
 }
 
-/** The collapsible Savant-style arsenal table (one row per pitch type). */
-function ArsenalSection({ pitchMix }: { pitchMix: PitchMix[] }) {
+/**
+ * One collapsible section of a pitcher card — Line, Innings, Arsenal. The bar
+ * reuses the batter card's game bar (`.game-sub-bar`) so the two cards' toggles
+ * share one format: label on the left, a summary that stands in for the body
+ * while it's closed, caret on the right. Expanding scrolls it to the top, like
+ * every other collapsible in the app.
+ */
+function CardSection({
+  title,
+  sub,
+  children,
+}: {
+  title: string;
+  sub?: ReactNode;
+  children: ReactNode;
+}) {
   const [open, setOpen] = useState(true);
   const secRef = useScrollIntoViewOnExpand<HTMLDivElement>(open);
-  if (pitchMix.length === 0) return null;
   return (
-    <div ref={secRef} className={`arsenal${open ? '' : ' collapsed'}`}>
+    <div ref={secRef} className={`card-section${open ? '' : ' collapsed'}`}>
       <button
         type="button"
-        className="arsenal-caption"
+        className="game-sub-bar section-bar"
         aria-expanded={open}
+        title={open ? `Collapse ${title.toLowerCase()}` : `Expand ${title.toLowerCase()}`}
         onClick={() => setOpen((v) => !v)}
       >
-        <span className="arsenal-caption-title">Arsenal</span>
-        <span className="arsenal-caption-sub">
-          game avg · <span className="am-arrow">▲▼</span> vs season
-        </span>
-        <span className="arsenal-caret" aria-hidden="true">
+        <span className="section-title">{title}</span>
+        {sub && <span className="section-sub">{sub}</span>}
+        <span className="section-caret" aria-hidden="true">
           ▾
         </span>
       </button>
-      {open && pitchMix.map((m) => <ArsenalRow key={m.pitchType} m={m} />)}
+      {open && children}
     </div>
+  );
+}
+
+/** The Savant-style arsenal table (one row per pitch type). */
+function ArsenalSection({ pitchMix }: { pitchMix: PitchMix[] }) {
+  if (pitchMix.length === 0) return null;
+  return (
+    <CardSection
+      title="Arsenal"
+      sub={
+        <>
+          game avg · <span className="am-arrow">▲▼</span> vs season
+        </>
+      }
+    >
+      <div className="arsenal">
+        {pitchMix.map((m) => (
+          <ArsenalRow key={m.pitchType} m={m} />
+        ))}
+      </div>
+    </CardSection>
   );
 }
 
@@ -355,48 +388,48 @@ function GameLine({ pg }: { pg: PitcherGame }) {
   const L = pg.line;
   const color = decisionColor(pg.decision);
   const strike = pg.strikePct === null ? 0 : Math.round(pg.strikePct * 100);
+  // The bar's summary is "game totals", not the line itself — the card header
+  // (or, on a multi-game card, the game bar) already carries it right above.
   return (
-    <div className="pline">
-      <div className="pline-caption">
-        <span className="pline-caption-title">Line</span>
-        <span className="pline-caption-sub">game totals</span>
-      </div>
-      <div className="ars-row" style={{ borderLeftColor: color }}>
-        <div className="ars-head">
-          <span className="ars-dot" style={{ background: color }} />
-          {pg.decision && <span className={`ars-abbr dec-${pg.decision}`}>{pg.decision}</span>}
-          <span className="ars-name pline-ip">{formatIp(L.outs)} IP</span>
-          <span className="ars-count">{L.pitchesThrown} P</span>
-          {/* Strike rate fills the arsenal's usage bar. Neutral accent, not the
-              decision color — a strike rate isn't good or bad by itself. */}
-          <span className="ars-usage" title={`${strike}% of pitches for strikes`}>
-            <span className="ars-mlabel">Strike</span>
-            <span className="ars-bar">
-              <span
-                className="ars-bar-fill"
-                style={{ width: `${strike}%`, background: 'var(--accent)' }}
-              />
+    <CardSection title="Line" sub="game totals">
+      <div className="pline">
+        <div className="ars-row" style={{ borderLeftColor: color }}>
+          <div className="ars-head">
+            <span className="ars-dot" style={{ background: color }} />
+            {pg.decision && <span className={`ars-abbr dec-${pg.decision}`}>{pg.decision}</span>}
+            <span className="ars-name pline-ip">{formatIp(L.outs)} IP</span>
+            <span className="ars-count">{L.pitchesThrown} P</span>
+            {/* Strike rate fills the arsenal's usage bar. Neutral accent, not the
+                decision color — a strike rate isn't good or bad by itself. */}
+            <span className="ars-usage" title={`${strike}% of pitches for strikes`}>
+              <span className="ars-mlabel">Strike</span>
+              <span className="ars-bar">
+                <span
+                  className="ars-bar-fill"
+                  style={{ width: `${strike}%`, background: 'var(--accent)' }}
+                />
+              </span>
+              <span className="ars-share">{pct(pg.strikePct)}</span>
             </span>
-            <span className="ars-share">{pct(pg.strikePct)}</span>
-          </span>
-        </div>
-        <div className="ars-metrics">
-          <LineStat label="H" value={String(L.hits)} />
-          <LineStat label="R" value={String(L.runs)} />
-          <LineStat label="ER" value={String(L.earnedRuns)} />
-          <LineStat label="BB" value={String(L.walks)} />
-          <LineStat label="K" value={String(L.strikeouts)} />
-          <LineStat label="HR" value={String(L.hr)} />
-        </div>
-        <div className="ars-results">
-          <span className="ars-rtag">Game</span>
-          <ResultStat label="ERA" value={eraOf(L)} />
-          <ResultStat label="WHIP" value={whipOf(L)} />
-          <ResultStat label="Whiff" value={pct(pg.whiffRate)} />
-          <ResultStat label="CSW" value={pct(pg.cswRate)} />
+          </div>
+          <div className="ars-metrics">
+            <LineStat label="H" value={String(L.hits)} />
+            <LineStat label="R" value={String(L.runs)} />
+            <LineStat label="ER" value={String(L.earnedRuns)} />
+            <LineStat label="BB" value={String(L.walks)} />
+            <LineStat label="K" value={String(L.strikeouts)} />
+            <LineStat label="HR" value={String(L.hr)} />
+          </div>
+          <div className="ars-results">
+            <span className="ars-rtag">Game</span>
+            <ResultStat label="ERA" value={eraOf(L)} />
+            <ResultStat label="WHIP" value={whipOf(L)} />
+            <ResultStat label="Whiff" value={pct(pg.whiffRate)} />
+            <ResultStat label="CSW" value={pct(pg.cswRate)} />
+          </div>
         </div>
       </div>
-    </div>
+    </CardSection>
   );
 }
 
@@ -458,11 +491,20 @@ function PitcherGameBlock({
           <GameLine pg={pg} />
 
           {/* Batters faced — grouped by inning, each result expandable to its pitches */}
-          <div className="innings-list">
-            {groupByInning(faced).map((group) => (
-              <InningBlock key={`${group.inning}-${group.half}`} group={group} gamePk={game.gamePk} />
-            ))}
-          </div>
+          <CardSection
+            title="Innings"
+            sub={`${faced.length} batter${faced.length === 1 ? '' : 's'} faced`}
+          >
+            <div className="innings-list">
+              {groupByInning(faced).map((group) => (
+                <InningBlock
+                  key={`${group.inning}-${group.half}`}
+                  group={group}
+                  gamePk={game.gamePk}
+                />
+              ))}
+            </div>
+          </CardSection>
 
           {/* Arsenal: velo/spin/break per pitch type, vs season & league */}
           <ArsenalSection pitchMix={pg.pitchMix} />

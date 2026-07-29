@@ -1301,62 +1301,51 @@ body {
   display: flex;
   flex-direction: column;
   gap: 7px;
-  scroll-margin-top: var(--scroll-offset);
 }
-/* Section caption inside a pitcher card — "Line", "Arsenal". The arsenal's is
-   also its collapse toggle, so it's a button; the line's is a static label. */
-.arsenal-caption,
-.pline-caption {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  width: 100%;
-  font-size: 11px;
-  font-weight: 700;
+/* A pitcher card's collapsible sections — Line / Innings / Arsenal. The bar
+   itself is the batter card's .game-sub-bar, so both cards' expandables share
+   one format; these rules only adapt it to a <button> and style its contents. */
+.section-bar {
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+.section-title {
+  font-size: 12px;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   color: var(--muted);
 }
-.arsenal-caption {
-  padding: 0;
-  border: none;
-  background: none;
-  cursor: pointer;
-}
-.arsenal-caption:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-  border-radius: 4px;
-}
-.arsenal-caption-sub,
-.pline-caption-sub {
-  font-size: 10px;
+/* Stands in for the section's body while it's closed. */
+.section-sub {
+  min-width: 0;
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.03em;
-  text-transform: none;
   color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.arsenal-caption .am-arrow {
-  color: var(--faint);
+.section-sub .am-arrow {
   font-size: 9px;
 }
-.arsenal-caret {
+.section-caret {
   margin-left: auto;
-  align-self: center;
   font-size: 11px;
   color: var(--muted);
   transition: transform 0.15s ease;
 }
-.arsenal.collapsed .arsenal-caret {
+.card-section {
+  /* Expanding a section scrolls it to the top — clear the sticky nav strip. */
+  scroll-margin-top: var(--scroll-offset);
+}
+.card-section.collapsed .section-caret {
   transform: rotate(-90deg);
 }
 /* Game line — the outing's totals, built from the arsenal row's parts so the
-   two sections read as one table (caption, color-keyed row, dashed rate strip). */
-.pline {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-}
+   two sections read as one table (color-keyed row + dashed rate strip). */
 /* Innings pitched sits in the arsenal's name slot but reads as the row's
    headline, so it takes the abbr's weight instead of the name's muted tone. */
 .pline-ip {
