@@ -23,6 +23,10 @@
   --called: #a78bfa;
   --ball: #475569;
 
+  /* Breathing room left above anything scrolled to the top of the viewport
+     (player cards, at-bats, the feed's rows) — read via scroll-margin-top. */
+  --scroll-offset: 12px;
+
   --radius: 14px;
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
   font-synthesis: none;
@@ -413,8 +417,7 @@ body {
   margin: 6px 0 0;
   padding: 6px;
   position: absolute;
-  /* Above the sticky player-nav (z-index 20, which on phones is a top toolbar
-     that would otherwise cover this dropdown) and the date popover (30). */
+  /* Above the date popover (z-index 30) and everything else in the page flow. */
   z-index: 40;
   width: 100%;
   background: var(--panel-2);
@@ -570,7 +573,7 @@ body {
   transition: opacity 0.15s ease;
 }
 
-/* ---- Content layout (top strip + list) ---- */
+/* ---- Content layout (the player list / edit screen) ---- */
 .content-layout {
   position: relative;
   display: flex;
@@ -578,157 +581,99 @@ body {
   align-items: stretch;
   gap: 14px;
 }
-/* Zero-height marker at the strip's flow origin. An IntersectionObserver watches
-   it (not the sticky strip, whose own rect.top is pinned once stuck) to toggle
-   the collapsed state exactly when the strip reaches the top of the viewport. */
-.nav-sentinel {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 1px;
-  height: 1px;
-  pointer-events: none;
-  visibility: hidden;
-}
 
-/* The player nav is a horizontal strip pinned to the top of the page at every
-   width. As a full-bleed opaque toolbar (page-coloured, edge-to-edge) it hides
-   the cards that scroll behind the inset pill once it sticks. */
-.player-nav {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  margin: 0 -22px;
-  padding: 12px 22px;
+/* ---- Edit screen: drag-to-reorder the watchlist ---- */
+.order-editor {
+  max-width: 620px;
+  width: 100%;
+  margin: 0 auto;
 }
-/* Once stuck to the top, the strip must be opaque so player cards scrolling
-   underneath don't show through the gaps around the avatars. Full-bleed (the
-   negative margin) so it covers edge to edge, with a soft shadow to separate. */
-.player-nav.is-stuck {
-  background: var(--bg);
-  box-shadow: 0 6px 16px -8px rgba(0, 0, 0, 0.6);
-}
-/* Edit toggle at the end of the player list. On the wide text rail it's a text
-   pill ("Edit"/"Done") at the bottom; the narrow avatar rail and phone strip
-   swap it for an icon (see the media queries, which hide the text and round it). */
-.player-nav-edit-inline {
-  flex: 0 0 auto;
-  align-self: center;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: 1px solid var(--border);
+.order-hint {
+  margin: 0 0 10px;
   color: var(--muted);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  padding: 4px 16px;
-  border-radius: 999px;
-  cursor: pointer;
+  font-size: 13px;
 }
-.player-nav-edit-inline:hover {
-  color: var(--text);
-  border-color: var(--accent);
+.order-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
-.player-nav.editing .player-nav-edit-inline {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--bg);
-}
-/* Icon is hidden on the wide text rail; shown when the rail collapses. */
-.player-nav-edit-icon {
-  display: none;
-}
-/* Edit mode: draggable rows with a grip and a delete button. touch-action: none
-   lets a touch drag reorder instead of scrolling the strip. */
-.player-nav-link.editing {
-  position: relative;
+/* One draggable player row: order number, headshot, name, grip. touch-action:
+   none so a touch drag reorders instead of scrolling the page (the editor
+   scrolls the page itself when a drag nears the top/bottom edge). */
+.order-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
   cursor: grab;
   user-select: none;
   touch-action: none;
 }
-.player-nav-link.editing:active {
+.order-row:active {
   cursor: grabbing;
 }
-/* The dragged item fades and ignores pointer hit-testing, so elementFromPoint
-   resolves to the item underneath the pointer (the drop target). */
-.player-nav-link.dragging {
-  opacity: 0.4;
+/* The dragged row is dimmed and ignores pointer hit-testing, so elementFromPoint
+   resolves to the row underneath the pointer (the drop target). */
+.order-row.dragging {
+  opacity: 0.5;
   pointer-events: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
 }
-.player-nav-grip {
+.order-num {
   flex: none;
-  color: var(--faint);
-  font-size: 14px;
-  line-height: 1;
-}
-.player-nav-delete {
-  flex: none;
-  margin-left: auto;
-  display: grid;
-  place-items: center;
   width: 22px;
-  height: 22px;
-  border-radius: 6px;
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  color: var(--muted);
-  font-size: 11px;
-  cursor: pointer;
+  color: var(--faint);
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
 }
-.player-nav-delete:hover {
-  color: var(--strikeout);
-  border-color: var(--strikeout);
-}
-/* The visible pill: a horizontal, side-scrolling row of player items inset
-   inside the toolbar's padding. */
-.player-nav nav {
-  display: flex;
-  flex-direction: row;
-  gap: 6px;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  background: var(--panel);
-  border-radius: var(--radius);
-  padding: 8px;
-}
-.player-nav-link {
-  flex: 0 0 auto;
+.order-photo {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  border-radius: 8px;
-  color: var(--text);
-  text-decoration: none;
-  font-size: 14px;
-  line-height: 1.3;
-  /* padding eases so items shrink smoothly as the strip collapses on scroll. */
-  transition: background 0.12s ease, padding 0.2s ease;
-}
-/* Name over game line; capped so one long row can't dominate the strip. The
-   body fades out as the strip collapses (its display flips to none only once the
-   fade finishes — see the is-stuck rule — so the item's gap collapses cleanly). */
-.player-nav-body {
-  min-width: 0;
-  max-width: 150px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  opacity: 1;
-  transition: opacity 0.16s ease;
-}
-/* Wraps the headshot so the lineup-spot badge can pin to its top-right corner. */
-.player-nav-avatar {
-  position: relative;
+  justify-content: center;
   flex: none;
-  display: inline-flex;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: top center;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
 }
+.order-photo-empty {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.order-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 600;
+}
+.order-grip {
+  flex: none;
+  color: var(--faint);
+  font-size: 16px;
+  line-height: 1;
+}
+
 /* Lineup-position pip: batting-order number (green) or a red "!" when the
    player is out of the lineup. A fixed square → an identical circle for any
    single digit or the "!" (batting spots are always 1–9, so it never grows).
-   Shared by the nav avatar and the card headshot so the two read identically;
+   Shared by the card headshot and the summary table so the two read identically;
    each caller adds its own position and size below. Its own tone classes
    (spot-in/out) — NOT the .lineup-tag-* the card's text pill uses, whose later
    border-color rules would otherwise override this border and make the two
@@ -754,14 +699,9 @@ body {
   color: #fff;
   background: var(--strikeout);
 }
-/* On the nav avatar's corner. */
-.player-nav-spot {
-  position: absolute;
-  top: -4px;
-  right: -4px;
-  width: 17px;
-  height: 17px;
-  font-size: 10px;
+.lineup-spot.spot-postponed {
+  color: var(--bg);
+  background: var(--hr);
 }
 /* On the card headshot's corner — larger photo, so a larger pip. Pushed out
    toward the corner so it clears the player's face rather than sitting on it. */
@@ -773,208 +713,6 @@ body {
   height: 22px;
   font-size: 13px;
 }
-/* The headshot leads every item; it's all that remains once the strip collapses. */
-.player-nav-photo {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  object-fit: cover;
-  object-position: top center;
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  /* Eases between the expanded (40px) and collapsed (34px) avatar. */
-  transition: width 0.2s ease, height 0.2s ease;
-}
-.player-nav-photo-empty {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--muted);
-}
-/* Expanded strip: taller, roomier items (a larger headshot alongside the two
-   text lines). The collapsed (`is-stuck`) strip keeps the compact 34px avatar. */
-.player-nav:not(.is-stuck) .player-nav-link {
-  padding: 8px 10px;
-}
-.player-nav:not(.is-stuck) .player-nav-photo {
-  width: 40px;
-  height: 40px;
-}
-.player-nav-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-/* Live-role ring on the always-visible avatar (complements the name colour). */
-.player-nav-link.role-at-bat .player-nav-photo {
-  border-color: var(--strikeout);
-  box-shadow: 0 0 0 1px var(--strikeout);
-}
-.player-nav-link.role-on-deck .player-nav-photo {
-  border-color: var(--hr);
-  box-shadow: 0 0 0 1px var(--hr);
-}
-.player-nav-link.role-on-base .player-nav-photo {
-  border-color: #c084fc;
-  box-shadow: 0 0 0 1px #c084fc;
-}
-/* Stuck (scrolled) strip: collapse each item down to just its avatar. The body
-   fades first, then display flips to none (allow-discrete) so it leaves layout —
-   collapsing the item's flex gap — only after the fade, not instantly. Browsers
-   without allow-discrete just drop it immediately, as before. */
-.player-nav.is-stuck .player-nav-body {
-  display: none;
-  opacity: 0;
-  /* Text fades over 0.16s; the display flip waits the full 0.2s so the body
-     leaves layout in step with the padding/avatar ease — one settle, not two. */
-  transition: opacity 0.16s ease, display 0.2s allow-discrete;
-}
-/* Honor a reduced-motion preference: snap between the two strip states. */
-@media (prefers-reduced-motion: reduce) {
-  .player-nav-link,
-  .player-nav-photo,
-  .player-nav-body,
-  .player-nav.is-stuck .player-nav-body {
-    transition: none;
-  }
-}
-.player-nav.is-stuck .player-nav-link {
-  padding: 3px;
-}
-/* Collapsed strip in edit mode: no room for the inline grip; delete rides the
-   avatar's corner instead. */
-.player-nav.is-stuck .player-nav-grip {
-  display: none;
-}
-.player-nav.is-stuck .player-nav-link.editing .player-nav-delete {
-  position: absolute;
-  top: -2px;
-  right: -2px;
-  margin: 0;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--strikeout);
-  border-color: var(--strikeout);
-  color: var(--bg);
-}
-/* Phones: the strip layout is already the base (avatars only). */
-@media (max-width: 640px) {
-  /* Show the strip as avatars only at every scroll position — the same compact
-     treatment as the stuck (collapsed) strip, applied unconditionally so the
-     names/scores never crowd the narrow toolbar. */
-  .player-nav .player-nav-body {
-    display: none;
-  }
-  .player-nav:not(.is-stuck) .player-nav-link {
-    padding: 3px;
-  }
-  .player-nav:not(.is-stuck) .player-nav-photo {
-    width: 34px;
-    height: 34px;
-  }
-  .player-nav .player-nav-grip {
-    display: none;
-  }
-  .player-nav-link.editing .player-nav-delete {
-    position: absolute;
-    top: -2px;
-    right: -2px;
-    margin: 0;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: var(--strikeout);
-    border-color: var(--strikeout);
-    color: var(--bg);
-  }
-}
-.player-nav-link:hover {
-  background: var(--panel-2);
-}
-/* Second line under a nav name: start time / score+inning / final, with a
-   runners-on-base diamond for live games. */
-.nav-game {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: var(--muted);
-}
-.nav-game.live {
-  color: var(--hit);
-  /* Stack the score over the inning + runners/outs rather than running them
-     across one line. */
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1px;
-}
-.nav-game.scheduled {
-  color: var(--accent);
-}
-/* One stacked row of the live status (the score line, then the inning line). */
-.nav-game-line {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  min-width: 0;
-  max-width: 100%;
-}
-/* The inning + runners/outs sit a touch quieter beneath the score. */
-.nav-game-sub {
-  opacity: 0.85;
-}
-.nav-game-text {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.nav-game .base-diamond {
-  flex: none;
-  width: 12px;
-  height: 14px;
-}
-.nav-game .base-diamond .base,
-.nav-game .base-diamond .out {
-  stroke: currentColor;
-  opacity: 0.85;
-}
-.nav-game .base-diamond .base.on,
-.nav-game .base-diamond .out.on {
-  fill: currentColor;
-  stroke: currentColor;
-  opacity: 1;
-}
-.player-nav-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Live-situation highlight on the nav name — at bat (red), on deck (yellow), on
-   base (purple). The role also rings the avatar; the spelled-out tag lives on
-   the player card, not the nav. */
-.player-nav-link.role-at-bat .player-nav-name {
-  color: var(--strikeout);
-  font-weight: 700;
-}
-.player-nav-link.role-on-deck .player-nav-name {
-  color: var(--hr);
-  font-weight: 700;
-}
-.player-nav-link.role-on-base .player-nav-name {
-  color: #c084fc;
-  font-weight: 700;
-}
 
 /* ---- Player list ---- */
 .player-list {
@@ -983,30 +721,15 @@ body {
   display: flex;
   flex-direction: column;
   gap: 18px;
-  /* Exclude the cards from scroll-anchor selection. Otherwise, when the sticky
-     nav strip collapses/expands and its height changes, the browser nudges the
-     scroll position to keep a card stationary — which moves the nav back across
-     its stick threshold and makes it oscillate while scrolling slowly. */
-  overflow-anchor: none;
 }
 .player-card {
-  /* Clear the sticky nav strip when a nav link scrolls this card to the top.
-     --nav-offset is published from the collapsed strip's measured height (App.tsx);
-     the fallback covers the first scroll before it's set. */
-  scroll-margin-top: var(--nav-offset, 92px);
+  /* Breathing room above a card scrolled to the top of the viewport. */
+  scroll-margin-top: var(--scroll-offset);
   background: linear-gradient(180deg, var(--panel), var(--bg-2));
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 18px 20px 20px;
   container-type: inline-size;
-}
-/* Phones can start with a taller strip before the measured offset lands, so use
-   a larger pre-measurement fallback. Once --nav-offset is set it wins at every
-   width. Must sit after the base rule — equal specificity, source order decides. */
-@media (max-width: 640px) {
-  .player-card {
-    scroll-margin-top: var(--nav-offset, 104px);
-  }
 }
 
 /* Collapsed cards show only the header, whose own padding provides the bottom
@@ -1282,6 +1005,10 @@ body {
 .game-status.final {
   color: var(--faint);
 }
+.game-status.postponed {
+  color: var(--hr);
+  border-color: rgba(251, 191, 36, 0.4);
+}
 .game-prob-pitcher {
   font-size: 12px;
   font-weight: 600;
@@ -1469,7 +1196,7 @@ body {
 .game-block {
   margin-top: 14px;
   /* When expanding a game scrolls it to the top, clear the sticky nav strip. */
-  scroll-margin-top: var(--nav-offset, 92px);
+  scroll-margin-top: var(--scroll-offset);
 }
 /* The multi-game bar mirrors the card's own header (player-head): an identity
    block (matchup + date) on the left, a summary (line + game badge) on the
@@ -1952,7 +1679,7 @@ body {
   container-type: inline-size;
   /* When expanding scrolls this at-bat to the top, clear the sticky nav strip
      (same measured offset the player cards use). */
-  scroll-margin-top: var(--nav-offset, 92px);
+  scroll-margin-top: var(--scroll-offset);
 }
 .pa-card.kind-hr,
 .faced-row.kind-hr,
@@ -2162,7 +1889,7 @@ body {
   margin-top: 10px;
   /* When the clip scrolls to the top on play, clear the sticky nav strip (same
      measured offset the cards and at-bats use). */
-  scroll-margin-top: var(--nav-offset, 92px);
+  scroll-margin-top: var(--scroll-offset);
 }
 .pa-video-bar {
   display: flex;
@@ -3058,7 +2785,8 @@ body {
   }
 }
 
-/* ---- View bar: Players/Feed tabs on the left, the sim toggle on the right ---- */
+/* ---- View bar: Summary/Players/Feed tabs on the left, the player search (and
+   its Edit toggle) on the right ---- */
 .view-bar {
   display: flex;
   align-items: center;
@@ -3066,6 +2794,45 @@ body {
   gap: 10px 12px;
   flex-wrap: wrap;
   margin-bottom: 14px;
+}
+/* Search box + the Edit (reorder) button, side by side. Takes the .adder's old
+   flex sizing so the pair grows into the free space and wraps to its own line
+   when the tabs and it can't share a row. */
+.players-bar {
+  flex: 1;
+  min-width: 280px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.players-bar .adder {
+  min-width: 0;
+}
+.edit-order-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.edit-order-btn:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.edit-order-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+}
+.edit-order-icon {
+  display: inline-flex;
 }
 
 /* ---- Summary view: a full-page, scroll-locked stat table ---- */
@@ -3098,6 +2865,16 @@ body {
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--bg);
+}
+/* Both tables share one width: the column is sized to the widest table's
+   content (and never narrower than the viewport), and each table stretches to
+   fill it. Without this the batter table — fewer columns than the pitcher one —
+   would only span the visible width and end mid-scroll. */
+.summary-tables {
+  width: max-content;
+  min-width: 100%;
+  display: flex;
+  flex-direction: column;
 }
 .summary-table {
   border-collapse: separate;
@@ -3337,6 +3114,10 @@ body {
 .sum-opp-live .sum-opp-detail {
   color: var(--hit);
 }
+/* A postponed game reads as an amber caution rather than an ordinary matchup. */
+.sum-opp-postponed .sum-opp-detail {
+  color: var(--hr);
+}
 .sum-opp-empty {
   color: var(--muted);
 }
@@ -3420,11 +3201,6 @@ body {
   display: flex;
   flex-direction: column;
   gap: 26px;
-  /* The feed has no sticky nav strip, so when expanding an at-bat / upcoming row
-     (or playing a clip) scrolls it to the top, its scroll-margin-top only needs
-     a little breathing room — not the nav-clearing offset the player view uses.
-     Scoped here so every descendant that reads var(--nav-offset) picks it up. */
-  --nav-offset: 16px;
 }
 .feed-section {
   display: flex;
@@ -3516,7 +3292,7 @@ body {
   gap: 10px;
   /* When expanding scrolls this row to the top, clear the sticky nav strip
      (same measured offset the player and at-bat cards use). */
-  scroll-margin-top: var(--nav-offset, 92px);
+  scroll-margin-top: var(--scroll-offset);
 }
 .upcoming-head {
   display: flex;
@@ -3588,7 +3364,7 @@ body {
   gap: 8px;
   /* Expanding an at-bat scrolls this whole item (player header + card) to the
      top, so it — not the inner card — carries the top offset. */
-  scroll-margin-top: var(--nav-offset, 92px);
+  scroll-margin-top: var(--scroll-offset);
 }
 .feed-item-head {
   display: flex;

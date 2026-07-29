@@ -41,7 +41,9 @@ export function StatPill({ label, value }: { label: string; value: string }) {
 export function GameStatusBadge({ game, withMatchup }: { game: PlayerGame; withMatchup?: boolean }) {
   const { kind, score, detail } = gameStatusView(game);
   const matchup =
-    withMatchup && kind === 'scheduled' ? `${game.isHome ? 'vs' : '@'} ${game.opponent}` : null;
+    withMatchup && (kind === 'scheduled' || kind === 'postponed')
+      ? `${game.isHome ? 'vs' : '@'} ${game.opponent}`
+      : null;
   return (
     <span className={`game-status ${kind}`}>
       {score && <span className="game-score">{score}</span>}
@@ -141,13 +143,9 @@ function GameBlock({
   spansMultipleDays: boolean;
   singleDay: boolean;
 }) {
-  // While a game is live, show the most recent plate appearance first so the
-  // latest at-bat is at the top; once it's final, read top-to-bottom in the
-  // order they happened.
-  const live = game.status.state === 'live';
-  const pas = [...game.plateAppearances].sort((a, b) =>
-    live ? b.atBatNumber - a.atBatNumber : a.atBatNumber - b.atBatNumber,
-  );
+  // Always read top-to-bottom in the order the plate appearances happened,
+  // whether the game is live or final.
+  const pas = [...game.plateAppearances].sort((a, b) => a.atBatNumber - b.atBatNumber);
   const hasPas = pas.length > 0;
   // Multiple games (showMatchup) start collapsed; a lone game stays open.
   const [collapsed, setCollapsed] = useState(showMatchup);
@@ -317,7 +315,7 @@ function GameBlock({
  * click. Falls back to a blank circle when MLB has no image for the id.
  * stopPropagation keeps a click from also toggling the (collapsible) card header
  * it sits in. `corner` pins the lineup-spot pip (batting number, or a red "!"
- * when out of the lineup) to the top-right, matching the player-nav avatar.
+ * when out of the lineup) to the top-right, matching the summary table's headshot.
  */
 export function Headshot({
   id,
@@ -329,7 +327,7 @@ export function Headshot({
   id: number;
   name: string;
   onOpen: () => void;
-  corner?: { text: string; title: string; tone: 'in' | 'out' } | null;
+  corner?: { text: string; title: string; tone: 'in' | 'out' | 'postponed' } | null;
   role?: LiveRole | null;
 }) {
   const [failed, setFailed] = useState(false);
@@ -359,7 +357,7 @@ export function Headshot({
         <span
           className={`lineup-spot player-photo-spot spot-${corner.tone}`}
           title={corner.title}
-          aria-label={corner.tone === 'out' ? 'Not in lineup' : `Batting ${corner.text}`}
+          aria-label={corner.tone === 'in' ? `Batting ${corner.text}` : corner.title}
         >
           {corner.text}
         </span>
@@ -379,7 +377,7 @@ function RosterStatusTag({ status }: { status: RosterStatus | null }) {
   );
 }
 
-/** Live-game role tag — "At bat" / "On deck" / "On base" — matching the nav. */
+/** Live-game role tag — "At bat" / "On deck" / "On base". */
 export function LiveRoleTag({ role }: { role: LiveRole | null }) {
   if (!role) return null;
   return <span className={`live-role role-${role}`}>{liveRoleLabel(role)}</span>;
@@ -461,7 +459,7 @@ export function PlayerCard({
   const primary = games[0];
   const summary = lineSummary(combined);
   // Live at-bat/on-deck/on-base state (across the player's live games), shown as
-  // a ring on the headshot and a tag in the header, as in the nav.
+  // a ring on the headshot and a tag in the header.
   const role = liveRole(report);
   const spansMultipleDays = new Set(games.map((g) => g.date)).size > 1;
   // A player may be in view only for an upcoming/just-started game with no plate
@@ -479,7 +477,7 @@ export function PlayerCard({
 
   const head = (
     <>
-      {/* Lineup slot rides the headshot corner (as in the nav): batting number
+      {/* Lineup slot rides the headshot corner: batting number
           for a starter — kept even after they bat, to show where they hit — or
           a red "!" when out of the lineup before first pitch. Only for a lone
           game; a doubleheader's per-game bars carry their own lineup tags. */}

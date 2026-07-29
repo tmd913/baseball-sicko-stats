@@ -278,7 +278,7 @@ export function formatStartTime(iso: string | null): string | null {
 }
 
 export interface GameStatusView {
-  kind: 'scheduled' | 'live' | 'final';
+  kind: 'scheduled' | 'live' | 'final' | 'postponed';
   /** Away-first line score, e.g. "BOS 2–3 NYY" (null before a game starts). */
   score: string | null;
   /** Right-hand label: start time, current inning, or "Final". */
@@ -293,6 +293,11 @@ export function gameStatusView(game: PlayerGame): GameStatusView {
       ? `${game.awayTeam} ${s.awayScore}–${s.homeScore} ${game.homeTeam}`
       : null;
 
+  if (s.state === 'postponed') {
+    // A postponed game's start time is often bumped to the makeup date, so show
+    // the "Postponed" label rather than a misleading next-day time.
+    return { kind: 'postponed', score: null, detail: s.detailedState || 'Postponed' };
+  }
   if (s.state === 'scheduled') {
     const t = formatStartTime(s.startTime);
     return { kind: 'scheduled', score: null, detail: t ?? (s.detailedState || 'Scheduled') };
@@ -396,13 +401,17 @@ export function lineupBadge(
 }
 
 /**
- * Corner badge for the nav avatar: the batting-order number when the player is
- * in the lineup, an exclamation mark when a posted lineup left them out. Null
- * when the lineup hasn't posted (or a starter has no known spot) — nothing to show.
+ * Corner badge for a player headshot: the batting-order number when the player is
+ * in the lineup, an exclamation mark when a posted lineup left them out or the
+ * game was postponed. Null when the lineup hasn't posted (or a starter has no
+ * known spot) — nothing to show.
  */
 export function lineupCorner(
   game: PlayerGame,
-): { text: string; title: string; tone: 'in' | 'out' } | null {
+): { text: string; title: string; tone: 'in' | 'out' | 'postponed' } | null {
+  if (game.status.state === 'postponed') {
+    return { text: '!', title: 'Postponed', tone: 'postponed' };
+  }
   if (game.lineupStatus === 'bench') {
     return { text: '!', title: 'Not in lineup', tone: 'out' };
   }
@@ -438,7 +447,7 @@ export function hasDoubleheader(games: PlayerGame[]): boolean {
   return [...byDate.values()].some((n) => n >= 2);
 }
 
-/** A watched player's current live role, for highlighting them in the nav. */
+/** A watched player's current live role, for highlighting them in the UI. */
 export type LiveRole = 'at-bat' | 'on-deck' | 'on-base' | 'pitching';
 
 /**

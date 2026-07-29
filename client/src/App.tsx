@@ -1,133 +1,18 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api';
-import type { PlayerGame, PlayerReport, SeasonPlayer, WatchPlayer } from './types';
+import type { PlayerReport, SeasonPlayer, WatchPlayer } from './types';
 import { PlayerAdder } from './components/PlayerAdder';
+import { PlayerOrderEditor } from './components/PlayerOrderEditor';
 import { PlayerCard } from './components/PlayerCard';
 import { PitcherCard } from './components/PitcherCard';
 import { LiveFeed } from './components/LiveFeed';
 import { SummaryTable } from './components/SummaryTable';
 import { simulateLiveDay } from './simulate';
 import { PlayerDetails } from './components/PlayerDetails';
-import { BaseDiamond } from './components/BaseDiamond';
 import { DateRangePicker } from './components/DateRangePicker';
-import {
-  absenceLabel,
-  didNotAppear,
-  formatStartTime,
-  gameStatusView,
-  headshotUrl,
-  lineupCorner,
-  liveRole,
-  mostRecentGameFirst,
-} from './lib';
 
-// Breathing room between the sticky nav strip and a card scrolled up beneath it.
-const NAV_GAP = 10;
-
-const SHORT_INNING: Record<string, string> = {
-  Top: 'Top',
-  Bottom: 'Bot',
-  Middle: 'Mid',
-  End: 'End',
-};
-
-/** The game to summarize for a player in the nav: prefer live, then upcoming. */
-function navGame(report: PlayerReport): PlayerGame | null {
-  const games = report.games;
-  if (games.length === 0) return null;
-  return (
-    games.find((g) => g.status.state === 'live') ??
-    games.find((g) => g.status.state === 'scheduled') ??
-    [...games].sort(mostRecentGameFirst)[0]
-  );
-}
-
-/**
- * Player headshot for the image-only (narrow) nav; falls back to initials.
- * `corner` overlays the lineup spot (or a red "!" when out of the lineup) on the
- * top-right of the avatar.
- */
-function NavPhoto({
-  id,
-  name,
-  corner,
-}: {
-  id: number;
-  name: string;
-  corner?: { text: string; title: string; tone: 'in' | 'out' } | null;
-}) {
-  const [failed, setFailed] = useState(false);
-  const initials = name
-    .split(/\s+/)
-    .map((p) => p[0])
-    .slice(0, 2)
-    .join('');
-  return (
-    <span className="player-nav-avatar">
-      {failed ? (
-        <span className="player-nav-photo player-nav-photo-empty" aria-label={name}>
-          {initials}
-        </span>
-      ) : (
-        <img
-          className="player-nav-photo"
-          src={headshotUrl(id)}
-          alt={name}
-          loading="lazy"
-          onError={() => setFailed(true)}
-        />
-      )}
-      {corner && (
-        <span
-          className={`lineup-spot player-nav-spot spot-${corner.tone}`}
-          title={corner.title}
-          aria-label={corner.tone === 'out' ? 'Not in lineup' : `Batting ${corner.text}`}
-        >
-          {corner.text}
-        </span>
-      )}
-    </span>
-  );
-}
-
-/** Compact game line for the nav: time (scheduled), score + inning + runners/outs
- * (live), or final score. */
-function NavGameStatus({ game }: { game: PlayerGame }) {
-  const s = game.status;
-  const { kind, score } = gameStatusView(game);
-  const matchup = `${game.isHome ? 'vs' : '@'} ${game.opponent}`;
-
-  if (kind === 'live') {
-    const inning =
-      s.currentInning !== null
-        ? `${SHORT_INNING[s.inningState ?? ''] ?? s.inningState ?? ''} ${s.currentInning}`.trim()
-        : s.detailedState;
-    // Score on top; the inning and the runners/outs diamond stack beneath it.
-    return (
-      <span className="nav-game live">
-        <span className="nav-game-line">
-          <span className="nav-game-text">{score ?? matchup}</span>
-        </span>
-        <span className="nav-game-line nav-game-sub">
-          <span className="nav-game-text">{inning}</span>
-          {s.bases && (
-            <BaseDiamond bases={s.bases} outs={s.outs ?? 0} className="nav-bases" />
-          )}
-        </span>
-      </span>
-    );
-  }
-
-  const text =
-    kind === 'scheduled'
-      ? `${matchup} · ${formatStartTime(s.startTime) ?? (s.detailedState || 'TBD')}`
-      : `${score ?? matchup} · Final`;
-  return (
-    <span className={`nav-game ${kind}`}>
-      <span className="nav-game-text">{text}</span>
-    </span>
-  );
-}
+// Breathing room above a card scrolled to the top of the viewport.
+const SCROLL_GAP = 12;
 
 // MLB days are anchored to US Eastern time (games can end after midnight ET),
 // so "previous day" is computed in America/New_York rather than UTC or the
@@ -276,96 +161,22 @@ export default function App() {
       window.removeEventListener('keydown', onKey);
     };
   }, [settingsOpen]);
-  // Nav edit mode: reveal per-player delete buttons and enable drag-to-reorder.
+  // Edit mode (the pencil next to the search box): swaps the player list for the
+  // drag-to-reorder edit screen. Deliberately not persisted in the URL — it's a
+  // transient mode, not a view.
   const [editMode, setEditMode] = useState(false);
-  const [draggingId, setDraggingId] = useState<number | null>(null);
-  const dragId = useRef<number | null>(null);
-  // The edit toggle rides at the right end of the horizontal strip, so after
-  // tapping it keep that end in view: snap the strip all the way right once the
-  // re-render settles (edit mode widens each item with a grip + delete button,
-  // so this must run after the new layout, not off the pre-toggle width).
-  const navScrollEl = useRef<HTMLElement | null>(null);
-  const scrollNavRight = useRef(false);
-  const toggleEditMode = useCallback(() => {
-    scrollNavRight.current = true;
-    setEditMode((v) => !v);
-  }, []);
-  useLayoutEffect(() => {
-    if (!scrollNavRight.current) return;
-    scrollNavRight.current = false;
-    const el = navScrollEl.current;
-    if (el) el.scrollLeft = el.scrollWidth; // clamps to the rightmost position
-  }, [editMode]);
-  // The nav strip collapses to an image-only bar once it sticks to the top on
-  // scroll; at the top of the page it stays expanded with names/scores.
-  //
-  // We can't watch the strip's own rect.top: a sticky element pins that value to
-  // 0 while stuck, so it never reports "scrolled back up", and any threshold on
-  // it flip-flops every frame once pinned. Instead a zero-height sentinel sits at
-  // the strip's flow origin (absolutely placed at the top of .content-layout) and
-  // an IntersectionObserver flags "stuck" the moment it scrolls out the top.
-  // Because it fires only on real crossings — not per scroll frame — and its
-  // position doesn't move when the strip collapses, there's nothing to oscillate.
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
-  const navAsideRef = useRef<HTMLElement | null>(null);
-  const [navStuck, setNavStuck] = useState(false);
-  // Re-attach the observer whenever the sentinel (re)mounts — including on a
-  // view switch, since the feed view unmounts the whole strip. `view` is in the
-  // deps so switching back to the player list disconnects the observer from the
-  // now-detached old sentinel and re-observes the fresh one; without it, the
-  // stale observer fires isIntersecting=false as the old node leaves the DOM and
-  // leaves the strip wrongly collapsed at the top of the page.
-  useEffect(() => {
-    const el = sentinelRef.current;
-    if (!el) return;
-    const io = new IntersectionObserver(([entry]) => setNavStuck(!entry.isIntersecting), {
-      threshold: 0,
-    });
-    io.observe(el);
-    return () => io.disconnect();
-  }, [reports.length, view]);
-  // A nav link scrolls its card to the top, but the strip is sticky there and
-  // would cover it. Track the collapsed strip height (the state it's in at any
-  // scrolled destination), measured while stuck, and also publish it as
-  // --nav-offset for scroll-margin on any native (hash) scroll-into-view.
-  const collapsedNavH = useRef(82);
-  useEffect(() => {
-    if (!navStuck) return;
-    const measure = () => {
-      const h = navAsideRef.current?.offsetHeight;
-      if (h) {
-        collapsedNavH.current = h;
-        document.documentElement.style.setProperty('--nav-offset', `${h + NAV_GAP}px`);
-      }
-    };
-    // The strip now eases into its collapsed size, so the height is mid-flight
-    // the instant navStuck flips. Measure best-effort now, then again once the
-    // collapse transition has settled so the scroll offset reflects the final
-    // (shorter) strip. (Reduced-motion users have no transition; the first
-    // measurement is already correct for them.)
-    measure();
-    const t = setTimeout(measure, 240);
-    return () => clearTimeout(t);
-  }, [navStuck]);
 
-  // Scroll a player's card just below the sticky strip. Done manually (not
-  // scrollIntoView) because the strip collapses from its expanded height down to
-  // collapsedNavH as the page scrolls, shifting the card up by that difference —
-  // so we pre-subtract the pending shrink to land the card in the right spot.
+  // Scroll a player's card to the top of the viewport.
   //
   // Deferred a frame because callers expand the card first: expanding grows the
   // document, and only then is there room to scroll a bottom-of-page card's top
-  // up under the strip. Scrolling before the grow would clamp at the old, shorter
-  // page bottom and stop short.
+  // up to the top. Scrolling before the grow would clamp at the old, shorter page
+  // bottom and stop short.
   const scrollToPlayer = useCallback((playerId: number) => {
     requestAnimationFrame(() => {
       const el = document.getElementById(`player-${playerId}`);
       if (!el) return;
-      const collapsedH = collapsedNavH.current;
-      const currentH = navAsideRef.current?.offsetHeight ?? collapsedH;
-      const pendingShrink = Math.max(0, currentH - collapsedH);
-      const top =
-        el.getBoundingClientRect().top + window.scrollY - pendingShrink - collapsedH - NAV_GAP;
+      const top = el.getBoundingClientRect().top + window.scrollY - SCROLL_GAP;
       window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
     });
   }, []);
@@ -457,7 +268,7 @@ export default function App() {
   );
 
   // While any game is in progress, quietly re-poll so the live score, bases, and
-  // the nav's at-bat/on-deck/on-base highlights track the game in near-real-time.
+  // the at-bat/on-deck/on-base highlights track the game in near-real-time.
   // Only real live games drive polling — a simulated one has nothing to fetch.
   const hasRealLiveGame = reports.some((r) => r.games.some((g) => g.status.state === 'live'));
   // The feed view is always available: besides live at-bats it lists the day's
@@ -490,9 +301,13 @@ export default function App() {
     });
   }, []);
   // Whether the current view has anything expanded to collapse (the summary
-  // table has no collapsibles).
+  // table and the edit screen have no collapsibles).
   const hasExpanded =
-    view === 'summary' ? false : view === 'feed' ? feedOpenKeys.size > 0 : expandedIds.size > 0;
+    view === 'summary'
+      ? false
+      : view === 'feed'
+        ? feedOpenKeys.size > 0
+        : !editMode && expandedIds.size > 0;
   const collapseAll = () => {
     if (view === 'feed') setFeedOpenKeys(new Set());
     else setExpandedIds(new Set());
@@ -505,17 +320,15 @@ export default function App() {
     setWatchlist(await api.removePlayer(id));
   };
 
-  // Drag-to-reorder in the nav, via Pointer Events so it works with both mouse
-  // and touch (the phone strip). The list is reordered live as the dragged item
-  // passes over another; the final order is persisted when the pointer is
+  // Drag-to-reorder on the edit screen: the list is reordered live as the dragged
+  // row passes over another, and the final order is persisted once the pointer is
   // released. The order ref is updated synchronously so chained moves — and the
   // release commit — always see the latest order, independent of render timing.
-  const reorderTo = useCallback((targetId: number) => {
-    const from = dragId.current;
-    if (from === null || from === targetId) return;
+  const movePlayer = useCallback((fromId: number, toId: number) => {
+    if (fromId === toId) return;
     const prev = reportsRef.current;
-    const fi = prev.findIndex((r) => r.id === from);
-    const ti = prev.findIndex((r) => r.id === targetId);
+    const fi = prev.findIndex((r) => r.id === fromId);
+    const ti = prev.findIndex((r) => r.id === toId);
     if (fi === -1 || ti === -1 || fi === ti) return;
     const next = prev.slice();
     const [moved] = next.splice(fi, 1);
@@ -524,43 +337,14 @@ export default function App() {
     setReports(next);
   }, []);
 
-  const dragMove = useCallback(
-    (e: PointerEvent) => {
-      // The dragged item has pointer-events: none (see .dragging), so this finds
-      // the item under the pointer, not the one being dragged.
-      const link = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest(
-        '.player-nav-link',
-      ) as HTMLElement | null;
-      const id = link?.dataset.id;
-      if (id) reorderTo(Number(id));
-    },
-    [reorderTo],
-  );
-
-  const endDrag = useCallback(() => {
-    window.removeEventListener('pointermove', dragMove);
-    window.removeEventListener('pointerup', endDrag);
-    window.removeEventListener('pointercancel', endDrag);
-    dragId.current = null;
-    setDraggingId(null);
-    // Persist the new order; setWatchlist keeps the server's copy in sync (and
-    // triggers a cached report refetch, which returns the same order).
+  // Persist the order; setWatchlist keeps the server's copy in sync (and triggers
+  // a cached report refetch, which returns the same order).
+  const commitOrder = useCallback(() => {
     api
       .reorderPlayers(reportsRef.current.map((r) => r.id))
       .then(setWatchlist)
       .catch((e: Error) => setError(e.message));
-  }, [dragMove]);
-
-  const startDrag = (e: React.PointerEvent, id: number) => {
-    // A press on the delete button shouldn't begin a drag.
-    if ((e.target as HTMLElement).closest('.player-nav-delete')) return;
-    e.preventDefault();
-    dragId.current = id;
-    setDraggingId(id);
-    window.addEventListener('pointermove', dragMove);
-    window.addEventListener('pointerup', endDrag);
-    window.addEventListener('pointercancel', endDrag);
-  };
+  }, []);
 
   const toggleCollapsed = (id: number) => {
     const willExpand = !expandedIds.has(id);
@@ -570,17 +354,8 @@ export default function App() {
       else next.add(id);
       return next;
     });
-    // Expanding scrolls the card just below the sticky nav. scrollToPlayer is
-    // nav-aware (it pre-subtracts the strip's pending collapse), so the card
-    // isn't cut off when the strip is still in its tall/expanded state — which a
-    // plain scrollIntoView, reserving only the collapsed height, would do.
+    // Expanding scrolls the card to the top of the viewport.
     if (willExpand) scrollToPlayer(id);
-  };
-  // Clicking a player in the nav jumps to their card and opens it (cards are
-  // collapsed by default); scrollToPlayer lands it just below the strip.
-  const openPlayerCard = (id: number) => {
-    setExpandedIds((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
-    scrollToPlayer(id);
   };
   // A link (from the summary/feed) jumped to the players page — remember which
   // view we came from so a back button can return there. Cleared once we're back,
@@ -606,10 +381,8 @@ export default function App() {
     });
   };
   // From the feed/summary: jump to a player's full day on the players view —
-  // switch views, expand their card, and scroll it below the strip.
-  // setNavStuck(false) matches the Players-tab handler (avoids a frame of
-  // stale-collapsed strip on the remount); the observer corrects it on its next
-  // callback. Record the origin view + its scroll offset for the back button.
+  // switch views, expand their card, and scroll it to the top. Record the origin
+  // view + its scroll offset for the back button.
   const openPlayerDay = useCallback(
     (id: number) => {
       const from = view === 'summary' || view === 'feed' ? view : null;
@@ -619,7 +392,7 @@ export default function App() {
         backScroll.current = window.scrollY;
       }
       setBackView(from);
-      setNavStuck(false);
+      setEditMode(false);
       setView('players');
       setExpandedIds((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
       scrollToPlayer(id);
@@ -782,6 +555,7 @@ export default function App() {
                 className={`view-tab${view === 'summary' ? ' active' : ''}`}
                 onClick={() => {
                   setBackView(null);
+                  setEditMode(false);
                   setView('summary');
                 }}
               >
@@ -793,10 +567,6 @@ export default function App() {
                 aria-selected={view === 'players'}
                 className={`view-tab${view === 'players' ? ' active' : ''}`}
                 onClick={() => {
-                  // Assume expanded: the toggle sits at the top of the page, so the
-                  // remounting strip starts unstuck (the observer confirms/corrects
-                  // on its next callback). Avoids a frame of stale-collapsed strip.
-                  setNavStuck(false);
                   setBackView(null);
                   setView('players');
                 }}
@@ -810,6 +580,7 @@ export default function App() {
                 className={`view-tab${view === 'feed' ? ' active' : ''}`}
                 onClick={() => {
                   setBackView(null);
+                  setEditMode(false);
                   setView('feed');
                 }}
               >
@@ -818,13 +589,58 @@ export default function App() {
             </div>
           )}
           {view === 'players' && (
-            <PlayerAdder
-              players={seasonPlayers}
-              watchlist={watchlist}
-              onAdd={onAdd}
-              onOpenDetails={setDetailsId}
-              loading={playersLoading}
-            />
+            <div className="players-bar">
+              <PlayerAdder
+                players={seasonPlayers}
+                watchlist={watchlist}
+                onAdd={onAdd}
+                onOpenDetails={setDetailsId}
+                loading={playersLoading}
+              />
+              {/* Opens the reorder screen in place of the player list. Hidden
+                  until there's more than one player to put in an order. */}
+              {reports.length > 1 && (
+                <button
+                  type="button"
+                  className={`edit-order-btn${editMode ? ' active' : ''}`}
+                  onClick={() => setEditMode((v) => !v)}
+                  title={editMode ? 'Finish editing' : 'Reorder players'}
+                  aria-pressed={editMode}
+                >
+                  <span className="edit-order-icon" aria-hidden="true">
+                    {editMode ? (
+                      <svg
+                        viewBox="0 0 24 24"
+                        width="16"
+                        height="16"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M20 6 9 17l-5-5" />
+                      </svg>
+                    ) : (
+                      <svg
+                        viewBox="0 0 24 24"
+                        width="16"
+                        height="16"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M12 20h9" />
+                        <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                      </svg>
+                    )}
+                  </span>
+                  {editMode ? 'Done' : 'Edit'}
+                </button>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -874,133 +690,13 @@ export default function App() {
       <div
         className={`content-layout${showLoading && reports.length > 0 ? ' is-loading' : ''}`}
       >
-        {reports.length > 0 && (
-          <div ref={sentinelRef} className="nav-sentinel" aria-hidden="true" />
-        )}
-        {reports.length > 0 && (
-          <aside
-            ref={navAsideRef}
-            className={`player-nav${editMode ? ' editing' : ''}${navStuck ? ' is-stuck' : ''}`}
-          >
-            <nav ref={navScrollEl}>
-              {displayReports.map((r) => {
-                const role = liveRole(r);
-                const game = navGame(r);
-                // Lineup spot (or a red "!" when benched) rides the avatar's
-                // top-right corner — visible even when the strip collapses to
-                // avatars only — so the name row just carries the live role tag.
-                const corner = game ? lineupCorner(game) : null;
-                const body = (
-                  <>
-                    <NavPhoto id={r.id} name={r.name} corner={corner} />
-                    <div className="player-nav-body">
-                      <div className="player-nav-top">
-                        <span className="player-nav-name">{r.name}</span>
-                        {/* Live role shows only as the avatar ring + name colour
-                            here (via the role-* class on the link); the text tag
-                            ("At bat"/…) lives on the player card, not the nav. */}
-                      </div>
-                      {game && !didNotAppear(r) ? (
-                        <NavGameStatus game={game} />
-                      ) : (
-                        <span className="nav-game">{absenceLabel(r)}</span>
-                      )}
-                    </div>
-                  </>
-                );
-                if (editMode) {
-                  // In edit mode the item isn't a link — it's a draggable row with
-                  // a delete button. Dragging (mouse or touch) reorders the list as
-                  // the item passes over its peers; data-id lets a pointer move map
-                  // the element under the finger back to a player.
-                  return (
-                    <div
-                      key={r.id}
-                      data-id={r.id}
-                      className={
-                        `player-nav-link editing${role ? ` role-${role}` : ''}` +
-                        (draggingId === r.id ? ' dragging' : '')
-                      }
-                      title={r.name}
-                      onPointerDown={(e) => startDrag(e, r.id)}
-                    >
-                      <span className="player-nav-grip" aria-hidden="true">
-                        ⠿
-                      </span>
-                      {body}
-                      <button
-                        type="button"
-                        className="player-nav-delete"
-                        onClick={() => onRemove(r.id)}
-                        title={`Remove ${r.name}`}
-                        aria-label={`Remove ${r.name}`}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  );
-                }
-                return (
-                  <a
-                    key={r.id}
-                    className={`player-nav-link${role ? ` role-${role}` : ''}`}
-                    href={`#player-${r.id}`}
-                    title={r.name}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      openPlayerCard(r.id);
-                    }}
-                  >
-                    {body}
-                  </a>
-                );
-              })}
-              {/* The edit toggle rides at the end of the list — a text pill at the
-                  bottom of the wide side rail, or an icon on the narrow avatar
-                  rail / end of the phone strip (CSS swaps text ↔ icon by width). */}
-              <button
-                type="button"
-                className="player-nav-edit-inline"
-                onClick={toggleEditMode}
-                title={editMode ? 'Finish editing' : 'Reorder or remove players'}
-                aria-label={editMode ? 'Finish editing' : 'Edit players'}
-              >
-                <span className="player-nav-edit-text">{editMode ? 'Done' : 'Edit'}</span>
-                <span className="player-nav-edit-icon" aria-hidden="true">
-                  {editMode ? (
-                    <svg
-                      viewBox="0 0 24 24"
-                      width="18"
-                      height="18"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M20 6 9 17l-5-5" />
-                    </svg>
-                  ) : (
-                    <svg
-                      viewBox="0 0 24 24"
-                      width="18"
-                      height="18"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M12 20h9" />
-                      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                    </svg>
-                  )}
-                </span>
-              </button>
-            </nav>
-          </aside>
-        )}
-
+        {editMode ? (
+          <PlayerOrderEditor
+            players={reports}
+            onMove={movePlayer}
+            onCommit={commitOrder}
+          />
+        ) : (
         <main className="player-list">
           {displayReports.map((r) =>
             r.kind === 'pitcher' ? (
@@ -1025,6 +721,7 @@ export default function App() {
             ),
           )}
         </main>
+        )}
       </div>
       )}
 

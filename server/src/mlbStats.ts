@@ -50,28 +50,61 @@ async function fetchText(url: string): Promise<string> {
 
 // ---- Schedule ---------------------------------------------------------
 
+interface GameStatusFields {
+  abstractGameState?: string;
+  codedGameState?: string;
+  detailedState?: string;
+}
 interface ScheduleGame {
   gamePk: number;
+  status?: GameStatusFields;
 }
 interface ScheduleResponse {
   dates?: { games?: ScheduleGame[] }[];
 }
 
-/** All regular-season gamePks played on a date (YYYY-MM-DD). */
-export async function getGamesForDate(date: string): Promise<number[]> {
+/** A game on a date's schedule, with the status that date's schedule reports. */
+export interface ScheduledGame {
+  gamePk: number;
+  /**
+   * Postponed for THIS date per the schedule endpoint. The game's own feed/live
+   * can't be trusted for this: once a postponed game is rescheduled its gamePk is
+   * reused and the feed rolls forward to the makeup date, reading "Scheduled"
+   * again — only the original date's schedule still says "Postponed".
+   */
+  postponed: boolean;
+  /** The schedule's human label for this date, e.g. "Postponed". */
+  detailedState: string;
+}
+
+/** Postponed per a raw status blob (feed or schedule). MLB reports a postponed
+ * game as abstractGameState "Final", so this can't lean on that field: it keys
+ * off codedGameState 'D' / the "Postponed" detailedState label. */
+function isPostponedStatus(s: GameStatusFields | undefined): boolean {
+  return s?.codedGameState === 'D' || s?.detailedState?.startsWith('Postponed') === true;
+}
+
+/** All regular-season games on a date (YYYY-MM-DD), with their schedule status. */
+export async function getGamesForDate(date: string): Promise<ScheduledGame[]> {
   const url =
     `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${date}&gameTypes=R` +
-    `&fields=dates,games,gamePk`;
+    `&fields=dates,games,gamePk,status,codedGameState,detailedState,abstractGameState`;
   const res = await fetch(url, { headers: UA });
   if (!res.ok) {
     throw new Error(`MLB Stats API schedule returned ${res.status} for ${date}`);
   }
   const data = (await res.json()) as ScheduleResponse;
-  const gamePks: number[] = [];
+  const games: ScheduledGame[] = [];
   for (const d of data.dates ?? []) {
-    for (const g of d.games ?? []) gamePks.push(g.gamePk);
+    for (const g of d.games ?? []) {
+      games.push({
+        gamePk: g.gamePk,
+        postponed: isPostponedStatus(g.status),
+        detailedState: g.status?.detailedState ?? '',
+      });
+    }
   }
-  return gamePks;
+  return games;
 }
 
 // ---- Season player list (for watchlist search/autocomplete) -----------
@@ -738,6 +771,17 @@ function isFinalFeed(feed: LiveFeed): boolean {
   );
 }
 
+/**
+ * A postponed game — moved to a later date, so it never became live/final on the
+ * queried date. MLB reports it with `abstractGameState: "Final"` (so isFinalFeed
+ * would claim it) and `codedGameState: 'D'` / `detailedState: "Postponed"` — the
+ * reliable signals. `rescheduleDate` points at the makeup game; without this
+ * branch the game reads as a real Final (no score) or a next-day scheduled game.
+ */
+function isPostponedFeed(feed: LiveFeed): boolean {
+  return isPostponedStatus(feed.gameData?.status);
+}
+
 // Compact (field-filtered) feed — used for reads of completed games we persist.
 const feedUrl = (gamePk: number) =>
   `https://statsapi.mlb.com/api/v1.1/game/${gamePk}/feed/live?fields=${FEED_FIELDS}`;
@@ -1075,11 +1119,16 @@ const baseState = (a: unknown, b: unknown, c: unknown): BaseState => ({
 
 function buildGameStatus(feed: LiveFeed): GameStatus {
   const s = feed.gameData?.status;
-  const state: GameStatus['state'] = isFinalFeed(feed)
-    ? 'final'
-    : s?.abstractGameState === 'Live'
-      ? 'live'
-      : 'scheduled';
+  // Postponed is checked first: MLB marks a postponed game as abstractGameState
+  // "Final" (codedGameState 'D'), so isFinalFeed would otherwise claim it as a
+  // real final.
+  const state: GameStatus['state'] = isPostponedFeed(feed)
+    ? 'postponed'
+    : isFinalFeed(feed)
+      ? 'final'
+      : s?.abstractGameState === 'Live'
+        ? 'live'
+        : 'scheduled';
   const ls = feed.liveData?.linescore;
   const o = ls?.offense;
   const live = state === 'live';

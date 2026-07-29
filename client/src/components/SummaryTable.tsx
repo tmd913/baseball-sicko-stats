@@ -17,12 +17,12 @@ import {
 } from '../lib';
 
 /** The lineup-spot pip (batting number, or a red "!" when benched) for a game. */
-type Corner = { text: string; title: string; tone: 'in' | 'out' } | null;
+type Corner = { text: string; title: string; tone: 'in' | 'out' | 'postponed' } | null;
 
 /**
  * The game to summarize for a player in the opponent column: prefer the live
  * game, then the next scheduled one, then their most recent — the same priority
- * the nav uses, so the column tracks whatever game is most current. (Stats still
+ * the player cards use, so the column tracks whatever game is most current. (Stats still
  * aggregate every game in the range; this cell reflects one representative game.)
  */
 function pickGame(report: PlayerReport): PlayerGame | null {
@@ -71,7 +71,7 @@ function StatCells({ line }: { line: BattingLine }) {
 }
 
 /** A pitcher's aggregate line + rates for the range, shown as one table row. */
-function PitchStatCells({ line, csw }: { line: PitchingLine; csw: number | null }) {
+function PitchStatCells({ line }: { line: PitchingLine }) {
   return (
     <>
       <td className="sum-num sum-hab">{line.outs > 0 ? formatIp(line.outs) : '—'}</td>
@@ -83,31 +83,19 @@ function PitchStatCells({ line, csw }: { line: PitchingLine; csw: number | null 
       <td className="sum-num">{line.hr}</td>
       <td className="sum-num sum-ops">{eraOf(line)}</td>
       <td className="sum-num">{whipOf(line)}</td>
-      <td className="sum-num">{csw === null ? '—' : `${Math.round(csw * 100)}%`}</td>
     </>
   );
 }
 
-/** Aggregate a pitcher's game rates (CSW weighted by pitch count) for the range. */
-function aggregatePitching(report: PlayerReport): { line: PitchingLine; csw: number | null } {
-  const pitched = report.games.filter((g) => g.pitching);
-  const line = combinePitchingLines(pitched.map((g) => g.pitching!.line));
-  let cswNum = 0;
-  let pitches = 0;
-  for (const g of pitched) {
-    const pg = g.pitching!;
-    if (pg.cswRate !== null) {
-      cswNum += pg.cswRate * pg.line.pitchesThrown;
-      pitches += pg.line.pitchesThrown;
-    }
-  }
-  return { line, csw: pitches > 0 ? cswNum / pitches : null };
+/** A pitcher's combined line across every game he pitched in the range. */
+function aggregatePitching(report: PlayerReport): PitchingLine {
+  return combinePitchingLines(report.games.filter((g) => g.pitching).map((g) => g.pitching!.line));
 }
 
 /**
  * Headshot for a summary row; falls back to a blank circle when MLB has none.
  * `role` paints the live-role ring (at bat / on deck / on base) and `corner`
- * pins the lineup-spot pip — the same colours and treatment the nav and feed use.
+ * pins the lineup-spot pip — the same colours and treatment the cards and feed use.
  */
 function SumPhoto({
   id,
@@ -147,7 +135,7 @@ function SumPhoto({
         <span
           className={`lineup-spot sum-photo-spot spot-${corner.tone}`}
           title={corner.title}
-          aria-label={corner.tone === 'out' ? 'Not in lineup' : `Batting ${corner.text}`}
+          aria-label={corner.tone === 'in' ? `Batting ${corner.text}` : corner.title}
         >
           {corner.text}
         </span>
@@ -250,7 +238,7 @@ function PitcherTable({ pitchers, handlers }: { pitchers: PlayerReport[]; handle
   const totalLine = combinePitchingLines(
     pitchers.flatMap((r) => r.games.filter((g) => g.pitching).map((g) => g.pitching!.line)),
   );
-  const cols = ['IP', 'H', 'R', 'ER', 'BB', 'K', 'HR', 'ERA', 'WHIP', 'CSW'];
+  const cols = ['IP', 'H', 'R', 'ER', 'BB', 'K', 'HR', 'ERA', 'WHIP'];
   return (
     <table className="summary-table summary-table-pitchers">
       <thead>
@@ -275,11 +263,10 @@ function PitcherTable({ pitchers, handlers }: { pitchers: PlayerReport[]; handle
         {pitchers.map((r) => {
           const game = pickGame(r);
           const role = liveRole(r);
-          const { line, csw } = aggregatePitching(r);
           return (
             <tr key={r.id} className={role ? `role-${role}` : undefined}>
               <LeadCells r={r} game={game} role={role} corner={null} {...handlers} />
-              <PitchStatCells line={line} csw={csw} />
+              <PitchStatCells line={aggregatePitching(r)} />
             </tr>
           );
         })}
@@ -291,7 +278,7 @@ function PitcherTable({ pitchers, handlers }: { pitchers: PlayerReport[]; handle
             <span className="sum-total-label">Total · {pitchers.length}</span>
           </th>
           <td className="sum-opp" aria-hidden="true" />
-          <PitchStatCells line={totalLine} csw={null} />
+          <PitchStatCells line={totalLine} />
         </tr>
       </tfoot>
     </table>
@@ -319,8 +306,13 @@ export function SummaryTable({
   return (
     <div className="summary-view">
       <div className="summary-scroll">
-        {batters.length > 0 && <BatterTable batters={batters} handlers={handlers} />}
-        {pitchers.length > 0 && <PitcherTable pitchers={pitchers} handlers={handlers} />}
+        {/* The tables sit in one max-content flex column so the narrower of the
+            two stretches to the other's width — otherwise the batter table (fewer
+            columns) would stop short of the scrolled-right edge. */}
+        <div className="summary-tables">
+          {batters.length > 0 && <BatterTable batters={batters} handlers={handlers} />}
+          {pitchers.length > 0 && <PitcherTable pitchers={pitchers} handlers={handlers} />}
+        </div>
       </div>
     </div>
   );

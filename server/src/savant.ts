@@ -582,13 +582,13 @@ async function buildStatsApiDay(date: string): Promise<{
   byPitcher: Map<number, { name: string; games: PlayerGame[] }>;
   dayGames: DayGame[];
 }> {
-  const gamePks = await getGamesForDate(date);
+  const scheduled = await getGamesForDate(date);
   const games = await Promise.all(
-    gamePks.map(async (pk) => {
+    scheduled.map(async (s) => {
       try {
-        return await getStatsApiGame(pk);
+        return { game: await getStatsApiGame(s.gamePk), sched: s };
       } catch (err) {
-        console.error(`live feed fetch failed for game ${pk}:`, err);
+        console.error(`live feed fetch failed for game ${s.gamePk}:`, err);
         return null;
       }
     }),
@@ -598,8 +598,15 @@ async function buildStatsApiDay(date: string): Promise<{
   const byPitcher = new Map<number, { name: string; games: PlayerGame[] }>();
   const dayGames: DayGame[] = [];
 
-  for (const g of games) {
-    if (!g) continue;
+  for (const entry of games) {
+    if (!entry) continue;
+    const { game: g, sched } = entry;
+    // A postponed game's own feed/live has rolled forward to its makeup date
+    // (reading "Scheduled"); only the queried date's schedule still calls it
+    // postponed, so that verdict overrides the feed-derived status here.
+    const status: GameStatus = sched.postponed
+      ? { ...g.status, state: 'postponed', detailedState: sched.detailedState || 'Postponed', startTime: null }
+      : g.status;
     dayGames.push({
       gamePk: g.gamePk,
       gameNumber: g.gameNumber,
@@ -608,7 +615,7 @@ async function buildStatsApiDay(date: string): Promise<{
       awayTeam: g.awayTeam,
       homeTeamId: g.homeTeamId,
       awayTeamId: g.awayTeamId,
-      status: g.status,
+      status,
       homeProbablePitcher: g.homeProbablePitcher,
       awayProbablePitcher: g.awayProbablePitcher,
       homePlayerIds: [...g.homePlayerIds],
@@ -656,7 +663,7 @@ async function buildStatsApiDay(date: string): Promise<{
         opponent,
         isHome: bg.isHome,
         stand: bg.stand,
-        status: g.status,
+        status,
         ...lineupStatusFor(bg.batterId, bg.isHome ? g.homeStarters : g.awayStarters),
         // The batter faces the opposing team's starter.
         probablePitcher: bg.isHome ? g.awayProbablePitcher : g.homeProbablePitcher,
@@ -699,7 +706,7 @@ async function buildStatsApiDay(date: string): Promise<{
         opponent,
         isHome: pg.isHome,
         stand: pg.throws, // the pitcher's throwing hand
-        status: g.status,
+        status,
         lineupStatus: null,
         lineupSpot: null,
         probablePitcher: null,

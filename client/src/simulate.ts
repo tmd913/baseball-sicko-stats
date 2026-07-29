@@ -64,7 +64,7 @@ function toLiveGame(game: PlayerGame, playerId: number, role: LiveRole): PlayerG
  * watched players who actually batted today and flip their most recent game to
  * an in-progress state, assigning them live roles (one at bat, one on deck, the
  * rest on base). Used by the "Simulate live" UI toggle to exercise the feed's
- * Live section, the nav role rings, and live game-status badges without a real
+ * Live section, the role rings, and live game-status badges without a real
  * live game. A no-op-shaped copy for players not chosen; never mutates input.
  */
 export function simulateLiveDay(reports: PlayerReport[]): PlayerReport[] {

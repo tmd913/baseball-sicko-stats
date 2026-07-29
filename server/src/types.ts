@@ -85,8 +85,8 @@ export interface BattingLine {
 
 /** Where a game is in its lifecycle, with score/inning (live) or start time (scheduled). */
 export interface GameStatus {
-  state: 'scheduled' | 'live' | 'final';
-  detailedState: string; // MLB's label, e.g. "Warmup", "In Progress", "Final"
+  state: 'scheduled' | 'live' | 'final' | 'postponed';
+  detailedState: string; // MLB's label, e.g. "Warmup", "In Progress", "Final", "Postponed"
   startTime: string | null; // ISO datetime of first pitch (for scheduled games)
   homeScore: number | null;
   awayScore: number | null;

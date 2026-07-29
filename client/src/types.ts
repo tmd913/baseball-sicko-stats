@@ -75,7 +75,7 @@ export interface BattingLine {
 }
 
 export interface GameStatus {
-  state: 'scheduled' | 'live' | 'final';
+  state: 'scheduled' | 'live' | 'final' | 'postponed';
   detailedState: string;
   startTime: string | null;
   homeScore: number | null;
