@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { LiveRole } from '../lib';
 import {
   eventLabel,
@@ -433,6 +433,36 @@ function UpcomingRow({
 }
 
 /**
+ * A feed section's rows, split into the watched hitters' and the watched
+ * pitchers' halves so the two never interleave. The Batters/Pitchers
+ * subheadings only appear when the section actually holds both kinds —
+ * with one kind on the watchlist the section heading already says it all.
+ * Order within each half is untouched (newest-first, or by role/start time).
+ */
+function KindSplit<T extends { report: PlayerReport }>({
+  rows,
+  className,
+  render,
+}: {
+  rows: T[];
+  // The row container's class, applied to each half separately.
+  className: string;
+  render: (row: T) => ReactNode;
+}) {
+  const batters = rows.filter((r) => r.report.kind !== 'pitcher');
+  const pitchers = rows.filter((r) => r.report.kind === 'pitcher');
+  const both = batters.length > 0 && pitchers.length > 0;
+  return (
+    <>
+      {both && <h3 className="kind-heading">Batters</h3>}
+      {batters.length > 0 && <div className={className}>{batters.map(render)}</div>}
+      {both && <h3 className="kind-heading">Pitchers</h3>}
+      {pitchers.length > 0 && <div className={className}>{pitchers.map(render)}</div>}
+    </>
+  );
+}
+
+/**
  * The watchlist as a flat, most-recent-first stream of individual at-bats —
  * shown while games are active. A "Live" section pins the players currently at
  * bat, on deck, or on base to the top; below it, every completed plate
@@ -513,8 +543,10 @@ export function LiveFeed({
             <span className="feed-heading-dot" aria-hidden="true" />
             Live
           </h2>
-          <div className="live-rows">
-            {liveRows.map(({ report, role, game }) => {
+          <KindSplit
+            rows={liveRows}
+            className="live-rows"
+            render={({ report, role, game }) => {
               const key = `live-${report.id}`;
               return (
                 <LiveEntry
@@ -528,16 +560,18 @@ export function LiveFeed({
                   onOpenPlayerDay={onOpenPlayerDay}
                 />
               );
-            })}
-          </div>
+            }}
+          />
         </section>
       )}
 
       {recent.length > 0 && (
         <section className="feed-section">
           <h2 className="feed-heading">Recent plays</h2>
-          <div className="feed-items">
-            {recent.map((entry) => {
+          <KindSplit
+            rows={recent}
+            className="feed-items"
+            render={(entry) => {
               if (entry.type === 'base') {
                 const { report, game, ev, i } = entry;
                 return (
@@ -578,16 +612,18 @@ export function LiveFeed({
                   onOpenPlayerDay={onOpenPlayerDay}
                 />
               );
-            })}
-          </div>
+            }}
+          />
         </section>
       )}
 
       {upcoming.length > 0 && (
         <section className="feed-section">
           <h2 className="feed-heading">Upcoming</h2>
-          <div className="upcoming-rows">
-            {upcoming.map(({ report, game }) => {
+          <KindSplit
+            rows={upcoming}
+            className="upcoming-rows"
+            render={({ report, game }) => {
               const key = `up-${report.id}-${game.gamePk}`;
               return (
                 <UpcomingRow
@@ -600,8 +636,8 @@ export function LiveFeed({
                   onOpenPlayerDay={onOpenPlayerDay}
                 />
               );
-            })}
-          </div>
+            }}
+          />
         </section>
       )}
 

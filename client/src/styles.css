@@ -3244,6 +3244,33 @@ body {
   }
 }
 
+/* "Batters" / "Pitchers" divider — splits the player list, and each feed
+   section, into its two halves. Only rendered when both kinds are watched, so
+   it never appears as a lone label over a single group. The trailing rule runs
+   out to the full width to read as a section break rather than a row label. */
+.kind-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.kind-heading::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+/* A little extra air above the second heading, which follows a group of cards
+   rather than the section's own heading. */
+.kind-heading:not(:first-child) {
+  margin-top: 8px;
+}
+
 /* Live section: players currently at bat / on deck / on base. Each entry is a
    feed-item whose header is a role-tinted chip; at-bat / on-base entries carry
    the batter's current / most recent at-bat card beneath it (on deck has none). */

@@ -429,6 +429,34 @@ export default function App() {
     [detailsId, watchlist],
   );
 
+  // The player list is split into a hitters half and a pitchers half (each
+  // keeping the watchlist's order). The headings only show when both kinds are
+  // watched — with one kind there's nothing to tell apart.
+  const cardBatters = displayReports.filter((r) => r.kind !== 'pitcher');
+  const cardPitchers = displayReports.filter((r) => r.kind === 'pitcher');
+  const showKindHeadings = cardBatters.length > 0 && cardPitchers.length > 0;
+  const renderCard = (r: PlayerReport) =>
+    r.kind === 'pitcher' ? (
+      <PitcherCard
+        key={r.id}
+        report={r}
+        position={positionById.get(r.id)}
+        collapsed={!expandedIds.has(r.id)}
+        onToggleCollapsed={() => toggleCollapsed(r.id)}
+        onOpenDetails={setDetailsId}
+      />
+    ) : (
+      <PlayerCard
+        key={r.id}
+        report={r}
+        position={positionById.get(r.id)}
+        singleDay={start === end}
+        collapsed={!expandedIds.has(r.id)}
+        onToggleCollapsed={() => toggleCollapsed(r.id)}
+        onOpenDetails={setDetailsId}
+      />
+    );
+
   return (
     <div className={`app${view === 'summary' ? ' summary-mode' : ''}`}>
       <header className="app-header">
@@ -698,28 +726,10 @@ export default function App() {
           />
         ) : (
         <main className="player-list">
-          {displayReports.map((r) =>
-            r.kind === 'pitcher' ? (
-              <PitcherCard
-                key={r.id}
-                report={r}
-                position={positionById.get(r.id)}
-                collapsed={!expandedIds.has(r.id)}
-                onToggleCollapsed={() => toggleCollapsed(r.id)}
-                onOpenDetails={setDetailsId}
-              />
-            ) : (
-              <PlayerCard
-                key={r.id}
-                report={r}
-                position={positionById.get(r.id)}
-                singleDay={start === end}
-                collapsed={!expandedIds.has(r.id)}
-                onToggleCollapsed={() => toggleCollapsed(r.id)}
-                onOpenDetails={setDetailsId}
-              />
-            ),
-          )}
+          {showKindHeadings && <h2 className="kind-heading">Batters</h2>}
+          {cardBatters.map(renderCard)}
+          {showKindHeadings && <h2 className="kind-heading">Pitchers</h2>}
+          {cardPitchers.map(renderCard)}
         </main>
         )}
       </div>
