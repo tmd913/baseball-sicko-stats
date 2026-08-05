@@ -673,6 +673,33 @@ body {
   font-size: 16px;
   line-height: 1;
 }
+/* Remove button: a quiet ✕ that turns into a red "Remove?" once armed (the
+   first tap arms, the second removes). */
+.order-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 10px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--faint);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.order-remove:hover,
+.order-remove:focus-visible {
+  color: var(--strikeout);
+  border-color: var(--strikeout);
+}
+.order-remove.armed {
+  color: var(--strikeout);
+  border-color: var(--strikeout);
+}
 
 /* Lineup-position pip: batting-order number (green) or a red "!" when the
    player is out of the lineup. A fixed square → an identical circle for any

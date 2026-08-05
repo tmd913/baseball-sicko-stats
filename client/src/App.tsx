@@ -339,6 +339,21 @@ export default function App() {
   const onRemove = async (p: { id: number; kind: PlayerKind }) => {
     setWatchlist(await api.removePlayer(p.id, p.kind));
   };
+  // Remove from the edit screen. The row goes as soon as it's tapped — the
+  // watchlist update refetches the report, which would otherwise leave the
+  // removed player sitting there until it lands — and reportsRef is updated
+  // alongside so a drag that follows commits the order without him.
+  const removeFromEditor = useCallback((key: string) => {
+    const player = reportsRef.current.find((r) => playerKey(r) === key);
+    if (!player) return;
+    const next = reportsRef.current.filter((r) => playerKey(r) !== key);
+    reportsRef.current = next;
+    setReports(next);
+    api
+      .removePlayer(player.id, player.kind)
+      .then(setWatchlist)
+      .catch((e: Error) => setError(e.message));
+  }, []);
 
   // Drag-to-reorder on the edit screen: the list is reordered live as the dragged
   // row passes over another, and the final order is persisted once the pointer is
@@ -788,6 +803,7 @@ export default function App() {
               players={editPlayers}
               onMove={movePlayer}
               onCommit={commitOrder}
+              onRemove={removeFromEditor}
             />
           </>
         ) : (
