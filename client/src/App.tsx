@@ -552,15 +552,23 @@ export default function App() {
               title="Settings"
               onClick={() => setSettingsOpen((v) => !v)}
             >
+              {/* Six-tooth gear generated at exact 60° rotational symmetry: a
+                  tip arc at r=9.1 spanning 24°, flanks down to a root arc at
+                  r=6.5 spanning 30° — so each tooth tapers toward its tip
+                  rather than flaring. The hand-written path this replaces had
+                  drifted out of symmetry (uneven teeth, a flat stretch on the
+                  left where one was missing), which showed at any size. */}
               <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-                <path
-                  d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"
+                <circle
+                  cx="12"
+                  cy="12"
+                  r="3.3"
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="1.8"
                 />
                 <path
-                  d="M19.4 13a7.6 7.6 0 0 0 .1-1 7.6 7.6 0 0 0-.1-1l2-1.6-2-3.4-2.4 1a7.3 7.3 0 0 0-1.7-1l-.4-2.5h-4l-.4 2.5a7.3 7.3 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7.6 7.6 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a7.3 7.3 0 0 0 1.7 1l.4 2.5h4l.4-2.5a7.3 7.3 0 0 0 1.7-1l2.4 1 2-3.4-2-1.6Z"
+                  d="M10.11 3.1A9.1 9.1 0 0 1 13.89 3.1L13.68 5.72A6.5 6.5 0 0 1 16.6 7.4L18.76 5.91A9.1 9.1 0 0 1 20.65 9.19L18.28 10.32A6.5 6.5 0 0 1 18.28 13.68L20.65 14.81A9.1 9.1 0 0 1 18.76 18.09L16.6 16.6A6.5 6.5 0 0 1 13.68 18.28L13.89 20.9A9.1 9.1 0 0 1 10.11 20.9L10.32 18.28A6.5 6.5 0 0 1 7.4 16.6L5.24 18.09A9.1 9.1 0 0 1 3.35 14.81L5.72 13.68A6.5 6.5 0 0 1 5.72 10.32L3.35 9.19A9.1 9.1 0 0 1 5.24 5.91L7.4 7.4A6.5 6.5 0 0 1 10.32 5.72L10.11 3.1Z"
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="1.8"
