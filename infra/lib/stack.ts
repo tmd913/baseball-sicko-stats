@@ -123,9 +123,10 @@ export class SickoStack extends Stack {
     const providers: cognito.UserPoolClientIdentityProvider[] = [
       cognito.UserPoolClientIdentityProvider.COGNITO,
     ];
+    let googleIdp: cognito.UserPoolIdentityProviderGoogle | undefined;
 
     if (googleClientId && googleSecretName) {
-      const google = new cognito.UserPoolIdentityProviderGoogle(this, 'Google', {
+      googleIdp = new cognito.UserPoolIdentityProviderGoogle(this, 'Google', {
         userPool,
         clientId: googleClientId,
         clientSecretValue: SecretValue.secretsManager(googleSecretName),
@@ -136,8 +137,6 @@ export class SickoStack extends Stack {
         },
       });
       providers.push(cognito.UserPoolClientIdentityProvider.GOOGLE);
-      // The client must not be created before the IdP it lists.
-      userPool.node.addDependency(google);
     }
 
     // Callback URLs Cognito will accept. localhost is always allowed so the
@@ -164,6 +163,13 @@ export class SickoStack extends Stack {
       refreshTokenValidity: Duration.days(30),
       preventUserExistenceErrors: true,
     });
+
+    // The client lists Google in supportedIdentityProviders, so the provider has
+    // to exist first — but the dependency belongs on the *client*, not the pool.
+    // Putting it on the pool makes UserPool depend on an IdP that already
+    // references the pool, which CloudFormation rejects as a circular
+    // dependency (and reports as a 19-resource cycle that hides the cause).
+    if (googleIdp) userPoolClient.node.addDependency(googleIdp);
 
     const cognitoDomain = `${cognitoPrefix}.auth.${this.region}.amazoncognito.com`;
 
