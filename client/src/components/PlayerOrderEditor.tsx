@@ -133,6 +133,15 @@ export function PlayerOrderEditor({
     rafId.current = requestAnimationFrame(autoScroll);
   };
 
+  // A finger drag and a page scroll are the same gesture, so on touch only the
+  // grip starts a drag (it alone carries touch-action: none) and the rest of the
+  // row scrolls the list normally. A mouse has no such conflict — it can still
+  // grab the row anywhere.
+  const startRowDrag = (e: React.PointerEvent, key: string) => {
+    if (e.pointerType !== 'mouse') return;
+    startDrag(e, key);
+  };
+
   // Unmounting mid-drag (the Done button, a view switch) must still tear the
   // listeners and the scroll loop down.
   useEffect(
@@ -148,7 +157,7 @@ export function PlayerOrderEditor({
   return (
     <div className="order-editor">
       <p className="order-hint">
-        Drag a player to change their order, or ✕ to remove them.
+        Drag ⠿ to change a player's order, or ✕ to remove them.
       </p>
       <ul className="order-list">
         {players.map((p, i) => {
@@ -158,12 +167,21 @@ export function PlayerOrderEditor({
               key={p.key}
               data-key={p.key}
               className={`order-row${draggingKey === p.key ? ' dragging' : ''}`}
-              onPointerDown={(e) => startDrag(e, p.key)}
+              onPointerDown={(e) => startRowDrag(e, p.key)}
             >
               <span className="order-num">{i + 1}</span>
               <OrderPhoto id={p.id} name={p.name} />
               <span className="order-name">{p.name}</span>
-              <span className="order-grip" aria-hidden="true">
+              {/* stopPropagation so a mouse press here doesn't also start the
+                  row's drag — one pointerdown, one drag. */}
+              <span
+                className="order-grip"
+                aria-hidden="true"
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  startDrag(e, p.key);
+                }}
+              >
                 ⠿
               </span>
               {/* stopPropagation so pressing the button never starts a drag —

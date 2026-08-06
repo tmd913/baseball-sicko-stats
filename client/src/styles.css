@@ -613,9 +613,9 @@ body {
   flex-direction: column;
   gap: 8px;
 }
-/* One draggable player row: order number, headshot, name, grip. touch-action:
-   none so a touch drag reorders instead of scrolling the page (the editor
-   scrolls the page itself when a drag nears the top/bottom edge). */
+/* One draggable player row: order number, headshot, name, grip. Note the row
+   itself does NOT set touch-action — only the grip does, so a finger anywhere
+   else on the row scrolls the list (see .order-grip). */
 .order-row {
   display: flex;
   align-items: center;
@@ -626,7 +626,6 @@ body {
   border-radius: 12px;
   cursor: grab;
   user-select: none;
-  touch-action: none;
 }
 .order-row:active {
   cursor: grabbing;
@@ -675,11 +674,26 @@ body {
   font-size: 15px;
   font-weight: 600;
 }
+/* The drag handle, and the only part of the row with touch-action: none — a
+   finger starting here reorders, a finger anywhere else scrolls the page. The
+   negative margin stretches it over the row's padding so the tap target is the
+   full row height rather than the glyph. */
 .order-grip {
   flex: none;
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  margin: -10px 0;
+  padding: 0 8px;
   color: var(--faint);
   font-size: 16px;
   line-height: 1;
+  cursor: grab;
+  touch-action: none;
+}
+.order-grip:active {
+  cursor: grabbing;
+  color: var(--text);
 }
 /* Remove button: a quiet ✕ that turns into a red "Remove?" once armed (the
    first tap arms, the second removes). */
