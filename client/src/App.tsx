@@ -297,6 +297,11 @@ export default function App() {
   // The feed view is always available: besides live at-bats it lists the day's
   // completed and not-yet-started games, so it's useful before first pitch too.
   const showViewToggle = displayReports.length > 0;
+  // The roster search belongs to the players view, but it's also the only way
+  // out of an empty watchlist — and with nothing watched the view tabs are
+  // hidden too, so a new user on the default summary view would otherwise have
+  // no search bar *and* no way to reach the view that has one.
+  const showAdder = view === 'players' || (watchlistLoaded && watchlist.length === 0);
   useEffect(() => {
     if (!hasRealLiveGame) return;
     const t = setInterval(() => loadReport(true), 20_000);
@@ -657,11 +662,12 @@ export default function App() {
         </div>
       </header>
 
-      {/* Tabs + (players-only) roster search share one row when there's room; the
-          search wraps to its own line when narrow. The row still renders with
-          just the search when there are no reports yet (so an empty watchlist can
-          still add players), and with just the tabs on the feed/summary views. */}
-      {(showViewToggle || view === 'players') && (
+      {/* Tabs + roster search share one row when there's room; the search wraps
+          to its own line when narrow. The row still renders with just the search
+          when the watchlist is empty (on any view — that's the only way to add a
+          first player, since the tabs are hidden until something is watched),
+          and with just the tabs on the feed/summary views. */}
+      {(showViewToggle || showAdder) && (
         <div className="view-bar">
           {showViewToggle && (
             <div className="view-switch" role="tablist" aria-label="Watchlist view">
@@ -705,7 +711,7 @@ export default function App() {
               </button>
             </div>
           )}
-          {view === 'players' && (
+          {showAdder && (
             <div className="players-bar">
               <PlayerAdder
                 players={seasonPlayers}
