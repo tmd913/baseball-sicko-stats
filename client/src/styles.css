@@ -405,6 +405,14 @@ body {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
 }
+/* iOS Safari zooms the page in when a focused field's font is under 16px, and
+   never zooms back out when you're done typing. Bump it to 16px on touch
+   devices only, so the desktop field keeps its slimmer 15px text. */
+@media (pointer: coarse) {
+  .adder-input {
+    font-size: 16px;
+  }
+}
 .adder-clear {
   position: absolute;
   right: 10px;
