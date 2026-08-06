@@ -1,6 +1,4 @@
-import { promises as fs } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { readBlob, writeBlob } from './storage.js';
 import { toSavantName } from './names.js';
 import type {
   BaseState,
@@ -13,8 +11,6 @@ import type {
   SeasonStats,
 } from './types.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const CACHE_DIR = path.join(__dirname, '..', 'data', 'cache');
 const UA = { 'User-Agent': 'statcast-sicko/1.0' };
 
 async function fetchCached(url: string, cacheFile: string): Promise<string> {
@@ -25,20 +21,10 @@ async function fetchCached(url: string, cacheFile: string): Promise<string> {
   return text;
 }
 
-async function readCache(cacheFile: string): Promise<string | null> {
-  try {
-    const cached = await fs.readFile(path.join(CACHE_DIR, cacheFile), 'utf8');
-    if (cached.trim().length > 0) return cached;
-  } catch {
-    // not cached yet
-  }
-  return null;
-}
-
-async function writeCache(cacheFile: string, text: string): Promise<void> {
-  await fs.mkdir(CACHE_DIR, { recursive: true });
-  await fs.writeFile(path.join(CACHE_DIR, cacheFile), text, 'utf8');
-}
+// The cache tier lives in storage.ts — the local filesystem by default, S3 when
+// CACHE_BUCKET is set. Key names are unchanged either way.
+const readCache = readBlob;
+const writeCache = writeBlob;
 
 async function fetchText(url: string): Promise<string> {
   const res = await fetch(url, { headers: UA });
@@ -1339,8 +1325,8 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
   const feedFile = `game-${gamePk}-v${FEED_CACHE_VERSION}.json`;
   const wpFile = `wp-${gamePk}.json`;
 
-  // A cached file on disk only ever exists for a completed game, so a hit means
-  // we can skip the network; otherwise resolve the live snapshot via diffPatch.
+  // A cached entry only ever exists for a completed game, so a hit means we can
+  // skip the network; otherwise resolve the live snapshot via diffPatch.
   const feedCached = await readCache(feedFile);
   let feed: LiveFeed;
   let winExpByAtBat: Map<number, number>;
@@ -1356,7 +1342,7 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
   const isFinal = isFinalFeed(feed);
 
   // Once the game is over, persist a compact (field-filtered) snapshot so the
-  // on-disk cache stays small, then drop the live snapshot from memory.
+  // cache stays small, then drop the live snapshot from memory.
   if (isFinal && feedCached === null) {
     const [compact, wpText] = await Promise.all([
       fetchText(feedUrl(gamePk)).catch(() => null),

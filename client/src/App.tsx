@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api';
+import { SignOutButton } from './auth';
 import { playerKey } from './types';
 import type { PlayerKind, PlayerReport, SeasonPlayer, WatchPlayer } from './types';
 import { PlayerAdder } from './components/PlayerAdder';
@@ -238,12 +239,14 @@ export default function App() {
     };
   }, []);
 
-  // Load watchlist once.
+  // Load watchlist once. A failure here used to be swallowed, which rendered the
+  // "your watchlist is empty" state — actively misleading now that the list
+  // lives server-side per user, where a failure means "we couldn't read it".
   useEffect(() => {
     api
       .watchlist()
       .then(setWatchlist)
-      .catch(() => {})
+      .catch((e: Error) => setError(e.message))
       .finally(() => setWatchlistLoaded(true));
   }, []);
 
@@ -590,6 +593,9 @@ export default function App() {
                   <span className="sim-dot" aria-hidden="true" />
                   {simulate ? 'Simulating live' : 'Simulate live'}
                 </button>
+                {/* Renders nothing when auth isn't configured, so the local dev
+                    menu looks exactly as it did. */}
+                <SignOutButton />
               </div>
             )}
           </div>

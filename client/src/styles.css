@@ -3717,3 +3717,93 @@ body {
   border-color: var(--live-purple);
   box-shadow: 0 0 0 2px var(--live-purple);
 }
+
+/* ---- Sign-in ---------------------------------------------------------- */
+
+/* The signed-out screen, shown in place of the app until Cognito hands back a
+   token. Deliberately spare — it's a doorway, not a page. */
+.auth-screen {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.auth-card {
+  width: min(360px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 28px 24px;
+  text-align: center;
+}
+.auth-title {
+  margin: 0;
+  font-size: 22px;
+  letter-spacing: -0.01em;
+}
+.auth-sub {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.auth-btn {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 11px 16px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.14s ease, background 0.14s ease;
+}
+.auth-btn:hover {
+  border-color: var(--accent);
+}
+.auth-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.auth-btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #04121f;
+}
+.auth-btn-primary:hover {
+  background: var(--accent-2);
+  border-color: var(--accent-2);
+}
+.auth-error {
+  margin: 4px 0 0;
+  color: var(--strikeout);
+  font-size: 13px;
+}
+
+/* Sits in the settings popover under "Simulate live", so it borrows that
+   button's shape rather than introducing another. */
+.signout-btn {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  padding: 7px 13px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.14s ease, border-color 0.14s ease;
+}
+.signout-btn:hover {
+  color: var(--text);
+  border-color: var(--strikeout);
+}
+.signout-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

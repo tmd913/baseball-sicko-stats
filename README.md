@@ -143,6 +143,78 @@ npm run build       # builds client, compiles server
 npm start           # serves API + built client on :4000
 ```
 
+## Deploying to AWS
+
+The `infra/` workspace is a CDK app that puts the client on S3 + CloudFront, the
+API on Lambda behind API Gateway, the cache in S3, and per-user watchlists in
+DynamoDB, with Cognito for sign-in.
+
+Everything is selected by environment variable, so **local development is
+unchanged** — with no AWS variables set the server writes to `server/data/` and
+treats every request as one dev user, exactly as before.
+
+### One-time setup
+
+1. **Bootstrap CDK** in the target account/region (once ever):
+   ```bash
+   npm run cdk -- bootstrap
+   ```
+2. **Google sign-in** (optional — omit to launch with email/password only).
+   Create an OAuth client in the Google Cloud console and store its secret:
+   ```bash
+   aws secretsmanager create-secret --name baseball-sicko/google-oauth \
+     --secret-string 'YOUR_GOOGLE_CLIENT_SECRET'
+   ```
+   Google's "authorized redirect URI" is
+   `https://<cognitoPrefix>.auth.<region>.amazoncognito.com/oauth2/idpresponse`
+   — the stack prints it as the `GoogleRedirectUri` output.
+
+### Deploy
+
+```bash
+npm run deploy      # builds client + server, then cdk deploy
+```
+
+Then register the site's own URL as a Cognito callback:
+
+```bash
+npm run cdk -- deploy -c siteUrl=https://dXXXXXXXX.cloudfront.net
+```
+
+**Why two passes.** Cognito's callback URL needs the CloudFront domain; the
+distribution needs the API as an origin; the API needs the JWT authorizer; the
+authorizer needs the user pool client — a dependency cycle. Passing the site URL
+in as context breaks it. The first deploy prints the exact second command as its
+`NextStep` output. This collapses to a single pass behind a custom domain, where
+the URL is known up front.
+
+Useful context flags: `-c cognitoPrefix=` (hosted-UI domain, must be globally
+unique), `-c googleClientId=`, `-c googleSecretName=`, `-c region=`.
+
+### How the pieces map
+
+| Concern      | Local                 | Deployed                                   |
+| ------------ | --------------------- | ------------------------------------------ |
+| Cache        | `server/data/cache/`  | S3, `cache/` prefix (`CACHE_BUCKET`)       |
+| Watchlist    | `watchlist.json`      | DynamoDB, one item per user (`WATCHLIST_TABLE`) |
+| User         | `local`               | Cognito `sub` (`USER_POOL_ID`)             |
+| Static files | `express.static`      | S3 + CloudFront                            |
+
+`/api/*` is a CloudFront behavior pointing at API Gateway, so the client stays
+same-origin and there is no CORS anywhere.
+
+### Keeping the cache warm
+
+A cold `/api/report` over a wide date range would blow API Gateway's 30s limit —
+it fans out to a feed and win-probability blob per game plus a multi-MB Savant
+CSV per day. Two EventBridge rules keep that off the interactive path: one every
+5 minutes for today and yesterday, and a nightly backfill that snapshots each
+finished day as a single gzipped object and refreshes per-player season data.
+
+A genuinely cold request for an old, wide range can still time out. If that
+becomes a real problem the escape hatch is a streaming Lambda Function URL for
+`/api/report` alone as a second CloudFront origin.
+
 ## API
 
 | Method   | Route                  | Purpose                                     |

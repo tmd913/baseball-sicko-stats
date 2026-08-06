@@ -1,7 +1,6 @@
 import { parse } from 'csv-parse/sync';
-import { promises as fs } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { readBlob, readGzipBlob, writeBlob, writeGzipBlob } from './storage.js';
+import { mapLimit } from './limit.js';
 import {
   getGamesForDate,
   getPitcherStats,
@@ -34,9 +33,6 @@ import type {
   ProbablePitcher,
   WatchPlayer,
 } from './types.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const CACHE_DIR = path.join(__dirname, '..', 'data', 'cache');
 
 /**
  * Build the Baseball Savant CSV export URL for a single date (YYYY-MM-DD).
@@ -149,17 +145,11 @@ function hasDataRows(csvText: string): boolean {
 }
 
 async function downloadCsv(date: string): Promise<string> {
-  await fs.mkdir(CACHE_DIR, { recursive: true });
-  const file = path.join(CACHE_DIR, `${date}.csv`);
-  try {
-    const cached = await fs.readFile(file, 'utf8');
-    // Only trust a cached file that actually has data rows. A headers-only file
-    // means the previous fetch ran before Statcast data posted; re-fetch so the
-    // enrichment (bat speed, swing length, xBA/xwOBA) fills in once it's live.
-    if (hasDataRows(cached)) return cached;
-  } catch {
-    // not cached yet
-  }
+  const cached = await readBlob(`${date}.csv`);
+  // Only trust a cached file that actually has data rows. A headers-only file
+  // means the previous fetch ran before Statcast data posted; re-fetch so the
+  // enrichment (bat speed, swing length, xBA/xwOBA) fills in once it's live.
+  if (cached !== null && hasDataRows(cached)) return cached;
   const res = await fetch(savantUrl(date), {
     headers: { 'User-Agent': 'statcast-sicko/1.0' },
   });
@@ -169,7 +159,7 @@ async function downloadCsv(date: string): Promise<string> {
   const text = await res.text();
   // Persist only complete exports; an empty (headers-only) result is transient,
   // so leave it uncached and let the next request try again.
-  if (hasDataRows(text)) await fs.writeFile(file, text, 'utf8');
+  if (hasDataRows(text)) await writeBlob(`${date}.csv`, text);
   return text;
 }
 
@@ -690,16 +680,14 @@ async function buildStatsApiDay(date: string): Promise<{
   dayGames: DayGame[];
 }> {
   const scheduled = await getGamesForDate(date);
-  const games = await Promise.all(
-    scheduled.map(async (s) => {
-      try {
-        return { game: await getStatsApiGame(s.gamePk), sched: s };
-      } catch (err) {
-        console.error(`live feed fetch failed for game ${s.gamePk}:`, err);
-        return null;
-      }
-    }),
-  );
+  const games = await mapLimit(scheduled, GAME_CONCURRENCY, async (s) => {
+    try {
+      return { game: await getStatsApiGame(s.gamePk), sched: s };
+    } catch (err) {
+      console.error(`live feed fetch failed for game ${s.gamePk}:`, err);
+      return null;
+    }
+  });
 
   const byBatter = new Map<number, { name: string; games: PlayerGame[] }>();
   const byPitcher = new Map<number, { name: string; games: PlayerGame[] }>();
@@ -854,23 +842,185 @@ function easternToday(): string {
   return `${get('year')}-${get('month')}-${get('day')}`;
 }
 
-export async function getDay(date: string): Promise<ParsedDay> {
-  const cached = memCache.get(date);
+/**
+ * Which players a caller actually needs out of a day.
+ *
+ * A day holds a report for *every* player who appeared — on the order of 600,
+ * several MB parsed — so a 62-day range that keeps them all resident is most of
+ * a gigabyte of heap for a watchlist of 27. Filtering at parse time is what
+ * makes a wide range viable inside a Lambda.
+ *
+ * `names` exists because `findPlayerDay` falls back to a same-kind name match
+ * when a player's id isn't present that day; filtering on ids alone would
+ * quietly break that fallback.
+ */
+export interface DayFilter {
+  keys: Set<string>;
+  names: Set<string>;
+}
+
+export function dayFilterFor(players: WatchPlayer[]): DayFilter {
+  return {
+    keys: new Set(players.map((p) => `${p.kind}-${p.id}`)),
+    names: new Set(players.map((p) => `${p.kind}|${p.savantName.toLowerCase()}`)),
+  };
+}
+
+function wanted(filter: DayFilter, key: string, rep: PlayerReport): boolean {
+  return (
+    filter.keys.has(key) || filter.names.has(`${rep.kind}|${rep.savantName.toLowerCase()}`)
+  );
+}
+
+/** A stable cache key for a filter — the watchlist rarely changes, so the 20s
+ *  report poll keeps hitting the same projection. */
+function filterKey(filter: DayFilter): string {
+  return [...filter.keys].sort().join(',');
+}
+
+function projectDay(day: ParsedDay, filter: DayFilter): ParsedDay {
+  const reports = new Map<string, PlayerReport>();
+  for (const [key, rep] of day.reports) {
+    if (wanted(filter, key, rep)) reports.set(key, rep);
+  }
+  return { ...day, reports };
+}
+
+/** Bump when the shape of a stored day changes, so old snapshots are ignored
+ *  rather than deserialized into the wrong model. v2 stores each game's
+ *  starting lineups as entry pairs — as Maps they serialized to `{}`. */
+const DAY_SNAPSHOT_VERSION = 2;
+
+/**
+ * The on-the-wire form of a day.
+ *
+ * Two things here are Maps, and `JSON.stringify` silently turns a Map into
+ * `{}` rather than failing — so both need explicit conversion: `reports`, and
+ * the per-side starting lineups nested inside each game.
+ */
+interface StoredDay {
+  date: string;
+  reports: Record<string, PlayerReport>;
+  games: StoredDayGame[];
+}
+
+type StoredDayGame = Omit<DayGame, 'homeStarters' | 'awayStarters'> & {
+  homeStarters: [number, number][];
+  awayStarters: [number, number][];
+};
+
+function storeGame(g: DayGame): StoredDayGame {
+  return { ...g, homeStarters: [...g.homeStarters], awayStarters: [...g.awayStarters] };
+}
+
+function loadGame(g: StoredDayGame): DayGame {
+  return {
+    ...g,
+    homeStarters: new Map(g.homeStarters ?? []),
+    awayStarters: new Map(g.awayStarters ?? []),
+  };
+}
+
+const snapshotKey = (date: string) => `day-${date}-v${DAY_SNAPSHOT_VERSION}.json`;
+
+/**
+ * A finished day, stored as one gzipped object.
+ *
+ * Rebuilding a day otherwise costs a schedule fetch plus a read per game (~16
+ * for a full slate) plus the Savant CSV. Collapsing that to a single read is
+ * the difference between a wide date range fitting in API Gateway's 30s budget
+ * and not.
+ */
+async function readDaySnapshot(date: string, filter: DayFilter): Promise<ParsedDay | null> {
+  const raw = await readGzipBlob(snapshotKey(date));
+  if (raw === null) return null;
+  try {
+    const stored = JSON.parse(raw) as StoredDay;
+    const reports = new Map<string, PlayerReport>();
+    // Filter while walking the parsed object rather than building the full Map
+    // and pruning it after.
+    for (const [key, rep] of Object.entries(stored.reports ?? {})) {
+      if (wanted(filter, key, rep)) reports.set(key, rep);
+    }
+    return {
+      date,
+      reports,
+      games: (stored.games ?? []).map(loadGame),
+      fetchedAt: Date.now(),
+    };
+  } catch (err) {
+    console.error(`day snapshot unreadable for ${date}:`, err);
+    return null;
+  }
+}
+
+async function writeDaySnapshot(day: ParsedDay): Promise<void> {
+  const stored: StoredDay = {
+    date: day.date,
+    reports: Object.fromEntries(day.reports),
+    games: day.games.map(storeGame),
+  };
+  await writeGzipBlob(snapshotKey(day.date), JSON.stringify(stored));
+}
+
+/** Frozen days, already narrowed to one watchlist. Bounded because the key
+ *  includes the watchlist, so a multi-user server would otherwise accumulate a
+ *  projection per user per date. */
+const projectedCache = new Map<string, ParsedDay>();
+const PROJECTED_CACHE_MAX = 200;
+
+function rememberProjection(key: string, day: ParsedDay): ParsedDay {
+  if (projectedCache.size >= PROJECTED_CACHE_MAX) {
+    const oldest = projectedCache.keys().next().value;
+    if (oldest !== undefined) projectedCache.delete(oldest);
+  }
+  projectedCache.set(key, day);
+  return day;
+}
+
+/** How many days / games of a report may be in flight at once. Caps the socket
+ *  count against MLB's APIs, and more importantly bounds how many fully-parsed
+ *  days are resident at the same time. */
+const DAY_CONCURRENCY = 6;
+const GAME_CONCURRENCY = 8;
+
+/**
+ * A day's parsed model. Pass `filter` to get back only the players it names —
+ * required for wide ranges, since the unfiltered model is far larger than any
+ * one watchlist needs.
+ */
+export async function getDay(date: string, filter?: DayFilter): Promise<ParsedDay> {
   // Today and future dates are still mutable (scores accrue, lineups/rosters get
   // posted closer to first pitch), so they honor the TTL. Past dates are frozen.
   const isMutable = date >= easternToday();
-  if (cached && !isMutable) return cached;
+
+  // Frozen days can be served from a snapshot without touching the network or
+  // the per-game caches at all.
+  if (!isMutable && filter) {
+    const pKey = `${date}|${filterKey(filter)}`;
+    const hit = projectedCache.get(pKey);
+    if (hit) return hit;
+    const full = memCache.get(date);
+    if (full) return rememberProjection(pKey, projectDay(full, filter));
+    const snapshot = await readDaySnapshot(date, filter);
+    if (snapshot) return rememberProjection(pKey, snapshot);
+  }
+
+  const cached = memCache.get(date);
+  if (cached && !isMutable) return filter ? projectDay(cached, filter) : cached;
   if (cached) {
     const states = cached.games.map((g) => g.status.state);
     // Once every game that day is final, nothing will change until the date
     // rolls over (final games are cached permanently), so freeze like a past
     // day. Empty schedules still honor the TTL in case games post late.
     const allFinal = states.length > 0 && states.every((s) => s === 'final');
-    if (allFinal) return cached;
+    if (allFinal) return filter ? projectDay(cached, filter) : cached;
     // Any in-progress game shortens the TTL so reloads track live scores;
     // otherwise a scheduled day polls for first pitch / lineups.
     const ttl = states.some((s) => s === 'live') ? LIVE_DAY_TTL : TODAY_TTL;
-    if (Date.now() - cached.fetchedAt < ttl) return cached;
+    if (Date.now() - cached.fetchedAt < ttl) {
+      return filter ? projectDay(cached, filter) : cached;
+    }
   }
 
   const { byBatter, byPitcher, dayGames } = await buildStatsApiDay(date);
@@ -935,8 +1085,26 @@ export async function getDay(date: string): Promise<ParsedDay> {
   }
 
   const parsed: ParsedDay = { date, reports, games: dayGames, fetchedAt: Date.now() };
-  memCache.set(date, parsed);
-  return parsed;
+
+  // Snapshot a day that will never change again, so the next cold read is one
+  // object instead of a schedule fetch plus a read per game. An empty schedule
+  // is deliberately not snapshotted — games can post late.
+  const allFinal =
+    dayGames.length > 0 && dayGames.every((g) => g.status.state === 'final');
+  if (allFinal) await writeDaySnapshot(parsed);
+
+  if (!filter) {
+    memCache.set(date, parsed);
+    return parsed;
+  }
+  // Hold on to the whole day only while it can still change; once it's frozen
+  // the snapshot is the durable copy and only the projection is worth keeping.
+  const projected = projectDay(parsed, filter);
+  if (isMutable && !allFinal) {
+    memCache.set(date, parsed);
+    return projected;
+  }
+  return rememberProjection(`${date}|${filterKey(filter)}`, projected);
 }
 
 /** Inclusive list of YYYY-MM-DD dates from start to end. */
@@ -1006,8 +1174,11 @@ export async function getReport(
   const ids = players.map((p) => p.id);
   const batterIds = players.filter((p) => p.kind === 'batter').map((p) => p.id);
   const pitcherIds = players.filter((p) => p.kind === 'pitcher').map((p) => p.id);
+  // Each day is narrowed to just these players as it's parsed — without that a
+  // wide range holds every player who appeared on every date in memory at once.
+  const filter = dayFilterFor(players);
   const [days, playerStats, pitcherStats, rosterInfo] = await Promise.all([
-    Promise.all(enumerateDates(startDate, endDate).map(getDay)),
+    mapLimit(enumerateDates(startDate, endDate), DAY_CONCURRENCY, (d) => getDay(d, filter)),
     getPlayerStats(batterIds),
     getPitcherStats(pitcherIds),
     getRosterInfo(ids),

@@ -6,3 +6,7 @@ server/data/cache/
 *.tsbuildinfo
 
 server/data/
+
+# CDK synth output
+infra/cdk.out/
+infra/cdk.context.json

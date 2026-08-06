@@ -1,4 +1,5 @@
 import { parse } from 'csv-parse/sync';
+import { readJsonBlob, writeJsonBlob } from './storage.js';
 import type { XwobaPa, XwobaSeries } from './types.js';
 
 // Keep in sync with hfSea in savant.ts and CURRENT_SEASON in percentiles.ts.
@@ -42,6 +43,13 @@ const num = (v: string | undefined): number | null => {
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const cache = new Map<string, { data: XwobaSeries; fetchedAt: number }>();
 
+/** Backing the memory cache with the storage tier matters more than it looks:
+ *  the source here is a *full-season* Savant CSV, several MB per player. Memory
+ *  alone means every cold container re-downloads and re-parses it. */
+const storeKey = (playerId: number, kind: 'batter' | 'pitcher') =>
+  `xwoba-${kind}-${playerId}-${SEASON}.json`;
+const stillFresh = (_v: XwobaSeries, cachedAt: number) => Date.now() - cachedAt < CACHE_TTL_MS;
+
 /** Sortable per-PA record before it's trimmed to the wire shape. */
 interface PaRow extends XwobaPa {
   gamePk: number;
@@ -64,6 +72,12 @@ export async function getXwobaSeries(
   const key = `${kind}-${playerId}`;
   const hit = cache.get(key);
   if (hit && Date.now() - hit.fetchedAt < CACHE_TTL_MS) return hit.data;
+
+  const stored = await readJsonBlob<XwobaSeries>(storeKey(playerId, kind), stillFresh);
+  if (stored) {
+    cache.set(key, { data: stored, fetchedAt: Date.now() });
+    return stored;
+  }
 
   const res = await fetch(seasonXwobaUrl(playerId, kind), {
     headers: { 'User-Agent': 'statcast-sicko/1.0' },
@@ -103,5 +117,6 @@ export async function getXwobaSeries(
 
   const data: XwobaSeries = { season: SEASON, seasonXwoba, leagueXwoba: LEAGUE_XWOBA, pas };
   cache.set(key, { data, fetchedAt: Date.now() });
+  await writeJsonBlob(storeKey(playerId, kind), data);
   return data;
 }

@@ -1,4 +1,5 @@
 import { parse } from 'csv-parse/sync';
+import { readJsonBlob, writeJsonBlob } from './storage.js';
 
 // Keep in sync with hfSea in savant.ts, SEASON in xwoba.ts, CURRENT_SEASON in
 // percentiles.ts.
@@ -120,6 +121,27 @@ const num = (v: string | undefined): number | null => {
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // current-season data moves daily
 const cache = new Map<number, { data: SeasonArsenals; fetchedAt: number }>();
 
+/** An `Arsenal` is a Map, so it needs flattening before it can be stored. */
+type StoredArsenals = Record<'all' | 'vsRight' | 'vsLeft', Record<string, SeasonPitch>>;
+
+const storeKey = (pitcherId: number) => `arsenal-${pitcherId}-${SEASON}.json`;
+
+function toStored(a: SeasonArsenals): StoredArsenals {
+  return {
+    all: Object.fromEntries(a.all),
+    vsRight: Object.fromEntries(a.vsRight),
+    vsLeft: Object.fromEntries(a.vsLeft),
+  };
+}
+
+function fromStored(s: StoredArsenals): SeasonArsenals {
+  return {
+    all: new Map(Object.entries(s.all ?? {})),
+    vsRight: new Map(Object.entries(s.vsRight ?? {})),
+    vsLeft: new Map(Object.entries(s.vsLeft ?? {})),
+  };
+}
+
 /**
  * A pitcher's season arsenal averages (velo, spin, induced vertical break,
  * horizontal break) per pitch type. The feed's `breakHorizontal` is the negation
@@ -129,6 +151,19 @@ const cache = new Map<number, { data: SeasonArsenals; fetchedAt: number }>();
 export async function getSeasonArsenal(pitcherId: number): Promise<SeasonArsenals> {
   const hit = cache.get(pitcherId);
   if (hit && Date.now() - hit.fetchedAt < CACHE_TTL_MS) return hit.data;
+
+  // getReport calls this once per watched pitcher, and the source is a
+  // full-season Savant CSV — without a storage tier behind the memory cache a
+  // cold container re-downloads one per pitcher on every report.
+  const stored = await readJsonBlob<StoredArsenals>(
+    storeKey(pitcherId),
+    (_v, cachedAt) => Date.now() - cachedAt < CACHE_TTL_MS,
+  );
+  if (stored) {
+    const data = fromStored(stored);
+    cache.set(pitcherId, { data, fetchedAt: Date.now() });
+    return data;
+  }
 
   const res = await fetch(seasonPitcherUrl(pitcherId), {
     headers: { 'User-Agent': 'statcast-sicko/1.0' },
@@ -149,6 +184,7 @@ export async function getSeasonArsenal(pitcherId: number): Promise<SeasonArsenal
     vsLeft: aggregate(records.filter((r) => r.stand === 'L')),
   };
   cache.set(pitcherId, { data, fetchedAt: Date.now() });
+  await writeJsonBlob(storeKey(pitcherId), toStored(data));
   return data;
 }
 

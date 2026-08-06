@@ -5,11 +5,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-npm install          # installs root + both workspaces
+npm install          # installs root + all three workspaces
 npm run dev          # dev: API on :4000 + client on :5173 (Vite proxies /api → :4000)
 npm run build        # builds client (tsc -b + vite), then compiles server (tsc)
 npm start            # prod: server serves API + built client on :4000
 npm run docs         # serve docs/ (MLB Stats API references) on :4001
+npm run deploy       # build, then cdk deploy (see Deployment below)
+npm run cdk -- diff  # any cdk subcommand, run in infra/
 ```
 
 Per-workspace: `npm run dev --workspace server` (tsx watch), `npm run dev --workspace client` (vite).
@@ -36,13 +38,37 @@ A third source: `server/src/percentiles.ts` **scrapes the Savant player page** f
 - Stats API at-bats ↔ Savant CSV rows: `at_bat_number == atBatIndex + 1`.
 - Players are matched by MLB id, with a **fallback to `savantName`** (`toSavantName` in `names.ts` converts "First Last" → "Last, First") if the id isn't present that day.
 
-### Caching (multiple layers, all in `server/data/`, gitignored)
+### Caching (multiple layers; `server/data/` locally, S3 when deployed)
+
+**All cache reads/writes go through `storage.ts`** — `readBlob`/`writeBlob` (text), `readGzipBlob`/`writeGzipBlob` (gzipped, `.gz` suffix applied internally), `readJsonBlob`/`writeJsonBlob` (JSON + a `cachedAt` stamp with a caller-supplied freshness test). It writes to `server/data/cache/` by default, or to S3 under a `cache/` prefix when `CACHE_BUCKET` is set. Key names are identical either way. **No module outside `storage.ts` should touch `fs` for cache purposes.** Cache reads degrade to a miss and cache *writes are logged and swallowed* — a failed write must never fail a request that already has its answer.
 
 - `cache/{date}.csv` — Savant CSV, downloaded once per date, kept forever (delete to refresh).
-- Stats API responses cached to `cache/` on disk **and** in-memory.
+- Stats API responses cached via `storage.ts` **and** in-memory.
+- `day-{date}-v{N}.json.gz` — **a whole finished day as one gzipped object** (`DAY_SNAPSHOT_VERSION`, currently 2). Written by `getDay` once every game that day is final; on a later cold read it replaces the schedule fetch + ~16 per-game reads + the CSV with a single read. Two things in it are `Map`s and so need explicit conversion (`JSON.stringify` turns a Map into `{}` silently): `ParsedDay.reports`, and each `DayGame`'s `homeStarters`/`awayStarters` — that second one is what v2 fixed.
+- `xwoba-*`/`arsenal-*` — `xwoba.ts` and `pitcherArsenal.ts` were memory-only; both now have a storage tier because each is backed by a *full-season* Savant CSV, and `getReport` pulls one arsenal per watched pitcher.
 - **Live-game freshness:** a game for the current day is re-fetched via `diffPatch` deltas at most once per `LIVE_GAME_TTL` (10s); the parsed day is memoized with a `TODAY_TTL` (10min). Past dates are treated as immutable.
 - `getSeasonPlayers` (roster for the add-player search) cached with a 1h TTL.
-- `watchlist.json` (in `server/data/`, **not** under `cache/`) persists the watchlist via `store.ts`.
+
+**`getDay(date, filter?)`** takes an optional `DayFilter` (`dayFilterFor(players)`). A day holds a report for *every* player who appeared — ~600, several MB — so `getReport` narrows each day to the watched players as it parses. The filter carries **names as well as ids**, because `findPlayerDay` falls back to a same-kind `savantName` match when an id isn't present that day; filtering on ids alone would silently break that. Frozen, filtered days are memoized in a bounded `projectedCache` keyed by date + watchlist; only still-mutable days are kept whole in `memCache`. `mapLimit` (`limit.ts`) caps the fan-out at `DAY_CONCURRENCY` (6) and `GAME_CONCURRENCY` (8) — this bounds peak heap as much as it bounds sockets.
+
+### Watchlist, users and auth
+
+The watchlist is **per user**. Every `store.ts` export takes `userId` first (`getWatchlist(userId)`, `addPlayer(userId, p)`, …); the list-manipulation logic — especially `reorderPlayers`' per-kind slot splicing — is unchanged. Backed by DynamoDB (one item `{ userId, players, version }`) when `WATCHLIST_TABLE` is set, else `server/data/watchlist.json`.
+
+There is deliberately **no module-level cache** in `store.ts`: the old one was never invalidated, so a second instance would serve a stale list and its next write would clobber the first wholesale. Writes now go through `update()`, which re-reads, applies the change, and does a version-conditional put, replaying once on a lost update. `getAllWatchedPlayers()` scans every user's list for the warmer.
+
+`auth.ts::requireUser` sets `req.userId`: the verified Cognito `sub` when `USER_POOL_ID` is set, else `DEV_USER_ID ?? 'local'` — which is what keeps `npm run dev` working with no AWS and no login. API Gateway also carries a JWT authorizer, but that's only an edge filter; this middleware is the single place that decides *which* user. `/api/health` and `/api/config` are the only unauthenticated routes.
+
+### Deployment (`infra/`, a CDK app)
+
+S3 + CloudFront for the client, Lambda behind an API Gateway HTTP API for the server, S3 for the cache, DynamoDB for watchlists, Cognito (self-signup + optional Google) for sign-in. `server/src/lambda.ts` wraps the Express app in `serverless-http`; `index.ts` guards `express.static` and `app.listen` behind `!IS_LAMBDA` and exports the app.
+
+- `/api/*` is a CloudFront **behavior** over the same distribution, so the client stays same-origin and there is **no CORS**. That behavior needs `ALL_VIEWER_EXCEPT_HOST_HEADER` — CloudFront strips `Authorization` by default and every request would 401.
+- **`compression()` is required, not an optimisation.** A wide-range report exceeds Lambda's 6 MB response cap uncompressed, and nothing downstream can compress on our behalf (the cap applies before CloudFront sees the response). `lambda.ts` marks JSON/text as `binary` so gzipped bodies are base64-encoded rather than corrupted.
+- CDK bundling sets **`bundleAwsSDK: true`**. The default leaves `@aws-sdk/*` external, but `@aws-sdk/lib-dynamodb` is *not* in the Lambda runtime's SDK — leaving it external is a `MODULE_NOT_FOUND` on the first watchlist read.
+- The client learns its Cognito config from **`/config.json`**, written into the site bucket by `BucketDeployment` via `Source.jsonData`, so one build works in any environment. `client/src/auth.tsx` skips auth entirely when that file is absent or has no user pool.
+- **Two-pass first deploy.** Cognito's callback URL needs the CloudFront domain → distribution → API → authorizer → user pool client is a cycle, so `siteUrl` comes from CDK **context** instead. Deploy, read the `NextStep` output, deploy again with `-c siteUrl=…`. A custom domain would collapse this to one pass.
+- Two EventBridge rules run `warmer.ts`: `live` every 5 min (today + yesterday) and `backfill` nightly (last 7 days + per-player season data + the season roster).
 
 ### Date handling
 

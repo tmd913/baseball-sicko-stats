@@ -1,11 +1,6 @@
 import { parse } from 'csv-parse/sync';
-import { promises as fs } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { readBlob, writeBlob } from './storage.js';
 import type { PercentileMetric, PercentileSection, PlayerPercentiles } from './types.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const CACHE_DIR = path.join(__dirname, '..', 'data', 'cache');
 
 /** Current Statcast season — mirrors the hfSea pin in savant.ts. */
 const CURRENT_SEASON = 2026;
@@ -351,7 +346,7 @@ function distFresh(d: Dist): boolean {
 }
 
 /** A qualified-batter distribution for one leaderboard column, sorted ascending
- * and cached in memory and on disk under `data/cache/{name}-{year}.json`.
+ * and cached in memory and in the storage tier as `{name}-{year}.json`.
  * `transform` adapts the raw column to the units used on the player page. */
 async function getDistribution(
   name: string,
@@ -364,15 +359,18 @@ async function getDistribution(
   const mem = distMem.get(key);
   if (mem && distFresh(mem)) return mem.values;
 
-  const file = path.join(CACHE_DIR, `${name}-${year}.json`);
-  try {
-    const disk = JSON.parse(await fs.readFile(file, 'utf8')) as Dist;
-    if (distFresh(disk)) {
-      distMem.set(key, disk);
-      return disk.values;
+  const file = `${name}-${year}.json`;
+  const raw = await readBlob(file);
+  if (raw !== null) {
+    try {
+      const stored = JSON.parse(raw) as Dist;
+      if (distFresh(stored)) {
+        distMem.set(key, stored);
+        return stored.values;
+      }
+    } catch {
+      // corrupt entry — fall through and re-fetch
     }
-  } catch {
-    // not cached yet
   }
 
   const res = await fetch(url, { headers: { 'User-Agent': BROWSER_UA } });
@@ -394,8 +392,7 @@ async function getDistribution(
 
   const built: Dist = { year, values, updatedAt: new Date().toISOString() };
   distMem.set(key, built);
-  await fs.mkdir(CACHE_DIR, { recursive: true });
-  await fs.writeFile(file, JSON.stringify(built), 'utf8');
+  await writeBlob(file, JSON.stringify(built));
   return values;
 }
 
@@ -521,7 +518,7 @@ function buildSections(
 const memCache = new Map<string, PlayerPercentiles>();
 
 function cacheFile(playerId: number, year: number, kind: 'batter' | 'pitcher'): string {
-  return path.join(CACHE_DIR, `percentiles-${kind}-${playerId}-${year}.json`);
+  return `percentiles-${kind}-${playerId}-${year}.json`;
 }
 
 /** A cached card is fresh if it's a past season (immutable) or, for the current
@@ -531,13 +528,14 @@ function isFresh(p: PlayerPercentiles, year: number): boolean {
   return Date.now() - new Date(p.updatedAt).getTime() < CURRENT_TTL_MS;
 }
 
-async function readDiskCache(
+async function readStoredCache(
   playerId: number,
   year: number,
   kind: 'batter' | 'pitcher',
 ): Promise<PlayerPercentiles | null> {
+  const raw = await readBlob(cacheFile(playerId, year, kind));
+  if (raw === null) return null;
   try {
-    const raw = await fs.readFile(cacheFile(playerId, year, kind), 'utf8');
     return JSON.parse(raw) as PlayerPercentiles;
   } catch {
     return null;
@@ -590,8 +588,8 @@ async function scrape(
 
 /**
  * A player's Savant-style percentile-ranking card for a season. Cached in
- * memory and on disk under `data/cache/`; the current season re-scrapes past a
- * TTL, past seasons are kept forever.
+ * memory and in the storage tier; the current season re-scrapes past a TTL,
+ * past seasons are kept forever.
  */
 export async function getPercentiles(
   playerId: number,
@@ -602,15 +600,14 @@ export async function getPercentiles(
   const mem = memCache.get(key);
   if (mem && isFresh(mem, year)) return mem;
 
-  const disk = await readDiskCache(playerId, year, kind);
-  if (disk && isFresh(disk, year)) {
-    memCache.set(key, disk);
-    return disk;
+  const stored = await readStoredCache(playerId, year, kind);
+  if (stored && isFresh(stored, year)) {
+    memCache.set(key, stored);
+    return stored;
   }
 
   const fresh = await scrape(playerId, year, kind);
   memCache.set(key, fresh);
-  await fs.mkdir(CACHE_DIR, { recursive: true });
-  await fs.writeFile(cacheFile(playerId, year, kind), JSON.stringify(fresh), 'utf8');
+  await writeBlob(cacheFile(playerId, year, kind), JSON.stringify(fresh));
   return fresh;
 }
