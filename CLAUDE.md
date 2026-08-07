@@ -84,7 +84,7 @@ S3 + CloudFront for the client, Lambda behind an API Gateway HTTP API for the se
 
 ### Client
 
-`App.tsx` holds all top-level state and persists it in the **URL query string** (seeded from `window.location.search` on load, synced via `history.replaceState`) — so a reload or shared link restores the same view. There is no `localStorage`. Params: date range, active preset, expanded **player keys**, open details player (also a key), `view=feed`, `kind=pitcher`, `sim=1`. `readKeys()` also accepts bare ids in `expanded`/`player` — links from before two-way support, read as batters.
+`App.tsx` holds all top-level state and persists it in the **URL query string** (seeded from `window.location.search` on load, synced via `history.replaceState`) — so a reload or shared link restores the same view. There is no `localStorage`. Params: `preset` **or** `start`/`end` (never both), expanded **player keys**, open details player (also a key), `view=feed`, `kind=pitcher`, `sim=1`. **A preset is a rule, not a range** — while one is active the URL carries only its label and the dates are re-derived from `datePresets()` on load, so a link (or a reloaded tab) saved under "Today" opens on the *new* today after the date rolls over. Only a custom range from the picker writes `start`/`end`. An unrecognised `preset=` label falls back to whatever `start`/`end` say; legacy links that carry both follow the preset. `readKeys()` also accepts bare ids in `expanded`/`player` — links from before two-way support, read as batters.
 
 ### Player keys
 

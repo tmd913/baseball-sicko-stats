@@ -105,21 +105,35 @@ export default function App() {
     () => new URLSearchParams(window.location.search),
     [],
   );
-  const [start, setStart] = useState(() => {
-    const v = initialParams.get('start');
-    return v && ISO_DATE.test(v) ? v : todayEt();
-  });
-  const [end, setEnd] = useState(() => {
-    const v = initialParams.get('end');
-    return v && ISO_DATE.test(v) ? v : todayEt();
-  });
-  const [activePreset, setActivePreset] = useState<string | null>(() => {
-    if (initialParams.has('preset')) return initialParams.get('preset') || null;
+  const presets = useMemo(datePresets, []);
+  // The preset named in the URL, if it's still one we offer. An unknown label
+  // (renamed preset, hand-edited link) falls through to start/end instead.
+  const initialPreset = useMemo(() => {
+    if (initialParams.has('preset')) {
+      const label = initialParams.get('preset');
+      return presets.some((p) => p.label === label) ? label : null;
+    }
     // No preset param: fresh visit defaults to Today; an explicit range means
     // the user picked custom dates, so no preset is active.
     return initialParams.has('start') || initialParams.has('end') ? null : 'Today';
-  });
-  const presets = useMemo(datePresets, []);
+  }, [initialParams, presets]);
+  // A preset is a rule, not a fixed range, so its dates are re-derived here
+  // rather than read back from the URL: a tab left open overnight and reloaded
+  // under "Today" has to land on the new today, not the day it was opened.
+  // Only a custom range gets its dates from the query string.
+  const initialRange = useMemo(() => {
+    const preset = presets.find((p) => p.label === initialPreset);
+    if (preset) return preset;
+    const s = initialParams.get('start');
+    const e = initialParams.get('end');
+    return {
+      start: s && ISO_DATE.test(s) ? s : todayEt(),
+      end: e && ISO_DATE.test(e) ? e : todayEt(),
+    };
+  }, [initialParams, presets, initialPreset]);
+  const [start, setStart] = useState(initialRange.start);
+  const [end, setEnd] = useState(initialRange.end);
+  const [activePreset, setActivePreset] = useState<string | null>(initialPreset);
   // The picker allows selecting through the end of the current year so the full
   // published schedule (scheduled games, probable pitchers) can be viewed ahead.
   const maxDate = useMemo(() => `${todayEt().slice(0, 4)}-12-31`, []);
@@ -207,9 +221,14 @@ export default function App() {
   // Keep the URL in sync with UI state (replaceState so we don't flood history).
   useEffect(() => {
     const p = new URLSearchParams();
-    p.set('start', start);
-    p.set('end', end);
-    if (activePreset) p.set('preset', activePreset);
+    // The preset *is* the range — writing its dates out too would pin the link
+    // to whatever "Today" meant when it was saved, which is the whole bug.
+    if (activePreset) {
+      p.set('preset', activePreset);
+    } else {
+      p.set('start', start);
+      p.set('end', end);
+    }
     if (expandedKeys.size) p.set('expanded', [...expandedKeys].join(','));
     if (detailsKey) p.set('player', detailsKey);
     if (view !== 'summary') p.set('view', view);
