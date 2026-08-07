@@ -19,3 +19,37 @@ export function useScrollIntoViewOnExpand<T extends HTMLElement>(expanded: boole
   }, [expanded]);
   return ref;
 }
+
+/**
+ * Freezes the page behind a full-screen overlay for as long as the caller is
+ * mounted, then puts it back exactly where it was.
+ *
+ * The overlay (`.details-view`) is `position: fixed` with its own scroller, so
+ * the document underneath stayed live: once the overlay hit its top or bottom
+ * the scroll chained through to the window, and keyboard scrolling (space,
+ * arrows, Page Down) never targeted the overlay at all because focus was still
+ * on the card behind it. Either way the page drifted invisibly and closing the
+ * overlay dumped the user somewhere they'd never scrolled to.
+ *
+ * `overflow: hidden` on the body alone doesn't hold on iOS Safari, so the body
+ * is pinned with `position: fixed` and offset by the current scroll — the one
+ * technique that stops touch scrolling everywhere. That offset is why the
+ * scroll has to be restored by hand on unlock: pinning the body resets the
+ * window to 0.
+ */
+export function useLockBodyScroll() {
+  useEffect(() => {
+    const { body } = document;
+    const y = window.scrollY;
+    const prev = body.style.cssText;
+    body.style.position = 'fixed';
+    body.style.top = `-${y}px`;
+    body.style.left = '0';
+    body.style.right = '0';
+    body.style.width = '100%';
+    return () => {
+      body.style.cssText = prev;
+      window.scrollTo(0, y);
+    };
+  }, []);
+}
