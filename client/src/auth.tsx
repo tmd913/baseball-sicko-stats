@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { ReactNode } from 'react';
 import { AuthProvider, useAuth } from 'react-oidc-context';
 import type { AuthProviderProps } from 'react-oidc-context';
@@ -142,26 +142,40 @@ function SignIn() {
 function Gate({ children }: { children: ReactNode }) {
   const auth = useAuth();
 
-  // Keep api.ts holding a current token, and let it ask for a fresh one when
-  // the server rejects the one it has.
-  useEffect(() => {
-    setAuthToken(auth.user?.id_token ?? null);
-  }, [auth.user]);
+  // Both of these are published *during render*, not from an effect.
+  //
+  // `children` mount in the very commit that first renders them, and React
+  // flushes a child's effects before its parent's — so an effect here would
+  // hand `api.ts` the token only after App's first /api/players, /api/watchlist
+  // and /api/report had already gone out bare. All three 401'd, the retry below
+  // then fired `signinSilent`, and the app was replaced by the "Signing in…"
+  // splash seconds after the user had in fact signed in. Assigning to a module
+  // variable is idempotent, so a re-render (or StrictMode's double render)
+  // costs nothing.
+  setAuthToken(auth.user?.id_token ?? null);
 
-  useEffect(() => {
-    setReauthHandler(async () => {
+  // The retry handler reads the live auth context out of a ref instead of
+  // closing over it, so it can be registered once and stay registered. The old
+  // effect re-ran on every auth change and its cleanup nulled the handler
+  // first, leaving windows where a 401 had nothing to retry with.
+  const authRef = useRef(auth);
+  authRef.current = auth;
+  const reauthRef = useRef<(() => Promise<string | null>) | null>(null);
+  if (!reauthRef.current) {
+    reauthRef.current = async () => {
       try {
-        const user = await auth.signinSilent();
+        const user = await authRef.current.signinSilent();
         setAuthToken(user?.id_token ?? null);
         return user?.id_token ?? null;
       } catch {
         stashQuery();
-        void auth.signinRedirect();
+        void authRef.current.signinRedirect();
         return null;
       }
-    });
-    return () => setReauthHandler(null);
-  }, [auth]);
+    };
+  }
+  setReauthHandler(reauthRef.current);
+  useEffect(() => () => setReauthHandler(null), []);
 
   // Publish the session so SignOutButton — which lives inside App, and so also
   // renders when auth is off — can show it without touching the auth context.
@@ -180,14 +194,23 @@ function Gate({ children }: { children: ReactNode }) {
     return () => setSession(null);
   }, [auth, auth.isAuthenticated, auth.user]);
 
-  if (auth.isLoading) {
-    return (
+  // A user we've already loaded stays signed in through a background silent
+  // renew. `isLoading` flips back on for every token refresh — routine, since
+  // ID tokens expire mid-session — and treating that as "not signed in yet"
+  // would unmount the whole app, lose its state, and put a "Signing in…" splash
+  // in front of someone who signed in an hour ago. So the splash is only for a
+  // boot with no user at all.
+  if (!auth.user) {
+    return auth.isLoading ? (
       <Splash>
         <p className="auth-sub">Signing in…</p>
       </Splash>
+    ) : (
+      <SignIn />
     );
   }
-  if (!auth.isAuthenticated) return <SignIn />;
+  // An expired token that nothing is renewing means the session is really over.
+  if (!auth.isAuthenticated && !auth.isLoading) return <SignIn />;
   return <>{children}</>;
 }
 

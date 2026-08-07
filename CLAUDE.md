@@ -57,6 +57,8 @@ The watchlist is **per user**. Every `store.ts` export takes `userId` first (`ge
 
 There is deliberately **no module-level cache** in `store.ts`: the old one was never invalidated, so a second instance would serve a stale list and its next write would clobber the first wholesale. Writes now go through `update()`, which re-reads, applies the change, and does a version-conditional put, replaying once on a lost update. `getAllWatchedPlayers()` scans every user's list for the warmer.
 
+`auth.tsx::Gate` publishes the ID token to `api.ts` (`setAuthToken`/`setReauthHandler`) **during render, not from an effect** — React flushes a child's effects before its parent's, so an effect there let App's first `/api/players`, `/api/watchlist` and `/api/report` go out with no `Authorization` header, 401, and trigger a `signinSilent` that threw the "Signing in…" splash up seconds after sign-in. For the same reason the splash is gated on `!auth.user` rather than `auth.isLoading`: a routine mid-session token renew flips `isLoading` back on, and reacting to that would unmount the whole app.
+
 `auth.ts::requireUser` sets `req.userId`: the verified Cognito `sub` when `USER_POOL_ID` is set, else `DEV_USER_ID ?? 'local'` — which is what keeps `npm run dev` working with no AWS and no login. API Gateway also carries a JWT authorizer, but that's only an edge filter; this middleware is the single place that decides *which* user. `/api/health` and `/api/config` are the only unauthenticated routes.
 
 ### Deployment (`infra/`, a CDK app)
