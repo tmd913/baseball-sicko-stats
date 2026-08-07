@@ -2096,6 +2096,9 @@ body {
   inset: 0;
   z-index: 60;
   overflow-y: auto;
+  /* Keep the scroll in here — see .details-view, which this overlay mirrors. */
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   background: var(--bg);
   padding: 20px 16px 64px;
 }
@@ -2462,6 +2465,14 @@ body {
   inset: 0;
   z-index: 50;
   overflow-y: auto;
+  /* Keep the scroll in here: no chaining to the page behind, and no rubber-band
+     / pull-to-refresh when the view is already at its top or bottom. */
+  overscroll-behavior: contain;
+  /* The view is open only while the body is pinned (useLockBodyScroll), which
+     takes the page's scrollbar away. When this view overflows its own scrollbar
+     fills that gutter; reserving it keeps the short tabs from shifting sideways
+     too. No-op on platforms with overlay scrollbars. */
+  scrollbar-gutter: stable;
   background: var(--bg);
   padding: 20px 16px 64px;
 }

@@ -12,6 +12,7 @@ import { headshotUrl, savantPlayerUrl } from '../lib';
 import { SeasonArsenalRow, SplitTabs } from './Arsenal';
 import type { SplitKey } from './Arsenal';
 import { RollingXwoba } from './RollingXwoba';
+import { useLockBodyScroll } from '../hooks';
 
 /**
  * Savant's diverging percentile scale: deep blue (poor, 0) → neutral grey
@@ -351,6 +352,10 @@ export function PlayerDetails({
   onRemove: () => void;
   onClose: () => void;
 }) {
+  // This view covers the page but scrolls in its own box, so the list behind it
+  // has to be frozen — otherwise the scroll chains straight through and closing
+  // the view lands somewhere the user never scrolled to.
+  useLockBodyScroll();
   const kind = isPitcher ? 'pitcher' : 'batter';
   const [tab, setTab] = useState<DetailsTab>('percentiles');
   const [data, setData] = useState<PlayerPercentiles | null>(null);

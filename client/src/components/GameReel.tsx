@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { PlateAppearance } from '../types';
 import { api } from '../api';
 import { eventLabel, outcomeKind } from '../lib';
+import { useLockBodyScroll } from '../hooks';
 
 /** A resolved clip in the reel: its playable URL plus the caption metadata. */
 interface ReelClip {
@@ -37,6 +38,10 @@ export function GameReel({
   subtitle: string;
   onClose: () => void;
 }) {
+  // Same fixed full-screen overlay as PlayerDetails, so it needs the same lock:
+  // without it the reel's scroll chains into the page behind and closing lands
+  // the user away from the game they opened.
+  useLockBodyScroll();
   const [clips, setClips] = useState<ReelClip[]>([]);
   // How many at-bats we've attempted to resolve so far (drives the loading
   // progress line while clips are still being fetched).
