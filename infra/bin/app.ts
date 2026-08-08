@@ -10,6 +10,9 @@ const ctx = (key: string): string | undefined => {
   return typeof v === 'string' && v.length > 0 ? v : undefined;
 };
 
+/** Set once the domain is registered and its hosted zone exists. */
+const domainName = ctx('domainName');
+
 new SickoStack(app, ctx('stackName') ?? 'BaseballSicko', {
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
@@ -17,8 +20,11 @@ new SickoStack(app, ctx('stackName') ?? 'BaseballSicko', {
     // (statsapi / baseballsavant) are US-hosted.
     region: ctx('region') ?? process.env.CDK_DEFAULT_REGION ?? 'us-east-1',
   },
-  // Empty on the first deploy — see the note on SickoStackProps.siteUrl.
-  siteUrl: ctx('siteUrl'),
+  // With a custom domain this is known up front and the second pass on
+  // SickoStackProps.siteUrl disappears; without one it is empty on the first
+  // deploy and fed back in as context on the second.
+  siteUrl: ctx('siteUrl') ?? (domainName ? `https://${domainName}` : undefined),
+  domainName,
   googleClientId: ctx('googleClientId'),
   googleSecretName: ctx('googleSecretName') ?? 'baseball-sicko/google-oauth',
   // Cognito hosted-UI prefixes are globally unique, so make it easy to change.
