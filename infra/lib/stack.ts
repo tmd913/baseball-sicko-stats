@@ -31,7 +31,14 @@ const REPO = path.join(__dirname, '..', '..');
 
 export interface SickoStackProps extends StackProps {
   /**
-   * The site's own origin, e.g. `https://d111.cloudfront.net`.
+   * An origin Cognito should accept as a callback, e.g.
+   * `https://d111.cloudfront.net`.
+   *
+   * With no `domainName` this is the site's own origin and the reason for the
+   * two-pass first deploy. With one, the apex is the origin and this narrows to
+   * its remaining job: keeping a *previous* origin signable-in. The CloudFront
+   * domain never stops serving the app, so dropping its callback would let an
+   * old bookmark load the page and then fail at sign-in.
    *
    * Taken from context rather than read off the Distribution construct, and
    * that is deliberate. Cognito's callback URL needs the site domain; the
@@ -155,13 +162,18 @@ export class SickoStack extends Stack {
     }
 
     // Callback URLs Cognito will accept. localhost is always allowed so the
-    // hosted UI can be exercised against `npm run dev`. The CloudFront domain
-    // stays on the list alongside the custom one: both still resolve to the
-    // same distribution, and dropping it would break any bookmark of it
-    // mid-session. The www entry is unreachable while the redirect is in place
-    // (the app only ever runs on the apex, and the client builds its
-    // redirect_uri from window.location.origin) but is kept so that removing
-    // the redirect doesn't silently break sign-in.
+    // hosted UI can be exercised against `npm run dev`.
+    //
+    // The pre-domain CloudFront origin has to be carried in explicitly, via
+    // `siteUrl` in cdk.json — it cannot be read off the Distribution construct
+    // here without recreating the dependency cycle described above, and once
+    // `domainName` supplies the origin it would otherwise fall off the list
+    // and strand every bookmark of it at sign-in.
+    //
+    // The www entry is unreachable while the redirect is in place (the app only
+    // ever runs on the apex, and the client builds its redirect_uri from
+    // window.location.origin) but is kept so removing the redirect doesn't
+    // silently break sign-in.
     const callbackUrls = [
       ...new Set([
         'http://localhost:5173/',

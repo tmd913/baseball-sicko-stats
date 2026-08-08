@@ -8,6 +8,8 @@
     "//": "Deployment settings. The Google client id is not a secret (the secret itself lives in Secrets Manager under googleSecretName); keeping it here rather than passing -c on every deploy means the second, siteUrl pass can't accidentally drop the Google provider by omitting it.",
     "cognitoPrefix": "baseball-sicko",
     "domainName": "statcastsicko.com",
+    "//siteUrl": "The origin the site used before statcastsicko.com. It still serves the app, so it stays a Cognito callback — pinned here because the distribution's own domain can't be read back into the user pool client without recreating the dependency cycle.",
+    "siteUrl": "https://d18r33h6h98ev9.cloudfront.net",
     "googleClientId": "68383070545-5nldhf2aldbek680br28qe78h3f8s6on.apps.googleusercontent.com",
     "googleSecretName": "baseball-sicko/google-oauth",
 
