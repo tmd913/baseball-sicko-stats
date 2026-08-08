@@ -63,10 +63,11 @@ export function lineSummary(l: PitchingLine): string {
 }
 
 /**
- * One collapsible section of a pitcher card — Line, Innings, Arsenal. The bar
- * reuses the batter card's game bar (`.game-sub-bar`) so the two cards' toggles
- * share one format: a bare label, no caret. Expanding scrolls it to the top,
- * like every other collapsible in the app.
+ * One collapsible section of a pitcher card — Line, Innings, Opponent (once
+ * there's an outing beneath it), Arsenal. The bar reuses the batter card's game
+ * bar (`.game-sub-bar`) so the two cards' toggles share one format: a bare
+ * label, no caret. Expanding scrolls it to the top, like every other
+ * collapsible in the app.
  */
 function CardSection({ title, children }: { title: string; children: ReactNode }) {
   const [open, setOpen] = useState(true);
@@ -288,13 +289,21 @@ function rankNote(rank: number | null | undefined): string | undefined {
  * of it that's actually his problem — how they hit pitchers of his hand. Reuses
  * the game line's parts so the two sections read as one table. Silent when the
  * team lookup failed; it's context, not the outing.
+ *
+ * `collapsible` from first pitch on: once there's an outing under it this is
+ * background to a card that has its own story to tell, so it takes the same
+ * toggle bar the other sections carry and can be folded away. Before then it
+ * stays a plain label — it's the whole point of a card with no outing, and a
+ * toggle there would only offer to hide the one thing worth reading.
  */
 export function OpponentSection({
   game,
   throws: reportThrows,
+  collapsible = false,
 }: {
   game: PlayerGame;
   throws?: string | null;
+  collapsible?: boolean;
 }) {
   const hitting = game.opponentHitting;
   if (!hitting) return null;
@@ -306,77 +315,78 @@ export function OpponentSection({
   const hand = game.stand ?? reportThrows ?? null;
   const throws = hand === 'L' || hand === 'R' ? hand : null;
   const split = throws === 'L' ? hitting.vsLeft : throws === 'R' ? hitting.vsRight : null;
-  return (
-    <div className="card-section">
-      {/* A plain label, not a CardSection: there's one short block under it and
-          nothing to collapse away from, so it needs neither the toggle bar's
-          frame nor the height that bar reserves for its controls. */}
-      <div className="section-title opp-title">Opponent</div>
-      <div className="pline">
-        <div className="ars-row">
-          <div className="ars-head">
-            <span className="ars-abbr">{game.opponent}</span>
-            <span className="ars-name">
-              {s.runsPerGame ?? '—'} R/G
-              {s.ranks?.runsPerGame ? (
-                <span className="ars-rnote">{ordinal(s.ranks.runsPerGame)}</span>
-              ) : null}
-            </span>
-            <span className="ars-count">{s.games} G</span>
-          </div>
-          {/* Each number carries where it places among all 30 — a .231 team
-              average says nothing until you know it's 28th. 1st is always the
-              best offence, so the fewest strikeouts ranks 1st, not 30th. */}
-          <div className="ars-results" title="Season, with league rank (1st = best offence)">
-            <span className="ars-rtag">Season</span>
-            <ResultStat label="AVG" value={s.avg} note={rankNote(s.ranks?.avg)} />
-            <ResultStat label="OBP" value={s.obp} note={rankNote(s.ranks?.obp)} />
-            <ResultStat label="SLG" value={s.slg} note={rankNote(s.ranks?.slg)} />
-            <ResultStat label="OPS" value={s.ops} note={rankNote(s.ranks?.ops)} />
-            <ResultStat label="HR" value={String(s.homeRuns)} note={rankNote(s.ranks?.homeRuns)} />
+  const body = (
+    <div className="pline">
+      <div className="ars-row">
+        <div className="ars-head">
+          <span className="ars-abbr">{game.opponent}</span>
+          <span className="ars-name opp-rg">
+            {s.runsPerGame ?? '—'} R/G
+            {s.ranks?.runsPerGame ? (
+              <span className="ars-rnote">{ordinal(s.ranks.runsPerGame)}</span>
+            ) : null}
+          </span>
+        </div>
+        {/* Each number carries where it places among all 30 — a .231 team
+            average says nothing until you know it's 28th. 1st is always the
+            best offence, so the fewest strikeouts ranks 1st, not 30th. */}
+        <div
+          className="ars-results opp-results"
+          title="Season, with league rank (1st = best offence)"
+        >
+          <span className="ars-rtag">Season</span>
+          <ResultStat label="AVG" value={s.avg} note={rankNote(s.ranks?.avg)} />
+          <ResultStat label="OBP" value={s.obp} note={rankNote(s.ranks?.obp)} />
+          <ResultStat label="SLG" value={s.slg} note={rankNote(s.ranks?.slg)} />
+          <ResultStat label="OPS" value={s.ops} note={rankNote(s.ranks?.ops)} />
+          <ResultStat label="HR" value={String(s.homeRuns)} note={rankNote(s.ranks?.homeRuns)} />
+          <ResultStat
+            label="K%"
+            value={ratePct(s.kRate)}
+            note={rankNote(s.ranks?.kRate)}
+            title="Rank counts the fewest strikeouts as 1st"
+          />
+          <ResultStat label="BB%" value={ratePct(s.bbRate)} note={rankNote(s.ranks?.bbRate)} />
+        </div>
+        {split && (
+          <div
+            className="ars-results opp-results"
+            title={`${split.pa} plate appearances — rank is among all 30 teams against this hand`}
+          >
+            <span className="ars-rtag">vs {throws === 'L' ? 'LHP' : 'RHP'}</span>
+            <ResultStat label="AVG" value={split.avg} note={rankNote(split.ranks?.avg)} />
+            <ResultStat label="OBP" value={split.obp} note={rankNote(split.ranks?.obp)} />
+            <ResultStat label="SLG" value={split.slg} note={rankNote(split.ranks?.slg)} />
+            <ResultStat label="OPS" value={split.ops} note={rankNote(split.ranks?.ops)} />
             <ResultStat
-              label="SB"
-              value={String(s.stolenBases)}
-              note={rankNote(s.ranks?.stolenBases)}
+              label="HR"
+              value={String(split.homeRuns)}
+              note={rankNote(split.ranks?.homeRuns)}
             />
             <ResultStat
               label="K%"
-              value={ratePct(s.kRate)}
-              note={rankNote(s.ranks?.kRate)}
-              title="Rank counts the fewest strikeouts as 1st"
+              value={ratePct(split.kRate)}
+              note={rankNote(split.ranks?.kRate)}
             />
-            <ResultStat label="BB%" value={ratePct(s.bbRate)} note={rankNote(s.ranks?.bbRate)} />
+            <ResultStat
+              label="BB%"
+              value={ratePct(split.bbRate)}
+              note={rankNote(split.ranks?.bbRate)}
+            />
           </div>
-          {split && (
-            <div
-              className="ars-results"
-              title={`${split.pa} plate appearances — rank is among all 30 teams against this hand`}
-            >
-              <span className="ars-rtag">vs {throws === 'L' ? 'LHP' : 'RHP'}</span>
-              <ResultStat label="PA" value={String(split.pa)} />
-              <ResultStat label="AVG" value={split.avg} note={rankNote(split.ranks?.avg)} />
-              <ResultStat label="OBP" value={split.obp} note={rankNote(split.ranks?.obp)} />
-              <ResultStat label="SLG" value={split.slg} note={rankNote(split.ranks?.slg)} />
-              <ResultStat label="OPS" value={split.ops} note={rankNote(split.ranks?.ops)} />
-              <ResultStat
-                label="HR"
-                value={String(split.homeRuns)}
-                note={rankNote(split.ranks?.homeRuns)}
-              />
-              <ResultStat
-                label="K%"
-                value={ratePct(split.kRate)}
-                note={rankNote(split.ranks?.kRate)}
-              />
-              <ResultStat
-                label="BB%"
-                value={ratePct(split.bbRate)}
-                note={rankNote(split.ranks?.bbRate)}
-              />
-            </div>
-          )}
-        </div>
+        )}
       </div>
+    </div>
+  );
+  // A plain label rather than a toggle bar before he's in the game: there's
+  // one short block under it and nothing to collapse away from, so it needs
+  // neither the bar's frame nor the height it reserves for its controls.
+  return collapsible ? (
+    <CardSection title="Opponent">{body}</CardSection>
+  ) : (
+    <div className="card-section">
+      <div className="section-title opp-title">Opponent</div>
+      {body}
     </div>
   );
 }
@@ -440,13 +450,15 @@ function PitcherGameBlock({
           {/* Game aggregate line */}
           <GameLine pg={pg} />
 
-          {/* The lineup on the other side */}
-          <OpponentSection game={game} throws={throws} />
-
           {/* Batters faced — grouped by inning, each result expandable to its pitches */}
           <CardSection title="Innings">
             <InningsList game={game} pitcherId={pitcherId} />
           </CardSection>
+
+          {/* The lineup on the other side. Once he's thrown a pitch this is
+              background rather than the headline, so it sits under the outing
+              itself and collapses like every section around it. */}
+          <OpponentSection game={game} throws={throws} collapsible />
 
           {/* Arsenal: velo/spin/break per pitch type, vs season & league */}
           <ArsenalSection pg={pg} />

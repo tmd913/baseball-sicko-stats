@@ -17,7 +17,7 @@ import type {
 } from '../types';
 import { useScrollIntoViewOnExpand } from '../hooks';
 import { InlineVideoClip, PlateAppearanceCard } from './PlateAppearanceCard';
-import { PlatoonSplit, ProbablePitcher } from './PlayerCard';
+import { GameStatusBadge, PlatoonSplit, ProbablePitcher } from './PlayerCard';
 import { OpponentSection, PitchingTag, lineSummary } from './PitcherCard';
 import { InningsList } from './Innings';
 
@@ -101,6 +101,20 @@ function entryTime(e: FeedEntry): number {
   }
   const d = Date.parse(`${e.game.date}T23:59:59Z`);
   return Number.isNaN(d) ? 0 : d;
+}
+
+/**
+ * Tie-break within a single play. Every event of a play carries that play's
+ * `endTime`, so a steal, the run it turned into and the plate appearance they
+ * happened on are indistinguishable by timestamp — and which of them led came
+ * down to the order the server happened to record them in. This orders them by
+ * what actually happened: the batter's result, then the steal, then the run.
+ * Sorted descending like the timestamp, so the newest-first stream still reads
+ * back in time through a play (Run Scored above Stole 3rd above the single).
+ */
+function playOrder(e: FeedEntry): number {
+  if (e.type !== 'base') return 0;
+  return e.ev.kind === 'run' ? 2 : 1;
 }
 
 /**
@@ -328,10 +342,12 @@ function FeedBaseEvent({
  * the stream around it. `role` is set only while he's on the mound, and tints
  * the header.
  *
- * The header toggles the whole item and the scroll-on-expand is on the item, not
- * the innings inside it — the same shape as a batter's at-bat card, so opening
- * one brings the player it belongs to into view rather than a bare inning. No
- * caret: nothing on the pitcher side carries one (see styles.css).
+ * The line bar under the header toggles the item — the header itself carries the
+ * headshot and name links and is static, so a mistimed tap can't navigate off the
+ * outing it meant to open. The scroll-on-expand is on the item, not the innings
+ * inside it — the same shape as a batter's at-bat card, so opening one brings the
+ * player it belongs to into view rather than a bare inning. No caret: nothing on
+ * the pitcher side carries one (see styles.css).
  */
 function FeedPitcherGame({
   report,
@@ -354,20 +370,12 @@ function FeedPitcherGame({
   const ref = useScrollIntoViewOnExpand<HTMLDivElement>(open);
   return (
     <div className={`feed-item feed-pitcher${role ? ` live-entry role-${role}` : ''}`} ref={ref}>
-      <div
-        className="feed-item-head feed-item-toggle"
-        role="button"
-        tabIndex={0}
-        aria-expanded={open}
-        title={open ? 'Collapse outing' : 'Expand outing'}
-        onClick={onToggle}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            onToggle();
-          }
-        }}
-      >
+      {/* Identity only, and deliberately NOT the toggle: the headshot and the
+          name are links, and while they sat inside the expand target a thumb
+          that missed either one navigated away instead of opening the outing.
+          Every other feed item is already this shape — a static header over a
+          tappable card — so the outing follows it. */}
+      <div className="feed-item-head">
         <FeedHeadshot
           id={report.id}
           name={report.name}
@@ -376,20 +384,32 @@ function FeedPitcherGame({
         />
         <div className="feed-item-id">
           <FeedPlayerName playerKey={playerKey(report)} name={report.name} onOpen={onOpenPlayerDay} />
-          <span className="feed-context">
-            {matchup(game)}
-            {role ? ` · ${liveInning(game)}` : ''}
-          </span>
+          <span className="feed-context">{matchup(game)}</span>
         </div>
+        {role && <span className={`live-role role-${role}`}>{liveRoleLabel(role)}</span>}
+      </div>
+      {/* The card under that header: tags and the line, and the whole bar is the
+          toggle — the batter's `PlateAppearanceCard` in the same slot. It holds
+          no links, so every pixel of it expands the outing. */}
+      <button
+        type="button"
+        className="feed-item-toggle"
+        aria-expanded={open}
+        title={open ? 'Collapse outing' : 'Expand outing'}
+        onClick={onToggle}
+      >
         <PitchingTag game={game} />
         {pg.decision && (
           <span className={`dec-tag dec-${pg.decision}`}>{creditLabel(pg.decision)}</span>
         )}
-        {role && <span className={`live-role role-${role}`}>{liveRoleLabel(role)}</span>}
         {/* Collapsed, the line is what the item says. No caret — see the note on
             `.feed-item-toggle` in styles.css. */}
         <span className="feed-pitch-line">{lineSummary(pg.line)}</span>
-      </div>
+        {/* Score and state, the same badge closing the pitcher card's header —
+            and, while he's on the mound, the inning and the bases behind him.
+            It carries the live inning the context line used to spell out. */}
+        <GameStatusBadge game={game} />
+      </button>
       {open && <InningsList game={game} pitcherId={report.id} newestFirst />}
     </div>
   );
@@ -414,7 +434,10 @@ function byStartTime(
  * that's the probable starter and his own line against that hand; for a
  * **pitcher** it's the lineup waiting for him (the same `OpponentSection` his
  * card carries) — the probable starter on the other side is nobody he faces.
- * The header is static when there's nothing to reveal yet.
+ * The identity row (headshot + name, both links) sits above the bar rather than
+ * inside it, so a tap meant for the row can't land on a link. The bar is static
+ * when there's nothing to reveal yet, and carries no caret on either side — the
+ * bar itself is the affordance (see styles.css).
  */
 function UpcomingRow({
   report,
@@ -437,50 +460,38 @@ function UpcomingRow({
   // On expand, bring the row to the top of the viewport (its scroll-margin-top
   // clears the sticky nav), matching how the at-bat cards behave.
   const ref = useScrollIntoViewOnExpand<HTMLDivElement>(expandable && open);
-  const head = (
+  // The bar under the name: matchup, the SP chip and first pitch. It is the whole
+  // of the row's interactive surface — the headshot and name above it are links,
+  // and inside a tappable row a near-miss on either navigated away instead of
+  // expanding (the same split the pitcher outing takes).
+  const bar = (
     <>
-      <FeedHeadshot id={report.id} name={report.name} onOpen={() => onOpenDetails(playerKey(report))} />
-      <div className="live-row-id">
-        <FeedPlayerName playerKey={playerKey(report)} name={report.name} onOpen={onOpenPlayerDay} />
-        <span className="feed-context">{matchup(game)}</span>
-      </div>
+      <span className="feed-context">{matchup(game)}</span>
       {/* For a watched pitcher, whether he's the announced starter tonight. */}
       <PitchingTag game={game} />
+      {/* No caret either side — the bar's own hover is the affordance. */}
       <span className="feed-time">{time ?? (game.status.detailedState || 'TBD')}</span>
-      {/* No caret on the pitcher side — the row's own hover is the affordance. */}
-      {expandable && !isPitcher && (
-        <svg
-          className={`upcoming-caret${open ? ' open' : ''}`}
-          viewBox="0 0 12 8"
-          aria-hidden="true"
-        >
-          <path d="M1 1.5 6 6.5 11 1.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
-        </svg>
-      )}
     </>
   );
 
   return (
     <div className="upcoming-item" ref={ref}>
+      <div className="upcoming-id">
+        <FeedHeadshot id={report.id} name={report.name} onOpen={() => onOpenDetails(playerKey(report))} />
+        <FeedPlayerName playerKey={playerKey(report)} name={report.name} onOpen={onOpenPlayerDay} />
+      </div>
       {expandable ? (
-        <div
+        <button
+          type="button"
           className="upcoming-head"
-          role="button"
-          tabIndex={0}
           aria-expanded={open}
           title={open ? 'Collapse' : isPitcher ? 'Expand opponent' : 'Expand platoon split'}
           onClick={onToggle}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              onToggle();
-            }
-          }}
         >
-          {head}
-        </div>
+          {bar}
+        </button>
       ) : (
-        <div className="upcoming-head static">{head}</div>
+        <div className="upcoming-head static">{bar}</div>
       )}
       {expandable && open && (
         <div className="upcoming-detail">
@@ -575,7 +586,8 @@ export function LiveFeed({
       if (t) return t;
       const gn = (b.game.gameNumber ?? 0) - (a.game.gameNumber ?? 0);
       if (gn) return gn;
-      return b.game.gamePk - a.game.gamePk;
+      if (a.game.gamePk !== b.game.gamePk) return b.game.gamePk - a.game.gamePk;
+      return playOrder(b) - playOrder(a);
     });
 
   // Not-yet-started games, earliest first pitch first — so the feed still has

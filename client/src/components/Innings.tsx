@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { FacedBatter, PlayerGame } from '../types';
-import { eventLabel, ordinal, outcomeKind } from '../lib';
+import { contactHighlight, eventLabel, ordinal, outcomeKind } from '../lib';
 import { useScrollIntoViewOnExpand } from '../hooks';
 import { BaseDiamond } from './BaseDiamond';
 import { VideoClip } from './PlateAppearanceCard';
@@ -64,6 +64,9 @@ function FacedBatterCard({
   const [open, setOpen] = useState(false);
   const kind = outcomeKind(fb.event);
   const expandable = fb.pitches.length > 0;
+  // The same exit velo · launch angle · distance line a batter's at-bat carries
+  // — it's one batted ball, and it reads identically from either side.
+  const contact = contactHighlight(fb);
   // On expand, bring this batter to the top of the screen — same as a batter's
   // at-bat card, so the pitch sequence isn't left below the fold.
   const cardRef = useScrollIntoViewOnExpand<HTMLDivElement>(open);
@@ -80,9 +83,7 @@ function FacedBatterCard({
         {fb.batterName}
         {fb.stand ? <span className="faced-hand"> ({fb.stand})</span> : null}
       </span>
-      {fb.launchSpeed !== null && (
-        <span className="pa-contact-main">{fb.launchSpeed.toFixed(1)} mph</span>
-      )}
+      {contact && <span className="pa-contact-main">{contact}</span>}
       {expandable && <span className="faced-pitches">{fb.pitches.length} P</span>}
     </>
   );
@@ -104,6 +105,13 @@ function FacedBatterCard({
       {open && (
         <div className="faced-detail">
           {fb.description && <p className="pa-des">{fb.description}</p>}
+          {contact && (
+            <div className="pa-contact">
+              <span className="pa-contact-main">{contact}</span>
+              {fb.bbType && <span className="pa-bbtype">{fb.bbType.replace(/_/g, ' ')}</span>}
+              {fb.xwoba !== null && <span className="pa-xwoba">xwOBA {fb.xwoba.toFixed(3)}</span>}
+            </div>
+          )}
           <PitchSequence pitches={fb.pitches} />
           {fb.playId && <VideoClip playId={fb.playId} gamePk={gamePk} />}
         </div>

@@ -4,6 +4,7 @@ import { api } from '../api';
 import { useScrollIntoViewOnExpand } from '../hooks';
 import { contactHighlight, eventLabel, finalSwingBatSpeed, outcomeKind } from '../lib';
 import { BaseDiamond } from './BaseDiamond';
+import { ClipVideo } from './ClipVideo';
 import { PitchTable } from './PitchSequence';
 import { StrikeZone } from './StrikeZone';
 
@@ -50,8 +51,7 @@ export function VideoClip({ playId, gamePk }: { playId: string; gamePk: number }
             ✕ Hide video
           </button>
         </div>
-        {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-        <video className="pa-video-el" src={url} controls autoPlay playsInline />
+        <ClipVideo className="pa-video-el" src={url} autoPlay />
       </div>
     );
   }
@@ -119,14 +119,11 @@ export function InlineVideoClip({ playId, gamePk }: { playId: string; gamePk: nu
   return (
     <div className="pa-video" ref={wrapRef}>
       {near ? (
-        /* eslint-disable-next-line jsx-a11y/media-has-caption */
-        <video
+        <ClipVideo
           // #t=0.1 seeks to the first frame so it paints as the poster (with
           // preload="metadata" a bare src often stays blank until played).
           className="pa-video-el pa-video-inline"
           src={`${url}#t=0.1`}
-          controls
-          playsInline
           preload="metadata"
         />
       ) : (

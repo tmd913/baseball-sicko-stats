@@ -880,7 +880,10 @@ async function buildStatsApiDay(date: string): Promise<{
         // Filled per team in getReport — the day builder shouldn't fan out to
         // another API for a lineup nobody has asked about yet.
         opponentHitting: null,
-        probablePitcher: null,
+        // His counterpart: the starter the other side announced. Nothing on the
+        // pitcher side of the card reads it (the lineup he faces is the useful
+        // half), but the summary table's opponent column shows the matchup.
+        probablePitcher: pg.isHome ? g.awayProbablePitcher : g.homeProbablePitcher,
         plateAppearances: [],
         baseEvents: [],
         line: buildLine([]),
@@ -958,8 +961,9 @@ function projectDay(day: ParsedDay, filter: DayFilter): ParsedDay {
  *  starting lineups as entry pairs — as Maps they serialized to `{}`; v3 added
  *  the pitching role (starter/reliever + entry inning) each game carries, the
  *  starting-pitcher ids the placeholder games read it from, the pitching line's
- *  win/save/hold credits, and each game's opposing team id. */
-const DAY_SNAPSHOT_VERSION = 3;
+ *  win/save/hold credits, and each game's opposing team id; v4 fills the
+ *  opposing probable starter on a pitcher's own game, which used to be null. */
+const DAY_SNAPSHOT_VERSION = 4;
 
 /**
  * The on-the-wire form of a day.

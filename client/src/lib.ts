@@ -199,7 +199,8 @@ export function pitcherSeasonSummary(s: PitcherSeasonStats): string {
   per9(s.homeRunsPer9, 'HR/9');
   // Stops here on purpose: BAA and the rate splits are a tap away in the
   // details view, and a collapsed card is meant to be scanned, not read.
-  return parts.join(' · ');
+  // Comma-separated to match the batter card's season line (`seasonStatsSummary`).
+  return parts.join(', ');
 }
 
 /**
@@ -662,12 +663,17 @@ export function rosterStatusBadge(
   return { label: description.replace(/\s*#\s*days?$/i, ''), title: description, tone: 'other' };
 }
 
-/** Best xwOBA / batted-ball highlight for a PA, if any. */
-export function contactHighlight(pa: PlateAppearance): string | null {
-  if (pa.launchSpeed === null) return null;
-  const bits: string[] = [`${pa.launchSpeed.toFixed(1)} mph`];
-  if (pa.launchAngle !== null) bits.push(`${pa.launchAngle}°`);
-  if (pa.hitDistance !== null && pa.hitDistance > 0) bits.push(`${pa.hitDistance} ft`);
+/** Exit velo · launch angle · distance for a batted ball, if any was tracked.
+ * Takes the batted-ball fields rather than a whole plate appearance, so the
+ * pitcher's side reads the same line off a `FacedBatter` — the two carry the
+ * same three fields and should say the same thing about the same contact. */
+export function contactHighlight(
+  hit: Pick<PlateAppearance, 'launchSpeed' | 'launchAngle' | 'hitDistance'>,
+): string | null {
+  if (hit.launchSpeed === null) return null;
+  const bits: string[] = [`${hit.launchSpeed.toFixed(1)} mph`];
+  if (hit.launchAngle !== null) bits.push(`${hit.launchAngle}°`);
+  if (hit.hitDistance !== null && hit.hitDistance > 0) bits.push(`${hit.hitDistance} ft`);
   return bits.join(' · ');
 }
 
