@@ -31,9 +31,14 @@ function useNoHover(): boolean {
  * have handled. Anything with a pointer keeps the browser's own controls, which
  * already hide themselves while playing and return on hover.
  *
- * Note the tap handler is bound *only* while playing, i.e. only while the
- * controls are gone: with them up, a tap on the native play button can also
- * reach this element, and the clip would start and stop on the same touch.
+ * The pause-on-tap has to be armed on **`pointerdown`**, not decided when the
+ * click arrives: the native controls live in the video's shadow DOM, so a tap on
+ * its play button reaches this element too, and by the time that touch's `click`
+ * is dispatched the `play` event has already flipped `playing` and re-rendered —
+ * so a handler bound on "am I playing *now*?" is bound in time to catch the very
+ * tap that started playback, and every clip stopped dead the instant it began.
+ * Down-then-up is one gesture: if the finger went down while the controls were
+ * up, that tap belongs to them, whatever the state is when it lifts.
  */
 export function ClipVideo({
   src,
@@ -51,6 +56,8 @@ export function ClipVideo({
   const noHover = useNoHover();
   const [playing, setPlaying] = useState(false);
   const ref = useRef<HTMLVideoElement>(null);
+  /** Did this touch go down on the bare frame (controls hidden), i.e. is it ours? */
+  const tapIsOurs = useRef(false);
   const hideControls = noHover && playing;
   return (
     /* eslint-disable-next-line jsx-a11y/media-has-caption */
@@ -68,7 +75,14 @@ export function ClipVideo({
         setPlaying(false);
         onEnded?.();
       }}
-      onClick={hideControls ? () => ref.current?.pause() : undefined}
+      onPointerDown={() => {
+        tapIsOurs.current = hideControls;
+      }}
+      onClick={() => {
+        const ours = tapIsOurs.current;
+        tapIsOurs.current = false;
+        if (ours) ref.current?.pause();
+      }}
     />
   );
 }
