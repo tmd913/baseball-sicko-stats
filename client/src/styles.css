@@ -158,10 +158,28 @@ body {
   gap: 9px;
   padding: 12px;
   min-width: 180px;
+  /* Sign out carries the signed-in email, so the menu's natural width is
+     however long that address happens to be. Cap it — against the viewport too,
+     less the app's own side padding — and let the button ellipsize inside,
+     rather than letting one long address decide how wide the menu is. */
+  max-width: min(320px, calc(100vw - 44px));
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 12px;
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+}
+/* The popover hangs off the gear, which on a phone sits some 200px into a
+   390px-wide header — leaving less room to its right than the shortest useful
+   menu needs, so it ran off the screen (with the email in the label, far off).
+   Anchor it to the brand row instead: it drops from the same edge, but opens
+   at the header's left with the width of the page to work with. */
+@media (max-width: 640px) {
+  .brand {
+    position: relative;
+  }
+  .settings-menu {
+    position: static;
+  }
 }
 .settings-popover-label {
   font-size: 11px;
@@ -1394,7 +1412,7 @@ body {
 .arsenal {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 9px;
 }
 /* A pitcher card's collapsible sections — Line / Innings / Arsenal. The bar
    itself is the batter card's .game-sub-bar, so both cards' expandables share
@@ -1438,10 +1456,10 @@ body {
   border: none;
   background: none;
   color: var(--faint);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.02em;
-  padding: 4px 10px;
+  padding: 5px 11px;
   border-radius: var(--control-radius-inner);
   cursor: pointer;
   transition: color 0.14s ease, background 0.14s ease;
@@ -1462,7 +1480,7 @@ body {
 /* Innings pitched sits in the arsenal's name slot but reads as the row's
    headline, so it takes the abbr's weight instead of the name's muted tone. */
 .pline-ip {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 800;
   color: var(--text);
   font-variant-numeric: tabular-nums;
@@ -1493,15 +1511,15 @@ body {
 /* Strips after the first — the dashed rule already separates them, so they
    don't need the full top margin again. */
 .pline .ars-results + .ars-results {
-  margin-top: 6px;
-  padding-top: 6px;
+  margin-top: 9px;
+  padding-top: 9px;
 }
 .ars-row {
   background: var(--bg);
   border: 1px solid var(--border);
   border-left: 3px solid var(--faint);
   border-radius: 10px;
-  padding: 8px 11px 9px;
+  padding: 11px 13px 12px;
 }
 .ars-head {
   display: flex;
@@ -1509,19 +1527,19 @@ body {
   /* Two rate bars ride at the right; on a narrow card they drop to their own
      line rather than squeezing the pitch name to nothing. */
   flex-wrap: wrap;
-  gap: 8px 10px;
-  margin-bottom: 7px;
+  gap: 9px 12px;
+  margin-bottom: 10px;
 }
 .ars-dot {
   flex: none;
-  width: 9px;
-  height: 9px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
 }
 .ars-abbr {
   flex: none;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 800;
   letter-spacing: 0.02em;
   color: var(--text);
@@ -1530,7 +1548,7 @@ body {
 .ars-name {
   flex: 1 1 auto;
   min-width: 0;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--muted);
   white-space: nowrap;
@@ -1539,7 +1557,7 @@ body {
 }
 .ars-count {
   flex: none;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--faint);
   font-variant-numeric: tabular-nums;
@@ -1549,24 +1567,24 @@ body {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 .ars-bar {
-  width: 60px;
-  height: 6px;
-  border-radius: 3px;
+  width: 66px;
+  height: 7px;
+  border-radius: 4px;
   background: var(--border);
   overflow: hidden;
 }
 .ars-bar-fill {
   display: block;
   height: 100%;
-  border-radius: 3px;
+  border-radius: 4px;
 }
 .ars-share {
-  min-width: 32px;
+  min-width: 36px;
   text-align: right;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 800;
   color: var(--text);
   font-variant-numeric: tabular-nums;
@@ -1574,7 +1592,7 @@ body {
 .ars-metrics {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 6px;
+  gap: 10px 12px;
 }
 @container (max-width: 440px) {
   .ars-metrics {
@@ -1584,36 +1602,36 @@ body {
 .ars-metric {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 3px;
   min-width: 0;
 }
 .ars-mlabel {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--faint);
 }
 .ars-mval {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 800;
   color: var(--text);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 .ars-unit {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--muted);
   margin-left: 1px;
 }
 .ars-delta {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--faint);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  min-height: 13px;
+  min-height: 15px;
 }
 /* Green/red is whether the change is an improvement for THIS pitch type — not
    whether the number went up (a changeup that dropped more is better, and its
@@ -1632,28 +1650,28 @@ body {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 4px 13px;
-  margin-top: 8px;
-  padding-top: 8px;
+  gap: 7px 16px;
+  margin-top: 11px;
+  padding-top: 11px;
   border-top: 1px dashed var(--border);
 }
 .ars-rtag {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--faint);
   border: 1px solid var(--border);
   border-radius: 4px;
-  padding: 1px 4px;
+  padding: 2px 5px;
 }
 .ars-rstat {
   display: inline-flex;
   align-items: baseline;
-  gap: 4px;
+  gap: 5px;
 }
 .ars-rlabel {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -1665,14 +1683,14 @@ body {
 .ars-rnote {
   flex: none;
   align-self: center;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.01em;
   color: var(--muted);
   background: var(--bg-2);
   border: 1px solid var(--border);
   border-radius: 999px;
-  padding: 1px 5px;
+  padding: 2px 6px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -1680,8 +1698,37 @@ body {
 .ars-name .ars-rnote {
   margin-left: 7px;
 }
+/* The opponent head's "5.02 R/G" plus its rank. `.ars-name` clips its overflow
+   (it ellipsizes a long pitch name on the arsenal rows), and the badge is a
+   bordered pill taller than the 13px line box it sits in — so it came out with
+   its top and bottom sheared flat. This text is a fixed width and never needs
+   the ellipsis, so lay the pair out as a flex line and stop clipping. */
+.opp-rg {
+  display: flex;
+  align-items: center;
+  flex: none;
+  overflow: visible;
+}
+/* The opponent's two strips — Season and vs RHP/LHP — carry the same stats in
+   the same order, so they share one grid template rather than wrapping as flex:
+   every column lines up between them, and a rank badge that widens one cell
+   can't shunt the strip below it out of step. `auto-fill`, not `auto-fit`, so a
+   row with fewer stats than columns keeps the column width the other strip is
+   using; the leading `.ars-rtag` takes the first cell in both, which is what
+   keeps the two in register from the second cell on. */
+.opp-results {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 8px 12px;
+}
+/* The tag takes a cell like any stat, but it's a pill: hug the text rather than
+   stretching to the column, and sit on the row's centre line. */
+.opp-results .ars-rtag {
+  justify-self: start;
+  align-self: center;
+}
 .ars-rval {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 800;
   color: var(--text);
   font-variant-numeric: tabular-nums;
@@ -1699,6 +1746,13 @@ body {
   overflow: hidden;
   /* Expanding an inning scrolls it to the top — clear the sticky nav strip. */
   scroll-margin-top: var(--scroll-offset);
+  /* An outing's insides size themselves with @container queries (the faced
+     batter's name, and the pitch table / strike zone of an expanded at-bat).
+     The block has to be the container: in the pitcher card the nearest one
+     would otherwise be `.player-card`, and in the feed there is none at all —
+     so on a phone every one of those queries silently failed and the pitch
+     table kept its 210px strike-zone column, crushed to ~65px. */
+  container-type: inline-size;
 }
 .inning-head {
   width: 100%;
@@ -1722,7 +1776,7 @@ body {
   align-items: center;
   gap: 5px;
   min-width: 44px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 800;
   color: var(--text);
   font-variant-numeric: tabular-nums;
@@ -1736,10 +1790,10 @@ body {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 3px 9px;
+  gap: 4px 11px;
 }
 .inning-stat {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
@@ -3367,6 +3421,26 @@ body {
   color: var(--muted);
   white-space: nowrap;
 }
+/* Pre-game the start time rides the matchup rather than taking a line of its
+   own — the cell's second line is the probable starter, and three lines made the
+   scheduled rows taller than every other row in the table. */
+.sum-opp-time {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+/* Second line, pre-game only: the starter the other side announced — his surname,
+   since this is the column whose width costs a stat column off the right of a
+   phone. Quiet type: who's pitching is context, not state. */
+.sum-opp-sp {
+  display: block;
+  margin-top: 1px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--faint);
+  white-space: nowrap;
+}
 /* A live game's inning gets the same green accent the app uses elsewhere, and a
    postponed one reads as an amber caution. Game state and player state are what
    the table still colours — the stat columns themselves stay monochrome. */
@@ -3570,34 +3644,35 @@ body {
   flex-direction: column;
   gap: 16px;
 }
-.live-entry .feed-item-head {
-  padding: 10px 12px;
-  background: linear-gradient(180deg, var(--panel), var(--bg-2));
-  border: 1px solid var(--border);
-  border-left-width: 4px;
-  border-radius: 12px;
+/* The identity row is BARE — headshot, name, matchup, role tag — exactly like
+   the Recent and Upcoming items' identity rows. It used to carry the panel
+   gradient, a border, a role-coloured left accent and a 12px radius: the very
+   chrome of the `.feed-item-toggle` bar and the at-bat card it sits above, so a
+   static row of two links read as a collapsed card and invited a tap that did
+   nothing (worse on deck, where there's nothing under it to open at all). The
+   role still reads loudly off the headshot's ring and the tag at the right end.
+   Same rule as everywhere else in the feed: a box is something you can open. */
+.live-entry {
+  /* The role rail runs down the whole entry — header and card together — so the
+     group is flagged as live without any one row of it posing as a control. */
+  border-left: 3px solid var(--border);
+  border-radius: 3px;
+  padding-left: 11px;
 }
-.live-entry.role-at-bat .feed-item-head {
+.live-entry.role-at-bat {
   border-left-color: var(--strikeout);
 }
-.live-entry.role-on-deck .feed-item-head {
+.live-entry.role-on-deck {
   border-left-color: var(--hr);
 }
-.live-entry.role-on-base .feed-item-head,
-.live-entry.role-pitching .feed-item-head {
+.live-entry.role-on-base,
+.live-entry.role-pitching {
   border-left-color: var(--live-purple);
 }
 /* Role tag sits at the right end of the header row. */
 .feed-item-head .live-role {
   margin-left: auto;
 }
-.live-row-id {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
 /* Upcoming section: not-yet-started games, earliest first pitch first — each with
    the batter's platoon split vs the probable starter's hand below the header. */
 .upcoming-rows {
@@ -3608,16 +3683,34 @@ body {
 .upcoming-item {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   /* When expanding scrolls this row to the top, clear the sticky nav strip
      (same measured offset the player and at-bat cards use). */
   scroll-margin-top: var(--scroll-offset);
 }
-.upcoming-head {
+/* Identity above the bar — headshot and name, both links, and nothing here
+   toggles: inside a tappable row a thumb that missed either one navigated off
+   the game it meant to open. */
+.upcoming-id {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 14px;
+  min-width: 0;
+}
+/* The bar under the name: matchup, the SP chip and first pitch — and the row's
+   whole interactive surface, holding no links of its own. */
+.upcoming-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  width: 100%;
+  /* A thumb-sized target — the point of splitting it off the identity row. */
+  min-height: 44px;
+  padding: 10px 14px;
+  font: inherit;
+  color: inherit;
+  text-align: left;
   background: linear-gradient(180deg, var(--panel), var(--bg-2));
   border: 1px solid var(--border);
   border-left-width: 4px;
@@ -3635,17 +3728,6 @@ body {
 .upcoming-head:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-}
-/* Chevron hinting the row expands; rotates to point up when open. */
-.upcoming-caret {
-  flex: none;
-  width: 12px;
-  height: 8px;
-  color: var(--muted);
-  transition: transform 0.16s ease;
-}
-.upcoming-caret.open {
-  transform: rotate(180deg);
 }
 .upcoming-detail {
   display: flex;
@@ -3728,9 +3810,14 @@ body {
   align-items: center;
   gap: 10px;
 }
-/* A pitcher's feed item is his whole outing: a header that toggles it, and the
-   same per-inning blocks the players view uses (newest inning first) beneath.
-   The line rides the header so a collapsed item still says how the outing went.
+/* A pitcher's feed item is his whole outing: a static identity header, the line
+   bar below it, and the same per-inning blocks the players view uses (newest
+   inning first) under that. The bar alone toggles — it is the batter item's
+   at-bat card in the same slot, and it holds no links, so every pixel of it
+   opens the outing. It carries the line, so a collapsed item still says how the
+   outing went. (The headshot and name went back to the header for this: inside
+   the toggle, a thumb that missed either link on a phone navigated away instead
+   of expanding.)
 
    NO CARET. Nothing on the pitcher side of this app carries one — not the card's
    sections, not its innings or batters faced, and not this. The bar itself is
@@ -3738,8 +3825,21 @@ body {
    allowed near an inning is the top/bottom half-inning indicator, which is a
    *label*, not a toggle. Don't reintroduce one. */
 .feed-item-toggle {
+  display: flex;
+  align-items: center;
+  /* A finished outing carries an SP chip, a decision, a full line ("6.0 IP, 5 H,
+     2 ER, 2 BB, 8 K, 1 HR") and the game badge; on a narrow card they wrap
+     within the bar rather than shrinking. */
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+  /* A thumb-sized target — the point of splitting it off the header. */
+  min-height: 44px;
+  padding: 8px 12px;
+  font: inherit;
+  color: inherit;
+  text-align: left;
   cursor: pointer;
-  padding: 10px 12px;
   background: linear-gradient(180deg, var(--panel), var(--bg-2));
   border: 1px solid var(--border);
   border-radius: var(--control-radius);
@@ -3752,22 +3852,39 @@ body {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-/* A live entry draws its own frame (`.live-entry .feed-item-head`, which outranks
-   the rules above) — but the hover below would take its role-tinted left edge
-   with it, so put that back. */
-.live-entry.role-pitching .feed-item-toggle:hover {
-  border-left-color: var(--live-purple);
+/* Its own container so the narrow layout below tracks the item's width rather
+   than the viewport's, the way the player cards do. (`.pa-card` and
+   `.inning-block` are containers themselves, so nothing inside an item starts
+   resolving its queries against this one.) */
+.feed-pitcher {
+  container-type: inline-size;
+}
+/* Narrow: the bar's contents spread across it instead of bunching at its right
+   end, the way the player card's summary line does at the same width. */
+@container (max-width: 480px) {
+  .feed-pitcher .feed-item-toggle {
+    justify-content: space-between;
+    column-gap: 10px;
+  }
+  /* The line fills the bar's free space, with the same floor the card's summary
+     line uses so it drops to its own row rather than shrinking to a sliver. */
+  .feed-pitcher .feed-pitch-line {
+    margin-left: 0;
+    flex: 1 1 auto;
+    min-width: 9em;
+  }
+  .feed-pitcher .game-status {
+    flex-shrink: 0;
+  }
 }
 .feed-pitch-line {
-  margin-left: auto;
   font-size: 13px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--text);
-}
-/* Both want the right end of the row; the line goes first, the caret last. */
-.feed-item-toggle .live-role {
-  margin-left: 0;
+  /* Tags left, line and badge hugging the right end — the `.game-sub-bar`
+     grammar, identity on one side and the summary on the other. */
+  margin-left: auto;
 }
 .feed-pitcher .innings-list {
   padding-left: 4px;
@@ -3902,7 +4019,8 @@ body {
   border-color: var(--hr);
   box-shadow: 0 0 0 2px var(--hr);
 }
-.feed-photo-link.role-on-base .feed-photo {
+.feed-photo-link.role-on-base .feed-photo,
+.feed-photo-link.role-pitching .feed-photo {
   border-color: var(--live-purple);
   box-shadow: 0 0 0 2px var(--live-purple);
 }

@@ -9,6 +9,7 @@ import {
   formatIp,
   formatRate,
   gameStatusView,
+  handThrows,
   headshotUrl,
   lineupCorner,
   liveRole,
@@ -34,18 +35,51 @@ function pickGame(report: PlayerReport): PlayerGame | null {
   );
 }
 
+const NAME_SUFFIXES = new Set(['jr', 'jr.', 'sr', 'sr.', 'ii', 'iii', 'iv']);
+
+/**
+ * "Tarik Skubal" → "Skubal", "Nestor Cortes Jr." → "Cortes Jr." — a starter is
+ * referred to by surname anyway, and the opponent column is the one place where
+ * a wider cell costs a stat column off the right of a phone screen.
+ */
+function surname(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length < 2) return name;
+  const last = parts[parts.length - 1];
+  return NAME_SUFFIXES.has(last.toLowerCase()) && parts.length > 2
+    ? `${parts[parts.length - 2]} ${last}`
+    : last;
+}
+
 /**
  * The opponent / game cell: the matchup before first pitch, the live score +
- * inning while it's on, and the final score once it's over.
+ * inning while it's on, the final score once it's over.
+ *
+ * Before first pitch the second line is the starter the other side announced
+ * (`game.probablePitcher` — on a pitcher's row that's his counterpart, not
+ * someone he faces) and the start time moves up beside the matchup, so the cell
+ * is two lines in every state rather than three in one of them. Once the game is
+ * under way the starter drops off: by then the line that matters is the score
+ * and the inning, and the batter is as likely to be facing a reliever.
  */
 function OpponentCell({ game }: { game: PlayerGame | null }) {
   if (!game) return <td className="sum-opp sum-opp-empty">—</td>;
   const { kind, score, detail } = gameStatusView(game);
   const matchup = `${game.isHome ? 'vs' : '@'} ${game.opponent}`;
+  const scheduled = kind === 'scheduled';
+  const sp = scheduled ? game.probablePitcher : null;
   return (
     <td className={`sum-opp sum-opp-${kind}`}>
-      <span className="sum-opp-main">{kind === 'scheduled' ? matchup : (score ?? matchup)}</span>
-      <span className="sum-opp-detail">{detail}</span>
+      <span className="sum-opp-main">
+        {scheduled ? matchup : (score ?? matchup)}
+        {scheduled && <span className="sum-opp-time">{detail}</span>}
+      </span>
+      {!scheduled && <span className="sum-opp-detail">{detail}</span>}
+      {sp && (
+        <span className="sum-opp-sp" title={`Starting pitcher: ${sp.name}`}>
+          vs {handThrows(sp.hand)} {surname(sp.name)}
+        </span>
+      )}
     </td>
   );
 }

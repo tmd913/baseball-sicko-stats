@@ -3,6 +3,7 @@ import type { PlateAppearance } from '../types';
 import { api } from '../api';
 import { eventLabel, outcomeKind } from '../lib';
 import { useLockBodyScroll } from '../hooks';
+import { ClipVideo } from './ClipVideo';
 
 /** A resolved clip in the reel: its playable URL plus the caption metadata. */
 interface ReelClip {
@@ -138,14 +139,11 @@ export function GameReel({
         <div className="reel-stage">
           {/* Keyed by playId so the element remounts per clip — that re-fires
               autoPlay when the reel advances to the next at-bat. */}
-          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-          <video
+          <ClipVideo
             key={cur.playId}
             className="reel-video"
             src={cur.url}
-            controls
             autoPlay
-            playsInline
             onEnded={() => {
               if (hasNext) setIndex((i) => i + 1);
             }}

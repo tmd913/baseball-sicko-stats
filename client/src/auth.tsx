@@ -124,6 +124,15 @@ function Splash({ children }: { children: ReactNode }) {
   );
 }
 
+/** The interstitial shown while a sign-in or a token renewal is in flight. */
+function SigningIn() {
+  return (
+    <Splash>
+      <p className="auth-sub">Signing in…</p>
+    </Splash>
+  );
+}
+
 /** Signed-out screen. Google is offered by asking Cognito to skip straight to
  *  that provider rather than showing the hosted UI's own picker. */
 function SignIn() {
@@ -185,6 +194,45 @@ function Gate({ children }: { children: ReactNode }) {
   setReauthHandler(reauthRef.current);
   useEffect(() => () => setReauthHandler(null), []);
 
+  // A stored session whose ID token has expired is *not* a signed-out user: the
+  // refresh token sitting beside it in localStorage is good for a year. But
+  // nothing renews it on its own at boot — oidc-client-ts only schedules a
+  // renewal for a token that hasn't expired yet (`AccessTokenEvents.load`
+  // cancels the timer outright once the duration is past), and
+  // react-oidc-context just loads the expired user and reports
+  // `isAuthenticated: false`. So every return after an hour away — a closed
+  // laptop, a new tab the next morning — hit the sign-in screen and a full trip
+  // through the hosted UI, whose own session cookie has usually lapsed too, so
+  // it meant retyping a password. That is most of "it makes you reauthenticate
+  // too often", and one refresh-token exchange on boot removes it. (The
+  // open-tab case was already covered: `automaticSilentRenew` polls the clock
+  // rather than trusting a timeout, so it survives sleep.)
+  const [renewFailed, setRenewFailed] = useState(false);
+  const renewedRef = useRef(false);
+  const staleSession = Boolean(auth.user) && !auth.isAuthenticated;
+  useEffect(() => {
+    if (renewedRef.current || !staleSession || auth.isLoading || auth.activeNavigator) return;
+    renewedRef.current = true;
+    void authRef.current
+      .signinSilent()
+      .then((user) => {
+        // No refresh token, or one Cognito has stopped honouring: the session
+        // really is over and the sign-in screen is the honest answer.
+        if (!user) setRenewFailed(true);
+      })
+      .catch(() => setRenewFailed(true));
+  }, [staleSession, auth.isLoading, auth.activeNavigator]);
+
+  // Arm that attempt again once there's a live session, so a *later* expiry
+  // (the app left open overnight, say) gets its own exchange instead of being
+  // stranded on the splash behind the boot attempt's spent flag.
+  useEffect(() => {
+    if (auth.isAuthenticated) {
+      renewedRef.current = false;
+      setRenewFailed(false);
+    }
+  }, [auth.isAuthenticated]);
+
   // Publish the session so SignOutButton — which lives inside App, and so also
   // renders when auth is off — can show it without touching the auth context.
   useEffect(() => {
@@ -209,16 +257,12 @@ function Gate({ children }: { children: ReactNode }) {
   // in front of someone who signed in an hour ago. So the splash is only for a
   // boot with no user at all.
   if (!auth.user) {
-    return auth.isLoading ? (
-      <Splash>
-        <p className="auth-sub">Signing in…</p>
-      </Splash>
-    ) : (
-      <SignIn />
-    );
+    return auth.isLoading ? <SigningIn /> : <SignIn />;
   }
-  // An expired token that nothing is renewing means the session is really over.
-  if (!auth.isAuthenticated && !auth.isLoading) return <SignIn />;
+  // An expired token is a session to renew, not a session to end — the splash
+  // holds the app back until the refresh-token exchange above resolves, and
+  // only its failure gets to send the user back to the hosted UI.
+  if (!auth.isAuthenticated) return renewFailed ? <SignIn /> : <SigningIn />;
   return <>{children}</>;
 }
 
