@@ -135,6 +135,9 @@ export interface FacedBatter {
   pitches: Pitch[];
 }
 
+/** A win, loss, save or hold — what a pitcher took away from an outing. */
+export type PitchingCredit = 'W' | 'L' | 'S' | 'H';
+
 /** A pitcher's per-game counting line (authoritative, from the boxscore). */
 export interface PitchingLine {
   outs: number; // innings pitched × 3
@@ -156,6 +159,13 @@ export interface PitchingLine {
   wildPitches: number;
   inheritedRunners: number;
   inheritedRunnersScored: number;
+  // The game's official credits, from the boxscore — 0 or 1 each per game, and
+  // summed over a range by combinePitchingLines. A win/save agrees with
+  // `PitcherGame.decision`; a hold has no equivalent there (liveData.decisions
+  // only names the W/L/S pitchers).
+  wins: number;
+  saves: number;
+  holds: number;
 }
 
 /** One pitch type in a pitcher's game arsenal, with game averages + season /
@@ -214,7 +224,9 @@ export interface PitcherGame {
   cswRate: number | null;
   strikePct: number | null;
   isStart: boolean;
-  decision: 'W' | 'L' | 'S' | null; // this pitcher's W/L/S in the game
+  // What he came away with: the official W/L/S, or a hold — which the feed's
+  // decisions never name, so the server reads it off his boxscore line.
+  decision: PitchingCredit | null;
 }
 
 /** A pitcher's season arsenal: the whole season, plus the batter-handedness
@@ -271,6 +283,55 @@ export interface PitcherSeasonStats {
   kRate: string;
   bbRate: string;
   avgAgainst: string;
+  hitBatsmen: number;
+  homeRunsPer9: string;
+  // ERA-scale estimators: FIP from his own three true outcomes, xFIP with his
+  // home runs swapped for fly balls at the league rate. Null on a split, and
+  // for too small a workload to mean anything.
+  fip: string | null;
+  xfip: string | null;
+}
+
+/** Where a team places among all 30 in each category. 1 is always the **best
+ *  offence**, so the fewest strikeouts ranks 1st. Null where there's no value. */
+export interface TeamHittingRanks {
+  runsPerGame: number | null;
+  avg: number | null;
+  obp: number | null;
+  slg: number | null;
+  ops: number | null;
+  homeRuns: number | null;
+  stolenBases: number | null;
+  kRate: number | null;
+  bbRate: number | null;
+}
+
+/** One batting line for a team — the whole season, or against one pitcher hand. */
+export interface TeamHittingLine {
+  pa: number;
+  games: number;
+  runs: number;
+  runsPerGame: string | null; // null on a split, which carries no runs
+  avg: string;
+  obp: string;
+  slg: string;
+  ops: string;
+  homeRuns: number;
+  strikeOuts: number;
+  baseOnBalls: number;
+  stolenBases: number;
+  kRate: string;
+  bbRate: string;
+  ranks: TeamHittingRanks | null;
+}
+
+/** How the opposing lineup has hit this season, whole and by pitcher hand
+ *  (`vsLeft`/`vsRight` are their lines against left/right-handed pitching). */
+export interface TeamHitting {
+  teamId: number;
+  season: TeamHittingLine;
+  vsLeft: TeamHittingLine | null;
+  vsRight: TeamHittingLine | null;
 }
 
 export interface PlayerGame {
@@ -289,6 +350,15 @@ export interface PlayerGame {
   status: GameStatus;
   lineupStatus: 'starting' | 'bench' | null;
   lineupSpot: number | null;
+  // Pitcher-side mirror of lineupStatus (null for a batter's game): 'starting'
+  // for the announced/actual starter, 'relief' once he's come out of the
+  // bullpen — `entryInning` is the inning he entered (null for a starter).
+  pitchingRole: 'starting' | 'relief' | null;
+  entryInning: number | null;
+  // The opposing team, and — on a watched pitcher's game — how that lineup has
+  // hit this season.
+  opponentId: number | null;
+  opponentHitting: TeamHitting | null;
   probablePitcher: ProbablePitcher | null;
   plateAppearances: PlateAppearance[];
   // Stolen bases + runs scored by this player in the game, in play order.
@@ -342,6 +412,10 @@ export interface PlayerReport extends WatchPlayer {
   splitVsLeft: SeasonStats | null;
   splitVsRight: SeasonStats | null;
   rosterStatus: RosterStatus | null;
+  // Throwing hand ("L"/"R") — pitchers only, and null for a batter. His games
+  // carry it as `stand` once he's appeared in one; this is what the card reads
+  // before that, when the only thing on it is a game he hasn't pitched yet.
+  throws: string | null;
 }
 
 export interface SeasonPlayer extends WatchPlayer {

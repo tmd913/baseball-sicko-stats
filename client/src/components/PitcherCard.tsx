@@ -11,13 +11,15 @@ import { playerKey } from '../types';
 import { useScrollIntoViewOnExpand } from '../hooks';
 import {
   combinePitchingLines,
+  creditLabel,
   eraOf,
-  eventLabel,
   formatIp,
   liveRole,
   mostRecentGameFirst,
-  outcomeKind,
+  ordinal,
   pitcherSeasonSummary,
+  pitchingBadge,
+  pitchingCorner,
   prettyGameDate,
   whipOf,
 } from '../lib';
@@ -30,13 +32,27 @@ import {
   pct,
 } from './Arsenal';
 import type { SplitKey } from './Arsenal';
-import { BaseDiamond } from './BaseDiamond';
-import { VideoClip } from './PlateAppearanceCard';
-import { PitchSequence } from './PitchSequence';
+import { InningsList } from './Innings';
 import { GameStatusBadge, Headshot, LiveRoleTag, PlayerName } from './PlayerCard';
 
+/**
+ * How the pitcher came into this game — "SP" for the starter (announced before
+ * first pitch, confirmed once he's thrown one) or "RP 7th" for a reliever,
+ * naming the inning he entered. The pitcher-side counterpart of the batter
+ * card's lineup chip; nothing to show until he's announced or appears.
+ */
+export function PitchingTag({ game }: { game: PlayerGame }) {
+  const badge = pitchingBadge(game);
+  if (!badge) return null;
+  return (
+    <span className={`lineup-tag lineup-tag-${badge.tone}`} title={badge.title}>
+      {badge.label}
+    </span>
+  );
+}
+
 /** A one-line pitching line: "6.0 IP, 4 H, 2 ER, 1 BB, 5 K". */
-function lineSummary(l: PitchingLine): string {
+export function lineSummary(l: PitchingLine): string {
   const parts = [`${formatIp(l.outs)} IP`];
   if (l.hits) parts.push(`${l.hits} H`);
   parts.push(`${l.earnedRuns} ER`);
@@ -44,183 +60,6 @@ function lineSummary(l: PitchingLine): string {
   parts.push(`${l.strikeouts} K`);
   if (l.hr) parts.push(`${l.hr} HR`);
   return parts.join(', ');
-}
-
-/** English ordinal for an inning number: 1 → "1st", 3 → "3rd", 11 → "11th". */
-function ordinal(n: number): string {
-  const s = ['th', 'st', 'nd', 'rd'];
-  const v = n % 100;
-  return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`;
-}
-
-/** One inning's worth of a pitcher's results, grouped in encounter order. */
-interface InningGroup {
-  inning: number;
-  half: string;
-  batters: FacedBatter[];
-}
-
-/** Group the batters faced by inning, preserving play order — so both the
- * innings and the batters within each one read first-to-last. */
-function groupByInning(faced: FacedBatter[]): InningGroup[] {
-  const groups: InningGroup[] = [];
-  const idx = new Map<number, number>();
-  for (const fb of faced) {
-    let gi = idx.get(fb.inning);
-    if (gi === undefined) {
-      gi = groups.length;
-      idx.set(fb.inning, gi);
-      groups.push({ inning: fb.inning, half: fb.half, batters: [] });
-    }
-    groups[gi].batters.push(fb);
-  }
-  return groups;
-}
-
-/** The pitcher's line for one inning: batters faced, hits, R, ER, K, BB, pitches. */
-function inningStats(batters: FacedBatter[]) {
-  let h = 0;
-  let r = 0;
-  let er = 0;
-  let k = 0;
-  let bb = 0;
-  let pitches = 0;
-  for (const fb of batters) {
-    const kind = outcomeKind(fb.event);
-    if (kind === 'hit' || kind === 'hr') h++;
-    else if (kind === 'strikeout') k++;
-    else if (kind === 'walk') bb++;
-    r += fb.runs;
-    er += fb.earnedRuns;
-    pitches += fb.pitches.length;
-  }
-  return { bf: batters.length, h, r, er, k, bb, pitches };
-}
-
-/** One batter faced — the result row, expandable to the full pitch sequence. */
-function FacedBatterCard({
-  fb,
-  seq,
-  gamePk,
-}: {
-  fb: FacedBatter;
-  // Where this batter came up within the inning — 1 for the inning's first.
-  seq: number;
-  gamePk: number;
-}) {
-  const [open, setOpen] = useState(false);
-  const kind = outcomeKind(fb.event);
-  const expandable = fb.pitches.length > 0;
-  // On expand, bring this batter to the top of the screen — same as a batter's
-  // at-bat card, so the pitch sequence isn't left below the fold.
-  const cardRef = useScrollIntoViewOnExpand<HTMLDivElement>(open);
-
-  const summary = (
-    <>
-      <span className="faced-seq" title={`Batter ${seq} of the inning`}>
-        {seq}
-      </span>
-      <BaseDiamond bases={fb.onBase} outs={fb.outsWhenUp ?? 0} className="pa-bases" />
-      <span className={`pa-badge kind-${kind}`}>{eventLabel(fb.event)}</span>
-      {fb.rbi > 0 && <span className="pa-rbi">{fb.rbi} RBI</span>}
-      <span className="faced-batter">
-        {fb.batterName}
-        {fb.stand ? <span className="faced-hand"> ({fb.stand})</span> : null}
-      </span>
-      {fb.launchSpeed !== null && (
-        <span className="pa-contact-main">{fb.launchSpeed.toFixed(1)} mph</span>
-      )}
-      {expandable && <span className="faced-pitches">{fb.pitches.length} P</span>}
-    </>
-  );
-
-  if (!expandable) {
-    return <div className={`faced-row kind-${kind}`}>{summary}</div>;
-  }
-
-  return (
-    <div ref={cardRef} className={`faced-card kind-${kind}${open ? ' expanded' : ''}`}>
-      <button
-        type="button"
-        className="faced-row faced-summary"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-      >
-        {summary}
-      </button>
-      {open && (
-        <div className="faced-detail">
-          {fb.description && <p className="pa-des">{fb.description}</p>}
-          <PitchSequence pitches={fb.pitches} />
-          {fb.playId && <VideoClip playId={fb.playId} gamePk={gamePk} />}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** A collapsible per-inning card: header with the inning's line, then the
- * expandable result rows for each batter faced that inning. */
-function InningBlock({
-  group,
-  gamePk,
-  active,
-}: {
-  group: InningGroup;
-  gamePk: number;
-  // The pitcher is on the mound right now, in this inning.
-  active: boolean;
-}) {
-  const [collapsed, setCollapsed] = useState(true);
-  const s = inningStats(group.batters);
-  const isTop = group.half === 'Top';
-  // Expanding an inning brings it to the top of the screen, like a game block.
-  const blockRef = useScrollIntoViewOnExpand<HTMLDivElement>(!collapsed);
-  return (
-    <div
-      ref={blockRef}
-      className={`inning-block${collapsed ? ' collapsed' : ''}${active ? ' active' : ''}`}
-    >
-      <button
-        type="button"
-        className="inning-head"
-        aria-expanded={!collapsed}
-        onClick={() => setCollapsed((v) => !v)}
-      >
-        <span className="inning-label">
-          <svg className="pa-inning-arrow" viewBox="0 0 12 10" aria-hidden="true" fill="currentColor">
-            <path d={isTop ? 'M6 0 12 10 0 10Z' : 'M0 0 12 0 6 10Z'} />
-          </svg>
-          {ordinal(group.inning)}
-        </span>
-        {active && <span className="inning-live">Live</span>}
-        <span className="inning-stats">
-          <span className="inning-stat">{s.bf} BF</span>
-          {s.h > 0 && <span className="inning-stat is-h">{s.h} H</span>}
-          {s.r > 0 && (
-            <span className="inning-stat is-r">
-              {s.r} R{s.er !== s.r ? ` (${s.er} ER)` : ''}
-            </span>
-          )}
-          {s.k > 0 && <span className="inning-stat is-k">{s.k} K</span>}
-          {s.bb > 0 && <span className="inning-stat is-bb">{s.bb} BB</span>}
-          <span className="inning-stat is-p">{s.pitches} P</span>
-        </span>
-      </button>
-      {!collapsed && (
-        <div className="inning-batters">
-          {group.batters.map((fb, i) => (
-            <FacedBatterCard
-              key={`${fb.batterId}-${fb.inning}-${i}`}
-              fb={fb}
-              seq={i + 1}
-              gamePk={gamePk}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
 }
 
 /**
@@ -273,11 +112,13 @@ function ArsenalSection({ pg }: { pg: PitcherGame }) {
   );
 }
 
-/** The color keyed to a decision (W/L/S) — the game line's accent. */
+/** The color keyed to a credit (W/L/S/HLD) — the game line's accent. */
 function decisionColor(d: PitcherGame['decision']): string {
   if (d === 'W') return 'var(--hit)';
   if (d === 'L') return 'var(--strikeout)';
   if (d === 'S') return 'var(--accent)';
+  // A hold takes the relief amber the RP chip uses — it's the reliever's credit.
+  if (d === 'H') return 'var(--hr)';
   return 'var(--muted)';
 }
 
@@ -357,7 +198,7 @@ function GameLine({ pg }: { pg: PitcherGame }) {
           <div className="ars-head">
             <span className="ars-dot" style={{ background: color }} />
             {!sp && pg.decision && (
-              <span className={`ars-abbr dec-${pg.decision}`}>{pg.decision}</span>
+              <span className={`ars-abbr dec-${pg.decision}`}>{creditLabel(pg.decision)}</span>
             )}
             <span className="ars-name pline-ip">
               {sp ? `${L.battersFaced} BF` : `${formatIp(L.outs)} IP`}
@@ -431,15 +272,126 @@ function GameLine({ pg }: { pg: PitcherGame }) {
   );
 }
 
+/** A ".231"-style rate as a percentage, for the K%/BB% columns. */
+function ratePct(rate: string): string {
+  const n = Number(rate);
+  return Number.isNaN(n) ? '—' : pct(n);
+}
+
+/** A league rank as an ordinal — "1st", "23rd" — or nothing when unranked. */
+function rankNote(rank: number | null | undefined): string | undefined {
+  return rank ? ordinal(rank) : undefined;
+}
+
+/**
+ * Who he's up against: the opposing lineup's season batting line, and the half
+ * of it that's actually his problem — how they hit pitchers of his hand. Reuses
+ * the game line's parts so the two sections read as one table. Silent when the
+ * team lookup failed; it's context, not the outing.
+ */
+export function OpponentSection({
+  game,
+  throws: reportThrows,
+}: {
+  game: PlayerGame;
+  throws?: string | null;
+}) {
+  const hitting = game.opponentHitting;
+  if (!hitting) return null;
+  const s = hitting.season;
+  // `stand` on a pitcher's game is his throwing hand, and a team's vl/vr split
+  // is by the hand they faced — so this is their line against pitchers like him.
+  // Before he's thrown a pitch the game has no `stand`, which is exactly when
+  // this section is most worth reading, so his report's hand stands in.
+  const hand = game.stand ?? reportThrows ?? null;
+  const throws = hand === 'L' || hand === 'R' ? hand : null;
+  const split = throws === 'L' ? hitting.vsLeft : throws === 'R' ? hitting.vsRight : null;
+  return (
+    <div className="card-section">
+      {/* A plain label, not a CardSection: there's one short block under it and
+          nothing to collapse away from, so it needs neither the toggle bar's
+          frame nor the height that bar reserves for its controls. */}
+      <div className="section-title opp-title">Opponent</div>
+      <div className="pline">
+        <div className="ars-row">
+          <div className="ars-head">
+            <span className="ars-abbr">{game.opponent}</span>
+            <span className="ars-name">
+              {s.runsPerGame ?? '—'} R/G
+              {s.ranks?.runsPerGame ? (
+                <span className="ars-rnote">{ordinal(s.ranks.runsPerGame)}</span>
+              ) : null}
+            </span>
+            <span className="ars-count">{s.games} G</span>
+          </div>
+          {/* Each number carries where it places among all 30 — a .231 team
+              average says nothing until you know it's 28th. 1st is always the
+              best offence, so the fewest strikeouts ranks 1st, not 30th. */}
+          <div className="ars-results" title="Season, with league rank (1st = best offence)">
+            <span className="ars-rtag">Season</span>
+            <ResultStat label="AVG" value={s.avg} note={rankNote(s.ranks?.avg)} />
+            <ResultStat label="OBP" value={s.obp} note={rankNote(s.ranks?.obp)} />
+            <ResultStat label="SLG" value={s.slg} note={rankNote(s.ranks?.slg)} />
+            <ResultStat label="OPS" value={s.ops} note={rankNote(s.ranks?.ops)} />
+            <ResultStat label="HR" value={String(s.homeRuns)} note={rankNote(s.ranks?.homeRuns)} />
+            <ResultStat
+              label="SB"
+              value={String(s.stolenBases)}
+              note={rankNote(s.ranks?.stolenBases)}
+            />
+            <ResultStat
+              label="K%"
+              value={ratePct(s.kRate)}
+              note={rankNote(s.ranks?.kRate)}
+              title="Rank counts the fewest strikeouts as 1st"
+            />
+            <ResultStat label="BB%" value={ratePct(s.bbRate)} note={rankNote(s.ranks?.bbRate)} />
+          </div>
+          {split && (
+            <div
+              className="ars-results"
+              title={`${split.pa} plate appearances — rank is among all 30 teams against this hand`}
+            >
+              <span className="ars-rtag">vs {throws === 'L' ? 'LHP' : 'RHP'}</span>
+              <ResultStat label="PA" value={String(split.pa)} />
+              <ResultStat label="AVG" value={split.avg} note={rankNote(split.ranks?.avg)} />
+              <ResultStat label="OBP" value={split.obp} note={rankNote(split.ranks?.obp)} />
+              <ResultStat label="SLG" value={split.slg} note={rankNote(split.ranks?.slg)} />
+              <ResultStat label="OPS" value={split.ops} note={rankNote(split.ranks?.ops)} />
+              <ResultStat
+                label="HR"
+                value={String(split.homeRuns)}
+                note={rankNote(split.ranks?.homeRuns)}
+              />
+              <ResultStat
+                label="K%"
+                value={ratePct(split.kRate)}
+                note={rankNote(split.ranks?.kRate)}
+              />
+              <ResultStat
+                label="BB%"
+                value={ratePct(split.bbRate)}
+                note={rankNote(split.ranks?.bbRate)}
+              />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** One game a watched pitcher threw in: aggregate stats + arsenal + batters faced. */
 function PitcherGameBlock({
   game,
   pitcherId,
+  throws,
   showMatchup,
   spansMultipleDays,
 }: {
   game: PlayerGame;
   pitcherId: number;
+  throws: string | null;
   showMatchup: boolean;
   spansMultipleDays: boolean;
 }) {
@@ -447,14 +399,6 @@ function PitcherGameBlock({
   const L = pg.line;
   const [collapsed, setCollapsed] = useState(showMatchup);
   const blockRef = useScrollIntoViewOnExpand<HTMLDivElement>(!collapsed);
-  // Always in play order, live or final — an outing reads first inning down.
-  const faced = pg.facedBatters;
-  // While this pitcher is the one on the mound, the half-inning he's throwing
-  // gets a live accent. Null once the game is over or he's been pulled.
-  const st = game.status;
-  const onMound = st.state === 'live' && st.pitchingId === pitcherId;
-  const activeInning = onMound ? st.currentInning : null;
-  const activeIsTop = st.isTopInning;
 
   const gameId = (
     <div className="game-sub-id">
@@ -484,6 +428,7 @@ function PitcherGameBlock({
         >
           {gameId}
           <div className="game-sub-summary">
+            <PitchingTag game={game} />
             <span className="game-sub-line">{lineSummary(L)}</span>
             <GameStatusBadge game={game} />
           </div>
@@ -495,20 +440,12 @@ function PitcherGameBlock({
           {/* Game aggregate line */}
           <GameLine pg={pg} />
 
+          {/* The lineup on the other side */}
+          <OpponentSection game={game} throws={throws} />
+
           {/* Batters faced — grouped by inning, each result expandable to its pitches */}
           <CardSection title="Innings">
-            <div className="innings-list">
-              {groupByInning(faced).map((group) => (
-                <InningBlock
-                  key={`${group.inning}-${group.half}`}
-                  group={group}
-                  gamePk={game.gamePk}
-                  active={
-                    group.inning === activeInning && (group.half === 'Top') === activeIsTop
-                  }
-                />
-              ))}
-            </div>
+            <InningsList game={game} pitcherId={pitcherId} />
           </CardSection>
 
           {/* Arsenal: velo/spin/break per pitch type, vs season & league */}
@@ -540,23 +477,87 @@ export function PitcherCard({
   // "did not pitch").
   if (pitched.length === 0) {
     const meta = report.pitcherSeasonStats ? pitcherSeasonSummary(report.pitcherSeasonStats) : null;
-    return (
-      <div className="player-card empty" id={`player-${playerKey(report)}`}>
-        <div className="player-head">
-          <Headshot id={report.id} name={report.name} onOpen={() => onOpenDetails(playerKey(report))} role={role} />
-          <div className="player-id">
-            <PlayerName name={report.name} position={position ?? 'P'} status={report.rosterStatus} />
-            {meta && <span className="player-meta">{meta}</span>}
-          </div>
-          <div className="player-summary">
-            {games.map((g) => (
-              <GameStatusBadge key={g.gamePk} game={g} withMatchup />
-            ))}
-            {games.length > 0 && games.every((g) => g.status.state === 'final') && (
-              <span className="dnp-badge">Did not pitch</span>
-            )}
-          </div>
+    // He hasn't thrown a pitch, so the only thing this card can say beyond the
+    // start time is who's waiting for him — which is when that reads best. A
+    // game he sat out isn't offered: the lineup he didn't face is nothing.
+    const ahead = games.filter((g) => g.opponentHitting && g.status.state !== 'final');
+    const expandable = ahead.length > 0;
+    // The dashed border claims "nothing is coming here" — so it belongs only on a
+    // pitcher who can't still take the ball: no game at all, or every one of them
+    // over (or called off) without him. While a game is scheduled or under way he
+    // might yet appear, and if he's the announced starter he certainly will.
+    const mayStillPitch = games.some(
+      (g) => g.status.state === 'scheduled' || g.status.state === 'live',
+    );
+    const head = (
+      <>
+        {/* Tonight's announced starter is the pitcher's version of a posted
+            lineup — the one thing worth flagging on a card with no outing. */}
+        <Headshot
+          id={report.id}
+          name={report.name}
+          onOpen={() => onOpenDetails(playerKey(report))}
+          corner={games.length === 1 ? pitchingCorner(games[0]) : null}
+          role={role}
+        />
+        <div className="player-id">
+          <PlayerName name={report.name} position={position ?? 'P'} status={report.rosterStatus} />
+          {meta && <span className="player-meta">{meta}</span>}
         </div>
+        <div className="player-summary">
+          {games.length === 1 && <PitchingTag game={games[0]} />}
+          {games.map((g) => (
+            <GameStatusBadge key={g.gamePk} game={g} withMatchup />
+          ))}
+          {games.length > 0 && games.every((g) => g.status.state === 'final') && (
+            <span className="dnp-badge">Did not pitch</span>
+          )}
+        </div>
+      </>
+    );
+    return (
+      <div
+        className={`player-card${mayStillPitch ? '' : ' empty'}${
+          expandable && collapsed ? ' collapsed' : ''
+        }`}
+        id={`player-${playerKey(report)}`}
+      >
+        {expandable ? (
+          <div
+            className="player-head player-head-toggle"
+            role="button"
+            tabIndex={0}
+            aria-expanded={!collapsed}
+            title={collapsed ? 'Expand' : 'Collapse'}
+            onClick={onToggleCollapsed}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onToggleCollapsed();
+              }
+            }}
+          >
+            {head}
+          </div>
+        ) : (
+          <div className="player-head">{head}</div>
+        )}
+        {expandable &&
+          !collapsed &&
+          ahead.map((g) => (
+            <div key={g.gamePk} className="pitcher-body">
+              {ahead.length > 1 && (
+                <div className="game-sub-bar static">
+                  <div className="game-sub-id">
+                    <span className="game-sub-title">
+                      {g.batterTeam} {g.isHome ? 'vs' : '@'} {g.opponent}
+                    </span>
+                  </div>
+                </div>
+              )}
+              <OpponentSection game={g} throws={report.throws} />
+            </div>
+          ))}
       </div>
     );
   }
@@ -568,7 +569,16 @@ export function PitcherCard({
 
   const head = (
     <>
-      <Headshot id={report.id} name={report.name} onOpen={() => onOpenDetails(playerKey(report))} role={role} />
+      {/* The role pip rides the headshot corner: "SP" for a starter, the inning
+          a reliever entered in. Only for a lone outing — with several in view
+          each game block's bar carries its own role chip. */}
+      <Headshot
+        id={report.id}
+        name={report.name}
+        onOpen={() => onOpenDetails(playerKey(report))}
+        corner={pitched.length === 1 ? pitchingCorner(primary) : null}
+        role={role}
+      />
       <div className="player-id">
         <PlayerName name={report.name} position={position ?? 'P'} status={report.rosterStatus} />
         <span className="player-meta">
@@ -579,9 +589,10 @@ export function PitcherCard({
       </div>
       <div className="player-summary">
         <LiveRoleTag role={role} />
+        {pitched.length === 1 && <PitchingTag game={primary} />}
         {pitched.length === 1 && primary.pitching!.decision && (
           <span className={`dec-tag dec-${primary.pitching!.decision}`}>
-            {primary.pitching!.decision}
+            {creditLabel(primary.pitching!.decision)}
           </span>
         )}
         <span className="summary-line">{lineSummary(combined)}</span>
@@ -618,6 +629,7 @@ export function PitcherCard({
             key={g.gamePk}
             game={g}
             pitcherId={report.id}
+            throws={report.throws}
             showMatchup={showMatchup}
             spansMultipleDays={spansMultipleDays}
           />

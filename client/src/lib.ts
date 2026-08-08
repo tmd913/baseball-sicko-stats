@@ -2,6 +2,7 @@ import type {
   BaseState,
   BattingLine,
   PitcherSeasonStats,
+  PitchingCredit,
   PitchingLine,
   PlateAppearance,
   PlayerGame,
@@ -163,6 +164,9 @@ export function combinePitchingLines(lines: PitchingLine[]): PitchingLine {
     wildPitches: sum((l) => l.wildPitches),
     inheritedRunners: sum((l) => l.inheritedRunners),
     inheritedRunnersScored: sum((l) => l.inheritedRunnersScored),
+    wins: sum((l) => l.wins),
+    saves: sum((l) => l.saves),
+    holds: sum((l) => l.holds),
   };
 }
 
@@ -180,9 +184,30 @@ export function whipOf(line: PitchingLine): string {
 
 /** A compact pitcher season summary for the card header. */
 export function pitcherSeasonSummary(s: PitcherSeasonStats): string {
-  const parts = [`${s.era} ERA`, `${s.whip} WHIP`];
-  if (s.strikeoutsPer9 && s.strikeoutsPer9 !== '—') parts.push(`${s.strikeoutsPer9} K/9`);
-  return parts.join(', ');
+  const parts = [`${s.era} ERA`];
+  // The ERA estimators next to ERA itself, which is the comparison worth making
+  // at a glance — a starter whose FIP sits a run under his ERA is a different
+  // read from one whose doesn't.
+  if (s.fip) parts.push(`${s.fip} FIP`);
+  if (s.xfip) parts.push(`${s.xfip} xFIP`);
+  parts.push(`${s.whip} WHIP`);
+  const per9 = (v: string, label: string) => {
+    if (v && v !== '—') parts.push(`${v} ${label}`);
+  };
+  per9(s.strikeoutsPer9, 'K/9');
+  per9(s.walksPer9, 'BB/9');
+  per9(s.homeRunsPer9, 'HR/9');
+  // Stops here on purpose: BAA and the rate splits are a tap away in the
+  // details view, and a collapsed card is meant to be scanned, not read.
+  return parts.join(' · ');
+}
+
+/**
+ * The chip text for a pitching credit. The letters are the scorebook's, except
+ * a hold — "H" alone reads as a hit next to a line of them, so it's spelled.
+ */
+export function creditLabel(credit: PitchingCredit): string {
+  return credit === 'H' ? 'HLD' : credit;
 }
 
 /** How a game value compares to a reference (season/league avg), for an arrow. */
@@ -409,14 +434,20 @@ export function lineupBadge(
 }
 
 /**
+ * The pip pinned to a headshot corner — a batting slot, a pitching role, or a
+ * flag for a game the player is out of. Shared by the cards and the summary
+ * table so the two read identically.
+ */
+export type CornerTone = 'in' | 'out' | 'postponed' | 'start' | 'relief';
+export type Corner = { text: string; title: string; tone: CornerTone } | null;
+
+/**
  * Corner badge for a player headshot: the batting-order number when the player is
  * in the lineup, an exclamation mark when a posted lineup left them out or the
  * game was postponed. Null when the lineup hasn't posted (or a starter has no
  * known spot) — nothing to show.
  */
-export function lineupCorner(
-  game: PlayerGame,
-): { text: string; title: string; tone: 'in' | 'out' | 'postponed' } | null {
+export function lineupCorner(game: PlayerGame): Corner {
   if (game.status.state === 'postponed') {
     return { text: '!', title: 'Postponed', tone: 'postponed' };
   }
@@ -427,6 +458,52 @@ export function lineupCorner(
     return { text: String(game.lineupSpot), title: `Batting ${ordinal(game.lineupSpot)}`, tone: 'in' };
   }
   return null;
+}
+
+/**
+ * The pitching-role indicator for a game — the pitcher-side mirror of
+ * lineupBadge. "SP" for the starter (announced before first pitch, confirmed by
+ * the boxscore after), "RP 7th" for a reliever, naming the inning he came in.
+ * Null when he hasn't pitched and isn't the posted probable.
+ */
+export function pitchingBadge(
+  game: PlayerGame,
+): { label: string; title: string; tone: 'start' | 'relief' } | null {
+  if (game.pitchingRole === 'starting') {
+    return {
+      label: 'SP',
+      title: game.status.state === 'scheduled' ? 'Probable starting pitcher' : 'Started the game',
+      tone: 'start',
+    };
+  }
+  if (game.pitchingRole === 'relief') {
+    return game.entryInning
+      ? {
+          label: `RP ${ordinal(game.entryInning)}`,
+          title: `Relieved in the ${ordinal(game.entryInning)}`,
+          tone: 'relief',
+        }
+      : { label: 'RP', title: 'Relief appearance', tone: 'relief' };
+  }
+  return null;
+}
+
+/**
+ * Corner badge for a pitcher headshot, the counterpart of lineupCorner: "SP"
+ * for a starter, the entry inning for a reliever (a bare number, like a batting
+ * slot — the title spells it out), or an exclamation mark for a postponed game.
+ */
+export function pitchingCorner(game: PlayerGame): Corner {
+  if (game.status.state === 'postponed') {
+    return { text: '!', title: 'Postponed', tone: 'postponed' };
+  }
+  const badge = pitchingBadge(game);
+  if (!badge) return null;
+  return {
+    text: game.pitchingRole === 'relief' && game.entryInning ? String(game.entryInning) : 'SP',
+    title: badge.title,
+    tone: badge.tone,
+  };
 }
 
 /**

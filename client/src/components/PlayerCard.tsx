@@ -20,7 +20,7 @@ import {
   rosterStatusBadge,
   seasonStatsSummary,
 } from '../lib';
-import type { LiveRole } from '../lib';
+import type { Corner, LiveRole } from '../lib';
 import { BaseDiamond } from './BaseDiamond';
 import { PlateAppearanceCard } from './PlateAppearanceCard';
 import { GameReel } from './GameReel';
@@ -328,7 +328,7 @@ export function Headshot({
   id: number;
   name: string;
   onOpen: () => void;
-  corner?: { text: string; title: string; tone: 'in' | 'out' | 'postponed' } | null;
+  corner?: Corner;
   role?: LiveRole | null;
 }) {
   const [failed, setFailed] = useState(false);
@@ -358,7 +358,7 @@ export function Headshot({
         <span
           className={`lineup-spot player-photo-spot spot-${corner.tone}`}
           title={corner.title}
-          aria-label={corner.tone === 'in' ? `Batting ${corner.text}` : corner.title}
+          aria-label={corner.title}
         >
           {corner.text}
         </span>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { BattingLine, PitchingLine, PlayerGame, PlayerReport } from '../types';
 import { playerKey } from '../types';
-import type { LiveRole } from '../lib';
+import type { Corner, LiveRole } from '../lib';
 import {
   combineLines,
   combinePitchingLines,
@@ -14,11 +14,9 @@ import {
   liveRole,
   lineOps,
   mostRecentGameFirst,
+  pitchingCorner,
   whipOf,
 } from '../lib';
-
-/** The lineup-spot pip (batting number, or a red "!" when benched) for a game. */
-type Corner = { text: string; title: string; tone: 'in' | 'out' | 'postponed' } | null;
 
 /**
  * The game to summarize for a player in the opponent column: prefer the live
@@ -64,7 +62,7 @@ function StatCells({ line }: { line: BattingLine }) {
       <td className="sum-num">{line.hr}</td>
       <td className="sum-num">{line.rbi}</td>
       <td className="sum-num">{line.sb}</td>
-      <td className="sum-num sum-ops">{ops !== null ? formatRate(ops) : '—'}</td>
+      <td className="sum-num">{ops !== null ? formatRate(ops) : '—'}</td>
       <td className="sum-num">{line.bb}</td>
       <td className="sum-num">{line.so}</td>
     </>
@@ -72,6 +70,14 @@ function StatCells({ line }: { line: BattingLine }) {
 }
 
 /** A pitcher's aggregate line + rates for the range, shown as one table row. */
+/**
+ * A win / save / hold count, dashed at zero — these columns are empty for almost
+ * every row, and a column of noughts reads as data when it isn't.
+ */
+function CreditCell({ n }: { n: number }) {
+  return <td className="sum-num">{n > 0 ? n : '—'}</td>;
+}
+
 function PitchStatCells({ line }: { line: PitchingLine }) {
   return (
     <>
@@ -82,7 +88,10 @@ function PitchStatCells({ line }: { line: PitchingLine }) {
       <td className="sum-num">{line.walks}</td>
       <td className="sum-num">{line.strikeouts}</td>
       <td className="sum-num">{line.hr}</td>
-      <td className="sum-num sum-ops">{eraOf(line)}</td>
+      <CreditCell n={line.wins} />
+      <CreditCell n={line.saves} />
+      <CreditCell n={line.holds} />
+      <td className="sum-num">{eraOf(line)}</td>
       <td className="sum-num">{whipOf(line)}</td>
     </>
   );
@@ -138,7 +147,7 @@ function SumPhoto({
         <span
           className={`lineup-spot sum-photo-spot spot-${corner.tone}`}
           title={corner.title}
-          aria-label={corner.tone === 'in' ? `Batting ${corner.text}` : corner.title}
+          aria-label={corner.title}
         >
           {corner.text}
         </span>
@@ -241,7 +250,7 @@ function PitcherTable({ pitchers, handlers }: { pitchers: PlayerReport[]; handle
   const totalLine = combinePitchingLines(
     pitchers.flatMap((r) => r.games.filter((g) => g.pitching).map((g) => g.pitching!.line)),
   );
-  const cols = ['IP', 'H', 'R', 'ER', 'BB', 'K', 'HR', 'ERA', 'WHIP'];
+  const cols = ['IP', 'H', 'R', 'ER', 'BB', 'K', 'HR', 'W', 'SV', 'HLD', 'ERA', 'WHIP'];
   return (
     <table className="summary-table summary-table-pitchers">
       <thead>
@@ -268,7 +277,7 @@ function PitcherTable({ pitchers, handlers }: { pitchers: PlayerReport[]; handle
           const role = liveRole(r);
           return (
             <tr key={r.id} className={role ? `role-${role}` : undefined}>
-              <LeadCells r={r} game={game} role={role} corner={null} {...handlers} />
+              <LeadCells r={r} game={game} role={role} corner={game ? pitchingCorner(game) : null} {...handlers} />
               <PitchStatCells line={aggregatePitching(r)} />
             </tr>
           );

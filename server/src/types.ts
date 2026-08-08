@@ -148,6 +148,9 @@ export interface FacedBatter {
   pitches: Pitch[];
 }
 
+/** A win, loss, save or hold — what a pitcher took away from an outing. */
+export type PitchingCredit = 'W' | 'L' | 'S' | 'H';
+
 /** A pitcher's per-game counting line (authoritative, from the boxscore). `outs`
  * is the aggregation-safe innings field; IP is formatted for display. */
 export interface PitchingLine {
@@ -170,6 +173,13 @@ export interface PitchingLine {
   wildPitches: number;
   inheritedRunners: number;
   inheritedRunnersScored: number;
+  // The game's official credits, from the boxscore — 0 or 1 each per game, and
+  // summed over a range by combinePitchingLines. A win/save agrees with
+  // `PitcherGame.decision`; a hold has no equivalent there (liveData.decisions
+  // only names the W/L/S pitchers).
+  wins: number;
+  saves: number;
+  holds: number;
 }
 
 /** One pitch type in a pitcher's game arsenal, with the game averages and the
@@ -230,7 +240,9 @@ export interface PitcherGame {
   cswRate: number | null; // (called strikes + whiffs) / pitches
   strikePct: number | null; // strikes / pitches
   isStart: boolean;
-  decision: 'W' | 'L' | 'S' | null; // this pitcher's W/L/S in the game
+  // What he came away with: the official W/L/S, or a hold — which `decisions`
+  // never names, so it comes off his boxscore line instead.
+  decision: PitchingCredit | null;
 }
 
 /**
@@ -279,6 +291,63 @@ export interface PitcherSeasonStats {
   kRate: string; // K / batters faced, ".291"
   bbRate: string;
   avgAgainst: string; // batting average against, ".221"
+  hitBatsmen: number;
+  homeRunsPer9: string;
+  // ERA-scale estimators (leagueRates.ts). FIP is the pitcher's own three true
+  // outcomes; xFIP swaps his home runs for his fly balls at the league HR/FB
+  // rate, so it needs the Savant season CSV and is filled in getReport — null
+  // for a split, and until that fetch lands.
+  fip: string | null;
+  xfip: string | null;
+}
+
+/**
+ * Where a team places among all 30 in each category — 1 is always the **best
+ * offence**, so a low strikeout rate ranks 1st, not 30th. Computed here rather
+ * than read off the API, which ranks by its own default sort and doesn't rank
+ * splits at all. Null where the category has no value (a split has no runs).
+ */
+export interface TeamHittingRanks {
+  runsPerGame: number | null;
+  avg: number | null;
+  obp: number | null;
+  slg: number | null;
+  ops: number | null;
+  homeRuns: number | null;
+  stolenBases: number | null;
+  kRate: number | null;
+  bbRate: number | null;
+}
+
+/** One batting line for a team — the whole season, or against one pitcher hand. */
+export interface TeamHittingLine {
+  pa: number;
+  games: number;
+  runs: number;
+  runsPerGame: string | null; // null on a split, which carries no runs
+  avg: string;
+  obp: string;
+  slg: string;
+  ops: string;
+  homeRuns: number;
+  strikeOuts: number;
+  baseOnBalls: number;
+  stolenBases: number;
+  kRate: string; // K / PA, ".231"
+  bbRate: string;
+  ranks: TeamHittingRanks | null;
+}
+
+/**
+ * How a team has hit this season, whole and by the pitcher's hand — the lineup
+ * a watched pitcher is about to face (or just did). `vsLeft` / `vsRight` are
+ * their lines against left- and right-handed *pitching*.
+ */
+export interface TeamHitting {
+  teamId: number;
+  season: TeamHittingLine;
+  vsLeft: TeamHittingLine | null;
+  vsRight: TeamHittingLine | null;
 }
 
 export interface PlayerGame {
@@ -301,6 +370,19 @@ export interface PlayerGame {
   lineupStatus: 'starting' | 'bench' | null;
   // Batting-order slot (1-9) when starting; null otherwise.
   lineupSpot: number | null;
+  // The pitcher-side mirror of lineupStatus (always null for a batter's game):
+  // 'starting' once he's the announced probable or has actually taken the ball
+  // to open the game, 'relief' once he's come out of the bullpen. Null when he
+  // hasn't pitched and isn't the posted probable.
+  pitchingRole: 'starting' | 'relief' | null;
+  // The inning a reliever entered in. Null for a starter (it's the 1st by
+  // definition) and before he appears.
+  entryInning: number | null;
+  // The opposing team's MLB id, and — for a watched pitcher's game — how that
+  // lineup has hit this season. It's the "who is he facing" half of an outing,
+  // and null for a batter's game (his own line already says how it went).
+  opponentId: number | null;
+  opponentHitting: TeamHitting | null;
   // The opposing probable starter — the pitcher this batter is scheduled to
   // face. Meaningful before the game starts; null once real matchups exist.
   probablePitcher: ProbablePitcher | null;
@@ -367,6 +449,10 @@ export interface PlayerReport extends WatchPlayer {
   // plainly active — explains a card whose games come only from the team's
   // schedule (the player is off the active roster). Null when active/unknown.
   rosterStatus: RosterStatus | null;
+  // Throwing hand ("L"/"R") — pitchers only, and null for a batter. His games
+  // carry it as `stand` once he's appeared in one; this is what the card reads
+  // before that, when the only thing on it is a game he hasn't pitched yet.
+  throws: string | null;
 }
 
 /** A rostered player for the season, used for search/autocomplete. */

@@ -15,11 +15,24 @@ export const pct = (x: number | null): string => (x === null ? '—' : `${Math.r
 export const avg3 = (n: number | null): string => (n === null ? '—' : n.toFixed(3).replace(/^0\./, '.'));
 
 /** One labelled stat in a results strip — the arsenal's, or the game line's. */
-export function ResultStat({ label, value, title }: { label: string; value: string; title?: string }) {
+export function ResultStat({
+  label,
+  value,
+  title,
+  note,
+}: {
+  label: string;
+  value: string;
+  title?: string;
+  // A trailing qualifier in the muted label type — the opponent section's
+  // league rank ("14th"), where the number alone doesn't say much.
+  note?: string;
+}) {
   return (
     <span className="ars-rstat" title={title}>
       <span className="ars-rlabel">{label}</span>
       <span className="ars-rval">{value}</span>
+      {note && <span className="ars-rnote">{note}</span>}
     </span>
   );
 }

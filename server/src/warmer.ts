@@ -4,6 +4,7 @@ import { getPercentiles } from './percentiles.js';
 import { getPitcherStats, getPlayerStats, getSeasonPlayers } from './mlbStats.js';
 import { getAllWatchedPlayers } from './store.js';
 import { mapLimit } from './limit.js';
+import { baseballToday } from './etDate.js';
 
 /**
  * The scheduled cache warmer.
@@ -24,24 +25,11 @@ interface WarmEvent {
   days?: number;
 }
 
-const ET_ZONE = 'America/New_York';
-
-/** Today in US Eastern — MLB days are anchored to ET, and a UTC "today" rolls
- *  over while ET games are still live. Matches savant.ts and index.ts. */
-function easternToday(): string {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: ET_ZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(new Date());
-  const get = (t: string) => parts.find((p) => p.type === t)!.value;
-  return `${get('year')}-${get('month')}-${get('day')}`;
-}
-
-/** The `n` most recent dates ending today, oldest first. */
+/** The `n` most recent dates ending on today's baseball day (see etDate.ts),
+ *  oldest first — so between midnight and 3am ET the warmer keeps refreshing
+ *  the slate that's still finishing rather than the empty next one. */
 function recentDates(n: number): string[] {
-  const [y, m, d] = easternToday().split('-').map(Number);
+  const [y, m, d] = baseballToday().split('-').map(Number);
   const today = Date.UTC(y, m - 1, d);
   return Array.from({ length: n }, (_, i) =>
     new Date(today - (n - 1 - i) * 86_400_000).toISOString().slice(0, 10),

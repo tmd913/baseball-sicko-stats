@@ -3,6 +3,24 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- iOS Safari zooms the page in whenever a focused field's font is under
+         16px, and never zooms back out afterwards. `maximum-scale=1` suppresses
+         that automatic zoom, which lets the roster search keep normal-sized text
+         instead of being inflated to 16px (and the tabs beside it with it).
+         Applied only on iOS: Safari has ignored the constraint for pinch-zoom
+         since iOS 10, so nothing is taken away from the user there, but other
+         browsers do honour it and would lose zoom entirely. -->
+    <script>
+      (function () {
+        var ua = navigator.userAgent;
+        var iOS =
+          /iPad|iPhone|iPod/.test(ua) ||
+          (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+        if (!iOS) return;
+        var meta = document.querySelector('meta[name="viewport"]');
+        if (meta) meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0';
+      })();
+    </script>
     <meta name="color-scheme" content="dark" />
     <title>Statcast Sicko</title>
     <!-- Paint the dark base color on the very first frame so a reload doesn't

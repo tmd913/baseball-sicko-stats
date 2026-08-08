@@ -1,5 +1,6 @@
 import { readBlob, writeBlob } from './storage.js';
 import { toSavantName } from './names.js';
+import { fipLike, ipToOuts } from './leagueRates.js';
 import type {
   BaseState,
   GameStatus,
@@ -167,12 +168,40 @@ export async function getSeasonPlayers(
 
 // ---- Season batting stats + platoon splits (shown on each player's card) ----
 
+/** One row of a hydrated stat group. `team` is present only on a *stint* row —
+ *  see preferSeasonWide. */
+interface StatGroupSplit {
+  split?: { code?: string };
+  team?: { id?: number };
+  stat?: Record<string, unknown>;
+}
 interface PeopleStatsPerson {
   id: number;
   stats?: {
     type?: { displayName?: string };
-    splits?: { split?: { code?: string }; stat?: Record<string, unknown> }[];
+    splits?: StatGroupSplit[];
   }[];
+}
+
+/**
+ * Fold a split into a stat slot, preferring the season-wide row.
+ *
+ * A player traded mid-season comes back as one row **per stint** plus a
+ * season-wide one, and the aggregate is the row carrying no `team`. Position is
+ * no help: it leads in the `season` group but trails its own stints in the
+ * vs-L/R group. Simply keeping whichever row came last therefore showed a
+ * traded player only his new team's numbers — a season that appeared to reset
+ * on trade day. A stint row is accepted only while the slot is still empty, so
+ * a shape we haven't seen yields stats rather than none.
+ */
+function preferSeasonWide<T>(
+  current: T | null,
+  split: StatGroupSplit,
+  build: (stat: Record<string, unknown>) => T,
+): T | null {
+  if (!split.stat) return current;
+  if (split.team === undefined) return build(split.stat);
+  return current ?? build(split.stat);
 }
 interface PeopleStatsResponse {
   people?: PeopleStatsPerson[];
@@ -213,11 +242,10 @@ function parsePlayerStats(p: PeopleStatsPerson): PlayerStats {
   for (const grp of p.stats ?? []) {
     const type = grp.type?.displayName;
     for (const sp of grp.splits ?? []) {
-      if (!sp.stat) continue;
-      if (type === 'season') out.season = toSeasonStats(sp.stat);
+      if (type === 'season') out.season = preferSeasonWide(out.season, sp, toSeasonStats);
       else if (type === 'statSplits') {
-        if (sp.split?.code === 'vl') out.vsLeft = toSeasonStats(sp.stat);
-        else if (sp.split?.code === 'vr') out.vsRight = toSeasonStats(sp.stat);
+        if (sp.split?.code === 'vl') out.vsLeft = preferSeasonWide(out.vsLeft, sp, toSeasonStats);
+        else if (sp.split?.code === 'vr') out.vsRight = preferSeasonWide(out.vsRight, sp, toSeasonStats);
       }
     }
   }
@@ -292,7 +320,11 @@ function toPitcherSeasonStats(stat: Record<string, unknown>): PitcherSeasonStats
   const bf = n(stat.battersFaced);
   const k = n(stat.strikeOuts);
   const bb = n(stat.baseOnBalls);
+  const hbp = n(stat.hitBatsmen);
+  const hr = n(stat.homeRuns);
+  const outs = ipToOuts(str(stat.inningsPitched));
   const perBf = (num: number) => (bf > 0 ? rate3(num / bf) : '—');
+  const fip = fipLike(hr, bb, hbp, k, outs);
   return {
     gamesPlayed: n(stat.gamesPlayed),
     gamesStarted: n(stat.gamesStarted),
@@ -309,6 +341,12 @@ function toPitcherSeasonStats(stat: Record<string, unknown>): PitcherSeasonStats
     kRate: perBf(k),
     bbRate: perBf(bb),
     avgAgainst: str(stat.avg),
+    hitBatsmen: hbp,
+    homeRunsPer9: str(stat.homeRunsPer9),
+    fip: fip === null ? null : fip.toFixed(2),
+    // Needs a fly-ball count, which only the Savant season CSV has — getReport
+    // fills it for the whole-season line once that fetch lands.
+    xfip: null,
   };
 }
 
@@ -317,11 +355,14 @@ function parsePitcherStats(p: PeopleStatsPerson): PitcherStats {
   for (const grp of p.stats ?? []) {
     const type = grp.type?.displayName;
     for (const sp of grp.splits ?? []) {
-      if (!sp.stat) continue;
-      if (type === 'season') out.season = toPitcherSeasonStats(sp.stat);
+      // Same per-stint rows a traded batter gets — see preferSeasonWide.
+      if (type === 'season') out.season = preferSeasonWide(out.season, sp, toPitcherSeasonStats);
       else if (type === 'statSplits') {
-        if (sp.split?.code === 'vl') out.vsLeft = toPitcherSeasonStats(sp.stat);
-        else if (sp.split?.code === 'vr') out.vsRight = toPitcherSeasonStats(sp.stat);
+        if (sp.split?.code === 'vl') {
+          out.vsLeft = preferSeasonWide(out.vsLeft, sp, toPitcherSeasonStats);
+        } else if (sp.split?.code === 'vr') {
+          out.vsRight = preferSeasonWide(out.vsRight, sp, toPitcherSeasonStats);
+        }
       }
     }
   }
@@ -373,18 +414,27 @@ export async function getPitcherStats(
 export interface RosterInfo {
   teamId: number | null;
   status: RosterStatus | null;
+  throws: string | null; // "L" | "R" — pitchers; meaningless for a batter's card
+}
+
+/** What the people?hydrate=currentTeam call yields per id. */
+interface PlayerTeamInfo {
+  teamId: number | null;
+  throws: string | null;
 }
 
 /** Team ids and rosters move at most day to day, so a 30-min TTL is plenty. */
 const ROSTER_INFO_TTL = 30 * 60 * 1000;
-const playerTeamCache = new Map<number, { teamId: number | null; fetchedAt: number }>();
+const playerTeamCache = new Map<number, PlayerTeamInfo & { fetchedAt: number }>();
 
 interface PeopleTeamResponse {
-  people?: { id: number; currentTeam?: { id?: number } }[];
+  people?: { id: number; currentTeam?: { id?: number }; pitchHand?: { code?: string } }[];
 }
 
-/** Each id's current team id, batched into one people?hydrate=currentTeam call. */
-async function getPlayerTeamIds(ids: number[]): Promise<Map<number, number | null>> {
+/** Each id's current team and throwing hand, batched into one people call. The
+ *  hand is what a pitcher's card needs before he throws a pitch — his game has
+ *  no `stand` until he appears in one. */
+async function getPlayerTeamIds(ids: number[]): Promise<Map<number, PlayerTeamInfo>> {
   const now = Date.now();
   const stale = ids.filter((id) => {
     const c = playerTeamCache.get(id);
@@ -395,25 +445,34 @@ async function getPlayerTeamIds(ids: number[]): Promise<Map<number, number | nul
     try {
       const url =
         `https://statsapi.mlb.com/api/v1/people?personIds=${stale.join(',')}` +
-        `&hydrate=currentTeam&fields=people,id,currentTeam`;
+        `&hydrate=currentTeam&fields=people,id,currentTeam,pitchHand,code`;
       const res = await fetch(url, { headers: UA });
       if (!res.ok) throw new Error(`people/currentTeam returned ${res.status}`);
       const data = (await res.json()) as PeopleTeamResponse;
       const seen = new Set<number>();
       for (const p of data.people ?? []) {
-        playerTeamCache.set(p.id, { teamId: p.currentTeam?.id ?? null, fetchedAt: now });
+        playerTeamCache.set(p.id, {
+          teamId: p.currentTeam?.id ?? null,
+          throws: p.pitchHand?.code ?? null,
+          fetchedAt: now,
+        });
         seen.add(p.id);
       }
       // Cache misses too, so an unknown id doesn't refetch every request.
       for (const id of stale) {
-        if (!seen.has(id)) playerTeamCache.set(id, { teamId: null, fetchedAt: now });
+        if (!seen.has(id)) playerTeamCache.set(id, { teamId: null, throws: null, fetchedAt: now });
       }
     } catch (err) {
       console.error('player team lookup failed:', err);
     }
   }
 
-  return new Map(ids.map((id) => [id, playerTeamCache.get(id)?.teamId ?? null]));
+  return new Map(
+    ids.map((id) => {
+      const c = playerTeamCache.get(id);
+      return [id, { teamId: c?.teamId ?? null, throws: c?.throws ?? null }];
+    }),
+  );
 }
 
 interface RosterResponse {
@@ -462,7 +521,11 @@ async function getTeamRosterStatus(teamId: number): Promise<Map<number, RosterSt
  */
 export async function getRosterInfo(ids: number[]): Promise<Map<number, RosterInfo>> {
   const teamByPlayer = await getPlayerTeamIds(ids);
-  const teamIds = [...new Set([...teamByPlayer.values()].filter((t): t is number => t !== null))];
+  const teamIds = [
+    ...new Set(
+      [...teamByPlayer.values()].map((t) => t.teamId).filter((t): t is number => t !== null),
+    ),
+  ];
   const rosters = new Map<number, Map<number, RosterStatus>>();
   await Promise.all(
     teamIds.map(async (tid) => {
@@ -471,9 +534,10 @@ export async function getRosterInfo(ids: number[]): Promise<Map<number, RosterIn
   );
   return new Map(
     ids.map((id) => {
-      const teamId = teamByPlayer.get(id) ?? null;
+      const info = teamByPlayer.get(id);
+      const teamId = info?.teamId ?? null;
       const status = teamId !== null ? rosters.get(teamId)?.get(id) ?? null : null;
-      return [id, { teamId, status }];
+      return [id, { teamId, status, throws: info?.throws ?? null }];
     }),
   );
 }
@@ -604,6 +668,11 @@ const FEED_FIELDS = [
   'wildPitches',
   'inheritedRunners',
   'inheritedRunnersScored',
+  // The game's credits: a win/save duplicates liveData.decisions, but a hold is
+  // only ever here.
+  'wins',
+  'saves',
+  'holds',
   // liveData.decisions — the winning / losing / save pitcher (final games).
   'decisions',
   'winner',
@@ -737,6 +806,8 @@ interface LiveFeed {
 
 /** A boxscore team's players, with each player's pitching line when present. */
 interface BoxTeam {
+  // Pitcher ids in the order they appeared — [0] is the starter.
+  pitchers?: number[];
   players?: Record<
     string,
     {
@@ -769,6 +840,10 @@ interface BoxPitching {
   wildPitches?: number;
   inheritedRunners?: number;
   inheritedRunnersScored?: number;
+  // 0 or 1 each, for this game.
+  wins?: number;
+  saves?: number;
+  holds?: number;
 }
 
 /**
@@ -1113,6 +1188,9 @@ export interface StatsApiGame {
   // boxscore pitching line per pitcher id.
   pitchers: Map<number, StatsApiPitcherGame>;
   pitchingLines: Map<number, PitchingLine>;
+  // The ids of the two starting pitchers (from the boxscore). Empty before
+  // first pitch, when the announced probables are all there is to go on.
+  pitchingStarters: Set<number>;
   // The winning / losing / save pitcher ids for a decided game (null until final).
   decisions: { win: number | null; loss: number | null; save: number | null };
   runsByRunner: Map<number, number>;
@@ -1209,15 +1287,32 @@ function startingOrder(
   return order;
 }
 
-/** Innings pitched string "5.2" → outs recorded (5×3 + 2). */
-function ipToOuts(ip: string | undefined): number {
-  if (!ip) return 0;
-  const [whole, frac] = ip.split('.');
-  return (Number(whole) || 0) * 3 + (Number(frac) || 0);
-}
-
 /** The authoritative per-pitcher counting line from the boxscore (the play stream
  * can't attribute earned vs unearned / inherited runners). Keyed by pitcher id. */
+/**
+ * The ids of the two starting pitchers. Authoritative where the play-by-play
+ * isn't: an opener pulled after one batter still started, and a reliever who
+ * comes in mid-first didn't. Empty until the boxscore names them.
+ */
+function startingPitchers(feed: LiveFeed): Set<number> {
+  const out = new Set<number>();
+  const teams = feed.liveData?.boxscore?.teams;
+  for (const team of [teams?.home, teams?.away]) {
+    // A side's `pitchers` lists who has taken the mound, in order, and is filled
+    // from warmup on — the only thing that names the starter before he throws a
+    // pitch, since `gamesStarted` stays 0 until the game is under way. It's not
+    // in the field-filtered feed a final game is cached as; there the stat line
+    // is complete and gamesStarted answers it.
+    const first = team?.pitchers?.[0];
+    if (typeof first === 'number') out.add(first);
+    for (const p of Object.values(team?.players ?? {})) {
+      const id = p.person?.id;
+      if (typeof id === 'number' && p.stats?.pitching?.gamesStarted) out.add(id);
+    }
+  }
+  return out;
+}
+
 function parsePitchingLines(feed: LiveFeed): Map<number, PitchingLine> {
   const out = new Map<number, PitchingLine>();
   const teams = feed.liveData?.boxscore?.teams;
@@ -1248,6 +1343,9 @@ function parsePitchingLines(feed: LiveFeed): Map<number, PitchingLine> {
         wildPitches: pit.wildPitches ?? 0,
         inheritedRunners: pit.inheritedRunners ?? 0,
         inheritedRunnersScored: pit.inheritedRunnersScored ?? 0,
+        wins: pit.wins ?? 0,
+        saves: pit.saves ?? 0,
+        holds: pit.holds ?? 0,
       });
     }
   }
@@ -1315,8 +1413,9 @@ async function getLiveData(gamePk: number): Promise<{ feed: LiveFeed; winExp: Ma
 // Bump when the persisted compact feed needs new fields (so cached finals, which
 // were frozen without them, re-fetch). v2 added the boxscore pitching line; v3
 // added liveData.decisions (W/L/S) and the per-batter pitch sequence; v4 added
-// runners[].details.earned (per-PA earned-run flag); v5 added responsiblePitcher.
-const FEED_CACHE_VERSION = 6;
+// runners[].details.earned (per-PA earned-run flag); v5 added responsiblePitcher;
+// v7 added the boxscore's per-game wins/saves/holds.
+const FEED_CACHE_VERSION = 7;
 
 export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
   const finalCached = gameMemCache.get(gamePk);
@@ -1548,6 +1647,7 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
   }
 
   const pitchingLines = parsePitchingLines(feed);
+  const pitchingStarters = startingPitchers(feed);
 
   const game: StatsApiGame = {
     gamePk,
@@ -1566,6 +1666,7 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
     batters,
     pitchers,
     pitchingLines,
+    pitchingStarters,
     decisions: {
       win: feed.liveData?.decisions?.winner?.id ?? null,
       loss: feed.liveData?.decisions?.loser?.id ?? null,

@@ -16,10 +16,19 @@ import { DateRangePicker } from './components/DateRangePicker';
 // Breathing room above a card scrolled to the top of the viewport.
 const SCROLL_GAP = 12;
 
-// MLB days are anchored to US Eastern time (games can end after midnight ET),
-// so "previous day" is computed in America/New_York rather than UTC or the
-// machine's local zone — otherwise an evening US user gets an off-by-one.
+// MLB days are anchored to US Eastern time, computed in America/New_York rather
+// than UTC or the machine's local zone — otherwise an evening US user gets an
+// off-by-one.
 const ET_ZONE = 'America/New_York';
+
+// And a baseball day doesn't end at midnight: a 10pm ET first pitch on the West
+// Coast finishes around 1am, so at 12:30am the day "Today" should mean is still
+// the one whose games are ending — rolling over on the calendar would swap the
+// user onto an empty slate mid-game. The day turns at 3am ET instead: later
+// than any game realistically runs, earlier than anything the next day starts.
+// `server/src/etDate.ts` mirrors this (the two workspaces can't share code, and
+// the API's default date has to land where the presets do) — change both.
+const DAY_ROLLOVER_HOUR = 3;
 
 function easternDate(d: Date): string {
   const parts = new Intl.DateTimeFormat('en-US', {
@@ -39,16 +48,18 @@ function addDays(date: string, delta: number): string {
   return dt.toISOString().slice(0, 10);
 }
 
-function todayEt(): string {
-  return easternDate(new Date());
+/** Today's baseball date — the Eastern date of a clock set back to the rollover
+ *  hour, so the small hours still belong to the night before. */
+function baseballToday(): string {
+  return easternDate(new Date(Date.now() - DAY_ROLLOVER_HOUR * 3_600_000));
 }
 
 function previousDay(): string {
-  return addDays(todayEt(), -1);
+  return addDays(baseballToday(), -1);
 }
 
 function nextDay(): string {
-  return addDays(todayEt(), 1);
+  return addDays(baseballToday(), 1);
 }
 
 /** Most recent Monday on or before the given date (i.e. start of that week). */
@@ -67,7 +78,7 @@ interface DatePreset {
 }
 
 function datePresets(): DatePreset[] {
-  const today = todayEt();
+  const today = baseballToday();
   const tomorrow = nextDay();
   const yesterday = previousDay();
   return [
@@ -127,8 +138,8 @@ export default function App() {
     const s = initialParams.get('start');
     const e = initialParams.get('end');
     return {
-      start: s && ISO_DATE.test(s) ? s : todayEt(),
-      end: e && ISO_DATE.test(e) ? e : todayEt(),
+      start: s && ISO_DATE.test(s) ? s : baseballToday(),
+      end: e && ISO_DATE.test(e) ? e : baseballToday(),
     };
   }, [initialParams, presets, initialPreset]);
   const [start, setStart] = useState(initialRange.start);
@@ -136,7 +147,7 @@ export default function App() {
   const [activePreset, setActivePreset] = useState<string | null>(initialPreset);
   // The picker allows selecting through the end of the current year so the full
   // published schedule (scheduled games, probable pitchers) can be viewed ahead.
-  const maxDate = useMemo(() => `${todayEt().slice(0, 4)}-12-31`, []);
+  const maxDate = useMemo(() => `${baseballToday().slice(0, 4)}-12-31`, []);
   const [seasonPlayers, setSeasonPlayers] = useState<SeasonPlayer[]>([]);
   const [playersLoading, setPlayersLoading] = useState(true);
   const [watchlist, setWatchlist] = useState<WatchPlayer[]>([]);
@@ -504,8 +515,8 @@ export default function App() {
   const showKindTabs = cardBatters.length > 0 && cardPitchers.length > 0;
   const shownKind = showKindTabs || cardPitchers.length === 0 ? playerKind : 'pitcher';
   const kindCards = shownKind === 'pitcher' ? cardPitchers : cardBatters;
-  // One tab row, shared by the player list, the summary table and the reorder
-  // screen — all three show a single kind at a time.
+  // The second tier of tabs, in the view bar beside the view switch: every view
+  // below shows a single kind at a time, so the pair reads as one control.
   const kindTabs = showKindTabs ? (
     <div className="kind-switch" role="tablist" aria-label="Batters or pitchers">
       <button
@@ -530,6 +541,66 @@ export default function App() {
       </button>
     </div>
   ) : null;
+  // The roster search + the Edit (reorder) toggle. On the players view they sit
+  // under the tabs, with the list they act on; everywhere else — really just the
+  // empty watchlist, the one case the search shows outside that view — the view
+  // bar carries them, since there's no list to sit above.
+  const adderBelowTabs = view === 'players' && displayReports.length > 0;
+  const playersBar = (
+    <div className="players-bar">
+      <PlayerAdder
+        players={seasonPlayers}
+        watchlist={watchlist}
+        onAdd={onAdd}
+        onOpenDetails={setDetailsKey}
+        loading={playersLoading}
+      />
+      {/* Opens the reorder screen in place of the player list. Hidden until
+          there's more than one player to put in an order. */}
+      {reports.length > 1 && (
+        <button
+          type="button"
+          className={`edit-order-btn${editMode ? ' active' : ''}`}
+          onClick={() => setEditMode((v) => !v)}
+          title={editMode ? 'Finish editing' : 'Reorder players'}
+          aria-pressed={editMode}
+        >
+          <span className="edit-order-icon" aria-hidden="true">
+            {editMode ? (
+              <svg
+                viewBox="0 0 24 24"
+                width="16"
+                height="16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M20 6 9 17l-5-5" />
+              </svg>
+            ) : (
+              <svg
+                viewBox="0 0 24 24"
+                width="16"
+                height="16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+              </svg>
+            )}
+          </span>
+          {editMode ? 'Done' : 'Edit'}
+        </button>
+      )}
+    </div>
+  );
+
   // The reorder screen edits the raw watchlist order, one kind at a time, so it
   // reads `reports` rather than the simulate-overlaid copy the cards render.
   const editPlayers = reports
@@ -681,109 +752,63 @@ export default function App() {
         </div>
       </header>
 
-      {/* Tabs + roster search share one row when there's room; the search wraps
-          to its own line when narrow. The row still renders with just the search
-          when the watchlist is empty (on any view — that's the only way to add a
-          first player, since the tabs are hidden until something is watched),
-          and with just the tabs on the feed/summary views. */}
-      {(showViewToggle || showAdder) && (
+      {/* Both tiers of tabs share one row when there's room for them, the second
+          wrapping under the first when there isn't. The row still renders with
+          just the search when the watchlist is empty (on any view — that's the
+          only way to add a first player, since the tabs are hidden until
+          something is watched); on the players view the search sits below
+          instead, with the list it acts on. */}
+      {(showViewToggle || (showAdder && !adderBelowTabs)) && (
         <div className="view-bar">
           {showViewToggle && (
-            <div className="view-switch" role="tablist" aria-label="Watchlist view">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={view === 'summary'}
-                className={`view-tab${view === 'summary' ? ' active' : ''}`}
-                onClick={() => {
-                  setBackView(null);
-                  setEditMode(false);
-                  setView('summary');
-                }}
-              >
-                Summary
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={view === 'players'}
-                className={`view-tab${view === 'players' ? ' active' : ''}`}
-                onClick={() => {
-                  setBackView(null);
-                  setView('players');
-                }}
-              >
-                Players
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={view === 'feed'}
-                className={`view-tab${view === 'feed' ? ' active' : ''}`}
-                onClick={() => {
-                  setBackView(null);
-                  setEditMode(false);
-                  setView('feed');
-                }}
-              >
-                Feed
-              </button>
-            </div>
-          )}
-          {showAdder && (
-            <div className="players-bar">
-              <PlayerAdder
-                players={seasonPlayers}
-                watchlist={watchlist}
-                onAdd={onAdd}
-                onOpenDetails={setDetailsKey}
-                loading={playersLoading}
-              />
-              {/* Opens the reorder screen in place of the player list. Hidden
-                  until there's more than one player to put in an order. */}
-              {reports.length > 1 && (
+            <div className="view-bar-tabs">
+              <div className="view-switch" role="tablist" aria-label="Watchlist view">
                 <button
                   type="button"
-                  className={`edit-order-btn${editMode ? ' active' : ''}`}
-                  onClick={() => setEditMode((v) => !v)}
-                  title={editMode ? 'Finish editing' : 'Reorder players'}
-                  aria-pressed={editMode}
+                  role="tab"
+                  aria-selected={view === 'summary'}
+                  className={`view-tab${view === 'summary' ? ' active' : ''}`}
+                  onClick={() => {
+                    setBackView(null);
+                    setEditMode(false);
+                    setView('summary');
+                  }}
                 >
-                  <span className="edit-order-icon" aria-hidden="true">
-                    {editMode ? (
-                      <svg
-                        viewBox="0 0 24 24"
-                        width="16"
-                        height="16"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="M20 6 9 17l-5-5" />
-                      </svg>
-                    ) : (
-                      <svg
-                        viewBox="0 0 24 24"
-                        width="16"
-                        height="16"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="M12 20h9" />
-                        <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                      </svg>
-                    )}
-                  </span>
-                  {editMode ? 'Done' : 'Edit'}
+                  Summary
                 </button>
-              )}
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={view === 'players'}
+                  className={`view-tab${view === 'players' ? ' active' : ''}`}
+                  onClick={() => {
+                    setBackView(null);
+                    setView('players');
+                  }}
+                >
+                  Players
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={view === 'feed'}
+                  className={`view-tab${view === 'feed' ? ' active' : ''}`}
+                  onClick={() => {
+                    setBackView(null);
+                    setEditMode(false);
+                    setView('feed');
+                  }}
+                >
+                  Feed
+                </button>
+              </div>
+              {/* Second tier: Batters / Pitchers. Beside the view tabs when
+                  the row has room for both, wrapping under them when it
+                  does not. */}
+              {kindTabs}
             </div>
           )}
+          {showAdder && !adderBelowTabs && playersBar}
         </div>
       )}
 
@@ -812,19 +837,20 @@ export default function App() {
 
       {view === 'summary' ? (
         displayReports.length > 0 && (
-          <>
-            {kindTabs}
-            <SummaryTable
-              reports={kindCards}
-              onOpenDetails={setDetailsKey}
-              onOpenPlayerDay={openPlayerDay}
-            />
-          </>
+          <SummaryTable
+            reports={kindCards}
+            onOpenDetails={setDetailsKey}
+            onOpenPlayerDay={openPlayerDay}
+          />
         )
       ) : view === 'feed' ? (
         displayReports.length > 0 && (
+          /* Keyed so switching kind or date range starts the stream back at its
+             first page; a live poll (data only) leaves it alone. */
           <LiveFeed
-            reports={displayReports}
+            key={`${shownKind}-${start}-${end}`}
+            reports={kindCards}
+            kind={shownKind}
             onOpenDetails={setDetailsKey}
             onOpenPlayerDay={openPlayerDay}
             openKeys={feedOpenKeys}
@@ -837,7 +863,7 @@ export default function App() {
       >
         {editMode ? (
           <>
-            {kindTabs}
+            {adderBelowTabs && playersBar}
             <PlayerOrderEditor
               players={editPlayers}
               onMove={movePlayer}
@@ -847,7 +873,7 @@ export default function App() {
           </>
         ) : (
         <main className="player-list">
-          {kindTabs}
+          {adderBelowTabs && playersBar}
           {kindCards.map(renderCard)}
         </main>
         )}
