@@ -158,7 +158,10 @@ export class SickoStack extends Stack {
     // hosted UI can be exercised against `npm run dev`. The CloudFront domain
     // stays on the list alongside the custom one: both still resolve to the
     // same distribution, and dropping it would break any bookmark of it
-    // mid-session.
+    // mid-session. The www entry is unreachable while the redirect is in place
+    // (the app only ever runs on the apex, and the client builds its
+    // redirect_uri from window.location.origin) but is kept so that removing
+    // the redirect doesn't silently break sign-in.
     const callbackUrls = [
       ...new Set([
         'http://localhost:5173/',
@@ -317,6 +320,20 @@ export class SickoStack extends Stack {
           })
         : undefined;
 
+    // Only on the default behavior, never on `/api/*`: a 301 on a non-idempotent
+    // request is a footgun (browsers may replay it as GET), and the viewer never
+    // gets that far anyway — the document request redirects first, so nothing
+    // the client issues afterwards is aimed at `www`.
+    const wwwRedirect = domainName
+      ? new cloudfront.Function(this, 'WwwRedirect', {
+          code: cloudfront.FunctionCode.fromFile({
+            filePath: path.join(__dirname, 'redirect-to-apex.js'),
+          }),
+          runtime: cloudfront.FunctionRuntime.JS_2_0,
+          comment: 'Redirect www to the apex domain',
+        })
+      : undefined;
+
     const distribution = new cloudfront.Distribution(this, 'Distribution', {
       ...(domainName && certificate
         ? { domainNames: [domainName, `www.${domainName}`], certificate }
@@ -327,6 +344,16 @@ export class SickoStack extends Stack {
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         compress: true,
+        ...(wwwRedirect
+          ? {
+              functionAssociations: [
+                {
+                  function: wwwRedirect,
+                  eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
+                },
+              ],
+            }
+          : {}),
       },
       additionalBehaviors: {
         // Serving the API from the same origin is what lets the client keep
@@ -352,9 +379,10 @@ export class SickoStack extends Stack {
       ],
     });
 
-    // Apex and www both serve the app rather than one redirecting to the other:
-    // a redirect would need its own CloudFront Function or a second
-    // distribution, and two aliases on one distribution cost nothing.
+    // The apex serves the app; www only exists to 301 onto it. It still needs
+    // its own alias records, cert SAN and distribution alias regardless —
+    // without all three the redirect itself can't be reached over HTTPS, and
+    // the visitor gets a certificate warning instead of a working site.
     if (zone && domainName) {
       const target = route53.RecordTarget.fromAlias(
         new r53targets.CloudFrontTarget(distribution),
