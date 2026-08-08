@@ -3,6 +3,7 @@ import compression from 'compression';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { requireUser, userId } from './auth.js';
+import { addDays, baseballToday } from './etDate.js';
 import { getReport } from './savant.js';
 import { getPercentiles } from './percentiles.js';
 import { getXwobaSeries } from './xwoba.js';
@@ -27,28 +28,11 @@ const IS_LAMBDA = process.env.AWS_LAMBDA_FUNCTION_NAME !== undefined;
 
 const PORT = Number(process.env.PORT ?? 4000);
 
-// MLB days are anchored to US Eastern time (games can end after midnight ET),
-// so "previous day" is computed in America/New_York rather than UTC — this
-// must match the client's previousDay() so defaults agree.
-const ET_ZONE = 'America/New_York';
-
-function easternDate(d: Date): string {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: ET_ZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(d);
-  const get = (t: string) => parts.find((p) => p.type === t)!.value;
-  return `${get('year')}-${get('month')}-${get('day')}`;
-}
-
-/** Previous day (US Eastern) relative to now, as YYYY-MM-DD. */
+/** The day before today's baseball day (see etDate.ts), as YYYY-MM-DD. The
+ *  client's presets resolve against the same rollover, so a default and a
+ *  "Yesterday" click land on the same date. */
 function previousDay(): string {
-  const [y, m, day] = easternDate(new Date()).split('-').map(Number);
-  const dt = new Date(Date.UTC(y, m - 1, day));
-  dt.setUTCDate(dt.getUTCDate() - 1);
-  return dt.toISOString().slice(0, 10);
+  return addDays(baseballToday(), -1);
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;

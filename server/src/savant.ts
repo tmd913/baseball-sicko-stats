@@ -1,6 +1,9 @@
 import { parse } from 'csv-parse/sync';
 import { readBlob, readGzipBlob, writeBlob, writeGzipBlob } from './storage.js';
 import { mapLimit } from './limit.js';
+import { baseballToday } from './etDate.js';
+import { getTeamHitting } from './teamStats.js';
+import { fipLike, ipToOuts, LEAGUE_HR_PER_FB } from './leagueRates.js';
 import {
   getGamesForDate,
   getPitcherStats,
@@ -15,7 +18,7 @@ import type {
   StatsApiPitcherGame,
 } from './mlbStats.js';
 import { getSeasonArsenal } from './pitcherArsenal.js';
-import type { Arsenal } from './pitcherArsenal.js';
+import type { Arsenal, BattedBallMix } from './pitcherArsenal.js';
 import { getLeaguePitchAverage } from './pitchLeague.js';
 import { toSavantName } from './names.js';
 import type {
@@ -23,6 +26,7 @@ import type {
   Pitch,
   PitchMix,
   PitcherGame,
+  PitcherSeasonStats,
   PitcherSplit,
   PitchingLine,
   PlateAppearance,
@@ -30,7 +34,9 @@ import type {
   PlayerReport,
   BattingLine,
   GameStatus,
+  PitchingCredit,
   ProbablePitcher,
+  TeamHitting,
   WatchPlayer,
 } from './types.js';
 
@@ -84,6 +90,9 @@ interface DayGame {
   status: GameStatus;
   homeProbablePitcher: ProbablePitcher | null;
   awayProbablePitcher: ProbablePitcher | null;
+  // The ids of the game's two starting pitchers, from the boxscore. Empty until
+  // first pitch. An array, not a Set — a day is snapshotted as JSON.
+  pitchingStarterIds: number[];
   homePlayerIds: number[];
   awayPlayerIds: number[];
   homeStarters: Map<number, number>;
@@ -105,6 +114,21 @@ function lineupStatusFor(
   return spot !== undefined
     ? { lineupStatus: 'starting', lineupSpot: spot }
     : { lineupStatus: 'bench', lineupSpot: null };
+}
+
+/**
+ * A pitcher's role in a game, shaped as the PlayerGame fields so it can be
+ * spread in — the pitcher-side mirror of lineupStatusFor. A starter's entry
+ * inning is left null (it's the 1st by definition); a reliever carries the
+ * inning he first pitched in. Neither is known until he's announced or appears.
+ */
+function pitchingRoleFor(
+  isStarter: boolean,
+  firstInning: number | null,
+): { pitchingRole: 'starting' | 'relief' | null; entryInning: number | null } {
+  if (isStarter) return { pitchingRole: 'starting', entryInning: null };
+  if (firstInning === null) return { pitchingRole: null, entryInning: null };
+  return { pitchingRole: 'relief', entryInning: firstInning };
 }
 
 interface ParsedDay {
@@ -481,15 +505,23 @@ function deriveLine(faced: StatsApiFacedBatter[], pitches: StatsApiPitch[]): Pit
     wildPitches: 0,
     inheritedRunners: 0,
     inheritedRunnersScored: 0,
+    wins: 0,
+    saves: 0,
+    holds: 0,
   };
 }
 
 /** This pitcher's decision in the game (win, loss, or save), or null. */
-function pitcherDecision(g: StatsApiGame, pitcherId: number): 'W' | 'L' | 'S' | null {
+function pitcherDecision(g: StatsApiGame, pitcherId: number): PitchingCredit | null {
   const d = g.decisions;
   if (d.win === pitcherId) return 'W';
   if (d.loss === pitcherId) return 'L';
   if (d.save === pitcherId) return 'S';
+  // A hold is the reliever's version of the same thing, and `liveData.decisions`
+  // has no slot for it — the boxscore line is the only place it appears. Checked
+  // last because the official decision outranks it (they're mutually exclusive
+  // by rule, but a feed that disagrees shouldn't demote a save to a hold).
+  if ((g.pitchingLines.get(pitcherId)?.holds ?? 0) > 0) return 'H';
   return null;
 }
 
@@ -586,7 +618,8 @@ function buildSplit(faced: StatsApiFacedBatter[]): PitcherSplit {
 function buildPitcherGame(
   pg: StatsApiPitcherGame,
   line: PitchingLine | undefined,
-  decision: 'W' | 'L' | 'S' | null,
+  decision: PitchingCredit | null,
+  isStart: boolean,
 ): PitcherGame {
   const overall = aggregatePitches(pg.pitches);
   // Baserunning-only plays (pickoffs, steals) carry a batter but aren't plate
@@ -629,10 +662,30 @@ function buildPitcherGame(
     whiffRate: overall.whiffRate,
     cswRate: overall.cswRate,
     strikePct: pl.pitchesThrown ? pl.strikes / pl.pitchesThrown : total ? (total - (pl.balls || 0)) / total : null,
-    // A starter (or opener) faces the first batter of the game, in the 1st inning.
-    isStart: pg.facedBatters[0]?.inning === 1,
+    isStart,
     decision,
   };
+}
+
+/**
+ * The season line with xFIP filled in — his own home runs swapped for his fly
+ * balls at the league rate. Needs the Savant season CSV's batted-ball mix,
+ * which is why it happens here rather than where the rest of the line is built.
+ */
+function withXfip(
+  season: PitcherSeasonStats | null,
+  bb: BattedBallMix | undefined,
+): PitcherSeasonStats | null {
+  if (!season || !bb || bb.fly === 0) return season;
+  const xfip = fipLike(
+    bb.fly * LEAGUE_HR_PER_FB,
+    season.baseOnBalls,
+    season.hitBatsmen,
+    season.strikeOuts,
+    ipToOuts(season.inningsPitched),
+  );
+  // A copy: the stats cache hands out the same object to every request.
+  return { ...season, xfip: xfip === null ? null : xfip.toFixed(2) };
 }
 
 /** Fill a pitcher game's arsenal with season (his own) and league baselines,
@@ -713,6 +766,7 @@ async function buildStatsApiDay(date: string): Promise<{
       status,
       homeProbablePitcher: g.homeProbablePitcher,
       awayProbablePitcher: g.awayProbablePitcher,
+      pitchingStarterIds: [...g.pitchingStarters],
       homePlayerIds: [...g.homePlayerIds],
       awayPlayerIds: [...g.awayPlayerIds],
       homeStarters: g.homeStarters,
@@ -760,6 +814,13 @@ async function buildStatsApiDay(date: string): Promise<{
         stand: bg.stand,
         status,
         ...lineupStatusFor(bg.batterId, bg.isHome ? g.homeStarters : g.awayStarters),
+        // Pitching role is the pitcher-side mirror of that lineup status; a
+        // batter's game never carries one (a two-way player's pitching shows up
+        // in his own pitcher report).
+        pitchingRole: null,
+        entryInning: null,
+        opponentId: bg.isHome ? g.awayTeamId : g.homeTeamId,
+        opponentHitting: null,
         // The batter faces the opposing team's starter.
         probablePitcher: bg.isHome ? g.awayProbablePitcher : g.homeProbablePitcher,
         plateAppearances,
@@ -791,6 +852,16 @@ async function buildStatsApiDay(date: string): Promise<{
     for (const pg of g.pitchers.values()) {
       const pitcherTeam = pg.isHome ? g.homeTeam : g.awayTeam;
       const opponent = pg.isHome ? g.awayTeam : g.homeTeam;
+      // Starter or reliever: the boxscore's gamesStarted is definitive, so a
+      // pitcher missing from a non-empty starter set relieved. Only when the
+      // boxscore carries no pitching stats at all (an old cached feed) do the
+      // announced probable and "faced someone in the 1st" stand in.
+      const ownProbable = pg.isHome ? g.homeProbablePitcher : g.awayProbablePitcher;
+      const firstInning = pg.facedBatters[0]?.inning ?? null;
+      const isStart =
+        g.pitchingStarters.size > 0
+          ? g.pitchingStarters.has(pg.pitcherId)
+          : ownProbable?.id === pg.pitcherId || firstInning === 1;
       const pitcherGame: PlayerGame = {
         gamePk: g.gamePk,
         gameNumber: g.gameNumber,
@@ -804,11 +875,21 @@ async function buildStatsApiDay(date: string): Promise<{
         status,
         lineupStatus: null,
         lineupSpot: null,
+        ...pitchingRoleFor(isStart, firstInning),
+        opponentId: pg.isHome ? g.awayTeamId : g.homeTeamId,
+        // Filled per team in getReport — the day builder shouldn't fan out to
+        // another API for a lineup nobody has asked about yet.
+        opponentHitting: null,
         probablePitcher: null,
         plateAppearances: [],
         baseEvents: [],
         line: buildLine([]),
-        pitching: buildPitcherGame(pg, g.pitchingLines.get(pg.pitcherId), pitcherDecision(g, pg.pitcherId)),
+        pitching: buildPitcherGame(
+          pg,
+          g.pitchingLines.get(pg.pitcherId),
+          pitcherDecision(g, pg.pitcherId),
+          isStart,
+        ),
       };
       let pb = byPitcher.get(pg.pitcherId);
       if (!pb) {
@@ -827,20 +908,6 @@ async function buildStatsApiDay(date: string): Promise<{
  *  up with live scores (the underlying feed refreshes on its own 10s cadence). */
 const TODAY_TTL = 10 * 60 * 1000;
 const LIVE_DAY_TTL = 15 * 1000;
-
-/** Today's date (YYYY-MM-DD) in US Eastern — MLB days are anchored to ET, and a
- *  UTC "today" rolls over mid-evening while ET games are still live, which would
- *  misclassify the live game day as a frozen past date. Matches index.ts. */
-function easternToday(): string {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(new Date());
-  const get = (t: string) => parts.find((p) => p.type === t)!.value;
-  return `${get('year')}-${get('month')}-${get('day')}`;
-}
 
 /**
  * Which players a caller actually needs out of a day.
@@ -888,8 +955,11 @@ function projectDay(day: ParsedDay, filter: DayFilter): ParsedDay {
 
 /** Bump when the shape of a stored day changes, so old snapshots are ignored
  *  rather than deserialized into the wrong model. v2 stores each game's
- *  starting lineups as entry pairs — as Maps they serialized to `{}`. */
-const DAY_SNAPSHOT_VERSION = 2;
+ *  starting lineups as entry pairs — as Maps they serialized to `{}`; v3 added
+ *  the pitching role (starter/reliever + entry inning) each game carries, the
+ *  starting-pitcher ids the placeholder games read it from, the pitching line's
+ *  win/save/hold credits, and each game's opposing team id. */
+const DAY_SNAPSHOT_VERSION = 3;
 
 /**
  * The on-the-wire form of a day.
@@ -983,6 +1053,9 @@ function rememberProjection(key: string, day: ParsedDay): ParsedDay {
  *  days are resident at the same time. */
 const DAY_CONCURRENCY = 6;
 const GAME_CONCURRENCY = 8;
+// Opposing-lineup fetches: at most one per team in the range, nearly always a
+// cache hit after the first report of the day.
+const TEAM_CONCURRENCY = 6;
 
 /**
  * A day's parsed model. Pass `filter` to get back only the players it names —
@@ -992,7 +1065,11 @@ const GAME_CONCURRENCY = 8;
 export async function getDay(date: string, filter?: DayFilter): Promise<ParsedDay> {
   // Today and future dates are still mutable (scores accrue, lineups/rosters get
   // posted closer to first pitch), so they honor the TTL. Past dates are frozen.
-  const isMutable = date >= easternToday();
+  // A day stays mutable until the *baseball* day has moved past it (3am ET, see
+  // etDate.ts). On the calendar boundary alone, a 12:30am read would call a date
+  // whose West Coast games are still in progress a frozen past date and serve
+  // the cached copy without refreshing it.
+  const isMutable = date >= baseballToday();
 
   // Frozen days can be served from a snapshot without touching the network or
   // the per-game caches at all.
@@ -1064,6 +1141,7 @@ export async function getDay(date: string, filter?: DayFilter): Promise<ParsedDa
       splitVsLeft: null,
       splitVsRight: null,
       rosterStatus: null,
+      throws: null,
     });
   }
 
@@ -1081,6 +1159,7 @@ export async function getDay(date: string, filter?: DayFilter): Promise<ParsedDa
       splitVsLeft: null,
       splitVsRight: null,
       rosterStatus: null,
+      throws: null,
     });
   }
 
@@ -1138,6 +1217,16 @@ function findPlayerDay(day: ParsedDay, p: WatchPlayer): PlayerReport | undefined
  * score alongside "did not appear").
  */
 function rosterGame(dg: DayGame, isHome: boolean, playerId: number): PlayerGame {
+  // A watched pitcher with no outing of his own is either the starter — the
+  // pitcher-side equivalent of a posted lineup — or nothing yet. The boxscore
+  // names the starter from first pitch on, which covers the gap before his
+  // first batter completes an at-bat; until then the announced probable stands
+  // in. Deliberately not after first pitch: a probable who never appears in the
+  // boxscore was scratched.
+  const ownProbable = isHome ? dg.homeProbablePitcher : dg.awayProbablePitcher;
+  const announced =
+    dg.pitchingStarterIds.includes(playerId) ||
+    (dg.status.state === 'scheduled' && ownProbable?.id === playerId);
   return {
     gamePk: dg.gamePk,
     gameNumber: dg.gameNumber,
@@ -1150,6 +1239,9 @@ function rosterGame(dg: DayGame, isHome: boolean, playerId: number): PlayerGame 
     stand: null,
     status: dg.status,
     ...lineupStatusFor(playerId, isHome ? dg.homeStarters : dg.awayStarters),
+    ...pitchingRoleFor(announced, null),
+    opponentId: isHome ? dg.awayTeamId : dg.homeTeamId,
+    opponentHitting: null,
     probablePitcher: isHome ? dg.awayProbablePitcher : dg.homeProbablePitcher,
     plateAppearances: [],
     baseEvents: [],
@@ -1185,19 +1277,40 @@ export async function getReport(
   ]);
 
   // Each watched pitcher's season arsenal (fetched once) — for the per-game
-  // velo/spin/break vs season-average comparison on the card.
+  // velo/spin/break vs season-average comparison on the card, and the fly-ball
+  // count his xFIP needs.
   const arsenals = new Map<number, Arsenal>();
+  const battedBalls = new Map<number, BattedBallMix>();
   await Promise.all(
     pitcherIds.map(async (id) => {
       try {
         // The game card compares against his season vs everyone; the details
         // view is where the handedness splits are read.
-        arsenals.set(id, (await getSeasonArsenal(id)).all);
+        const seasonArsenal = await getSeasonArsenal(id);
+        arsenals.set(id, seasonArsenal.all);
+        battedBalls.set(id, seasonArsenal.battedBalls);
       } catch (err) {
         console.error(`pitcher arsenal fetch failed for ${id}:`, err);
       }
     }),
   );
+
+  // How each opposing lineup has hit this season — one fetch per team, however
+  // many watched pitchers face it, and only for the pitchers (a batter's card
+  // has no use for the other side's offence).
+  const opponentIds = new Set<number>();
+  for (const day of days) {
+    for (const dg of day.games) {
+      for (const id of [dg.homeTeamId, dg.awayTeamId]) if (id !== null) opponentIds.add(id);
+    }
+  }
+  const teamHitting = new Map<number, TeamHitting>();
+  if (pitcherIds.length > 0) {
+    await mapLimit([...opponentIds], TEAM_CONCURRENCY, async (id) => {
+      const hitting = await getTeamHitting(id);
+      if (hitting) teamHitting.set(id, hitting);
+    });
+  }
 
   return players.map((p) => {
     const games: PlayerGame[] = [];
@@ -1233,21 +1346,28 @@ export async function getReport(
     }
     games.sort(byGameOrder);
     const rosterStatus = rosterInfo.get(p.id)?.status ?? null;
+    const throws = p.kind === 'pitcher' ? (rosterInfo.get(p.id)?.throws ?? null) : null;
 
     if (p.kind === 'pitcher') {
       const arsenal = arsenals.get(p.id);
       if (arsenal) {
         for (const g of games) if (g.pitching) attachArsenalBaselines(g.pitching, arsenal);
       }
+      // The lineup he faced, on every one of his games (a card can hold more
+      // than one, against different teams).
+      for (const g of games) {
+        g.opponentHitting = g.opponentId === null ? null : (teamHitting.get(g.opponentId) ?? null);
+      }
       return {
         ...p,
         found: games.length > 0,
         games,
         seasonStats: null,
-        pitcherSeasonStats: pitcherStats.get(p.id)?.season ?? null,
+        pitcherSeasonStats: withXfip(pitcherStats.get(p.id)?.season ?? null, battedBalls.get(p.id)),
         splitVsLeft: null,
         splitVsRight: null,
         rosterStatus,
+        throws,
       };
     }
 
@@ -1261,6 +1381,7 @@ export async function getReport(
       splitVsLeft: st?.vsLeft ?? null,
       splitVsRight: st?.vsRight ?? null,
       rosterStatus,
+      throws,
     };
   });
 }

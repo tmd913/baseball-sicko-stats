@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'reac
 import type { ReactNode } from 'react';
 import { AuthProvider, useAuth } from 'react-oidc-context';
 import type { AuthProviderProps } from 'react-oidc-context';
+import { WebStorageStateStore } from 'oidc-client-ts';
 import { setAuthToken, setReauthHandler } from './api';
 
 /**
@@ -68,6 +69,13 @@ function settings(config: AuthConfig): AuthProviderProps {
       end_session_endpoint: `https://${domain}/logout`,
       jwks_uri: `https://cognito-idp.${config.region}.amazonaws.com/${config.userPoolId}/.well-known/jwks.json`,
     },
+    // Keep the signed-in user — and with it the refresh token — in
+    // localStorage. oidc-client-ts defaults this store to *sessionStorage*,
+    // which is per-tab and dies with it: every new tab and every browser
+    // restart threw away a perfectly good 30-day refresh token and sent the
+    // user back through the hosted UI. The access/ID tokens still expire hourly
+    // and are renewed in the background off the refresh token.
+    userStore: new WebStorageStateStore({ store: window.localStorage }),
     // Strip ?code=&state= as soon as the exchange completes, before App mounts
     // and starts writing its own query string.
     onSigninCallback: () => {

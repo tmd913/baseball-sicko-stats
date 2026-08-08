@@ -41,12 +41,26 @@ export interface SeasonPitch extends ArsenalPitch, PitchResults, PitchUsage {}
 /** A pitcher's season arsenal, keyed by full pitch name ("4-Seam Fastball"). */
 export type Arsenal = Map<string, SeasonPitch>;
 
+/**
+ * The season's batted balls by trajectory. Only the fly-ball share is used —
+ * xFIP replaces a pitcher's own home runs with his fly balls times the league
+ * HR/FB rate, and the CSV this module already downloads is the one place we
+ * have a fly-ball count (the boxscore only counts batted-ball *outs*).
+ */
+export interface BattedBallMix {
+  total: number;
+  fly: number; // fly balls incl. popups, and so incl. the ones that left the yard
+  ground: number;
+  line: number;
+}
+
 /** The season arsenal, whole and split by the batter's side. A split is empty
  * (not absent) when he's faced nobody of that hand. */
 export interface SeasonArsenals {
   all: Arsenal;
   vsRight: Arsenal;
   vsLeft: Arsenal;
+  battedBalls: BattedBallMix;
 }
 
 /**
@@ -122,15 +136,25 @@ const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // current-season data moves daily
 const cache = new Map<number, { data: SeasonArsenals; fetchedAt: number }>();
 
 /** An `Arsenal` is a Map, so it needs flattening before it can be stored. */
-type StoredArsenals = Record<'all' | 'vsRight' | 'vsLeft', Record<string, SeasonPitch>>;
+interface StoredArsenals {
+  all: Record<string, SeasonPitch>;
+  vsRight: Record<string, SeasonPitch>;
+  vsLeft: Record<string, SeasonPitch>;
+  battedBalls?: BattedBallMix;
+}
 
-const storeKey = (pitcherId: number) => `arsenal-${pitcherId}-${SEASON}.json`;
+// v2 carries the batted-ball mix; a v1 blob would deserialize with no fly balls
+// and silently cost every pitcher his xFIP until the TTL expired.
+const storeKey = (pitcherId: number) => `arsenal-${pitcherId}-${SEASON}-v2.json`;
+
+const NO_BATTED_BALLS: BattedBallMix = { total: 0, fly: 0, ground: 0, line: 0 };
 
 function toStored(a: SeasonArsenals): StoredArsenals {
   return {
     all: Object.fromEntries(a.all),
     vsRight: Object.fromEntries(a.vsRight),
     vsLeft: Object.fromEntries(a.vsLeft),
+    battedBalls: a.battedBalls,
   };
 }
 
@@ -139,7 +163,33 @@ function fromStored(s: StoredArsenals): SeasonArsenals {
     all: new Map(Object.entries(s.all ?? {})),
     vsRight: new Map(Object.entries(s.vsRight ?? {})),
     vsLeft: new Map(Object.entries(s.vsLeft ?? {})),
+    battedBalls: s.battedBalls ?? NO_BATTED_BALLS,
   };
+}
+
+/** Tally the season's batted balls by Statcast trajectory (`bb_type`). */
+function battedBallMix(records: Record<string, string>[]): BattedBallMix {
+  const mix: BattedBallMix = { total: 0, fly: 0, ground: 0, line: 0 };
+  for (const r of records) {
+    switch (r.bb_type) {
+      // Popups are fly balls for this purpose, and a home run is recorded as a
+      // fly ball — so `fly` is already the denominator HR/FB wants.
+      case 'fly_ball':
+      case 'popup':
+        mix.fly++;
+        break;
+      case 'ground_ball':
+        mix.ground++;
+        break;
+      case 'line_drive':
+        mix.line++;
+        break;
+      default:
+        continue;
+    }
+    mix.total++;
+  }
+  return mix;
 }
 
 /**
@@ -182,6 +232,7 @@ export async function getSeasonArsenal(pitcherId: number): Promise<SeasonArsenal
     // righties / lefties.
     vsRight: aggregate(records.filter((r) => r.stand === 'R')),
     vsLeft: aggregate(records.filter((r) => r.stand === 'L')),
+    battedBalls: battedBallMix(records),
   };
   cache.set(pitcherId, { data, fetchedAt: Date.now() });
   await writeJsonBlob(storeKey(pitcherId), toStored(data));

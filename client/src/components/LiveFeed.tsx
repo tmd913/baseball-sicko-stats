@@ -1,18 +1,29 @@
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import type { LiveRole } from '../lib';
 import { playerKey } from '../types';
 import {
-  eventLabel,
+  creditLabel,
   formatStartTime,
   headshotUrl,
   liveRoleGame,
   liveRoleLabel,
-  outcomeKind,
 } from '../lib';
-import type { BaseEvent, FacedBatter, PlateAppearance, PlayerGame, PlayerReport } from '../types';
+import type {
+  BaseEvent,
+  PlateAppearance,
+  PlayerGame,
+  PlayerKind,
+  PlayerReport,
+} from '../types';
 import { useScrollIntoViewOnExpand } from '../hooks';
 import { InlineVideoClip, PlateAppearanceCard } from './PlateAppearanceCard';
 import { PlatoonSplit, ProbablePitcher } from './PlayerCard';
+import { OpponentSection, PitchingTag, lineSummary } from './PitcherCard';
+import { InningsList } from './Innings';
+
+/** How many stream items the Recent section shows at a time — a day of at-bats
+ * across a watchlist runs to hundreds, and every one of them mounts a card. */
+const PAGE_SIZE = 20;
 
 /** Priority order for the Live section: at bat, then on deck, then on base. */
 const ROLE_ORDER: Record<LiveRole, number> = {
@@ -61,17 +72,29 @@ function roleAtBat(role: LiveRole, game: PlayerGame): PlateAppearance | null {
   return null;
 }
 
-/** A recent-stream item: a plate appearance, a base-running event, or (for a
- * watched pitcher) a batter they faced. */
+/** A recent-stream item: a batter's plate appearance, a base-running event, or
+ * a watched pitcher's whole outing (one item, grouped by inning below). */
 type FeedEntry =
   | { type: 'pa'; report: PlayerReport; game: PlayerGame; pa: PlateAppearance }
   | { type: 'base'; report: PlayerReport; game: PlayerGame; ev: BaseEvent; i: number }
-  | { type: 'faced'; report: PlayerReport; game: PlayerGame; fb: FacedBatter; i: number };
+  | { type: 'pitching'; report: PlayerReport; game: PlayerGame };
+
+/** When a pitcher's outing last saw action — the batters faced are in play
+ * order, so that's the last one's timestamp. */
+function lastFacedTime(game: PlayerGame): string | null {
+  const faced = game.pitching?.facedBatters ?? [];
+  return faced.length ? faced[faced.length - 1].timestamp : null;
+}
 
 /** Sort key for the recent stream: the item's timestamp, falling back to the end
  * of the game's date so undated cached items still land on the right day. */
 function entryTime(e: FeedEntry): number {
-  const ts = e.type === 'pa' ? e.pa.timestamp : e.type === 'faced' ? e.fb.timestamp : e.ev.timestamp;
+  const ts =
+    e.type === 'pa'
+      ? e.pa.timestamp
+      : e.type === 'pitching'
+        ? lastFacedTime(e.game)
+        : e.ev.timestamp;
   if (ts) {
     const t = Date.parse(ts);
     if (!Number.isNaN(t)) return t;
@@ -296,47 +319,78 @@ function FeedBaseEvent({
   );
 }
 
-/** One batter a watched pitcher faced, in the recent stream — the pitcher header
- * plus the result (no pitch-by-pitch detail). */
-function FeedFacedBatter({
+/**
+ * A watched pitcher's outing in the feed — one item per game, not a row per
+ * batter faced. Collapsed it's the usual feed header plus his line; open it adds
+ * his innings, grouped the way the players view groups them (`InningsList`),
+ * each expandable to the batters faced and their pitch sequences. Newest inning
+ * first, so the half he's throwing right now sits directly under his name, like
+ * the stream around it. `role` is set only while he's on the mound, and tints
+ * the header.
+ *
+ * The header toggles the whole item and the scroll-on-expand is on the item, not
+ * the innings inside it — the same shape as a batter's at-bat card, so opening
+ * one brings the player it belongs to into view rather than a bare inning. No
+ * caret: nothing on the pitcher side carries one (see styles.css).
+ */
+function FeedPitcherGame({
   report,
   game,
-  fb,
+  role,
+  open,
+  onToggle,
   onOpenDetails,
   onOpenPlayerDay,
 }: {
   report: PlayerReport;
   game: PlayerGame;
-  fb: FacedBatter;
+  role?: LiveRole | null;
+  open: boolean;
+  onToggle: () => void;
   onOpenDetails: (key: string) => void;
   onOpenPlayerDay: (key: string) => void;
 }) {
-  const kind = outcomeKind(fb.event);
+  const pg = game.pitching!;
+  const ref = useScrollIntoViewOnExpand<HTMLDivElement>(open);
   return (
-    <div className="feed-item">
-      <div className="feed-item-head">
-        <FeedHeadshot id={report.id} name={report.name} onOpen={() => onOpenDetails(playerKey(report))} />
+    <div className={`feed-item feed-pitcher${role ? ` live-entry role-${role}` : ''}`} ref={ref}>
+      <div
+        className="feed-item-head feed-item-toggle"
+        role="button"
+        tabIndex={0}
+        aria-expanded={open}
+        title={open ? 'Collapse outing' : 'Expand outing'}
+        onClick={onToggle}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onToggle();
+          }
+        }}
+      >
+        <FeedHeadshot
+          id={report.id}
+          name={report.name}
+          role={role}
+          onOpen={() => onOpenDetails(playerKey(report))}
+        />
         <div className="feed-item-id">
           <FeedPlayerName playerKey={playerKey(report)} name={report.name} onOpen={onOpenPlayerDay} />
           <span className="feed-context">
-            {matchup(game)} · pitching
+            {matchup(game)}
+            {role ? ` · ${liveInning(game)}` : ''}
           </span>
         </div>
-      </div>
-      <div className={`faced-row kind-${kind}`}>
-        <span className="feed-base-inning">
-          {fb.half} {fb.inning}
-        </span>
-        <span className={`pa-badge kind-${kind}`}>{eventLabel(fb.event)}</span>
-        {fb.rbi > 0 && <span className="pa-rbi">{fb.rbi} RBI</span>}
-        <span className="faced-batter">
-          vs {fb.batterName}
-          {fb.stand ? <span className="faced-hand"> ({fb.stand})</span> : null}
-        </span>
-        {fb.launchSpeed !== null && (
-          <span className="pa-contact-main">{fb.launchSpeed.toFixed(1)} mph</span>
+        <PitchingTag game={game} />
+        {pg.decision && (
+          <span className={`dec-tag dec-${pg.decision}`}>{creditLabel(pg.decision)}</span>
         )}
+        {role && <span className={`live-role role-${role}`}>{liveRoleLabel(role)}</span>}
+        {/* Collapsed, the line is what the item says. No caret — see the note on
+            `.feed-item-toggle` in styles.css. */}
+        <span className="feed-pitch-line">{lineSummary(pg.line)}</span>
       </div>
+      {open && <InningsList game={game} pitcherId={report.id} newestFirst />}
     </div>
   );
 }
@@ -356,9 +410,11 @@ function byStartTime(
 
 /**
  * One not-yet-started game in the Upcoming section: player + matchup + first
- * pitch. The header collapses/expands the batter's platoon split vs the probable
- * starter — but only when there's a probable pitcher to reveal; otherwise the
- * header is static (nothing to show yet).
+ * pitch, expanding to what that player wants to know about it. For a **batter**
+ * that's the probable starter and his own line against that hand; for a
+ * **pitcher** it's the lineup waiting for him (the same `OpponentSection` his
+ * card carries) — the probable starter on the other side is nobody he faces.
+ * The header is static when there's nothing to reveal yet.
  */
 function UpcomingRow({
   report,
@@ -376,7 +432,8 @@ function UpcomingRow({
   onOpenPlayerDay: (key: string) => void;
 }) {
   const time = formatStartTime(game.status.startTime);
-  const expandable = !!game.probablePitcher;
+  const isPitcher = report.kind === 'pitcher';
+  const expandable = isPitcher ? !!game.opponentHitting : !!game.probablePitcher;
   // On expand, bring the row to the top of the viewport (its scroll-margin-top
   // clears the sticky nav), matching how the at-bat cards behave.
   const ref = useScrollIntoViewOnExpand<HTMLDivElement>(expandable && open);
@@ -387,8 +444,11 @@ function UpcomingRow({
         <FeedPlayerName playerKey={playerKey(report)} name={report.name} onOpen={onOpenPlayerDay} />
         <span className="feed-context">{matchup(game)}</span>
       </div>
+      {/* For a watched pitcher, whether he's the announced starter tonight. */}
+      <PitchingTag game={game} />
       <span className="feed-time">{time ?? (game.status.detailedState || 'TBD')}</span>
-      {expandable && (
+      {/* No caret on the pitcher side — the row's own hover is the affordance. */}
+      {expandable && !isPitcher && (
         <svg
           className={`upcoming-caret${open ? ' open' : ''}`}
           viewBox="0 0 12 8"
@@ -408,7 +468,7 @@ function UpcomingRow({
           role="button"
           tabIndex={0}
           aria-expanded={open}
-          title={open ? 'Collapse' : 'Expand platoon split'}
+          title={open ? 'Collapse' : isPitcher ? 'Expand opponent' : 'Expand platoon split'}
           onClick={onToggle}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
@@ -422,11 +482,17 @@ function UpcomingRow({
       ) : (
         <div className="upcoming-head static">{head}</div>
       )}
-      {/* The batter's season line against the probable starter's hand. */}
       {expandable && open && (
         <div className="upcoming-detail">
-          <ProbablePitcher game={game} />
-          <PlatoonSplit report={report} game={game} />
+          {isPitcher ? (
+            <OpponentSection game={game} throws={report.throws} />
+          ) : (
+            <>
+              {/* The batter's season line against the probable starter's hand. */}
+              <ProbablePitcher game={game} />
+              <PlatoonSplit report={report} game={game} />
+            </>
+          )}
         </div>
       )}
     </div>
@@ -434,51 +500,27 @@ function UpcomingRow({
 }
 
 /**
- * A feed section's rows, split into the watched hitters' and the watched
- * pitchers' halves so the two never interleave. The Batters/Pitchers
- * subheadings only appear when the section actually holds both kinds —
- * with one kind on the watchlist the section heading already says it all.
- * Order within each half is untouched (newest-first, or by role/start time).
- */
-function KindSplit<T extends { report: PlayerReport }>({
-  rows,
-  className,
-  render,
-}: {
-  rows: T[];
-  // The row container's class, applied to each half separately.
-  className: string;
-  render: (row: T) => ReactNode;
-}) {
-  const batters = rows.filter((r) => r.report.kind !== 'pitcher');
-  const pitchers = rows.filter((r) => r.report.kind === 'pitcher');
-  const both = batters.length > 0 && pitchers.length > 0;
-  return (
-    <>
-      {both && <h3 className="kind-heading">Batters</h3>}
-      {batters.length > 0 && <div className={className}>{batters.map(render)}</div>}
-      {both && <h3 className="kind-heading">Pitchers</h3>}
-      {pitchers.length > 0 && <div className={className}>{pitchers.map(render)}</div>}
-    </>
-  );
-}
-
-/**
- * The watchlist as a flat, most-recent-first stream of individual at-bats —
- * shown while games are active. A "Live" section pins the players currently at
- * bat, on deck, or on base to the top; below it, every completed plate
- * appearance across the watchlist reads newest-first, each labeled with just the
- * player (name + headshot) and the at-bat itself — none of the per-player stats,
- * season line, or score chrome the grouped player view carries.
+ * The watchlist as a flat, most-recent-first stream — shown while games are
+ * active. A "Live" section pins whoever is at bat, on deck, on base or on the
+ * mound to the top; below it, everything that has happened reads newest-first,
+ * with none of the per-player stats, season line or score chrome the grouped
+ * player view carries. `reports` is one kind at a time (App's kind tabs sit
+ * above this view), so a batter's at-bats and a pitcher's outings never mix:
+ * for a batter an item is a single plate appearance or base-running event, for
+ * a pitcher it's a whole outing grouped by inning.
  */
 export function LiveFeed({
   reports,
+  kind,
   onOpenDetails,
   onOpenPlayerDay,
   openKeys,
   onToggleKey,
 }: {
   reports: PlayerReport[];
+  // Which kind the tabs above are showing — the stream is one kind at a time,
+  // and a pitcher's items are outings rather than plays.
+  kind: PlayerKind;
   onOpenDetails: (key: string) => void;
   // Jump to a player's full day of at-bats on the players view.
   onOpenPlayerDay: (key: string) => void;
@@ -488,6 +530,12 @@ export function LiveFeed({
   onToggleKey: (key: string) => void;
 }) {
   const toggle = onToggleKey;
+  // How much of the Recent section is on screen, grown a page at a time by the
+  // "Load more" button. Deliberately not in the URL — it's a reading position,
+  // not a view. It survives the 20s live poll (only the data changes, the
+  // component stays mounted) and resets when the kind or the date range does,
+  // since App keys this view on both.
+  const [shown, setShown] = useState(PAGE_SIZE);
 
   // Players currently in a live at-bat/on-deck/on-base situation, highest-
   // priority role first (a player is listed once, for their leading role).
@@ -499,21 +547,28 @@ export function LiveFeed({
     .filter((x): x is { report: PlayerReport; role: LiveRole; game: PlayerGame } => x !== null)
     .sort((a, b) => ROLE_ORDER[a.role] - ROLE_ORDER[b.role]);
 
-  // Every completed plate appearance plus every base-running event (stolen
-  // bases, runs scored) across the watchlist, interleaved newest-first. The
-  // in-progress at-bat (no event yet) lives in the Live section above, not here.
+  // The games already pinned to the Live section, so the stream below doesn't
+  // repeat them (a pitcher's outing is one item either way).
+  const livePinned = new Set(liveRows.map((r) => `${r.report.id}-${r.game.gamePk}`));
+
+  // Everything that has happened, interleaved newest-first: for a batter every
+  // completed plate appearance plus every base-running event (stolen bases, runs
+  // scored); for a pitcher his outing, as a single item. The in-progress at-bat
+  // (no event yet) lives in the Live section above, not here.
   const recent = reports
     .flatMap((report) =>
-      report.games.flatMap((game): FeedEntry[] => [
-        ...game.plateAppearances
-          .filter((pa) => pa.event)
-          .map((pa): FeedEntry => ({ type: 'pa', report, game, pa })),
-        ...game.baseEvents.map((ev, i): FeedEntry => ({ type: 'base', report, game, ev, i })),
-        // A watched pitcher's game contributes each batter they faced.
-        ...(game.pitching?.facedBatters ?? []).map(
-          (fb, i): FeedEntry => ({ type: 'faced', report, game, fb, i }),
-        ),
-      ]),
+      report.games.flatMap((game): FeedEntry[] =>
+        report.kind === 'pitcher'
+          ? game.pitching && !livePinned.has(`${report.id}-${game.gamePk}`)
+            ? [{ type: 'pitching', report, game }]
+            : []
+          : [
+              ...game.plateAppearances
+                .filter((pa) => pa.event)
+                .map((pa): FeedEntry => ({ type: 'pa', report, game, pa })),
+              ...game.baseEvents.map((ev, i): FeedEntry => ({ type: 'base', report, game, ev, i })),
+            ],
+      ),
     )
     .sort((a, b) => {
       const t = entryTime(b) - entryTime(a);
@@ -544,12 +599,23 @@ export function LiveFeed({
             <span className="feed-heading-dot" aria-hidden="true" />
             Live
           </h2>
-          <KindSplit
-            rows={liveRows}
-            className="live-rows"
-            render={({ report, role, game }) => {
+          <div className="live-rows">
+            {liveRows.map(({ report, role, game }) => {
               const key = `live-${report.id}`;
-              return (
+              // A pitcher on the mound reads as his outing so far, innings and
+              // all — the same item the stream below would carry, pinned here.
+              return report.kind === 'pitcher' && game.pitching ? (
+                <FeedPitcherGame
+                  key={report.id}
+                  report={report}
+                  game={game}
+                  role={role}
+                  open={openKeys.has(key)}
+                  onToggle={() => toggle(key)}
+                  onOpenDetails={onOpenDetails}
+                  onOpenPlayerDay={onOpenPlayerDay}
+                />
+              ) : (
                 <LiveEntry
                   key={report.id}
                   report={report}
@@ -561,18 +627,18 @@ export function LiveFeed({
                   onOpenPlayerDay={onOpenPlayerDay}
                 />
               );
-            }}
-          />
+            })}
+          </div>
         </section>
       )}
 
       {recent.length > 0 && (
         <section className="feed-section">
-          <h2 className="feed-heading">Recent plays</h2>
-          <KindSplit
-            rows={recent}
-            className="feed-items"
-            render={(entry) => {
+          <h2 className="feed-heading">
+            {kind === 'pitcher' ? 'Recent outings' : 'Recent plays'}
+          </h2>
+          <div className="feed-items">
+            {recent.slice(0, shown).map((entry) => {
               if (entry.type === 'base') {
                 const { report, game, ev, i } = entry;
                 return (
@@ -586,14 +652,16 @@ export function LiveFeed({
                   />
                 );
               }
-              if (entry.type === 'faced') {
-                const { report, game, fb, i } = entry;
+              if (entry.type === 'pitching') {
+                const { report, game } = entry;
+                const key = `pitching-${report.id}-${game.gamePk}`;
                 return (
-                  <FeedFacedBatter
-                    key={`faced-${report.id}-${game.gamePk}-${i}`}
+                  <FeedPitcherGame
+                    key={key}
                     report={report}
                     game={game}
-                    fb={fb}
+                    open={openKeys.has(key)}
+                    onToggle={() => toggle(key)}
                     onOpenDetails={onOpenDetails}
                     onOpenPlayerDay={onOpenPlayerDay}
                   />
@@ -613,18 +681,26 @@ export function LiveFeed({
                   onOpenPlayerDay={onOpenPlayerDay}
                 />
               );
-            }}
-          />
+            })}
+          </div>
+          {recent.length > shown && (
+            <button
+              type="button"
+              className="feed-more"
+              onClick={() => setShown((n) => n + PAGE_SIZE)}
+            >
+              Load more
+              <span className="feed-more-count">{recent.length - shown}</span>
+            </button>
+          )}
         </section>
       )}
 
       {upcoming.length > 0 && (
         <section className="feed-section">
           <h2 className="feed-heading">Upcoming</h2>
-          <KindSplit
-            rows={upcoming}
-            className="upcoming-rows"
-            render={({ report, game }) => {
+          <div className="upcoming-rows">
+            {upcoming.map(({ report, game }) => {
               const key = `up-${report.id}-${game.gamePk}`;
               return (
                 <UpcomingRow
@@ -637,8 +713,8 @@ export function LiveFeed({
                   onOpenPlayerDay={onOpenPlayerDay}
                 />
               );
-            }}
-          />
+            })}
+          </div>
         </section>
       )}
 

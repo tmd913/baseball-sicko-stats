@@ -160,7 +160,12 @@ export class SickoStack extends Stack {
       supportedIdentityProviders: providers,
       accessTokenValidity: Duration.hours(1),
       idTokenValidity: Duration.hours(1),
-      refreshTokenValidity: Duration.days(30),
+      // Cognito's refresh-token clock runs from issuance and a refresh doesn't
+      // reset it, so this is exactly how often a signed-in user is sent back
+      // through the hosted UI no matter how much they use the app. A year for a
+      // personal watchlist; shorten it if the trade (a leaked refresh token
+      // stays usable until it's revoked by signing out) stops being worth it.
+      refreshTokenValidity: Duration.days(365),
       preventUserExistenceErrors: true,
     });
 

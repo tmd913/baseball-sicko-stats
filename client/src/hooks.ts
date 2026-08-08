@@ -7,6 +7,10 @@ import { useEffect, useRef } from 'react';
  * transition — never on mount, on collapse, or on an unrelated re-render — so
  * expanding a card, a game, or an at-bat brings it into view without yanking
  * the page around otherwise.
+ *
+ * Every collapsible in the app scrolls this way — no per-caller alignment. An
+ * earlier `block: 'nearest'` option existed for the feed's innings and made
+ * them the one thing that moved differently from everything around it.
  */
 export function useScrollIntoViewOnExpand<T extends HTMLElement>(expanded: boolean) {
   const ref = useRef<T>(null);

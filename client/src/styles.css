@@ -31,6 +31,22 @@
      (player cards, at-bats, the feed's rows) — read via scroll-margin-top. */
   --scroll-offset: 12px;
 
+  /* The bar controls — roster search, view/kind tabs, the Edit toggle — share
+     one height so a row of them reads as one set, whatever their own text size.
+     (The search field's font is not forced up to 16px for iOS's sake; the
+     viewport meta in index.html handles that instead.) */
+  --control-h: 36px;
+  /* One corner radius for everything the reader can act on — buttons, tabs,
+     form fields — taken from the roster search and the Edit button beside it.
+     Fully-round pills read as a different app next to the player cards' softer
+     boxes. A tab inside a switch takes the inner radius so its corners sit
+     concentric with the few px of shell around it. */
+  --control-radius: 12px;
+  --control-radius-inner: 9px;
+  /* The single vertical step between stacked rows on a narrow screen — see the
+     media query at the end of the file. */
+  --stack-gap: 12px;
+
   --radius: 14px;
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
   font-synthesis: none;
@@ -183,31 +199,16 @@ body {
   flex-wrap: wrap;
   justify-content: flex-end;
 }
+/* The presets are a segmented control, not a row of separate buttons: they take
+   the view/kind tabs' rules wholesale (see .view-switch / .view-tab), so the
+   selected preset highlights exactly the way the selected tab does instead of
+   merely resembling it. Only the row's own alignment lives here. */
 .date-presets {
-  display: flex;
-  gap: 6px;
   flex-wrap: nowrap;
   justify-content: flex-end;
 }
 .date-preset {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  color: var(--muted);
-  padding: 5px 11px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
   white-space: nowrap;
-}
-.date-preset:hover {
-  color: var(--text);
-  border-color: var(--accent);
-}
-.date-preset.active {
-  color: var(--bg);
-  background: var(--accent);
-  border-color: var(--accent);
 }
 /* The preset <select> replaces the pill row on phones (see the media query
    below); it's hidden on desktop where the pills are shown instead. */
@@ -225,8 +226,9 @@ body {
   color: var(--text);
   /* Match the date-range picker's box model (.drp-field) so the two controls
      are the same height where they sit side by side on phones. */
-  border-radius: 9px;
+  border-radius: var(--control-radius);
   padding: 6px 32px 6px 14px;
+  min-height: var(--control-h);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -245,7 +247,10 @@ body {
   .date-row {
     justify-content: flex-start;
   }
-  .date-presets {
+  /* Specific enough to beat the shared .view-switch rule below, which sets
+     `display: inline-flex` and, being later in the file, would otherwise win
+     and leave both the pill row and its dropdown on screen at once. */
+  .date-row .date-presets {
     display: none;
   }
   .date-presets-select {
@@ -263,8 +268,10 @@ body {
   background: var(--panel);
   border: 1px solid var(--border);
   color: var(--text);
-  border-radius: 9px;
-  padding: 6px 11px;
+  /* Fully round, like the preset pills and the tabs below them. */
+  border-radius: var(--control-radius);
+  padding: 6px 12px;
+  min-height: var(--control-h);
   font-size: 13px;
   cursor: pointer;
 }
@@ -397,6 +404,7 @@ body {
   /* Slim field: minimal internal padding, with just enough room on the right for
      the clear (✕) button that appears while typing. */
   padding: 7px 34px 7px 12px;
+  min-height: var(--control-h);
   font-size: 15px;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
@@ -404,14 +412,6 @@ body {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
-}
-/* iOS Safari zooms the page in when a focused field's font is under 16px, and
-   never zooms back out when you're done typing. Bump it to 16px on touch
-   devices only, so the desktop field keeps its slimmer 15px text. */
-@media (pointer: coarse) {
-  .adder-input {
-    font-size: 16px;
-  }
 }
 .adder-clear {
   position: absolute;
@@ -707,7 +707,7 @@ body {
   padding: 0 10px;
   background: transparent;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--control-radius);
   color: var(--faint);
   font-size: 12px;
   font-weight: 700;
@@ -756,6 +756,23 @@ body {
   color: var(--bg);
   background: var(--hr);
 }
+/* Pitching-role pips: "SP" for a starter, the entry inning for a reliever.
+   "SP" is two glyphs, so the pip grows sideways into a pill rather than
+   overflowing the fixed circle a single digit gets. */
+.lineup-spot.spot-start,
+.lineup-spot.spot-relief {
+  width: auto;
+  padding-left: 0.28em;
+  padding-right: 0.28em;
+  border-radius: 999px;
+  color: var(--bg);
+}
+.lineup-spot.spot-start {
+  background: var(--accent);
+}
+.lineup-spot.spot-relief {
+  background: var(--hr);
+}
 /* On the card headshot's corner — larger photo, so a larger pip. Pushed out
    toward the corner so it clears the player's face rather than sitting on it. */
 .player-photo-spot {
@@ -765,6 +782,12 @@ body {
   width: 22px;
   height: 22px;
   font-size: 13px;
+}
+/* A widened role pip still can't shrink below the circle a digit gets. */
+.player-photo-spot.spot-start,
+.player-photo-spot.spot-relief {
+  min-width: 22px;
+  font-size: 11px;
 }
 
 /* ---- Player list ---- */
@@ -843,6 +866,18 @@ body {
   color: var(--muted);
   background: var(--bg-2);
   border-color: var(--border);
+}
+/* Pitching-role chips — "SP" (accent) and "RP 7th" (amber), so a starter and a
+   reliever are told apart at a glance rather than by reading the label. */
+.lineup-tag-start {
+  color: var(--accent);
+  background: rgba(56, 189, 248, 0.12);
+  border-color: rgba(56, 189, 248, 0.4);
+}
+.lineup-tag-relief {
+  color: var(--hr);
+  background: rgba(251, 191, 36, 0.12);
+  border-color: rgba(251, 191, 36, 0.4);
 }
 
 .player-head {
@@ -1019,7 +1054,8 @@ body {
   color: var(--hr);
   background: rgba(251, 191, 36, 0.15);
 }
-.live-role.role-on-base {
+.live-role.role-on-base,
+.live-role.role-pitching {
   color: var(--live-purple);
   background: rgba(192, 132, 252, 0.15);
 }
@@ -1348,6 +1384,11 @@ body {
 .dec-tag.dec-S {
   color: var(--accent);
 }
+/* A hold in the relief amber the RP chip uses — it's the reliever's credit, and
+   the one the feed's decisions never name (it comes off the boxscore line). */
+.dec-tag.dec-H {
+  color: var(--hr);
+}
 /* Arsenal — a Savant-style pitch-arsenal table: one color-coded row per pitch
    type (dot + abbr + name + usage bar), then velo/spin/iVB/HB vs season + whiff. */
 .arsenal {
@@ -1374,6 +1415,12 @@ body {
   /* Expanding a section scrolls it to the top — clear the sticky nav strip. */
   scroll-margin-top: var(--scroll-offset);
 }
+/* The Opponent heading is a label rather than a toggle, so it skips the bar
+   entirely: no frame, and none of the 46px the bar reserves for the controls a
+   collapsible one carries. */
+.opp-title {
+  padding: 4px 2px 6px;
+}
 /* Overall / vs RHB / vs LHB, inside the Line and Arsenal sections. The quietest
    tier of the app's three pill switches (view → kind → split): no fill on the
    track, just a tinted active pill, so it reads as a filter on the section
@@ -1385,7 +1432,7 @@ body {
   padding: 2px;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--control-radius);
 }
 .split-tab {
   border: none;
@@ -1395,7 +1442,7 @@ body {
   font-weight: 700;
   letter-spacing: 0.02em;
   padding: 4px 10px;
-  border-radius: 999px;
+  border-radius: var(--control-radius-inner);
   cursor: pointer;
   transition: color 0.14s ease, background 0.14s ease;
 }
@@ -1428,6 +1475,9 @@ body {
 }
 .ars-abbr.dec-S {
   color: var(--accent);
+}
+.ars-abbr.dec-H {
+  color: var(--hr);
 }
 /* The line has no metric grid — every stat rides in a results strip (Results,
    Rates, Contact), so the head runs straight into the first dashed rule. */
@@ -1608,6 +1658,27 @@ body {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--faint);
+}
+/* League rank beside an opponent stat. A small outlined badge: it has to read
+   as a different *kind* of thing from the number it qualifies — a placement, not
+   another stat — which plain muted text next to a bold figure didn't do. */
+.ars-rnote {
+  flex: none;
+  align-self: center;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: var(--muted);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* In the head the badge follows running text rather than a stat's own gap. */
+.ars-name .ars-rnote {
+  margin-left: 7px;
 }
 .ars-rval {
   font-size: 13px;
@@ -2009,7 +2080,7 @@ body {
   border: 1px solid rgba(56, 189, 248, 0.4);
   color: var(--accent);
   padding: 5px 12px;
-  border-radius: 999px;
+  border-radius: var(--control-radius);
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
@@ -2042,7 +2113,7 @@ body {
   border: 1px solid rgba(56, 189, 248, 0.4);
   color: var(--accent);
   padding: 5px 12px;
-  border-radius: 999px;
+  border-radius: var(--control-radius);
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
@@ -2067,7 +2138,7 @@ body {
   border: 1px solid rgba(56, 189, 248, 0.45);
   color: var(--text);
   padding: 6px 12px;
-  border-radius: 999px;
+  border-radius: var(--control-radius);
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.02em;
@@ -2189,7 +2260,7 @@ body {
   border: 1px solid var(--border);
   color: var(--text);
   padding: 10px 14px;
-  border-radius: 999px;
+  border-radius: var(--control-radius);
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
@@ -2494,7 +2565,7 @@ body {
   font-size: 13px;
   font-weight: 700;
   padding: 7px 14px 7px 10px;
-  border-radius: 999px;
+  border-radius: var(--control-radius);
   cursor: pointer;
 }
 .details-back:hover {
@@ -2519,7 +2590,7 @@ body {
   font-size: 13px;
   font-weight: 700;
   padding: 8px 16px;
-  border-radius: 999px;
+  border-radius: var(--control-radius);
   cursor: pointer;
 }
 .details-add:hover {
@@ -2556,7 +2627,7 @@ body {
   font-size: 13px;
   font-weight: 700;
   padding: 8px 16px;
-  border-radius: 999px;
+  border-radius: var(--control-radius);
   cursor: pointer;
 }
 .details-remove:hover,
@@ -2681,7 +2752,7 @@ body {
   padding: 3px;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--control-radius);
 }
 .roll-win {
   border: none;
@@ -2690,7 +2761,7 @@ body {
   font-size: 12px;
   font-weight: 700;
   padding: 5px 11px;
-  border-radius: 999px;
+  border-radius: var(--control-radius-inner);
   cursor: pointer;
   transition: color 0.14s ease, background 0.14s ease;
 }
@@ -2963,6 +3034,17 @@ body {
   flex-wrap: wrap;
   margin-bottom: 14px;
 }
+/* The two tiers of tabs — Summary/Players/Feed and Batters/Pitchers — as one
+   group, so the view bar's space-between doesn't push them apart. They share a
+   row while it's wide enough and the kind tabs wrap under the view tabs when it
+   isn't. */
+.view-bar-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+}
+
 /* Search box + the Edit (reorder) button, side by side. Takes the .adder's old
    flex sizing so the pair grows into the free space and wraps to its own line
    when the tabs and it can't share a row. */
@@ -2982,6 +3064,7 @@ body {
   align-items: center;
   gap: 6px;
   padding: 7px 14px;
+  min-height: var(--control-h);
   border-radius: 12px;
   background: var(--panel);
   border: 1px solid var(--border);
@@ -3051,10 +3134,13 @@ body {
   font-size: 13px;
   color: var(--text);
 }
-/* When both a batter and a pitcher table stack in the scroll box, space them. */
+/* When both a batter and a pitcher table stack in the scroll box, space them.
+   Column gutters tighten with the viewport: on a phone the table always needs
+   horizontal scrolling, and every pixel of padding is a stat pushed off screen.
+   Full width at desktop sizes, where the whole table already fits. */
 .summary-table th,
 .summary-table td {
-  padding: 8px 13px;
+  padding: 8px clamp(5px, 1.6vw, 13px);
   white-space: nowrap;
   border-bottom: 1px solid var(--border);
   background: var(--bg);
@@ -3072,7 +3158,8 @@ body {
    absorbs the slack on wide screens; right-aligned with tabular figures. */
 .summary-table .sum-num {
   width: 1%;
-  min-width: 54px;
+  /* Floor only — past the narrow end the numbers themselves set the width. */
+  min-width: clamp(32px, 5vw, 54px);
   text-align: right;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
@@ -3083,15 +3170,15 @@ body {
   text-align: center;
 }
 .summary-table .sum-name-col {
-  min-width: 150px;
+  min-width: clamp(92px, 26vw, 150px);
   text-align: left;
 }
 /* Breathing room past the last column — a trailing gutter so the rightmost
    stat isn't flush against the table's edge (and there's space after it when
-   scrolled all the way right). */
+   scrolled all the way right). Scales down with the column gutters. */
 .summary-table th:last-child,
 .summary-table td:last-child {
-  padding-right: 32px;
+  padding-right: clamp(10px, 3vw, 32px);
 }
 /* Header row sticks to the top while scrolling vertically. */
 .summary-table thead th {
@@ -3201,6 +3288,11 @@ body {
   height: 15px;
   font-size: 9px;
 }
+.sum-photo-spot.spot-start,
+.sum-photo-spot.spot-relief {
+  min-width: 15px;
+  font-size: 8px;
+}
 .sum-photo-empty {
   display: inline-block;
 }
@@ -3243,11 +3335,11 @@ body {
   outline-offset: 2px;
   border-radius: 4px;
 }
+/* The table is deliberately monochrome: every value reads in the same colour,
+   with the secondary line muted. What a cell *says* — "Top 8", "Final", a dash
+   — carries the state; tinting columns just made the eye jump between them. */
 .sum-hab {
   font-weight: 700;
-}
-.sum-ops {
-  color: var(--accent);
 }
 .sum-total-label {
   font-weight: 800;
@@ -3275,11 +3367,12 @@ body {
   color: var(--muted);
   white-space: nowrap;
 }
-/* A live game's inning gets the same green accent the app uses elsewhere. */
+/* A live game's inning gets the same green accent the app uses elsewhere, and a
+   postponed one reads as an amber caution. Game state and player state are what
+   the table still colours — the stat columns themselves stay monochrome. */
 .sum-opp-live .sum-opp-detail {
   color: var(--hit);
 }
-/* A postponed game reads as an amber caution rather than an ordinary matchup. */
 .sum-opp-postponed .sum-opp-detail {
   color: var(--hr);
 }
@@ -3294,7 +3387,7 @@ body {
   border: 1px solid var(--border);
   color: var(--muted);
   padding: 7px 13px;
-  border-radius: 999px;
+  border-radius: var(--control-radius);
   font-size: 13px;
   font-weight: 700;
   white-space: nowrap;
@@ -3327,16 +3420,20 @@ body {
 
 /* ---- View switch (Players / Feed) ---- */
 .view-switch,
-.kind-switch {
+.kind-switch,
+.date-presets {
   display: inline-flex;
+  align-items: center;
+  min-height: var(--control-h);
   gap: 3px;
   padding: 3px;
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--control-radius);
 }
 .view-tab,
-.kind-tab {
+.kind-tab,
+.date-preset {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -3346,21 +3443,24 @@ body {
   font-size: 13px;
   font-weight: 700;
   padding: 5px 12px;
-  border-radius: 999px;
+  border-radius: var(--control-radius-inner);
   cursor: pointer;
   transition: color 0.14s ease, background 0.14s ease;
 }
 .view-tab:hover,
-.kind-tab:hover {
+.kind-tab:hover,
+.date-preset:hover {
   color: var(--text);
 }
 .view-tab.active,
-.kind-tab.active {
+.kind-tab.active,
+.date-preset.active {
   color: var(--bg);
   background: var(--accent);
 }
 .view-tab:focus-visible,
-.kind-tab:focus-visible {
+.kind-tab:focus-visible,
+.date-preset:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -3417,17 +3517,12 @@ body {
   }
 }
 
-/* Batters / Pitchers tabs, above the player list, the summary table and the
-   reorder screen — each shows one kind at a time. Same pill shape as the
-   top-level view tabs (see .view-switch, which shares these rules). */
+/* Batters / Pitchers tabs — each view below shows one kind at a time. Same
+   shape as the top-level view tabs (see .view-switch, which shares these rules
+   with them and with the header's date presets), and they sit beside them in
+   the view bar. */
 .kind-switch {
   align-self: flex-start;
-  margin-bottom: 2px;
-}
-/* On the summary view the tabs sit directly above the table's own border, which
-   reads as cramped without a gap the card lists don't need. */
-.summary-mode .kind-switch {
-  margin-bottom: 14px;
 }
 .kind-tab-count {
   font-size: 11px;
@@ -3488,7 +3583,8 @@ body {
 .live-entry.role-on-deck .feed-item-head {
   border-left-color: var(--hr);
 }
-.live-entry.role-on-base .feed-item-head {
+.live-entry.role-on-base .feed-item-head,
+.live-entry.role-pitching .feed-item-head {
   border-left-color: var(--live-purple);
 }
 /* Role tag sits at the right end of the header row. */
@@ -3561,6 +3657,44 @@ body {
   font-size: 13px;
   color: var(--muted);
 }
+/* "Load more" under the Recent section — the stream shows a page at a time, so
+   a long day doesn't mount hundreds of at-bat cards at once. The count is
+   what's still below it. */
+.feed-more {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 8px 16px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.feed-more:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-2));
+}
+.feed-more:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.feed-more-count {
+  background: rgba(56, 189, 248, 0.18);
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
 .feed-time {
   margin-left: auto;
   flex: none;
@@ -3593,6 +3727,50 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+/* A pitcher's feed item is his whole outing: a header that toggles it, and the
+   same per-inning blocks the players view uses (newest inning first) beneath.
+   The line rides the header so a collapsed item still says how the outing went.
+
+   NO CARET. Nothing on the pitcher side of this app carries one — not the card's
+   sections, not its innings or batters faced, and not this. The bar itself is
+   the affordance (it lights up on hover and takes focus), and the only triangle
+   allowed near an inning is the top/bottom half-inning indicator, which is a
+   *label*, not a toggle. Don't reintroduce one. */
+.feed-item-toggle {
+  cursor: pointer;
+  padding: 10px 12px;
+  background: linear-gradient(180deg, var(--panel), var(--bg-2));
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  transition: border-color 0.14s ease;
+}
+.feed-item-toggle:hover {
+  border-color: var(--accent);
+}
+.feed-item-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* A live entry draws its own frame (`.live-entry .feed-item-head`, which outranks
+   the rules above) — but the hover below would take its role-tinted left edge
+   with it, so put that back. */
+.live-entry.role-pitching .feed-item-toggle:hover {
+  border-left-color: var(--live-purple);
+}
+.feed-pitch-line {
+  margin-left: auto;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+/* Both want the right end of the row; the line goes first, the caret last. */
+.feed-item-toggle .live-role {
+  margin-left: 0;
+}
+.feed-pitcher .innings-list {
+  padding-left: 4px;
 }
 .feed-item-id {
   display: flex;
@@ -3765,7 +3943,7 @@ body {
   border: 1px solid var(--border);
   color: var(--text);
   padding: 11px 16px;
-  border-radius: 10px;
+  border-radius: var(--control-radius);
   font-size: 14px;
   font-weight: 700;
   cursor: pointer;
@@ -3800,7 +3978,7 @@ body {
   border: 1px solid var(--border);
   color: var(--muted);
   padding: 7px 13px;
-  border-radius: 999px;
+  border-radius: var(--control-radius);
   font-size: 13px;
   font-weight: 700;
   max-width: 100%;
@@ -3817,4 +3995,34 @@ body {
 .signout-btn:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* ---- Narrow-screen vertical rhythm -----------------------------------------
+   On a phone every one of these rows stacks, and each was spaced by whichever
+   rule happened to own it — the header's own gap, the view bar's, the tab
+   group's, the card list's — which read down the page as 20, 14, 10, 14, 18.
+   One value for all of them instead. Last in the file on purpose: a media
+   query adds no specificity, so these have to come after the base rules they
+   override. */
+@media (max-width: 640px) {
+  .app-header {
+    gap: var(--stack-gap);
+    margin-bottom: var(--stack-gap);
+  }
+  .date-row {
+    gap: var(--stack-gap);
+  }
+  .view-bar {
+    gap: var(--stack-gap);
+    margin-bottom: var(--stack-gap);
+  }
+  .view-bar-tabs {
+    gap: var(--stack-gap);
+  }
+  .player-list {
+    gap: var(--stack-gap);
+  }
+  .live-feed {
+    margin-top: var(--stack-gap);
+  }
 }
