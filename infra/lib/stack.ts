@@ -8,6 +8,7 @@ import {
   Stack,
   type StackProps,
 } from 'aws-cdk-lib';
+import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as apigw from 'aws-cdk-lib/aws-apigatewayv2';
 import * as apigwAuth from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import * as apigwInteg from 'aws-cdk-lib/aws-apigatewayv2-integrations';
@@ -19,6 +20,8 @@ import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction, OutputFormat } from 'aws-cdk-lib/aws-lambda-nodejs';
+import * as route53 from 'aws-cdk-lib/aws-route53';
+import * as r53targets from 'aws-cdk-lib/aws-route53-targets';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
 import type { Construct } from 'constructs';
@@ -28,7 +31,14 @@ const REPO = path.join(__dirname, '..', '..');
 
 export interface SickoStackProps extends StackProps {
   /**
-   * The site's own origin, e.g. `https://d111.cloudfront.net`.
+   * An origin Cognito should accept as a callback, e.g.
+   * `https://d111.cloudfront.net`.
+   *
+   * With no `domainName` this is the site's own origin and the reason for the
+   * two-pass first deploy. With one, the apex is the origin and this narrows to
+   * its remaining job: keeping a *previous* origin signable-in. The CloudFront
+   * domain never stops serving the app, so dropping its callback would let an
+   * old bookmark load the page and then fail at sign-in.
    *
    * Taken from context rather than read off the Distribution construct, and
    * that is deliberate. Cognito's callback URL needs the site domain; the
@@ -40,6 +50,18 @@ export interface SickoStackProps extends StackProps {
    * front and the second pass disappears.
    */
   siteUrl?: string;
+  /**
+   * Registered apex domain, e.g. `statcastsicko.com`. Omit to stay on the
+   * CloudFront-assigned domain.
+   *
+   * Its hosted zone must already exist in this account (registering through
+   * Route 53 creates one), because it is resolved by a context lookup at synth
+   * time — the ACM certificate validates against it and the alias records are
+   * written into it. Supplying it also collapses the two-pass first deploy:
+   * the site origin is known before the distribution exists, so `siteUrl` no
+   * longer has to be fed back in as context.
+   */
+  domainName?: string;
   /** Google OAuth client id, and the Secrets Manager secret holding its secret.
    *  Omit both to deploy with email/password sign-in only. */
   googleClientId?: string;
@@ -52,7 +74,7 @@ export class SickoStack extends Stack {
   constructor(scope: Construct, id: string, props: SickoStackProps) {
     super(scope, id, props);
 
-    const { siteUrl, googleClientId, googleSecretName, cognitoPrefix } = props;
+    const { siteUrl, domainName, googleClientId, googleSecretName, cognitoPrefix } = props;
 
     // ---- Storage ------------------------------------------------------
 
@@ -141,7 +163,24 @@ export class SickoStack extends Stack {
 
     // Callback URLs Cognito will accept. localhost is always allowed so the
     // hosted UI can be exercised against `npm run dev`.
-    const callbackUrls = ['http://localhost:5173/', ...(siteUrl ? [`${siteUrl}/`] : [])];
+    //
+    // The pre-domain CloudFront origin has to be carried in explicitly, via
+    // `siteUrl` in cdk.json — it cannot be read off the Distribution construct
+    // here without recreating the dependency cycle described above, and once
+    // `domainName` supplies the origin it would otherwise fall off the list
+    // and strand every bookmark of it at sign-in.
+    //
+    // The www entry is unreachable while the redirect is in place (the app only
+    // ever runs on the apex, and the client builds its redirect_uri from
+    // window.location.origin) but is kept so removing the redirect doesn't
+    // silently break sign-in.
+    const callbackUrls = [
+      ...new Set([
+        'http://localhost:5173/',
+        ...(siteUrl ? [`${siteUrl}/`] : []),
+        ...(domainName ? [`https://${domainName}/`, `https://www.${domainName}/`] : []),
+      ]),
+    ];
 
     const userPoolClient = userPool.addClient('WebClient', {
       // A browser app can't keep a secret; PKCE covers the exchange instead.
@@ -274,13 +313,59 @@ export class SickoStack extends Stack {
 
     // ---- Delivery -----------------------------------------------------
 
+    // The zone is imported rather than created: Route 53 makes one when the
+    // domain is registered, and a second zone for the same name would serve
+    // records the registrar's delegation never points at.
+    const zone = domainName
+      ? route53.HostedZone.fromLookup(this, 'Zone', { domainName })
+      : undefined;
+
+    // CloudFront only accepts certificates from us-east-1, which is where this
+    // stack already lives. Validation writes its CNAME into the zone above, so
+    // the deploy blocks for a minute or two the first time and is instant after.
+    const certificate =
+      domainName && zone
+        ? new acm.Certificate(this, 'SiteCert', {
+            domainName,
+            subjectAlternativeNames: [`www.${domainName}`],
+            validation: acm.CertificateValidation.fromDns(zone),
+          })
+        : undefined;
+
+    // Only on the default behavior, never on `/api/*`: a 301 on a non-idempotent
+    // request is a footgun (browsers may replay it as GET), and the viewer never
+    // gets that far anyway — the document request redirects first, so nothing
+    // the client issues afterwards is aimed at `www`.
+    const wwwRedirect = domainName
+      ? new cloudfront.Function(this, 'WwwRedirect', {
+          code: cloudfront.FunctionCode.fromFile({
+            filePath: path.join(__dirname, 'redirect-to-apex.js'),
+          }),
+          runtime: cloudfront.FunctionRuntime.JS_2_0,
+          comment: 'Redirect www to the apex domain',
+        })
+      : undefined;
+
     const distribution = new cloudfront.Distribution(this, 'Distribution', {
+      ...(domainName && certificate
+        ? { domainNames: [domainName, `www.${domainName}`], certificate }
+        : {}),
       defaultRootObject: 'index.html',
       defaultBehavior: {
         origin: origins.S3BucketOrigin.withOriginAccessControl(siteBucket),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         compress: true,
+        ...(wwwRedirect
+          ? {
+              functionAssociations: [
+                {
+                  function: wwwRedirect,
+                  eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
+                },
+              ],
+            }
+          : {}),
       },
       additionalBehaviors: {
         // Serving the API from the same origin is what lets the client keep
@@ -305,6 +390,25 @@ export class SickoStack extends Stack {
         { httpStatus: 404, responseHttpStatus: 200, responsePagePath: '/index.html' },
       ],
     });
+
+    // The apex serves the app; www only exists to 301 onto it. It still needs
+    // its own alias records, cert SAN and distribution alias regardless —
+    // without all three the redirect itself can't be reached over HTTPS, and
+    // the visitor gets a certificate warning instead of a working site.
+    if (zone && domainName) {
+      const target = route53.RecordTarget.fromAlias(
+        new r53targets.CloudFrontTarget(distribution),
+      );
+      for (const [id, recordName] of [
+        ['Apex', undefined],
+        ['Www', `www.${domainName}`],
+      ] as const) {
+        new route53.ARecord(this, `Alias${id}`, { zone, recordName, target });
+        // CloudFront answers on IPv6 by default; without this record an
+        // IPv6-only client can't resolve the site at all.
+        new route53.AaaaRecord(this, `Alias${id}V6`, { zone, recordName, target });
+      }
+    }
 
     new s3deploy.BucketDeployment(this, 'DeploySite', {
       destinationBucket: siteBucket,
@@ -350,7 +454,12 @@ export class SickoStack extends Stack {
 
     // ---- Outputs ------------------------------------------------------
 
-    new CfnOutput(this, 'SiteUrl', { value: `https://${distribution.distributionDomainName}` });
+    new CfnOutput(this, 'SiteUrl', {
+      value: `https://${domainName ?? distribution.distributionDomainName}`,
+    });
+    new CfnOutput(this, 'DistributionDomain', {
+      value: distribution.distributionDomainName,
+    });
     new CfnOutput(this, 'ApiUrl', { value: httpApi.apiEndpoint });
     new CfnOutput(this, 'UserPoolId', { value: userPool.userPoolId });
     new CfnOutput(this, 'UserPoolClientId', { value: userPoolClient.userPoolClientId });
@@ -361,7 +470,9 @@ export class SickoStack extends Stack {
       value: `https://${cognitoDomain}/oauth2/idpresponse`,
       description: 'Add this as an authorized redirect URI on the Google OAuth client',
     });
-    if (!siteUrl) {
+    // With a custom domain the site origin is known before anything is
+    // created, so the callback URL is already right on the first pass.
+    if (!siteUrl && !domainName) {
       new CfnOutput(this, 'NextStep', {
         value: `Re-deploy with: npm run cdk -w infra -- deploy -c siteUrl=https://${distribution.distributionDomainName}`,
         description: 'Registers the real site URL as a Cognito callback',
