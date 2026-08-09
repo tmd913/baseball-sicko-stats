@@ -668,8 +668,15 @@ export function ResearchTable({
       // sit — `offsetLeft` is neither, and measuring with it quietly folded the
       // app's own side padding into the offset (290px for a block ending at
       // 268), which parked the sorted column that far past the name.
-      const nameSticky = !!name && getComputedStyle(name).position === 'sticky';
-      const pin = img.offsetWidth + (nameSticky && name ? name.offsetWidth : 0);
+      // Pinned **horizontally**, which is `left`, not `position`. Every header
+      // cell in this table is already `position: sticky` at every width — that
+      // is what pins the header row to the top — so testing the position made
+      // the name column count as pinned on a phone, where it is not. The board
+      // then held the sorted column 240px in on a 346px-wide table, out in the
+      // middle of the screen past a column that had scrolled away.
+      const pinnedAcross = (el: HTMLElement) => getComputedStyle(el).left !== 'auto';
+      const pin =
+        img.offsetWidth + (name && pinnedAcross(name) ? name.offsetWidth : 0);
       box.style.setProperty('--research-pin-left', `${pin}px`);
     };
     measure();
