@@ -554,7 +554,6 @@ export function PitcherCard({
           {meta && <span className="player-meta">{meta}</span>}
         </div>
         <div className="player-summary">
-          {singleDay && games.length === 1 && <PitchingTag game={games[0]} />}
           {/* One badge per game only while the range is a day. Over a week these
               are his team's games, not his — he's in none of them — and a row of
               seven scores ran off the right of the card to say so. */}
@@ -643,7 +642,6 @@ export function PitcherCard({
       </div>
       <div className="player-summary">
         <LiveRoleTag role={role} />
-        {onePitchedGame && <PitchingTag game={primary} />}
         {/* One outing's W/L/S/HLD, or — over a range — the tally of them, which
             is what a week of relief work comes down to and the one part of the
             per-game chrome that does survive being added up. */}
