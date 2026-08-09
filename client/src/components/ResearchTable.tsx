@@ -639,6 +639,45 @@ export function ResearchTable({
   // and a selector whose selection you can't see is worse than no selector.
   // Scrolled by hand rather than with scrollIntoView, which walks up to every
   // scrollable ancestor and would drag the table (and the page) with it.
+  /**
+   * The sorted column follows you along the table: it sits where it belongs
+   * until it would scroll off an edge, then pins to that edge — left if you
+   * have scrolled past it, right if you haven't reached it yet. That is one
+   * `position: sticky` with **both** `left` and `right` set; the browser picks
+   * the edge, so there is no scroll listener and nothing to keep in sync.
+   *
+   * The `left` offset can't be a constant the way the name column's 63px is.
+   * It has to clear whatever is already pinned there, and the name column is
+   * fluid — it absorbs the table's slack — so the width is measured and handed
+   * to CSS as `--research-pin-left`. Below 820px the name isn't sticky at all
+   * and only the headshot has to be cleared, which the same measurement gives
+   * for free by reading whichever cell is actually pinned.
+   */
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    const box = scrollRef.current;
+    if (!box) return;
+    const measure = () => {
+      const head = box.querySelector('thead tr');
+      if (!head) return;
+      const img = head.querySelector<HTMLElement>('.sum-img-col');
+      const name = head.querySelector<HTMLElement>('.sum-name-col');
+      if (!img) return;
+      // The **sum of the pinned widths**, not a position. A width is unaffected
+      // both by how far the table is scrolled and by where the page happens to
+      // sit — `offsetLeft` is neither, and measuring with it quietly folded the
+      // app's own side padding into the offset (290px for a block ending at
+      // 268), which parked the sorted column that far past the name.
+      const nameSticky = !!name && getComputedStyle(name).position === 'sticky';
+      const pin = img.offsetWidth + (nameSticky && name ? name.offsetWidth : 0);
+      box.style.setProperty('--research-pin-left', `${pin}px`);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(box);
+    return () => ro.disconnect();
+  });
+
   const posRowRef = useRef<HTMLDivElement | null>(null);
   useLayoutEffect(() => {
     const row = posRowRef.current;
@@ -1086,7 +1125,7 @@ export function ResearchTable({
       )}
 
       {visible.length > 0 && (
-        <div className="research-scroll">
+        <div className="research-scroll" ref={scrollRef}>
           <table className="summary-table research-table">
             <thead>
               <tr>
