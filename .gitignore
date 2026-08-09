@@ -5,6 +5,11 @@ server/data/cache/
 .DS_Store
 *.tsbuildinfo
 
+# Per-machine Claude Code settings — the permission allowlist each checkout
+# accumulates as it works. `.claude/settings.json` is the shared project
+# config and stays tracked; this one is personal and conflicts on every merge.
+.claude/settings.local.json
+
 server/data/
 
 # CDK synth output
