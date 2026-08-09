@@ -455,6 +455,22 @@ const POSITION_TYPE_LABELS: Record<string, string> = {
 const posTypeLabel = (t: string) => POSITION_TYPE_LABELS[t] ?? t;
 
 /** Which board a position sits on — what App fetches and keys the table on. */
+/**
+ * Whose players the board is showing. Orthogonal to the position pills — scope
+ * narrows *who* is eligible, position narrows it again — which is why it is a
+ * switch of its own rather than two more pills on that row: picking SS must not
+ * look like it deselects "My Players".
+ *
+ * `'all'` is the default and stays the default. This is the one view that works
+ * with nothing watched, and defaulting to a watchlist that may be empty would
+ * open a new user onto a blank table on the only page they can currently use.
+ */
+export type ResearchScope = 'all' | 'mine';
+
+export function toResearchScope(v: string | null): ResearchScope {
+  return v === 'mine' ? 'mine' : 'all';
+}
+
 export function researchKindFor(pos: ResearchPos): PlayerKind {
   return POSITION_BY_KEY.get(pos)?.kind ?? 'batter';
 }
@@ -515,6 +531,15 @@ interface Props {
    *  table is about rather than which of its rows are shown. */
   window: ResearchWindow;
   onWindowChange: (w: ResearchWindow) => void;
+  /** Whose players to show. Lifted to App with the other cross-board controls,
+   *  and in the URL for the same reason the window is: it changes the
+   *  population the table describes, not the presentation of it. */
+  scope: ResearchScope;
+  onScopeChange: (s: ResearchScope) => void;
+  /** `${kind}-${id}` for everything on the watchlist — the app's player key, so
+   *  a two-way player watched only as a pitcher is marked on the pitching board
+   *  and not the batting one, which is what watching him as a pitcher means. */
+  watchedKeys: Set<string>;
   /** Open the details overlay (percentiles, game log, season splits) for a row.
    *  Takes a player key, the same currency the rest of the app navigates in. */
   onOpenDetails: (key: string) => void;
@@ -547,6 +572,9 @@ export function ResearchTable({
   onQualifiedChange,
   window: statWindow,
   onWindowChange,
+  scope,
+  onScopeChange,
+  watchedKeys,
   onOpenDetails,
 }: Props) {
   // Every column this board *has* — what the picker lists, what a filter can be
@@ -590,10 +618,14 @@ export function ResearchTable({
   // a plate appearance, position players who mopped up an eleven-run loss — and
   // both are dropped here rather than per pill, which is what makes the count
   // line's "of N" a number some pill can actually reach.
-  const boardRows = useMemo(
-    () => rows.filter(kind === 'pitcher' ? isPitcherByTrade : isBatterByTrade),
-    [rows, kind],
-  );
+  // Trade first, then scope. Both narrow the *population* the count line is
+  // measured against, so that "12 of 12" on My Players is honest about the
+  // board it describes rather than quoting the league's 624.
+  const boardRows = useMemo(() => {
+    const byTrade = rows.filter(kind === 'pitcher' ? isPitcherByTrade : isBatterByTrade);
+    if (scope !== 'mine') return byTrade;
+    return byTrade.filter((r) => watchedKeys.has(`${r.kind}-${r.id}`));
+  }, [rows, kind, scope, watchedKeys]);
 
   // Hiding the column you were sorting on leaves the table ordered by something
   // you can neither see nor reverse — there is no header left to click. So the
@@ -719,6 +751,28 @@ export function ResearchTable({
           desktop the whole control set fits on a single line, and the row
           breaks to two (or three) as the screen narrows. */}
       <div className="research-bar">
+      {/* Ahead of the position pills, and a separate control from them: scope and
+          position both apply, so folding these two into that row would read as
+          one single-select where picking SS un-picks My Players. */}
+      <div className="research-scope" role="tablist" aria-label="Whose players">
+        {(['mine', 'all'] as const).map((sc) => (
+          <button
+            key={sc}
+            type="button"
+            role="tab"
+            aria-selected={scope === sc}
+            className={`research-scope-tab${scope === sc ? ' active' : ''}`}
+            title={
+              sc === 'mine'
+                ? 'Only the players on your watchlist'
+                : 'Every player in the league'
+            }
+            onClick={() => onScopeChange(sc)}
+          >
+            {sc === 'mine' ? 'My Players' : 'All Players'}
+          </button>
+        ))}
+      </div>
       <div className="research-positions" role="tablist" aria-label="Position" ref={posRowRef}>
         {POSITIONS.map((p) => (
           <button
@@ -1009,6 +1063,28 @@ export function ResearchTable({
         </div>
       )}
 
+      {/* My Players with nothing on the watchlist of this kind. Distinct from the
+          message above, which is about filters — here there is nothing to filter,
+          and the way out is All Players rather than a looser threshold. */}
+      {!loading && !error && scope === 'mine' && boardRows.length === 0 && (
+        <div className="empty-state">
+          <p className="empty-title">
+            No {kind === 'pitcher' ? 'pitchers' : 'batters'} on your watchlist
+          </p>
+          <p>
+            Open a player from{' '}
+            <button
+              type="button"
+              className="empty-inline-link"
+              onClick={() => onScopeChange('all')}
+            >
+              All Players
+            </button>{' '}
+            to add them.
+          </p>
+        </div>
+      )}
+
       {visible.length > 0 && (
         <div className="research-scroll">
           <table className="summary-table research-table">
@@ -1081,6 +1157,31 @@ export function ResearchTable({
                       >
                         {r.name}
                       </button>
+                      {/* Only on All Players: on My Players every row would
+                          carry one, which marks nothing. The same accent check
+                          `PlayerDetails` uses for "On watchlist", so the app
+                          says this one thing one way. */}
+                      {scope === 'all' && watchedKeys.has(key) && (
+                        <span
+                          className="research-watched"
+                          title={`${r.name} is on your watchlist`}
+                        >
+                          <svg
+                            viewBox="0 0 24 24"
+                            width="13"
+                            height="13"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="3"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden="true"
+                          >
+                            <path d="M20 6 9 17l-5-5" />
+                          </svg>
+                          <span className="sr-only">On your watchlist</span>
+                        </span>
+                      )}
                     </td>
                     <td className="research-team-col">{r.team || '—'}</td>
                     <td className="research-pos-col" title={posTypeLabel(r.positionType)}>

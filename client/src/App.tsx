@@ -23,9 +23,10 @@ import {
   researchKindFor,
   toColumnKeys,
   toResearchPos,
+  toResearchScope,
   toResearchWindow,
 } from './components/ResearchTable';
-import type { ResearchPos } from './components/ResearchTable';
+import type { ResearchPos, ResearchScope } from './components/ResearchTable';
 import { simulateLiveDay } from './simulate';
 import { PlayerDetails } from './components/PlayerDetails';
 import { DateRangePicker } from './components/DateRangePicker';
@@ -331,10 +332,19 @@ export default function App() {
   const [researchWindow, setResearchWindow] = useState<ResearchWindow>(() =>
     toResearchWindow(initialParams.get('win')),
   );
+  // Whose players the board shows. Shared across both boards and both windows
+  // like the two above — it is a statement about you, not about the board.
+  const [researchScope, setResearchScope] = useState<ResearchScope>(() =>
+    toResearchScope(initialParams.get('scope')),
+  );
   // Keyed by board **and** window: each is its own fetch and its own megabyte,
   // and both are kept, so flipping back to a window already read is instant.
   const [research, setResearch] = useState<Record<string, ResearchRow[]>>({});
   const researchCacheKey = `${researchKind}:${researchWindow}`;
+  // The research board is the whole league, so it marks its rows against the
+  // watchlist rather than being built from it. Same key `PlayerAdder` dedupes
+  // on, so the two agree about what "already watched" means.
+  const watchedKeys = useMemo(() => new Set(watchlist.map(playerKey)), [watchlist]);
   // Shared across both boards (see the prop's comment in ResearchTable), so it
   // survives the remount that switching board causes. Transient like the page's
   // other filters — deliberately not in the URL.
@@ -414,6 +424,9 @@ export default function App() {
     if (view === 'research' && researchWindow !== 'season') {
       p.set('win', String(researchWindow));
     }
+    // 'all' is the default and stays out of the URL, so a shared research link
+    // only ever narrows to the sender's watchlist when they meant it to.
+    if (view === 'research' && researchScope !== 'all') p.set('scope', researchScope);
     // The column set of the board on screen, and only once it differs from that
     // board's defaults — otherwise every link would carry twenty stat keys to
     // say "the usual". `pos=` is what tells a reader which board they describe.
@@ -435,6 +448,7 @@ export default function App() {
     playerKind,
     researchPos,
     researchWindow,
+    researchScope,
     researchCols,
     researchKind,
     simulate,
@@ -1200,6 +1214,9 @@ export default function App() {
           onQualifiedChange={setResearchQualified}
           window={researchWindow}
           onWindowChange={setResearchWindow}
+          scope={researchScope}
+          onScopeChange={setResearchScope}
+          watchedKeys={watchedKeys}
           onOpenDetails={setDetailsKey}
         />
       ) : view === 'summary' ? (
