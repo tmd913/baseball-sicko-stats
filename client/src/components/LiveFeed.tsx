@@ -4,11 +4,13 @@ import { playerKey } from '../types';
 import {
   creditLabel,
   formatStartTime,
+  handThrows,
   headshotUrl,
   isOnActiveRoster,
   isRotationStarter,
   liveRoleGame,
   liveRoleLabel,
+  surname,
 } from '../lib';
 import type {
   BaseEvent,
@@ -19,7 +21,7 @@ import type {
 } from '../types';
 import { useScrollIntoViewOnExpand } from '../hooks';
 import { InlineVideoClip, PlateAppearanceCard } from './PlateAppearanceCard';
-import { GameStatusBadge, PlatoonSplit, ProbablePitcher } from './PlayerCard';
+import { GameStatusBadge, PlatoonSplit } from './PlayerCard';
 import { OpponentSection, PitchingTag, lineSummary } from './PitcherCard';
 import { InningsList } from './Innings';
 
@@ -449,11 +451,20 @@ function isUpcomingFor(report: PlayerReport, game: PlayerGame): boolean {
 }
 
 /**
- * One not-yet-started game in the Upcoming section: player + matchup + first
- * pitch, expanding to what that player wants to know about it. For a **batter**
- * that's the probable starter and his own line against that hand; for a
- * **pitcher** it's the lineup waiting for him (the same `OpponentSection` his
- * card carries) — the probable starter on the other side is nobody he faces.
+ * One not-yet-started game in the Upcoming section: player + matchup + the
+ * announced starter on the other side + first pitch, expanding to what that
+ * player wants to know about it. For a **batter** that's his own line against
+ * the starter's hand; for a **pitcher** it's the lineup waiting for him (the
+ * same `OpponentSection` his card carries).
+ *
+ * The opposing starter reads on the closed bar rather than only inside the
+ * detail: it's the one fact that decides whether a scheduled game is worth
+ * opening, and the same thing the summary table's opponent cell shows pre-game
+ * (surname only there and here — the bar wraps on a phone, and the matchup and
+ * first pitch are what it must keep on one line). On a *pitcher's* row that's
+ * his counterpart, not someone he faces, which is why the detail below still
+ * belongs to the lineup instead.
+ *
  * The identity row (headshot + name, both links) sits above the bar rather than
  * inside it, so a tap meant for the row can't land on a link. The bar is static
  * when there's nothing to reveal yet, and carries no caret on either side — the
@@ -476,19 +487,34 @@ function UpcomingRow({
 }) {
   const time = formatStartTime(game.status.startTime);
   const isPitcher = report.kind === 'pitcher';
-  const expandable = isPitcher ? !!game.opponentHitting : !!game.probablePitcher;
+  const sp = game.probablePitcher;
+  // A batter's detail is now the platoon split alone, so it opens on a starter
+  // of a known hand rather than on any announced starter: without one there is
+  // nothing under the bar to reveal, the name itself being on the bar.
+  const expandable = isPitcher
+    ? !!game.opponentHitting
+    : sp?.hand === 'R' || sp?.hand === 'L';
   // On expand, bring the row to the top of the viewport (its scroll-margin-top
   // clears the sticky nav), matching how the at-bat cards behave.
   const ref = useScrollIntoViewOnExpand<HTMLDivElement>(expandable && open);
-  // The bar under the name: matchup, the SP chip and first pitch. It is the whole
-  // of the row's interactive surface — the headshot and name above it are links,
-  // and inside a tappable row a near-miss on either navigated away instead of
-  // expanding (the same split the pitcher outing takes).
+  // The bar under the name: matchup, the SP chip, the other side's announced
+  // starter and first pitch. It is the whole of the row's interactive surface —
+  // the headshot and name above it are links, and inside a tappable row a
+  // near-miss on either navigated away instead of expanding (the same split the
+  // pitcher outing takes).
   const bar = (
     <>
       <span className="feed-context">{matchup(game)}</span>
       {/* For a watched pitcher, whether he's the announced starter tonight. */}
       <PitchingTag game={game} />
+      {sp && (
+        <span
+          className="game-prob-pitcher"
+          title={`${isPitcher ? 'Opposing' : 'Probable'} starting pitcher: ${sp.name}`}
+        >
+          vs {handThrows(sp.hand)} {surname(sp.name)}
+        </span>
+      )}
       {/* No caret either side — the bar's own hover is the affordance. */}
       <span className="feed-time">{time ?? (game.status.detailedState || 'TBD')}</span>
     </>
@@ -518,11 +544,10 @@ function UpcomingRow({
           {isPitcher ? (
             <OpponentSection game={game} throws={report.throws} />
           ) : (
-            <>
-              {/* The batter's season line against the probable starter's hand. */}
-              <ProbablePitcher game={game} />
-              <PlatoonSplit report={report} game={game} />
-            </>
+            /* The batter's season line against the probable starter's hand — the
+               starter himself is named on the bar above, so this is only the
+               split (whose own head says which hand it's against). */
+            <PlatoonSplit report={report} game={game} />
           )}
         </div>
       )}

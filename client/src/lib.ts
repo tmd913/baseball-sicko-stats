@@ -376,6 +376,23 @@ export function handThrows(hand: string | null): string {
   return hand === 'R' ? 'RHP' : hand === 'L' ? 'LHP' : 'P';
 }
 
+const NAME_SUFFIXES = new Set(['jr', 'jr.', 'sr', 'sr.', 'ii', 'iii', 'iv']);
+
+/**
+ * "Tarik Skubal" → "Skubal", "Nestor Cortes Jr." → "Cortes Jr." — a starter is
+ * referred to by surname anyway, and every place one is named beside a matchup
+ * (the summary table's opponent cell, the feed's Upcoming bar) is a row where a
+ * wider name costs something else off the right of a phone screen.
+ */
+export function surname(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length < 2) return name;
+  const last = parts[parts.length - 1];
+  return NAME_SUFFIXES.has(last.toLowerCase()) && parts.length > 2
+    ? `${parts[parts.length - 2]} ${last}`
+    : last;
+}
+
 /**
  * True when a watched player never came to the plate: either their team didn't
  * play (no games) or they were rostered for a completed game but didn't bat. A
