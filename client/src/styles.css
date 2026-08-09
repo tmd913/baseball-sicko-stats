@@ -3724,10 +3724,15 @@ body {
 .sum-opp-empty {
   color: var(--muted);
 }
-/* The settings popover's items. `.help-btn` (How to use) is folded into these
-   selector lists rather than restyled to resemble them, so the menu's entries
-   stay identical by construction. */
+/* The settings popover's items. `.settings-toggle` (hide injured) and
+   `.help-btn` (How to use) are folded into the simulate toggle's selector lists
+   rather than restyled to match it, so every row of the menu is the same
+   control by construction. They differ only in what an active one is coloured:
+   the simulate overlay is a loud, temporary lie about the data (red), hiding
+   injured players is an ordinary preference (accent), and How to use is a link
+   out rather than a toggle, so it has no active state at all. */
 .sim-toggle,
+.settings-toggle,
 .help-btn {
   display: inline-flex;
   align-items: center;
@@ -3744,16 +3749,19 @@ body {
   transition: color 0.14s ease, border-color 0.14s ease, background 0.14s ease;
 }
 .sim-toggle:hover,
+.settings-toggle:hover,
 .help-btn:hover {
   color: var(--text);
   border-color: var(--accent);
 }
 .sim-toggle:focus-visible,
+.settings-toggle:focus-visible,
 .help-btn:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-.sim-dot {
+.sim-dot,
+.settings-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
@@ -3767,6 +3775,14 @@ body {
 .sim-toggle.active .sim-dot {
   background: var(--strikeout);
   animation: feed-live-pulse 1.8s ease-out infinite;
+}
+.settings-toggle.active {
+  color: var(--accent);
+  border-color: rgba(56, 189, 248, 0.5);
+  background: rgba(56, 189, 248, 0.12);
+}
+.settings-toggle.active .settings-dot {
+  background: var(--accent);
 }
 
 /* ---- View switch (Players / Feed) ---- */
