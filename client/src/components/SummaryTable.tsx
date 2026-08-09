@@ -16,6 +16,7 @@ import {
   lineOps,
   mostRecentGameFirst,
   pitchingCorner,
+  surname,
   whipOf,
 } from '../lib';
 
@@ -33,22 +34,6 @@ function pickGame(report: PlayerReport): PlayerGame | null {
     games.find((g) => g.status.state === 'scheduled') ??
     [...games].sort(mostRecentGameFirst)[0]
   );
-}
-
-const NAME_SUFFIXES = new Set(['jr', 'jr.', 'sr', 'sr.', 'ii', 'iii', 'iv']);
-
-/**
- * "Tarik Skubal" → "Skubal", "Nestor Cortes Jr." → "Cortes Jr." — a starter is
- * referred to by surname anyway, and the opponent column is the one place where
- * a wider cell costs a stat column off the right of a phone screen.
- */
-function surname(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length < 2) return name;
-  const last = parts[parts.length - 1];
-  return NAME_SUFFIXES.has(last.toLowerCase()) && parts.length > 2
-    ? `${parts[parts.length - 2]} ${last}`
-    : last;
 }
 
 /**
