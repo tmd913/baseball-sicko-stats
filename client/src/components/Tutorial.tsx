@@ -447,16 +447,6 @@ const CHAPTERS: Chapter[] = [
             in purple and tagged <strong>Live</strong>.
           </li>
         </ul>
-        <p>
-          Nothing on? Open the{' '}
-          <Ui>
-            <GearIcon /> settings
-          </Ui>{' '}
-          menu beside the title and turn on <Ui>Simulate live</Ui>. It overlays a
-          synthetic live day on your watchlist so you can see all of the above without
-          waiting for first pitch. It changes nothing on the server, and switching it
-          off puts the real day back.
-        </p>
       </>
     ),
   },
@@ -489,7 +479,7 @@ const CHAPTERS: Chapter[] = [
             <strong>
               <GearIcon /> Settings
             </strong>{' '}
-            — beside the title: the simulate toggle, this guide, and sign out.
+            — beside the title: hiding injured players, this guide, and sign out.
           </li>
           <li>
             <strong>Expanding scrolls.</strong> Whatever you open — a card, a game, an

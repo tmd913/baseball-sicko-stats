@@ -18,6 +18,13 @@ import { Tutorial } from './components/Tutorial';
 // Breathing room above a card scrolled to the top of the viewport.
 const SCROLL_GAP = 12;
 
+// Whether the settings menu offers the "Simulate live" toggle. Off: the overlay
+// is a developer/demo tool, not something a user of the site should be handed a
+// switch for. The mode itself is untouched — `?sim=1` in the URL still turns it
+// on — so flipping this back to true (or, later, to an is-admin test, which the
+// app has no notion of yet) is all it takes to restore the menu entry.
+const SHOW_SIMULATE_TOGGLE = false;
+
 // MLB days are anchored to US Eastern time, computed in America/New_York rather
 // than UTC or the machine's local zone — otherwise an evening US user gets an
 // off-by-one.
@@ -185,7 +192,9 @@ export default function App() {
     initialParams.get('kind') === 'pitcher' ? 'pitcher' : 'batter',
   );
   // Demo toggle: overlay a synthetic live-day state on the loaded reports so the
-  // live-only UI can be exercised when nothing is actually being played.
+  // live-only UI can be exercised when nothing is actually being played. Still
+  // reachable by hand as `?sim=1`; only its settings-menu entry is hidden (see
+  // SHOW_SIMULATE_TOGGLE).
   const [simulate, setSimulate] = useState<boolean>(() => initialParams.get('sim') === '1');
   // Keep players on the IL off the players view. The summary table hides them
   // whatever this says (see `visibleReports`); this is the one view where the
@@ -199,9 +208,9 @@ export default function App() {
   // In the URL like every other view, so it survives a reload and can be linked
   // to — which is the only way to hand someone the guide directly.
   const [helpOpen, setHelpOpen] = useState<boolean>(() => initialParams.get('help') === '1');
-  // The settings popover (gear next to the title) — the simulate and
-  // hide-injured toggles, then the way into the how-to page. Closes on outside
-  // click or Escape.
+  // The settings popover (gear next to the title) — the hide-injured toggle
+  // (and the simulate one, when it's shown), then the way into the how-to page.
+  // Closes on outside click or Escape.
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -734,17 +743,19 @@ export default function App() {
             {settingsOpen && (
               <div className="settings-popover" role="menu">
                 <span className="settings-popover-label">Settings</span>
-                <button
-                  type="button"
-                  className={`sim-toggle${simulate ? ' active' : ''}`}
-                  role="menuitemcheckbox"
-                  aria-checked={simulate}
-                  onClick={() => setSimulate((v) => !v)}
-                  title="Simulate a live day of games — demo the live view when nothing's on"
-                >
-                  <span className="sim-dot" aria-hidden="true" />
-                  {simulate ? 'Simulating live' : 'Simulate live'}
-                </button>
+                {SHOW_SIMULATE_TOGGLE && (
+                  <button
+                    type="button"
+                    className={`sim-toggle${simulate ? ' active' : ''}`}
+                    role="menuitemcheckbox"
+                    aria-checked={simulate}
+                    onClick={() => setSimulate((v) => !v)}
+                    title="Simulate a live day of games — demo the live view when nothing's on"
+                  >
+                    <span className="sim-dot" aria-hidden="true" />
+                    {simulate ? 'Simulating live' : 'Simulate live'}
+                  </button>
+                )}
                 <button
                   type="button"
                   className={`settings-toggle${hideInjured ? ' active' : ''}`}
@@ -756,7 +767,7 @@ export default function App() {
                   <span className="settings-dot" aria-hidden="true" />
                   Hide injured players
                 </button>
-                {/* The two checkable toggles read together above; this one is a
+                {/* The checkable toggle(s) read together above; this one is a
                     way out of the menu, so it sits below them and beside Sign
                     out. */}
                 <button
