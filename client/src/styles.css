@@ -229,8 +229,12 @@ body {
   white-space: nowrap;
 }
 /* The preset <select> replaces the pill row on phones (see the media query
-   below); it's hidden on desktop where the pills are shown instead. */
-.date-presets-select {
+   below); it's hidden on desktop where the pills are shown instead. The research
+   board's time-span dropdown is folded in here rather than restyled to match,
+   so the app's two "pills on a desktop, dropdown on a phone" controls are one
+   control by construction. */
+.date-presets-select,
+.research-window-select {
   display: none;
   /* Custom chevron (native arrow can't be inset from the edge): draw it as a
      background image positioned 14px in, and reserve room for it on the right. */
@@ -251,7 +255,8 @@ body {
   font-weight: 600;
   cursor: pointer;
 }
-.date-presets-select:hover {
+.date-presets-select:hover,
+.research-window-select:hover {
   border-color: var(--accent);
 }
 /* On phones the header wraps and the date control spans the full width. Swap the
@@ -273,6 +278,12 @@ body {
   }
   .date-presets-select {
     display: block;
+  }
+  .research-window-select {
+    display: block;
+    /* In a wrapping flex bar rather than the header's grid — it must not
+       stretch to fill the line it shares with the four icon buttons. */
+    flex: none;
   }
 }
 /* ---- Date range picker ---- */
@@ -4096,6 +4107,18 @@ body {
     clip: rect(0, 0, 0, 0);
     white-space: nowrap;
     border: 0;
+  }
+}
+
+/* On a phone the time-span tabs give way to the dropdown beside the buttons
+   (`.research-window-select`, styled with the header's preset dropdown). Two
+   classes deep because the shared `.view-switch` rule sets `display:
+   inline-flex` and comes later in the file — the same reason `.date-row
+   .date-presets` is written that way — and without the extra specificity the
+   row and its dropdown would both be on screen at once. */
+@media (max-width: 640px) {
+  .research-bar .research-window-row {
+    display: none;
   }
 }
 

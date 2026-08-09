@@ -854,6 +854,25 @@ export function ResearchTable({
         ))}
       </div>
 
+        {/* The same tabs as a dropdown, for a phone. Rendered alongside them and
+            swapped by a media query, which is how the header's date presets
+            already do it — and placed here, at the head of the buttons, so on a
+            narrow screen it shares their line instead of taking one of its own.
+            It keeps the tabs' short labels: a native select is as wide as its
+            widest option, and "Last 60 days" would cost back the width this is
+            here to save. */}
+        <select
+          className="research-window-select"
+          value={String(statWindow)}
+          onChange={(e) => onWindowChange(toResearchWindow(e.target.value))}
+          aria-label="Time span"
+        >
+          {RESEARCH_WINDOWS.map((w) => (
+            <option key={String(w)} value={String(w)}>
+              {windowLabel(w)}
+            </option>
+          ))}
+        </select>
         {/* Not a disclosure like the three beside it — it has no panel, so it
             takes `.on` and never `.active`. First of the buttons because it is
             the one that changes *who* is in the table rather than what is shown
