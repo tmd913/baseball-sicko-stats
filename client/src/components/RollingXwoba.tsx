@@ -18,6 +18,22 @@ interface Pt {
   date: string;
 }
 
+// The window the chart opens on. 50 and 250 are only ever walked if they're picked.
+const DEFAULT_WIN: Win = 100;
+
+/** The rolling-mean series as plotted points, dropping the incomplete leading window. */
+function buildPoints(series: XwobaSeries, win: number): Pt[] {
+  const roll = rollingMean(
+    series.pas.map((p) => p.xwoba),
+    win,
+  );
+  const pts: Pt[] = [];
+  for (let i = 0; i < roll.length; i++) {
+    if (!Number.isNaN(roll[i])) pts.push({ pa: i + 1, y: roll[i], date: series.pas[i].date });
+  }
+  return pts;
+}
+
 /** Trailing mean of `xs` over `win` values; NaN until the first full window. */
 function rollingMean(xs: number[], win: number): number[] {
   const out: number[] = [];
@@ -43,19 +59,22 @@ function md(date: string): string {
 }
 
 export function RollingXwoba({ series, name }: { series: XwobaSeries; name: string }) {
-  const [win, setWin] = useState<Win>(50);
+  const [win, setWin] = useState<Win>(DEFAULT_WIN);
   const [hover, setHover] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
 
+  // Each window is built the first time it's selected and kept for the life of the
+  // series, so opening the tab costs one pass over the season rather than three, and
+  // switching back to a window already seen costs none.
+  const cache = useRef<{ series: XwobaSeries; byWin: Map<Win, Pt[]> } | null>(null);
+  if (cache.current?.series !== series) cache.current = { series, byWin: new Map() };
+
   const points = useMemo<Pt[]>(() => {
-    const roll = rollingMean(
-      series.pas.map((p) => p.xwoba),
-      win,
-    );
-    const pts: Pt[] = [];
-    for (let i = 0; i < roll.length; i++) {
-      if (!Number.isNaN(roll[i])) pts.push({ pa: i + 1, y: roll[i], date: series.pas[i].date });
-    }
+    const store = cache.current!.byWin;
+    const seen = store.get(win);
+    if (seen) return seen;
+    const pts = buildPoints(series, win);
+    store.set(win, pts);
     return pts;
   }, [series, win]);
 
