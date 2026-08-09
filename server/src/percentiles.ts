@@ -62,8 +62,16 @@ const SECTIONS: SectionDef[] = [
       { key: 'iso', label: 'ISO', pct: 'percent_rank_iso', raw: 'iso', fmt: 'avg' },
       { key: 'xiso', label: 'xISO', pct: 'percent_rank_xiso', raw: 'xiso', fmt: 'avg' },
       { key: 'xhr', label: 'xHR', pct: 'percent_rank_xhr', raw: 'xhr', fmt: 'dec1' },
-      // BABIP bridges the slash line into the contact-quality metrics that explain it.
+      // BABIP closes the slash line and bridges into Batted Ball, the contact
+      // quality that explains it.
       { key: 'babip', label: 'BABIP', pct: 'percent_rank_babip', raw: 'babip', fmt: 'avg' },
+    ],
+  },
+  {
+    title: 'Batted Ball',
+    metrics: [
+      // What he hit and how hard — the pitcher card's section of the same name,
+      // read from the other side of the plate.
       { key: 'exit_velo', label: 'Avg Exit Velocity', pct: 'percent_rank_exit_velocity_avg', raw: 'exit_velocity_avg', fmt: 'dec1' },
       { key: 'barrel', label: 'Barrel %', pct: 'percent_rank_barrel_batted_rate', raw: 'barrel_batted_rate', fmt: 'dec1' },
       { key: 'hard_hit', label: 'Hard-Hit %', pct: 'percent_rank_hard_hit_percent', raw: 'hard_hit_percent', fmt: 'dec1' },
@@ -73,10 +81,24 @@ const SECTIONS: SectionDef[] = [
       { key: 'pull_air', label: 'Pull Air %', pct: 'percent_rank_pull_percent_airballs', raw: 'pull_percent_airballs', fmt: 'dec1' },
       // Batted-ball profile: air balls (fly balls + line drives).
       { key: 'air', label: 'Air %', pct: 'percent_rank_airballs_percent', raw: 'airballs_percent', fmt: 'dec1' },
+    ],
+  },
+  {
+    title: 'Swing',
+    metrics: [
+      // Bat tracking — the swing itself, before it meets anything. The pitcher
+      // card carries the same rows as Swings Against, the swings he induces.
       // Bat speed's percentile lives under `swing_speed` but the raw mph under
       // `avg_swing_speed` — the two are not named in parallel.
       { key: 'bat_speed', label: 'Bat Speed', pct: 'percent_rank_swing_speed', raw: 'avg_swing_speed', fmt: 'dec1' },
+      // Fast Swing % follows, ranked by `BATTER_COMPUTED` — the page carries the
+      // rate but doesn't rank it.
       { key: 'squared_up', label: 'Squared-Up %', pct: 'percent_rank_squared_up_swing', raw: 'squared_up_swing', fmt: 'dec1' },
+    ],
+  },
+  {
+    title: 'Plate Discipline',
+    metrics: [
       // Chase %'s raw value is the out-of-zone swing rate.
       { key: 'chase', label: 'Chase %', pct: 'percent_rank_chase_percent', raw: 'oz_swing_percent', fmt: 'dec1', lowerBetter: true },
       { key: 'whiff', label: 'Whiff %', pct: 'percent_rank_whiff_percent', raw: 'whiff_percent', fmt: 'dec1', lowerBetter: true },
@@ -699,6 +721,24 @@ function hrMetric(row: StatcastRow, hrCounts: number[]): PercentileMetric | null
   };
 }
 
+/** The batter's two computed rows, and where each lands. Unlike the pitcher's
+ * they aren't ranked off a shared leaderboard blob — each has its own board and
+ * so its own builder — but they're spliced the same way: `before` sits a row
+ * ahead of its expected twin (so the client pairs the two into a dumbbell),
+ * `after` follows the row it belongs beside, and a missing anchor appends to the
+ * section it names. */
+interface BatterComputedDef {
+  section: string; // section title in SECTIONS
+  build: (row: StatcastRow, computed: Computed) => PercentileMetric | null;
+  before?: string;
+  after?: string;
+}
+
+const BATTER_COMPUTED: BatterComputedDef[] = [
+  { section: 'Batting', before: 'xhr', build: (row, c) => hrMetric(row, c.hrCounts) },
+  { section: 'Swing', after: 'bat_speed', build: (row, c) => fastSwingMetric(row, c.fastSwingRates) },
+];
+
 /** The league distributions behind the rows we rank ourselves, each empty when
  * its leaderboard was unavailable (which costs that one bar its percentile). */
 interface Computed {
@@ -737,22 +777,17 @@ function buildSections(
       if (percentile === null && value === null) continue;
       metrics.push({ key: m.key, label: m.label, percentile, value, ...(estimated && { estimated }) });
     }
-    if (kind === 'batter' && sec.title === 'Batting') {
-      // Fast Swing % is computed, not scraped — slot it next to Bat Speed since
-      // they're both bat-tracking metrics.
-      const fs = fastSwingMetric(row, computed.fastSwingRates);
-      if (fs) {
-        const at = metrics.findIndex((m) => m.key === 'bat_speed');
-        if (at === -1) metrics.push(fs);
-        else metrics.splice(at + 1, 0, fs);
-      }
-      // Actual HR is computed too — place it right before the scraped xHR so the
-      // client pairs the two into an expected/actual dumbbell.
-      const hr = hrMetric(row, computed.hrCounts);
-      if (hr) {
-        const at = metrics.findIndex((m) => m.key === 'xhr');
-        if (at === -1) metrics.push(hr);
-        else metrics.splice(at, 0, hr);
+    if (kind === 'batter') {
+      // Actual HR (ahead of the scraped xHR, so the client pairs the two into an
+      // expected/actual dumbbell) and Fast Swing % (beside Bat Speed, the other
+      // bat-tracking row) are ranked against a leaderboard rather than scraped.
+      for (const def of BATTER_COMPUTED) {
+        if (def.section !== sec.title) continue;
+        const metric = def.build(row, computed);
+        if (!metric) continue;
+        const at = metrics.findIndex((m) => m.key === (def.before ?? def.after));
+        if (at === -1) metrics.push(metric);
+        else metrics.splice(def.before ? at : at + 1, 0, metric);
       }
     }
     if (kind === 'pitcher') {
@@ -784,8 +819,10 @@ function cacheFile(playerId: number, year: number, kind: 'batter' | 'pitcher'): 
  * forever, so without this a stored one would be served for good in the shape
  * it was scraped in — v2 added the pitcher card's actual-vs-expected rows, v3
  * widened the pitcher card (run value, OBP/ISO/HR pairs, BABIP, curve spin, run
- * value by pitch group, command rates, swings against, more batted ball). */
-const CARD_VERSION = 3;
+ * value by pitch group, command rates, swings against, more batted ball), v4
+ * split the batter card's one long Batting section into Batting / Batted Ball /
+ * Swing / Plate Discipline. */
+const CARD_VERSION = 4;
 
 /** A cached card is fresh if it was built by this version of the card and is
  * either a past season (immutable) or, for the current season, younger than the
