@@ -23,6 +23,15 @@
     </script>
     <meta name="color-scheme" content="dark" />
     <title>Statcast Sicko</title>
+
+    <!-- Tab icon. The SVG is the header's brand mark and is what every current
+         browser picks; the .ico carries 16/32px rasters for anything that only
+         asks for /favicon.ico, and the touch icon is the home-screen tile
+         (square-cornered — iOS rounds it itself). All three live in
+         client/public/, which Vite copies to the site root verbatim. -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="alternate icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <!-- Paint the dark base color on the very first frame so a reload doesn't
          flash white before the stylesheet loads. -->
     <style>

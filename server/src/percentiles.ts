@@ -137,10 +137,29 @@ const PITCHER_SECTIONS: SectionDef[] = [
   {
     title: 'Value',
     metrics: [
+      // The headline row, as on Savant's own card: the runs he saved or cost
+      // over every pitch — the pitcher-side twin of Batting Run Value.
+      { key: 'run_value', label: 'Pitching Run Value', pct: 'percent_rank_swing_take_run_value', raw: 'swing_take_run_value', fmt: 'int' },
+      // Each result a pitcher actually posted sits immediately before its
+      // expected twin, which is what collapses the two into one dumbbell row on
+      // the card (the client pairs on `EXPECTED_OF`, actual first). ERA and HR
+      // are the exceptions: the page ranks neither, so `PITCHER_COMPUTED` ranks
+      // them against a leaderboard and splices each in below.
+      { key: 'woba', label: 'wOBA', pct: 'percent_rank_woba', raw: 'woba', fmt: 'avg', lowerBetter: true },
       { key: 'xwoba', label: 'xwOBA', pct: 'percent_rank_xwoba', raw: 'xwoba', fmt: 'avg', lowerBetter: true },
       { key: 'xera', label: 'xERA', pct: 'percent_rank_xera', raw: 'xera', fmt: 'dec2', lowerBetter: true },
+      { key: 'ba', label: 'BA', pct: 'percent_rank_ba', raw: 'ba', fmt: 'avg', lowerBetter: true },
       { key: 'xba', label: 'xBA', pct: 'percent_rank_xba', raw: 'xba', fmt: 'avg', lowerBetter: true },
+      { key: 'obp', label: 'OBP', pct: 'percent_rank_obp', raw: 'obp', fmt: 'avg', lowerBetter: true },
+      { key: 'xobp', label: 'xOBP', pct: 'percent_rank_xobp', raw: 'xobp', fmt: 'avg', lowerBetter: true },
+      { key: 'slg', label: 'SLG', pct: 'percent_rank_slg', raw: 'slg', fmt: 'avg', lowerBetter: true },
       { key: 'xslg', label: 'xSLG', pct: 'percent_rank_xslg', raw: 'xslg', fmt: 'avg', lowerBetter: true },
+      { key: 'iso', label: 'ISO', pct: 'percent_rank_iso', raw: 'iso', fmt: 'avg', lowerBetter: true },
+      { key: 'xiso', label: 'xISO', pct: 'percent_rank_xiso', raw: 'xiso', fmt: 'avg', lowerBetter: true },
+      { key: 'xhr', label: 'xHR', pct: 'percent_rank_xhr', raw: 'xhr', fmt: 'dec1', lowerBetter: true },
+      // BABIP closes the section the way it does on the batter card: the bridge
+      // from what he allowed to the contact quality that explains it.
+      { key: 'babip', label: 'BABIP', pct: 'percent_rank_babip', raw: 'babip', fmt: 'avg', lowerBetter: true },
     ],
   },
   {
@@ -149,6 +168,21 @@ const PITCHER_SECTIONS: SectionDef[] = [
       { key: 'fb_velo', label: 'Fastball Velocity', pct: 'percent_rank_fastball_velo', raw: 'fastball_velo', fmt: 'dec1' },
       { key: 'fb_spin', label: 'Fastball Spin', pct: 'percent_rank_fastball_spin', raw: 'fastball_spin', fmt: 'int' },
       { key: 'fb_ext', label: 'Extension', pct: 'percent_rank_fastball_extension', raw: 'fastball_extension', fmt: 'dec1' },
+      // The one breaking-ball spin Savant ranks (`cu_spin`, not named in
+      // parallel with its raw). Null for a pitcher with no curve, which the
+      // metric-level null-drop keeps off his card.
+      { key: 'cu_spin', label: 'Curveball Spin', pct: 'percent_rank_cu_spin', raw: 'curveball_spin', fmt: 'int' },
+    ],
+  },
+  {
+    title: 'Run Value by Pitch',
+    metrics: [
+      // The mirror of the batter card's Vs Pitch Type section: run value earned
+      // with each pitch group (whole-run totals), which is where a card shows
+      // that one pitch is carrying the arsenal.
+      { key: 'rv_fastball', label: 'Fastball', pct: 'percent_rank_pitch_run_value_fastball', raw: 'pitch_run_value_fastball', fmt: 'int' },
+      { key: 'rv_breaking', label: 'Breaking', pct: 'percent_rank_pitch_run_value_breaking', raw: 'pitch_run_value_breaking', fmt: 'int' },
+      { key: 'rv_offspeed', label: 'Offspeed', pct: 'percent_rank_pitch_run_value_offspeed', raw: 'pitch_run_value_offspeed', fmt: 'int' },
     ],
   },
   {
@@ -157,16 +191,41 @@ const PITCHER_SECTIONS: SectionDef[] = [
       { key: 'k', label: 'K %', pct: 'percent_rank_k_percent', raw: 'k_percent', fmt: 'dec1' },
       { key: 'bb', label: 'BB %', pct: 'percent_rank_bb_percent', raw: 'bb_percent', fmt: 'dec1', lowerBetter: true },
       { key: 'whiff', label: 'Whiff %', pct: 'percent_rank_whiff_percent', raw: 'whiff_percent', fmt: 'dec1' },
-      { key: 'chase', label: 'Chase %', pct: 'percent_rank_chase_percent', raw: 'chase_percent', fmt: 'dec1' },
+      // Chase %'s raw value is the out-of-zone swing rate, as on the batter card
+      // — there is no `chase_percent` field, so the bar printed no number.
+      { key: 'chase', label: 'Chase %', pct: 'percent_rank_chase_percent', raw: 'oz_swing_percent', fmt: 'dec1' },
+      // First-Pitch Strike %, Edge % and Meatball % follow, ranked by
+      // `PITCHER_COMPUTED` — the page carries the three rates but ranks none.
+    ],
+  },
+  {
+    title: 'Swings Against',
+    metrics: [
+      // Bat tracking, read from the pitcher's side: these are the swings he
+      // induces, so a low number is the good one (verified against Savant's own
+      // ranks, which already bake the direction in).
+      { key: 'bat_speed', label: 'Bat Speed', pct: 'percent_rank_swing_speed', raw: 'avg_swing_speed', fmt: 'dec1', lowerBetter: true },
+      { key: 'squared_up', label: 'Squared-Up %', pct: 'percent_rank_squared_up_swing', raw: 'squared_up_swing', fmt: 'dec1', lowerBetter: true },
+      { key: 'blasts', label: 'Blast %', pct: 'percent_rank_blasts_swing', raw: 'blasts_swing', fmt: 'dec1', lowerBetter: true },
+      // Swords (a swing so far off it embarrasses the hitter) follows, ranked by
+      // `PITCHER_COMPUTED`.
     ],
   },
   {
     title: 'Batted Ball',
     metrics: [
+      // What the contact he allowed was worth, actual before expected so the two
+      // pair into a dumbbell like the slash line above.
+      { key: 'wobacon', label: 'wOBAcon', pct: 'percent_rank_wobacon', raw: 'wobacon', fmt: 'avg', lowerBetter: true },
+      { key: 'xwobacon', label: 'xwOBAcon', pct: 'percent_rank_xwobacon', raw: 'xwobacon', fmt: 'avg', lowerBetter: true },
       { key: 'exit_velo', label: 'Avg Exit Velocity', pct: 'percent_rank_exit_velocity_avg', raw: 'exit_velocity_avg', fmt: 'dec1', lowerBetter: true },
+      { key: 'max_exit_velo', label: 'Max Exit Velocity', pct: 'percent_rank_exit_velocity_max', raw: 'exit_velocity_max', fmt: 'dec1', lowerBetter: true },
       { key: 'barrel', label: 'Barrel %', pct: 'percent_rank_barrel_batted_rate', raw: 'barrel_batted_rate', fmt: 'dec1', lowerBetter: true },
       { key: 'hard_hit', label: 'Hard-Hit %', pct: 'percent_rank_hard_hit_percent', raw: 'hard_hit_percent', fmt: 'dec1', lowerBetter: true },
+      { key: 'sweet_spot', label: 'LA Sweet-Spot %', pct: 'percent_rank_sweet_spot_percent', raw: 'sweet_spot_percent', fmt: 'dec1', lowerBetter: true },
+      { key: 'launch_angle', label: 'Avg Launch Angle', pct: 'percent_rank_launch_angle_avg', raw: 'launch_angle_avg', fmt: 'dec1', lowerBetter: true },
       { key: 'gb', label: 'Groundball %', pct: 'percent_rank_groundballs_percent', raw: 'groundballs_percent', fmt: 'dec1' },
+      // HR/FB % follows, ranked by `PITCHER_COMPUTED`.
     ],
   },
 ];
@@ -340,7 +399,7 @@ const distMem = new Map<string, Dist>();
 
 /** Same freshness rule as the percentile cards: past seasons are immutable,
  * the current season re-fetches past the TTL. */
-function distFresh(d: Dist): boolean {
+function distFresh(d: { year: number; updatedAt: string }): boolean {
   if (d.year !== CURRENT_SEASON) return true;
   return Date.now() - new Date(d.updatedAt).getTime() < CURRENT_TTL_MS;
 }
@@ -424,16 +483,195 @@ const getFastSwingDist = (year: number) =>
 const getHrDist = (year: number) =>
   getDistribution('hr-dist', year, hrLeaderboardUrl(year), 'home_run');
 
-/** League percentile of `value` within an ascending distribution: the share of
- * the league below it, matching Savant's percent-rank convention. */
-function leaguePercentile(value: number, sortedAsc: number[]): number | null {
-  if (sortedAsc.length === 0) return null;
-  let below = 0;
-  for (const v of sortedAsc) {
-    if (v < value) below++;
-    else break; // ascending, so nothing further can be below
+/** League percentile of `value` within a distribution: the share of the league
+ * it beat, matching Savant's percent-rank convention. `lowerBetter` flips which
+ * side of it counts as beaten (a pitcher's ERA is better for being smaller). */
+function leaguePercentile(
+  value: number,
+  values: number[],
+  lowerBetter = false,
+): number | null {
+  if (values.length === 0) return null;
+  const beaten = values.filter((v) => (lowerBetter ? v > value : v < value)).length;
+  return Math.max(0, Math.min(100, Math.round((beaten / values.length) * 100)));
+}
+
+// ---- Rows a pitcher's page shows but doesn't rank -------------------------
+// Savant ranks a pitcher's xERA but not the ERA it estimates, and prints his
+// first-pitch strike, edge, meatball, sword and HR/FB numbers with no rank at
+// all. We rank each ourselves — against the same population Savant used for
+// every other bar on the card. That population is not everyone who threw a
+// pitch: the page publishes its size as `n` beside each metric in
+// `metricSummaryStats` (363 in 2026), and taking that many pitchers off a
+// leaderboard in plate-appearance order reproduces Savant's own
+// xERA/xwOBA/BA/SLG ranks to the point, which is the check that the slice is
+// the right one.
+
+/** The columns we rank against, and the board each comes from: `expected` is the
+ * expected-statistics leaderboard, the only one carrying ERA; `custom` is the
+ * custom board, which serves every other column in one request. Both carry the
+ * `pa` the slice sorts on. */
+const POP_COLUMNS = {
+  expected: ['era'],
+  custom: [
+    'home_run',
+    'f_strike_percent',
+    'edge_percent',
+    'meatball_percent',
+    'swords',
+    // `flyballs` is carried only to derive HR/FB below — the board prints the
+    // rate itself as an empty column — and is never ranked on its own.
+    'flyballs',
+    'hr_flyballs_percent',
+  ],
+} as const;
+
+type PopBoard = keyof typeof POP_COLUMNS;
+
+/** One pitcher's season on a leaderboard: `pa` plus that board's ranked columns.
+ * A column is kept nullable rather than defaulted, so a blank cell drops out of
+ * the distribution instead of ranking as a 0. */
+interface PopRow {
+  pa: number;
+  values: Record<string, number | null>;
+}
+interface PopDist {
+  year: number;
+  rows: PopRow[];
+  updatedAt: string;
+}
+
+function popUrl(board: PopBoard, year: number): string {
+  // `min=1` keeps the whole league on either board; the PA slice below is what
+  // narrows it to the population Savant ranked within.
+  if (board === 'expected') {
+    return (
+      'https://baseballsavant.mlb.com/leaderboard/expected_statistics?' +
+      `type=pitcher&year=${year}&position=&team=&filter=&min=1&csv=true`
+    );
   }
-  return Math.max(0, Math.min(100, Math.round((below / sortedAsc.length) * 100)));
+  const params = new URLSearchParams({
+    year: String(year),
+    type: 'pitcher',
+    filter: '',
+    min: '1',
+    selections: `pa,${POP_COLUMNS.custom.join(',')},`,
+    sort: '1',
+    sortDir: 'desc',
+    csv: 'true',
+  });
+  return `https://baseballsavant.mlb.com/leaderboard/custom?${params.toString()}`;
+}
+
+const popMem = new Map<string, PopDist>();
+
+/** Every pitcher's PA and ranked columns from one leaderboard, cached in memory
+ * and in the storage tier on the same freshness rule as the other distributions.
+ * Unsliced, because the population size comes from the player page, not here. */
+async function getPopRows(board: PopBoard, year: number): Promise<PopRow[]> {
+  const key = `${board}-${year}`;
+  const mem = popMem.get(key);
+  if (mem && distFresh(mem)) return mem.rows;
+
+  const file = `pitcher-pop-${board}-${year}.json`;
+  const raw = await readBlob(file);
+  if (raw !== null) {
+    try {
+      const stored = JSON.parse(raw) as PopDist;
+      if (distFresh(stored)) {
+        popMem.set(key, stored);
+        return stored.rows;
+      }
+    } catch {
+      // corrupt entry — fall through and re-fetch
+    }
+  }
+
+  const res = await fetch(popUrl(board, year), { headers: { 'User-Agent': BROWSER_UA } });
+  if (!res.ok) {
+    throw new Error(`${board} pitcher leaderboard returned ${res.status} ${res.statusText}`);
+  }
+  const records: Record<string, string>[] = parse(await res.text(), {
+    columns: true,
+    skip_empty_lines: true,
+    bom: true,
+    relax_column_count: true,
+  });
+  const rows: PopRow[] = [];
+  for (const r of records) {
+    const pa = toNum(r.pa);
+    if (pa === null) continue;
+    const values: Record<string, number | null> = {};
+    for (const c of POP_COLUMNS[board]) values[c] = toNum(r[c]);
+    // HR/FB comes back blank for every pitcher on the custom board, so it's
+    // derived from the two counts that back it — the same quotient the player
+    // page prints.
+    if (board === 'custom') {
+      const { home_run: hr, flyballs: fb } = values;
+      values.hr_flyballs_percent = hr !== null && fb ? (hr / fb) * 100 : null;
+    }
+    rows.push({ pa, values });
+  }
+
+  const built: PopDist = { year, rows, updatedAt: new Date().toISOString() };
+  popMem.set(key, built);
+  await writeBlob(file, JSON.stringify(built));
+  return rows;
+}
+
+/** The `n` most-worked pitchers' values for one column, ascending — the slice
+ * Savant ranks within, less anyone the column is blank for. */
+function popDistribution(rows: PopRow[], n: number, column: string): number[] {
+  return [...rows]
+    .sort((a, b) => b.pa - a.pa)
+    .slice(0, n)
+    .map((r) => r.values[column])
+    .filter((v): v is number => v !== null)
+    .sort((a, b) => a - b);
+}
+
+/** A row the player page carries a value for but no `percent_rank_` field:
+ * ranked here against `column`'s distribution, then spliced into `section` —
+ * ahead of `before` when it has an expected twin there (so the client pairs the
+ * two into a dumbbell), else appended. */
+interface ComputedDef {
+  key: string;
+  label: string;
+  raw: string; // field on the player's statcast row
+  fmt: Fmt;
+  column: string; // leaderboard column holding the league's values
+  section: string; // section title in PITCHER_SECTIONS
+  before?: string;
+  lowerBetter?: boolean;
+}
+
+const PITCHER_COMPUTED: ComputedDef[] = [
+  // The two actuals whose expected twins Savant does rank.
+  { key: 'era', label: 'ERA', raw: 'era', fmt: 'dec2', column: 'era', section: 'Value', before: 'xera', lowerBetter: true },
+  { key: 'hr', label: 'HR', raw: 'home_run', fmt: 'int', column: 'home_run', section: 'Value', before: 'xhr', lowerBetter: true },
+  // Command: how often he starts a hitter 0-1, how much of the plate he works
+  // the edges of, and how often he leaves one over the middle.
+  { key: 'f_strike', label: 'First-Pitch Strike %', raw: 'f_strike_percent', fmt: 'dec1', column: 'f_strike_percent', section: 'Plate Discipline' },
+  { key: 'edge', label: 'Edge %', raw: 'edge_percent', fmt: 'dec1', column: 'edge_percent', section: 'Plate Discipline' },
+  { key: 'meatball', label: 'Meatball %', raw: 'meatball_percent', fmt: 'dec1', column: 'meatball_percent', section: 'Plate Discipline', lowerBetter: true },
+  // A sword is a swing so far off it comes apart mid-cut — a count, not a rate,
+  // so it ranks like HR does.
+  { key: 'swords', label: 'Swords', raw: 'swords', fmt: 'int', column: 'swords', section: 'Swings Against' },
+  { key: 'hr_fb', label: 'HR/FB %', raw: 'hr_flyballs_percent', fmt: 'dec1', column: 'hr_flyballs_percent', section: 'Batted Ball', lowerBetter: true },
+];
+
+/** The computed row for one definition, or null if the pitcher has no value for
+ * it. An empty distribution (its leaderboard was unavailable) costs the row its
+ * percentile and nothing else. */
+function computedMetric(row: StatcastRow, def: ComputedDef, values: number[]): PercentileMetric | null {
+  const raw = toNum(row[def.raw]);
+  if (raw === null) return null;
+  return {
+    key: def.key,
+    label: def.label,
+    percentile: leaguePercentile(raw, values, !!def.lowerBetter),
+    value: formatValue(raw, def.fmt),
+  };
 }
 
 /** The computed Fast Swing % row, or null if the player has no fast-swing data. */
@@ -461,13 +699,20 @@ function hrMetric(row: StatcastRow, hrCounts: number[]): PercentileMetric | null
   };
 }
 
+/** The league distributions behind the rows we rank ourselves, each empty when
+ * its leaderboard was unavailable (which costs that one bar its percentile). */
+interface Computed {
+  fastSwingRates: number[]; // batter
+  hrCounts: number[]; // batter
+  pitcherDists: Record<string, number[]>; // pitcher, keyed by leaderboard column
+}
+
 function buildSections(
   row: StatcastRow,
   dist: Record<string, MetricStats>,
   defs: SectionDef[],
   kind: 'batter' | 'pitcher',
-  fastSwingRates: number[],
-  hrCounts: number[],
+  computed: Computed,
 ): PercentileSection[] {
   const sections: PercentileSection[] = [];
   for (const sec of defs) {
@@ -495,7 +740,7 @@ function buildSections(
     if (kind === 'batter' && sec.title === 'Batting') {
       // Fast Swing % is computed, not scraped — slot it next to Bat Speed since
       // they're both bat-tracking metrics.
-      const fs = fastSwingMetric(row, fastSwingRates);
+      const fs = fastSwingMetric(row, computed.fastSwingRates);
       if (fs) {
         const at = metrics.findIndex((m) => m.key === 'bat_speed');
         if (at === -1) metrics.push(fs);
@@ -503,11 +748,25 @@ function buildSections(
       }
       // Actual HR is computed too — place it right before the scraped xHR so the
       // client pairs the two into an expected/actual dumbbell.
-      const hr = hrMetric(row, hrCounts);
+      const hr = hrMetric(row, computed.hrCounts);
       if (hr) {
         const at = metrics.findIndex((m) => m.key === 'xhr');
         if (at === -1) metrics.push(hr);
         else metrics.splice(at, 0, hr);
+      }
+    }
+    if (kind === 'pitcher') {
+      // Rows Savant shows but doesn't rank are computed rather than scraped.
+      // Each goes just ahead of its expected twin, so the client pairs the two
+      // into a dumbbell the way the batter card pairs HR with xHR; the rest
+      // land at the end of the section they belong to.
+      for (const def of PITCHER_COMPUTED) {
+        if (def.section !== sec.title) continue;
+        const metric = computedMetric(row, def, computed.pitcherDists[def.column] ?? []);
+        if (!metric) continue;
+        const at = def.before ? metrics.findIndex((m) => m.key === def.before) : -1;
+        if (at === -1) metrics.push(metric);
+        else metrics.splice(at, 0, metric);
       }
     }
     if (metrics.length > 0) sections.push({ title: sec.title, metrics });
@@ -521,9 +780,18 @@ function cacheFile(playerId: number, year: number, kind: 'batter' | 'pitcher'): 
   return `percentiles-${kind}-${playerId}-${year}.json`;
 }
 
-/** A cached card is fresh if it's a past season (immutable) or, for the current
- * season, younger than the TTL. */
+/** Bumped whenever the card gains or drops rows. A past season's card is kept
+ * forever, so without this a stored one would be served for good in the shape
+ * it was scraped in — v2 added the pitcher card's actual-vs-expected rows, v3
+ * widened the pitcher card (run value, OBP/ISO/HR pairs, BABIP, curve spin, run
+ * value by pitch group, command rates, swings against, more batted ball). */
+const CARD_VERSION = 3;
+
+/** A cached card is fresh if it was built by this version of the card and is
+ * either a past season (immutable) or, for the current season, younger than the
+ * TTL. */
 function isFresh(p: PlayerPercentiles, year: number): boolean {
+  if (p.version !== CARD_VERSION) return false;
   if (year !== CURRENT_SEASON) return true;
   return Date.now() - new Date(p.updatedAt).getTime() < CURRENT_TTL_MS;
 }
@@ -562,26 +830,44 @@ async function scrape(
   }
   const dist = extractMetricSummary(html)[String(year)] ?? {};
   const defs = kind === 'pitcher' ? PITCHER_SECTIONS : SECTIONS;
-  // Fast Swing % and actual HR are batter-only computed rows; ranked against a
-  // leaderboard. A failed fetch just drops those bars.
-  let fastSwingRates: number[] = [];
-  let hrCounts: number[] = [];
+  // Fast Swing % and actual HR (batter), and every `PITCHER_COMPUTED` row, are
+  // ranked against a leaderboard rather than read off the page. A failed fetch
+  // leaves those distributions empty, which costs their bars a percentile and
+  // nothing else.
+  const computed: Computed = { fastSwingRates: [], hrCounts: [], pitcherDists: {} };
   if (kind === 'batter') {
     try {
-      fastSwingRates = await getFastSwingDist(year);
+      computed.fastSwingRates = await getFastSwingDist(year);
     } catch (err) {
       console.error(`Bat-tracking leaderboard unavailable for ${year}:`, err);
     }
     try {
-      hrCounts = await getHrDist(year);
+      computed.hrCounts = await getHrDist(year);
     } catch (err) {
       console.error(`HR leaderboard unavailable for ${year}:`, err);
+    }
+  } else {
+    // Savant publishes the size of its ranking population beside every metric —
+    // slice each leaderboard to match, so these bars rank against the same
+    // pitchers the ones above and below them do. A board that fails takes only
+    // its own columns down with it, hence one try per board.
+    const n = toNum(dist.xera?.n) ?? toNum(dist.woba?.n);
+    for (const board of Object.keys(POP_COLUMNS) as PopBoard[]) {
+      try {
+        const rows = await getPopRows(board, year);
+        for (const column of POP_COLUMNS[board]) {
+          computed.pitcherDists[column] = popDistribution(rows, n ?? rows.length, column);
+        }
+      } catch (err) {
+        console.error(`Pitcher ${board} leaderboard unavailable for ${year}:`, err);
+      }
     }
   }
   return {
     playerId,
     year,
-    sections: buildSections(row, dist, defs, kind, fastSwingRates, hrCounts),
+    version: CARD_VERSION,
+    sections: buildSections(row, dist, defs, kind, computed),
     updatedAt: new Date().toISOString(),
   };
 }

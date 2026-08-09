@@ -715,7 +715,10 @@ body {
 }
 /* Remove button: a quiet ✕ that turns into a red "Remove?" once armed (the
    first tap arms, the second removes). */
-.order-remove {
+/* The watchlist's one destructive control, shared by the reorder screen and the
+   details view (RemoveButton.tsx) — the same ✕ in both, arming into a red
+   "Remove?" on the first tap. */
+.remove-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -731,12 +734,12 @@ body {
   font-weight: 700;
   cursor: pointer;
 }
-.order-remove:hover,
-.order-remove:focus-visible {
+.remove-btn:hover,
+.remove-btn:focus-visible {
   color: var(--strikeout);
   border-color: var(--strikeout);
 }
-.order-remove.armed {
+.remove-btn.armed {
   color: var(--strikeout);
   border-color: var(--strikeout);
 }
@@ -1392,6 +1395,9 @@ body {
   padding: 1px 6px;
   border-radius: 6px;
   border: 1px solid var(--border);
+  /* Over a range the tag carries a count ("2 HLD"), which the header's flex row
+     will happily break across two lines given the chance. */
+  white-space: nowrap;
 }
 .dec-tag.dec-W {
   color: var(--hit);
@@ -2669,25 +2675,31 @@ body {
 .details-watched svg {
   color: var(--accent);
 }
-/* Remove-from-watchlist button: a quiet outlined pill that takes on the danger
-   red on hover/focus. */
-.details-remove {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 700;
-  padding: 8px 16px;
-  border-radius: var(--control-radius);
-  cursor: pointer;
-}
-.details-remove:hover,
-.details-remove:focus-visible {
-  color: var(--strikeout);
-  border-color: var(--strikeout);
+/* Narrow screens: the three parts of this header don't fit one row, and the
+   headshot + name is by far the widest of them — so wrapping left Back alone on
+   the top row and stranded the watchlist actions below the name, far from the
+   only other control in the view. The two controls keep the first row to
+   themselves instead, in the same left/right pairing they hold when it's wide,
+   and the identity block drops onto its own line under them. Next to the
+   component rather than in the narrow-screen rhythm block at the end of the
+   file, but still after every base rule it overrides. */
+@media (max-width: 640px) {
+  /* The row gap is doing a different job here than the rhythm block's 12px:
+     it's the only thing separating the controls from the player they act on,
+     so the identity block gets room to read as its own thing rather than as a
+     third line of the button row. */
+  .details-head {
+    gap: 20px 12px;
+  }
+  .details-id {
+    order: 1;
+    width: 100%;
+  }
+  /* Back + "On watchlist" + Remove share one 390px row; the label and the
+     button need to sit closer than they do with room to spare. */
+  .details-watch-actions {
+    gap: 8px;
+  }
 }
 .details-photo {
   width: 64px;
@@ -2748,6 +2760,245 @@ body {
   color: var(--muted);
 }
 
+/* The details view's Game Log tab: one row per game of the season, newest
+   first. Wider than the other tabs' reading column — it's a stat table, and on
+   a phone it scrolls sideways inside its own box rather than pushing the page. */
+.details-gamelog {
+  /* Wider than the other tabs' 860px reading column: this one has fourteen
+     columns, and at 860 the last of them fell off the right of a laptop the
+     moment the gutters got any room. */
+  max-width: 1000px;
+  margin: 0 auto;
+}
+.glog-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+.glog-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+  font-size: 13px;
+  color: var(--text);
+}
+/* Gutters tighten with the viewport, as in the summary table: the table
+   overflows on a phone and every pixel of padding is a stat pushed off it. The
+   row height doesn't, though — vertical space costs a scroll, not a column, and
+   this pane scrolls anyway. */
+.glog-table th,
+.glog-table td {
+  padding: 10px clamp(5px, 1.6vw, 14px);
+  line-height: 1.35;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+.glog-table tbody tr:nth-child(even) td,
+.glog-table tbody tr:nth-child(even) .glog-date {
+  background: var(--panel);
+}
+.glog-table tbody tr:hover td,
+.glog-table tbody tr:hover .glog-date {
+  background: var(--panel-2);
+}
+.glog-table thead th {
+  /* Sticky against .glog-scroll, which is the scroll container in both axes —
+     which is the whole reason the Game Log tab reshapes the overlay below. */
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding-top: 9px;
+  padding-bottom: 9px;
+  background: var(--panel-2);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.glog-table .glog-num {
+  width: 1%;
+  min-width: clamp(28px, 4.4vw, 46px);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+/* The date column pins to the left edge as the stats scroll under it — without
+   it a row a few columns in belongs to no game in particular. */
+.glog-table .glog-date {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  width: 1%;
+  text-align: left;
+  font-weight: 700;
+  background: var(--bg);
+  box-shadow: 6px 0 8px -6px rgba(0, 0, 0, 0.5);
+}
+/* The top-left corner: above both the sticky header row and the sticky date
+   column, so neither slides over it. */
+.glog-table thead .glog-date {
+  z-index: 3;
+  background: var(--panel-2);
+}
+.glog-table .glog-opp {
+  text-align: left;
+  color: var(--text);
+  font-weight: 600;
+}
+.glog-at {
+  color: var(--faint);
+  font-weight: 600;
+}
+/* SP/RP beside the date: five innings out of the bullpen is a different night
+   from five as the starter, and the IP column alone can't say which. */
+.glog-role {
+  margin-left: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: var(--faint);
+}
+/* His team's result, not his own — a label, so it keeps the pill shape. */
+.glog-res {
+  margin-left: 6px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+}
+.glog-res-w {
+  color: var(--hit);
+  background: color-mix(in srgb, var(--hit) 16%, transparent);
+}
+.glog-res-l {
+  color: var(--strikeout);
+  background: color-mix(in srgb, var(--strikeout) 16%, transparent);
+}
+/* A game the log has a score for but no result — still being played, or
+   suspended. It carries the same chip so the column doesn't shift, without the
+   colour, which here means won or lost. */
+.glog-res-none {
+  color: var(--muted);
+  background: var(--panel-2);
+}
+/* Where he hit in the order. Muted like the Szn rates: it's the setting for the
+   line, not part of it. */
+.glog-spot {
+  color: var(--muted);
+}
+/* The margin a pitcher inherited. Up/down take the same green and red as the
+   W/L chip — like it, this is the state of the game, not a stat of his. */
+.glog-ent {
+  font-weight: 700;
+}
+.glog-ent-up {
+  color: var(--hit);
+}
+.glog-ent-down {
+  color: var(--strikeout);
+}
+.glog-ent-even {
+  color: var(--muted);
+}
+.glog-dec {
+  font-weight: 800;
+}
+.glog-credit {
+  font-weight: 800;
+}
+/* A zero is context, not a result — dimmed so the eye lands on the games with
+   something in them instead of counting empty columns. */
+.glog-zero {
+  color: var(--faint);
+  font-weight: 500;
+}
+.glog-rate {
+  color: var(--muted);
+}
+/* The season row: the totals over every game in the log, not just the page on
+   screen. Pinned to the bottom of the box the way the summary table's is. */
+.glog-table tfoot th,
+.glog-table tfoot td {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  background: var(--panel-2);
+  border-top: 2px solid var(--border);
+  border-bottom: none;
+  font-weight: 800;
+}
+.glog-table tfoot .glog-date {
+  z-index: 3;
+}
+.glog-total-label {
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+/* A sticky header can only stick to the box that actually scrolls, and the box
+   that scrolls has to be the table's own — its columns overflow a phone, and an
+   overflow-x container scrolls in both axes whether you want it to or not. So
+   the Game Log gives the overlay the shape `.app.summary-mode` gives the summary
+   view: a fixed-height flex column where the head and tabs hold their place and
+   only the table moves. Every other tab leaves the overlay scrolling
+   as it always has. */
+.details-view.gamelog-mode {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  /* No trailing gutter to scroll past — the table ends where the viewport does. */
+  padding-bottom: 20px;
+}
+/* Everything above the table keeps its natural height; only the pane flexes.
+   `width: 100%` is not redundant: both of these center themselves with `margin:
+   0 auto`, and an auto margin on the cross axis suppresses a flex item's
+   stretch — so in this mode alone they shrank to their content and centered
+   *that*, leaving the header and tabs sitting a good 30px right of where every
+   other tab puts them. At full width the max-width centers them as it does in
+   normal flow. */
+.details-view.gamelog-mode > .details-head,
+.details-view.gamelog-mode > .details-tabs {
+  flex: none;
+  width: 100%;
+}
+.details-view.gamelog-mode .details-gamelog {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.details-view.gamelog-mode .glog-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.glog-more {
+  flex: none;
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px 14px;
+  min-height: var(--control-h);
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.glog-more:hover {
+  background: var(--panel-2);
+  color: var(--text);
+}
+
 /* Tabs switching the details view between percentile rankings and splits. */
 .details-tabs {
   display: flex;
@@ -2755,8 +3006,18 @@ body {
   max-width: 680px;
   margin: 0 auto 16px;
   border-bottom: 1px solid var(--border);
+  /* Five tabs overflow a phone. They scroll sideways as one strip rather than
+     wrapping, which would leave the first row's underline floating clear of the
+     rule the active tab is supposed to sit on. */
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.details-tabs::-webkit-scrollbar {
+  display: none;
 }
 .details-tab {
+  flex: none;
+  white-space: nowrap;
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
@@ -3322,9 +3583,16 @@ body {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+/* Bigger than the other cells' content would allow: the headshot column trades
+   its vertical padding for image, so the row height is unchanged (5 + 37 + 5
+   is the old 8 + 31 + 8) and the live-role ring still clears the row border. */
+.summary-table tbody td.sum-img-col {
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
 .sum-photo {
-  width: 31px;
-  height: 31px;
+  width: 37px;
+  height: 37px;
   border-radius: 50%;
   object-fit: cover;
   object-position: top center;
@@ -3336,8 +3604,11 @@ body {
    benched) — matches the nav avatar's corner. */
 .sum-photo-spot {
   position: absolute;
-  top: -3px;
-  right: -3px;
+  /* Tucked closer than the nav's: on a circle the bounding box's corner sits
+     further outside the edge as the image grows, so the bigger headshot needs
+     a smaller offset to keep the pip sitting on the rim. */
+  top: -2px;
+  right: -2px;
   width: 15px;
   height: 15px;
   font-size: 9px;

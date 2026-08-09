@@ -290,6 +290,9 @@ export interface PitcherSeasonStats {
   // for too small a workload to mean anything.
   fip: string | null;
   xfip: string | null;
+  // Statcast's own contact-quality ERA estimator, off Savant's expected-stats
+  // leaderboard rather than derived here. Null on a split, which it doesn't cover.
+  xera: string | null;
 }
 
 /** Where a team places among all 30 in each category. 1 is always the **best
@@ -399,6 +402,81 @@ export interface SeasonStats {
   sb: number;
 }
 
+/**
+ * One game in a player's season game log — the half that says which game it was.
+ * The stats hang off the kind-specific interfaces below.
+ */
+export interface GameLogEntry {
+  gamePk: number;
+  date: string; // "2026-04-07"
+  home: boolean;
+  opponent: string; // "MIL" — the abbreviation, the full name being column-wide
+  opponentId: number;
+  win: boolean | null; // his team's result; null until the game is decided
+  // The final score from his side of it, so the row reads "W 5-3" rather than
+  // needing the reader to know which team was home. Both null when the score
+  // lookup failed or the game hasn't started.
+  teamScore: number | null;
+  opponentScore: number | null;
+  summary: string; // MLB's own one-liner, e.g. "1-4 | 2B, 2 K, RBI"
+}
+
+/** A batter's line for one game. */
+export interface BatterGameLog extends GameLogEntry {
+  // Where he hit in the posted order, 1-9. Null when he wasn't in it — he came
+  // on off the bench, and the posted lineup doesn't say whose spot he took.
+  lineupSpot: number | null;
+  pa: number;
+  ab: number;
+  runs: number;
+  hits: number;
+  doubles: number;
+  triples: number;
+  hr: number;
+  rbi: number;
+  bb: number;
+  so: number;
+  sb: number;
+  // Carried but not shown as columns: with these the season row recomputes OBP
+  // and SLG from the totals, instead of averaging 150 per-game rates.
+  hbp: number;
+  sacFlies: number;
+  totalBases: number;
+  // MLB's game log carries these as the line **through** that game, not the
+  // game's own — a 1-for-4 night reads ".248". That running line is the useful
+  // one (a game's own AVG is just its H/AB restated), so the names say so.
+  seasonAvg: string;
+  seasonObp: string;
+  seasonSlg: string;
+  seasonOps: string;
+}
+
+/** A pitcher's line for one game. */
+export interface PitcherGameLog extends GameLogEntry {
+  // The innings he was in the game for, and his team's margin at his first
+  // pitch (+2 up two, 0 tied, -1 down one). MLB's game log has none of this —
+  // it comes off his season's pitch-level Savant CSV — so all three are null
+  // together when that lookup failed.
+  firstInning: number | null;
+  lastInning: number | null;
+  entryMargin: number | null;
+  decision: PitchingCredit | null;
+  started: boolean;
+  outs: number; // what the season row sums — thirds of an inning don't add up
+  inningsPitched: string; // "5.1"
+  hits: number;
+  runs: number;
+  earnedRuns: number;
+  walks: number;
+  strikeOuts: number;
+  hr: number;
+  hitBatsmen: number;
+  battersFaced: number;
+  pitches: number;
+  strikes: number;
+  seasonEra: string; // his ERA through this game, as with the batter's rates
+}
+
 export interface RosterStatus {
   code: string;
   description: string;
@@ -443,6 +521,7 @@ export interface PlayerPercentiles {
   year: number;
   sections: PercentileSection[];
   updatedAt: string;
+  version?: number;
 }
 
 /** One plate appearance in a season xwOBA series (Savant estimated wOBA). */

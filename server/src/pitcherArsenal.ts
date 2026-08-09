@@ -1,8 +1,8 @@
 import { parse } from 'csv-parse/sync';
 import { readJsonBlob, writeJsonBlob } from './storage.js';
 
-// Keep in sync with hfSea in savant.ts, SEASON in xwoba.ts, CURRENT_SEASON in
-// percentiles.ts.
+// Keep in sync with hfSea in savant.ts, SEASON in xwoba.ts / teamStats.ts /
+// expectedStats.ts, and CURRENT_SEASON in percentiles.ts.
 const SEASON = 2026;
 
 /** A pitch type's season averages, in the same units/convention as the game feed
@@ -54,6 +54,23 @@ export interface BattedBallMix {
   line: number;
 }
 
+/**
+ * When a pitcher was in one game and what he walked into. Nothing in MLB's game
+ * log says either — it has his line and no innings at all — but the pitch-level
+ * CSV this module already downloads stamps every pitch with its inning and the
+ * score before it was thrown, so an appearance is just its first and last row.
+ */
+export interface Appearance {
+  firstInning: number;
+  lastInning: number;
+  /** His team's runs minus the opponent's, at his first pitch: +2 up two, 0
+   *  tied, -1 down one. `fld_score` is the fielding side, i.e. his. */
+  entryMargin: number;
+}
+
+/** A pitcher's appearances, by gamePk. */
+export type Appearances = Map<number, Appearance>;
+
 /** The season arsenal, whole and split by the batter's side. A split is empty
  * (not absent) when he's faced nobody of that hand. */
 export interface SeasonArsenals {
@@ -61,6 +78,7 @@ export interface SeasonArsenals {
   vsRight: Arsenal;
   vsLeft: Arsenal;
   battedBalls: BattedBallMix;
+  appearances: Appearances;
 }
 
 /**
@@ -141,11 +159,13 @@ interface StoredArsenals {
   vsRight: Record<string, SeasonPitch>;
   vsLeft: Record<string, SeasonPitch>;
   battedBalls?: BattedBallMix;
+  appearances?: Record<string, Appearance>;
 }
 
 // v2 carries the batted-ball mix; a v1 blob would deserialize with no fly balls
-// and silently cost every pitcher his xFIP until the TTL expired.
-const storeKey = (pitcherId: number) => `arsenal-${pitcherId}-${SEASON}-v2.json`;
+// and silently cost every pitcher his xFIP until the TTL expired. v3 adds the
+// per-game appearances, which the game log's innings/entry columns read.
+const storeKey = (pitcherId: number) => `arsenal-${pitcherId}-${SEASON}-v3.json`;
 
 const NO_BATTED_BALLS: BattedBallMix = { total: 0, fly: 0, ground: 0, line: 0 };
 
@@ -155,6 +175,7 @@ function toStored(a: SeasonArsenals): StoredArsenals {
     vsRight: Object.fromEntries(a.vsRight),
     vsLeft: Object.fromEntries(a.vsLeft),
     battedBalls: a.battedBalls,
+    appearances: Object.fromEntries(a.appearances),
   };
 }
 
@@ -164,6 +185,9 @@ function fromStored(s: StoredArsenals): SeasonArsenals {
     vsRight: new Map(Object.entries(s.vsRight ?? {})),
     vsLeft: new Map(Object.entries(s.vsLeft ?? {})),
     battedBalls: s.battedBalls ?? NO_BATTED_BALLS,
+    appearances: new Map(
+      Object.entries(s.appearances ?? {}).map(([pk, a]) => [Number(pk), a]),
+    ),
   };
 }
 
@@ -190,6 +214,49 @@ function battedBallMix(records: Record<string, string>[]): BattedBallMix {
     mix.total++;
   }
   return mix;
+}
+
+/**
+ * Each game he pitched in, from the pitch rows themselves. The CSV comes back in
+ * no order this can rely on, so the entry row is the lowest `at_bat_number` /
+ * `pitch_number` of the game rather than the first row seen — and the scores on
+ * it are the ones *before* that pitch (`post_*` are after), which is exactly the
+ * situation he inherited.
+ */
+function appearanceMap(records: Record<string, string>[]): Appearances {
+  const out = new Map<number, Appearance & { atBat: number; pitch: number }>();
+  for (const r of records) {
+    const pk = num(r.game_pk);
+    const inning = num(r.inning);
+    if (pk === null || inning === null) continue;
+    const atBat = num(r.at_bat_number) ?? 0;
+    const pitch = num(r.pitch_number) ?? 0;
+    const margin = (num(r.fld_score) ?? 0) - (num(r.bat_score) ?? 0);
+    const cur = out.get(pk);
+    if (!cur) {
+      out.set(pk, {
+        firstInning: inning,
+        lastInning: inning,
+        entryMargin: margin,
+        atBat,
+        pitch,
+      });
+      continue;
+    }
+    if (inning < cur.firstInning) cur.firstInning = inning;
+    if (inning > cur.lastInning) cur.lastInning = inning;
+    if (atBat < cur.atBat || (atBat === cur.atBat && pitch < cur.pitch)) {
+      cur.atBat = atBat;
+      cur.pitch = pitch;
+      cur.entryMargin = margin;
+    }
+  }
+  return new Map(
+    [...out].map(([pk, a]) => [
+      pk,
+      { firstInning: a.firstInning, lastInning: a.lastInning, entryMargin: a.entryMargin },
+    ]),
+  );
 }
 
 /**
@@ -233,6 +300,7 @@ export async function getSeasonArsenal(pitcherId: number): Promise<SeasonArsenal
     vsRight: aggregate(records.filter((r) => r.stand === 'R')),
     vsLeft: aggregate(records.filter((r) => r.stand === 'L')),
     battedBalls: battedBallMix(records),
+    appearances: appearanceMap(records),
   };
   cache.set(pitcherId, { data, fetchedAt: Date.now() });
   await writeJsonBlob(storeKey(pitcherId), toStored(data));

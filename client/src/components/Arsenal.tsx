@@ -184,9 +184,19 @@ export function RateBar({
   );
 }
 
+/** Which half of his season a game row's strip is drawn from — the hover title,
+ * since the tag reads "Season Results" on every tab. */
+function seasonScope(split: SplitKey): string {
+  return split === 'R' ? 'season, vs RHB' : split === 'L' ? 'season, vs LHB' : 'season';
+}
+
 /** One pitch type as a Savant-style arsenal row: color-coded id + usage and
- * strike bars, then velo / spin / iVB / HB (vs season) + whiff. */
-export function ArsenalRow({ m }: { m: PitchMix }) {
+ * strike bars, then velo / spin / iVB / HB (vs season) + whiff.
+ *
+ * `split` is only read for the results strip's hover title: on a handedness tab
+ * the season figures beside the game's are drawn from that same half of his
+ * season (the server matches them up), and the title says so. */
+export function ArsenalRow({ m, split = 'all' }: { m: PitchMix; split?: SplitKey }) {
   const { abbr, color } = pitchStyle(m.pitchType);
   const share = Math.round(m.share * 100);
   const balls = m.count - m.strikes;
@@ -225,8 +235,15 @@ export function ArsenalRow({ m }: { m: PitchMix }) {
         </div>
       </div>
       {m.seasonPa !== null && (
-        <div className="ars-results" title={`${m.seasonPa} PA ended on this pitch (season)`}>
-          <span className="ars-rtag">Szn vs</span>
+        <div
+          className="ars-results"
+          title={`${m.seasonPa} PA ended on this pitch (${seasonScope(split)})`}
+        >
+          <span className="ars-rtag">Season Results</span>
+          {/* The same strip the details view's Arsenal tab carries, PA first:
+              a split's season sample can be a fraction of the whole, and the
+              rate beside it means little without it. */}
+          <ResultStat label="PA" value={String(m.seasonPa)} />
           <ResultStat label="BA" value={avg3(m.seasonBa)} />
           <ResultStat label="SLG" value={avg3(m.seasonSlg)} />
           <ResultStat label="wOBA" value={avg3(m.seasonWoba)} />
@@ -283,7 +300,7 @@ export function SeasonArsenalRow({ p }: { p: SeasonArsenalPitch }) {
       </div>
       {p.pa !== null && (
         <div className="ars-results" title={`${p.pa} PA ended on this pitch`}>
-          <span className="ars-rtag">Results</span>
+          <span className="ars-rtag">Season Results</span>
           <ResultStat label="PA" value={String(p.pa)} />
           <ResultStat label="BA" value={avg3(p.ba)} />
           <ResultStat label="SLG" value={avg3(p.slg)} />
