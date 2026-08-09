@@ -554,10 +554,6 @@ export function toResearchWindow(v: string | null): ResearchWindow {
 }
 
 const windowLabel = (w: ResearchWindow) => (w === 'season' ? 'Season' : `${w}d`);
-/** Spelt out where there is room for it — the chip and the count line, which are
- *  read as sentences rather than scanned as tabs. */
-const windowPhrase = (w: ResearchWindow) =>
-  w === 'season' ? 'Season' : `Last ${w} days`;
 
 export function ResearchTable({
   rows,
@@ -819,6 +815,29 @@ export function ResearchTable({
           </button>
         ))}
       </div>
+      {/* Out in the bar rather than inside the Filters panel: it decides which
+          games every number on the board is drawn from, which is too large a
+          thing to keep behind a disclosure — and being always visible, it needs
+          no chip to say what it is set to. */}
+      <div className="research-window-row" role="tablist" aria-label="Time span">
+        {RESEARCH_WINDOWS.map((w) => (
+          <button
+            key={String(w)}
+            type="button"
+            role="tab"
+            aria-selected={statWindow === w}
+            className={`research-window-tab${statWindow === w ? ' active' : ''}`}
+            onClick={() => onWindowChange(w)}
+            title={
+              w === 'season'
+                ? 'The whole season to date'
+                : `The last ${w} days of games, ending yesterday`
+            }
+          >
+            {windowLabel(w)}
+          </button>
+        ))}
+      </div>
       <div className="research-positions" role="tablist" aria-label="Position" ref={posRowRef}>
         {POSITIONS.map((p) => (
           <button
@@ -853,7 +872,7 @@ export function ResearchTable({
           <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M20 6 9 17l-5-5" />
           </svg>
-          Qualified
+          <span className="research-toggle-label">Qualified</span>
         </button>
         {/* Each panel's button carries an `on` state whenever the panel holds
             something, open or shut — a collapsed control must never be the
@@ -865,27 +884,30 @@ export function ResearchTable({
           }`}
           aria-expanded={searchOpen}
           onClick={() => setSearchOpen((v) => !v)}
+          title="Search the league by name"
         >
           <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
             <circle cx="11" cy="11" r="7" />
             <path d="m20 20-3.5-3.5" />
           </svg>
-          Search
+          <span className="research-toggle-label">Search</span>
         </button>
         <button
           type="button"
           /* `.on` means the panel *holds* something, whether it is open or
-             shut — a non-default window counts, the same as a stat filter. */
+             shut. The window used to count here; it is out in the bar now and
+             speaks for itself. */
           className={`research-toggle${filtersOpen ? ' active' : ''}${
-            filters.length || statWindow !== 'season' ? ' on' : ''
+            filters.length ? ' on' : ''
           }`}
           aria-expanded={filtersOpen}
           onClick={() => setFiltersOpen((v) => !v)}
+          title="Filter the board by a stat threshold"
         >
           <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
             <path d="M3 5h18l-7 8v6l-4 2v-8Z" />
           </svg>
-          Filters
+          <span className="research-toggle-label">Filters</span>
           {filters.length > 0 && <span className="research-toggle-count">{filters.length}</span>}
         </button>
         <button
@@ -895,12 +917,13 @@ export function ResearchTable({
           }`}
           aria-expanded={columnsOpen}
           onClick={() => setColumnsOpen((v) => !v)}
+          title="Choose which columns to show"
         >
           <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
             <rect x="3" y="4" width="18" height="16" rx="2" />
             <path d="M9 4v16M15 4v16" />
           </svg>
-          Columns
+          <span className="research-toggle-label">Columns</span>
           <span className="research-toggle-count">{columns.length}</span>
         </button>
       </div>
@@ -921,28 +944,6 @@ export function ResearchTable({
               Clear
             </button>
           )}
-        </div>
-      )}
-
-      {filtersOpen && (
-        <div className="research-window-row" role="tablist" aria-label="Time span">
-          {RESEARCH_WINDOWS.map((w) => (
-            <button
-              key={String(w)}
-              type="button"
-              role="tab"
-              aria-selected={statWindow === w}
-              className={`research-window-tab${statWindow === w ? ' active' : ''}`}
-              onClick={() => onWindowChange(w)}
-              title={
-                w === 'season'
-                  ? 'The whole season to date'
-                  : `The last ${w} days of games, ending yesterday`
-              }
-            >
-              {windowLabel(w)}
-            </button>
-          ))}
         </div>
       )}
 
@@ -998,25 +999,8 @@ export function ResearchTable({
       {/* Outside the panel on purpose: the chips are the record of what the
           table is currently showing, so they stay whether the Filters panel is
           open or shut. */}
-      {(filters.length > 0 || statWindow !== 'season') && (
+      {filters.length > 0 && (
         <div className="research-chips">
-          {/* The window reads first and cannot be dismissed by clicking it —
-              every other chip here removes a restriction, and "Season" is not
-              the absence of a window but another one, so this returns to the
-              default rather than to nothing. */}
-          {statWindow !== 'season' && (
-            <button
-              type="button"
-              className="research-chip research-chip-window"
-              onClick={() => onWindowChange('season')}
-              title="Back to the whole season"
-            >
-              {windowPhrase(statWindow)}
-              <span className="research-chip-x" aria-hidden="true">
-                ×
-              </span>
-            </button>
-          )}
           {filters.map((f) => (
             <button
               key={f.id}
@@ -1031,15 +1015,13 @@ export function ResearchTable({
               </span>
             </button>
           ))}
-          {filters.length > 0 && (
-            <button
-              type="button"
-              className="research-clear"
-              onClick={() => setFilters([])}
-            >
-              Clear all
-            </button>
-          )}
+          <button
+            type="button"
+            className="research-clear"
+            onClick={() => setFilters([])}
+          >
+            Clear all
+          </button>
         </div>
       )}
 

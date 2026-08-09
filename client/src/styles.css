@@ -4074,6 +4074,31 @@ body {
 }
 
 /* ---- Active filters ---- */
+/* On a phone the four disclosure buttons go to their icons alone. The bar holds
+   two tab groups and four buttons and was taking four lines before the first
+   name; the words cost roughly half their width and the icons are the part you
+   aim at. The label is *visually* hidden rather than removed, so it still names
+   the button for a screen reader — `display: none` would leave four buttons
+   whose only content is an `aria-hidden` glyph. Each also carries a `title`,
+   which is what a pointer gets on hover. The count badges stay: they are the
+   compact half of the label and say what the panel is holding.
+
+   Its own narrow-screen block, next to the component rather than in the rhythm
+   block at the end of the file, but still after every base rule it overrides. */
+@media (max-width: 640px) {
+  .research-toggle-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}
+
 /* Whose-players switch, ahead of the position pills. The control is the app's
    segmented switch (folded into `.view-switch`/`.view-tab`'s lists above), so
    only its behaviour in the wrapping bar is its own: it never shrinks and never
@@ -4116,15 +4141,16 @@ body {
   color: var(--text);
 }
 
-/* The time-span tabs, at the head of the Filters panel. The control itself is
-   the app's segmented switch — folded into `.view-switch`/`.view-tab`'s selector
-   lists above rather than restyled to match, so it highlights identically by
-   construction. Only its place in the panel stack is its own: it sits directly
-   under the control bar as the first thing in the panel, and scrolls sideways
-   rather than wrapping, the rule the position pills already follow. */
+/* The time-span tabs. In the control bar rather than inside the Filters panel:
+   they decide which games every number on the board is drawn from, which is too
+   large a thing to keep behind a disclosure. The control itself is the app's
+   segmented switch — folded into `.view-switch`/`.view-tab`'s selector lists
+   above rather than restyled to match, so it highlights identically by
+   construction. `flex: none` so it travels intact when the bar wraps, as the
+   scope switch does. */
 .research-window-row {
   display: flex;
-  margin-bottom: 8px;
+  flex: none;
   max-width: max-content;
   overflow-x: auto;
   scrollbar-width: none;
@@ -4134,14 +4160,6 @@ body {
 }
 .research-window-tab {
   flex: none;
-}
-
-/* The window chip reads as a statement of what the table covers rather than as
-   one more restriction to peel off, so it takes the accent the active tab does
-   instead of the neutral chip fill. */
-.research-chip-window {
-  border-color: var(--accent);
-  color: var(--accent);
 }
 
 .research-chips {
