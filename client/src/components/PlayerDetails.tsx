@@ -89,9 +89,16 @@ const EXPECTED_OF: Record<string, string> = {
 };
 
 /**
+ * How far a finger may travel between pointerdown and pointerup and still count
+ * as a tap rather than the start of a scroll. Chromium's own touch-slop figure.
+ */
+const TAP_SLOP = 8;
+
+/**
  * A combined actual/expected row. At rest it reads as a normal row for the
  * EXPECTED stat — a filled bar with a solid bubble at the expected percentile —
- * so the card is calm by default. On hover (mouse) or tap (touch) it reveals the
+ * so the card is calm by default. On hover (mouse) or a deliberate tap (touch,
+ * see `TAP_SLOP`) it reveals the
  * dumbbell: the fill recedes and the ACTUAL percentile appears as a ring joined
  * to the expected bubble by a connector, so the actual↔expected gap (over/under-
  * performance) is on-demand rather than always-on. Values follow suit: expected
@@ -116,6 +123,8 @@ function PairRow({
   const eColor = e !== null ? pctColor(e) : undefined;
   const both = a !== null && e !== null;
   const [revealed, setRevealed] = useState(false);
+  // Where a touch went down, so pointerup can tell a tap from a scroll.
+  const tapOrigin = useRef<{ x: number; y: number } | null>(null);
   const staggered = revealed && both && Math.abs(a - e) < overlapPct;
   const title =
     `${actual.label} — actual ${a ?? '–'}th pct (${actual.value ?? '–'}), ` +
@@ -126,9 +135,26 @@ function PairRow({
       className={`pct-row pct-row-pair${revealed ? ' is-revealed' : ''}`}
       title={title}
       // Mouse hovers reveal; touch/pen taps toggle (hover doesn't exist there).
+      // The toggle waits for pointerup within TAP_SLOP of where the finger went
+      // down: the card is a list of rows inside a scroller, and toggling on
+      // pointerdown meant every flick that happened to start on a row flipped it.
       onPointerEnter={(ev) => ev.pointerType === 'mouse' && setRevealed(true)}
       onPointerLeave={(ev) => ev.pointerType === 'mouse' && setRevealed(false)}
-      onPointerDown={(ev) => ev.pointerType !== 'mouse' && setRevealed((r) => !r)}
+      onPointerDown={(ev) => {
+        tapOrigin.current =
+          ev.pointerType === 'mouse' ? null : { x: ev.clientX, y: ev.clientY };
+      }}
+      onPointerUp={(ev) => {
+        const start = tapOrigin.current;
+        tapOrigin.current = null;
+        if (!start) return;
+        const moved = Math.hypot(ev.clientX - start.x, ev.clientY - start.y);
+        if (moved <= TAP_SLOP) setRevealed((r) => !r);
+      }}
+      // A scroll the browser takes over cancels the pointer without an up.
+      onPointerCancel={() => {
+        tapOrigin.current = null;
+      }}
     >
       {/* At rest the row is the expected stat, so it wears the expected label
           (e.g. "xwOBA"); revealing the dumbbell promotes the actual, so the
