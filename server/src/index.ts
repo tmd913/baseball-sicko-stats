@@ -10,11 +10,20 @@ import { getXwobaSeries } from './xwoba.js';
 import { getBatterGameLog, getPitcherGameLog } from './gameLog.js';
 import { getSeasonArsenal } from './pitcherArsenal.js';
 import { getPitcherXera } from './expectedStats.js';
+import { getResearch } from './research.js';
 import type { Arsenal } from './pitcherArsenal.js';
 import { getLeaguePitchAverage } from './pitchLeague.js';
 import type { SeasonArsenalPitch } from './types.js';
 import { getPitcherStats, getPlayerStats, getSeasonPlayers, resolveVideoUrl } from './mlbStats.js';
-import { addPlayer, getWatchlist, removePlayer, reorderPlayers } from './store.js';
+import {
+  addPlayer,
+  getPrefs,
+  getWatchlist,
+  removePlayer,
+  reorderPlayers,
+  setHideInjured,
+  setResearchColumns,
+} from './store.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -180,6 +189,76 @@ app.get(
 );
 
 // A player's Savant-style Statcast percentile-ranking card, for the details view.
+// Saved per-user preferences. One request on boot, alongside the watchlist —
+// they live on the same item, so this is a read the client already pays for.
+app.get(
+  '/api/prefs',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    res.json(await getPrefs(userId(req)));
+  }),
+);
+
+/** A column key as the client writes them: short, alphanumeric identifiers.
+ *  Validated for *shape* only — which keys exist is the client's vocabulary,
+ *  and it drops any it doesn't know when reading them back. This is here to
+ *  keep the item from growing junk, not to police the column list. */
+const COLUMN_KEY_RE = /^[A-Za-z0-9]{1,40}$/;
+const MAX_COLUMNS = 100;
+
+app.put(
+  '/api/prefs/research-columns',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const { kind, keys } = (req.body ?? {}) as { kind?: unknown; keys?: unknown };
+    if (kind !== 'batter' && kind !== 'pitcher') {
+      res.status(400).json({ error: "kind must be 'batter' or 'pitcher'" });
+      return;
+    }
+    // null is "back to the defaults", which is stored as the absence of an
+    // entry rather than as a copy of today's default list.
+    if (keys !== null && !Array.isArray(keys)) {
+      res.status(400).json({ error: 'keys must be an array of column keys, or null' });
+      return;
+    }
+    if (
+      Array.isArray(keys) &&
+      (keys.length > MAX_COLUMNS ||
+        !keys.every((k) => typeof k === 'string' && COLUMN_KEY_RE.test(k)))
+    ) {
+      res.status(400).json({ error: 'keys must be up to 100 short alphanumeric column keys' });
+      return;
+    }
+    res.json(await setResearchColumns(userId(req), kind, keys as string[] | null));
+  }),
+);
+
+app.put(
+  '/api/prefs/hide-injured',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const { hide } = (req.body ?? {}) as { hide?: unknown };
+    if (typeof hide !== 'boolean') {
+      res.status(400).json({ error: 'hide must be a boolean' });
+      return;
+    }
+    res.json(await setHideInjured(userId(req), hide));
+  }),
+);
+
+// Every player in the league on one board, season to date — the research
+// table. Unlike /api/report this is watchlist-independent and season-wide: it
+// is a league leaderboard to sort and filter, not a read on the range in view.
+app.get(
+  '/api/research',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const kind = req.query.type === 'pitcher' ? 'pitcher' : 'batter';
+    const { season, rows } = await getResearch(kind);
+    res.json({ season, kind, rows });
+  }),
+);
+
 app.get(
   '/api/percentiles/:playerId',
   requireUser,

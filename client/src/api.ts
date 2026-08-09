@@ -6,8 +6,10 @@ import type {
   PitcherSeasonStats,
   PlayerPercentiles,
   PlayerReport,
+  ResearchRow,
   SeasonPlayer,
   SeasonStats,
+  UserPrefs,
   WatchPlayer,
   XwobaSeries,
 } from './types';
@@ -119,6 +121,34 @@ export const api = {
     end: string,
   ): Promise<{ start: string; end: string; players: PlayerReport[] }> {
     return request(`/api/report?start=${start}&end=${end}`);
+  },
+  // What this user has customised, saved server-side against their id. One
+  // request on boot; the research board's columns are the only entry so far.
+  async prefs(): Promise<UserPrefs> {
+    return request('/api/prefs');
+  },
+  // `keys: null` means "back to the defaults", stored as no entry at all — so
+  // a reset follows the defaults as they change rather than pinning today's.
+  async saveResearchColumns(kind: PlayerKind, keys: string[] | null): Promise<UserPrefs> {
+    return request('/api/prefs/research-columns', {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ kind, keys }),
+    });
+  },
+  async saveHideInjured(hide: boolean): Promise<UserPrefs> {
+    return request('/api/prefs/hide-injured', {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ hide }),
+    });
+  },
+  // Every player in the league on one board, season to date — the research
+  // table. Watchlist-independent and season-wide, so it takes no date range.
+  async research(
+    kind: PlayerKind,
+  ): Promise<{ season: number; kind: PlayerKind; rows: ResearchRow[] }> {
+    return request(`/api/research?type=${kind}`);
   },
   async percentiles(
     playerId: number,
