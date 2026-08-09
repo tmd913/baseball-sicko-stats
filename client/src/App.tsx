@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api';
 import { SignOutButton } from './auth';
 import { playerKey } from './types';
-import type { PlayerKind, PlayerReport, SeasonPlayer, WatchPlayer } from './types';
+import type { PlayerKind, PlayerReport, ResearchRow, SeasonPlayer, WatchPlayer } from './types';
 import { isInjured } from './lib';
 import { PlayerAdder } from './components/PlayerAdder';
 import { PlayerOrderEditor } from './components/PlayerOrderEditor';
@@ -10,6 +10,14 @@ import { PlayerCard } from './components/PlayerCard';
 import { PitcherCard } from './components/PitcherCard';
 import { LiveFeed } from './components/LiveFeed';
 import { SummaryTable } from './components/SummaryTable';
+import {
+  ResearchTable,
+  isDefaultColumns,
+  researchKindFor,
+  toColumnKeys,
+  toResearchPos,
+} from './components/ResearchTable';
+import type { ResearchPos } from './components/ResearchTable';
 import { simulateLiveDay } from './simulate';
 import { PlayerDetails } from './components/PlayerDetails';
 import { DateRangePicker } from './components/DateRangePicker';
@@ -180,10 +188,14 @@ export default function App() {
   // most-recent-first stream of individual at-bats ('feed') for following live
   // games, or a full-page stat table over the range ('summary'). Seeded from the
   // URL so a reload/shared link restores the same view.
-  const [view, setView] = useState<'players' | 'feed' | 'summary'>(() => {
+  // 'research' is the odd one out: the other three are reads on the watchlist
+  // over the date range, while research is the whole league over the season. It
+  // hides the date row for that reason, and is reachable with nothing watched —
+  // finding players to watch is half of what it's for.
+  const [view, setView] = useState<'players' | 'feed' | 'summary' | 'research'>(() => {
     const v = initialParams.get('view');
-    // Summary is the default view; players/feed are opted into explicitly.
-    return v === 'players' || v === 'feed' ? v : 'summary';
+    // Summary is the default view; the rest are opted into explicitly.
+    return v === 'players' || v === 'feed' || v === 'research' ? v : 'summary';
   });
   // Which half of the watchlist the players view is showing. Its own tab row,
   // since a batter card and a pitcher card have nothing in common to scan down.
@@ -201,9 +213,115 @@ export default function App() {
   // choice is the user's, since a card can still show what he did before he got
   // hurt. In the URL like every other view setting — the client has no
   // localStorage, so this is where a preference lives.
-  const [hideInjured, setHideInjured] = useState<boolean>(
+  const [hideInjured, setHideInjuredState] = useState<boolean>(
     () => initialParams.get('hideil') === '1',
   );
+  // A URL that says nothing about this is *unspecified*, not "off" — that's
+  // what lets the saved preference fill it in below. `hideil=1` is the only
+  // thing the param can say, so an explicit off is indistinguishable from
+  // silence; a link therefore only ever turns the filter on.
+  const hideInjuredFromUrl = initialParams.get('hideil') === '1';
+  // Set once the user works the toggle, so a preference arriving late can't
+  // undo a choice they just made.
+  const hideInjuredTouched = useRef(false);
+  const setHideInjured = useCallback((hide: boolean) => {
+    hideInjuredTouched.current = true;
+    setHideInjuredState(hide);
+    api
+      .saveHideInjured(hide)
+      .catch((e: Error) => console.error('saving hide-injured failed:', e.message));
+  }, []);
+  // The research board, fetched per kind the first time that tab is opened and
+  // kept for the session: it's the whole league in one blob, season-to-date, and
+  // the server caches it for six hours — re-fetching on every tab switch would
+  // buy nothing but a spinner.
+  // Which pill the research board is on. Its own selector rather than the
+  // watchlist's `kind` tabs, because the row it drives is both — Batters and
+  // Pitchers are two of its eleven entries, and the rest are slices of one or
+  // the other, so the board is a consequence of the position rather than a
+  // second choice beside it. In the URL like every other tab in the app.
+  const [researchPos, setResearchPos] = useState<ResearchPos>(() =>
+    toResearchPos(initialParams.get('pos')),
+  );
+  const researchKind = researchKindFor(researchPos);
+  // Which columns the research table shows, per board — absent means that
+  // board's defaults. Per board because a batter's columns and a pitcher's are
+  // different vocabularies; the URL carries only the one on screen (see below).
+  // A `cols=` on the opening URL names one board — the one `pos=` selects.
+  // Remembered so the saved preferences that arrive a moment later don't
+  // overwrite it: a link someone was handed should show what it says.
+  const urlColumns = useMemo(() => {
+    const kind = researchKindFor(toResearchPos(initialParams.get('pos')));
+    const keys = toColumnKeys(kind, initialParams.get('cols'));
+    return keys ? { kind, keys } : null;
+  }, [initialParams]);
+  const [researchCols, setResearchCols] = useState<Partial<Record<PlayerKind, string[]>>>(
+    () => (urlColumns ? { [urlColumns.kind]: urlColumns.keys } : {}),
+  );
+
+  // The user's saved columns, fetched once. Applied only to boards the URL
+  // didn't already speak for, and only where the user hasn't already changed
+  // something in the seconds before this landed.
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .prefs()
+      .then((prefs) => {
+        if (cancelled) return;
+        if (!hideInjuredTouched.current && !hideInjuredFromUrl && prefs.hideInjured) {
+          setHideInjuredState(true);
+        }
+        setResearchCols((prev) => {
+          const next = { ...prev };
+          for (const kind of ['batter', 'pitcher'] as const) {
+            if (next[kind] || urlColumns?.kind === kind) continue;
+            const saved = toColumnKeys(kind, prefs.researchColumns?.[kind]?.join(',') ?? null);
+            if (saved) next[kind] = saved;
+          }
+          return next;
+        });
+      })
+      // A preference is not worth an error banner over: the board opens on its
+      // defaults, which is exactly what a user with nothing saved gets.
+      .catch((e: Error) => console.error('preferences unavailable:', e.message));
+    return () => {
+      cancelled = true;
+    };
+  }, [urlColumns, hideInjuredFromUrl]);
+
+  // Saving is debounced because the picker is a row of checkboxes — turning a
+  // group on is one intent and a dozen state changes, and each would otherwise
+  // be its own read-modify-write against the user's item.
+  const saveColsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (saveColsTimer.current) clearTimeout(saveColsTimer.current);
+  }, []);
+  const setResearchColumns = useCallback(
+    (keys: string[] | null) => {
+      setResearchCols((prev) => {
+        const next = { ...prev };
+        if (keys) next[researchKind] = keys;
+        else delete next[researchKind];
+        return next;
+      });
+      if (saveColsTimer.current) clearTimeout(saveColsTimer.current);
+      saveColsTimer.current = setTimeout(() => {
+        api
+          .saveResearchColumns(researchKind, keys)
+          .catch((e: Error) => console.error('saving columns failed:', e.message));
+      }, 600);
+    },
+    [researchKind],
+  );
+
+  const [research, setResearch] = useState<Partial<Record<PlayerKind, ResearchRow[]>>>({});
+  // Shared across both boards (see the prop's comment in ResearchTable), so it
+  // survives the remount that switching board causes. Transient like the page's
+  // other filters — deliberately not in the URL.
+  const [researchQualified, setResearchQualified] = useState(false);
+  const [researchLoading, setResearchLoading] = useState(false);
+  const [researchError, setResearchError] = useState<string | null>(null);
+
   // The how-to page (settings menu → How to use, and the empty state's button).
   // In the URL like every other view, so it survives a reload and can be linked
   // to — which is the only way to hand someone the guide directly.
@@ -268,6 +386,15 @@ export default function App() {
     if (detailsKey) p.set('player', detailsKey);
     if (view !== 'summary') p.set('view', view);
     if (playerKind !== 'batter') p.set('kind', playerKind);
+    // Only meaningful on the research view, and 'batters' is its default.
+    if (view === 'research' && researchPos !== 'batters') p.set('pos', researchPos);
+    // The column set of the board on screen, and only once it differs from that
+    // board's defaults — otherwise every link would carry twenty stat keys to
+    // say "the usual". `pos=` is what tells a reader which board they describe.
+    const cols = researchCols[researchKind];
+    if (view === 'research' && cols && !isDefaultColumns(researchKind, cols)) {
+      p.set('cols', cols.join(','));
+    }
     if (simulate) p.set('sim', '1');
     if (hideInjured) p.set('hideil', '1');
     if (helpOpen) p.set('help', '1');
@@ -280,10 +407,43 @@ export default function App() {
     detailsKey,
     view,
     playerKind,
+    researchPos,
+    researchCols,
+    researchKind,
     simulate,
     hideInjured,
     helpOpen,
   ]);
+
+  // Fetch the research board for the kind on screen, once per kind. Lazy —
+  // nothing here is needed until the tab is opened, and it's a megabyte of
+  // league-wide season stats.
+  useEffect(() => {
+    // Already loaded: nothing to fetch, but clear an error left over from the
+    // other kind — it belongs to that board, not this one.
+    if (research[researchKind]) {
+      setResearchError(null);
+      return;
+    }
+    if (view !== 'research') return;
+    let cancelled = false;
+    setResearchLoading(true);
+    setResearchError(null);
+    api
+      .research(researchKind)
+      .then((r) => {
+        if (!cancelled) setResearch((prev) => ({ ...prev, [r.kind]: r.rows }));
+      })
+      .catch((e: Error) => {
+        if (!cancelled) setResearchError(e.message);
+      })
+      .finally(() => {
+        if (!cancelled) setResearchLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [view, researchKind, research]);
 
   // Load the season's player list once, for search/autocomplete.
   useEffect(() => {
@@ -361,14 +521,24 @@ export default function App() {
   // the at-bat/on-deck/on-base highlights track the game in near-real-time.
   // Only real live games drive polling — a simulated one has nothing to fetch.
   const hasRealLiveGame = reports.some((r) => r.games.some((g) => g.status.state === 'live'));
-  // The feed view is always available: besides live at-bats it lists the day's
-  // completed and not-yet-started games, so it's useful before first pitch too.
-  const showViewToggle = displayReports.length > 0;
+  // The three watchlist views need something watched to be worth opening; the
+  // feed among them, since besides live at-bats it lists the day's completed and
+  // not-yet-started games. Research needs nothing, so the row itself always
+  // renders — with an empty watchlist it's the lone Research pill, which is the
+  // one tab a new user can actually use.
+  const showWatchlistViews = displayReports.length > 0;
+  const showViewToggle = true;
   // The roster search belongs to the players view, but it's also the only way
   // out of an empty watchlist — and with nothing watched the view tabs are
   // hidden too, so a new user on the default summary view would otherwise have
   // no search bar *and* no way to reach the view that has one.
-  const showAdder = view === 'players' || (watchlistLoaded && watchlist.length === 0);
+  // …but never on the research board, which carries its own search over the
+  // whole league. A player is added from there through his details overlay,
+  // which is a click on his name away — two search boxes side by side, one
+  // over the watchlist roster and one over the table below it, would be a
+  // question about which one you're in.
+  const showAdder =
+    view !== 'research' && (view === 'players' || (watchlistLoaded && watchlist.length === 0));
   useEffect(() => {
     if (!hasRealLiveGame) return;
     const t = setInterval(() => loadReport(true), 20_000);
@@ -697,7 +867,11 @@ export default function App() {
   };
 
   return (
-    <div className={`app${view === 'summary' ? ' summary-mode' : ''}`}>
+    <div
+      className={`app${view === 'summary' ? ' summary-mode' : ''}${
+        view === 'research' ? ' research-mode' : ''
+      }`}
+    >
       <header className="app-header">
         <div className="brand">
           <div className="brand-mark" aria-hidden="true">
@@ -761,7 +935,7 @@ export default function App() {
                   className={`settings-toggle${hideInjured ? ' active' : ''}`}
                   role="menuitemcheckbox"
                   aria-checked={hideInjured}
-                  onClick={() => setHideInjured((v) => !v)}
+                  onClick={() => setHideInjured(!hideInjured)}
                   title="Keep players on the IL off the players view — the summary table always leaves them off"
                 >
                   <span className="settings-dot" aria-hidden="true" />
@@ -794,6 +968,10 @@ export default function App() {
             )}
           </div>
         </div>
+        {/* The research board is season-to-date and watchlist-independent, so
+            the range picker has nothing to act on there — left up, it would
+            invite a click that changes nothing on the page in front of you. */}
+        {view !== 'research' && (
         <div className="date-control">
           <div className="date-row">
             {/* Desktop: a row of preset pills. On phones this row is hidden and
@@ -849,6 +1027,7 @@ export default function App() {
             />
           </div>
         </div>
+        )}
       </header>
 
       {/* Both tiers of tabs share one row when there's room for them, the second
@@ -861,7 +1040,9 @@ export default function App() {
         <div className="view-bar">
           {showViewToggle && (
             <div className="view-bar-tabs">
-              <div className="view-switch" role="tablist" aria-label="Watchlist view">
+              <div className="view-switch" role="tablist" aria-label="View">
+                {showWatchlistViews && (
+                  <>
                 <button
                   type="button"
                   role="tab"
@@ -900,11 +1081,28 @@ export default function App() {
                 >
                   Feed
                 </button>
+                  </>
+                )}
+                {/* Always present, watchlist or not — the league board is the
+                    one page that doesn't depend on what you're tracking. */}
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={view === 'research'}
+                  className={`view-tab${view === 'research' ? ' active' : ''}`}
+                  onClick={() => {
+                    setBackView(null);
+                    setEditMode(false);
+                    setView('research');
+                  }}
+                >
+                  Research
+                </button>
               </div>
               {/* Second tier: Batters / Pitchers. Beside the view tabs when
                   the row has room for both, wrapping under them when it
                   does not. */}
-              {kindTabs}
+              {view !== 'research' && kindTabs}
             </div>
           )}
           {showAdder && !adderBelowTabs && playersBar}
@@ -913,7 +1111,7 @@ export default function App() {
 
       {error && <div className="error-banner">⚠ {error}</div>}
 
-      {watchlistLoaded && watchlist.length === 0 && !error && (
+      {watchlistLoaded && watchlist.length === 0 && !error && view !== 'research' && (
         <div className="empty-state">
           <p className="empty-title">Your watchlist is empty</p>
           <p>
@@ -928,11 +1126,11 @@ export default function App() {
         </div>
       )}
 
-      {showLoading && reports.length === 0 && (
+      {showLoading && reports.length === 0 && view !== 'research' && (
         <div className="loading">Loading events…</div>
       )}
 
-      {showLoading && reports.length > 0 && (
+      {showLoading && reports.length > 0 && view !== 'research' && (
         <div className="refreshing" role="status">
           <span className="spinner" aria-hidden="true" />
           Updating…
@@ -942,7 +1140,7 @@ export default function App() {
       {/* Everyone the active view would show is on the IL. Without this the
           summary is a header over a Total row of zeros, and the players view an
           expanse of nothing with no hint that a setting is doing it. */}
-      {displayReports.length > 0 && kindCards.length === 0 && !editMode && (
+      {view !== 'research' && displayReports.length > 0 && kindCards.length === 0 && !editMode && (
         <div className="empty-state">
           <p className="empty-title">Nothing to show — everyone here is on the IL</p>
           <p>
@@ -953,7 +1151,26 @@ export default function App() {
         </div>
       )}
 
-      {view === 'summary' ? (
+      {view === 'research' ? (
+        <ResearchTable
+          /* Keyed on the board, not the pill: moving between positions of the
+             same kind (SS → OF) keeps the sort and the filters, while crossing
+             to the other board (OF → SP) starts fresh rather than carrying a
+             batter's column vocabulary onto a pitcher's table. */
+          key={researchKind}
+          rows={research[researchKind] ?? []}
+          kind={researchKind}
+          loading={researchLoading && !research[researchKind]}
+          error={researchError}
+          pos={researchPos}
+          onPosChange={setResearchPos}
+          columnKeys={researchCols[researchKind] ?? null}
+          onColumnsChange={setResearchColumns}
+          qualifiedOnly={researchQualified}
+          onQualifiedChange={setResearchQualified}
+          onOpenDetails={setDetailsKey}
+        />
+      ) : view === 'summary' ? (
         kindCards.length > 0 && (
           <SummaryTable
             reports={kindCards}

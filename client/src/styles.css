@@ -3403,9 +3403,12 @@ body {
 
 /* ---- Summary view: a full-page, scroll-locked stat table ---- */
 
-/* In summary mode the page itself doesn't scroll — the app becomes a fixed-
-   height flex column (header + view bar + table), and only the table scrolls. */
-.app.summary-mode {
+/* In summary mode — and on the research board, which is the same wide table
+   over the league instead of the watchlist — the page itself doesn't scroll:
+   the app becomes a fixed-height flex column (header + view bar + table), and
+   only the table scrolls. */
+.app.summary-mode,
+.app.research-mode {
   height: 100dvh;
   padding-bottom: 14px;
   display: flex;
@@ -3783,6 +3786,462 @@ body {
 }
 .settings-toggle.active .settings-dot {
   background: var(--accent);
+}
+
+/* ---- Research view: the league board ---------------------------------------
+   The same wide, scroll-locked stat table the summary view uses — .summary-table
+   and its sticky header / sticky headshot column are shared outright, since the
+   two are one object cut two ways (the watchlist over a range, the league over a
+   season). Only what differs is styled here: the filter bar above it, the
+   sortable headers, and the Statcast group at the right end. */
+
+.research-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+/* Grows to its content but never past the height left below the controls, and
+   scrolls in both axes past that — the column count always overflows a phone. */
+.research-scroll {
+  flex: 1;
+  min-height: 0;
+  max-height: 100%;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  background: var(--bg);
+}
+
+/* ---- Position row ---- */
+/* Both boards and every position in one row. It scrolls sideways rather than
+   wrapping: this view is a table that wants every pixel of height, and a
+   control that reflows to three lines on a phone pushes the first name below
+   the fold. `flex: none` on the pills is what makes them overflow instead of
+   being squeezed to fit.
+
+   The row itself is `flex: 0 1 auto` — no grow, so it is only as wide as its
+   eleven pills and the search, filter and count controls can share its line on
+   a desktop; shrink allowed, so once the line is too narrow to hold all four it
+   wraps, takes the width on its own and scrolls what doesn't fit. (A flex item
+   with `overflow-x: auto` has an automatic minimum size of 0, which is what
+   lets it shrink past its content instead of forcing the wrap wider.) */
+.research-positions {
+  flex: 0 1 auto;
+  display: flex;
+  gap: 3px;
+  align-items: center;
+  min-height: var(--control-h);
+  padding: 3px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+}
+.research-positions::-webkit-scrollbar {
+  display: none;
+}
+/* The same pill as a view/kind tab, so the page's three tiers of tabs are one
+   control — but sized to a two-character label, since eleven of them share a
+   phone's width. */
+.research-pos-tab {
+  flex: none;
+  padding: 6px 11px;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  border-radius: var(--control-radius-inner);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.research-pos-tab:hover {
+  color: var(--text);
+}
+.research-pos-tab.active {
+  color: var(--bg);
+  background: var(--accent);
+}
+.research-pos-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* ---- Disclosure bar: Search and Filters, each behind its own button ---- */
+.research-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.research-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--control-h);
+  padding: 0 12px;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.research-toggle:hover {
+  color: var(--text);
+}
+/* `.active` is "the panel is open"; `.on` is "the panel holds something",
+   which has to read whether it's open or not — a collapsed control must never
+   be the only place a filter lives. */
+.research-toggle.active {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.research-toggle.on {
+  color: var(--accent);
+  border-color: rgba(56, 189, 248, 0.5);
+  background: rgba(56, 189, 248, 0.12);
+}
+.research-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.research-toggle-count {
+  min-width: 17px;
+  padding: 1px 4px;
+  color: var(--bg);
+  background: var(--accent);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+}
+
+/* An opened panel. Both take the same row so opening either costs one line. */
+.research-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.research-panel input,
+.research-panel select {
+  height: var(--control-h);
+  padding: 0 10px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  font: inherit;
+  font-size: 13px;
+}
+.research-panel input:focus-visible,
+.research-panel select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.research-search {
+  flex: 1 1 200px;
+  min-width: 140px;
+  max-width: 360px;
+}
+/* The stat select carries full stat names ("Expected slugging percentage"), so
+   it needs the room; the operator and the threshold hug their content. */
+.research-filter-add > select:first-of-type {
+  flex: 1 1 180px;
+  max-width: 240px;
+}
+.research-op {
+  width: 56px;
+}
+.research-value {
+  width: 84px;
+  font-variant-numeric: tabular-nums;
+}
+.research-add {
+  height: var(--control-h);
+  padding: 0 14px;
+  color: var(--bg);
+  background: var(--accent);
+  border: 1px solid transparent;
+  border-radius: var(--control-radius);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.research-add:disabled {
+  color: var(--muted);
+  background: var(--panel);
+  border-color: var(--border);
+  cursor: default;
+}
+
+/* ---- Column picker ---- */
+/* A block panel rather than the single wrapping row the other two panels are:
+   it holds forty checkboxes in four labelled runs, and laying those out as one
+   flow would lose the runs that make them findable. */
+.research-panel.research-columns {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+}
+.research-colgroup-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.research-colgroup-head button {
+  padding: 2px 8px;
+  color: var(--muted);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius-inner);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.research-colgroup-head button:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.research-colgroup-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+/* The checkbox itself is hidden and the label is the control — a grid of forty
+   native boxes is twice the height and half as scannable, and the chip can
+   carry the on/off state in its own colour. It stays a real <label> around a
+   real <input>, so it keeps the keyboard and screen-reader behaviour. */
+.research-col-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius-inner);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+.research-col-chip input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.research-col-chip:hover {
+  color: var(--text);
+}
+.research-col-chip.on {
+  color: var(--accent);
+  background: rgba(56, 189, 248, 0.12);
+  border-color: rgba(56, 189, 248, 0.45);
+}
+/* Focus lands on the hidden input, so the ring has to be drawn by the label. */
+.research-col-chip:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.research-cols-reset {
+  align-self: flex-start;
+}
+
+/* ---- Active filters ---- */
+.research-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+/* A chip is a label you can dismiss rather than a control you operate, but it
+   is still clicked — so it takes the control radius, per the app-wide rule that
+   only pure labels stay fully round. */
+.research-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  color: var(--accent);
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  border-radius: var(--control-radius);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.research-chip:hover {
+  background: rgba(56, 189, 248, 0.2);
+}
+.research-chip-x {
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0.75;
+}
+.research-clear {
+  padding: 5px 9px;
+  color: var(--muted);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.research-clear:hover {
+  color: var(--text);
+}
+/* How many rows survived the filters, and out of how many — without it a short
+   table reads as a short league rather than a tight filter. It sits directly
+   above the table rather than up in the control bar, so it reads as that
+   table's caption: the number describes what is under it, not what the
+   controls are set to. */
+.research-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+/* ---- Table ---- */
+/* Team and position hug their content; both scroll away with the name, only the
+   headshot staying pinned (as in the summary table, so stat columns get the
+   room on a phone). */
+.research-table .research-team-col,
+.research-table .research-pos-col {
+  width: 1%;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+}
+/* The whole header cell is the hit target, so the button fills it rather than
+   sitting as a smaller shape inside a cell that also looks clickable. */
+.research-table th.research-sort {
+  padding: 0;
+}
+.research-table th.research-sort button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  width: 100%;
+  /* Matches the padding the shared th rule gives every other cell, so the
+     header text lines up with the numbers under it. */
+  padding: 8px clamp(5px, 1.6vw, 13px);
+  color: inherit;
+  background: none;
+  border: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  /* Not `inherit`: the shared header rule uppercases everything, which is right
+     for AVG and RBI and wrong for every Statcast label — xwOBA, xBA, xERA and
+     Brl% are mixed-case stat names, and the app writes them that way
+     everywhere else. The labels here are already capitalised as they should
+     read, so the transform is simply off. */
+  text-transform: none;
+  cursor: pointer;
+}
+.research-table th.research-sort button:hover {
+  color: var(--text);
+}
+.research-table th.research-sort.active button {
+  color: var(--accent);
+}
+.research-table th.research-sort button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+/* Reserved whether or not this column is the sorted one, so clicking a header
+   doesn't shove every column to its right along by the width of an arrow. */
+.research-arrow {
+  display: inline-block;
+  min-width: 8px;
+  font-size: 9px;
+}
+/* ---- Sticky player name, on a wide enough screen ----
+   The summary table pins only the headshot and lets the name scroll away,
+   because there a phone needs every pixel for stats. This table is three times
+   as wide, so by the time you have scrolled out to Chase% or FB% there is no
+   way to tell whose row you are reading — the name is worth its width here.
+
+   The 63px offset is the headshot cell exactly: a 37px photo (border-box, so
+   its border is inside that) between two 13px gutters. Those gutters are
+   `clamp(5px, 1.6vw, 13px)`, which only reaches 13px from ~813px of viewport
+   up — which is the other half of why this starts at 820px rather than lower.
+   Narrower than that the offset would be wrong *and* the pinned pair would eat
+   two fifths of the screen, so the name goes back to scrolling away. */
+@media (min-width: 820px) {
+  .research-table .sum-name-col {
+    position: sticky;
+    left: 63px;
+    z-index: 1;
+  }
+  /* Above both the sticky header and the sticky column, as the corner cell. */
+  .research-table thead .sum-name-col {
+    z-index: 3;
+  }
+  /* The soft edge marks where the pinned block ends, so it moves out to the
+     name — left on the headshot it would draw a seam through the middle of a
+     pair that scrolls as one. */
+  .research-table .sum-img-col {
+    box-shadow: none;
+  }
+  .research-table .sum-name-col {
+    box-shadow: 6px 0 8px -6px rgba(0, 0, 0, 0.5);
+  }
+}
+
+/* The column being sorted on is tinted down its whole length — on a table this
+   wide the header alone is off screen by the time you've scrolled to the rows
+   you're reading. */
+.research-table td.research-sorted {
+  color: var(--accent);
+}
+/* The Statcast half of the row is a different kind of number from the counting
+   stats beside it — what the contact was worth, not what it went for — so the
+   seam between them is drawn, and the group named in the header's own colour.
+   Deliberately *not* a wash behind the cells: the zebra stripe and the row
+   hover are both defined later in the file and would win on half the rows,
+   leaving a tint that flickers down the table rather than marking a group. */
+.research-table .research-statcast-start {
+  border-left: 1px solid var(--border);
+}
+.research-table thead th.research-statcast button {
+  color: var(--accent);
+  opacity: 0.75;
+}
+.research-table thead th.research-statcast.active button {
+  opacity: 1;
 }
 
 /* ---- View switch (Players / Feed) ---- */

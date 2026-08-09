@@ -2,6 +2,7 @@ import { getDay } from './savant.js';
 import { getSeasonArsenal } from './pitcherArsenal.js';
 import { getPercentiles } from './percentiles.js';
 import { getPitcherStats, getPlayerStats, getSeasonPlayers } from './mlbStats.js';
+import { getResearch } from './research.js';
 import { getAllWatchedPlayers } from './store.js';
 import { mapLimit } from './limit.js';
 import { baseballToday } from './etDate.js';
@@ -99,6 +100,14 @@ export async function warm(event: WarmEvent = {}): Promise<{ mode: string; dates
     // The add-player search hits this on first load and it's a ~1,400-row fetch.
     await getSeasonPlayers(new Date().getFullYear()).catch((err) =>
       console.error('season roster warm failed:', err),
+    );
+    // The research board: a league-wide MLB leaderboard plus two Savant CSVs per
+    // kind, and the one page in the app that belongs to nobody's watchlist — so
+    // nothing else here would ever pull it warm.
+    await Promise.all(
+      (['batter', 'pitcher'] as const).map((kind) =>
+        getResearch(kind).catch((err) => console.error(`research ${kind} warm failed:`, err)),
+      ),
     );
     return { mode, dates };
   }

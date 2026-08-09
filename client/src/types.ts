@@ -544,3 +544,131 @@ export interface XwobaSeries {
   leagueXwoba: number; // MLB league average, drawn as the reference line
   pas: XwobaPa[]; // in play order
 }
+
+// ---- Research table (league-wide season leaderboard) -----------------------
+
+/**
+ * One player's season on the research table — every player in the league, not
+ * just the watchlist, which is what separates this from `SeasonStats`.
+ *
+ * Both kinds share one row shape and one endpoint, with the half that doesn't
+ * apply left null: the client renders one kind's columns at a time, and a
+ * discriminated union would make every column accessor need a narrowing step
+ * to read a field the table already knows is there.
+ *
+ * Counting stats are `number`; everything a filter or a sort compares is a
+ * `number | null` rather than MLB's display string, so the client can order and
+ * threshold them without reparsing. `null` means "no value" — the reliever with
+ * no batted ball behind his barrel rate — and sorts to the bottom whichever way
+ * the column is pointing, since a blank is not a good score or a bad one.
+ */
+export interface ResearchRow {
+  id: number;
+  name: string;
+  savantName: string;
+  kind: PlayerKind;
+  team: string; // "MIL" — the abbreviation; a full name is column-wide
+  position: string; // "2B"
+  // What the position-type filter selects on: Pitcher / Catcher / Infielder /
+  // Outfielder / Hitter (DH) / Two-Way Player, straight from the Stats API.
+  positionType: string;
+  games: number;
+  /** A majority of his appearances are starts — the same test `isRotationStarter`
+   *  applies to a watched pitcher. Computed server-side so the SP/RP pills and
+   *  the qualifier below can't drift apart on what a starter is. Always false
+   *  on a batter row. */
+  starter: boolean;
+  /** The rate-stat qualifier, measured against games **his team** has played
+   *  rather than games he has played, which is the whole point of it. Three
+   *  rules, because one number can't serve all three roles — see `qualifies`
+   *  in research.ts. */
+  qualified: boolean;
+
+  // Batting half — null on a pitcher row.
+  pa: number | null;
+  ab: number | null;
+  doubles: number | null;
+  triples: number | null;
+  rbi: number | null;
+  sb: number | null;
+  cs: number | null; // caught stealing — carried for SB%, which needs both
+  avg: number | null;
+  obp: number | null;
+  slg: number | null;
+  ops: number | null;
+  babip: number | null;
+
+  // Pitching half — null on a batter row.
+  gamesStarted: number | null;
+  wins: number | null;
+  losses: number | null;
+  saves: number | null;
+  holds: number | null;
+  inningsPitched: string | null; // "158.1" — thirds, so it displays as given
+  // …and the same innings as a plain count, because the display string doesn't
+  // sort: 6.2 is two thirds past six, not two tenths, so 6.2 > 6.11 as a number
+  // but 6.2 < 6.11 as innings. The column shows the string and orders on this.
+  outs?: number;
+  era: number | null;
+  whip: number | null;
+  strikeoutsPer9: number | null;
+  walksPer9: number | null;
+  homeRunsPer9: number | null;
+  battersFaced: number | null;
+  avgAgainst: number | null; // batting average against
+  earnedRuns?: number;
+  hitBatsmen: number | null;
+  // Pitch counts, for the strike rate the client derives from them.
+  strikes: number | null;
+  pitches: number | null;
+  // Fielding-independent pitching, computed server-side off `leagueRates.ts`
+  // rather than in the table: the FIP constant lives there and is shared with
+  // the pitcher card, and one definition of FIP in the codebase is enough.
+  // Null under three innings, where the number is noise.
+  fip: number | null;
+  // …and its fly-ball twin, which swaps his own home runs for his fly balls at
+  // the league rate. Computed in `enrich`, not beside FIP, because the fly-ball
+  // count is Savant's — so a failed custom board costs this and leaves FIP.
+  xfip: number | null;
+
+  // Shared by both halves, meaning "his" for a batter and "allowed" for a
+  // pitcher — the columns a research table wants on either board.
+  hits: number | null;
+  hr: number | null;
+  runs: number | null;
+  walks: number | null;
+  strikeouts: number | null;
+
+  // Statcast enrichment (Savant). Null when Savant has no row for the player or
+  // when the board it comes from was unavailable — a failed fetch costs these
+  // columns a value, never the table.
+  xba: number | null;
+  xslg: number | null;
+  xwoba: number | null;
+  xera: number | null; // pitcher only
+  exitVelocity: number | null; // mph
+  launchAngle: number | null; // degrees
+  barrelRate: number | null; // percent
+  hardHitRate: number | null; // percent
+  sweetSpotRate: number | null; // percent of batted balls at 8-32°
+  // Batted-ball profile, as a share of balls in play.
+  gbRate: number | null;
+  ldRate: number | null;
+  fbRate: number | null;
+  // Plate discipline. `chaseRate` is swings at pitches out of the zone;
+  // `firstPitchStrikeRate` is 0-0 counts that went to strike one — read as
+  // "how often he falls behind" for a batter and "gets ahead" for a pitcher.
+  whiffRate: number | null; // percent
+  chaseRate: number | null; // percent
+  firstPitchStrikeRate: number | null; // percent
+  // Batter only — Savant publishes no sprint speed on the pitching board.
+  sprintSpeed: number | null; // feet per second
+}
+
+/** Everything a user has customised, saved server-side against their id.
+ *  `{}` for a user who never has. Mirrors `UserPrefs` in the server's store. */
+export interface UserPrefs {
+  researchColumns?: Partial<Record<PlayerKind, string[]>>;
+  /** Absent means off, the default — the server stores off as no entry. */
+  hideInjured?: boolean;
+}
