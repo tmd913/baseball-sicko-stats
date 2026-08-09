@@ -562,6 +562,17 @@ export interface XwobaSeries {
  * no batted ball behind his barrel rate — and sorts to the bottom whichever way
  * the column is pointing, since a blank is not a good score or a bad one.
  */
+/**
+ * How much of the season the research board is reading. `'season'` is the whole
+ * of it — the default, and the only one Savant publishes a Statcast leaderboard
+ * for; the numbers are days back, ending yesterday (today's games are in
+ * progress and Savant lags the feed by a day).
+ */
+export type ResearchWindow = 'season' | 7 | 15 | 30 | 60;
+
+/** The tabs, in the order the Filters panel shows them. */
+export const RESEARCH_WINDOWS: ResearchWindow[] = ['season', 7, 15, 30, 60];
+
 export interface ResearchRow {
   id: number;
   name: string;

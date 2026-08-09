@@ -12,6 +12,7 @@ import type {
   UserPrefs,
   WatchPlayer,
   XwobaSeries,
+  ResearchWindow,
 } from './types';
 
 /** An API failure that still knows its HTTP status — the app needs to tell an
@@ -147,8 +148,15 @@ export const api = {
   // table. Watchlist-independent and season-wide, so it takes no date range.
   async research(
     kind: PlayerKind,
-  ): Promise<{ season: number; kind: PlayerKind; rows: ResearchRow[] }> {
-    return request(`/api/research?type=${kind}`);
+    window: ResearchWindow = 'season',
+  ): Promise<{
+    season: number;
+    kind: PlayerKind;
+    window: ResearchWindow;
+    rows: ResearchRow[];
+  }> {
+    const w = window === 'season' ? '' : `&window=${window}`;
+    return request(`/api/research?type=${kind}${w}`);
   },
   async percentiles(
     playerId: number,

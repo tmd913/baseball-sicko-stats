@@ -169,6 +169,9 @@ function hasDataRows(csvText: string): boolean {
   return nl !== -1 && trimmed.slice(nl + 1).trim().length > 0;
 }
 
+/** Exported as `downloadDayCsv` below — `statcastWindow.ts` builds a windowed
+ *  board by reducing these same per-date exports to per-player counts, and
+ *  reuses this so a day already on disk for the report is never fetched twice. */
 async function downloadCsv(date: string): Promise<string> {
   const cached = await readBlob(`${date}.csv`);
   // Only trust a cached file that actually has data rows. A headers-only file
@@ -187,6 +190,8 @@ async function downloadCsv(date: string): Promise<string> {
   if (hasDataRows(text)) await writeBlob(`${date}.csv`, text);
   return text;
 }
+
+export { downloadCsv as downloadDayCsv };
 
 function classifyHit(event: string | null): {
   isAb: boolean;

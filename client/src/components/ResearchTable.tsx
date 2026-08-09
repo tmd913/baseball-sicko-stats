@@ -1,5 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { PlayerKind, ResearchRow } from '../types';
+import { RESEARCH_WINDOWS } from '../types';
+import type { PlayerKind, ResearchRow, ResearchWindow } from '../types';
 import { headshotUrl } from '../lib';
 
 /**
@@ -508,10 +509,30 @@ interface Props {
    *  a tab switch would be a silent change of population. */
   qualifiedOnly: boolean;
   onQualifiedChange: (on: boolean) => void;
+  /** How much of the season the numbers cover. Lifted to App alongside `pos`
+   *  and `qualifiedOnly`: it survives the remount a board switch causes, and it
+   *  is the one page control the URL carries, since it decides which games the
+   *  table is about rather than which of its rows are shown. */
+  window: ResearchWindow;
+  onWindowChange: (w: ResearchWindow) => void;
   /** Open the details overlay (percentiles, game log, season splits) for a row.
    *  Takes a player key, the same currency the rest of the app navigates in. */
   onOpenDetails: (key: string) => void;
 }
+
+/** An unrecognised `win=` is the season, matching `toResearchPos`'s rule and the
+ *  server's: a link from a build that offered a different set of windows should
+ *  still open the board rather than 404 on a query param. */
+export function toResearchWindow(v: string | null): ResearchWindow {
+  const n = Number(v);
+  return RESEARCH_WINDOWS.includes(n as ResearchWindow) ? (n as ResearchWindow) : 'season';
+}
+
+const windowLabel = (w: ResearchWindow) => (w === 'season' ? 'Season' : `${w}d`);
+/** Spelt out where there is room for it — the chip and the count line, which are
+ *  read as sentences rather than scanned as tabs. */
+const windowPhrase = (w: ResearchWindow) =>
+  w === 'season' ? 'Season' : `Last ${w} days`;
 
 export function ResearchTable({
   rows,
@@ -524,6 +545,8 @@ export function ResearchTable({
   onColumnsChange,
   qualifiedOnly,
   onQualifiedChange,
+  window: statWindow,
+  onWindowChange,
   onOpenDetails,
 }: Props) {
   // Every column this board *has* — what the picker lists, what a filter can be
@@ -751,8 +774,10 @@ export function ResearchTable({
         </button>
         <button
           type="button"
+          /* `.on` means the panel *holds* something, whether it is open or
+             shut — a non-default window counts, the same as a stat filter. */
           className={`research-toggle${filtersOpen ? ' active' : ''}${
-            filters.length ? ' on' : ''
+            filters.length || statWindow !== 'season' ? ' on' : ''
           }`}
           aria-expanded={filtersOpen}
           onClick={() => setFiltersOpen((v) => !v)}
@@ -796,6 +821,28 @@ export function ResearchTable({
               Clear
             </button>
           )}
+        </div>
+      )}
+
+      {filtersOpen && (
+        <div className="research-window-row" role="tablist" aria-label="Time span">
+          {RESEARCH_WINDOWS.map((w) => (
+            <button
+              key={String(w)}
+              type="button"
+              role="tab"
+              aria-selected={statWindow === w}
+              className={`research-window-tab${statWindow === w ? ' active' : ''}`}
+              onClick={() => onWindowChange(w)}
+              title={
+                w === 'season'
+                  ? 'The whole season to date'
+                  : `The last ${w} days of games, ending yesterday`
+              }
+            >
+              {windowLabel(w)}
+            </button>
+          ))}
         </div>
       )}
 
@@ -851,8 +898,25 @@ export function ResearchTable({
       {/* Outside the panel on purpose: the chips are the record of what the
           table is currently showing, so they stay whether the Filters panel is
           open or shut. */}
-      {filters.length > 0 && (
+      {(filters.length > 0 || statWindow !== 'season') && (
         <div className="research-chips">
+          {/* The window reads first and cannot be dismissed by clicking it —
+              every other chip here removes a restriction, and "Season" is not
+              the absence of a window but another one, so this returns to the
+              default rather than to nothing. */}
+          {statWindow !== 'season' && (
+            <button
+              type="button"
+              className="research-chip research-chip-window"
+              onClick={() => onWindowChange('season')}
+              title="Back to the whole season"
+            >
+              {windowPhrase(statWindow)}
+              <span className="research-chip-x" aria-hidden="true">
+                ×
+              </span>
+            </button>
+          )}
           {filters.map((f) => (
             <button
               key={f.id}
@@ -867,13 +931,15 @@ export function ResearchTable({
               </span>
             </button>
           ))}
-          <button
-            type="button"
-            className="research-clear"
-            onClick={() => setFilters([])}
-          >
-            Clear all
-          </button>
+          {filters.length > 0 && (
+            <button
+              type="button"
+              className="research-clear"
+              onClick={() => setFilters([])}
+            >
+              Clear all
+            </button>
+          )}
         </div>
       )}
 
