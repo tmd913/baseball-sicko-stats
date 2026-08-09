@@ -5,6 +5,8 @@ import {
   creditLabel,
   formatStartTime,
   headshotUrl,
+  isOnActiveRoster,
+  isRotationStarter,
   liveRoleGame,
   liveRoleLabel,
 } from '../lib';
@@ -429,6 +431,24 @@ function byStartTime(
 }
 
 /**
+ * Whether a scheduled game is one this player is actually part of — the test the
+ * Upcoming section is filtered on, since a watched player's *team* has a game
+ * far more often than he does.
+ *
+ * Two ways that happens. A player off the active roster — hurt, suspended,
+ * optioned — is on none of his team's games, however many of them are on the
+ * schedule. And a starting pitcher is in one game in five: he belongs here only
+ * when his side has announced him, which `pitchingRole` already reports. A side
+ * that has announced nobody yet (a TBD probable) hides no one, and a reliever is
+ * never filtered — any of his team's games could be his.
+ */
+function isUpcomingFor(report: PlayerReport, game: PlayerGame): boolean {
+  if (!isOnActiveRoster(report.rosterStatus)) return false;
+  if (report.kind !== 'pitcher' || !isRotationStarter(report)) return true;
+  return game.pitchingRole === 'starting' || game.teamProbablePitcher === null;
+}
+
+/**
  * One not-yet-started game in the Upcoming section: player + matchup + first
  * pitch, expanding to what that player wants to know about it. For a **batter**
  * that's the probable starter and his own line against that hand; for a
@@ -592,11 +612,12 @@ export function LiveFeed({
 
   // Not-yet-started games, earliest first pitch first — so the feed still has
   // something to show before the day's first at-bat (and lists later games while
-  // earlier ones are underway).
+  // earlier ones are underway). Only the ones the player is actually in: see
+  // `isUpcomingFor`.
   const upcoming = reports
     .flatMap((report) =>
       report.games
-        .filter((game) => game.status.state === 'scheduled')
+        .filter((game) => game.status.state === 'scheduled' && isUpcomingFor(report, game))
         .map((game) => ({ report, game })),
     )
     .sort(byStartTime);

@@ -648,6 +648,29 @@ export function seasonStatsSummary(s: SeasonStats): string {
 export type RosterTone = 'il' | 'susp' | 'minors' | 'other';
 
 /**
+ * Whether the player is on the active roster and can appear in a game today.
+ * Anything that earns a status badge — an IL stint, a suspension, an option to
+ * the minors, paternity leave — means he isn't, so nothing about him belongs in
+ * a list of what's still to come.
+ */
+export function isOnActiveRoster(status: RosterStatus | null): boolean {
+  return rosterStatusBadge(status) === null;
+}
+
+/**
+ * Whether a pitcher works out of the rotation — a majority of his appearances
+ * this season are starts. A starter takes the ball every fifth day, so his
+ * team's other games are somebody else's; a reliever's could be any of them,
+ * which is why the distinction is worth drawing at all. Nobody with no
+ * appearances yet counts (a season-opening rotation is a guess from here).
+ */
+export function isRotationStarter(report: PlayerReport): boolean {
+  const s = report.pitcherSeasonStats;
+  if (!s || s.gamesPlayed === 0) return false;
+  return s.gamesStarted * 2 >= s.gamesPlayed;
+}
+
+/**
  * A short card badge for a roster status that keeps a player off the field —
  * an IL stint, suspension, or option to the minors. Returns null when the
  * player is active (or status is unknown), since an active player needs no
