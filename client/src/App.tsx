@@ -613,6 +613,7 @@ export default function App() {
         key={key}
         report={r}
         position={positionById.get(r.id)}
+        singleDay={start === end}
         collapsed={!expandedKeys.has(key)}
         onToggleCollapsed={() => toggleCollapsed(key)}
         onOpenDetails={setDetailsKey}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { RemoveButton } from './RemoveButton';
 import { headshotUrl } from '../lib';
 
 // How close to the top/bottom edge of the viewport a drag has to get before the
@@ -184,38 +185,12 @@ export function PlayerOrderEditor({
               >
                 ⠿
               </span>
-              {/* stopPropagation so pressing the button never starts a drag —
-                  the row's pointerdown would otherwise preventDefault the click
-                  away. */}
-              <button
-                type="button"
-                className={`order-remove${armed ? ' armed' : ''}`}
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={() => (armed ? onRemove(p.key) : setArmedKey(p.key))}
-                title={`Remove ${p.name} from your watchlist`}
-                aria-label={
-                  armed
-                    ? `Confirm removing ${p.name} from your watchlist`
-                    : `Remove ${p.name} from your watchlist`
-                }
-              >
-                {armed ? (
-                  'Remove?'
-                ) : (
-                  <svg
-                    viewBox="0 0 24 24"
-                    width="14"
-                    height="14"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M18 6 6 18M6 6l12 12" />
-                  </svg>
-                )}
-              </button>
+              <RemoveButton
+                name={p.name}
+                armed={armed}
+                onArm={() => setArmedKey(p.key)}
+                onRemove={() => onRemove(p.key)}
+              />
             </li>
           );
         })}

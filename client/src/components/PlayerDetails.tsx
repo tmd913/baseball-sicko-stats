@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { api } from '../api';
 import type {
+  BatterGameLog,
+  PitcherGameLog,
   PitcherSeasonStats,
   PlayerPercentiles,
   PercentileMetric,
@@ -11,7 +13,9 @@ import type {
 import { headshotUrl, savantPlayerUrl } from '../lib';
 import { SeasonArsenalRow, SplitTabs } from './Arsenal';
 import type { SplitKey } from './Arsenal';
+import { RemoveButton } from './RemoveButton';
 import { RollingXwoba } from './RollingXwoba';
+import { GameLog } from './GameLog';
 import { useLockBodyScroll } from '../hooks';
 
 /**
@@ -71,11 +75,17 @@ function MetricRow({ metric }: { metric: PercentileMetric }) {
  * section they collapse into one dumbbell row instead of two stacked bars. */
 const EXPECTED_OF: Record<string, string> = {
   woba: 'xwoba',
+  // Pitcher-only: the card's headline pair — what he gave up against what the
+  // contact he gave up was worth.
+  era: 'xera',
   ba: 'xba',
   obp: 'xobp',
   slg: 'xslg',
   iso: 'xiso',
   hr: 'xhr',
+  // Pitcher-only: what the contact he allowed was worth, against what it should
+  // have been worth.
+  wobacon: 'xwobacon',
 };
 
 /**
@@ -184,7 +194,8 @@ function renderMetricRows(metrics: PercentileMetric[], overlapPct: number): Reac
   return rows;
 }
 
-/** One stat cell in a splits block. */
+/** One stat cell in a Season-tab block. A value the source doesn't carry is
+ *  dropped rather than dashed — see `Cells` below. */
 function StatCell({ label, value }: { label: string; value: string }) {
   return (
     <div className="stat-pill">
@@ -194,102 +205,191 @@ function StatCell({ label, value }: { label: string; value: string }) {
   );
 }
 
-/** One platoon split — the player's season line against LHP or RHP. */
-function SplitBlock({ label, split }: { label: string; split: SeasonStats | null }) {
-  if (!split || split.pa === 0) {
+/** A stat MLB doesn't carry for this slice comes back as the em-dash `str()`
+ *  falls back to (a split has no ERA — earned runs aren't split by hand), and a
+ *  derived one comes back null. Either way the pill is left out: a block should
+ *  show the stats it has, not a row of dashes standing in for the ones it can't. */
+function has(v: string | null | undefined): v is string {
+  return !!v && v !== '—';
+}
+
+/**
+ * The batter's stat row. One list, rendered for the whole season and for each
+ * platoon half alike, so a split reads column-for-column against the line above
+ * it. It carries what the rest of the app leaves out (R, SB, games) — this is
+ * the one place that shows the season whole rather than a slice of it: the cards
+ * summarise it in a sentence, the summary table only spans the report's range.
+ * `whole` marks the season-wide block, which is the only one MLB gives runs and
+ * steals for (see below).
+ */
+function BatterStats({ s, whole }: { s: SeasonStats; whole: boolean }) {
+  return (
+    <div className="stat-row">
+      <StatCell label="AVG" value={s.avg} />
+      <StatCell label="OBP" value={s.obp} />
+      <StatCell label="SLG" value={s.slg} />
+      <StatCell label="OPS" value={s.ops} />
+      <StatCell label="HR" value={String(s.hr)} />
+      <StatCell label="RBI" value={String(s.rbi)} />
+      {/* Runs and steals are season-only, and not by choice: MLB's platoon
+          splits come back with both zeroed for every player, so a split would
+          print "0 R" for a leadoff hitter with 44 of them. A false zero reads as
+          a real one — 0 is a value a low-PA split could genuinely have — so the
+          only honest move is to leave them off the half-season blocks. */}
+      {whole && <StatCell label="R" value={String(s.runs)} />}
+      {whole && <StatCell label="SB" value={String(s.sb)} />}
+      <StatCell label="AB" value={String(s.atBats)} />
+    </div>
+  );
+}
+
+/**
+ * The pitcher's stat row, again shared by the season and its halves. Each
+ * ERA-scale estimator sits immediately after the number it estimates (ERA →
+ * xERA, FIP → xFIP), the way the collapsed card's summary pairs them — the
+ * comparison is the reason they're carried. A half of the season shows fewer of
+ * them than the whole does, and not by choice: MLB doesn't split earned runs, so
+ * a split has no ERA, and xERA/xFIP are season-wide (the leaderboard doesn't
+ * split, and the fly-ball count behind xFIP is tallied over the whole CSV).
+ */
+function PitcherStats({ s }: { s: PitcherSeasonStats }) {
+  return (
+    <div className="stat-row">
+      {has(s.era) && <StatCell label="ERA" value={s.era} />}
+      {has(s.xera) && <StatCell label="xERA" value={s.xera} />}
+      {has(s.fip) && <StatCell label="FIP" value={s.fip} />}
+      {has(s.xfip) && <StatCell label="xFIP" value={s.xfip} />}
+      <StatCell label="WHIP" value={s.whip} />
+      <StatCell label="AVG" value={s.avgAgainst} />
+      <StatCell label="K/9" value={s.strikeoutsPer9} />
+      <StatCell label="BB/9" value={s.walksPer9} />
+      <StatCell label="HR/9" value={s.homeRunsPer9} />
+      <StatCell label="K%" value={s.kRate} />
+      <StatCell label="BB%" value={s.bbRate} />
+      <StatCell label="K" value={String(s.strikeOuts)} />
+      <StatCell label="BB" value={String(s.baseOnBalls)} />
+      <StatCell label="HR" value={String(s.homeRuns)} />
+    </div>
+  );
+}
+
+/**
+ * One block of the Season card: a head carrying the label and that slice's
+ * sample size, then the stats. `whole` marks the season-wide block, which is the
+ * only one with a games count to report.
+ */
+function BatterBlock({
+  label,
+  s,
+  whole = false,
+}: {
+  label: string;
+  s: SeasonStats | null;
+  whole?: boolean;
+}) {
+  if (!s || s.pa === 0) {
     return (
       <div className="split-block">
         <div className="split-head">{label}</div>
-        <div className="split-empty">No plate appearances {label.toLowerCase()} this season.</div>
+        <div className="split-empty">
+          No plate appearances {whole ? '' : `${label.toLowerCase()} `}this season.
+        </div>
       </div>
     );
   }
   return (
     <div className="split-block">
       <div className="split-head">
-        {label} · {split.pa} PA
+        {label} · {whole ? `${s.gamesPlayed} G · ${s.pa} PA` : `${s.pa} PA`}
       </div>
-      <div className="stat-row">
-        <StatCell label="AVG" value={split.avg} />
-        <StatCell label="OBP" value={split.obp} />
-        <StatCell label="SLG" value={split.slg} />
-        <StatCell label="OPS" value={split.ops} />
-        <StatCell label="HR" value={String(split.hr)} />
-        <StatCell label="RBI" value={String(split.rbi)} />
-        <StatCell label="H" value={String(split.hits)} />
-        <StatCell label="AB" value={String(split.atBats)} />
-      </div>
+      <BatterStats s={s} whole={whole} />
     </div>
   );
 }
 
-/** The Splits tab: the player's platoon splits vs LHP and vs RHP. */
-function SplitsPanel({
+/** The same block for a pitcher, measured in batters faced. */
+function PitcherBlock({
+  label,
+  s,
+  whole = false,
+}: {
+  label: string;
+  s: PitcherSeasonStats | null;
+  whole?: boolean;
+}) {
+  if (!s || s.battersFaced === 0) {
+    return (
+      <div className="split-block">
+        <div className="split-head">{label}</div>
+        <div className="split-empty">
+          No batters faced {whole ? '' : `${label.toLowerCase()} `}this season.
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="split-block">
+      <div className="split-head">
+        {label} ·{' '}
+        {whole
+          ? `${s.gamesPlayed} G · ${s.gamesStarted} GS · ${s.inningsPitched} IP`
+          : `${s.battersFaced} BF`}
+      </div>
+      <PitcherStats s={s} />
+    </div>
+  );
+}
+
+/**
+ * The Season tab: the whole season and the two halves of it, as one card. They
+ * are the same line cut three ways, so they read as one table of labelled blocks
+ * rather than as separate cards — the overall row is the thing a split is a
+ * split *of*, and the comparison only lands with them stacked together.
+ */
+function SeasonPanel({
+  season,
   vsLeft,
   vsRight,
 }: {
+  season: SeasonStats | null;
   vsLeft: SeasonStats | null;
   vsRight: SeasonStats | null;
 }) {
   return (
     <div className="pct-card">
       <div className="pct-card-head">
-        <span className="pct-card-title">Platoon Splits</span>
+        <span className="pct-card-title">Season</span>
       </div>
-      <SplitBlock label="vs LHP" split={vsLeft} />
-      <SplitBlock label="vs RHP" split={vsRight} />
+      <BatterBlock label="Overall" s={season} whole />
+      <BatterBlock label="vs LHP" s={vsLeft} />
+      <BatterBlock label="vs RHP" s={vsRight} />
     </div>
   );
 }
 
-/** One pitcher platoon split — the line against LHB or RHB. */
-function PitcherSplitBlock({ label, split }: { label: string; split: PitcherSeasonStats | null }) {
-  if (!split || split.battersFaced === 0) {
-    return (
-      <div className="split-block">
-        <div className="split-head">{label}</div>
-        <div className="split-empty">No batters faced {label.toLowerCase()} this season.</div>
-      </div>
-    );
-  }
-  return (
-    <div className="split-block">
-      <div className="split-head">
-        {label} · {split.battersFaced} BF
-      </div>
-      <div className="stat-row">
-        <StatCell label="AVG" value={split.avgAgainst} />
-        <StatCell label="K%" value={split.kRate} />
-        <StatCell label="BB%" value={split.bbRate} />
-        <StatCell label="K" value={String(split.strikeOuts)} />
-        <StatCell label="BB" value={String(split.baseOnBalls)} />
-        <StatCell label="H" value={String(split.hits)} />
-        <StatCell label="HR" value={String(split.homeRuns)} />
-      </div>
-    </div>
-  );
-}
-
-/** The Splits tab for a pitcher: the line against LHB and RHB. */
-function PitcherSplitsPanel({
+/** The same card for a pitcher — his season, then the line against each side. */
+function PitcherSeasonPanel({
+  season,
   vsLeft,
   vsRight,
 }: {
+  season: PitcherSeasonStats | null;
   vsLeft: PitcherSeasonStats | null;
   vsRight: PitcherSeasonStats | null;
 }) {
   return (
     <div className="pct-card">
       <div className="pct-card-head">
-        <span className="pct-card-title">Platoon Splits (against)</span>
+        <span className="pct-card-title">Season</span>
       </div>
-      <PitcherSplitBlock label="vs LHB" split={vsLeft} />
-      <PitcherSplitBlock label="vs RHB" split={vsRight} />
+      <PitcherBlock label="Overall" s={season} whole />
+      <PitcherBlock label="vs LHB" s={vsLeft} />
+      <PitcherBlock label="vs RHB" s={vsRight} />
     </div>
   );
 }
 
-type DetailsTab = 'percentiles' | 'splits' | 'rolling' | 'arsenal';
+type DetailsTab = 'percentiles' | 'splits' | 'gamelog' | 'rolling' | 'arsenal';
 
 /**
  * The Arsenal tab: a pitcher's season pitch mix, overall or against one batter
@@ -358,16 +458,21 @@ export function PlayerDetails({
   useLockBodyScroll();
   const kind = isPitcher ? 'pitcher' : 'batter';
   const [tab, setTab] = useState<DetailsTab>('percentiles');
+  // The Remove button arms on the first tap and commits on the second, as it
+  // does on the reorder screen — see RemoveButton. There is no undo.
+  const [armedRemove, setArmedRemove] = useState(false);
   const [data, setData] = useState<PlayerPercentiles | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  // Platoon splits are fetched here (not passed in) so the details view works
-  // for any player, whether or not they're on the watchlist.
+  // The season line and platoon splits are fetched here (not passed in) so the
+  // details view works for any player, whether or not they're on the watchlist.
   const [splits, setSplits] = useState<{
+    season: SeasonStats | null;
     vsLeft: SeasonStats | null;
     vsRight: SeasonStats | null;
   } | null>(null);
   const [pitcherSplits, setPitcherSplits] = useState<{
+    season: PitcherSeasonStats | null;
     vsLeft: PitcherSeasonStats | null;
     vsRight: PitcherSeasonStats | null;
   } | null>(null);
@@ -380,12 +485,22 @@ export function PlayerDetails({
   const [xwobaLoading, setXwobaLoading] = useState(false);
   // The season arsenal backs the pitcher-only Arsenal tab — another heavy Savant
   // fetch, so it's lazy in the same way.
+  // The season game log backs the Game Log tab — a whole season of rows, so it
+  // loads lazily on first open like the two above it.
+  const [gameLog, setGameLog] = useState<
+    { kind: 'batter'; games: BatterGameLog[] } | { kind: 'pitcher'; games: PitcherGameLog[] } | null
+  >(null);
+  const [gameLogError, setGameLogError] = useState<string | null>(null);
+  const [gameLogLoading, setGameLogLoading] = useState(false);
   const [arsenal, setArsenal] = useState<SeasonArsenal | null>(null);
   const [arsenalSplit, setArsenalSplit] = useState<SplitKey>('all');
   const [arsenalError, setArsenalError] = useState<string | null>(null);
   const [arsenalLoading, setArsenalLoading] = useState(false);
   const arsenalReq = useRef<number | null>(null);
   const xwobaReq = useRef<number | null>(null);
+  // Keyed by kind as well as player: a two-way player's two logs are two
+  // different requests, and the batter's must not stand in for the pitcher's.
+  const gameLogReq = useRef<string | null>(null);
 
   // The percentile-point distance below which two paired bubbles would overlap,
   // measured from the live track width (~a bubble diameter's worth of the rail)
@@ -470,7 +585,36 @@ export function PlayerDetails({
     setArsenal(null);
     setArsenalError(null);
     setArsenalSplit('all');
+    gameLogReq.current = null;
+    setGameLog(null);
+    setGameLogError(null);
   }, [playerId]);
+
+  // Same lazy load for the Game Log tab.
+  useEffect(() => {
+    const req = `${kind}-${playerId}`;
+    if (tab !== 'gamelog' || gameLogReq.current === req) return;
+    gameLogReq.current = req;
+    let live = true;
+    setGameLogLoading(true);
+    setGameLogError(null);
+    (isPitcher ? api.pitcherGameLog(playerId) : api.gameLog(playerId))
+      .then((d) => {
+        if (live) setGameLog(d);
+      })
+      .catch((e: unknown) => {
+        if (live) {
+          setGameLogError(e instanceof Error ? e.message : 'Failed to load');
+          gameLogReq.current = null; // allow a retry on re-open
+        }
+      })
+      .finally(() => {
+        if (live) setGameLogLoading(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [tab, playerId, isPitcher, kind]);
 
   // Same lazy load for the Arsenal tab.
   useEffect(() => {
@@ -526,7 +670,10 @@ export function PlayerDetails({
   }, [tab, playerId, kind]);
 
   return (
-    <div className="details-view">
+    // The Game Log makes the overlay a fixed-height column so only its table
+    // scrolls — see `.details-view.gamelog-mode`, which is the only way its
+    // header row can stick over a season's worth of rows.
+    <div className={`details-view${tab === 'gamelog' ? ' gamelog-mode' : ''}`}>
       <div className="details-head">
         <button type="button" className="details-back" onClick={onClose}>
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -559,17 +706,12 @@ export function PlayerDetails({
               </svg>
               On watchlist
             </span>
-            <button
-              type="button"
-              className="details-remove"
-              onClick={onRemove}
-              title={`Remove ${name} from your watchlist`}
-            >
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M18 6 6 18M6 6l12 12" />
-              </svg>
-              Remove
-            </button>
+            <RemoveButton
+              name={name}
+              armed={armedRemove}
+              onArm={() => setArmedRemove(true)}
+              onRemove={onRemove}
+            />
           </div>
         ) : (
           <button
@@ -599,11 +741,20 @@ export function PlayerDetails({
         <button
           type="button"
           role="tab"
-          aria-selected={tab === 'rolling'}
-          className={`details-tab${tab === 'rolling' ? ' is-active' : ''}`}
-          onClick={() => setTab('rolling')}
+          aria-selected={tab === 'splits'}
+          className={`details-tab${tab === 'splits' ? ' is-active' : ''}`}
+          onClick={() => setTab('splits')}
         >
-          Rolling xwOBA
+          Season
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'gamelog'}
+          className={`details-tab${tab === 'gamelog' ? ' is-active' : ''}`}
+          onClick={() => setTab('gamelog')}
+        >
+          Game Log
         </button>
         {isPitcher && (
           <button
@@ -619,11 +770,11 @@ export function PlayerDetails({
         <button
           type="button"
           role="tab"
-          aria-selected={tab === 'splits'}
-          className={`details-tab${tab === 'splits' ? ' is-active' : ''}`}
-          onClick={() => setTab('splits')}
+          aria-selected={tab === 'rolling'}
+          className={`details-tab${tab === 'rolling' ? ' is-active' : ''}`}
+          onClick={() => setTab('rolling')}
         >
-          Splits
+          Rolling xwOBA
         </button>
       </div>
 
@@ -636,6 +787,16 @@ export function PlayerDetails({
       {tab === 'arsenal' && arsenal && !arsenalLoading && (
         <ArsenalTab arsenal={arsenal} split={arsenalSplit} onSplit={setArsenalSplit} />
       )}
+
+      {tab === 'gamelog' && gameLogLoading && (
+        <div className="details-status">Loading game log…</div>
+      )}
+      {tab === 'gamelog' && gameLogError && !gameLogLoading && (
+        <div className="details-status details-error">
+          Couldn’t load the game log: {gameLogError}
+        </div>
+      )}
+      {tab === 'gamelog' && gameLog && !gameLogLoading && <GameLog {...gameLog} />}
 
       {tab === 'rolling' && xwobaLoading && (
         <div className="details-status">Loading season xwOBA…</div>
@@ -650,18 +811,22 @@ export function PlayerDetails({
       )}
 
       {tab === 'splits' && splitsLoading && (
-        <div className="details-status">Loading platoon splits…</div>
+        <div className="details-status">Loading season stats…</div>
       )}
       {tab === 'splits' && splitsError && !splitsLoading && (
         <div className="details-status details-error">
-          Couldn’t load platoon splits: {splitsError}
+          Couldn’t load season stats: {splitsError}
         </div>
       )}
       {tab === 'splits' && !splitsLoading && isPitcher && pitcherSplits && (
-        <PitcherSplitsPanel vsLeft={pitcherSplits.vsLeft} vsRight={pitcherSplits.vsRight} />
+        <PitcherSeasonPanel
+          season={pitcherSplits.season}
+          vsLeft={pitcherSplits.vsLeft}
+          vsRight={pitcherSplits.vsRight}
+        />
       )}
       {tab === 'splits' && !splitsLoading && !isPitcher && splits && (
-        <SplitsPanel vsLeft={splits.vsLeft} vsRight={splits.vsRight} />
+        <SeasonPanel season={splits.season} vsLeft={splits.vsLeft} vsRight={splits.vsRight} />
       )}
 
       {tab === 'percentiles' && loading && (

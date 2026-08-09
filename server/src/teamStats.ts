@@ -2,7 +2,7 @@ import { readJsonBlob, writeJsonBlob } from './storage.js';
 import type { TeamHitting, TeamHittingLine, TeamHittingRanks } from './types.js';
 
 // Keep in sync with hfSea in savant.ts, CURRENT_SEASON in percentiles.ts, and
-// SEASON in xwoba.ts / pitcherArsenal.ts.
+// SEASON in xwoba.ts / pitcherArsenal.ts / expectedStats.ts.
 const SEASON = 2026;
 
 // Team lines barely move inside a day, and this is the whole league in one blob.

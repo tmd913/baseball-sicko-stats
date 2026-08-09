@@ -3,6 +3,7 @@ import type {
   FacedBatter,
   PitcherGame,
   PitcherSplit,
+  PitchingCredit,
   PitchingLine,
   PlayerGame,
   PlayerReport,
@@ -12,6 +13,7 @@ import { useScrollIntoViewOnExpand } from '../hooks';
 import {
   combinePitchingLines,
   creditLabel,
+  decisionColor,
   eraOf,
   formatIp,
   liveRole,
@@ -68,9 +70,20 @@ export function lineSummary(l: PitchingLine): string {
  * bar (`.game-sub-bar`) so the two cards' toggles share one format: a bare
  * label, no caret. Expanding scrolls it to the top, like every other
  * collapsible in the app.
+ *
+ * Closed unless told otherwise: opening a pitcher's card should show the game
+ * line and the bars for everything else, not four sections' worth of tables.
  */
-function CardSection({ title, children }: { title: string; children: ReactNode }) {
-  const [open, setOpen] = useState(true);
+function CardSection({
+  title,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
   const secRef = useScrollIntoViewOnExpand<HTMLDivElement>(open);
   return (
     <div ref={secRef} className="card-section">
@@ -106,21 +119,11 @@ function ArsenalSection({ pg }: { pg: PitcherGame }) {
       <SplitTabs hasRight={!!pg.vsRight} hasLeft={!!pg.vsLeft} value={split} onChange={setSplit} />
       <div className="arsenal">
         {mix.map((m) => (
-          <ArsenalRow key={m.pitchType} m={m} />
+          <ArsenalRow key={m.pitchType} m={m} split={split} />
         ))}
       </div>
     </CardSection>
   );
-}
-
-/** The color keyed to a credit (W/L/S/HLD) — the game line's accent. */
-function decisionColor(d: PitcherGame['decision']): string {
-  if (d === 'W') return 'var(--hit)';
-  if (d === 'L') return 'var(--strikeout)';
-  if (d === 'S') return 'var(--accent)';
-  // A hold takes the relief amber the RP chip uses — it's the reliever's credit.
-  if (d === 'H') return 'var(--hr)';
-  return 'var(--muted)';
 }
 
 /** Batted-ball threshold Statcast calls "hard hit". */
@@ -192,7 +195,7 @@ function GameLine({ pg }: { pg: PitcherGame }) {
   const perBf = (n: number) => (L.battersFaced ? n / L.battersFaced : null);
   const singles = Math.max(0, L.hits - L.doubles - L.triples - L.hr);
   return (
-    <CardSection title="Line">
+    <CardSection title="Line" defaultOpen>
       <SplitTabs hasRight={!!pg.vsRight} hasLeft={!!pg.vsLeft} value={split} onChange={setSplit} />
       <div className="pline">
         <div className="ars-row" style={{ borderLeftColor: color }}>
@@ -468,15 +471,36 @@ function PitcherGameBlock({
   );
 }
 
+/** "1 G" / "5 G" — how many of them the line above is added up from. */
+function gameCount(n: number): string {
+  return `${n} G`;
+}
+
+/**
+ * The W/L/S/HLD earned across the outings in view, in scorebook order and with
+ * only the credits he actually took. `PitchingLine` sums wins/saves/holds but
+ * carries no losses, so this counts the per-game `decision` instead — one field,
+ * all four credits.
+ */
+function creditTally(games: PlayerGame[]): { credit: PitchingCredit; n: number }[] {
+  const ORDER: PitchingCredit[] = ['W', 'L', 'S', 'H'];
+  return ORDER.map((credit) => ({
+    credit,
+    n: games.filter((g) => g.pitching?.decision === credit).length,
+  })).filter((c) => c.n > 0);
+}
+
 export function PitcherCard({
   report,
   position,
+  singleDay,
   collapsed,
   onToggleCollapsed,
   onOpenDetails,
 }: {
   report: PlayerReport;
   position?: string;
+  singleDay: boolean;
   collapsed: boolean;
   onToggleCollapsed: () => void;
   onOpenDetails: (key: string) => void;
@@ -484,6 +508,19 @@ export function PitcherCard({
   const games = [...report.games].sort(mostRecentGameFirst);
   const pitched = games.filter((g) => g.pitching);
   const role = liveRole(report);
+  /**
+   * Whether the header can speak for one game — the role chip, the decision and
+   * the final score all belong to a particular outing, not to a span of them.
+   *
+   * This is the **range** in view, not how many times he happened to pitch. On
+   * the count alone a week read two different ways depending on the pitcher's
+   * role: a starter makes one start in it and got a card that looked exactly
+   * like a single day's — one line, one W, one final score, as though that game
+   * were the week — while the reliever below him made five appearances and got
+   * a bare aggregate. Same view, two formats, and the starter's was the one
+   * telling a half-truth.
+   */
+  const onePitchedGame = singleDay && pitched.length === 1;
 
   // No outing in range — a header-only card with the game status (scheduled /
   // "did not pitch").
@@ -509,7 +546,7 @@ export function PitcherCard({
           id={report.id}
           name={report.name}
           onOpen={() => onOpenDetails(playerKey(report))}
-          corner={games.length === 1 ? pitchingCorner(games[0]) : null}
+          corner={singleDay && games.length === 1 ? pitchingCorner(games[0]) : null}
           role={role}
         />
         <div className="player-id">
@@ -517,10 +554,15 @@ export function PitcherCard({
           {meta && <span className="player-meta">{meta}</span>}
         </div>
         <div className="player-summary">
-          {games.length === 1 && <PitchingTag game={games[0]} />}
-          {games.map((g) => (
-            <GameStatusBadge key={g.gamePk} game={g} withMatchup />
-          ))}
+          {singleDay && games.length === 1 && <PitchingTag game={games[0]} />}
+          {/* One badge per game only while the range is a day. Over a week these
+              are his team's games, not his — he's in none of them — and a row of
+              seven scores ran off the right of the card to say so. */}
+          {singleDay ? (
+            games.map((g) => <GameStatusBadge key={g.gamePk} game={g} withMatchup />)
+          ) : (
+            <span className="summary-line">{gameCount(games.length)}</span>
+          )}
           {games.length > 0 && games.every((g) => g.status.state === 'final') && (
             <span className="dnp-badge">Did not pitch</span>
           )}
@@ -588,7 +630,7 @@ export function PitcherCard({
         id={report.id}
         name={report.name}
         onOpen={() => onOpenDetails(playerKey(report))}
-        corner={pitched.length === 1 ? pitchingCorner(primary) : null}
+        corner={onePitchedGame ? pitchingCorner(primary) : null}
         role={role}
       />
       <div className="player-id">
@@ -601,14 +643,27 @@ export function PitcherCard({
       </div>
       <div className="player-summary">
         <LiveRoleTag role={role} />
-        {pitched.length === 1 && <PitchingTag game={primary} />}
-        {pitched.length === 1 && primary.pitching!.decision && (
-          <span className={`dec-tag dec-${primary.pitching!.decision}`}>
-            {creditLabel(primary.pitching!.decision)}
-          </span>
-        )}
-        <span className="summary-line">{lineSummary(combined)}</span>
-        {pitched.length === 1 && <GameStatusBadge game={primary} withMatchup />}
+        {onePitchedGame && <PitchingTag game={primary} />}
+        {/* One outing's W/L/S/HLD, or — over a range — the tally of them, which
+            is what a week of relief work comes down to and the one part of the
+            per-game chrome that does survive being added up. */}
+        {onePitchedGame
+          ? primary.pitching!.decision && (
+              <span className={`dec-tag dec-${primary.pitching!.decision}`}>
+                {creditLabel(primary.pitching!.decision)}
+              </span>
+            )
+          : creditTally(pitched).map(({ credit, n }) => (
+              <span key={credit} className={`dec-tag dec-${credit}`}>
+                {n > 1 ? `${n} ` : ''}
+                {creditLabel(credit)}
+              </span>
+            ))}
+        <span className="summary-line">
+          {!onePitchedGame && `${gameCount(pitched.length)} · `}
+          {lineSummary(combined)}
+        </span>
+        {onePitchedGame && <GameStatusBadge game={primary} withMatchup />}
       </div>
     </>
   );

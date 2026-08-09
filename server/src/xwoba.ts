@@ -2,7 +2,8 @@ import { parse } from 'csv-parse/sync';
 import { readJsonBlob, writeJsonBlob } from './storage.js';
 import type { XwobaPa, XwobaSeries } from './types.js';
 
-// Keep in sync with hfSea in savant.ts and CURRENT_SEASON in percentiles.ts.
+// Keep in sync with hfSea in savant.ts, CURRENT_SEASON in percentiles.ts, and
+// SEASON in pitcherArsenal.ts / teamStats.ts / expectedStats.ts.
 const SEASON = 2026;
 
 // MLB league-average xwOBA — the reference line on the rolling chart. wOBA (and

@@ -184,12 +184,14 @@ export function whipOf(line: PitchingLine): string {
 
 /** A compact pitcher season summary for the card header. */
 export function pitcherSeasonSummary(s: PitcherSeasonStats): string {
+  // No estimators here. xERA and xFIP used to ride along paired with the number
+  // each estimates ("3.20/3.74 ERA/xERA"), which doubled the width of the two
+  // leading items and made a line meant to be scanned into one to be read. The
+  // pairing itself is right — the comparison is the whole point of carrying them
+  // — so it survives where there's room to land: the Season tab, which shows
+  // each estimator immediately after the number it estimates.
   const parts = [`${s.era} ERA`];
-  // The ERA estimators next to ERA itself, which is the comparison worth making
-  // at a glance — a starter whose FIP sits a run under his ERA is a different
-  // read from one whose doesn't.
   if (s.fip) parts.push(`${s.fip} FIP`);
-  if (s.xfip) parts.push(`${s.xfip} xFIP`);
   parts.push(`${s.whip} WHIP`);
   const per9 = (v: string, label: string) => {
     if (v && v !== '—') parts.push(`${v} ${label}`);
@@ -201,6 +203,17 @@ export function pitcherSeasonSummary(s: PitcherSeasonStats): string {
   // details view, and a collapsed card is meant to be scanned, not read.
   // Comma-separated to match the batter card's season line (`seasonStatsSummary`).
   return parts.join(', ');
+}
+
+/** The color keyed to a credit (W/L/S/HLD) — the accent on a pitcher's line,
+ *  wherever that line is shown (the card, the feed, the game log). */
+export function decisionColor(d: PitchingCredit | null): string {
+  if (d === 'W') return 'var(--hit)';
+  if (d === 'L') return 'var(--strikeout)';
+  if (d === 'S') return 'var(--accent)';
+  // A hold takes the relief amber the RP chip uses — it's the reliever's credit.
+  if (d === 'H') return 'var(--hr)';
+  return 'var(--muted)';
 }
 
 /**

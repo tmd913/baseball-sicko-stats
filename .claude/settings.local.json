@@ -76,7 +76,12 @@
       "Bash(aws cloudfront create-invalidation *)",
       "Bash(curl -s https://d18r33h6h98ev9.cloudfront.net/)",
       "Bash(pkill -f chrome-headless-shell)",
-      "Bash(pkill -f fakegw.mjs)"
+      "Bash(pkill -f fakegw.mjs)",
+      "Bash(npx cdk *)",
+      "Bash(aws cloudfront *)",
+      "Bash(curl -s https://statcastsicko.com/assets/index-DG-QQw5e.js)",
+      "Bash(~/Library/Caches/ms-playwright/chromium_headless_shell-1228/chrome-headless-shell-mac-arm64/chrome-headless-shell --headless --disable-gpu --virtual-time-budget=15000 --dump-dom https://statcastsicko.com/)",
+      "Bash(git push *)"
     ]
   }
 }

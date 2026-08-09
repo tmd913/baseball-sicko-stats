@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { PlateAppearance } from '../types';
 import { api } from '../api';
 import { eventLabel, outcomeKind } from '../lib';
@@ -59,6 +59,18 @@ export function GameReel({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  // Which reel this is, by its content rather than by the identity of the array
+  // holding it. `pas` is rebuilt by the parent on every render, and App re-polls
+  // the report every 20s while any game is live — so an effect keyed on the
+  // array itself re-ran mid-reel, wiping `clips` and snapping playback back to
+  // the first highlight unprompted. The play ids are what actually decide the
+  // reel, and on a final game they never change.
+  const reelKey = `${gamePk}:${pas.map((pa) => pa.playId ?? '').join(',')}`;
+  // The at-bats are read through a ref so the resolver can take their captions
+  // without listing the array as a dependency.
+  const pasRef = useRef(pas);
+  pasRef.current = pas;
+
   // Resolve each at-bat's clip URL in play order, appending as they arrive so
   // playback can begin on the first one while the rest are still resolving.
   // Sequential (not parallel) so the first request warms the server's per-game
@@ -70,10 +82,11 @@ export function GameReel({
     setLoading(true);
     setIndex(0);
     (async () => {
+      const list = pasRef.current;
       const out: ReelClip[] = [];
-      for (let i = 0; i < pas.length; i++) {
+      for (let i = 0; i < list.length; i++) {
         if (cancelled) return;
-        const pa = pas[i];
+        const pa = list[i];
         if (pa.playId) {
           try {
             const url = await api.video(pa.playId, gamePk);
@@ -98,7 +111,7 @@ export function GameReel({
     return () => {
       cancelled = true;
     };
-  }, [pas, gamePk]);
+  }, [reelKey, gamePk]);
 
   const cur = clips[index] ?? null;
   const hasNext = index < clips.length - 1;

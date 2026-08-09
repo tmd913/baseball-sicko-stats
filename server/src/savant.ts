@@ -18,7 +18,8 @@ import type {
   StatsApiPitcherGame,
 } from './mlbStats.js';
 import { getSeasonArsenal } from './pitcherArsenal.js';
-import type { Arsenal, BattedBallMix } from './pitcherArsenal.js';
+import { getPitcherXera } from './expectedStats.js';
+import type { Arsenal, BattedBallMix, SeasonArsenals } from './pitcherArsenal.js';
 import { getLeaguePitchAverage } from './pitchLeague.js';
 import { toSavantName } from './names.js';
 import type {
@@ -668,37 +669,43 @@ function buildPitcherGame(
 }
 
 /**
- * The season line with xFIP filled in — his own home runs swapped for his fly
- * balls at the league rate. Needs the Savant season CSV's batted-ball mix,
- * which is why it happens here rather than where the rest of the line is built.
+ * The season line with the two estimators the MLB line can't carry: xFIP (his
+ * own home runs swapped for his fly balls at the league rate, which needs the
+ * Savant season CSV's batted-ball mix) and xERA (Statcast's, read straight off
+ * the expected-stats leaderboard). Both land here rather than where the rest of
+ * the line is built because both wait on a Savant fetch.
  */
-function withXfip(
+export function withEstimators(
   season: PitcherSeasonStats | null,
   bb: BattedBallMix | undefined,
+  xera: string | undefined,
 ): PitcherSeasonStats | null {
-  if (!season || !bb || bb.fly === 0) return season;
-  const xfip = fipLike(
-    bb.fly * LEAGUE_HR_PER_FB,
-    season.baseOnBalls,
-    season.hitBatsmen,
-    season.strikeOuts,
-    ipToOuts(season.inningsPitched),
-  );
+  if (!season) return season;
+  const xfip =
+    bb && bb.fly > 0
+      ? fipLike(
+          bb.fly * LEAGUE_HR_PER_FB,
+          season.baseOnBalls,
+          season.hitBatsmen,
+          season.strikeOuts,
+          ipToOuts(season.inningsPitched),
+        )
+      : null;
   // A copy: the stats cache hands out the same object to every request.
-  return { ...season, xfip: xfip === null ? null : xfip.toFixed(2) };
+  return {
+    ...season,
+    xfip: xfip === null ? season.xfip : xfip.toFixed(2),
+    xera: xera ?? season.xera,
+  };
 }
 
-/** Fill a pitcher game's arsenal with season (his own) and league baselines,
- * orienting the league horizontal-break magnitude to his own break direction.
- * The handedness splits carry their own copy of the mix, so they get it too —
- * the baselines are season-wide either way. */
-function attachArsenalBaselines(pitching: PitcherGame, season: Arsenal): void {
-  for (const m of [
-    ...pitching.pitchMix,
-    ...(pitching.vsRight?.pitchMix ?? []),
-    ...(pitching.vsLeft?.pitchMix ?? []),
-  ]) {
-    const sea = season.get(m.pitchType);
+/** Fill one mix's rows with season (his own) and league baselines, orienting
+ * the league horizontal-break magnitude to his own break direction. */
+function fillBaselines(mix: PitchMix[], season: Arsenal, fallback: Arsenal): void {
+  for (const m of mix) {
+    // A split arsenal can be missing a pitch he's thrown only a handful of
+    // times to that hand; his season-wide row is a better baseline than none.
+    const sea = season.get(m.pitchType) ?? fallback.get(m.pitchType);
     if (sea) {
       m.seasonVelo = sea.velo;
       m.seasonSpin = sea.spin;
@@ -723,6 +730,20 @@ function attachArsenalBaselines(pitching: PitcherGame, season: Arsenal): void {
       m.leagueHBreak = lg.hBreak === null ? null : Math.abs(lg.hBreak) * dir;
     }
   }
+}
+
+/**
+ * Fill a pitcher game's arsenal with his season baselines and the league's.
+ * **Each handedness split is measured against that same split of his season**,
+ * not against his season as a whole — the details view's Arsenal tab reads that
+ * way (its vs RHB rows are aggregated from the righty half of the CSV), and a
+ * card whose "vs RHB" tab changed the game numbers while its season column sat
+ * still was comparing two different populations.
+ */
+function attachArsenalBaselines(pitching: PitcherGame, season: SeasonArsenals): void {
+  fillBaselines(pitching.pitchMix, season.all, season.all);
+  if (pitching.vsRight) fillBaselines(pitching.vsRight.pitchMix, season.vsRight, season.all);
+  if (pitching.vsLeft) fillBaselines(pitching.vsLeft.pitchMix, season.vsLeft, season.all);
 }
 
 // ---- Primary day builder (MLB Stats API) ---------------------------------
@@ -1283,21 +1304,27 @@ export async function getReport(
   // Each watched pitcher's season arsenal (fetched once) — for the per-game
   // velo/spin/break vs season-average comparison on the card, and the fly-ball
   // count his xFIP needs.
-  const arsenals = new Map<number, Arsenal>();
+  const arsenals = new Map<number, SeasonArsenals>();
   const battedBalls = new Map<number, BattedBallMix>();
+  // One leaderboard for every pitcher in the league, so it rides along with the
+  // per-pitcher arsenals rather than adding a round of its own.
+  const xeraPromise: Promise<Map<number, string>> =
+    pitcherIds.length > 0 ? getPitcherXera() : Promise.resolve(new Map());
   await Promise.all(
     pitcherIds.map(async (id) => {
       try {
-        // The game card compares against his season vs everyone; the details
-        // view is where the handedness splits are read.
+        // Splits and all: the card's Arsenal section has its own Overall / vs
+        // RHB / vs LHB tabs, and each compares against the matching half of his
+        // season.
         const seasonArsenal = await getSeasonArsenal(id);
-        arsenals.set(id, seasonArsenal.all);
+        arsenals.set(id, seasonArsenal);
         battedBalls.set(id, seasonArsenal.battedBalls);
       } catch (err) {
         console.error(`pitcher arsenal fetch failed for ${id}:`, err);
       }
     }),
   );
+  const xera = await xeraPromise;
 
   // How each opposing lineup has hit this season — one fetch per team, however
   // many watched pitchers face it, and only for the pitchers (a batter's card
@@ -1367,7 +1394,11 @@ export async function getReport(
         found: games.length > 0,
         games,
         seasonStats: null,
-        pitcherSeasonStats: withXfip(pitcherStats.get(p.id)?.season ?? null, battedBalls.get(p.id)),
+        pitcherSeasonStats: withEstimators(
+          pitcherStats.get(p.id)?.season ?? null,
+          battedBalls.get(p.id),
+          xera.get(p.id),
+        ),
         splitVsLeft: null,
         splitVsRight: null,
         rosterStatus,

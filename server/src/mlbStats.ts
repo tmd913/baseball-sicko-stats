@@ -347,6 +347,9 @@ function toPitcherSeasonStats(stat: Record<string, unknown>): PitcherSeasonStats
     // Needs a fly-ball count, which only the Savant season CSV has — getReport
     // fills it for the whole-season line once that fetch lands.
     xfip: null,
+    // Not derivable from this line at all: getReport reads it off Savant's
+    // expected-stats leaderboard, again for the whole-season line only.
+    xera: null,
   };
 }
 

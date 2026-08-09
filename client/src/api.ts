@@ -1,4 +1,6 @@
 import type {
+  BatterGameLog,
+  PitcherGameLog,
   SeasonArsenal,
   PlayerKind,
   PitcherSeasonStats,
@@ -124,15 +126,33 @@ export const api = {
   ): Promise<PlayerPercentiles> {
     return request(`/api/percentiles/${playerId}?type=${kind}`);
   },
+  // The season line plus the platoon splits — the details view's Season tab.
   async splits(
     playerId: number,
-  ): Promise<{ vsLeft: SeasonStats | null; vsRight: SeasonStats | null }> {
+  ): Promise<{
+    season: SeasonStats | null;
+    vsLeft: SeasonStats | null;
+    vsRight: SeasonStats | null;
+  }> {
     return request(`/api/players/${playerId}/splits`);
   },
   async pitcherSplits(
     playerId: number,
-  ): Promise<{ vsLeft: PitcherSeasonStats | null; vsRight: PitcherSeasonStats | null }> {
+  ): Promise<{
+    season: PitcherSeasonStats | null;
+    vsLeft: PitcherSeasonStats | null;
+    vsRight: PitcherSeasonStats | null;
+  }> {
     return request(`/api/players/${playerId}/splits?type=pitcher`);
+  },
+  // Every game of the player's season, newest first — the Game Log tab.
+  async gameLog(playerId: number): Promise<{ kind: 'batter'; games: BatterGameLog[] }> {
+    return request(`/api/players/${playerId}/gamelog`);
+  },
+  async pitcherGameLog(
+    playerId: number,
+  ): Promise<{ kind: 'pitcher'; games: PitcherGameLog[] }> {
+    return request(`/api/players/${playerId}/gamelog?type=pitcher`);
   },
   // A pitcher's season pitch arsenal (details view's Arsenal tab).
   async arsenal(playerId: number): Promise<SeasonArsenal> {

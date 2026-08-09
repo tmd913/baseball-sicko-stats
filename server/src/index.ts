@@ -4,10 +4,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { requireUser, userId } from './auth.js';
 import { addDays, baseballToday } from './etDate.js';
-import { getReport } from './savant.js';
+import { getReport, withEstimators } from './savant.js';
 import { getPercentiles } from './percentiles.js';
 import { getXwobaSeries } from './xwoba.js';
+import { getBatterGameLog, getPitcherGameLog } from './gameLog.js';
 import { getSeasonArsenal } from './pitcherArsenal.js';
+import { getPitcherXera } from './expectedStats.js';
 import type { Arsenal } from './pitcherArsenal.js';
 import { getLeaguePitchAverage } from './pitchLeague.js';
 import type { SeasonArsenalPitch } from './types.js';
@@ -194,9 +196,9 @@ app.get(
   }),
 );
 
-// A player's season platoon splits (vs LHP / vs RHP), for the details view. The
-// report already carries these for watchlisted players; this serves the details
-// view when it's opened for a player who isn't on the watchlist.
+// A player's season line and platoon splits (vs LHP / vs RHP), for the details
+// view. The report already carries these for watchlisted players; this serves the
+// details view when it's opened for a player who isn't on the watchlist.
 app.get(
   '/api/players/:playerId/splits',
   requireUser,
@@ -207,12 +209,61 @@ app.get(
       return;
     }
     if (req.query.type === 'pitcher') {
-      const stats = (await getPitcherStats([playerId])).get(playerId);
-      res.json({ vsLeft: stats?.vsLeft ?? null, vsRight: stats?.vsRight ?? null, kind: 'pitcher' });
+      // Both ERA-scale estimators, fetched alongside the line rather than after
+      // it. xERA is one league-wide leaderboard, cached and shared across every
+      // pitcher; xFIP needs *this* pitcher's own season CSV for a fly-ball count,
+      // which is the same blob the Arsenal tab opens on and is already warm for a
+      // watched pitcher (his report pulled it). Neither may take the line down
+      // with it — a failed estimator costs one number, not the whole tab — so the
+      // CSV's throw is caught here and `getPitcherXera` swallows its own.
+      const [pitcherStats, xera, arsenal] = await Promise.all([
+        getPitcherStats([playerId]),
+        getPitcherXera(),
+        getSeasonArsenal(playerId).catch(() => null),
+      ]);
+      const stats = pitcherStats.get(playerId);
+      res.json({
+        season: withEstimators(
+          stats?.season ?? null,
+          arsenal?.battedBalls,
+          xera.get(playerId),
+        ),
+        vsLeft: stats?.vsLeft ?? null,
+        vsRight: stats?.vsRight ?? null,
+        kind: 'pitcher',
+      });
       return;
     }
     const stats = (await getPlayerStats([playerId])).get(playerId);
-    res.json({ vsLeft: stats?.vsLeft ?? null, vsRight: stats?.vsRight ?? null, kind: 'batter' });
+    res.json({
+      season: stats?.season ?? null,
+      vsLeft: stats?.vsLeft ?? null,
+      vsRight: stats?.vsRight ?? null,
+      kind: 'batter',
+    });
+  }),
+);
+
+// A player's game-by-game season log, for the details view's Game Log tab —
+// every game he appeared in, newest first. Kept off the report because it spans
+// the whole season rather than the report's range, and off the Season tab
+// because that tab is the season as one line, this is the season as 150 of them.
+app.get(
+  '/api/players/:playerId/gamelog',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const playerId = Number(req.params.playerId);
+    if (!Number.isInteger(playerId) || playerId <= 0) {
+      res.status(400).json({ error: 'invalid playerId' });
+      return;
+    }
+    const yearQ = Number(req.query.year);
+    const season = Number.isInteger(yearQ) && yearQ >= 2015 ? yearQ : undefined;
+    if (req.query.type === 'pitcher') {
+      res.json({ kind: 'pitcher', games: await getPitcherGameLog(playerId, season) });
+      return;
+    }
+    res.json({ kind: 'batter', games: await getBatterGameLog(playerId, season) });
   }),
 );
 
