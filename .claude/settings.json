@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(aws sts get-caller-identity)",
+      "Bash(aws cloudfront create-invalidation *)",
+      "Bash(aws cloudfront get-invalidation *)",
+      "Bash(npm run build)",
+      "Bash(npm run cdk -- diff*)",
+      "Bash(npm run cdk -- deploy*)",
+      "Bash(curl -s https://statcastsicko.com/*)",
+      "Bash(curl -s https://statcastsicko.com/)",
+      "Bash(~/Library/Caches/ms-playwright/chromium_headless_shell-*/chrome-headless-shell-mac-arm64/chrome-headless-shell *)"
+    ]
+  }
+}
