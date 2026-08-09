@@ -98,8 +98,10 @@ gh pr merge <N> --merge --delete-branch
 
 Use `--merge`, not squash or rebase: the history here is merge commits
 (`Merge pull request #N from tmd913/worktree-…`) and each branch's own commits carry
-the reasoning. `--delete-branch` is what stops the remote accumulating dead branches
-— six are sitting there right now because it was skipped.
+the reasoning. `--delete-branch` is what stops the remote accumulating dead branches; skipping it
+is how six of them once accumulated unnoticed. **If you are standing on the branch
+you are merging**, move off it first (`git checkout main`) — `gh` cannot delete a
+checked-out local branch, and it will leave it behind while the remote one goes.
 
 Then, **before merging the next one**:
 
@@ -242,11 +244,11 @@ an unmerged branch may be an agent's parked work.
 git push origin --delete <branch> ...
 ```
 
-There are currently six merged-but-undeleted branches on the remote
-(`worktree-batter-percentile-sections`, `worktree-deploy-skill`,
-`worktree-feed-upcoming-opposing-sp`, `worktree-hide-simulate-toggle`,
-`worktree-pct-tap-not-scroll`, `worktree-rolling-xwoba-default-100`). All six are
-ancestors of `main` and safe to remove whenever the user wants them gone.
+This step is not hypothetical: six `worktree-*` branches had accumulated on the
+remote before it was first run, all of them ancestors of `main`. The loop above is
+what finds them, and re-running `--is-ancestor` immediately before deleting is what
+makes the deletion safe — a branch can gain a commit between the survey and the
+cleanup.
 
 ## 7. Report, and offer the deploy
 
