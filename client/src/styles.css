@@ -3724,7 +3724,11 @@ body {
 .sum-opp-empty {
   color: var(--muted);
 }
-.sim-toggle {
+/* The settings popover's items. `.help-btn` (How to use) is folded into these
+   selector lists rather than restyled to resemble them, so the menu's entries
+   stay identical by construction. */
+.sim-toggle,
+.help-btn {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -3739,11 +3743,13 @@ body {
   cursor: pointer;
   transition: color 0.14s ease, border-color 0.14s ease, background 0.14s ease;
 }
-.sim-toggle:hover {
+.sim-toggle:hover,
+.help-btn:hover {
   color: var(--text);
   border-color: var(--accent);
 }
-.sim-toggle:focus-visible {
+.sim-toggle:focus-visible,
+.help-btn:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -4382,6 +4388,283 @@ body {
   border-color: var(--strikeout);
 }
 .signout-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---- How-to page ------------------------------------------------------------
+   The guide rides on `.details-view` — same fixed full-screen box, same own
+   scroller, same pinned page behind it — so only what's different from the
+   player page is written here. Its padding moves off the shell and onto the
+   rows, because the chapter strip is sticky and has to span the full width
+   rather than sit inside a padded column. */
+.tutorial-view {
+  padding: 0 0 64px;
+  /* Above the player page: a `?help=1` link can land on top of an open details
+     view, and closing the guide should reveal it rather than the other way
+     round. */
+  z-index: 60;
+}
+.tut-head {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 20px 16px 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+}
+.tut-title {
+  font-size: clamp(22px, 5vw, 30px);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  margin: 0 0 8px;
+}
+.tut-lede {
+  margin: 0;
+  max-width: 60ch;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.6;
+}
+/* The chapter strip. A jump list, not a switch — it takes the details view's
+   tab shape (a scrolling strip over a rule) rather than the segmented pill,
+   which would claim it filters the page. Sticky against the overlay's own
+   scroller, so it stays reachable through nine chapters. */
+.tut-nav-wrap {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+.tut-nav {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 16px;
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tut-nav::-webkit-scrollbar {
+  display: none;
+}
+.tut-nav-chip {
+  flex: none;
+  white-space: nowrap;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  cursor: pointer;
+}
+.tut-nav-chip:hover {
+  color: var(--text);
+}
+.tut-nav-chip.is-active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.tut-nav-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.tut-body {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+.tut-section {
+  padding: 30px 0;
+  border-bottom: 1px solid var(--border);
+  /* Clear of the sticky strip when jumped to. */
+  scroll-margin-top: 44px;
+}
+.tut-section:last-of-type {
+  border-bottom: none;
+}
+.tut-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  margin: 0 0 14px;
+}
+.tut-num {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 800;
+}
+.tut-sub {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text);
+  margin: 22px 0 8px;
+}
+.tut-section p {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.65;
+  max-width: 64ch;
+}
+.tut-section strong {
+  color: var(--text);
+  font-weight: 700;
+}
+.tut-section em {
+  color: var(--text);
+}
+.tut-list,
+.tut-steps {
+  margin: 0 0 12px;
+  padding-left: 22px;
+  max-width: 64ch;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.65;
+}
+.tut-list li,
+.tut-steps li {
+  margin-bottom: 9px;
+}
+.tut-steps {
+  counter-reset: none;
+}
+/* Term/definition pairs — the shape most of this guide takes, since nearly
+   everything here is "this control, and what it gives you". */
+.tut-defs {
+  margin: 0 0 12px;
+  display: grid;
+  gap: 12px;
+}
+.tut-defs dt {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text);
+}
+.tut-defs dd {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.6;
+  max-width: 64ch;
+  padding-left: 12px;
+  border-left: 2px solid var(--border);
+}
+/* An aside that qualifies the chapter above it rather than continuing it. */
+.tut-note {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--control-radius);
+  padding: 11px 14px;
+  font-size: 14px !important;
+}
+/* Naming a control the reader will find on screen. Not a button — it takes the
+   panel's box and the control radius so it reads as a quotation of the chrome,
+   never as something to tap here. */
+.tut-ui {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 1px 7px;
+  color: var(--text);
+  font-size: 0.9em;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.tut-inline-icon {
+  vertical-align: -2px;
+}
+/* A replica of a real control, built from the app's own classes. Pointer events
+   off throughout: it looks exactly like the thing it describes, which is the
+   point, and would otherwise invite a tap that does nothing. */
+.tut-demo {
+  margin: 0 0 16px;
+  padding: 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.tut-demo-stage {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  max-width: 100%;
+  pointer-events: none;
+  user-select: none;
+}
+.tut-demo-label {
+  color: var(--faint);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+}
+.tut-end {
+  padding: 26px 0 0;
+  display: flex;
+  justify-content: center;
+}
+.tut-done {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  color: #04121c;
+  font-size: 14px;
+  font-weight: 800;
+  padding: 11px 22px;
+  border-radius: var(--control-radius);
+  cursor: pointer;
+}
+.tut-done:hover {
+  filter: brightness(1.08);
+}
+.tut-done:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+/* The empty watchlist's way in — the one screen every new user lands on. */
+.empty-help {
+  margin-top: 16px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: color 0.14s ease, border-color 0.14s ease;
+}
+.empty-help:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.empty-help:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
