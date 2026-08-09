@@ -4199,6 +4199,13 @@ body {
   text-transform: none;
   cursor: pointer;
 }
+/* The trailing gutter the shared `:last-child` rule gives the rightmost column
+   has to be re-applied here: that rule sets it on the `th`, and `th.research-sort`
+   zeroes the th's padding so the sort button can own it. Without this the last
+   header sat 19px inside its own numbers while every other one lined up. */
+.research-table th.research-sort:last-child button {
+  padding-right: clamp(10px, 3vw, 32px);
+}
 .research-table th.research-sort button:hover {
   color: var(--text);
 }
