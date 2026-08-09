@@ -4304,6 +4304,48 @@ body {
 .research-table td.research-sorted {
   color: var(--accent);
 }
+
+/* …and it follows you along the table. One `position: sticky` carrying **both**
+   `left` and `right`: the cell keeps its natural place until it would leave the
+   viewport, then pins to whichever edge it was about to pass — left once you
+   have scrolled beyond it, right while you have not yet reached it. The browser
+   resolves which, so there is no scroll listener and no state to drift.
+
+   `--research-pin-left` is measured in the component (the name column is fluid,
+   so unlike its own 63px this offset can't be a constant) and is the right edge
+   of whatever is already pinned there — the headshot alone below 820px, the
+   headshot and name above it. Without clearing it the sorted column would slide
+   underneath the name rather than alongside it.
+
+   The cells are opaque by construction — every th and td in this table carries a
+   background, and the zebra and hover rules keep the sticky one matching its row
+   — so columns pass cleanly underneath rather than showing through.
+
+   The soft edge goes on **both** sides, which is the one place this differs from
+   the pinned name column's single right-hand shadow. Which edge is doing the
+   pinning changes with the scroll position and CSS cannot know which, so both
+   are drawn: whichever side columns are sliding under gets its boundary marked.
+   Without it the half-covered column beside it reads as a broken column of its
+   own — an OPS of .904 sliding under shows as a column headed "PS" holding
+   "04" — rather than as one passing behind. In its natural position, unpinned,
+   the pair reads as emphasis on the column the table is ordered by, which is no
+   bad thing for the one column that is. */
+.research-table td.research-sorted,
+.research-table th.research-sort.active {
+  position: sticky;
+  left: var(--research-pin-left, 63px);
+  right: 0;
+  z-index: 1;
+  box-shadow: 6px 0 8px -6px rgba(0, 0, 0, 0.5), -6px 0 8px -6px rgba(0, 0, 0, 0.5);
+}
+/* The sorted header is pinned on both axes at once — down the page with the
+   rest of the header row, across the table with its own column — so it needs
+   the header's `top` as well, and a layer above both the row it sits in and the
+   column it heads. */
+.research-table thead th.research-sort.active {
+  top: 0;
+  z-index: 3;
+}
 /* The Statcast half of the row is a different kind of number from the counting
    stats beside it — what the contact was worth, not what it went for — so the
    seam between them is drawn, and the group named in the header's own colour.
