@@ -3,6 +3,7 @@ import { api } from './api';
 import { SignOutButton } from './auth';
 import { playerKey } from './types';
 import type { PlayerKind, PlayerReport, SeasonPlayer, WatchPlayer } from './types';
+import { isInjured } from './lib';
 import { PlayerAdder } from './components/PlayerAdder';
 import { PlayerOrderEditor } from './components/PlayerOrderEditor';
 import { PlayerCard } from './components/PlayerCard';
@@ -185,8 +186,16 @@ export default function App() {
   // Demo toggle: overlay a synthetic live-day state on the loaded reports so the
   // live-only UI can be exercised when nothing is actually being played.
   const [simulate, setSimulate] = useState<boolean>(() => initialParams.get('sim') === '1');
-  // The settings popover (gear next to the title) — currently holds the simulate
-  // toggle. Closes on outside click or Escape.
+  // Keep players on the IL off the players view. The summary table hides them
+  // whatever this says (see `visibleReports`); this is the one view where the
+  // choice is the user's, since a card can still show what he did before he got
+  // hurt. In the URL like every other view setting — the client has no
+  // localStorage, so this is where a preference lives.
+  const [hideInjured, setHideInjured] = useState<boolean>(
+    () => initialParams.get('hideil') === '1',
+  );
+  // The settings popover (gear next to the title) — the simulate and
+  // hide-injured toggles. Closes on outside click or Escape.
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -245,8 +254,19 @@ export default function App() {
     if (view !== 'summary') p.set('view', view);
     if (playerKind !== 'batter') p.set('kind', playerKind);
     if (simulate) p.set('sim', '1');
+    if (hideInjured) p.set('hideil', '1');
     window.history.replaceState(null, '', `?${p.toString()}`);
-  }, [start, end, activePreset, expandedKeys, detailsKey, view, playerKind, simulate]);
+  }, [
+    start,
+    end,
+    activePreset,
+    expandedKeys,
+    detailsKey,
+    view,
+    playerKind,
+    simulate,
+    hideInjured,
+  ]);
 
   // Load the season's player list once, for search/autocomplete.
   useEffect(() => {
@@ -510,10 +530,38 @@ export default function App() {
   // keeping the watchlist's order). The tabs only appear when both kinds are
   // watched; with one kind there's nothing to switch between, so the list just
   // shows it — even if the URL asked for the empty half.
-  const cardBatters = displayReports.filter((r) => r.kind !== 'pitcher');
-  const cardPitchers = displayReports.filter((r) => r.kind === 'pitcher');
+  //
+  // A player on the IL plays no games, so over any range that starts after he
+  // went down his row is a line of dashes. The summary table — nothing but those
+  // rows — drops him outright; the players view drops him only when the settings
+  // toggle asks, his card there still being able to say what he did before he
+  // got hurt. The feed is left alone either way: it's a record of things that
+  // happened, and it already keeps inactive players out of Upcoming.
+  //
+  // Filtering here, ahead of the kind split, is what keeps the tab counts equal
+  // to the list under them. The reorder screen is deliberately upstream of it
+  // (`editPlayers`, off raw `reports`) — dropping an injured player from the
+  // watchlist is exactly what that screen is for.
+  const hidingInjured = view === 'summary' || hideInjured;
+  const shownReports = useMemo(
+    () =>
+      hidingInjured
+        ? displayReports.filter((r) => !isInjured(r.rosterStatus))
+        : displayReports,
+    [displayReports, hidingInjured],
+  );
+  const cardBatters = shownReports.filter((r) => r.kind !== 'pitcher');
+  const cardPitchers = shownReports.filter((r) => r.kind === 'pitcher');
   const showKindTabs = cardBatters.length > 0 && cardPitchers.length > 0;
-  const shownKind = showKindTabs || cardPitchers.length === 0 ? playerKind : 'pitcher';
+  // With one kind empty the tabs are hidden, so the list shows whichever kind is
+  // left — a stale `kind=` (or a filter that just emptied that half) can't leave
+  // the user staring at nothing with no tab to click back to.
+  const shownKind =
+    cardPitchers.length === 0 && cardBatters.length > 0
+      ? 'batter'
+      : cardBatters.length === 0 && cardPitchers.length > 0
+        ? 'pitcher'
+        : playerKind;
   const kindCards = shownKind === 'pitcher' ? cardPitchers : cardBatters;
   // The second tier of tabs, in the view bar beside the view switch: every view
   // below shows a single kind at a time, so the pair reads as one control.
@@ -689,6 +737,17 @@ export default function App() {
                   <span className="sim-dot" aria-hidden="true" />
                   {simulate ? 'Simulating live' : 'Simulate live'}
                 </button>
+                <button
+                  type="button"
+                  className={`settings-toggle${hideInjured ? ' active' : ''}`}
+                  role="menuitemcheckbox"
+                  aria-checked={hideInjured}
+                  onClick={() => setHideInjured((v) => !v)}
+                  title="Keep players on the IL off the players view — the summary table always leaves them off"
+                >
+                  <span className="settings-dot" aria-hidden="true" />
+                  Hide injured players
+                </button>
                 {/* Renders nothing when auth isn't configured, so the local dev
                     menu looks exactly as it did. */}
                 <SignOutButton />
@@ -836,8 +895,22 @@ export default function App() {
         </div>
       )}
 
+      {/* Everyone the active view would show is on the IL. Without this the
+          summary is a header over a Total row of zeros, and the players view an
+          expanse of nothing with no hint that a setting is doing it. */}
+      {displayReports.length > 0 && kindCards.length === 0 && !editMode && (
+        <div className="empty-state">
+          <p className="empty-title">Nothing to show — everyone here is on the IL</p>
+          <p>
+            {view === 'summary'
+              ? 'Injured players are left off the summary table. Their cards are still on the Players view.'
+              : 'Turn off “Hide injured players” in settings (the gear by the title) to see their cards.'}
+          </p>
+        </div>
+      )}
+
       {view === 'summary' ? (
-        displayReports.length > 0 && (
+        kindCards.length > 0 && (
           <SummaryTable
             reports={kindCards}
             onOpenDetails={setDetailsKey}
@@ -845,7 +918,7 @@ export default function App() {
           />
         )
       ) : view === 'feed' ? (
-        displayReports.length > 0 && (
+        kindCards.length > 0 && (
           /* Keyed so switching kind or date range starts the stream back at its
              first page; a live poll (data only) leaves it alone. */
           <LiveFeed
