@@ -1038,10 +1038,20 @@ export function ResearchTable({
                       aria-sort={active ? (sortAsc ? 'ascending' : 'descending') : 'none'}
                     >
                       <button type="button" onClick={() => toggleSort(c)} title={c.title}>
-                        {c.label}
+                        {/* The arrow leads the label rather than trailing it, and
+                            that is an alignment decision rather than a stylistic
+                            one. It reserves its width on every column, sorted or
+                            not, so that clicking a header doesn't shove every
+                            column right of it along — but reserved *after* the
+                            label it pushed the label 11px (8px arrow + 3px gap)
+                            inside the edge the numbers right-align to, so no
+                            header sat over its own column. Ahead of the label,
+                            the reservation is still paid and the label's right
+                            edge is the cell's, exactly like the values below. */}
                         <span className="research-arrow" aria-hidden="true">
                           {active ? (sortAsc ? '▲' : '▼') : ''}
                         </span>
+                        {c.label}
                       </button>
                     </th>
                   );
