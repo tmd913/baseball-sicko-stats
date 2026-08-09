@@ -2,7 +2,8 @@ import { parse } from 'csv-parse/sync';
 import { readJsonBlob, writeJsonBlob } from './storage.js';
 import { toSavantName } from './names.js';
 import { LEAGUE_HR_PER_FB, fipLike, ipToOuts } from './leagueRates.js';
-import type { PlayerKind, ResearchRow } from './types.js';
+import { windowDates, windowStatcast } from './statcastWindow.js';
+import type { PlayerKind, ResearchRow, ResearchWindow } from './types.js';
 
 // Keep in sync with hfSea in savant.ts, CURRENT_SEASON in percentiles.ts, and
 // SEASON in xwoba.ts / pitcherArsenal.ts / teamStats.ts / expectedStats.ts.
@@ -68,6 +69,42 @@ async function getTeamAbbrevs(): Promise<Map<number, string>> {
 // read off the leaderboard, whose only game count is the player's own.
 
 /** Games played, per team id, from the standings. */
+/**
+ * Games **his team** has played inside the window, which is what the qualifier
+ * is measured against. The standings carry a season total and nothing else, so
+ * a window has to count finals off the schedule instead — and must count them
+ * per team rather than per day, since no two clubs play the same number over
+ * thirty days (22 to 25, on a checked month). A postponement is not a game and
+ * is excluded by asking for `codedGameState === 'F'`.
+ */
+async function getTeamGamesInRange(start: string, end: string): Promise<Map<number, number>> {
+  const url =
+    'https://statsapi.mlb.com/api/v1/schedule?sportId=1&gameType=R' +
+    `&startDate=${start}&endDate=${end}` +
+    '&fields=dates,games,status,codedGameState,teams,away,home,team,id';
+  const res = await fetch(url, { headers: UA });
+  if (!res.ok) throw new Error(`MLB Stats API schedule returned ${res.status}`);
+  const data = (await res.json()) as {
+    dates?: {
+      games?: {
+        status?: { codedGameState?: string };
+        teams?: { away?: { team?: { id?: number } }; home?: { team?: { id?: number } } };
+      }[];
+    }[];
+  };
+  const games = new Map<number, number>();
+  for (const day of data.dates ?? []) {
+    for (const g of day.games ?? []) {
+      if (g.status?.codedGameState !== 'F') continue;
+      for (const side of [g.teams?.away, g.teams?.home]) {
+        const id = side?.team?.id;
+        if (id !== undefined) games.set(id, (games.get(id) ?? 0) + 1);
+      }
+    }
+  }
+  return games;
+}
+
 async function getTeamGames(): Promise<Map<number, number>> {
   const url =
     'https://statsapi.mlb.com/api/v1/standings?leagueId=103,104' +
@@ -123,24 +160,30 @@ function qualifies(kind: PlayerKind, row: ResearchRow, teamGames: number): boole
   return row.games >= Math.floor(teamGames / 3);
 }
 
-function leaderboardUrl(kind: PlayerKind): string {
+/** The same leaderboard either way. `byDateRange` takes `playerPool=ALL` just as
+ *  the season call does, and still returns a traded player once carrying his
+ *  current club, so nothing downstream has to know which one it asked for. */
+function leaderboardUrl(kind: PlayerKind, window: ResearchWindow): string {
   const group = kind === 'pitcher' ? 'pitching' : 'hitting';
-  return (
-    `https://statsapi.mlb.com/api/v1/stats?stats=season&group=${group}` +
-    `&season=${SEASON}&sportId=1&limit=2000&playerPool=ALL`
-  );
+  const base =
+    `https://statsapi.mlb.com/api/v1/stats?group=${group}` +
+    `&season=${SEASON}&sportId=1&limit=2000&playerPool=ALL`;
+  if (window === 'season') return `${base}&stats=season`;
+  const d = windowDates(window);
+  return `${base}&stats=byDateRange&startDate=${d[0]}&endDate=${d[d.length - 1]}`;
 }
 
-async function buildBase(kind: PlayerKind): Promise<ResearchRow[]> {
+async function buildBase(kind: PlayerKind, window: ResearchWindow): Promise<ResearchRow[]> {
+  const d = window === 'season' ? null : windowDates(window);
   const [res, teams, teamGames] = await Promise.all([
-    fetch(leaderboardUrl(kind), { headers: UA }),
+    fetch(leaderboardUrl(kind, window), { headers: UA }),
     getTeamAbbrevs(),
-    getTeamGames(),
+    d ? getTeamGamesInRange(d[0], d[d.length - 1]) : getTeamGames(),
   ]);
   // The fallback for a player whose team we can't place (see `qualifies`).
   const maxTeamGames = Math.max(0, ...teamGames.values());
   if (!res.ok) {
-    throw new Error(`MLB Stats API season ${kind} leaderboard returned ${res.status}`);
+    throw new Error(`MLB Stats API ${kind} leaderboard returned ${res.status}`);
   }
   const data = (await res.json()) as StatsResponse;
   const splits = data.stats?.[0]?.splits ?? [];
@@ -340,6 +383,67 @@ const customUrl = (kind: PlayerKind) => {
   return `https://baseballsavant.mlb.com/leaderboard/custom?${params.toString()}`;
 };
 
+/**
+ * The windowed Statcast half, computed from the per-date exports rather than
+ * read off a leaderboard — Savant publishes none for a range (see
+ * `statcastWindow.ts` for why, and for the 25,000-row cap that rules out the
+ * obvious alternative).
+ *
+ * Two columns are **absent by nature** on a window and stay null: `sprintSpeed`
+ * is never in a pitch row, and `xera` is Statcast's own model. The client dashes
+ * them like any other missing value, which is the honest rendering — a window
+ * has no sprint speed rather than a sprint speed of zero.
+ */
+async function enrichWindow(
+  rows: ResearchRow[],
+  kind: PlayerKind,
+  window: Exclude<ResearchWindow, 'season'>,
+): Promise<void> {
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  let stat;
+  try {
+    stat = await windowStatcast(kind, window);
+  } catch (err) {
+    // Same rule as the season board's Savant half: this costs its own columns
+    // a value, never the table — the MLB line is already in hand.
+    console.error(`Research: ${window}-day Statcast unavailable:`, err);
+    return;
+  }
+  for (const [id, v] of stat) {
+    const row = byId.get(id);
+    if (!row) continue;
+    row.xba = v.xba;
+    row.xslg = v.xslg;
+    row.xwoba = v.xwoba;
+    row.exitVelocity = v.exitVelocity;
+    row.launchAngle = v.launchAngle;
+    row.barrelRate = v.barrelRate;
+    row.hardHitRate = v.hardHitRate;
+    row.sweetSpotRate = v.sweetSpotRate;
+    row.gbRate = v.gbRate;
+    row.ldRate = v.ldRate;
+    row.fbRate = v.fbRate;
+    row.whiffRate = v.whiffRate;
+    row.chaseRate = v.chaseRate;
+    row.firstPitchStrikeRate = v.firstPitchStrikeRate;
+    // xFIP off the window's own fly balls, exactly as the season path does it
+    // off the custom board's — same helper, same league rate, so a pitcher's
+    // xFIP means the same thing on either board.
+    if (kind === 'pitcher') {
+      row.xfip =
+        v.flyBalls > 0
+          ? fipLike(
+              v.flyBalls * LEAGUE_HR_PER_FB,
+              row.walks ?? 0,
+              row.hitBatsmen ?? 0,
+              row.strikeouts ?? 0,
+              row.outs ?? 0,
+            )
+          : null;
+    }
+  }
+}
+
 async function enrich(rows: ResearchRow[], kind: PlayerKind): Promise<void> {
   const byId = new Map(rows.map((r) => [r.id, r]));
 
@@ -402,21 +506,29 @@ async function enrich(rows: ResearchRow[], kind: PlayerKind): Promise<void> {
 
 interface Cached {
   season: number;
+  window: ResearchWindow;
   rows: ResearchRow[];
 }
 
-const mem = new Map<PlayerKind, { data: Cached; fetchedAt: number }>();
-const inFlight = new Map<PlayerKind, Promise<Cached>>();
+// Keyed by kind **and** window: the two boards were already separate blobs, and
+// a window is a different population of the same league, not a filter over one.
+type BoardKey = `${PlayerKind}:${ResearchWindow}`;
+const boardKey = (kind: PlayerKind, window: ResearchWindow): BoardKey => `${kind}:${window}`;
+
+const mem = new Map<BoardKey, { data: Cached; fetchedAt: number }>();
+const inFlight = new Map<BoardKey, Promise<Cached>>();
 
 // -v3: a stored older blob deserializes with every field added since missing,
 // and would quietly cost each row its estimators, its batted-ball profile or
 // its discipline columns for six hours. Bump this whenever a field is added.
-const storeKey = (kind: PlayerKind) => `research-${kind}-${SEASON}-v5.json`;
+const storeKey = (kind: PlayerKind, window: ResearchWindow) =>
+  `research-${kind}-${window}-${SEASON}-v6.json`;
 
-async function build(kind: PlayerKind): Promise<Cached> {
-  const rows = await buildBase(kind);
-  await enrich(rows, kind);
-  return { season: SEASON, rows };
+async function build(kind: PlayerKind, window: ResearchWindow): Promise<Cached> {
+  const rows = await buildBase(kind, window);
+  if (window === 'season') await enrich(rows, kind);
+  else await enrichWindow(rows, kind, window);
+  return { season: SEASON, window, rows };
 }
 
 /**
@@ -428,31 +540,35 @@ async function build(kind: PlayerKind): Promise<Cached> {
  * The MLB half throwing fails the request — without it there is no table. The
  * Savant half failing only empties its own columns (see `enrich`).
  */
-export async function getResearch(kind: PlayerKind): Promise<Cached> {
-  const hit = mem.get(kind);
+export async function getResearch(
+  kind: PlayerKind,
+  window: ResearchWindow = 'season',
+): Promise<Cached> {
+  const key = boardKey(kind, window);
+  const hit = mem.get(key);
   if (hit && Date.now() - hit.fetchedAt < CACHE_TTL_MS) return hit.data;
 
-  const running = inFlight.get(kind);
+  const running = inFlight.get(key);
   if (running) return running;
 
   const p = (async () => {
     const stored = await readJsonBlob<Cached>(
-      storeKey(kind),
+      storeKey(kind, window),
       (_v, cachedAt) => Date.now() - cachedAt < CACHE_TTL_MS,
     );
     if (stored) {
-      mem.set(kind, { data: stored, fetchedAt: Date.now() });
+      mem.set(key, { data: stored, fetchedAt: Date.now() });
       return stored;
     }
-    const data = await build(kind);
-    mem.set(kind, { data, fetchedAt: Date.now() });
-    await writeJsonBlob(storeKey(kind), data);
+    const data = await build(kind, window);
+    mem.set(key, { data, fetchedAt: Date.now() });
+    await writeJsonBlob(storeKey(kind, window), data);
     return data;
   })();
-  inFlight.set(kind, p);
+  inFlight.set(key, p);
   try {
     return await p;
   } finally {
-    inFlight.delete(kind);
+    inFlight.delete(key);
   }
 }

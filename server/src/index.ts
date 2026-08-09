@@ -13,7 +13,8 @@ import { getPitcherXera } from './expectedStats.js';
 import { getResearch } from './research.js';
 import type { Arsenal } from './pitcherArsenal.js';
 import { getLeaguePitchAverage } from './pitchLeague.js';
-import type { SeasonArsenalPitch } from './types.js';
+import { RESEARCH_WINDOWS } from './types.js';
+import type { ResearchWindow, SeasonArsenalPitch } from './types.js';
 import { getPitcherStats, getPlayerStats, getSeasonPlayers, resolveVideoUrl } from './mlbStats.js';
 import {
   addPlayer,
@@ -254,8 +255,15 @@ app.get(
   requireUser,
   asyncRoute(async (req, res) => {
     const kind = req.query.type === 'pitcher' ? 'pitcher' : 'batter';
-    const { season, rows } = await getResearch(kind);
-    res.json({ season, kind, rows });
+    // An unrecognised window is the season, not a 400: the param is a view
+    // preference carried in a shareable URL, and an older link naming a window
+    // this build no longer offers should still open the board.
+    const asked = Number(req.query.window);
+    const window: ResearchWindow = RESEARCH_WINDOWS.includes(asked as ResearchWindow)
+      ? (asked as ResearchWindow)
+      : 'season';
+    const { season, rows } = await getResearch(kind, window);
+    res.json({ season, kind, window, rows });
   }),
 );
 

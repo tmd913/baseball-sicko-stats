@@ -3,6 +3,7 @@ import { getSeasonArsenal } from './pitcherArsenal.js';
 import { getPercentiles } from './percentiles.js';
 import { getPitcherStats, getPlayerStats, getSeasonPlayers } from './mlbStats.js';
 import { getResearch } from './research.js';
+import { RESEARCH_WINDOWS } from './types.js';
 import { getAllWatchedPlayers } from './store.js';
 import { mapLimit } from './limit.js';
 import { baseballToday } from './etDate.js';
@@ -104,11 +105,24 @@ export async function warm(event: WarmEvent = {}): Promise<{ mode: string; dates
     // The research board: a league-wide MLB leaderboard plus two Savant CSVs per
     // kind, and the one page in the app that belongs to nobody's watchlist — so
     // nothing else here would ever pull it warm.
-    await Promise.all(
-      (['batter', 'pitcher'] as const).map((kind) =>
-        getResearch(kind).catch((err) => console.error(`research ${kind} warm failed:`, err)),
-      ),
-    );
+    //
+    // Every window too, not just the season. A window's Statcast half is built
+    // from the per-date exports (see `statcastWindow.ts`), and while a day's
+    // counts are cached forever once computed, the *first* pass over a 60-day
+    // window has up to sixty 3.3MB CSVs to fetch — far past what the
+    // interactive path can absorb. After that each night adds one new day and
+    // re-reads the rest as small blobs, so this stays cheap. Sequential by
+    // window so the cold first run doesn't open sixty downloads per board at
+    // once; the boards within a window still go together.
+    for (const window of RESEARCH_WINDOWS) {
+      await Promise.all(
+        (['batter', 'pitcher'] as const).map((kind) =>
+          getResearch(kind, window).catch((err) =>
+            console.error(`research ${kind} ${window} warm failed:`, err),
+          ),
+        ),
+      );
+    }
     return { mode, dates };
   }
 

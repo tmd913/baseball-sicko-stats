@@ -4074,6 +4074,34 @@ body {
 }
 
 /* ---- Active filters ---- */
+/* The time-span tabs, at the head of the Filters panel. The control itself is
+   the app's segmented switch — folded into `.view-switch`/`.view-tab`'s selector
+   lists above rather than restyled to match, so it highlights identically by
+   construction. Only its place in the panel stack is its own: it sits directly
+   under the control bar as the first thing in the panel, and scrolls sideways
+   rather than wrapping, the rule the position pills already follow. */
+.research-window-row {
+  display: flex;
+  margin-bottom: 8px;
+  max-width: max-content;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.research-window-row::-webkit-scrollbar {
+  display: none;
+}
+.research-window-tab {
+  flex: none;
+}
+
+/* The window chip reads as a statement of what the table covers rather than as
+   one more restriction to peel off, so it takes the accent the active tab does
+   instead of the neutral chip fill. */
+.research-chip-window {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .research-chips {
   display: flex;
   flex-wrap: wrap;
@@ -4247,6 +4275,7 @@ body {
 /* ---- View switch (Players / Feed) ---- */
 .view-switch,
 .kind-switch,
+.research-window-row,
 .date-presets {
   display: inline-flex;
   align-items: center;
@@ -4259,6 +4288,7 @@ body {
 }
 .view-tab,
 .kind-tab,
+.research-window-tab,
 .date-preset {
   display: inline-flex;
   align-items: center;
@@ -4275,17 +4305,20 @@ body {
 }
 .view-tab:hover,
 .kind-tab:hover,
+.research-window-tab:hover,
 .date-preset:hover {
   color: var(--text);
 }
 .view-tab.active,
 .kind-tab.active,
+.research-window-tab.active,
 .date-preset.active {
   color: var(--bg);
   background: var(--accent);
 }
 .view-tab:focus-visible,
 .kind-tab:focus-visible,
+.research-window-tab:focus-visible,
 .date-preset:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;

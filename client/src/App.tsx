@@ -2,7 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api';
 import { SignOutButton } from './auth';
 import { playerKey } from './types';
-import type { PlayerKind, PlayerReport, ResearchRow, SeasonPlayer, WatchPlayer } from './types';
+import type {
+  PlayerKind,
+  PlayerReport,
+  ResearchRow,
+  ResearchWindow,
+  SeasonPlayer,
+  WatchPlayer,
+} from './types';
 import { isInjured } from './lib';
 import { PlayerAdder } from './components/PlayerAdder';
 import { PlayerOrderEditor } from './components/PlayerOrderEditor';
@@ -16,6 +23,7 @@ import {
   researchKindFor,
   toColumnKeys,
   toResearchPos,
+  toResearchWindow,
 } from './components/ResearchTable';
 import type { ResearchPos } from './components/ResearchTable';
 import { simulateLiveDay } from './simulate';
@@ -314,7 +322,19 @@ export default function App() {
     [researchKind],
   );
 
-  const [research, setResearch] = useState<Partial<Record<PlayerKind, ResearchRow[]>>>({});
+  // Which slice of the season the board is reading. Shared across both boards
+  // like `qualified` and for the same reason: "the last 30 days" means the same
+  // thing on either, so a tab switch dropping it would silently change the
+  // population. In the URL, unlike the page's transient filters — it changes
+  // *which* season a shared link is about, which is the kind of thing a link
+  // has to carry.
+  const [researchWindow, setResearchWindow] = useState<ResearchWindow>(() =>
+    toResearchWindow(initialParams.get('win')),
+  );
+  // Keyed by board **and** window: each is its own fetch and its own megabyte,
+  // and both are kept, so flipping back to a window already read is instant.
+  const [research, setResearch] = useState<Record<string, ResearchRow[]>>({});
+  const researchCacheKey = `${researchKind}:${researchWindow}`;
   // Shared across both boards (see the prop's comment in ResearchTable), so it
   // survives the remount that switching board causes. Transient like the page's
   // other filters — deliberately not in the URL.
@@ -388,6 +408,12 @@ export default function App() {
     if (playerKind !== 'batter') p.set('kind', playerKind);
     // Only meaningful on the research view, and 'batters' is its default.
     if (view === 'research' && researchPos !== 'batters') p.set('pos', researchPos);
+    // Likewise, with the whole season as the default. A window is the one page
+    // filter that goes in the URL: it decides which games the numbers are drawn
+    // from, so a link without it would open on a different table.
+    if (view === 'research' && researchWindow !== 'season') {
+      p.set('win', String(researchWindow));
+    }
     // The column set of the board on screen, and only once it differs from that
     // board's defaults — otherwise every link would carry twenty stat keys to
     // say "the usual". `pos=` is what tells a reader which board they describe.
@@ -408,6 +434,7 @@ export default function App() {
     view,
     playerKind,
     researchPos,
+    researchWindow,
     researchCols,
     researchKind,
     simulate,
@@ -420,8 +447,8 @@ export default function App() {
   // league-wide season stats.
   useEffect(() => {
     // Already loaded: nothing to fetch, but clear an error left over from the
-    // other kind — it belongs to that board, not this one.
-    if (research[researchKind]) {
+    // other board — it belongs to that one, not this one.
+    if (research[researchCacheKey]) {
       setResearchError(null);
       return;
     }
@@ -430,9 +457,12 @@ export default function App() {
     setResearchLoading(true);
     setResearchError(null);
     api
-      .research(researchKind)
+      .research(researchKind, researchWindow)
       .then((r) => {
-        if (!cancelled) setResearch((prev) => ({ ...prev, [r.kind]: r.rows }));
+        // Keyed off what came back rather than what was asked for, so a server
+        // that fell back to the season (an unrecognised window from an older
+        // link) caches under the window it actually served.
+        if (!cancelled) setResearch((prev) => ({ ...prev, [`${r.kind}:${r.window}`]: r.rows }));
       })
       .catch((e: Error) => {
         if (!cancelled) setResearchError(e.message);
@@ -443,7 +473,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [view, researchKind, research]);
+  }, [view, researchKind, researchWindow, researchCacheKey, research]);
 
   // Load the season's player list once, for search/autocomplete.
   useEffect(() => {
@@ -1158,9 +1188,9 @@ export default function App() {
              to the other board (OF → SP) starts fresh rather than carrying a
              batter's column vocabulary onto a pitcher's table. */
           key={researchKind}
-          rows={research[researchKind] ?? []}
+          rows={research[researchCacheKey] ?? []}
           kind={researchKind}
-          loading={researchLoading && !research[researchKind]}
+          loading={researchLoading && !research[researchCacheKey]}
           error={researchError}
           pos={researchPos}
           onPosChange={setResearchPos}
@@ -1168,6 +1198,8 @@ export default function App() {
           onColumnsChange={setResearchColumns}
           qualifiedOnly={researchQualified}
           onQualifiedChange={setResearchQualified}
+          window={researchWindow}
+          onWindowChange={setResearchWindow}
           onOpenDetails={setDetailsKey}
         />
       ) : view === 'summary' ? (
