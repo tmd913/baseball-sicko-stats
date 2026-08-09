@@ -699,6 +699,24 @@ export function rosterStatusBadge(
   return { label: description.replace(/\s*#\s*days?$/i, ''), title: description, tone: 'other' };
 }
 
+/**
+ * Whether the player is on the injured list. The summary table drops these rows
+ * outright and the players view offers to (the settings menu's "Hide injured"),
+ * since a line of dashes says less than the badge already does. Narrower than
+ * "has a status badge at all", on purpose: a suspension or an option to the
+ * minors is a few days and can end with a recall mid-day, an IL stint is weeks
+ * — only the latter is worth a standing filter.
+ */
+export function isInjured(status: RosterStatus | null): boolean {
+  if (!status) return false;
+  // A rehab assignment is an IL stint with minor-league games attached: he's
+  // still on the IL and still can't turn up in a box score. Its code ('RA')
+  // isn't a D-code, so the badge files it under "other" — but for the purpose
+  // of hiding a player who won't play, it's the same thing.
+  if (status.code === 'RA' || /rehab/i.test(status.description)) return true;
+  return rosterStatusBadge(status)?.tone === 'il';
+}
+
 /** Exit velo · launch angle · distance for a batted ball, if any was tracked.
  * Takes the batted-ball fields rather than a whole plate appearance, so the
  * pitcher's side reads the same line off a `FacedBatter` — the two carry the
