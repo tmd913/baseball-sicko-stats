@@ -13,6 +13,7 @@ import { SummaryTable } from './components/SummaryTable';
 import { simulateLiveDay } from './simulate';
 import { PlayerDetails } from './components/PlayerDetails';
 import { DateRangePicker } from './components/DateRangePicker';
+import { Tutorial } from './components/Tutorial';
 
 // Breathing room above a card scrolled to the top of the viewport.
 const SCROLL_GAP = 12;
@@ -194,8 +195,13 @@ export default function App() {
   const [hideInjured, setHideInjured] = useState<boolean>(
     () => initialParams.get('hideil') === '1',
   );
+  // The how-to page (settings menu → How to use, and the empty state's button).
+  // In the URL like every other view, so it survives a reload and can be linked
+  // to — which is the only way to hand someone the guide directly.
+  const [helpOpen, setHelpOpen] = useState<boolean>(() => initialParams.get('help') === '1');
   // The settings popover (gear next to the title) — the simulate and
-  // hide-injured toggles. Closes on outside click or Escape.
+  // hide-injured toggles, then the way into the how-to page. Closes on outside
+  // click or Escape.
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -255,6 +261,7 @@ export default function App() {
     if (playerKind !== 'batter') p.set('kind', playerKind);
     if (simulate) p.set('sim', '1');
     if (hideInjured) p.set('hideil', '1');
+    if (helpOpen) p.set('help', '1');
     window.history.replaceState(null, '', `?${p.toString()}`);
   }, [
     start,
@@ -266,6 +273,7 @@ export default function App() {
     playerKind,
     simulate,
     hideInjured,
+    helpOpen,
   ]);
 
   // Load the season's player list once, for search/autocomplete.
@@ -748,6 +756,26 @@ export default function App() {
                   <span className="settings-dot" aria-hidden="true" />
                   Hide injured players
                 </button>
+                {/* The two checkable toggles read together above; this one is a
+                    way out of the menu, so it sits below them and beside Sign
+                    out. */}
+                <button
+                  type="button"
+                  className="help-btn"
+                  role="menuitem"
+                  onClick={() => {
+                    setSettingsOpen(false);
+                    setHelpOpen(true);
+                  }}
+                  title="How to use the app"
+                >
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M9.6 9.2a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.9" />
+                    <path d="M12 17.2h.01" />
+                  </svg>
+                  How to use
+                </button>
                 {/* Renders nothing when auth isn't configured, so the local dev
                     menu looks exactly as it did. */}
                 <SignOutButton />
@@ -881,6 +909,11 @@ export default function App() {
             Search for a player above to start tracking their plate
             appearances, pitch sequences, and Statcast contact quality.
           </p>
+          {/* The one place a first-time user is guaranteed to land, so the guide
+              is offered here rather than only from the settings menu. */}
+          <button type="button" className="empty-help" onClick={() => setHelpOpen(true)}>
+            How does this work?
+          </button>
         </div>
       )}
 
@@ -1026,6 +1059,10 @@ export default function App() {
           onClose={() => setDetailsKey(null)}
         />
       )}
+
+      {/* Last, and above the player page in the stack: opened from a link it can
+          sit over an already-open details view, and closing it puts that back. */}
+      {helpOpen && <Tutorial onClose={() => setHelpOpen(false)} />}
     </div>
   );
 }
