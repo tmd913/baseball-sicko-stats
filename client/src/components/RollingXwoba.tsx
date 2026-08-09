@@ -21,6 +21,18 @@ interface Pt {
 // The window the chart opens on. 50 and 250 are only ever walked if they're picked.
 const DEFAULT_WIN: Win = 100;
 
+/**
+ * The window to open on: the default, or — for a player who hasn't the plate
+ * appearances to fill it — the largest shorter one he has, so a part season opens
+ * on a chart rather than on "not enough for a 100-PA rolling window". Falls back to
+ * the shortest window under 50 PA, where nothing plots and that message is the point.
+ */
+function openingWin(paCount: number): Win {
+  if (paCount >= DEFAULT_WIN) return DEFAULT_WIN;
+  const shorter = WINDOWS.filter((w) => w < DEFAULT_WIN && w <= paCount);
+  return shorter.length ? shorter[shorter.length - 1] : WINDOWS[0];
+}
+
 /** The rolling-mean series as plotted points, dropping the incomplete leading window. */
 function buildPoints(series: XwobaSeries, win: number): Pt[] {
   const roll = rollingMean(
@@ -59,7 +71,7 @@ function md(date: string): string {
 }
 
 export function RollingXwoba({ series, name }: { series: XwobaSeries; name: string }) {
-  const [win, setWin] = useState<Win>(DEFAULT_WIN);
+  const [win, setWin] = useState<Win>(() => openingWin(series.pas.length));
   const [hover, setHover] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
 
