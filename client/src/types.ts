@@ -584,6 +584,9 @@ export interface ResearchRow {
    *  shown to a user with a fantasy league connected. Absent means either no
    *  league or no match for the player. */
   rosterPct?: number | null;
+  /** How that roster % has moved over the trend window — client-merged too, and
+   *  absent when there is no league or no movement to report. */
+  rosterTrend?: number | null;
   savantName: string;
   kind: PlayerKind;
   team: string; // "MIL" — the abbreviation; a full name is column-wide
@@ -749,6 +752,9 @@ export interface EspnOwnership {
   owned: Record<number, number>;
   /** ESPN's global rostered percentage by MLB player id — see `ResearchRow.rosterPct`. */
   rosterPct: Record<number, number>;
+  /** How those percentages have moved, and over how long. Null until a second
+   *  day of history exists to measure against. */
+  trend: { delta: Record<number, number>; days: number } | null;
   /** Roster entries read, and how many found an MLB player. The gap is
    *  prospects who have never played a major-league game; it is carried so a
    *  match that has silently stopped working is visible rather than showing up

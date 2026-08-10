@@ -466,6 +466,7 @@ export function PlayerDetails({
   isPitcher = false,
   isWatched,
   rosterPct,
+  rosterTrend,
   onAdd,
   onRemove,
   onClose,
@@ -479,6 +480,9 @@ export function PlayerDetails({
    *  connected, which is what hides the line; `null` when there is one but
    *  ESPN has no figure for this player. */
   rosterPct?: number | null;
+  /** How that figure has moved, and over how long. Absent with no league or no
+   *  baseline; a `change` of 0 is a real answer and renders as "flat". */
+  rosterTrend?: { change: number; days: number };
   onAdd: () => void;
   onRemove: () => void;
   onClose: () => void;
@@ -732,6 +736,26 @@ export function PlayerDetails({
               >
                 Rostered{' '}
                 <strong>{rosterPct === null ? '—' : `${rosterPct.toFixed(1)}%`}</strong>
+                {rosterPct !== null && rosterTrend && (
+                  <span
+                    className={`details-trend${
+                      rosterTrend.change > 0
+                        ? ' up'
+                        : rosterTrend.change < 0
+                          ? ' down'
+                          : ''
+                    }`}
+                    title={`Change over the last ${rosterTrend.days} day${
+                      rosterTrend.days === 1 ? '' : 's'
+                    }`}
+                  >
+                    {rosterTrend.change === 0
+                      ? `flat over ${rosterTrend.days}d`
+                      : `${rosterTrend.change > 0 ? '▲' : '▼'} ${Math.abs(
+                          rosterTrend.change,
+                        ).toFixed(1)} in ${rosterTrend.days}d`}
+                  </span>
+                )}
               </p>
             )}
             <a

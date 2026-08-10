@@ -38,6 +38,11 @@ interface Column {
   // rate stats want their leaders first; ERA, WHIP and strikeouts-allowed want
   // their best first, which is the small end.
   ascFirst?: boolean;
+  // A class for the cell, chosen from the value. Only the trend column uses it,
+  // and it earns its place there: a rise and a fall are different *kinds* of
+  // news, and a signed number in the same colour as everything around it makes
+  // the reader do the arithmetic.
+  cellClass?: (r: ResearchRow) => string | undefined;
   statcast?: boolean; // tinted, and grouped behind a divider
   // Names the run of columns this one *starts*, for the column picker's
   // headings. Set on the first column of each run only and carried forward by
@@ -213,6 +218,36 @@ function inningsToOuts(ip: number): number {
 // counting stats first, then the slash line and the rate stats derived from
 // them, then the Statcast group behind its divider.
 
+/**
+ * Which way a roster % has moved lately.
+ *
+ * The label carries the span (`\u03947d`) because the span is not fixed: it is
+ * seven days once a week of history exists and whatever is available before
+ * then, and a header saying "7d" when it means three would be a lie the reader
+ * has no way to catch. `ResearchTable` rewrites the label from the value the
+ * server reports.
+ *
+ * Sorts descending first, like every other counting column — the question
+ * people bring to a trend column is "who is being added", and one tap answers
+ * it. One more tap gives the drops.
+ */
+const TREND_COLUMN: Column = {
+  key: 'rosterTrend',
+  label: '\u0394 Ros%',
+  title: 'Change in roster % over the last week',
+  format: (r) =>
+    r.rosterTrend == null
+      ? '\u2014'
+      : `${r.rosterTrend > 0 ? '+' : '\u2212'}${Math.abs(r.rosterTrend).toFixed(1)}`,
+  value: (r) => r.rosterTrend ?? null,
+  cellClass: (r) =>
+    r.rosterTrend == null || r.rosterTrend === 0
+      ? undefined
+      : r.rosterTrend > 0
+        ? 'research-trend-up'
+        : 'research-trend-down',
+};
+
 const ROSTER_PCT_COLUMN: Column = {
   key: 'rosterPct',
   label: 'Ros%',
@@ -224,6 +259,7 @@ const ROSTER_PCT_COLUMN: Column = {
 
 const BATTER_COLUMNS: Column[] = [
   ROSTER_PCT_COLUMN,
+  TREND_COLUMN,
   { key: 'games', label: 'G', group: 'Counting', title: 'Games played', format: (r) => count(r.games), value: (r) => r.games },
   { key: 'pa', label: 'PA', title: 'Plate appearances', format: (r) => count(r.pa), value: (r) => r.pa },
   { key: 'ab', label: 'AB', title: 'At bats', format: (r) => count(r.ab), value: (r) => r.ab },
@@ -256,6 +292,7 @@ const BATTER_COLUMNS: Column[] = [
 
 const PITCHER_COLUMNS: Column[] = [
   ROSTER_PCT_COLUMN,
+  TREND_COLUMN,
   { key: 'games', label: 'G', group: 'Counting', title: 'Games pitched', format: (r) => count(r.games), value: (r) => r.games },
   { key: 'gamesStarted', label: 'GS', title: 'Games started', format: (r) => count(r.gamesStarted), value: (r) => r.gamesStarted },
   // Shown as thirds ("158.1") and ordered on the out count behind it — 6.2 is
@@ -584,6 +621,9 @@ interface Props {
    *  so this gate is about relevance rather than access: to someone with no
    *  fantasy league it is a column of noise. */
   hasRosterPct: boolean;
+  /** The span the trend column measures, or null when there isn't enough
+   *  history yet — which is what removes the column entirely. */
+  trendDays: number | null;
   /** MLB ids of every player rostered in the connected fantasy league, or null
    *  while there is no league connected and nothing has been read. The free
    *  agents are the complement of this within the board — see `boardRows`. */
@@ -634,6 +674,7 @@ export function ResearchTable({
   scope,
   onScopeChange,
   hasRosterPct,
+  trendDays,
   ownedIds,
   espnConnected,
   espnLoading,
@@ -649,8 +690,22 @@ export function ResearchTable({
   // that isn't offered, and it would otherwise sit at the very front.
   const allColumns = useMemo(() => {
     const base = kind === 'pitcher' ? PITCHER_COLUMNS : BATTER_COLUMNS;
-    return hasRosterPct ? base : base.filter((c) => c.key !== 'rosterPct');
-  }, [kind, hasRosterPct]);
+    return base
+      .filter((c) => (c.key === 'rosterPct' ? hasRosterPct : true))
+      // Dropped rather than dashed until there is a second day of history to
+      // measure against: a column of zeroes would read as "nobody is moving",
+      // which is a claim where the truth is an absence.
+      .filter((c) => (c.key === 'rosterTrend' ? trendDays !== null : true))
+      .map((c) =>
+        c.key === 'rosterTrend' && trendDays !== null
+          ? {
+              ...c,
+              label: `\u0394${trendDays}d`,
+              title: `Change in roster % over the last ${trendDays} day${trendDays === 1 ? '' : 's'}`,
+            }
+          : c,
+      );
+  }, [kind, hasRosterPct, trendDays]);
   const columnsByKey = useMemo(
     () => new Map(allColumns.map((c) => [c.key, c])),
     [allColumns],
@@ -1377,7 +1432,7 @@ export function ResearchTable({
                         key={c.key}
                         className={`sum-num${activeSortKey === c.key ? ' research-sorted' : ''}${
                           i === statcastStart ? ' research-statcast-start' : ''
-                        }`}
+                        }${c.cellClass ? ` ${c.cellClass(r) ?? ''}` : ''}`}
                       >
                         {c.format(r)}
                       </td>

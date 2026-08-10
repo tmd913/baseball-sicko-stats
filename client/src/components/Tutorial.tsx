@@ -365,7 +365,9 @@ const CHAPTERS: Chapter[] = [
             no league ID. Connecting also adds a <Ui>Ros%</Ui> column to the
             board and a rostered figure to each player's page: the share of all
             ESPN leagues he's on a roster in, which sorts and filters like any
-            other column.
+            other column — and a <Ui>Δ7d</Ui> beside it for which way that has
+            been moving. Sort by it once for the week's biggest adds, twice for
+            the drops.
           </li>
         </ul>
         <h3 className="tut-sub">The four buttons</h3>

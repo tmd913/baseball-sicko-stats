@@ -617,6 +617,15 @@ export default function App() {
     loadOwnership();
   }, [espnConnected, ownership, espnLoading, espnError, view, detailsKey, loadOwnership]);
 
+  /** How each roster % has moved lately, and over how long. Null without a
+   *  league, and also when the server has no baseline yet. */
+  const rosterTrend = useMemo(() => {
+    if (!espnConnected || !ownership?.trend) return null;
+    const map = new Map<number, number>();
+    for (const [id, d] of Object.entries(ownership.trend.delta)) map.set(Number(id), d);
+    return { delta: map, days: ownership.trend.days };
+  }, [espnConnected, ownership]);
+
   /**
    * The board's rows with roster % merged in. Client-side because the research
    * board is cached per kind and window and served to every user alike, while
@@ -626,8 +635,15 @@ export default function App() {
   const researchRows = useMemo(() => {
     const rows = research[researchCacheKey] ?? [];
     if (!rosterPct) return rows;
-    return rows.map((r) => ({ ...r, rosterPct: rosterPct.get(r.id) ?? null }));
-  }, [research, researchCacheKey, rosterPct]);
+    return rows.map((r) => ({
+      ...r,
+      rosterPct: rosterPct.get(r.id) ?? null,
+      // Absent from the delta map means "hasn't moved", not "unknown": the
+      // server drops zeroes to keep the blob small, so a player with a roster %
+      // and no entry really is flat.
+      rosterTrend: rosterTrend ? (rosterPct.has(r.id) ? rosterTrend.delta.get(r.id) ?? 0 : null) : null,
+    }));
+  }, [research, researchCacheKey, rosterPct, rosterTrend]);
 
   const openEspnSettings = useCallback(() => {
     setSettingsOpen(false);
@@ -1802,6 +1818,7 @@ export default function App() {
           scope={researchScope}
           onScopeChange={setResearchScope}
           hasRosterPct={rosterPct !== null}
+          trendDays={rosterTrend?.days ?? null}
           ownedIds={ownedIds}
           espnConnected={espnConnected}
           espnLoading={espnLoading}
@@ -1930,6 +1947,11 @@ export default function App() {
           isPitcher={detailsPlayer.kind === 'pitcher'}
           isWatched={detailsWatched}
           rosterPct={rosterPct ? rosterPct.get(detailsPlayer.id) ?? null : undefined}
+          rosterTrend={
+            rosterTrend && rosterPct?.has(detailsPlayer.id)
+              ? { change: rosterTrend.delta.get(detailsPlayer.id) ?? 0, days: rosterTrend.days }
+              : undefined
+          }
           onAdd={() =>
             onAdd({
               id: detailsPlayer.id,

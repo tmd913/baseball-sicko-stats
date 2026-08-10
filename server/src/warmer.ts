@@ -7,6 +7,7 @@ import { RESEARCH_WINDOWS } from './types.js';
 import { getAllWatchedPlayers } from './store.js';
 import { mapLimit } from './limit.js';
 import { baseballToday } from './etDate.js';
+import { getRosterTrend } from './espn.js';
 
 /**
  * The scheduled cache warmer.
@@ -123,6 +124,14 @@ export async function warm(event: WarmEvent = {}): Promise<{ mode: string; dates
         ),
       );
     }
+    // ESPN ownership: one 940KB request whose *point* here is the side effect —
+    // it writes the day's snapshot, which is the baseline every future trend is
+    // measured against. Nothing else guarantees a snapshot on a day nobody
+    // happens to open the research board, and a missing day is a gap in the
+    // history for the fortnight it stays inside the trend window.
+    await getRosterTrend().catch((err) =>
+      console.error('ESPN ownership snapshot failed:', err),
+    );
     return { mode, dates };
   }
 

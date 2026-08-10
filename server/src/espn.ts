@@ -32,6 +32,8 @@
 
 import { toSavantName } from './names.js';
 import type { PlayerKind, WatchPlayer } from './types.js';
+import { readBlob, writeBlob } from './storage.js';
+import { baseballToday } from './etDate.js';
 
 // Keep in sync with hfSea in savant.ts, CURRENT_SEASON in percentiles.ts, and
 // SEASON in xwoba.ts / pitcherArsenal.ts / teamStats.ts / expectedStats.ts /
@@ -332,6 +334,105 @@ export async function getRosterPct(): Promise<Record<number, number>> {
   return rosterPctInFlight;
 }
 
+// ---- Trending: which way a roster % is moving ----------------------------
+//
+// **The delta is ours, not ESPN's.** They do publish a `percentChange`, but only
+// on payloads this app can't justify: the league board is 10MB and needs
+// cookies, and the season-wide `kona_player_info` — which needs none — is
+// **180MB**, rejects `limit`, and rejects every stat filter there is (checked:
+// 400 on each). Their window is undocumented either way.
+//
+// So it is computed from a **daily snapshot of the map already being fetched**.
+// That costs nothing extra — `getRosterPct` is one 940KB request the app makes
+// regardless — and it means the number has a definition the app can print: the
+// change over exactly the span reported beside it.
+
+/** How far back to look for a baseline, and how far back is still worth using
+ *  if that day is missing. Seven days is the fantasy convention for "trending";
+ *  the wider bound is what makes the feature work before a full week of
+ *  history exists, rather than showing nothing for a week. */
+const TREND_TARGET_DAYS = 7;
+const TREND_MAX_DAYS = 14;
+
+const snapshotKey = (date: string) => `espn-ownership-${date}.json`;
+
+/** Store today's map, once. Not overwritten later in the day: a baseline that
+ *  crept toward the current value would shrink every delta measured against it
+ *  as the day went on, for no reason a reader could see. */
+async function snapshotRosterPct(pct: Record<number, number>): Promise<void> {
+  const key = snapshotKey(baseballToday());
+  if ((await readBlob(key)) !== null) return;
+  await writeBlob(key, JSON.stringify(pct));
+}
+
+async function readSnapshot(date: string): Promise<Record<number, number> | null> {
+  const raw = await readBlob(snapshotKey(date));
+  if (raw === null) return null;
+  try {
+    return JSON.parse(raw) as Record<number, number>;
+  } catch {
+    return null;
+  }
+}
+
+function daysAgo(date: string, n: number): string {
+  const [y, m, d] = date.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d) - n * 86_400_000).toISOString().slice(0, 10);
+}
+
+export interface RosterTrend {
+  /** Change in roster % per MLB player id over `days`. Only players present in
+   *  both the baseline and today appear — a player ESPN has newly added has no
+   *  "change", and inventing one from zero would put every call-up at the top
+   *  of the risers. */
+  delta: Record<number, number>;
+  /** The span actually measured, which is the target once a week of history
+   *  exists and whatever is available before then. Reported rather than assumed
+   *  because the column's header says it: "7d" means seven days. */
+  days: number;
+}
+
+/**
+ * The trend map, or null when there is not yet a second day of history to
+ * measure against.
+ *
+ * Null is the honest answer on a cold install and the client hides the column
+ * for it, exactly as it hides roster % without a league. The alternative — a
+ * column of zeroes — would read as "nobody is moving", which is a claim rather
+ * than an absence.
+ */
+export async function getRosterTrend(): Promise<RosterTrend | null> {
+  const today = baseballToday();
+  const current = await getRosterPct();
+  await snapshotRosterPct(current).catch((err: Error) =>
+    console.error('ESPN ownership snapshot failed:', err.message),
+  );
+
+  // Walk out from the target span: the exact day if it is there, then further
+  // back, then nearer, so a gap in the history costs accuracy rather than the
+  // whole feature.
+  const order = [TREND_TARGET_DAYS];
+  for (let i = 1; i <= TREND_MAX_DAYS; i++) {
+    if (TREND_TARGET_DAYS + i <= TREND_MAX_DAYS) order.push(TREND_TARGET_DAYS + i);
+    if (TREND_TARGET_DAYS - i >= 1) order.push(TREND_TARGET_DAYS - i);
+  }
+  for (const days of order) {
+    const base = await readSnapshot(daysAgo(today, days));
+    if (!base) continue;
+    const delta: Record<number, number> = {};
+    for (const [id, pct] of Object.entries(current)) {
+      const was = base[id as unknown as number];
+      if (typeof was !== 'number') continue;
+      // Rounded to a tenth, which is the precision the figure is published at;
+      // without it floating-point noise gives half the league a "trend".
+      const change = Math.round((pct - was) * 10) / 10;
+      if (change !== 0) delta[Number(id)] = change;
+    }
+    return { delta, days };
+  }
+  return null;
+}
+
 // ---- Reading the league ---------------------------------------------------
 
 interface EspnRosterResponse {
@@ -488,6 +589,9 @@ export interface EspnOwnership extends EspnLeagueInfo {
    *  same: having a league. Its own cache is six hours, so the ten-minute
    *  ownership refresh re-reads a map rather than an upstream. */
   rosterPct: Record<number, number>;
+  /** How each roster % has moved lately, and over how long — null until there
+   *  is a second day of history to measure against. See `getRosterTrend`. */
+  trend: RosterTrend | null;
   /** Every team's roster, by fantasy team id. Keyed by team rather than
    *  narrowed to the caller's, because this whole object is cached **per
    *  league** and shared by everyone in it — making it user-specific would
@@ -517,7 +621,7 @@ export async function getOwnership(creds: EspnCreds, force = false): Promise<Esp
   if (running && !force) return running;
 
   const job = (async () => {
-    const [data, index, rosterPct] = await Promise.all([
+    const [data, index, rosterPct, trend] = await Promise.all([
       leagueGet(creds, ['mRoster', 'mTeam', 'mSettings']),
       getMlbIndex(),
       // A failed read here costs one column, not the whole connection: the
@@ -525,6 +629,10 @@ export async function getOwnership(creds: EspnCreds, force = false): Promise<Esp
       getRosterPct().catch((err: Error) => {
         console.error('ESPN roster% unavailable:', err.message);
         return {} as Record<number, number>;
+      }),
+      getRosterTrend().catch((err: Error) => {
+        console.error('ESPN roster trend unavailable:', err.message);
+        return null;
       }),
     ]);
     const info = leagueInfoFrom(creds, data);
@@ -569,6 +677,7 @@ export async function getOwnership(creds: EspnCreds, force = false): Promise<Esp
       ...info,
       owned,
       rosterPct,
+      trend,
       rosters,
       rosterCount,
       matched,
