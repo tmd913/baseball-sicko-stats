@@ -5838,6 +5838,53 @@ body {
 .espn-team-section {
   padding-top: 22px;
 }
+.espn-share-section {
+  padding-top: 22px;
+}
+/* The toggle takes `.settings-toggle` outright — same control as the settings
+   menu's, so "on" looks the same wherever the app puts a switch. */
+.espn-share-toggle {
+  margin: 4px 0 12px;
+}
+/* The link and its Copy button. The field is read-only rather than disabled so
+   the text is still selectable — clipboard access can be refused, and a link
+   you can't even select would leave no way to get it. */
+.espn-invite {
+  display: flex;
+  gap: 8px;
+  max-width: 560px;
+  margin-bottom: 12px;
+}
+.espn-invite .espn-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.espn-copy {
+  flex: none;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 0 14px;
+  min-height: var(--control-h);
+  cursor: pointer;
+  transition: border-color 0.14s ease, color 0.14s ease;
+}
+.espn-copy:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.espn-copy:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* A failed invite is the first thing on the page, above even the status panel:
+   it is the answer to what the reader just clicked. */
+.espn-join-error {
+  margin-top: 20px;
+}
 .espn-error {
   margin: 4px 0 12px;
   max-width: 62ch;

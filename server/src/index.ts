@@ -18,8 +18,13 @@ import type { ResearchWindow, SeasonArsenalPitch } from './types.js';
 import { getPitcherStats, getPlayerStats, getSeasonPlayers, resolveVideoUrl } from './mlbStats.js';
 import {
   addPlayer,
+  attachEspnLeague,
+  getEspnCreds,
   getEspnLeague,
+  getLeague,
   getPrefs,
+  joinLeague,
+  leagueForInvite,
   getWatchlist,
   removePlayer,
   reorderPlayers,
@@ -27,10 +32,13 @@ import {
   setEspnTeam,
   setHideInjured,
   setMuteAudio,
+  setLeagueSharing,
   setResearchColumns,
   setRosterSource,
+  upsertLeague,
 } from './store.js';
-import type { EspnLeague } from './store.js';
+import type { EspnLeague, LeagueRecord } from './store.js';
+import { randomBytes } from 'node:crypto';
 import {
   EspnAuthError,
   getLeagueInfo,
@@ -310,20 +318,47 @@ app.put(
 
 /** What the client is told about a connection. No credentials, by construction:
  *  it is assembled field by field rather than spread from the stored record. */
-function espnStatus(espn: EspnLeague | null) {
+function espnStatus(user: string, espn: EspnLeague | null, league: LeagueRecord | null) {
   if (!espn) return { connected: false as const };
   return {
     connected: true as const,
     leagueId: espn.leagueId,
-    leagueName: espn.leagueName ?? null,
+    leagueName: league?.leagueName ?? espn.leagueName ?? null,
     teamId: espn.teamId ?? null,
     teamName: espn.teamName ?? null,
     // Whether a cookie is stored at all — true for a private league, false for
     // a public one read anonymously. The value itself never appears here; this
     // is only so the page can say which of the two it is.
-    hasCredentials: Boolean(espn.swid && espn.espnS2),
+    hasCredentials: Boolean(league?.swid && league?.espnS2),
+    /** The invite code, or null when sharing is off. Only ever sent to someone
+     *  already attached to the league, which is everyone who can reach this. */
+    inviteCode: league?.inviteCode ?? null,
+    /** How many app users are on this connection, so the page can say whether
+     *  sharing it has actually done anything yet. */
+    memberCount: league?.members.length ?? 1,
+    /** Whether *this* user's cookie is the one the league is currently read
+     *  with. What it is for is the opposite case: telling someone their league
+     *  is running on a leaguemate's session, so a stale one is understood as
+     *  something anybody can fix rather than a fault of theirs. */
+    credentialMine: league ? league.credentialFrom === user : true,
     savedAt: espn.savedAt,
   };
+}
+
+/**
+ * The two records the status is assembled from.
+ *
+ * It goes through `getEspnCreds` rather than reading the league directly, for
+ * the side effect: that is where a pre-sharing connection's inline credential
+ * is promoted onto a league record. Reading around it would report
+ * `hasCredentials: false` for a perfectly good legacy connection right up
+ * until something else happened to trigger the migration.
+ */
+async function espnStatusFor(user: string) {
+  const espn = await getEspnLeague(user);
+  if (!espn) return espnStatus(user, null, null);
+  await getEspnCreds(user);
+  return espnStatus(user, espn, await getLeague(espn.leagueId));
 }
 
 /** ESPN rejecting the saved cookies is not an upstream fault to 502 over — it
@@ -352,11 +387,9 @@ async function fantasyWatchlist(
       'No fantasy team chosen in this league — pick yours on the Fantasy league page.',
     );
   }
-  const own = await getOwnership({
-    leagueId: espn.leagueId,
-    swid: espn.swid,
-    espnS2: espn.espnS2,
-  });
+  const creds = await getEspnCreds(user);
+  if (!creds) throw new EspnAuthError('No ESPN league connected');
+  const own = await getOwnership(creds);
   const roster = own.rosters[espn.teamId] ?? [];
   const team = own.teams.find((t) => t.id === espn.teamId);
   return { players: rosterToWatchlist(roster), teamName: team?.name ?? espn.teamName ?? null, roster };
@@ -366,7 +399,7 @@ app.get(
   '/api/espn',
   requireUser,
   asyncRoute(async (req, res) => {
-    res.json(espnStatus(await getEspnLeague(userId(req))));
+    res.json(await espnStatusFor(userId(req)));
   }),
 );
 
@@ -382,6 +415,79 @@ app.get(
     } catch (err) {
       if (!espnError(err, res)) throw err;
     }
+  }),
+);
+
+// ---- Sharing a league with your leaguemates ------------------------------
+//
+// The point of this: the *second* person in a league should not have to go
+// hunting for cookies. ESPN publishes no member emails — checked across every
+// league view and the member and invite endpoints, there is no email anywhere
+// in the payload — so leaguemates cannot be recognised automatically. What it
+// does publish is enough for the connection to be *shared* deliberately: one
+// person connects, turns sharing on, and hands out a link.
+//
+// The credential is never in the link and never leaves the server. Joining
+// attaches the user to the league record; their reads then use whatever
+// credential that record currently holds.
+
+/** An invite code: 16 URL-safe characters of randomness. Long enough that
+ *  guessing one is not a way into somebody's private league, which matters
+ *  because holding one is the whole of the authorisation to join. */
+function mintInviteCode(): string {
+  return randomBytes(12).toString('base64url');
+}
+
+/** Turn sharing on or off for the league this user is on. Any member may —
+ *  they are all equally on the connection, and a league whose only sharer has
+ *  stopped using the app would otherwise be frozen. */
+app.put(
+  '/api/espn/share',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const { enabled } = (req.body ?? {}) as { enabled?: unknown };
+    if (typeof enabled !== 'boolean') {
+      res.status(400).json({ error: 'enabled must be a boolean' });
+      return;
+    }
+    const espn = await getEspnLeague(userId(req));
+    if (!espn) {
+      res.status(409).json({ error: 'No ESPN league connected', code: 'espn-missing' });
+      return;
+    }
+    await setLeagueSharing(espn.leagueId, enabled, mintInviteCode);
+    res.json(await espnStatusFor(userId(req)));
+  }),
+);
+
+/**
+ * Join a league from an invite code. No cookies, no league id — the code is
+ * the whole of it, which is the point.
+ *
+ * A user who already has a league is moved to this one; their watchlist and
+ * preferences are untouched, and their team is unset because a team id means
+ * nothing in a different league.
+ */
+app.post(
+  '/api/espn/join',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const { code } = (req.body ?? {}) as { code?: unknown };
+    if (typeof code !== 'string' || code.trim() === '') {
+      res.status(400).json({ error: 'code is required' });
+      return;
+    }
+    const league = await leagueForInvite(code.trim());
+    if (!league) {
+      // Deliberately one message for "never existed" and "revoked": which of
+      // the two it is tells a stranger holding a guessed code something about
+      // whether they are close.
+      res.status(404).json({ error: 'That invite link is no longer valid.', code: 'espn-invite' });
+      return;
+    }
+    await joinLeague(userId(req), league.leagueId);
+    const espn = await attachEspnLeague(userId(req), league.leagueId, league.leagueName);
+    res.json(espnStatus(userId(req), espn, await getLeague(league.leagueId)));
   }),
 );
 
@@ -407,17 +513,19 @@ app.put(
     try {
       // Named from the league rather than trusted from the client: the id is a
       // choice, but the label beside it is a fact about the league.
-      const own = await getOwnership({
-        leagueId: espn.leagueId,
-        swid: espn.swid,
-        espnS2: espn.espnS2,
-      });
+      const creds = await getEspnCreds(userId(req));
+      if (!creds) {
+        res.status(409).json({ error: 'No ESPN league connected', code: 'espn-missing' });
+        return;
+      }
+      const own = await getOwnership(creds);
       const team = own.teams.find((t) => t.id === id);
       if (!team) {
         res.status(400).json({ error: `No team ${id} in league ${espn.leagueId}` });
         return;
       }
-      res.json(espnStatus(await setEspnTeam(userId(req), id, team.name)));
+      await setEspnTeam(userId(req), id, team.name);
+      res.json(await espnStatusFor(userId(req)));
     } catch (err) {
       if (!espnError(err, res)) throw err;
     }
@@ -465,15 +573,25 @@ app.put(
     try {
       const info = await getLeagueInfo(creds);
       const myTeamId = info.myTeamId ?? fallbackTeam;
+      // The credential goes on the **league**, not on this user: that is what
+      // lets it be shared, and what makes this same route the way any member
+      // refreshes an expired cookie for everybody on it.
+      const league = await upsertLeague(
+        userId(req),
+        creds.leagueId,
+        info.leagueName,
+        creds.swid,
+        creds.espnS2,
+      );
       const saved = await setEspnLeague(userId(req), {
-        ...creds,
+        leagueId: creds.leagueId,
         leagueName: info.leagueName,
         teamId: myTeamId,
         teamName:
           info.myTeamName ?? info.teams.find((t) => t.id === myTeamId)?.name ?? null,
         savedAt: Date.now(),
       });
-      res.json(espnStatus(saved));
+      res.json(espnStatus(userId(req), saved, league));
     } catch (err) {
       if (!espnError(err, res)) throw err;
     }
@@ -485,7 +603,7 @@ app.delete(
   requireUser,
   asyncRoute(async (req, res) => {
     await setEspnLeague(userId(req), null);
-    res.json(espnStatus(null));
+    res.json(espnStatus(userId(req), null, null));
   }),
 );
 
@@ -502,10 +620,12 @@ app.get(
       return;
     }
     try {
-      const own = await getOwnership(
-        { leagueId: espn.leagueId, swid: espn.swid, espnS2: espn.espnS2 },
-        req.query.refresh === '1',
-      );
+      const creds = await getEspnCreds(userId(req));
+      if (!creds) {
+        res.status(409).json({ error: 'No ESPN league connected', code: 'espn-missing' });
+        return;
+      }
+      const own = await getOwnership(creds, req.query.refresh === '1');
       res.json(own);
     } catch (err) {
       if (!espnError(err, res)) throw err;

@@ -209,6 +209,23 @@ export const api = {
       body: JSON.stringify({ teamId }),
     });
   },
+  /** Turn the invite link on or off for the league this user is on. Any member
+   *  may — they are all equally on the connection. */
+  async shareEspn(enabled: boolean): Promise<EspnStatus> {
+    return request('/api/espn/share', {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ enabled }),
+    });
+  },
+  /** Join a league from an invite code — no league id, no cookies. */
+  async joinEspn(code: string): Promise<EspnStatus> {
+    return request('/api/espn/join', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ code }),
+    });
+  },
   /** The user's own roster, slot by slot. */
   async espnRoster(): Promise<EspnRoster> {
     return request('/api/espn/roster');

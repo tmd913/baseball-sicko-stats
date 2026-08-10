@@ -94,10 +94,13 @@ export function unquote(raw: string): string {
  */
 export function EspnSettings({
   status,
+  joinError,
   onStatusChange,
   onClose,
 }: {
   status: EspnStatus | null;
+  /** Why an invite link failed, when the page was opened by one. */
+  joinError?: string | null;
   onStatusChange: (s: EspnStatus) => void;
   onClose: () => void;
 }) {
@@ -116,6 +119,7 @@ export function EspnSettings({
   // — the one call that already knows them — and only once connected.
   const [teams, setTeams] = useState<EspnTeam[]>([]);
   const [saving, setSaving] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // The form stays on screen after a successful connect — the panel above it
   // becomes the record of what happened, so a bare "saved" line would be the
@@ -172,6 +176,38 @@ export function EspnSettings({
       cancelled = true;
     };
   }, [connected, status?.connected ? status.leagueId : null]);
+
+  const shared = status?.connected === true && status.inviteCode !== null;
+  const inviteUrl =
+    status?.connected && status.inviteCode
+      ? `${window.location.origin}/?league=${status.inviteCode}`
+      : null;
+
+  const toggleShare = async (enabled: boolean) => {
+    setSaving(true);
+    setError(null);
+    setCopied(false);
+    try {
+      onStatusChange(await api.shareEspn(enabled));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not change sharing');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const copyInvite = async () => {
+    if (!inviteUrl) return;
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+      setCopied(true);
+    } catch {
+      // Clipboard access can be refused (an insecure origin, a permission
+      // prompt declined). The link is on screen and selectable either way, so
+      // this is a convenience failing rather than the feature failing.
+      setCopied(false);
+    }
+  };
 
   const chooseTeam = async (teamId: number) => {
     setSaving(true);
@@ -289,7 +325,7 @@ export function EspnSettings({
             Connect your ESPN fantasy baseball league and the app can do two more
             things: the research board gains a <strong>Free Agents</strong> filter
             — every player in the majors who isn't on a roster in your league —
-            and the watchlist views can read <strong>your own team</strong>
+            and the watchlist views can read <strong>your own team</strong>{' '}
             instead of the list you built here, each player marked with the slot
             he's in today.
           </p>
@@ -297,6 +333,12 @@ export function EspnSettings({
       </div>
 
       <div className="tut-body espn-body">
+        {joinError && (
+          <p className="espn-error espn-join-error">
+            {joinError} Ask whoever sent it to turn sharing back on, or connect
+            the league yourself below.
+          </p>
+        )}
         {connected && status.connected && (
           <section className="espn-status">
             <div className="espn-status-head">
@@ -355,6 +397,66 @@ export function EspnSettings({
               isn't. Your own watchlist is untouched and comes back the moment
               you switch off.
             </p>
+          </section>
+        )}
+
+        {connected && status.connected && (
+          <section className="espn-section espn-share-section">
+            <h2 className="espn-h2">Share with your league</h2>
+            <p className="espn-note">
+              Nobody else in your league should have to go through the cookie
+              hunt. Turn this on and you get a link: anyone who opens it is
+              connected to this league straight away — no League ID, no cookies,
+              nothing to copy. They pick their own team and see their own roster.
+            </p>
+            <p className="espn-note">
+              Two things worth knowing before you do. Their reads run on{' '}
+              <strong>your</strong> ESPN session, since that is the one the league
+              is stored with — the app only ever uses it to read this league, and
+              the cookie itself is never in the link and never leaves the server.
+              And <strong>anyone holding the link can join</strong>: ESPN gives us
+              no way to check that they're really in your league, so treat it like
+              a door key and hand it to the people you mean to.
+            </p>
+
+            <button
+              type="button"
+              className={`settings-toggle espn-share-toggle${shared ? ' active' : ''}`}
+              role="switch"
+              aria-checked={shared}
+              disabled={saving}
+              onClick={() => toggleShare(!shared)}
+            >
+              <span className="settings-dot" aria-hidden="true" />
+              {shared ? 'Sharing is on' : 'Share this league'}
+            </button>
+
+            {shared && inviteUrl && (
+              <div className="espn-invite">
+                <input className="espn-input espn-mono" readOnly value={inviteUrl} />
+                <button type="button" className="espn-copy" onClick={copyInvite}>
+                  {copied ? 'Copied' : 'Copy'}
+                </button>
+              </div>
+            )}
+
+            <p className="espn-note">
+              {status.memberCount > 1
+                ? `${status.memberCount} people are on this connection.`
+                : 'Nobody else is on this connection yet.'}{' '}
+              {shared
+                ? 'Turning sharing off stops new people joining; it doesn\u2019t remove anyone already on it.'
+                : ''}
+            </p>
+
+            {!status.credentialMine && (
+              <p className="espn-note espn-warn">
+                This league is currently being read with a leaguemate's ESPN
+                session, not yours. Nothing to do — but if it ever stops working,
+                you can fix it for everyone by pasting your own{' '}
+                <code>SWID</code> and <code>espn_s2</code> below.
+              </p>
+            )}
           </section>
         )}
 

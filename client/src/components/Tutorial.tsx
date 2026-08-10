@@ -359,7 +359,10 @@ const CHAPTERS: Chapter[] = [
             your roster — same tables, your team instead of your watchlist, each
             player carrying the slot he's in today (his position if he's in the
             lineup, <Ui>BE</Ui> or <Ui>IL</Ui> if he isn't). Your watchlist is
-            untouched and comes back when you switch off.
+            untouched and comes back when you switch off. And you only need one
+            person in a league to do any of this: whoever connects first can turn
+            on a share link, and everyone else joins by opening it — no cookies,
+            no league ID.
           </li>
         </ul>
         <h3 className="tut-sub">The four buttons</h3>

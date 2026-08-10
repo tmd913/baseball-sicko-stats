@@ -430,6 +430,8 @@ export default function App() {
   const [ownership, setOwnership] = useState<EspnOwnership | null>(null);
   const [espnLoading, setEspnLoading] = useState(false);
   const [espnError, setEspnError] = useState<string | null>(null);
+  /** Why an invite link didn't work, shown on the page it opens. */
+  const [espnJoinError, setEspnJoinError] = useState<string | null>(null);
 
   // Settled either way — read or failed. The report waits on this rather than
   // on the status itself, so a failed read doesn't leave a `roster=fantasy`
@@ -453,6 +455,43 @@ export default function App() {
       cancelled = true;
     };
   }, []);
+
+  /**
+   * An invite link (`?league=<code>`) hands this user a leaguemate's
+   * connection. Redeemed once on load, before anything else asks about a
+   * league — and the page is then **opened**, rather than the app quietly
+   * changing state behind them: a link that silently rewires where your player
+   * list comes from is a surprise, and they have to pick their team anyway.
+   *
+   * The param needs no cleanup of its own: `App`'s URL sync writes the whole
+   * query string from the view state, and `league` isn't part of it, so the
+   * first sync drops it. That also means a reload can't redeem it twice.
+   */
+  const inviteCode = initialParams.get('league');
+  useEffect(() => {
+    if (!inviteCode) return;
+    let cancelled = false;
+    api
+      .joinEspn(inviteCode)
+      .then((s) => {
+        if (cancelled) return;
+        setEspnStatus(s);
+        setEspnOpen(true);
+      })
+      .catch((e: Error) => {
+        if (cancelled) return;
+        // Opened anyway, with the reason: an expired link that does nothing at
+        // all leaves someone staring at an app that ignored what they clicked.
+        setEspnJoinError(e.message);
+        setEspnOpen(true);
+      })
+      .finally(() => {
+        if (!cancelled) setEspnStatusSettled(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [inviteCode]);
 
   const espnConnected = espnStatus?.connected === true;
   const espnLeagueId = espnStatus?.connected ? espnStatus.leagueId : null;
@@ -1871,6 +1910,7 @@ export default function App() {
       {espnOpen && (
         <EspnSettings
           status={espnStatus}
+          joinError={espnJoinError}
           onStatusChange={onEspnStatusChange}
           onClose={() => setEspnOpen(false)}
         />

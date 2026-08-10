@@ -716,6 +716,14 @@ export type EspnStatus =
        *  for a public league, which is read anonymously. The value itself is
        *  never sent; this only says which of the two kinds it is. */
       hasCredentials: boolean;
+      /** The invite code while sharing is on, else null. Only ever sent to
+       *  someone already on the league. */
+      inviteCode: string | null;
+      /** How many app users are on this connection. */
+      memberCount: number;
+      /** Whether this user's own cookie is the one the league is read with.
+       *  False means a leaguemate's session is carrying it. */
+      credentialMine: boolean;
       savedAt: number;
     };
 
