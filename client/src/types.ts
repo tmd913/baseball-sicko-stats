@@ -682,4 +682,6 @@ export interface UserPrefs {
   researchColumns?: Partial<Record<PlayerKind, string[]>>;
   /** Absent means off, the default — the server stores off as no entry. */
   hideInjured?: boolean;
+  /** Play every video clip with the sound off. Absent means off. */
+  muteAudio?: boolean;
 }

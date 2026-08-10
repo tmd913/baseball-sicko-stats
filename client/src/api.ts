@@ -144,6 +144,13 @@ export const api = {
       body: JSON.stringify({ hide }),
     });
   },
+  async saveMuteAudio(mute: boolean): Promise<UserPrefs> {
+    return request('/api/prefs/mute-audio', {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ mute }),
+    });
+  },
   // Every player in the league on one board, season to date — the research
   // table. Watchlist-independent and season-wide, so it takes no date range.
   async research(

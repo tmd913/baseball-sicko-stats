@@ -21,6 +21,16 @@ function prettyLong(date: string): string {
   });
 }
 
+/** "Aug 9", or "Aug 1 – Aug 9" across a range — the same words as
+ *  `prettyRange` with the year left off. For the view bar's narrow-screen date
+ *  badge, which has a phone's width to share with the kind tabs: the full form
+ *  is 161px and wraps the badge onto a line of its own, this one is ~115px and
+ *  sits beside them. The year is no loss — the app shows one season and says so
+ *  nowhere else on the page either. */
+export function shortRange(start: string, end: string): string {
+  return start === end ? prettyShort(start) : `${prettyShort(start)} – ${prettyShort(end)}`;
+}
+
 function prettyRange(start: string, end: string): string {
   return start === end
     ? prettyLong(start)

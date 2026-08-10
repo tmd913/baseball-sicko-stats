@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useMuted } from '../hooks';
 
 /** No hover means no way to summon controls on demand — i.e. a touch screen. */
 const NO_HOVER = '(hover: none)';
@@ -54,17 +55,44 @@ export function ClipVideo({
   onEnded?: () => void;
 }) {
   const noHover = useNoHover();
+  const prefMuted = useMuted();
   const [playing, setPlaying] = useState(false);
   const ref = useRef<HTMLVideoElement>(null);
+  // This clip's own audio state. The saved preference is its *starting* value,
+  // not a rule over it.
+  const [muted, setMuted] = useState(prefMuted);
+  // Set once the viewer works this clip's audio — with the button below or with
+  // the browser's own controls. From then on the preference leaves this clip
+  // alone: "mute clips by default" is a default, and a viewer who has unmuted
+  // one to hear a home run call shouldn't lose it because the toggle was
+  // touched, or because some other part of the app re-read the preference.
+  const audioTouched = useRef(false);
+  useEffect(() => {
+    if (!audioTouched.current) setMuted(prefMuted);
+  }, [prefMuted]);
+  // Belt and braces on top of the `muted` attribute below. React treats `muted`
+  // as a property rather than an attribute and can miss it on the first mount,
+  // which on an `autoPlay` clip is the one failure that matters — the setting
+  // exists precisely so a clip can't start making noise on its own. A layout
+  // effect runs before paint, so the element is never briefly live.
+  useLayoutEffect(() => {
+    if (ref.current) ref.current.muted = muted;
+  }, [muted]);
   /** Did this touch go down on the bare frame (controls hidden), i.e. is it ours? */
   const tapIsOurs = useRef(false);
   const hideControls = noHover && playing;
+  const setAudio = (next: boolean) => {
+    audioTouched.current = true;
+    setMuted(next);
+  };
   return (
-    /* eslint-disable-next-line jsx-a11y/media-has-caption */
+    <div className="clip">
+    {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
     <video
       ref={ref}
       className={className}
       src={src}
+      muted={muted}
       controls={!hideControls}
       autoPlay={autoPlay}
       preload={preload}
@@ -83,6 +111,49 @@ export function ClipVideo({
         tapIsOurs.current = false;
         if (ours) ref.current?.pause();
       }}
+      onVolumeChange={(e) => {
+        // The browser's own controls can mute this clip too. Mirror that into
+        // state so the button below agrees with the element, and count it as
+        // the viewer having spoken. Our own write above fires this as well,
+        // and lands here with the two already equal, so it falls straight out.
+        const el = e.currentTarget;
+        if (el.muted !== muted) setAudio(el.muted);
+      }}
     />
+      {/* Per-clip audio, on top of the frame. The browser's own mute is only
+          reachable with a pointer — on a touch device the control bar is hidden
+          for the whole time a clip is playing (see above), which with clips
+          muted by default would leave no way to hear one at all. Top *left*: the
+          native bar sits along the bottom, and the left edge is the one every
+          one of the three players shares, whether it sizes to the clip or fills
+          its column. */}
+      <button
+        type="button"
+        className="clip-audio"
+        onClick={() => setAudio(!muted)}
+        aria-pressed={muted}
+        aria-label={muted ? 'Unmute this clip' : 'Mute this clip'}
+        title={muted ? 'Unmute this clip' : 'Mute this clip'}
+      >
+        <svg
+          viewBox="0 0 24 24"
+          width="15"
+          height="15"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M11 5 6 9H3v6h3l5 4V5Z" />
+          {muted ? (
+            <path d="m16 9 5 6M21 9l-5 6" />
+          ) : (
+            <path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" />
+          )}
+        </svg>
+      </button>
+    </div>
   );
 }

@@ -8,7 +8,7 @@ import { useLockBodyScroll } from '../hooks';
  * second full-screen shell.
  *
  * It's one continuous read rather than a set of tabs: a tutorial is written to
- * be gone through in order, and tabs would hide eight of the nine chapters from
+ * be gone through in order, and tabs would hide nine of the ten chapters from
  * someone who doesn't yet know what they're looking for. The chapter strip at
  * the top is a jump list, not a switch — it tracks whichever chapter is under
  * the top of the viewport (see `useActiveChapter`).
@@ -52,6 +52,41 @@ const GearIcon = () => (
       strokeWidth="1.8"
       strokeLinejoin="round"
     />
+  </svg>
+);
+
+const SearchIcon = () => (
+  <svg
+    viewBox="0 0 24 24"
+    width="14"
+    height="14"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.2"
+    strokeLinecap="round"
+    aria-hidden="true"
+    className="tut-inline-icon"
+  >
+    <circle cx="10.5" cy="10.5" r="6.5" />
+    <path d="m15.4 15.4 4.1 4.1" />
+  </svg>
+);
+
+const CalendarIcon = () => (
+  <svg
+    viewBox="0 0 24 24"
+    width="14"
+    height="14"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+    className="tut-inline-icon"
+  >
+    <rect x="3" y="4" width="18" height="17" rx="2" />
+    <path d="M3 9h18M8 2v4M16 2v4" />
   </svg>
 );
 
@@ -109,13 +144,19 @@ const CHAPTERS: Chapter[] = [
         <p>
           Everything in the app is a read on the players <em>you</em> follow, so the
           first thing to do is put some there. The roster search sits at the top right
-          of every page, next to the date controls — it belongs to your watchlist
+          of every page, beside the date controls — it belongs to your watchlist
           rather than to any one view, so it is in the same place wherever you are.
         </p>
         <ol className="tut-steps">
           <Step>
             Type a name into <Ui>Search for a player</Ui>. It matches the whole
-            season's roster, first name or last.
+            season's roster, first name or last. On a phone there's no room for the
+            field, so it hides behind the{' '}
+            <Ui>
+              <SearchIcon />
+            </Ui>{' '}
+            — press that and a search bar opens across the top with the cursor
+            already in it, and <Ui>Escape</Ui> or the <Ui>✕</Ui> closes it again.
           </Step>
           <Step>
             Tap the <Ui>+</Ui> at the right of a result to add them. They appear in
@@ -142,10 +183,10 @@ const CHAPTERS: Chapter[] = [
     body: (
       <>
         <p>
-          The date control in the header decides what every view is showing. The
-          presets cover most of it:
+          The date control decides what every view is showing. The presets cover most
+          of it:
         </p>
-        <Demo label="The header presets — a dropdown on a phone">
+        <Demo label="The presets, behind the calendar button at the top right">
           <div className="date-presets">
             <span className="date-preset active">Today</span>
             <span className="date-preset">Tomorrow</span>
@@ -169,8 +210,19 @@ const CHAPTERS: Chapter[] = [
           </li>
         </ul>
         <p>
-          For anything else, the calendar button opens a range picker. A range can run
-          up to 62 days.
+          For anything else, the dated button beside them opens a range picker. A
+          range can run up to 62 days.
+        </p>
+        <p className="tut-note">
+          All of that lives behind the{' '}
+          <Ui>
+            <CalendarIcon />
+          </Ui>{' '}
+          at the top right, beside the search — it is the widest control in the app
+          and you set it once, so it stays out of the way until you want it. Press it
+          and the presets and the range picker open on a line of their own; picking a
+          preset closes them again. The chip beside the <Ui>Batters · Pitchers</Ui>{' '}
+          tabs is what tells you which days you are looking at meanwhile.
         </p>
       </>
     ),
@@ -182,15 +234,16 @@ const CHAPTERS: Chapter[] = [
     body: (
       <>
         <p>
-          The tabs under the header switch between three takes on the same watchlist
-          over the same dates. Pick whichever answers the question you actually have.
+          Three of the tabs under the header are takes on the same watchlist over the
+          same dates. Pick whichever answers the question you actually have.
         </p>
-        <Demo label="The view bar — the second tier appears once you watch both kinds">
+        <Demo label="The view bar — the kind tabs appear once you watch both">
           <div className="view-bar-tabs">
             <div className="view-switch">
               <span className="view-tab active">Summary</span>
               <span className="view-tab">Games</span>
               <span className="view-tab">Feed</span>
+              <span className="view-tab">Research</span>
             </div>
             <div className="kind-switch">
               <span className="kind-tab active">
@@ -200,6 +253,10 @@ const CHAPTERS: Chapter[] = [
                 Pitchers<span className="kind-tab-count">3</span>
               </span>
             </div>
+            <span className="date-badge">
+              <CalendarIcon />
+              Today
+            </span>
           </div>
         </Demo>
         <dl className="tut-defs">
@@ -230,7 +287,98 @@ const CHAPTERS: Chapter[] = [
         <p className="tut-note">
           Every view shows one kind at a time. Once you watch both batters and
           pitchers, the <Ui>Batters</Ui> / <Ui>Pitchers</Ui> tabs appear beside the
-          view tabs and follow you from view to view.
+          view tabs and follow you from view to view. The fourth tab,{' '}
+          <Ui>Research</Ui>, is a different animal — the whole league rather than
+          your watchlist — and has the next chapter to itself.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'tut-research',
+    tab: 'Research',
+    title: 'The whole league',
+    body: (
+      <>
+        <p>
+          <Ui>Research</Ui> is the one page that isn't about your watchlist: every
+          player in the league on a single sortable table. It answers the other
+          question — not "how did my guys do tonight" but "who else is doing this".
+          It needs nothing watched, which makes it the one view that works before
+          you've added anybody.
+        </p>
+        <Demo label="The position row — it picks the board and filters it at once">
+          <div className="research-positions">
+            <span className="research-pos-tab active">Batters</span>
+            <span className="research-pos-tab">Pitchers</span>
+            <span className="research-pos-tab">C</span>
+            <span className="research-pos-tab">1B</span>
+            <span className="research-pos-tab">SS</span>
+            <span className="research-pos-tab">OF</span>
+            <span className="research-pos-tab">SP</span>
+            <span className="research-pos-tab">RP</span>
+          </div>
+        </Demo>
+        <p>
+          That row is the main control, and it does two jobs at once: the position you
+          pick decides <em>which board you're on</em>. <Ui>SS</Ui> puts you on the
+          batting table, <Ui>RP</Ui> on the pitching one. <Ui>IF</Ui> and{' '}
+          <Ui>OF</Ui> are the whole infield and outfield, so they overlap the single
+          positions on purpose, and <Ui>SP</Ui> / <Ui>RP</Ui> split the pitchers by
+          whether most of their appearances are starts. On a phone the row scrolls
+          sideways rather than wrapping — a table wants every pixel of height it can
+          get, and eleven pills over three lines would push the first name off the
+          bottom of the screen.
+        </p>
+        <ul className="tut-list">
+          <li>
+            <strong>Sort by any column.</strong> Tap a header; tap again to reverse
+            it. Columns whose good end is the low one — ERA, WHIP, a batter's K —
+            open small-first on their own. Players with no value for that stat sink
+            to the bottom either way, so a blank never outranks a real number.
+          </li>
+          <li>
+            <strong>Season · 7d · 15d · 30d · 60d.</strong> Every number on the board
+            is drawn from the span you pick here, so it's out in the open rather than
+            behind a button. It's also the one research setting the address bar
+            carries.
+          </li>
+          <li>
+            <strong>My Players / All Players.</strong> Narrows the same board to your
+            watchlist. On <Ui>All Players</Ui> the people you already watch carry a
+            small ✓.
+          </li>
+        </ul>
+        <h3 className="tut-sub">The four buttons</h3>
+        <dl className="tut-defs">
+          <dt>Search</dt>
+          <dd>Find one player by name, anywhere in the league.</dd>
+          <dt>Filters</dt>
+          <dd>
+            Pick a stat, <Ui>≥</Ui> or <Ui>≤</Ui>, a number, <Ui>Add</Ui>. Stack as
+            many as you like — "300+ PA" and ".350+ xwOBA" is two of them — and each
+            shows as a chip under the bar that stays put whether the panel is open or
+            shut. A filter on a column you've hidden still applies.
+          </dd>
+          <dt>Qualified</dt>
+          <dd>
+            Drops everyone short of a full season's worth of playing time: 3.1 plate
+            appearances per game his team has played for a batter, an inning per team
+            game for a starter, an appearance every third game for a reliever.
+          </dd>
+          <dt>Columns</dt>
+          <dd>
+            The two boards carry about forty columns each, so they open on the
+            box-score line plus the headline Statcast numbers and the rest are a tick
+            away. Each group has an <Ui>All</Ui> / <Ui>None</Ui>. Your choice is saved
+            to your account, per board.
+          </dd>
+        </dl>
+        <p className="tut-note">
+          The count above the table — "622 of 622 batters" — always says how much of
+          the board you're looking at, so a short table reads as a tight filter rather
+          than a short league. Tap any name to open that player's page, which is where
+          the <Ui>Add to watchlist</Ui> button is.
         </p>
       </>
     ),
@@ -295,6 +443,12 @@ const CHAPTERS: Chapter[] = [
           exists it plays right there in the at-bat, and the <Ui>Highlights</Ui>{' '}
           button on a finished game plays every one of that player's at-bats back to
           back.
+        </p>
+        <p className="tut-note">
+          Every clip has a speaker button in its top-left corner. If you have{' '}
+          <Ui>Mute clip audio</Ui> on in settings, that is where you turn the sound
+          back on for one clip without changing the setting — handy on a phone, where
+          the browser's own controls disappear while a clip is playing.
         </p>
         <h3 className="tut-sub">Pitchers</h3>
         <p>A pitcher's card opens onto four sections, each its own bar:</p>
@@ -387,12 +541,15 @@ const CHAPTERS: Chapter[] = [
           <Ui>
             <PencilIcon /> Edit
           </Ui>{' '}
-          button appears beside the search box at the top right. Press it from
-          anywhere and it takes you to <Ui>Games</Ui>, where the reordering happens.
+          button appears beside the search at the top right — the pencil alone on a
+          phone. Press it from anywhere and it takes you to <Ui>Games</Ui>, where the
+          reordering happens.
         </p>
         <ol className="tut-steps">
           <Step>
-            Tap <Ui>Edit</Ui>. The cards are replaced by one compact row per player.
+            Tap <Ui>Edit</Ui>. The edit screen takes the whole page — the tabs, the
+            dates and the search all step out of the way, leaving the list and the
+            title above it. The button becomes <Ui>Done</Ui>, which is the way back.
           </Step>
           <Step>
             Drag a row to move it. On a phone, drag from the <Ui>⠿</Ui> grip — the
@@ -405,13 +562,14 @@ const CHAPTERS: Chapter[] = [
             takes two.
           </Step>
           <Step>
-            Tap <Ui>Done</Ui> to go back to the cards.
+            Tap <Ui>Done</Ui> at the top right to go back to the cards.
           </Step>
         </ol>
         <p className="tut-note">
           Batters and pitchers are ordered independently — you're only ever reordering
-          the tab you're on, and the other kind stays where it was. A player can also
-          be removed from their player page.
+          the tab you're on, and the other kind stays where it was, so the{' '}
+          <Ui>Batters · Pitchers</Ui> switch comes along to the edit screen and sits
+          beside its title. A player can also be removed from their player page.
         </p>
       </>
     ),
@@ -470,7 +628,8 @@ const CHAPTERS: Chapter[] = [
           </li>
           <li>
             <strong>The address bar is your state.</strong> The dates, the view, the
-            kind, which cards are open and which player page you're on all live in the
+            kind, which cards are open, which player page you're on, and on the league
+            board the position, the time span and the columns — all of it lives in the
             URL. Reload and you're where you left off; send the link and someone else
             lands on the same screen. A link saved under <Ui>Today</Ui> opens on the
             new today, not the day you saved it.
@@ -479,7 +638,9 @@ const CHAPTERS: Chapter[] = [
             <strong>
               <GearIcon /> Settings
             </strong>{' '}
-            — beside the title: hiding injured players, this guide, and sign out.
+            — beside the title: hiding injured players, muting clip audio, this
+            guide, and sign out. The two toggles are saved to your account, so they
+            follow you to another device.
           </li>
           <li>
             <strong>Expanding scrolls.</strong> Whatever you open — a card, a game, an

@@ -23,6 +23,7 @@ import {
   removePlayer,
   reorderPlayers,
   setHideInjured,
+  setMuteAudio,
   setResearchColumns,
 } from './store.js';
 
@@ -244,6 +245,23 @@ app.put(
       return;
     }
     res.json(await setHideInjured(userId(req), hide));
+  }),
+);
+
+// A route of its own rather than a merged PUT /api/prefs, for the reason the
+// two above are separate: their update semantics genuinely differ (a boolean is
+// always set; a column list needs a null that *clears*), and explicit,
+// tightly-validated routes beat a merge protocol with null-versus-absent rules.
+app.put(
+  '/api/prefs/mute-audio',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const { mute } = (req.body ?? {}) as { mute?: unknown };
+    if (typeof mute !== 'boolean') {
+      res.status(400).json({ error: 'mute must be a boolean' });
+      return;
+    }
+    res.json(await setMuteAudio(userId(req), mute));
   }),
 );
 
