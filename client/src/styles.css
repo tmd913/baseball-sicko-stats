@@ -2809,8 +2809,12 @@ body {
   max-width: 1000px;
   margin: 0 auto;
 }
+/* No scroll box of its own — the overlay scrolls, in both axes, and the header
+   row sticks to it (see `.glog-table thead th`). As wide as its table so the
+   border wraps the content rather than stopping at the window edge. */
 .glog-scroll {
-  overflow-x: auto;
+  width: max-content;
+  min-width: 100%;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg);
@@ -2843,8 +2847,11 @@ body {
   background: var(--panel-2);
 }
 .glog-table thead th {
-  /* Sticky against .glog-scroll, which is the scroll container in both axes —
-     which is the whole reason the Game Log tab reshapes the overlay below. */
+  /* Sticky against the overlay, which is the scroll container in both axes.
+     This tab used to reshape the overlay into a fixed-height column so the
+     table's own box could scroll and the header could stick to *that*; the box
+     is gone, so the whole tab scrolls as every other tab does and the header
+     pins to the top of the overlay on the way. */
   position: sticky;
   top: 0;
   z-index: 2;
@@ -2979,44 +2986,6 @@ body {
   font-size: 12px;
   letter-spacing: 0.02em;
   text-transform: uppercase;
-}
-/* A sticky header can only stick to the box that actually scrolls, and the box
-   that scrolls has to be the table's own — its columns overflow a phone, and an
-   overflow-x container scrolls in both axes whether you want it to or not. So
-   the Game Log gives the overlay the shape `.app.summary-mode` gives the summary
-   view: a fixed-height flex column where the head and tabs hold their place and
-   only the table moves. Every other tab leaves the overlay scrolling
-   as it always has. */
-.details-view.gamelog-mode {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  /* No trailing gutter to scroll past — the table ends where the viewport does. */
-  padding-bottom: 20px;
-}
-/* Everything above the table keeps its natural height; only the pane flexes.
-   `width: 100%` is not redundant: both of these center themselves with `margin:
-   0 auto`, and an auto margin on the cross axis suppresses a flex item's
-   stretch — so in this mode alone they shrank to their content and centered
-   *that*, leaving the header and tabs sitting a good 30px right of where every
-   other tab puts them. At full width the max-width centers them as it does in
-   normal flow. */
-.details-view.gamelog-mode > .details-head,
-.details-view.gamelog-mode > .details-tabs {
-  flex: none;
-  width: 100%;
-}
-.details-view.gamelog-mode .details-gamelog {
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-}
-.details-view.gamelog-mode .glog-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
 }
 .glog-more {
   flex: none;
@@ -3712,36 +3681,37 @@ body {
   letter-spacing: -0.02em;
 }
 
-/* ---- Summary view: a full-page, scroll-locked stat table ---- */
+/* ---- Summary view: a full-page stat table ----
 
-/* In summary mode — and on the research board, which is the same wide table
-   over the league instead of the watchlist — the page itself doesn't scroll:
-   the app becomes a fixed-height flex column (header + view bar + table), and
-   only the table scrolls. */
-.app.summary-mode,
-.app.research-mode {
-  height: 100dvh;
-  padding-bottom: 14px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-/* The table area may use up to whatever height is left below the header + view
-   bar, but no more. align-items:flex-start keeps the scroll box from being
-   stretched to that full height, so with only a few rows it shrinks to its
-   content instead of leaving dead space below the total row. */
+   **The page scrolls, and the table's own box does not.** These tables used to
+   live in a scroll box of their own inside a `height: 100dvh` app — the only
+   way to have a sticky header while the columns also scrolled sideways, since
+   an `overflow-x` container scrolls in both axes whether you want it to or not,
+   and a header can only stick to the box that actually scrolls.
+
+   The cost of that was the whole page: nothing outside the box moved, so a
+   phone never collapsed its address bar, the scroll never chained anywhere, and
+   the rubber-band at the end of a table was the box's rather than the page's.
+
+   So the box is gone and the **document** is the scroll container in both axes.
+   Every `position: sticky` in these tables now resolves against the viewport,
+   which is what makes the header row and the pinned columns work while the
+   page itself scrolls. The consequence is that a table wider than the window
+   scrolls the *page* sideways, chrome and all — that is the trade, and it is
+   the one the ask makes: there is no CSS that keeps horizontal scrolling inside
+   a box while a header inside that box sticks to something outside it. */
+
 .summary-view {
-  flex: 1;
-  min-height: 0;
   display: flex;
   align-items: flex-start;
 }
+/* As wide as its table, so the border wraps the content rather than stopping at
+   the window; `min-width: 100%` keeps it spanning the page when the table is
+   narrower than that. Overflowing this box is what widens the document, which
+   is what gives the page its horizontal scroll. */
 .summary-scroll {
-  flex: 1;
-  min-height: 0;
-  /* Grow to content, but cap at the available height and scroll past that. */
-  max-height: 100%;
-  overflow: auto;
+  width: max-content;
+  min-width: 100%;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--bg);
@@ -3809,7 +3779,8 @@ body {
 .summary-table td:last-child {
   padding-right: clamp(10px, 3vw, 32px);
 }
-/* Header row sticks to the top while scrolling vertically. */
+/* Header row sticks to the top of the **viewport** while the page scrolls (see
+   the note above `.summary-view` — the table has no scroll box of its own). */
 .summary-table thead th {
   position: sticky;
   top: 0;
@@ -3824,7 +3795,9 @@ body {
 /* Only the headshot column sticks to the left while scrolling horizontally — the
    name scrolls away with the rest, so the stat columns get the room on a narrow
    screen. The soft right-edge shadow reads as a pinned edge as columns slide
-   underneath. */
+   underneath. `left: 0` is the window's edge rather than the app's 22px gutter:
+   the pinned block hugging the edge is what a pinned column looks like
+   everywhere else, and on a phone it is 22px the stats get to keep. */
 .summary-table .sum-img-col {
   position: sticky;
   left: 0;
@@ -4107,19 +4080,16 @@ body {
    sortable headers, and the Statcast group at the right end. */
 
 .research-view {
-  flex: 1;
-  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
-/* Grows to its content but never past the height left below the controls, and
-   scrolls in both axes past that — the column count always overflows a phone. */
+/* As `.summary-scroll`: as wide as its table so the border wraps it, and no
+   scroll box of its own — the page scrolls, in both axes, and every sticky cell
+   in the table resolves against the viewport. */
 .research-scroll {
-  flex: 1;
-  min-height: 0;
-  max-height: 100%;
-  overflow: auto;
+  width: max-content;
+  min-width: 100%;
   border: 1px solid var(--border);
   border-radius: var(--control-radius);
   background: var(--bg);

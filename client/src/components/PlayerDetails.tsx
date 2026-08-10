@@ -705,10 +705,10 @@ export function PlayerDetails({
   }, [tab, playerId, kind]);
 
   return (
-    // The Game Log makes the overlay a fixed-height column so only its table
-    // scrolls — see `.details-view.gamelog-mode`, which is the only way its
-    // header row can stick over a season's worth of rows.
-    <div className={`details-view${tab === 'gamelog' ? ' gamelog-mode' : ''}`}>
+    // Every tab scrolls the overlay, the Game Log included: it used to become a
+    // fixed-height column so its table's own box could scroll and the header
+    // could stick to that, and now the header sticks to the overlay instead.
+    <div className="details-view">
       <div className="details-head">
         <button type="button" className="details-back" onClick={onClose}>
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

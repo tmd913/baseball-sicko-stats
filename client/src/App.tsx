@@ -1079,8 +1079,9 @@ export default function App() {
   // A link (from the summary/feed) jumped to the players page — remember which
   // view we came from so a back button can return there. Cleared once we're back,
   // or when the user navigates explicitly via the tabs. backScroll remembers that
-  // view's scroll offset so going back restores where the user left off — the
-  // summary view scrolls its inner table, the feed scrolls the window.
+  // view's scroll offset so going back restores where the user left off. Both
+  // views scroll the window now — the summary table had a scroll box of its own
+  // until the page took the job over.
   const [backView, setBackView] = useState<'summary' | 'feed' | null>(null);
   const backScroll = useRef(0);
   const goBack = () => {
@@ -1090,14 +1091,9 @@ export default function App() {
     setBackView(null);
     setView(dest);
     // Restore the previous scroll once the destination view has re-mounted.
-    requestAnimationFrame(() => {
-      if (dest === 'summary') {
-        const el = document.querySelector('.summary-scroll');
-        if (el) el.scrollTop = top;
-      } else {
-        window.scrollTo(0, top);
-      }
-    });
+    // One call for both: the summary table used to scroll inside its own box
+    // and now scrolls the page, like the feed.
+    requestAnimationFrame(() => window.scrollTo(0, top));
   };
   // From the feed/summary: jump to a player's full day on the players view —
   // switch views, expand their card, and scroll it to the top. Record the origin
@@ -1105,11 +1101,7 @@ export default function App() {
   const openPlayerDay = useCallback(
     (key: string) => {
       const from = view === 'summary' || view === 'feed' ? view : null;
-      if (from === 'summary') {
-        backScroll.current = document.querySelector('.summary-scroll')?.scrollTop ?? 0;
-      } else if (from === 'feed') {
-        backScroll.current = window.scrollY;
-      }
+      if (from) backScroll.current = window.scrollY;
       setBackView(from);
       setEditMode(false);
       setView('games');
@@ -1517,9 +1509,7 @@ export default function App() {
     <MutedContext.Provider value={muteAudio}>
     <FantasyRosterContext.Provider value={fantasySlots}>
     <div
-      className={`app${view === 'summary' ? ' summary-mode' : ''}${
-        view === 'research' ? ' research-mode' : ''
-      }${editMode ? ' edit-mode' : ''}${dateOpen ? ' date-open' : ''}`}
+      className={`app${editMode ? ' edit-mode' : ''}${dateOpen ? ' date-open' : ''}`}
     >
       <header className="app-header">
         <div className="brand">
