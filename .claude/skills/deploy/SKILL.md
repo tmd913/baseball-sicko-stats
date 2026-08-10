@@ -29,9 +29,30 @@ Then check the tree is in the state they mean to ship:
 git status --short && git log --oneline -1
 ```
 
-Uncommitted changes still deploy (the build reads the working tree, not HEAD).
-Mention what's dirty and which commit is at HEAD, then continue — don't block on it,
-and don't commit on their behalf unless asked.
+Uncommitted changes still deploy — **the build reads the working tree, not HEAD** —
+so a dirty tree ships code that exists nowhere but this one machine. Say what's dirty
+and what's at HEAD, and if the dirty files are the point of the deploy, **offer to
+land the work first — always as a PR**: a `worktree-<slug>` branch, a commit,
+`gh pr create`, then `gh pr merge --merge --delete-branch`. Committing straight to
+`main` is common in this repo's older history and is **no longer how work lands
+here** (the user's call, 2026-08-10); don't offer it as the quick option. Don't block
+on it and don't commit on their behalf — but do ask, because two things quietly stop
+being true once you deploy uncommitted work:
+
+- **Rollback stops working.** The Rollback section below is "check out the last
+  known-good commit and redeploy" — which for uncommitted work discards the very
+  thing that is live rather than restoring anything. There is no commit to go back
+  *to*, and going back means losing it.
+- **"Which commit is live" stops having an answer.** The bundle-hash check in step 5
+  proves the edge matches what you just *built*, not what is in git. Nothing else in
+  this skill can tell prod and `main` apart, so a deploy-then-merge ordering leaves
+  them provably-equal only if someone thinks to grep the deployed Lambda
+  (`aws lambda get-function --query 'Code.Location'`, unzip, grep for a marker string
+  from the change).
+
+If the user says deploy anyway, deploy — a hotfix that has to ship now is a real
+reason — but say plainly in the final report that what is live is not in git, and
+that landing it is still outstanding.
 
 ## 1. Build
 
@@ -126,7 +147,10 @@ curl -s https://statcastsicko.com/api/health
 
 Tell the user: what got deployed (commit + whether the tree was dirty), the bundle
 hash now live, that the invalidation went out, and the result of both verification
-checks. If a step failed, say which one and show the output — a deploy that built and
+checks. **If the tree was dirty, say so as a standing item, not a footnote** — name
+the files that are live but unlanded, and that landing them is still outstanding.
+A deploy report that reads as "done" while prod runs code no commit contains is the
+failure this line exists to prevent. If a step failed, say which one and show the output — a deploy that built and
 uploaded but renders a blank page is a failed deploy.
 
 ## Deployment coordinates
@@ -146,9 +170,19 @@ uploaded but renders a blank page is a failed deploy.
 There is no one-command rollback. Check out the last known-good commit and run this
 skill again from step 1 — the deploy is fully derived from the working tree.
 
+**Which is exactly why a dirty tree is worth raising in step 0.** This procedure
+restores a *commit*; work that was deployed without being committed is not in one, so
+checking out the last known-good commit doesn't roll it back — it deletes it, live
+version and all, with nothing to redeploy from. If you have to roll back past
+uncommitted work, commit or `git stash` it first so it still exists afterwards.
+
 ## Known traps
 
 - **`cdk deploy` with no credentials** fails late and noisily. Do step 0 first.
+- **Deploying a dirty tree, then merging afterwards.** It works, and it inverts the
+  guarantee: for the window between the two, prod runs code that no commit contains
+  and no rollback can restore. It happened on 2026-08-10 (the video-cache fix shipped
+  before PR #32 landed). Offer to land the work first — step 0.
 - **Skipping the invalidation** is the single most common way a "successful" deploy
   changes nothing for the user.
 - **`-c siteUrl=…`** drops the legacy CloudFront Cognito callback. Never pass it.
@@ -158,6 +192,9 @@ skill again from step 1 — the deploy is fully derived from the working tree.
 - **CDK bundling needs `bundleAwsSDK: true`** — `@aws-sdk/lib-dynamodb` is not in the
   Lambda runtime SDK, and leaving it external is `MODULE_NOT_FOUND` on the first
   watchlist read.
-- **The season is hardcoded in six places** (`savant.ts`, `percentiles.ts`,
-  `xwoba.ts`, `pitcherArsenal.ts`, `teamStats.ts`, `expectedStats.ts`). If a deploy
-  is meant to roll the season over, confirm all six changed before shipping.
+- **The season is hardcoded in seven places** (`savant.ts`, `percentiles.ts`,
+  `xwoba.ts`, `pitcherArsenal.ts`, `teamStats.ts`, `expectedStats.ts`, `research.ts`).
+  If a deploy is meant to roll the season over, confirm all seven changed before
+  shipping. This list said six and omitted `research.ts` until 2026-08-10; verify
+  against the code rather than trusting the count:
+  `grep -rln "hfSea\|CURRENT_SEASON = \|const SEASON = " server/src/`

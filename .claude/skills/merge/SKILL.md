@@ -124,10 +124,15 @@ git checkout main && git pull
 npm run build
 ```
 
-**A failed build stops the loop.** Fix it on `main` and commit before continuing —
-do not merge the next PR on top of a broken tree, or you lose the ability to tell
-which branch broke it. This build is the entire safety net; skipping it to save two
-minutes is how a broken `main` reaches a deploy.
+**A failed build stops the loop.** Do not merge the next PR on top of a broken tree,
+or you lose the ability to tell which branch broke it. This build is the entire
+safety net; skipping it to save two minutes is how a broken `main` reaches a deploy.
+
+Land the fix **as its own PR** — a `worktree-fix-<slug>` branch, a commit,
+`gh pr create`, `gh pr merge --merge --delete-branch` — and only then resume the
+loop. This used to say "fix it on `main` and commit"; work no longer lands here by a
+direct commit to `main` (the user's call, 2026-08-10), and a cross-branch break is
+exactly the change that most deserves a reviewable record of what broke and why.
 
 If `gh pr merge` reports the branch is no longer mergeable, resolve it locally:
 
