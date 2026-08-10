@@ -362,7 +362,10 @@ const CHAPTERS: Chapter[] = [
             untouched and comes back when you switch off. And you only need one
             person in a league to do any of this: whoever connects first can turn
             on a share link, and everyone else joins by opening it — no cookies,
-            no league ID.
+            no league ID. Connecting also adds a <Ui>Ros%</Ui> column to the
+            board and a rostered figure to each player's page: the share of all
+            ESPN leagues he's on a roster in, which sorts and filters like any
+            other column.
           </li>
         </ul>
         <h3 className="tut-sub">The four buttons</h3>

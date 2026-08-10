@@ -5924,6 +5924,19 @@ body {
   font-size: 12.5px;
 }
 
+/* Roster % under the player's name on the details page. Sits with the Savant
+   link in the identity block, and reads as a caption rather than a stat pill —
+   the page is full of numbers and this one is context, not a measurement. */
+.details-rostered {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.details-rostered strong {
+  color: var(--accent);
+  font-weight: 800;
+}
+
 /* ---- Fantasy lineup slot ----------------------------------------------------
    The chip beside a player's name while the views are reading a fantasy roster.
    Fully round, because the app reserves that shape for things you read; the

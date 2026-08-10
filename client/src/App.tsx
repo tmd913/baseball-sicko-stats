@@ -591,6 +591,44 @@ export default function App() {
     return new Set(watchlist.map(playerKey));
   }, [watchlist, fantasySlots]);
 
+  /** ESPN's global rostered percentage by MLB id, or null with no league —
+   *  which is also what turns the board's `Ros%` column on and off. */
+  const rosterPct = useMemo(() => {
+    if (!espnConnected || !ownership) return null;
+    const map = new Map<number, number>();
+    for (const [id, pct] of Object.entries(ownership.rosterPct)) map.set(Number(id), pct);
+    return map;
+  }, [espnConnected, ownership]);
+
+  /**
+   * Read the ownership map for the two surfaces that want roster % — the
+   * research board and the player page — as well as the free-agent filter that
+   * already asked for it.
+   *
+   * Unlike that one this fires **once**: roster % is ESPN's season-wide figure
+   * and moves by a fraction of a point a day, where a league's rosters change
+   * the moment anyone makes a move. Every guard here is a terminal state
+   * (loaded, failed, or in flight), so the effect cannot re-trigger on its own
+   * result.
+   */
+  useEffect(() => {
+    if (!espnConnected || ownership || espnLoading || espnError) return;
+    if (view !== 'research' && detailsKey === null) return;
+    loadOwnership();
+  }, [espnConnected, ownership, espnLoading, espnError, view, detailsKey, loadOwnership]);
+
+  /**
+   * The board's rows with roster % merged in. Client-side because the research
+   * board is cached per kind and window and served to every user alike, while
+   * this number is only shown to someone with a league connected — folding it
+   * into that blob would make a shared cache carry a per-user concern.
+   */
+  const researchRows = useMemo(() => {
+    const rows = research[researchCacheKey] ?? [];
+    if (!rosterPct) return rows;
+    return rows.map((r) => ({ ...r, rosterPct: rosterPct.get(r.id) ?? null }));
+  }, [research, researchCacheKey, rosterPct]);
+
   const openEspnSettings = useCallback(() => {
     setSettingsOpen(false);
     setEspnOpen(true);
@@ -1749,7 +1787,7 @@ export default function App() {
              to the other board (OF → SP) starts fresh rather than carrying a
              batter's column vocabulary onto a pitcher's table. */
           key={researchKind}
-          rows={research[researchCacheKey] ?? []}
+          rows={researchRows}
           kind={researchKind}
           loading={researchLoading && !research[researchCacheKey]}
           error={researchError}
@@ -1763,6 +1801,7 @@ export default function App() {
           onWindowChange={setResearchWindow}
           scope={researchScope}
           onScopeChange={setResearchScope}
+          hasRosterPct={rosterPct !== null}
           ownedIds={ownedIds}
           espnConnected={espnConnected}
           espnLoading={espnLoading}
@@ -1890,6 +1929,7 @@ export default function App() {
           position={detailsPlayer.position}
           isPitcher={detailsPlayer.kind === 'pitcher'}
           isWatched={detailsWatched}
+          rosterPct={rosterPct ? rosterPct.get(detailsPlayer.id) ?? null : undefined}
           onAdd={() =>
             onAdd({
               id: detailsPlayer.id,

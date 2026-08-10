@@ -213,7 +213,17 @@ function inningsToOuts(ip: number): number {
 // counting stats first, then the slash line and the rate stats derived from
 // them, then the Statcast group behind its divider.
 
+const ROSTER_PCT_COLUMN: Column = {
+  key: 'rosterPct',
+  label: 'Ros%',
+  group: 'Fantasy',
+  title: "Rostered in this share of all ESPN leagues \u2014 ESPN's own figure, not your league's",
+  format: (r) => (r.rosterPct == null ? '\u2014' : `${r.rosterPct.toFixed(1)}%`),
+  value: (r) => r.rosterPct ?? null,
+};
+
 const BATTER_COLUMNS: Column[] = [
+  ROSTER_PCT_COLUMN,
   { key: 'games', label: 'G', group: 'Counting', title: 'Games played', format: (r) => count(r.games), value: (r) => r.games },
   { key: 'pa', label: 'PA', title: 'Plate appearances', format: (r) => count(r.pa), value: (r) => r.pa },
   { key: 'ab', label: 'AB', title: 'At bats', format: (r) => count(r.ab), value: (r) => r.ab },
@@ -245,6 +255,7 @@ const BATTER_COLUMNS: Column[] = [
 ];
 
 const PITCHER_COLUMNS: Column[] = [
+  ROSTER_PCT_COLUMN,
   { key: 'games', label: 'G', group: 'Counting', title: 'Games pitched', format: (r) => count(r.games), value: (r) => r.games },
   { key: 'gamesStarted', label: 'GS', title: 'Games started', format: (r) => count(r.gamesStarted), value: (r) => r.gamesStarted },
   // Shown as thirds ("158.1") and ordered on the out count behind it — 6.2 is
@@ -568,6 +579,11 @@ interface Props {
    *  population the table describes, not the presentation of it. */
   scope: ResearchScope;
   onScopeChange: (s: ResearchScope) => void;
+  /** Whether a fantasy league is connected, and so whether the board carries a
+   *  roster-% column at all. The figure is ESPN's own and needs no credentials,
+   *  so this gate is about relevance rather than access: to someone with no
+   *  fantasy league it is a column of noise. */
+  hasRosterPct: boolean;
   /** MLB ids of every player rostered in the connected fantasy league, or null
    *  while there is no league connected and nothing has been read. The free
    *  agents are the complement of this within the board — see `boardRows`. */
@@ -617,6 +633,7 @@ export function ResearchTable({
   onWindowChange,
   scope,
   onScopeChange,
+  hasRosterPct,
   ownedIds,
   espnConnected,
   espnLoading,
@@ -627,7 +644,13 @@ export function ResearchTable({
 }: Props) {
   // Every column this board *has* — what the picker lists, what a filter can be
   // built on, and the canonical order. `columns` below is the visible subset.
-  const allColumns = kind === 'pitcher' ? PITCHER_COLUMNS : BATTER_COLUMNS;
+  // Roster % drops out of the vocabulary entirely without a league, rather than
+  // showing as a column of dashes: a column you cannot fill is worse than one
+  // that isn't offered, and it would otherwise sit at the very front.
+  const allColumns = useMemo(() => {
+    const base = kind === 'pitcher' ? PITCHER_COLUMNS : BATTER_COLUMNS;
+    return hasRosterPct ? base : base.filter((c) => c.key !== 'rosterPct');
+  }, [kind, hasRosterPct]);
   const columnsByKey = useMemo(
     () => new Map(allColumns.map((c) => [c.key, c])),
     [allColumns],

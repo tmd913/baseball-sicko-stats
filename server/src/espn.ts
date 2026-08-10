@@ -270,6 +270,68 @@ function matchPlayer(
   return onTeam.length === 1 ? onTeam[0] : null;
 }
 
+// ---- Roster %: how much of ESPN has this player --------------------------
+
+/**
+ * ESPN's **rostered percentage** for every player in its universe, keyed by MLB
+ * id.
+ *
+ * Note what this number is: the share of *all* ESPN leagues in which the player
+ * is on a roster — ESPN's own global figure, which is what "roster %" means
+ * everywhere in fantasy. It is **not** the share of teams in the user's league,
+ * which for a 12-team league would only ever be 0% or 8.3% and tell you
+ * nothing.
+ *
+ * Two things make this much cheaper than it might be. It comes off the
+ * **season-wide** players endpoint rather than the league board — 3,921 rows
+ * and ~940KB against `kona_player_info`'s 3,602 rows and 10MB — and that
+ * endpoint takes **no cookies at all**, since none of it is league-specific. So
+ * one fetch serves every user of the app, and the map is cached globally rather
+ * than per league.
+ *
+ * Gating it on having a league connected is therefore a product decision rather
+ * than a technical one: the number is available to anyone, and it is hidden
+ * from people with no fantasy league because to them it is noise.
+ */
+const ROSTER_PCT_TTL_MS = 6 * 60 * 60 * 1000;
+let rosterPctCache: { pct: Record<number, number>; fetchedAt: number } | null = null;
+let rosterPctInFlight: Promise<Record<number, number>> | null = null;
+
+export async function getRosterPct(): Promise<Record<number, number>> {
+  if (rosterPctCache && Date.now() - rosterPctCache.fetchedAt < ROSTER_PCT_TTL_MS) {
+    return rosterPctCache.pct;
+  }
+  if (rosterPctInFlight) return rosterPctInFlight;
+
+  rosterPctInFlight = (async () => {
+    const url = `${FANTASY_BASE}/${SEASON}/players?view=players_wl`;
+    const res = await fetch(url, {
+      headers: { ...UA, 'x-fantasy-filter': JSON.stringify({ filterActive: { value: true } }) },
+    });
+    if (!res.ok) throw new Error(`ESPN players endpoint returned ${res.status}`);
+    const rows = (await res.json()) as {
+      id?: number;
+      fullName?: string;
+      proTeamId?: number;
+      ownership?: { percentOwned?: number };
+    }[];
+    const index = await getMlbIndex();
+    const pct: Record<number, number> = {};
+    for (const row of rows) {
+      const owned = row.ownership?.percentOwned;
+      if (typeof owned !== 'number' || !row.fullName) continue;
+      const found = matchPlayer(index, row.fullName, row.proTeamId);
+      if (found) pct[found.id] = owned;
+    }
+    rosterPctCache = { pct, fetchedAt: Date.now() };
+    return pct;
+  })().finally(() => {
+    rosterPctInFlight = null;
+  });
+
+  return rosterPctInFlight;
+}
+
 // ---- Reading the league ---------------------------------------------------
 
 interface EspnRosterResponse {
@@ -420,6 +482,12 @@ export interface EspnRosterPlayer {
 export interface EspnOwnership extends EspnLeagueInfo {
   /** MLB player id to the fantasy team id that holds him. */
   owned: Record<number, number>;
+  /** ESPN's global rostered percentage, by MLB player id — see `getRosterPct`.
+   *  It rides along here rather than getting a route of its own because this is
+   *  the call a connected client already makes, and the gate on both is the
+   *  same: having a league. Its own cache is six hours, so the ten-minute
+   *  ownership refresh re-reads a map rather than an upstream. */
+  rosterPct: Record<number, number>;
   /** Every team's roster, by fantasy team id. Keyed by team rather than
    *  narrowed to the caller's, because this whole object is cached **per
    *  league** and shared by everyone in it — making it user-specific would
@@ -449,9 +517,15 @@ export async function getOwnership(creds: EspnCreds, force = false): Promise<Esp
   if (running && !force) return running;
 
   const job = (async () => {
-    const [data, index] = await Promise.all([
+    const [data, index, rosterPct] = await Promise.all([
       leagueGet(creds, ['mRoster', 'mTeam', 'mSettings']),
       getMlbIndex(),
+      // A failed read here costs one column, not the whole connection: the
+      // free-agent filter and the fantasy roster don't depend on it.
+      getRosterPct().catch((err: Error) => {
+        console.error('ESPN roster% unavailable:', err.message);
+        return {} as Record<number, number>;
+      }),
     ]);
     const info = leagueInfoFrom(creds, data);
     const owned: Record<number, number> = {};
@@ -494,6 +568,7 @@ export async function getOwnership(creds: EspnCreds, force = false): Promise<Esp
     const result: EspnOwnership = {
       ...info,
       owned,
+      rosterPct,
       rosters,
       rosterCount,
       matched,

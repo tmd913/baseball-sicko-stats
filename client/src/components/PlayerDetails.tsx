@@ -465,6 +465,7 @@ export function PlayerDetails({
   position,
   isPitcher = false,
   isWatched,
+  rosterPct,
   onAdd,
   onRemove,
   onClose,
@@ -474,6 +475,10 @@ export function PlayerDetails({
   position?: string;
   isPitcher?: boolean;
   isWatched: boolean;
+  /** ESPN's global rostered percentage. `undefined` with no fantasy league
+   *  connected, which is what hides the line; `null` when there is one but
+   *  ESPN has no figure for this player. */
+  rosterPct?: number | null;
   onAdd: () => void;
   onRemove: () => void;
   onClose: () => void;
@@ -714,6 +719,21 @@ export function PlayerDetails({
               {name}
               {position && <span className="player-pos">{position}</span>}
             </h1>
+            {/* Under the name rather than out beside the watchlist button: it
+                is a fact *about the player*, like the position chip above it,
+                where the buttons on the right are things you do to him. Absent
+                entirely without a fantasy league — and dashed rather than
+                hidden when there is one but ESPN has no figure for him, since
+                on a connected account a missing number is information. */}
+            {rosterPct !== undefined && (
+              <p
+                className="details-rostered"
+                title="Rostered in this share of all ESPN leagues — ESPN's own figure, not your league's"
+              >
+                Rostered{' '}
+                <strong>{rosterPct === null ? '—' : `${rosterPct.toFixed(1)}%`}</strong>
+              </p>
+            )}
             <a
               className="details-savant-link"
               href={savantPlayerUrl(name, playerId)}

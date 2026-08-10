@@ -576,6 +576,14 @@ export const RESEARCH_WINDOWS: ResearchWindow[] = ['season', 7, 15, 30, 60];
 export interface ResearchRow {
   id: number;
   name: string;
+  /** ESPN's global rostered percentage — the share of *all* ESPN leagues the
+   *  player is on a roster in, not of the user's own league.
+   *
+   *  **Merged in by the client**, not sent by `/api/research`: that board is
+   *  cached per kind and window and served to everyone, while this is only
+   *  shown to a user with a fantasy league connected. Absent means either no
+   *  league or no match for the player. */
+  rosterPct?: number | null;
   savantName: string;
   kind: PlayerKind;
   team: string; // "MIL" — the abbreviation; a full name is column-wide
@@ -739,6 +747,8 @@ export interface EspnOwnership {
   myTeamName: string | null;
   /** MLB player id → the fantasy team id holding him. */
   owned: Record<number, number>;
+  /** ESPN's global rostered percentage by MLB player id — see `ResearchRow.rosterPct`. */
+  rosterPct: Record<number, number>;
   /** Roster entries read, and how many found an MLB player. The gap is
    *  prospects who have never played a major-league game; it is carried so a
    *  match that has silently stopped working is visible rather than showing up
