@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { BatterGameLog, PitcherGameLog } from '../types';
+import { FullscreenButton } from './FullscreenButton';
+import { useFullscreen } from '../hooks';
 import { creditLabel, decisionColor, formatIp, formatRate, ordinal, prettyGameDate } from '../lib';
 
 /**
@@ -274,13 +276,20 @@ export function GameLog(
   log: { kind: 'batter'; games: BatterGameLog[] } | { kind: 'pitcher'; games: PitcherGameLog[] },
 ) {
   const [shown, setShown] = useState(PAGE_SIZE);
+  // Above the early return: hooks are unconditional, and a player with no games
+  // takes that branch.
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const { isFull, toggle } = useFullscreen(hostRef);
   if (log.games.length === 0) {
     return <div className="details-status">No games played this season.</div>;
   }
   const pitching = log.kind === 'pitcher';
   const more = log.games.length - shown;
   return (
-    <div className="details-gamelog">
+    <div className={`details-gamelog${isFull ? ' is-full' : ''}`} ref={hostRef}>
+      <div className="table-toolbar">
+        <FullscreenButton isFull={isFull} onToggle={toggle} what="log" />
+      </div>
       <div className="glog-scroll">
         <table className="glog-table">
           <thead>

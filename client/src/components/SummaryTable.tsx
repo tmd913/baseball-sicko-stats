@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { FantasySlotTag } from './FantasySlot';
+import { FullscreenButton } from './FullscreenButton';
+import { useFullscreen } from '../hooks';
 import type { BattingLine, PitchingLine, PlayerGame, PlayerReport } from '../types';
 import { playerKey } from '../types';
 import type { Corner, LiveRole } from '../lib';
@@ -338,8 +340,15 @@ export function SummaryTable({
   const handlers = { onOpenDetails, onOpenPlayerDay };
   const batters = reports.filter((r) => r.kind !== 'pitcher');
   const pitchers = reports.filter((r) => r.kind === 'pitcher');
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const { isFull, toggle } = useFullscreen(hostRef);
   return (
-    <div className="summary-view">
+    /* The full-screen button lives inside the element it expands, which is what
+       makes it the way back out too. */
+    <div className={`summary-view${isFull ? ' is-full' : ''}`} ref={hostRef}>
+      <div className="table-toolbar">
+        <FullscreenButton isFull={isFull} onToggle={toggle} what="table" />
+      </div>
       <div className="summary-scroll">
         {/* The tables sit in one max-content flex column so the narrower of the
             two stretches to the other's width — otherwise the batter table (fewer

@@ -1,4 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { FullscreenButton } from './FullscreenButton';
+import { useFullscreen } from '../hooks';
 import { RESEARCH_WINDOWS } from '../types';
 import type { PlayerKind, ResearchRow, ResearchWindow } from '../types';
 import { headshotUrl } from '../lib';
@@ -921,8 +923,11 @@ export function ResearchTable({
 
   const statcastStart = columns.findIndex((c) => c.statcast);
 
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const { isFull, toggle } = useFullscreen(hostRef);
+
   return (
-    <div className="research-view">
+    <div className={`research-view${isFull ? ' is-full' : ''}`} ref={hostRef}>
       {/* Positions, the two disclosure buttons and the count all share one
           wrapping row: the pills are only as wide as their content, so on a
           desktop the whole control set fits on a single line, and the row
@@ -1092,6 +1097,10 @@ export function ResearchTable({
           <span className="research-toggle-label">Columns</span>
           <span className="research-toggle-count">{columns.length}</span>
         </button>
+        {/* Last in the run, and needing no row of its own: this row is already
+            inside `.research-view`, which is the element that goes full screen,
+            so the same button is the way back out. */}
+        <FullscreenButton isFull={isFull} onToggle={toggle} what="board" />
         </div>
       </div>
 

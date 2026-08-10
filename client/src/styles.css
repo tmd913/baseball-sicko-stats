@@ -3468,6 +3468,7 @@ body {
 .edit-order-btn,
 .search-toggle,
 .date-toggle,
+.fs-btn,
 .search-bar-close {
   flex: none;
   /* The calendar is the one member that is never a square — see .date-toggle
@@ -3489,6 +3490,7 @@ body {
 .settings-btn:hover,
 .fantasy-btn:hover,
 .edit-order-btn:hover,
+.fs-btn:hover,
 .search-toggle:hover,
 .date-toggle:hover,
 .search-bar-close:hover {
@@ -3498,6 +3500,7 @@ body {
 .settings-btn:focus-visible,
 .fantasy-btn:focus-visible,
 .edit-order-btn:focus-visible,
+.fs-btn:focus-visible,
 .search-toggle:focus-visible,
 .date-toggle:focus-visible,
 .search-bar-close:focus-visible {
@@ -3510,6 +3513,7 @@ body {
 .settings-btn.active,
 .fantasy-btn.active,
 .edit-order-btn.active,
+.fs-btn.on,
 .search-toggle.active,
 .date-toggle.active {
   background: var(--accent);
@@ -3712,6 +3716,58 @@ body {
   letter-spacing: -0.02em;
 }
 
+/* ---- Full screen -----------------------------------------------------------
+   The three wide tables each offer the screen to themselves — see
+   `hooks.ts::useFullscreen` for why there are two mechanisms behind one button.
+
+   The button always sits **inside** the element that goes full screen, which is
+   what makes it the way out as well as the way in: on the research board that
+   is free, its tool row already being inside `.research-view`, and the other
+   two get `.table-toolbar` — one right-aligned row, the height of a control,
+   above the table.
+
+   Both mechanisms are styled the same way. `:fullscreen` is the real thing (the
+   element is already the size of the screen, so it only needs the app's
+   background, which it does not inherit — the fullscreen backdrop is black by
+   default and the table's own cells are transparent over it) and `.is-full` is
+   the fallback overlay, which has to place itself. */
+.table-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  flex: none;
+  margin-bottom: 8px;
+}
+.summary-view:fullscreen,
+.research-view:fullscreen,
+.details-gamelog:fullscreen {
+  background: var(--bg);
+  padding: 10px 12px;
+}
+.summary-view.is-full,
+.research-view.is-full,
+.details-gamelog.is-full {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: var(--bg);
+  padding: 10px 12px;
+}
+/* Whichever mechanism it is, the inside is the same column: the toolbar holds
+   its height at the top and the table takes everything left. `max-width: none`
+   undoes the reading column the game log sets for its place in the overlay —
+   full screen is the one moment that column is the wrong idea. */
+.summary-view:fullscreen,
+.research-view:fullscreen,
+.details-gamelog:fullscreen,
+.summary-view.is-full,
+.research-view.is-full,
+.details-gamelog.is-full {
+  display: flex;
+  flex-direction: column;
+  max-width: none;
+  margin: 0;
+}
+
 /* ---- Summary view: a full-page, scroll-locked stat table ---- */
 
 /* In summary mode — and on the research board, which is the same wide table
@@ -3726,21 +3782,20 @@ body {
   flex-direction: column;
   overflow: hidden;
 }
-/* The table area may use up to whatever height is left below the header + view
-   bar, but no more. align-items:flex-start keeps the scroll box from being
-   stretched to that full height, so with only a few rows it shrinks to its
-   content instead of leaving dead space below the total row. */
+/* A column, since the full-screen button's row sits above the table. The table
+   may use up to whatever height is left below it, and no more: `flex: 0 1 auto`
+   is what lets a three-row table shrink to its content instead of leaving dead
+   space below the total row, while a long one shrinks to the space available
+   and scrolls past that. */
 .summary-view {
   flex: 1;
   min-height: 0;
   display: flex;
-  align-items: flex-start;
+  flex-direction: column;
 }
 .summary-scroll {
-  flex: 1;
+  flex: 0 1 auto;
   min-height: 0;
-  /* Grow to content, but cap at the available height and scroll past that. */
-  max-height: 100%;
   overflow: auto;
   border: 1px solid var(--border);
   border-radius: 12px;

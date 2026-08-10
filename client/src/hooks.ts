@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 
 /**
@@ -133,4 +133,88 @@ export function useDismissable(
       window.removeEventListener('keydown', onKey);
     };
   }, [open, ref, close]);
+}
+
+/**
+ * Give one element the whole screen, and take it back.
+ *
+ * These tables are the app's widest things by some way — the research board
+ * carries 44 columns — and they read out of a box a few hundred pixels tall
+ * under a header, a tab row and a control bar. This is the button that says
+ * "just show me the table", and what it buys on a laptop is both the browser's
+ * chrome and the app's: a dozen more rows and several more columns at once.
+ *
+ * **Two mechanisms, one state.** The Fullscreen API is the real thing and takes
+ * the browser's own chrome with it, but iPhone Safari does not implement it for
+ * elements (only for video) — so a request that throws, or an API that isn't
+ * there, falls back to a fixed overlay over the app. That covers everything the
+ * app draws, which on a phone is nearly the whole screen anyway. The caller
+ * sees one `isFull` either way and never has to know which it got.
+ *
+ * `fullscreenchange` is what keeps the state honest: Escape and the browser's
+ * own exit are not our button, and a flag we set ourselves would go stale the
+ * first time either was used.
+ */
+export function useFullscreen<T extends HTMLElement>(ref: RefObject<T | null>) {
+  // The fallback's own flag. Native fullscreen is read from the document rather
+  // than remembered, so there is nothing to keep in sync there.
+  const [overlay, setOverlay] = useState(false);
+  const [native, setNative] = useState(false);
+
+  useEffect(() => {
+    const sync = () => {
+      const on = !!ref.current && document.fullscreenElement === ref.current;
+      setNative(on);
+      // The two must never both be on: a browser that ends up in real
+      // fullscreen *and* leaves the fallback flag set would drop back into the
+      // overlay when the user pressed Escape, which reads as an exit that
+      // didn't work. Checked because it is not hypothetical — a headless
+      // Chrome does exactly this, entering fullscreen and rejecting the promise
+      // that says it did.
+      if (on) setOverlay(false);
+    };
+    document.addEventListener('fullscreenchange', sync);
+    return () => document.removeEventListener('fullscreenchange', sync);
+  }, [ref]);
+
+  // Escape leaves native fullscreen on its own; the overlay has to be told.
+  useEffect(() => {
+    if (!overlay) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOverlay(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [overlay]);
+
+  const toggle = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (document.fullscreenElement) {
+      setOverlay(false);
+      void document.exitFullscreen().catch(() => undefined);
+      return;
+    }
+    if (overlay) {
+      setOverlay(false);
+      return;
+    }
+    if (document.fullscreenEnabled && el.requestFullscreen) {
+      // A rejected request is not an error worth showing anyone — it is an
+      // iPhone, or a permissions policy. Take the overlay instead.
+      //
+      // The decision is made from `document.fullscreenElement` a frame later
+      // rather than from the rejection itself, because the two disagree: a
+      // headless Chrome rejects the promise *and* enters fullscreen, and taking
+      // the rejection at its word left both mechanisms on at once. Asking what
+      // actually happened is the answer that can't be lied to.
+      el.requestFullscreen().catch(() => {
+        requestAnimationFrame(() => setOverlay(document.fullscreenElement !== el));
+      });
+    } else {
+      setOverlay(true);
+    }
+  }, [ref, overlay]);
+
+  return { isFull: native || overlay, toggle };
 }
