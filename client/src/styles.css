@@ -5274,6 +5274,130 @@ body {
   color: var(--strikeout);
   font-size: 13px;
 }
+/* Something went right that isn't the end of the flow — "code sent to
+   t***@g***.com". Same slot as the error, so the card doesn't change height
+   depending on which kind of message it got. */
+.auth-notice {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* The card's own form. The card is centred text — a doorway, not a page — but
+   labels and fields read down the left like every other form. */
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: left;
+}
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.auth-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+.auth-input {
+  width: 100%;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px 12px;
+  border-radius: var(--control-radius);
+  /* 16px, not the 13-14px the app's other fields use: iOS zooms into anything
+     smaller on focus and never zooms back out. The viewport hack in index.html
+     suppresses that app-wide, but this is the one field someone meets before
+     they have any reason to trust the page, so it doesn't lean on it. */
+  font-size: 16px;
+  font-family: inherit;
+}
+.auth-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+.auth-input:disabled {
+  opacity: 0.6;
+}
+/* Six digits, spaced out and centred so a typo is visible at a glance. */
+.auth-code {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.5em;
+  text-indent: 0.5em;
+  font-size: 20px;
+  font-weight: 700;
+}
+.auth-hint {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+/* Whose inbox the code went to, on the two screens where the address is
+   settled and the field is gone. */
+.auth-addressee {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  justify-content: space-between;
+  overflow-wrap: anywhere;
+}
+.auth-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 16px;
+}
+.auth-link {
+  background: none;
+  border: 0;
+  padding: 2px 0;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+}
+.auth-link:hover {
+  color: var(--accent-2);
+  text-decoration: underline;
+}
+.auth-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.auth-link:disabled {
+  color: var(--muted);
+  cursor: default;
+  text-decoration: none;
+}
+/* A rule with the word sitting in a gap in it, marking where the form ends and
+   the federated route begins. */
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
 
 /* Sits in the settings popover under "Simulate live", so it borrows that
    button's shape rather than introducing another. */
