@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLockBodyScroll } from '../hooks';
 import { api } from '../api';
-import type { EspnStatus } from '../types';
+import type { EspnStatus, EspnTeam } from '../types';
 
 /**
  * What a pasted ESPN league URL yields. Both ids are in the address bar of any
@@ -112,6 +112,9 @@ export function EspnSettings({
   const [urlTeamId, setUrlTeamId] = useState<number | null>(null);
   const [swid, setSwid] = useState('');
   const [espnS2, setEspnS2] = useState('');
+  // The league's teams, for the picker below. Read from the ownership endpoint
+  // — the one call that already knows them — and only once connected.
+  const [teams, setTeams] = useState<EspnTeam[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // The form stays on screen after a successful connect — the panel above it
@@ -150,6 +153,37 @@ export function EspnSettings({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
+
+  useEffect(() => {
+    if (!connected) {
+      setTeams([]);
+      return;
+    }
+    let cancelled = false;
+    api
+      .espnOwnership()
+      .then((o) => {
+        if (!cancelled) setTeams(o.teams);
+      })
+      // The picker is a convenience over a team the SWID usually names on its
+      // own; failing to list the league's teams is not worth an error here.
+      .catch((e: Error) => console.error('ESPN teams unavailable:', e.message));
+    return () => {
+      cancelled = true;
+    };
+  }, [connected, status?.connected ? status.leagueId : null]);
+
+  const chooseTeam = async (teamId: number) => {
+    setSaving(true);
+    setError(null);
+    try {
+      onStatusChange(await api.setEspnTeam(teamId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not set the team');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -252,9 +286,12 @@ export function EspnSettings({
         <div className="tut-title-block">
           <h1 className="tut-title">Fantasy league</h1>
           <p className="tut-lede">
-            Connect your ESPN fantasy baseball league and the research board gains a{' '}
-            <strong>Free Agents</strong> filter — every player in the majors who
-            isn't on a roster in your league, sortable by any stat on the board.
+            Connect your ESPN fantasy baseball league and the app can do two more
+            things: the research board gains a <strong>Free Agents</strong> filter
+            — every player in the majors who isn't on a roster in your league —
+            and the watchlist views can read <strong>your own team</strong>
+            instead of the list you built here, each player marked with the slot
+            he's in today.
           </p>
         </div>
       </div>
@@ -281,6 +318,43 @@ export function EspnSettings({
             >
               Disconnect
             </button>
+          </section>
+        )}
+
+        {connected && status.connected && (
+          <section className="espn-section espn-team-section">
+            <h2 className="espn-h2">Your team</h2>
+            <p className="espn-note">
+              Which team in the league is yours. It's worked out from your SWID
+              where that identifies one, so this is usually already right — pick
+              from the list if it isn't, or if you're reading a public league
+              nobody signed you into.
+            </p>
+            <label className="espn-field">
+              <span className="espn-label">Team</span>
+              <select
+                className="espn-input espn-select"
+                value={status.teamId ?? ''}
+                disabled={saving || teams.length === 0}
+                onChange={(e) => chooseTeam(Number(e.target.value))}
+              >
+                {status.teamId === null && <option value="">Choose a team…</option>}
+                {teams.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="espn-note">
+              With one chosen, the settings menu offers{' '}
+              <strong>Use my fantasy team</strong>: the Summary, Games and Feed
+              views then report on your roster instead of the watchlist you built
+              here, and each player carries the slot he's in today — his position
+              if he's in the lineup, <code>BE</code> or <code>IL</code> if he
+              isn't. Your own watchlist is untouched and comes back the moment
+              you switch off.
+            </p>
           </section>
         )}
 

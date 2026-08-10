@@ -43,6 +43,11 @@ export interface UserPrefs {
   /** Play every video clip with the sound off (the settings-menu toggle).
    *  Absent means off, the same convention as `hideInjured`. */
   muteAudio?: boolean;
+  /** Read the watchlist views off the user's **ESPN fantasy roster** instead of
+   *  the list they built here. Absent means the saved watchlist, which is the
+   *  default and the only thing a user without a connected league can have —
+   *  the same absence-is-the-default convention as the two toggles above. */
+  rosterSource?: 'fantasy';
 }
 
 /**
@@ -415,5 +420,49 @@ export async function setEspnLeague(
     prefs: cur.prefs,
     espn,
   }));
+  return next.espn;
+}
+
+/**
+ * Which list the watchlist views read from. `'watchlist'` is stored as the
+ * absence of the entry, as the toggles above are — so a user who switches back
+ * is indistinguishable from one who never switched, and the default can change
+ * without anyone's record needing revisiting.
+ */
+export async function setRosterSource(
+  userId: string,
+  source: 'watchlist' | 'fantasy',
+): Promise<UserPrefs> {
+  const next = await mutate(userId, (cur) => {
+    const prefs = { ...cur.prefs };
+    if (source === 'fantasy') prefs.rosterSource = 'fantasy';
+    else delete prefs.rosterSource;
+    return { players: cur.players, prefs, espn: cur.espn };
+  });
+  return next.prefs;
+}
+
+/**
+ * Point the connection at a different team in the same league.
+ *
+ * Needed because the SWID only identifies the connecting user's team in a
+ * league they are actually in — a public league read anonymously has no owner
+ * to match, and a manager with two teams has to say which. A no-op (returning
+ * null) when nothing is connected, since a team without a league is nothing.
+ */
+export async function setEspnTeam(
+  userId: string,
+  teamId: number,
+  teamName: string | null,
+): Promise<EspnLeague | null> {
+  const next = await mutate(userId, (cur) =>
+    cur.espn === null
+      ? null
+      : {
+          players: cur.players,
+          prefs: cur.prefs,
+          espn: { ...cur.espn, teamId, teamName },
+        },
+  );
   return next.espn;
 }

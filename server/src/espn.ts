@@ -30,6 +30,9 @@
  * universe into the name index, where it would only add collisions.
  */
 
+import { toSavantName } from './names.js';
+import type { PlayerKind, WatchPlayer } from './types.js';
+
 // Keep in sync with hfSea in savant.ts, CURRENT_SEASON in percentiles.ts, and
 // SEASON in xwoba.ts / pitcherArsenal.ts / teamStats.ts / expectedStats.ts /
 // research.ts.
@@ -130,6 +133,42 @@ const ESPN_TO_MLB_TEAM: Record<number, number> = {
   30: 139, // TB
 };
 
+/**
+ * ESPN's `lineupSlotId` to the slot a fantasy manager would call it.
+ *
+ * This is a **different numbering system** from `defaultPositionId` (a player's
+ * natural position), which is the trap in ESPN's payload: `1` here is first
+ * base and there a starting pitcher.
+ */
+const LINEUP_SLOTS: Record<number, string> = {
+  0: 'C',
+  1: '1B',
+  2: '2B',
+  3: '3B',
+  4: 'SS',
+  5: 'OF',
+  6: '2B/SS',
+  7: '1B/3B',
+  8: 'LF',
+  9: 'CF',
+  10: 'RF',
+  11: 'DH',
+  12: 'UTIL',
+  13: 'P',
+  14: 'SP',
+  15: 'RP',
+  16: 'BE',
+  17: 'IL',
+  19: 'IF',
+};
+
+/** The bench and the injured list are the two slots that are *not* a lineup
+ *  spot. Everything else — including the ones ESPN has never documented — is a
+ *  player who is in today's lineup, which is the way round that fails safe:
+ *  an unknown slot id reads as playing rather than as benched. */
+const BENCH_SLOT = 16;
+const IL_SLOT = 17;
+
 // ---- The MLB name index ---------------------------------------------------
 
 /**
@@ -154,6 +193,11 @@ interface IndexEntry {
   id: number;
   name: string;
   teamId: number | null;
+  /** Which board(s) the player belongs to, derived exactly as
+   *  `getSeasonPlayers` derives it so a fantasy roster and the watchlist agree
+   *  on what a two-way player is: primary-position code `1` is a pitcher, `Y`
+   *  is both, anything else is a batter. */
+  kinds: PlayerKind[];
 }
 
 interface MlbIndex {
@@ -176,16 +220,24 @@ async function getMlbIndex(): Promise<MlbIndex> {
   }
   const url =
     `https://statsapi.mlb.com/api/v1/sports/1/players?season=${SEASON}` +
-    '&fields=people,id,fullName,currentTeam,id';
+    '&fields=people,id,fullName,currentTeam,id,primaryPosition,code';
   const res = await fetch(url, { headers: UA });
   if (!res.ok) throw new Error(`MLB Stats API sports/players returned ${res.status}`);
   const data = (await res.json()) as {
-    people?: { id: number; fullName: string; currentTeam?: { id?: number } }[];
+    people?: {
+      id: number;
+      fullName: string;
+      currentTeam?: { id?: number };
+      primaryPosition?: { code?: string };
+    }[];
   };
   const byName = new Map<string, IndexEntry[]>();
   for (const p of data.people ?? []) {
     const key = normalizeName(p.fullName);
-    const entry = { id: p.id, name: p.fullName, teamId: p.currentTeam?.id ?? null };
+    const code = p.primaryPosition?.code;
+    const kinds: PlayerKind[] =
+      code === 'Y' ? ['batter', 'pitcher'] : code === '1' ? ['pitcher'] : ['batter'];
+    const entry = { id: p.id, name: p.fullName, teamId: p.currentTeam?.id ?? null, kinds };
     const at = byName.get(key);
     if (at) at.push(entry);
     else byName.set(key, [entry]);
@@ -205,13 +257,17 @@ async function getMlbIndex(): Promise<MlbIndex> {
  * guessed — marking the wrong Wilmer Flores as owned is worse than marking
  * neither.
  */
-function matchPlayer(index: MlbIndex, name: string, espnTeamId: number | undefined): number | null {
+function matchPlayer(
+  index: MlbIndex,
+  name: string,
+  espnTeamId: number | undefined,
+): IndexEntry | null {
   const candidates = index.byName.get(normalizeName(name));
   if (!candidates || candidates.length === 0) return null;
-  if (candidates.length === 1) return candidates[0].id;
+  if (candidates.length === 1) return candidates[0];
   const mlbTeam = espnTeamId === undefined ? undefined : ESPN_TO_MLB_TEAM[espnTeamId];
   const onTeam = candidates.filter((c) => c.teamId === mlbTeam);
-  return onTeam.length === 1 ? onTeam[0].id : null;
+  return onTeam.length === 1 ? onTeam[0] : null;
 }
 
 // ---- Reading the league ---------------------------------------------------
@@ -229,8 +285,9 @@ interface EspnRosterResponse {
     primaryOwner?: string | null;
     roster?: {
       entries?: {
+        lineupSlotId?: number;
         playerPoolEntry?: {
-          player?: { id?: number; fullName?: string; proTeamId?: number };
+          player?: { id?: number; fullName?: string; proTeamId?: number; injured?: boolean };
         };
       }[];
     };
@@ -334,9 +391,40 @@ function leagueInfoFrom(creds: EspnCreds, data: EspnRosterResponse): EspnLeagueI
  * research board is in, so the client's test for a free agent is a set lookup
  * on the id it already has.
  */
+/**
+ * One player on a fantasy roster, joined to the MLB id the rest of the app is
+ * written in. This is what makes "use my fantasy team as the watchlist"
+ * possible: the app's currency is `${kind}-${mlbId}`, and everything needed to
+ * mint that is here.
+ */
+export interface EspnRosterPlayer {
+  espnId: number;
+  name: string;
+  /** Null when the name didn't resolve to a major leaguer — a prospect, most
+   *  often. Kept in the list rather than dropped so the roster can say how many
+   *  of its players the app can actually report on. */
+  mlbId: number | null;
+  savantName: string | null;
+  /** Usually one; two for a two-way player, who is two watchlist entries. */
+  kinds: PlayerKind[];
+  /** The fantasy slot he is in *today* — 'SS', 'UTIL', 'SP', 'BE', 'IL'. */
+  slot: string;
+  slotId: number;
+  /** In today's lineup, i.e. not benched and not on the IL. */
+  starting: boolean;
+  /** ESPN's own injury flag, which is about the real player rather than the
+   *  fantasy slot — a manager can leave an injured player in a lineup spot. */
+  injured: boolean;
+}
+
 export interface EspnOwnership extends EspnLeagueInfo {
   /** MLB player id to the fantasy team id that holds him. */
   owned: Record<number, number>;
+  /** Every team's roster, by fantasy team id. Keyed by team rather than
+   *  narrowed to the caller's, because this whole object is cached **per
+   *  league** and shared by everyone in it — making it user-specific would
+   *  turn one upstream read into one per manager. */
+  rosters: Record<number, EspnRosterPlayer[]>;
   /** How many roster entries were read, and how many of them found an MLB
    *  player. The gap is almost entirely prospects who have never played a
    *  major-league game, and is reported so a bad *season* (an index for the
@@ -367,22 +455,46 @@ export async function getOwnership(creds: EspnCreds, force = false): Promise<Esp
     ]);
     const info = leagueInfoFrom(creds, data);
     const owned: Record<number, number> = {};
+    const rosters: Record<number, EspnRosterPlayer[]> = {};
     let rosterCount = 0;
     let matched = 0;
     for (const team of data.teams ?? []) {
+      const roster: EspnRosterPlayer[] = [];
       for (const entry of team.roster?.entries ?? []) {
         const player = entry.playerPoolEntry?.player;
         if (!player?.fullName) continue;
         rosterCount++;
-        const id = matchPlayer(index, player.fullName, player.proTeamId);
-        if (id === null) continue;
-        matched++;
-        owned[id] = team.id;
+        const found = matchPlayer(index, player.fullName, player.proTeamId);
+        if (found) {
+          matched++;
+          owned[found.id] = team.id;
+        }
+        const slotId = entry.lineupSlotId ?? BENCH_SLOT;
+        roster.push({
+          espnId: player.id ?? 0,
+          // MLB's spelling where the join succeeded: it is the one the rest of
+          // the app shows, and ESPN drops the accents MLB keeps.
+          name: found?.name ?? player.fullName,
+          mlbId: found?.id ?? null,
+          savantName: found ? toSavantName(found.name) : null,
+          kinds: found?.kinds ?? [],
+          slot: LINEUP_SLOTS[slotId] ?? String(slotId),
+          slotId,
+          starting: slotId !== BENCH_SLOT && slotId !== IL_SLOT,
+          injured: player.injured === true,
+        });
       }
+      // Lineup first, then the bench, then the IL — the order a manager reads
+      // their own team in, and the order the watchlist inherits.
+      roster.sort(
+        (a, b) => Number(b.starting) - Number(a.starting) || a.slotId - b.slotId,
+      );
+      rosters[team.id] = roster;
     }
     const result: EspnOwnership = {
       ...info,
       owned,
+      rosters,
       rosterCount,
       matched,
       fetchedAt: Date.now(),
@@ -395,4 +507,27 @@ export async function getOwnership(creds: EspnCreds, force = false): Promise<Esp
 
   inFlight.set(key, job);
   return job;
+}
+
+/**
+ * A fantasy roster as the app's own watchlist.
+ *
+ * Players the name match couldn't place are dropped — there is nothing to
+ * report on for a prospect who has never appeared in a major-league game — and
+ * a two-way player becomes **two entries**, one per kind, which is what the
+ * app's `${kind}-${id}` key means and what lets him be read as a hitter and a
+ * pitcher separately. Roster order is preserved, so the lineup comes first and
+ * the bench and IL follow.
+ */
+export function rosterToWatchlist(roster: EspnRosterPlayer[]): WatchPlayer[] {
+  return roster.flatMap((p) =>
+    p.mlbId === null || p.savantName === null
+      ? []
+      : p.kinds.map((kind) => ({
+          id: p.mlbId as number,
+          name: p.name,
+          savantName: p.savantName as string,
+          kind,
+        })),
+  );
 }

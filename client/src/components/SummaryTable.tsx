@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { FantasySlotTag } from './FantasySlot';
 import type { BattingLine, PitchingLine, PlayerGame, PlayerReport } from '../types';
 import { playerKey } from '../types';
 import type { Corner, LiveRole } from '../lib';
@@ -208,6 +209,9 @@ function LeadCells({
         >
           {r.name}
         </button>
+        {/* Outside the button: the name is a link to that player's day, and a
+            slot chip is a label rather than part of what you are pressing. */}
+        <FantasySlotTag playerKey={playerKey(r)} />
       </th>
       <OpponentCell game={game} />
     </>

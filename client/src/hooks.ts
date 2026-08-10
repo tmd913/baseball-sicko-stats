@@ -20,6 +20,31 @@ export function useMuted(): boolean {
   return useContext(MutedContext);
 }
 
+/** A player's place on the user's fantasy roster: today's slot, and whether
+ *  that slot is a lineup spot rather than the bench or the IL. */
+export interface FantasySlot {
+  slot: string;
+  starting: boolean;
+}
+
+/**
+ * Where each watched player sits on the user's fantasy roster, by the app's
+ * `${kind}-${id}` player key — or null when the views are reading the saved
+ * watchlist, which is the state that renders no slot at all.
+ *
+ * A context for the reason `MutedContext` is one: the players who need it are
+ * leaves, and they are scattered. The same chip belongs on the summary table's
+ * name cell, on both kinds of player card and on every feed row, and threading
+ * a map through the four views and their intermediate components — none of
+ * which have any other interest in a fantasy league — is a lot of plumbing for
+ * one badge.
+ */
+export const FantasyRosterContext = createContext<Map<string, FantasySlot> | null>(null);
+
+export function useFantasySlot(key: string): FantasySlot | null {
+  return useContext(FantasyRosterContext)?.get(key) ?? null;
+}
+
 /**
  * Returns a ref to attach to a collapsible element. When `expanded` flips from
  * false to true, the element scrolls to the top of the viewport (its own

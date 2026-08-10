@@ -5823,6 +5823,21 @@ body {
   /* An unbroken token has no spaces to wrap at, so it has to break anywhere. */
   word-break: break-all;
 }
+/* A native select, sharing the text fields' box so the form reads as one set.
+   The arrow is the platform's; nothing here is worth a custom one. */
+.espn-select {
+  appearance: none;
+  cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 34px;
+}
+.espn-team-section {
+  padding-top: 22px;
+}
 .espn-error {
   margin: 4px 0 12px;
   max-width: 62ch;
@@ -5860,6 +5875,53 @@ body {
 .espn-hint {
   color: var(--faint);
   font-size: 12.5px;
+}
+
+/* ---- Fantasy lineup slot ----------------------------------------------------
+   The chip beside a player's name while the views are reading a fantasy roster.
+   Fully round, because the app reserves that shape for things you read; the
+   control radius is for things you press.
+
+   The distinction it carries is **starting versus not**, not which slot — so
+   that is what the colour says. A lineup spot takes the accent and a filled
+   ground; the bench and the IL go muted and outlined, which is the same
+   quieter treatment the roster-status tags use for a player who isn't
+   available. */
+.fantasy-slot {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  margin-left: 6px;
+  padding: 1px 7px;
+  /* A faint accent edge even when benched. The hue is what says "this is your
+     fantasy slot" — without it a muted `BE` sits beside the muted `1B` of
+     `.player-pos` and reads as a second fielding position. The fill is then
+     free to carry the thing that actually matters, which is whether he is in
+     today's lineup. (The two also differ in shape: this is fully round where
+     `.player-pos` is a 6px rect, per the app's label-versus-control rule.) */
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  /* It sits inside a <button> in the summary table and the feed, both of which
+     set their own cursor and colour; this is a label either way. */
+  cursor: inherit;
+}
+.fantasy-slot.starting {
+  border-color: transparent;
+  background: rgba(56, 189, 248, 0.16);
+  color: var(--accent);
+}
+/* The view-bar chip naming the team whose roster is on screen. Takes
+   `.date-badge` outright — same shape, same job, one row apart — and differs
+   only in the accent that marks it as the fantasy source. */
+.fantasy-badge {
+  border-color: rgba(56, 189, 248, 0.4);
+  color: var(--accent);
 }
 
 /* ---- Narrow-screen vertical rhythm -----------------------------------------

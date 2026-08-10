@@ -1,6 +1,7 @@
 import type {
   BatterGameLog,
   EspnOwnership,
+  EspnRoster,
   EspnStatus,
   PitcherGameLog,
   SeasonArsenal,
@@ -9,6 +10,7 @@ import type {
   PlayerPercentiles,
   PlayerReport,
   ResearchRow,
+  RosterSource,
   SeasonPlayer,
   SeasonStats,
   UserPrefs,
@@ -119,11 +121,23 @@ export const api = {
     });
     return r.players;
   },
+  /** `source: 'fantasy'` reports on the user's ESPN roster instead of their
+   *  saved watchlist. Asked for explicitly rather than left to the server's
+   *  view of the saved preference, so the report and the view rendering it can
+   *  never disagree about which set of players it describes. */
   async report(
     start: string,
     end: string,
-  ): Promise<{ start: string; end: string; players: PlayerReport[] }> {
-    return request(`/api/report?start=${start}&end=${end}`);
+    source: RosterSource = 'watchlist',
+  ): Promise<{
+    start: string;
+    end: string;
+    players: PlayerReport[];
+    source?: RosterSource;
+    teamName?: string | null;
+  }> {
+    const src = source === 'fantasy' ? '&source=fantasy' : '';
+    return request(`/api/report?start=${start}&end=${end}${src}`);
   },
   // What this user has customised, saved server-side against their id. One
   // request on boot; the research board's columns are the only entry so far.
@@ -144,6 +158,13 @@ export const api = {
       method: 'PUT',
       headers: JSON_HEADERS,
       body: JSON.stringify({ hide }),
+    });
+  },
+  async saveRosterSource(source: RosterSource): Promise<UserPrefs> {
+    return request('/api/prefs/roster-source', {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ source }),
     });
   },
   async saveMuteAudio(mute: boolean): Promise<UserPrefs> {
@@ -177,6 +198,20 @@ export const api = {
   },
   async disconnectEspn(): Promise<EspnStatus> {
     return request('/api/espn', { method: 'DELETE' });
+  },
+  /** Which team in the league is the user's. Derived from the SWID at connect
+   *  time where that identifies one; settable because a public league read
+   *  anonymously has no owner to match. */
+  async setEspnTeam(teamId: number): Promise<EspnStatus> {
+    return request('/api/espn/team', {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ teamId }),
+    });
+  },
+  /** The user's own roster, slot by slot. */
+  async espnRoster(): Promise<EspnRoster> {
+    return request('/api/espn/roster');
   },
   /** `refresh` skips the server's ten-minute cache — for the user who has just
    *  made a move and wants the board to agree with ESPN. */

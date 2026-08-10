@@ -353,7 +353,13 @@ const CHAPTERS: Chapter[] = [
             fantasy league under the gear's <Ui>Fantasy league</Ui> page: the board
             drops everyone already on a roster in it, leaving the players you could
             actually add — sortable and filterable like any other slice. That page
-            walks through where ESPN keeps the two cookies it needs.
+            walks through where ESPN keeps the two cookies it needs, and it's also
+            where you say which team in the league is yours. With that set, the
+            gear's <Ui>Use my fantasy team</Ui> swaps the other three views over to
+            your roster — same tables, your team instead of your watchlist, each
+            player carrying the slot he's in today (his position if he's in the
+            lineup, <Ui>BE</Ui> or <Ui>IL</Ui> if he isn't). Your watchlist is
+            untouched and comes back when you switch off.
           </li>
         </ul>
         <h3 className="tut-sub">The four buttons</h3>

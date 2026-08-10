@@ -24,9 +24,11 @@ import {
   removePlayer,
   reorderPlayers,
   setEspnLeague,
+  setEspnTeam,
   setHideInjured,
   setMuteAudio,
   setResearchColumns,
+  setRosterSource,
 } from './store.js';
 import type { EspnLeague } from './store.js';
 import {
@@ -35,7 +37,10 @@ import {
   getOwnership,
   normalizeS2,
   normalizeSwid,
+  rosterToWatchlist,
 } from './espn.js';
+import type { EspnRosterPlayer } from './espn.js';
+import type { WatchPlayer } from './types.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -194,9 +199,29 @@ app.get(
       res.status(400).json({ error: `date range too large (max ${MAX_RANGE_DAYS} days)` });
       return;
     }
-    const watchlist = await getWatchlist(userId(req));
-    const players = await getReport(start, end, watchlist);
-    res.json({ start, end, players });
+    // `source=fantasy` reads the user's ESPN roster instead of the list they
+    // built here. The client asks for it explicitly rather than the server
+    // consulting the saved preference, so a report and the view rendering it
+    // can never disagree about which set of players it describes — the
+    // preference decides what the client asks for, and nothing else.
+    const fantasy = req.query.source === 'fantasy';
+    let watched: WatchPlayer[];
+    let teamName: string | null = null;
+    if (fantasy) {
+      try {
+        ({ players: watched, teamName } = await fantasyWatchlist(userId(req)));
+      } catch (err) {
+        // A league that can't be read is the user's to fix, and the client
+        // offers the way to — so 409 rather than the 502 `asyncRoute` would
+        // otherwise turn this into.
+        if (espnError(err, res)) return;
+        throw err;
+      }
+    } else {
+      watched = await getWatchlist(userId(req));
+    }
+    const players = await getReport(start, end, watched);
+    res.json({ start, end, players, source: fantasy ? 'fantasy' : 'watchlist', teamName });
   }),
 );
 
@@ -310,11 +335,92 @@ function espnError(err: unknown, res: express.Response): boolean {
   return true;
 }
 
+/**
+ * The user's own fantasy roster as a watchlist, plus the team it came from.
+ *
+ * Throws `EspnAuthError` when there is nothing to read from — no league, or no
+ * team chosen within it — so the caller answers 409 with something the user can
+ * act on rather than a 502 about an upstream that was never asked.
+ */
+async function fantasyWatchlist(
+  user: string,
+): Promise<{ players: WatchPlayer[]; teamName: string | null; roster: EspnRosterPlayer[] }> {
+  const espn = await getEspnLeague(user);
+  if (!espn) throw new EspnAuthError('No ESPN league connected');
+  if (espn.teamId == null) {
+    throw new EspnAuthError(
+      'No fantasy team chosen in this league — pick yours on the Fantasy league page.',
+    );
+  }
+  const own = await getOwnership({
+    leagueId: espn.leagueId,
+    swid: espn.swid,
+    espnS2: espn.espnS2,
+  });
+  const roster = own.rosters[espn.teamId] ?? [];
+  const team = own.teams.find((t) => t.id === espn.teamId);
+  return { players: rosterToWatchlist(roster), teamName: team?.name ?? espn.teamName ?? null, roster };
+}
+
 app.get(
   '/api/espn',
   requireUser,
   asyncRoute(async (req, res) => {
     res.json(espnStatus(await getEspnLeague(userId(req))));
+  }),
+);
+
+// The user's own roster, slot by slot — what the app shows beside each player
+// when it is reading the fantasy team rather than the saved watchlist.
+app.get(
+  '/api/espn/roster',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    try {
+      const { roster, teamName } = await fantasyWatchlist(userId(req));
+      res.json({ teamName, players: roster });
+    } catch (err) {
+      if (!espnError(err, res)) throw err;
+    }
+  }),
+);
+
+// Which team in the league is the user's. The SWID names it automatically for
+// a manager in their own private league; a public league read anonymously has
+// no owner to match, and someone with two teams has to say which — so it is
+// settable rather than only derived.
+app.put(
+  '/api/espn/team',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const { teamId } = (req.body ?? {}) as { teamId?: unknown };
+    const id = typeof teamId === 'number' ? teamId : Number(teamId);
+    if (!Number.isInteger(id) || id <= 0) {
+      res.status(400).json({ error: 'teamId must be a positive integer' });
+      return;
+    }
+    const espn = await getEspnLeague(userId(req));
+    if (!espn) {
+      res.status(409).json({ error: 'No ESPN league connected', code: 'espn-missing' });
+      return;
+    }
+    try {
+      // Named from the league rather than trusted from the client: the id is a
+      // choice, but the label beside it is a fact about the league.
+      const own = await getOwnership({
+        leagueId: espn.leagueId,
+        swid: espn.swid,
+        espnS2: espn.espnS2,
+      });
+      const team = own.teams.find((t) => t.id === id);
+      if (!team) {
+        res.status(400).json({ error: `No team ${id} in league ${espn.leagueId}` });
+        return;
+      }
+      res.json(espnStatus(await setEspnTeam(userId(req), id, team.name)));
+    } catch (err) {
+      if (!espnError(err, res)) throw err;
+    }
   }),
 );
 
@@ -404,6 +510,21 @@ app.get(
     } catch (err) {
       if (!espnError(err, res)) throw err;
     }
+  }),
+);
+
+// Which list the watchlist views read from. A route of its own like the three
+// above; 'watchlist' is stored as the absence of an entry.
+app.put(
+  '/api/prefs/roster-source',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const { source } = (req.body ?? {}) as { source?: unknown };
+    if (source !== 'watchlist' && source !== 'fantasy') {
+      res.status(400).json({ error: "source must be 'watchlist' or 'fantasy'" });
+      return;
+    }
+    res.json(await setRosterSource(userId(req), source));
   }),
 );
 

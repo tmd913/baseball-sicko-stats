@@ -684,7 +684,13 @@ export interface UserPrefs {
   hideInjured?: boolean;
   /** Play every video clip with the sound off. Absent means off. */
   muteAudio?: boolean;
+  /** Read the watchlist views off the ESPN fantasy roster rather than the
+   *  saved list. Absent means the saved list, which is the default. */
+  rosterSource?: 'fantasy';
 }
+
+/** Which set of players the four watchlist views describe. */
+export type RosterSource = 'watchlist' | 'fantasy';
 
 // ---- ESPN fantasy league ---------------------------------------------------
 
@@ -732,4 +738,27 @@ export interface EspnOwnership {
   rosterCount: number;
   matched: number;
   fetchedAt: number;
+}
+
+/** One player on the user's fantasy roster, joined to his MLB id. Mirrors
+ *  `EspnRosterPlayer` in the server's `espn.ts`. */
+export interface EspnRosterPlayer {
+  espnId: number;
+  name: string;
+  /** Null when the name matched no major leaguer — a prospect, usually. */
+  mlbId: number | null;
+  savantName: string | null;
+  /** One kind, or two for a two-way player. */
+  kinds: PlayerKind[];
+  /** Today's fantasy slot — 'SS', 'UTIL', 'SP', 'BE', 'IL'. */
+  slot: string;
+  slotId: number;
+  /** In today's lineup: neither benched nor on the IL. */
+  starting: boolean;
+  injured: boolean;
+}
+
+export interface EspnRoster {
+  teamName: string | null;
+  players: EspnRosterPlayer[];
 }

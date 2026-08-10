@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { FantasySlotTag } from './FantasySlot';
 import type { LiveRole } from '../lib';
 import { playerKey } from '../types';
 import {
@@ -136,17 +137,22 @@ function FeedPlayerName({
   onOpen: (key: string) => void;
 }) {
   return (
-    <button
-      type="button"
-      className="feed-player-name feed-player-name-link"
-      title={`${name} — full day`}
-      onClick={(e) => {
-        e.stopPropagation();
-        onOpen(key);
-      }}
-    >
-      {name}
-    </button>
+    <>
+      <button
+        type="button"
+        className="feed-player-name feed-player-name-link"
+        title={`${name} — full day`}
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpen(key);
+        }}
+      >
+        {name}
+      </button>
+      {/* Beside the link rather than inside it: this row's tap target opens the
+          player's day, and a slot chip is a label, not part of that. */}
+      <FantasySlotTag playerKey={key} />
+    </>
   );
 }
 
