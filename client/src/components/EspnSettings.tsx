@@ -80,8 +80,9 @@ export function unquote(raw: string): string {
  *
  * A full-screen overlay in the same shape as the how-to page and the player
  * page — `.details-view`, its own scroller, Escape or Back to leave — rather
- * than a fourth kind of modal. It is reached from the settings popover, which
- * is where the app's other saved preferences live.
+ * than a fourth kind of modal. It is reached from the fantasy button beside the
+ * settings gear — from its popover once a league is connected, and from the
+ * button itself before that, there being nothing yet to put in a menu.
  *
  * Most of what is on screen is **instructions**, and that is the right ratio:
  * the two values it needs are browser cookies, and nobody knows where those are
@@ -444,7 +445,7 @@ export function EspnSettings({
               </select>
             </label>
             <p className="espn-note">
-              With one chosen, the settings menu offers{' '}
+              With one chosen, the fantasy button in the header offers{' '}
               <strong>Use my fantasy team</strong>: the Summary, Games and Feed
               views then report on your roster instead of the watchlist you built
               here, and each player carries the slot he's in today — his position
