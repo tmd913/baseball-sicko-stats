@@ -14,14 +14,6 @@ import type {
 
 const UA = { 'User-Agent': 'statcast-sicko/1.0' };
 
-async function fetchCached(url: string, cacheFile: string): Promise<string> {
-  const hit = await readCache(cacheFile);
-  if (hit !== null) return hit;
-  const text = await fetchText(url);
-  await writeCache(cacheFile, text);
-  return text;
-}
-
 // The cache tier lives in storage.ts — the local filesystem by default, S3 when
 // CACHE_BUCKET is set. Key names are unchanged either way.
 const readCache = readBlob;
@@ -1708,15 +1700,67 @@ interface ContentResponse {
   highlights?: { highlights?: { items?: ContentHighlightItem[] } };
 }
 
-const highlightMemCache = new Map<number, Map<string, string>>();
+const contentUrl = (gamePk: number) =>
+  `https://statsapi.mlb.com/api/v1/game/${gamePk}/content`;
+// Status alone — 98 bytes, against ~600KB for the content payload it gates.
+const gameStatusUrl = (gamePk: number) =>
+  `https://statsapi.mlb.com/api/v1.1/game/${gamePk}/feed/live` +
+  `?fields=gameData,status,abstractGameState,codedGameState,detailedState`;
 
+// A game that is final stays final, so this only ever has to be asked once per
+// game per instance; before that it's a cheap question asked at most once per
+// HIGHLIGHT_TTL, since that's how often the highlights themselves are re-read.
+const finalGames = new Set<number>();
+async function isGameFinal(gamePk: number): Promise<boolean> {
+  if (finalGames.has(gamePk)) return true;
+  const feed = JSON.parse(await fetchText(gameStatusUrl(gamePk))) as LiveFeed;
+  const final = isFinalFeed(feed);
+  if (final) finalGames.add(gamePk);
+  return final;
+}
+
+// A minute is short against the pace at which cuts land and long against a
+// viewer opening several clips in a row.
+const HIGHLIGHT_TTL = 60 * 1000;
+interface HighlightEntry {
+  byPlayId: Map<string, string>;
+  final: boolean;
+  fetchedAt: number;
+}
+const highlightMemCache = new Map<number, HighlightEntry>();
+
+/**
+ * The game's highlight reel, keyed by playId.
+ *
+ * **The reel grows as the game is played**, which is why finality decides
+ * whether any of this is kept: the storage tier has no freshness test, so the
+ * copy written the first time anyone opened a clip is the copy served forever.
+ * Read
+ * an hour into a 1:05 game, that copy held 3 clips where the finished game has
+ * 18 — and for three of five games checked it held *none*, which is what "video
+ * isn't appearing for today" was. So storage is for finished games only, and an
+ * unfinished one is re-read every HIGHLIGHT_TTL.
+ *
+ * An empty reel isn't persisted even for a final game: cuts can land a few
+ * minutes after the last out, and a completed game with no clips at all is a
+ * fetch that arrived too early rather than a fact worth keeping forever.
+ */
 async function getHighlightVideosByPlayId(gamePk: number): Promise<Map<string, string>> {
   const cached = highlightMemCache.get(gamePk);
-  if (cached) return cached;
-  const text = await fetchCached(
-    `https://statsapi.mlb.com/api/v1/game/${gamePk}/content`,
-    `content-${gamePk}.json`,
-  );
+  if (cached && (cached.final || Date.now() - cached.fetchedAt < HIGHLIGHT_TTL)) {
+    return cached.byPlayId;
+  }
+
+  // The -v2 invalidates every blob written under the old rule: those are
+  // mid-game snapshots kept forever, and without a new key they'd go on being
+  // served as though they were the finished reel.
+  const key = `content-${gamePk}-v2.json`;
+  // A stored blob only ever exists for a finished game with clips in it, so a
+  // hit needs no finality check of its own.
+  const stored = await readCache(key);
+  const final = stored !== null || (await isGameFinal(gamePk));
+  const text = stored ?? (await fetchText(contentUrl(gamePk)));
+
   const data = JSON.parse(text) as ContentResponse;
   const items = data.highlights?.highlights?.items ?? [];
   const byPlayId = new Map<string, string>();
@@ -1725,7 +1769,10 @@ async function getHighlightVideosByPlayId(gamePk: number): Promise<Map<string, s
     const mp4 = item.playbacks?.find((p) => p.name === 'mp4Avc')?.url;
     if (mp4) byPlayId.set(item.guid, mp4);
   }
-  highlightMemCache.set(gamePk, byPlayId);
+
+  const settled = final && byPlayId.size > 0;
+  if (settled && stored === null) await writeCache(key, text);
+  highlightMemCache.set(gamePk, { byPlayId, final: settled, fetchedAt: Date.now() });
   return byPlayId;
 }
 
@@ -1733,7 +1780,14 @@ const BROWSER_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
   '(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 const MP4_RE = /https:\/\/sporty-clips\.mlb\.com\/[^"'\s)]+?\.mp4/;
-const videoCache = new Map<string, string | null>();
+
+// A resolved clip is permanent; a miss is not. Savant only publishes a day's
+// clips once it has ingested the day — its page 200s with an empty shell until
+// then — and MLB's own cuts land through the game, so today's miss is
+// tomorrow's clip. Caching a null forever is what made that unrecoverable
+// inside a warm instance.
+const VIDEO_MISS_TTL = 10 * 60 * 1000;
+const videoCache = new Map<string, { url: string | null; at: number }>();
 
 /** Savant embeds the clip URL HTML-escaped (e.g. "=" as "&#x3D;"); undo that. */
 function decodeHtmlEntities(text: string): string {
@@ -1758,11 +1812,14 @@ async function scrapeSavantVideoUrl(playId: string): Promise<string | null> {
  * Resolve the direct video URL for a Statcast playId within a given game.
  * Tries the official MLB game-content highlights first, falling back to
  * scraping Baseball Savant for plays that weren't cut into a highlight.
- * Cached (including negative results) since the mapping is stable.
+ * A resolved URL is cached for good; a miss only for VIDEO_MISS_TTL, since
+ * neither source has published all of a day's clips while the day is on.
  */
 export async function resolveVideoUrl(playId: string, gamePk: number): Promise<string | null> {
   const cached = videoCache.get(playId);
-  if (cached !== undefined) return cached;
+  if (cached && (cached.url !== null || Date.now() - cached.at < VIDEO_MISS_TTL)) {
+    return cached.url;
+  }
 
   let url: string | null = null;
   try {
@@ -1770,8 +1827,13 @@ export async function resolveVideoUrl(playId: string, gamePk: number): Promise<s
   } catch (err) {
     console.error(`game content fetch failed for game ${gamePk}:`, err);
   }
-  if (!url) url = await scrapeSavantVideoUrl(playId);
+  if (!url) {
+    url = await scrapeSavantVideoUrl(playId).catch((err) => {
+      console.error(`savant video scrape failed for play ${playId}:`, err);
+      return null;
+    });
+  }
 
-  videoCache.set(playId, url);
+  videoCache.set(playId, { url, at: Date.now() });
   return url;
 }
