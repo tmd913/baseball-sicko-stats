@@ -42,6 +42,12 @@ import { EspnSettings } from './components/EspnSettings';
 // Breathing room above a card scrolled to the top of the viewport.
 const SCROLL_GAP = 12;
 
+/** The three ways of reading one set of players over one span of days. They are
+ *  tabs *within* Roster rather than siblings of Research — see `section`. */
+type RosterTab = 'summary' | 'games' | 'feed';
+/** The flat view name the app (and the `view=` param) is written against. */
+type View = RosterTab | 'research';
+
 // Whether the settings menu offers the "Simulate live" toggle. Off: the overlay
 // is a developer/demo tool, not something a user of the site should be handed a
 // switch for. The mode itself is untouched — `?sim=1` in the URL still turns it
@@ -200,23 +206,42 @@ export default function App() {
   const [detailsKey, setDetailsKey] = useState<string | null>(
     () => readKeys(initialParams.get('player'))[0] ?? null,
   );
-  // Watchlist display mode: the grouped-by-player cards, one game block at a
-  // time ('games'), the flat, most-recent-first stream of individual at-bats
-  // ('feed') for following live games, or a full-page stat table over the range
-  // ('summary'). Seeded from the URL so a reload/shared link restores the view.
-  // 'research' is the odd one out: the other three are reads on the watchlist
-  // over the date range, while research is the whole league over the season. It
-  // hides the date row for that reason, and is reachable with nothing watched —
-  // finding players to watch is half of what it's for.
-  const [view, setView] = useState<'games' | 'feed' | 'summary' | 'research'>(() => {
+  // Where the page is, in two parts rather than one flat list of four views.
+  //
+  // The top tier is **Roster or Research**, which is the real division: Roster
+  // is a read on the watchlist (or the fantasy team) over the date range,
+  // Research is the whole league over the season — it hides the date row for
+  // that reason, and is reachable with nothing watched, finding players to
+  // watch being half of what it's for. Summary, Games and Feed are three ways
+  // of reading *the same set of players over the same days*, so they are a
+  // tier below, under the kind tabs, rather than three siblings of Research.
+  //
+  // Keeping them as two pieces of state is what lets Roster remember which of
+  // its three you were last on: leaving for Research and coming back lands
+  // where you left rather than resetting to Summary.
+  const [section, setSection] = useState<'roster' | 'research'>(() =>
+    initialParams.get('view') === 'research' ? 'research' : 'roster',
+  );
+  const [rosterTab, setRosterTab] = useState<RosterTab>(() => {
     const v = initialParams.get('view');
-    // `players` is what this view was called before it was named for what it
-    // shows; a link written under the old name still opens it, the same
+    // `players` is what the Games tab was called before it was named for what
+    // it shows; a link written under the old name still opens it, the same
     // courtesy `readKeys` extends to pre-two-way player ids.
     if (v === 'games' || v === 'players') return 'games';
-    // Summary is the default view; the rest are opted into explicitly.
-    return v === 'feed' || v === 'research' ? v : 'summary';
+    // Summary is the default; the rest are opted into explicitly.
+    return v === 'feed' ? 'feed' : 'summary';
   });
+  // The flat view name the rest of the app is written against, and the URL
+  // still carries — the split above is a fact about the tab rows, not about
+  // what any view is reading, so nothing downstream has to know about it.
+  const view: View = section === 'research' ? 'research' : rosterTab;
+  const setView = useCallback((next: View) => {
+    if (next === 'research') setSection('research');
+    else {
+      setSection('roster');
+      setRosterTab(next);
+    }
+  }, []);
   // Which half of the watchlist the players view is showing. Its own tab row,
   // since a batter card and a pitcher card have nothing in common to scan down.
   // Only surfaced when both kinds are watched; batters are the default.
@@ -1195,8 +1220,9 @@ export default function App() {
   // What the date controls would say if they were on screen. Below 640px they
   // are behind the calendar icon, so the range the whole page is reporting on
   // has nothing showing it — every number on every card is drawn from a span
-  // the user can no longer see. This says it, in the view bar beside the kind
-  // tabs, and hides again above 640 where the controls speak for themselves.
+  // the user can no longer see. This says it, in the view bar beside the roster
+  // tabs — the three views it qualifies — at every width, the date controls
+  // being behind the calendar at every width.
   //
   // A label, not a control: the calendar is two inches away and already opens
   // the row, and a second thing that does the same job is a question about
@@ -1694,24 +1720,76 @@ export default function App() {
       {/* Across the top, under the header — see `searchBar`. */}
       {searchBar}
 
-      {/* Both tiers of tabs share one row when there's room for them, the second
-          wrapping under the first when there isn't. The search no longer appears
-          here in any case — it is in the header now, which is also what lets the
-          tabs stay hidden until something is watched without stranding a new
-          user: the only way to add a first player is app chrome, not a bar that
-          comes and goes with the view. */}
+      {/* Three tiers of tabs, in the order the choices actually nest.
+          Top: **Roster or Research** — the real division, one being a read on
+          the watchlist over the date range and the other the whole league over
+          the season. Beside it, Batters / Pitchers, which applies to both.
+          Below both: Roster's own Summary / Games / Feed, three ways of
+          reading the same players over the same days, so they belong under
+          that choice rather than beside it.
+
+          The search no longer appears here in any case — it is in the header
+          now, which is also what lets the tabs stay hidden until something is
+          watched without stranding a new user: the only way to add a first
+          player is app chrome, not a bar that comes and goes with the view. */}
       {showViewToggle && (
         <div className="view-bar">
-          {showViewToggle && (
-            <div className="view-bar-tabs">
-              <div className="view-switch" role="tablist" aria-label="View">
-                {showWatchlistViews && (
-                  <>
+          <div className="view-bar-tabs">
+            <div className="view-switch" role="tablist" aria-label="Section">
+              {/* Nothing watched, nothing to put on a roster page — so this
+                  pill only appears once there is something to read. */}
+              {showWatchlistViews && (
                 <button
                   type="button"
                   role="tab"
-                  aria-selected={view === 'summary'}
-                  className={`view-tab${view === 'summary' ? ' active' : ''}`}
+                  aria-selected={section === 'roster'}
+                  className={`view-tab${section === 'roster' ? ' active' : ''}`}
+                  onClick={() => {
+                    setBackView(null);
+                    // Coming back to Roster lands on the tab you left it on;
+                    // the reorder screen only lives on Games, so returning to
+                    // either of the other two closes it rather than leaving
+                    // the app in a mode with nothing on screen to show for it.
+                    if (rosterTab !== 'games') setEditMode(false);
+                    setSection('roster');
+                  }}
+                >
+                  Roster
+                </button>
+              )}
+              {/* Always present, watchlist or not — the league board is the
+                  one page that doesn't depend on what you're tracking. */}
+              <button
+                type="button"
+                role="tab"
+                aria-selected={section === 'research'}
+                className={`view-tab${section === 'research' ? ' active' : ''}`}
+                onClick={() => {
+                  setBackView(null);
+                  setEditMode(false);
+                  setSection('research');
+                }}
+              >
+                Research
+              </button>
+            </div>
+            {/* Batters / Pitchers. Beside the section tabs when the row has
+                room for both, wrapping under them when it does not. */}
+            {view !== 'research' && kindTabs}
+          </div>
+          {/* Third tier, on a row of its own: which way to read the roster,
+              and — since both of them describe exactly what these three tabs
+              are reading — the two badges saying which days and whose list.
+              They rode up beside the kind tabs before this row existed; down
+              here they cost a phone no extra line, which up there they did. */}
+          {section === 'roster' && showWatchlistViews && (
+            <div className="view-bar-sub">
+              <div className="roster-switch" role="tablist" aria-label="Roster view">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={rosterTab === 'summary'}
+                  className={`roster-tab${rosterTab === 'summary' ? ' active' : ''}`}
                   onClick={() => {
                     setBackView(null);
                     setEditMode(false);
@@ -1723,8 +1801,8 @@ export default function App() {
                 <button
                   type="button"
                   role="tab"
-                  aria-selected={view === 'games'}
-                  className={`view-tab${view === 'games' ? ' active' : ''}`}
+                  aria-selected={rosterTab === 'games'}
+                  className={`roster-tab${rosterTab === 'games' ? ' active' : ''}`}
                   onClick={() => {
                     setBackView(null);
                     setView('games');
@@ -1735,8 +1813,8 @@ export default function App() {
                 <button
                   type="button"
                   role="tab"
-                  aria-selected={view === 'feed'}
-                  className={`view-tab${view === 'feed' ? ' active' : ''}`}
+                  aria-selected={rosterTab === 'feed'}
+                  className={`roster-tab${rosterTab === 'feed' ? ' active' : ''}`}
                   onClick={() => {
                     setBackView(null);
                     setEditMode(false);
@@ -1745,30 +1823,9 @@ export default function App() {
                 >
                   Feed
                 </button>
-                  </>
-                )}
-                {/* Always present, watchlist or not — the league board is the
-                    one page that doesn't depend on what you're tracking. */}
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={view === 'research'}
-                  className={`view-tab${view === 'research' ? ' active' : ''}`}
-                  onClick={() => {
-                    setBackView(null);
-                    setEditMode(false);
-                    setView('research');
-                  }}
-                >
-                  Research
-                </button>
               </div>
-              {/* Second tier: Batters / Pitchers. Beside the view tabs when
-                  the row has room for both, wrapping under them when it
-                  does not. */}
-              {view !== 'research' && kindTabs}
-              {view !== 'research' && dateBadge}
-              {view !== 'research' && fantasyBadge}
+              {dateBadge}
+              {fantasyBadge}
             </div>
           )}
         </div>

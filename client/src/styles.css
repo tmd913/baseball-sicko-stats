@@ -3384,6 +3384,19 @@ body {
   align-items: center;
   gap: 10px 12px;
 }
+/* The third tier — Roster's own Summary / Games / Feed — on a row of its own
+   under the two above. `flex: 1 1 100%` is the whole of "its own row": the view
+   bar already wraps, so claiming the full basis puts this on the next line at
+   every width rather than letting it ride up beside the section tabs when the
+   window happens to be wide (the same trick `.app.date-open .date-control`
+   uses for the date row). */
+.view-bar-sub {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+}
 /* The date badge — see `dateBadge` in App.tsx. Shown at every width, because at
    every width the date controls are behind the calendar button and this is the
    only thing on the page saying which days its numbers are drawn from. Round
@@ -4671,9 +4684,10 @@ body {
   opacity: 1;
 }
 
-/* ---- View switch (Players / Feed) ---- */
+/* ---- View switch (Roster / Research, and Roster's own tabs) ---- */
 .view-switch,
 .kind-switch,
+.roster-switch,
 .research-window-row,
 .research-scope,
 .date-presets {
@@ -4688,6 +4702,7 @@ body {
 }
 .view-tab,
 .kind-tab,
+.roster-tab,
 .research-window-tab,
 .research-scope-tab,
 .date-preset {
@@ -4706,6 +4721,7 @@ body {
 }
 .view-tab:hover,
 .kind-tab:hover,
+.roster-tab:hover,
 .research-window-tab:hover,
 .research-scope-tab:hover,
 .date-preset:hover {
@@ -4713,6 +4729,7 @@ body {
 }
 .view-tab.active,
 .kind-tab.active,
+.roster-tab.active,
 .research-window-tab.active,
 .research-scope-tab.active,
 .date-preset.active {
@@ -4721,6 +4738,7 @@ body {
 }
 .view-tab:focus-visible,
 .kind-tab:focus-visible,
+.roster-tab:focus-visible,
 .research-window-tab:focus-visible,
 .research-scope-tab:focus-visible,
 .date-preset:focus-visible {
