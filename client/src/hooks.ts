@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useRef } from 'react';
+import type { RefObject } from 'react';
 
 /**
  * Whether clips play with the sound off — the settings menu's "Mute clip
@@ -101,4 +102,35 @@ export function useLockBodyScroll() {
       window.scrollTo(0, y);
     };
   }, []);
+}
+
+/**
+ * Close a popover on a press outside it or on Escape.
+ *
+ * The header has two of these now — the settings gear and the fantasy button
+ * beside it — and they have to dismiss identically or the pair reads as two
+ * different kinds of control. `pointerdown` rather than `click`, so a press
+ * that starts outside dismisses on the way down instead of waiting for a mouse
+ * button that may come up somewhere else entirely.
+ */
+export function useDismissable(
+  open: boolean,
+  ref: RefObject<HTMLElement | null>,
+  close: () => void,
+) {
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) close();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close();
+    };
+    window.addEventListener('pointerdown', onDown);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('pointerdown', onDown);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [open, ref, close]);
 }

@@ -110,7 +110,8 @@ body {
 }
 /* Settings gear next to the title + the popover it opens (holds the simulate
    toggle). */
-.settings-menu {
+.settings-menu,
+.fantasy-menu {
   position: relative;
   display: inline-flex;
 }
@@ -145,9 +146,23 @@ body {
   .brand {
     position: relative;
   }
-  .settings-menu {
+  .settings-menu,
+  .fantasy-menu {
     position: static;
   }
+}
+/* The one line in the fantasy popover that isn't a control: which team the app
+   is reading. It is what the view bar's chip used to say, kept because the
+   button outside can report *that* the roster is the fantasy one and not whose.
+   Styled as text rather than as a menu item precisely so it doesn't invite a
+   press that does nothing. */
+.fantasy-popover-team {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .settings-popover-label {
   font-size: 11px;
@@ -3393,29 +3408,6 @@ body {
 .view-bar-tabs > * {
   flex: none;
 }
-/* The view bar's label pill. Round because it is a label: in this app that
-   shape is reserved for things you read, and anything you can press takes
-   --control-radius — which is what keeps it from reading as one more tab group
-   on the row it sits at the end of. It was `.date-badge` and carried the date
-   range as well; the calendar button says that itself now (`dateToggle`), so
-   the fantasy chip is what is left. */
-.bar-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 11px;
-  border-radius: 999px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-.bar-badge svg {
-  color: var(--faint);
-  flex: none;
-}
 
 /* The header's icon cluster — the roster search, Edit, and the calendar that
    stands in for the date controls on a narrow screen. The first two were a full
@@ -3472,6 +3464,7 @@ body {
    identical by construction: square at --control-h and --control-radius, the
    same height and corner as the date pills they share a line with. */
 .settings-btn,
+.fantasy-btn,
 .edit-order-btn,
 .search-toggle,
 .date-toggle,
@@ -3494,6 +3487,7 @@ body {
   transition: color 0.14s ease, border-color 0.14s ease, background 0.14s ease;
 }
 .settings-btn:hover,
+.fantasy-btn:hover,
 .edit-order-btn:hover,
 .search-toggle:hover,
 .date-toggle:hover,
@@ -3502,6 +3496,7 @@ body {
   border-color: var(--accent);
 }
 .settings-btn:focus-visible,
+.fantasy-btn:focus-visible,
 .edit-order-btn:focus-visible,
 .search-toggle:focus-visible,
 .date-toggle:focus-visible,
@@ -3513,12 +3508,36 @@ body {
    instead of filling, on the reasoning that a menu showing is a lesser thing
    than a mode you are in; one look for the row beats that distinction. */
 .settings-btn.active,
+.fantasy-btn.active,
 .edit-order-btn.active,
 .search-toggle.active,
 .date-toggle.active {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--bg);
+}
+/* `.on` — the app is reading the fantasy roster — takes the **filled** accent,
+   the same treatment `.active` gives every button in the list above and the
+   same one a selected tab takes. In this app a solid accent fill means "this is
+   on", and that is exactly what is being said.
+
+   It was a tint first (accent text on a 12% wash, the way the research board's
+   `.on` disclosures read) and that was too quiet by half: side by side with the
+   plain gear at 36px the two were barely distinguishable, and this button
+   inherited the job of the view bar's team chip, which announced the fantasy
+   roster from across the page. A state worth a chip is worth a fill.
+
+   That makes it identical to the popover-open state, which is fine and is the
+   same bargain the gear makes: while the popover is open it is on screen saying
+   what it holds, so the button underneath has nothing left to distinguish. */
+.fantasy-btn.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+}
+.fantasy-btn.on:hover {
+  color: var(--bg);
+  border-color: var(--accent);
 }
 .edit-order-icon {
   display: inline-flex;
@@ -6197,14 +6216,6 @@ body {
   background: rgba(56, 189, 248, 0.16);
   color: var(--accent);
 }
-/* The view-bar chip naming the team whose roster is on screen. Takes
-   `.bar-badge` outright — same shape, same job — and differs only in the accent
-   that marks it as the fantasy source. */
-.fantasy-badge {
-  border-color: rgba(56, 189, 248, 0.4);
-  color: var(--accent);
-}
-
 /* ---- Narrow-screen vertical rhythm -----------------------------------------
    On a phone every one of these rows stacks, and each was spaced by whichever
    rule happened to own it — the header's own gap, the view bar's, the tab

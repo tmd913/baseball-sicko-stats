@@ -34,7 +34,7 @@ import type { ResearchPos, ResearchScope } from './components/ResearchTable';
 import { simulateLiveDay } from './simulate';
 import { PlayerDetails } from './components/PlayerDetails';
 import { DateRangePicker, numericRange } from './components/DateRangePicker';
-import { FantasyRosterContext, MutedContext } from './hooks';
+import { FantasyRosterContext, MutedContext, useDismissable } from './hooks';
 import type { FantasySlot } from './hooks';
 import { Tutorial } from './components/Tutorial';
 import { EspnSettings } from './components/EspnSettings';
@@ -522,6 +522,7 @@ export default function App() {
   const espnLeagueId = espnStatus?.connected ? espnStatus.leagueId : null;
   const espnTeamId = espnStatus?.connected ? espnStatus.teamId : null;
   const espnTeamName = espnStatus?.connected ? espnStatus.teamName : null;
+  const espnLeagueName = espnStatus?.connected ? espnStatus.leagueName : null;
 
   /** Who is rostered in the connected league. The previous read is deliberately
    *  left in place while this one is in flight, so a re-read doesn't blank a
@@ -712,23 +713,20 @@ export default function App() {
   // Closes on outside click or Escape.
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    if (!settingsOpen) return;
-    const onDown = (e: PointerEvent) => {
-      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
-        setSettingsOpen(false);
-      }
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setSettingsOpen(false);
-    };
-    window.addEventListener('pointerdown', onDown);
-    window.addEventListener('keydown', onKey);
-    return () => {
-      window.removeEventListener('pointerdown', onDown);
-      window.removeEventListener('keydown', onKey);
-    };
-  }, [settingsOpen]);
+  const closeSettings = useCallback(() => setSettingsOpen(false), []);
+  useDismissable(settingsOpen, settingsRef, closeSettings);
+  // Everything to do with the fantasy league, behind its own button beside the
+  // gear. It was two entries in the settings menu — a "Use my fantasy team"
+  // toggle and a "Fantasy league" page link — plus a chip in the view bar
+  // naming the team, which is one feature answered in three places, none of
+  // them saying where the other two were. The button is the one place: it is
+  // lit when the app is reading the fantasy roster, so the state the chip used
+  // to carry is the button's own appearance, and what the chip *said* (which
+  // team) is the first line inside it.
+  const [fantasyOpen, setFantasyOpen] = useState(false);
+  const fantasyRef = useRef<HTMLDivElement | null>(null);
+  const closeFantasy = useCallback(() => setFantasyOpen(false), []);
+  useDismissable(fantasyOpen, fantasyRef, closeFantasy);
   // Edit mode (the pencil in the header): swaps the player list for the
   // drag-to-reorder edit screen. Deliberately not persisted in the URL — it's a
   // transient mode, not a view.
@@ -1217,17 +1215,6 @@ export default function App() {
       </button>
     </div>
   ) : null;
-  /** Says whose list is on screen, for the same reason the calendar says which
-   *  days: with the source behind a menu, this is the only thing on the page
-   *  explaining why the player list is not the one you built. A label, not a
-   *  control — the fully-round pill the app reserves for things you read, which
-   *  is what keeps it from reading as a fourth tab group on the row it ends. */
-  const fantasyBadge = usingFantasy ? (
-    <span className="bar-badge fantasy-badge" title="Reading your ESPN fantasy roster">
-      {fantasyRoster?.teamName ?? espnTeamName ?? 'Fantasy team'}
-    </span>
-  ) : null;
-
   // The header's cluster, at the top right: the roster search and the Edit
   // (reorder) toggle. The calendar was the third of them and has moved down to
   // the roster row (see `dateToggle`), which leaves the header holding only
@@ -1614,54 +1601,10 @@ export default function App() {
                   <span className="settings-dot" aria-hidden="true" />
                   Mute clip audio
                 </button>
-                {/* Only offered once a league is connected and a team is known
-                    — without both there is no roster for it to switch to, and a
-                    toggle that can only fail is worse than no toggle. */}
-                {espnConnected && espnTeamId !== null && (
-                  <button
-                    type="button"
-                    className={`settings-toggle${usingFantasy ? ' active' : ''}`}
-                    role="menuitemcheckbox"
-                    aria-checked={usingFantasy}
-                    onClick={() =>
-                      setRosterSource(rosterSource === 'fantasy' ? 'watchlist' : 'fantasy')
-                    }
-                    title={
-                      espnTeamName
-                        ? `Read the Summary, Games and Feed views off ${espnTeamName} instead of your watchlist`
-                        : 'Read the watchlist views off your fantasy roster'
-                    }
-                  >
-                    <span className="settings-dot" aria-hidden="true" />
-                    Use my fantasy team
-                  </button>
-                )}
-                {/* Below the toggles with the how-to button: both open a page
-                    rather than flipping a setting, so they read as the menu's
-                    two ways *out* of it. */}
-                <button
-                  type="button"
-                  className="help-btn espn-menu-btn"
-                  role="menuitem"
-                  onClick={openEspnSettings}
-                  title="Connect an ESPN fantasy league — adds a Free Agents filter to the research board"
-                >
-                  <svg
-                    viewBox="0 0 24 24"
-                    width="15"
-                    height="15"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <circle cx="12" cy="12" r="9" />
-                    <path d="M4.5 7.5A7.5 7.5 0 0 1 8 15M19.5 7.5A7.5 7.5 0 0 0 16 15" />
-                  </svg>
-                  {espnConnected ? 'Fantasy league ✓' : 'Fantasy league'}
-                </button>
+                {/* The fantasy entries used to sit here — the roster-source
+                    toggle and the league page — and have moved out to their own
+                    button beside the gear, where the state they control can be
+                    read without opening anything. */}
                 <button
                   type="button"
                   className="help-btn"
@@ -1682,6 +1625,121 @@ export default function App() {
                 {/* Renders nothing when auth isn't configured, so the local dev
                     menu looks exactly as it did. */}
                 <SignOutButton />
+              </div>
+            )}
+          </div>
+          {/* Everything fantasy, behind one button next to the gear. It is lit
+              (`.on`) whenever the app is reading the fantasy roster, which is
+              what the view bar's team chip used to say — the difference being
+              that a chip could only be read, where this can be read *and*
+              pressed to change what it reports. `.active` is the popover being
+              open, the same two-class split the research board's disclosures
+              use, and the fill wins over the tint while it is open because by
+              then the panel itself is saying the state.
+
+              With no league connected there is nothing to put in a menu, so the
+              button opens the league page directly: a popover holding one item
+              is a menu that isn't one. */}
+          <div className="fantasy-menu" ref={fantasyRef}>
+            <button
+              type="button"
+              className={`fantasy-btn${fantasyOpen ? ' active' : ''}${
+                usingFantasy ? ' on' : ''
+              }`}
+              aria-haspopup={espnConnected ? 'true' : undefined}
+              aria-expanded={espnConnected ? fantasyOpen : undefined}
+              aria-label="Fantasy league"
+              title={
+                usingFantasy
+                  ? `Reading ${fantasyRoster?.teamName ?? espnTeamName ?? 'your fantasy team'}`
+                  : espnConnected
+                    ? 'Fantasy league'
+                    : 'Connect an ESPN fantasy league'
+              }
+              onClick={() => {
+                setSettingsOpen(false);
+                if (espnConnected) setFantasyOpen((v) => !v);
+                else openEspnSettings();
+              }}
+            >
+              {/* The same mark the league page and the old menu entry carry, so
+                  one concept keeps one glyph across the app. */}
+              <svg
+                viewBox="0 0 24 24"
+                width="17"
+                height="17"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="9" />
+                <path d="M4.5 7.5A7.5 7.5 0 0 1 8 15M19.5 7.5A7.5 7.5 0 0 0 16 15" />
+              </svg>
+            </button>
+            {espnConnected && fantasyOpen && (
+              <div className="settings-popover fantasy-popover" role="menu">
+                <span className="settings-popover-label">Fantasy</span>
+                {/* What the chip in the view bar used to say, kept because the
+                    button can only report *that* the roster is fantasy, not
+                    whose. A line of text, not a menu item — nothing happens if
+                    you press it. */}
+                <span className="fantasy-popover-team">
+                  {fantasyRoster?.teamName ?? espnTeamName ?? espnLeagueName ?? 'Connected'}
+                </span>
+                {/* Only offered once a team is known — without one there is no
+                    roster to switch to, and a toggle that can only fail is
+                    worse than no toggle. */}
+                {espnTeamId !== null && (
+                  <button
+                    type="button"
+                    className={`settings-toggle${usingFantasy ? ' active' : ''}`}
+                    role="menuitemcheckbox"
+                    aria-checked={usingFantasy}
+                    onClick={() =>
+                      setRosterSource(rosterSource === 'fantasy' ? 'watchlist' : 'fantasy')
+                    }
+                    title={
+                      espnTeamName
+                        ? `Read the Summary, Games and Feed views off ${espnTeamName} instead of your watchlist`
+                        : 'Read the watchlist views off your fantasy roster'
+                    }
+                  >
+                    <span className="settings-dot" aria-hidden="true" />
+                    Use my fantasy team
+                  </button>
+                )}
+                {/* Below the toggle, as the how-to button sits below the gear's:
+                    it opens a page rather than flipping a setting, so it reads
+                    as the menu's way *out* of it. */}
+                <button
+                  type="button"
+                  className="help-btn"
+                  role="menuitem"
+                  onClick={() => {
+                    setFantasyOpen(false);
+                    openEspnSettings();
+                  }}
+                  title="Your league, your team, and the connection itself"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="15"
+                    height="15"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M4.5 7.5A7.5 7.5 0 0 1 8 15M19.5 7.5A7.5 7.5 0 0 0 16 15" />
+                  </svg>
+                  League settings
+                </button>
               </div>
             )}
           </div>
@@ -1815,7 +1873,6 @@ export default function App() {
                 </button>
               </div>
               {dateToggle}
-              {fantasyBadge}
               </>
             )}
           </div>
