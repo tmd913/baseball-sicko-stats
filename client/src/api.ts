@@ -1,5 +1,8 @@
 import type {
   BatterGameLog,
+  EspnOwnership,
+  EspnRoster,
+  EspnStatus,
   PitcherGameLog,
   SeasonArsenal,
   PlayerKind,
@@ -7,6 +10,7 @@ import type {
   PlayerPercentiles,
   PlayerReport,
   ResearchRow,
+  RosterSource,
   SeasonPlayer,
   SeasonStats,
   UserPrefs,
@@ -117,11 +121,23 @@ export const api = {
     });
     return r.players;
   },
+  /** `source: 'fantasy'` reports on the user's ESPN roster instead of their
+   *  saved watchlist. Asked for explicitly rather than left to the server's
+   *  view of the saved preference, so the report and the view rendering it can
+   *  never disagree about which set of players it describes. */
   async report(
     start: string,
     end: string,
-  ): Promise<{ start: string; end: string; players: PlayerReport[] }> {
-    return request(`/api/report?start=${start}&end=${end}`);
+    source: RosterSource = 'watchlist',
+  ): Promise<{
+    start: string;
+    end: string;
+    players: PlayerReport[];
+    source?: RosterSource;
+    teamName?: string | null;
+  }> {
+    const src = source === 'fantasy' ? '&source=fantasy' : '';
+    return request(`/api/report?start=${start}&end=${end}${src}`);
   },
   // What this user has customised, saved server-side against their id. One
   // request on boot; the research board's columns are the only entry so far.
@@ -144,6 +160,13 @@ export const api = {
       body: JSON.stringify({ hide }),
     });
   },
+  async saveRosterSource(source: RosterSource): Promise<UserPrefs> {
+    return request('/api/prefs/roster-source', {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ source }),
+    });
+  },
   async saveMuteAudio(mute: boolean): Promise<UserPrefs> {
     return request('/api/prefs/mute-audio', {
       method: 'PUT',
@@ -151,6 +174,68 @@ export const api = {
       body: JSON.stringify({ mute }),
     });
   },
+  // ---- ESPN fantasy league ----
+  // The credential (`espnS2`, an ESPN session cookie) travels one way: in
+  // through `saveEspn` and never back out, so nothing in this app's memory or
+  // in a devtools response pane holds it.
+  async espn(): Promise<EspnStatus> {
+    return request('/api/espn');
+  },
+  /** `swid`/`espnS2` are omitted for a public league, which ESPN serves to
+   *  anyone; `teamId` is whatever the pasted league URL carried, used only when
+   *  there is no SWID to identify the user's own team with. */
+  async saveEspn(
+    leagueId: number,
+    swid: string,
+    espnS2: string,
+    teamId: number | null = null,
+  ): Promise<EspnStatus> {
+    return request('/api/espn', {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ leagueId, swid, espnS2, teamId }),
+    });
+  },
+  async disconnectEspn(): Promise<EspnStatus> {
+    return request('/api/espn', { method: 'DELETE' });
+  },
+  /** Which team in the league is the user's. Derived from the SWID at connect
+   *  time where that identifies one; settable because a public league read
+   *  anonymously has no owner to match. */
+  async setEspnTeam(teamId: number): Promise<EspnStatus> {
+    return request('/api/espn/team', {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ teamId }),
+    });
+  },
+  /** Turn the invite link on or off for the league this user is on. Any member
+   *  may — they are all equally on the connection. */
+  async shareEspn(enabled: boolean): Promise<EspnStatus> {
+    return request('/api/espn/share', {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ enabled }),
+    });
+  },
+  /** Join a league from an invite code — no league id, no cookies. */
+  async joinEspn(code: string): Promise<EspnStatus> {
+    return request('/api/espn/join', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ code }),
+    });
+  },
+  /** The user's own roster, slot by slot. */
+  async espnRoster(): Promise<EspnRoster> {
+    return request('/api/espn/roster');
+  },
+  /** `refresh` skips the server's ten-minute cache — for the user who has just
+   *  made a move and wants the board to agree with ESPN. */
+  async espnOwnership(refresh = false): Promise<EspnOwnership> {
+    return request(`/api/espn/ownership${refresh ? '?refresh=1' : ''}`);
+  },
+
   // Every player in the league on one board, season to date — the research
   // table. Watchlist-independent and season-wide, so it takes no date range.
   async research(

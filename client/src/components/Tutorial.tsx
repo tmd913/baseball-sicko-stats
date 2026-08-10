@@ -348,6 +348,27 @@ const CHAPTERS: Chapter[] = [
             watchlist. On <Ui>All Players</Ui> the people you already watch carry a
             small ✓.
           </li>
+          <li>
+            <strong>Free Agents.</strong> A third pill, once you've connected an ESPN
+            fantasy league under the gear's <Ui>Fantasy league</Ui> page: the board
+            drops everyone already on a roster in it, leaving the players you could
+            actually add — sortable and filterable like any other slice. That page
+            walks through where ESPN keeps the two cookies it needs, and it's also
+            where you say which team in the league is yours. With that set, the
+            gear's <Ui>Use my fantasy team</Ui> swaps the other three views over to
+            your roster — same tables, your team instead of your watchlist, each
+            player carrying the slot he's in today (his position if he's in the
+            lineup, <Ui>BE</Ui> or <Ui>IL</Ui> if he isn't). Your watchlist is
+            untouched and comes back when you switch off. And you only need one
+            person in a league to do any of this: whoever connects first can turn
+            on a share link, and everyone else joins by opening it — no cookies,
+            no league ID. Connecting also adds a <Ui>Ros%</Ui> column to the
+            board and a rostered figure to each player's page: the share of all
+            ESPN leagues he's on a roster in, which sorts and filters like any
+            other column — and a <Ui>Δ7d</Ui> beside it for which way that has
+            been moving. Sort by it once for the week's biggest adds, twice for
+            the drops.
+          </li>
         </ul>
         <h3 className="tut-sub">The four buttons</h3>
         <dl className="tut-defs">

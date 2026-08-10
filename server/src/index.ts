@@ -18,14 +18,37 @@ import type { ResearchWindow, SeasonArsenalPitch } from './types.js';
 import { getPitcherStats, getPlayerStats, getSeasonPlayers, resolveVideoUrl } from './mlbStats.js';
 import {
   addPlayer,
+  attachEspnLeague,
+  getEspnCreds,
+  getEspnLeague,
+  getLeague,
   getPrefs,
+  joinLeague,
+  leagueForInvite,
   getWatchlist,
   removePlayer,
   reorderPlayers,
+  setEspnLeague,
+  setEspnTeam,
   setHideInjured,
   setMuteAudio,
+  setLeagueSharing,
   setResearchColumns,
+  setRosterSource,
+  upsertLeague,
 } from './store.js';
+import type { EspnLeague, LeagueRecord } from './store.js';
+import { randomBytes } from 'node:crypto';
+import {
+  EspnAuthError,
+  getLeagueInfo,
+  getOwnership,
+  normalizeS2,
+  normalizeSwid,
+  rosterToWatchlist,
+} from './espn.js';
+import type { EspnRosterPlayer } from './espn.js';
+import type { WatchPlayer } from './types.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -184,9 +207,29 @@ app.get(
       res.status(400).json({ error: `date range too large (max ${MAX_RANGE_DAYS} days)` });
       return;
     }
-    const watchlist = await getWatchlist(userId(req));
-    const players = await getReport(start, end, watchlist);
-    res.json({ start, end, players });
+    // `source=fantasy` reads the user's ESPN roster instead of the list they
+    // built here. The client asks for it explicitly rather than the server
+    // consulting the saved preference, so a report and the view rendering it
+    // can never disagree about which set of players it describes — the
+    // preference decides what the client asks for, and nothing else.
+    const fantasy = req.query.source === 'fantasy';
+    let watched: WatchPlayer[];
+    let teamName: string | null = null;
+    if (fantasy) {
+      try {
+        ({ players: watched, teamName } = await fantasyWatchlist(userId(req)));
+      } catch (err) {
+        // A league that can't be read is the user's to fix, and the client
+        // offers the way to — so 409 rather than the 502 `asyncRoute` would
+        // otherwise turn this into.
+        if (espnError(err, res)) return;
+        throw err;
+      }
+    } else {
+      watched = await getWatchlist(userId(req));
+    }
+    const players = await getReport(start, end, watched);
+    res.json({ start, end, players, source: fantasy ? 'fantasy' : 'watchlist', teamName });
   }),
 );
 
@@ -262,6 +305,346 @@ app.put(
       return;
     }
     res.json(await setMuteAudio(userId(req), mute));
+  }),
+);
+
+// ---- ESPN fantasy league ------------------------------------------------
+//
+// Three routes over the saved connection and one over what it can read. The
+// credential — `espnS2`, a live ESPN session cookie — goes in through the PUT
+// and never comes back out: every response below is built from the harmless
+// half of the record, so there is no shape of this API that hands a browser
+// back the cookie it was given.
+
+/** What the client is told about a connection. No credentials, by construction:
+ *  it is assembled field by field rather than spread from the stored record. */
+function espnStatus(user: string, espn: EspnLeague | null, league: LeagueRecord | null) {
+  if (!espn) return { connected: false as const };
+  return {
+    connected: true as const,
+    leagueId: espn.leagueId,
+    leagueName: league?.leagueName ?? espn.leagueName ?? null,
+    teamId: espn.teamId ?? null,
+    teamName: espn.teamName ?? null,
+    // Whether a cookie is stored at all — true for a private league, false for
+    // a public one read anonymously. The value itself never appears here; this
+    // is only so the page can say which of the two it is.
+    hasCredentials: Boolean(league?.swid && league?.espnS2),
+    /** The invite code, or null when sharing is off. Only ever sent to someone
+     *  already attached to the league, which is everyone who can reach this. */
+    inviteCode: league?.inviteCode ?? null,
+    /** How many app users are on this connection, so the page can say whether
+     *  sharing it has actually done anything yet. */
+    memberCount: league?.members.length ?? 1,
+    /** Whether *this* user's cookie is the one the league is currently read
+     *  with. What it is for is the opposite case: telling someone their league
+     *  is running on a leaguemate's session, so a stale one is understood as
+     *  something anybody can fix rather than a fault of theirs. */
+    credentialMine: league ? league.credentialFrom === user : true,
+    savedAt: espn.savedAt,
+  };
+}
+
+/**
+ * The two records the status is assembled from.
+ *
+ * It goes through `getEspnCreds` rather than reading the league directly, for
+ * the side effect: that is where a pre-sharing connection's inline credential
+ * is promoted onto a league record. Reading around it would report
+ * `hasCredentials: false` for a perfectly good legacy connection right up
+ * until something else happened to trigger the migration.
+ */
+async function espnStatusFor(user: string) {
+  const espn = await getEspnLeague(user);
+  if (!espn) return espnStatus(user, null, null);
+  await getEspnCreds(user);
+  return espnStatus(user, espn, await getLeague(espn.leagueId));
+}
+
+/** ESPN rejecting the saved cookies is not an upstream fault to 502 over — it
+ *  is a thing the user can fix, and the client shows it as such. 409 rather
+ *  than 401, which `api.ts` treats as an expired *Cognito* token and retries. */
+function espnError(err: unknown, res: express.Response): boolean {
+  if (!(err instanceof EspnAuthError)) return false;
+  res.status(409).json({ error: err.message, code: 'espn-auth' });
+  return true;
+}
+
+/**
+ * The user's own fantasy roster as a watchlist, plus the team it came from.
+ *
+ * Throws `EspnAuthError` when there is nothing to read from — no league, or no
+ * team chosen within it — so the caller answers 409 with something the user can
+ * act on rather than a 502 about an upstream that was never asked.
+ */
+async function fantasyWatchlist(
+  user: string,
+): Promise<{ players: WatchPlayer[]; teamName: string | null; roster: EspnRosterPlayer[] }> {
+  const espn = await getEspnLeague(user);
+  if (!espn) throw new EspnAuthError('No ESPN league connected');
+  if (espn.teamId == null) {
+    throw new EspnAuthError(
+      'No fantasy team chosen in this league — pick yours on the Fantasy league page.',
+    );
+  }
+  const creds = await getEspnCreds(user);
+  if (!creds) throw new EspnAuthError('No ESPN league connected');
+  const own = await getOwnership(creds);
+  const roster = own.rosters[espn.teamId] ?? [];
+  const team = own.teams.find((t) => t.id === espn.teamId);
+  return { players: rosterToWatchlist(roster), teamName: team?.name ?? espn.teamName ?? null, roster };
+}
+
+app.get(
+  '/api/espn',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    res.json(await espnStatusFor(userId(req)));
+  }),
+);
+
+// The user's own roster, slot by slot — what the app shows beside each player
+// when it is reading the fantasy team rather than the saved watchlist.
+app.get(
+  '/api/espn/roster',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    try {
+      const { roster, teamName } = await fantasyWatchlist(userId(req));
+      res.json({ teamName, players: roster });
+    } catch (err) {
+      if (!espnError(err, res)) throw err;
+    }
+  }),
+);
+
+// ---- Sharing a league with your leaguemates ------------------------------
+//
+// The point of this: the *second* person in a league should not have to go
+// hunting for cookies. ESPN publishes no member emails — checked across every
+// league view and the member and invite endpoints, there is no email anywhere
+// in the payload — so leaguemates cannot be recognised automatically. What it
+// does publish is enough for the connection to be *shared* deliberately: one
+// person connects, turns sharing on, and hands out a link.
+//
+// The credential is never in the link and never leaves the server. Joining
+// attaches the user to the league record; their reads then use whatever
+// credential that record currently holds.
+
+/** An invite code: 16 URL-safe characters of randomness. Long enough that
+ *  guessing one is not a way into somebody's private league, which matters
+ *  because holding one is the whole of the authorisation to join. */
+function mintInviteCode(): string {
+  return randomBytes(12).toString('base64url');
+}
+
+/** Turn sharing on or off for the league this user is on. Any member may —
+ *  they are all equally on the connection, and a league whose only sharer has
+ *  stopped using the app would otherwise be frozen. */
+app.put(
+  '/api/espn/share',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const { enabled } = (req.body ?? {}) as { enabled?: unknown };
+    if (typeof enabled !== 'boolean') {
+      res.status(400).json({ error: 'enabled must be a boolean' });
+      return;
+    }
+    const espn = await getEspnLeague(userId(req));
+    if (!espn) {
+      res.status(409).json({ error: 'No ESPN league connected', code: 'espn-missing' });
+      return;
+    }
+    await setLeagueSharing(espn.leagueId, enabled, mintInviteCode);
+    res.json(await espnStatusFor(userId(req)));
+  }),
+);
+
+/**
+ * Join a league from an invite code. No cookies, no league id — the code is
+ * the whole of it, which is the point.
+ *
+ * A user who already has a league is moved to this one; their watchlist and
+ * preferences are untouched, and their team is unset because a team id means
+ * nothing in a different league.
+ */
+app.post(
+  '/api/espn/join',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const { code } = (req.body ?? {}) as { code?: unknown };
+    if (typeof code !== 'string' || code.trim() === '') {
+      res.status(400).json({ error: 'code is required' });
+      return;
+    }
+    const league = await leagueForInvite(code.trim());
+    if (!league) {
+      // Deliberately one message for "never existed" and "revoked": which of
+      // the two it is tells a stranger holding a guessed code something about
+      // whether they are close.
+      res.status(404).json({ error: 'That invite link is no longer valid.', code: 'espn-invite' });
+      return;
+    }
+    await joinLeague(userId(req), league.leagueId);
+    const espn = await attachEspnLeague(userId(req), league.leagueId, league.leagueName);
+    res.json(espnStatus(userId(req), espn, await getLeague(league.leagueId)));
+  }),
+);
+
+// Which team in the league is the user's. The SWID names it automatically for
+// a manager in their own private league; a public league read anonymously has
+// no owner to match, and someone with two teams has to say which — so it is
+// settable rather than only derived.
+app.put(
+  '/api/espn/team',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const { teamId } = (req.body ?? {}) as { teamId?: unknown };
+    const id = typeof teamId === 'number' ? teamId : Number(teamId);
+    if (!Number.isInteger(id) || id <= 0) {
+      res.status(400).json({ error: 'teamId must be a positive integer' });
+      return;
+    }
+    const espn = await getEspnLeague(userId(req));
+    if (!espn) {
+      res.status(409).json({ error: 'No ESPN league connected', code: 'espn-missing' });
+      return;
+    }
+    try {
+      // Named from the league rather than trusted from the client: the id is a
+      // choice, but the label beside it is a fact about the league.
+      const creds = await getEspnCreds(userId(req));
+      if (!creds) {
+        res.status(409).json({ error: 'No ESPN league connected', code: 'espn-missing' });
+        return;
+      }
+      const own = await getOwnership(creds);
+      const team = own.teams.find((t) => t.id === id);
+      if (!team) {
+        res.status(400).json({ error: `No team ${id} in league ${espn.leagueId}` });
+        return;
+      }
+      await setEspnTeam(userId(req), id, team.name);
+      res.json(await espnStatusFor(userId(req)));
+    } catch (err) {
+      if (!espnError(err, res)) throw err;
+    }
+  }),
+);
+
+// Verified before it is stored: a set of cookies that cannot read the league is
+// worth rejecting while the user still has the form open and can see which
+// field is wrong, rather than at first use from a table that just looks empty.
+app.put(
+  '/api/espn',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const { leagueId, swid, espnS2, teamId } = (req.body ?? {}) as {
+      leagueId?: unknown;
+      swid?: unknown;
+      espnS2?: unknown;
+      teamId?: unknown;
+    };
+    const id = typeof leagueId === 'number' ? leagueId : Number(leagueId);
+    if (!Number.isInteger(id) || id <= 0) {
+      res.status(400).json({ error: 'leagueId must be a positive integer' });
+      return;
+    }
+    // **Both cookies or neither.** They are optional because a public league
+    // needs none, but half a pair is a typo rather than a choice, and letting
+    // it through would read the league anonymously and then report the private
+    // league's 401 as though the value supplied were the wrong one.
+    const hasSwid = typeof swid === 'string' && swid.trim() !== '';
+    const hasS2 = typeof espnS2 === 'string' && espnS2.trim() !== '';
+    if (hasSwid !== hasS2) {
+      res.status(400).json({ error: 'swid and espnS2 must be given together' });
+      return;
+    }
+    const creds = {
+      leagueId: id,
+      swid: hasSwid ? normalizeSwid(swid as string) : null,
+      espnS2: hasS2 ? normalizeS2(espnS2 as string) : null,
+    };
+    // Only used when there is no SWID to identify the user's team with — i.e.
+    // a public league, where the `teamId` in the URL they pasted is the one
+    // place it appears.
+    const urlTeamId = Number(teamId);
+    const fallbackTeam = Number.isInteger(urlTeamId) && urlTeamId > 0 ? urlTeamId : null;
+    try {
+      const info = await getLeagueInfo(creds);
+      const myTeamId = info.myTeamId ?? fallbackTeam;
+      // The credential goes on the **league**, not on this user: that is what
+      // lets it be shared, and what makes this same route the way any member
+      // refreshes an expired cookie for everybody on it.
+      const league = await upsertLeague(
+        userId(req),
+        creds.leagueId,
+        info.leagueName,
+        creds.swid,
+        creds.espnS2,
+      );
+      const saved = await setEspnLeague(userId(req), {
+        leagueId: creds.leagueId,
+        leagueName: info.leagueName,
+        teamId: myTeamId,
+        teamName:
+          info.myTeamName ?? info.teams.find((t) => t.id === myTeamId)?.name ?? null,
+        savedAt: Date.now(),
+      });
+      res.json(espnStatus(userId(req), saved, league));
+    } catch (err) {
+      if (!espnError(err, res)) throw err;
+    }
+  }),
+);
+
+app.delete(
+  '/api/espn',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    await setEspnLeague(userId(req), null);
+    res.json(espnStatus(userId(req), null, null));
+  }),
+);
+
+// Who is on a roster, keyed by MLB player id — which is what makes the research
+// board's free-agent filter a set lookup on the id each row already carries.
+// `?refresh=1` skips the ten-minute cache, for the user who has just made a move.
+app.get(
+  '/api/espn/ownership',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const espn = await getEspnLeague(userId(req));
+    if (!espn) {
+      res.status(409).json({ error: 'No ESPN league connected', code: 'espn-missing' });
+      return;
+    }
+    try {
+      const creds = await getEspnCreds(userId(req));
+      if (!creds) {
+        res.status(409).json({ error: 'No ESPN league connected', code: 'espn-missing' });
+        return;
+      }
+      const own = await getOwnership(creds, req.query.refresh === '1');
+      res.json(own);
+    } catch (err) {
+      if (!espnError(err, res)) throw err;
+    }
+  }),
+);
+
+// Which list the watchlist views read from. A route of its own like the three
+// above; 'watchlist' is stored as the absence of an entry.
+app.put(
+  '/api/prefs/roster-source',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const { source } = (req.body ?? {}) as { source?: unknown };
+    if (source !== 'watchlist' && source !== 'fantasy') {
+      res.status(400).json({ error: "source must be 'watchlist' or 'fantasy'" });
+      return;
+    }
+    res.json(await setRosterSource(userId(req), source));
   }),
 );
 

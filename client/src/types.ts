@@ -576,6 +576,17 @@ export const RESEARCH_WINDOWS: ResearchWindow[] = ['season', 7, 15, 30, 60];
 export interface ResearchRow {
   id: number;
   name: string;
+  /** ESPN's global rostered percentage — the share of *all* ESPN leagues the
+   *  player is on a roster in, not of the user's own league.
+   *
+   *  **Merged in by the client**, not sent by `/api/research`: that board is
+   *  cached per kind and window and served to everyone, while this is only
+   *  shown to a user with a fantasy league connected. Absent means either no
+   *  league or no match for the player. */
+  rosterPct?: number | null;
+  /** How that roster % has moved over the trend window — client-merged too, and
+   *  absent when there is no league or no movement to report. */
+  rosterTrend?: number | null;
   savantName: string;
   kind: PlayerKind;
   team: string; // "MIL" — the abbreviation; a full name is column-wide
@@ -684,4 +695,94 @@ export interface UserPrefs {
   hideInjured?: boolean;
   /** Play every video clip with the sound off. Absent means off. */
   muteAudio?: boolean;
+  /** Read the watchlist views off the ESPN fantasy roster rather than the
+   *  saved list. Absent means the saved list, which is the default. */
+  rosterSource?: 'fantasy';
+}
+
+/** Which set of players the four watchlist views describe. */
+export type RosterSource = 'watchlist' | 'fantasy';
+
+// ---- ESPN fantasy league ---------------------------------------------------
+
+/** One fantasy team in the connected league. */
+export interface EspnTeam {
+  id: number;
+  name: string;
+  abbrev: string;
+}
+
+/** What the server will say about a user's ESPN connection. Deliberately
+ *  credential-free: `espn_s2` goes in through `saveEspn` and never comes back,
+ *  so there is nothing here for the client to have to be careful with. */
+export type EspnStatus =
+  | { connected: false }
+  | {
+      connected: true;
+      leagueId: number;
+      leagueName: string | null;
+      teamId: number | null;
+      teamName: string | null;
+      /** Whether an ESPN cookie is stored for this connection at all — false
+       *  for a public league, which is read anonymously. The value itself is
+       *  never sent; this only says which of the two kinds it is. */
+      hasCredentials: boolean;
+      /** The invite code while sharing is on, else null. Only ever sent to
+       *  someone already on the league. */
+      inviteCode: string | null;
+      /** How many app users are on this connection. */
+      memberCount: number;
+      /** Whether this user's own cookie is the one the league is read with.
+       *  False means a leaguemate's session is carrying it. */
+      credentialMine: boolean;
+      savedAt: number;
+    };
+
+/** Who in the connected league is already rostered — keyed by **MLB** player
+ *  id, so the research board's free-agent test is a lookup on the id every row
+ *  already carries. Mirrors `EspnOwnership` in the server's `espn.ts`. */
+export interface EspnOwnership {
+  leagueId: number;
+  leagueName: string;
+  season: number;
+  teams: EspnTeam[];
+  myTeamId: number | null;
+  myTeamName: string | null;
+  /** MLB player id → the fantasy team id holding him. */
+  owned: Record<number, number>;
+  /** ESPN's global rostered percentage by MLB player id — see `ResearchRow.rosterPct`. */
+  rosterPct: Record<number, number>;
+  /** How those percentages have moved, and over how long. Null until a second
+   *  day of history exists to measure against. */
+  trend: { delta: Record<number, number>; days: number } | null;
+  /** Roster entries read, and how many found an MLB player. The gap is
+   *  prospects who have never played a major-league game; it is carried so a
+   *  match that has silently stopped working is visible rather than showing up
+   *  as a league where everyone is a free agent. */
+  rosterCount: number;
+  matched: number;
+  fetchedAt: number;
+}
+
+/** One player on the user's fantasy roster, joined to his MLB id. Mirrors
+ *  `EspnRosterPlayer` in the server's `espn.ts`. */
+export interface EspnRosterPlayer {
+  espnId: number;
+  name: string;
+  /** Null when the name matched no major leaguer — a prospect, usually. */
+  mlbId: number | null;
+  savantName: string | null;
+  /** One kind, or two for a two-way player. */
+  kinds: PlayerKind[];
+  /** Today's fantasy slot — 'SS', 'UTIL', 'SP', 'BE', 'IL'. */
+  slot: string;
+  slotId: number;
+  /** In today's lineup: neither benched nor on the IL. */
+  starting: boolean;
+  injured: boolean;
+}
+
+export interface EspnRoster {
+  teamName: string | null;
+  players: EspnRosterPlayer[];
 }

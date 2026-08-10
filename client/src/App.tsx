@@ -3,10 +3,14 @@ import { api } from './api';
 import { SignOutButton } from './auth';
 import { playerKey } from './types';
 import type {
+  EspnOwnership,
+  EspnRoster,
+  EspnStatus,
   PlayerKind,
   PlayerReport,
   ResearchRow,
   ResearchWindow,
+  RosterSource,
   SeasonPlayer,
   WatchPlayer,
 } from './types';
@@ -30,8 +34,10 @@ import type { ResearchPos, ResearchScope } from './components/ResearchTable';
 import { simulateLiveDay } from './simulate';
 import { PlayerDetails } from './components/PlayerDetails';
 import { DateRangePicker, shortRange } from './components/DateRangePicker';
-import { MutedContext } from './hooks';
+import { FantasyRosterContext, MutedContext } from './hooks';
+import type { FantasySlot } from './hooks';
 import { Tutorial } from './components/Tutorial';
+import { EspnSettings } from './components/EspnSettings';
 
 // Breathing room above a card scrolled to the top of the viewport.
 const SCROLL_GAP = 12;
@@ -262,6 +268,29 @@ export default function App() {
       .saveMuteAudio(mute)
       .catch((e: Error) => console.error('saving mute-audio failed:', e.message));
   }, []);
+  /**
+   * Which set of players the four watchlist views describe: the list built here,
+   * or the user's ESPN fantasy roster.
+   *
+   * In the URL like `hideil=1`, and for the same reason — it changes *which
+   * players a view is reporting on*, so a shared link that says so is saying
+   * something about the data. Saved per user too, with the same
+   * already-touched guard, so a preference landing a moment after boot can't
+   * undo a switch just made.
+   */
+  const [rosterSource, setRosterSourceState] = useState<RosterSource>(() =>
+    initialParams.get('roster') === 'fantasy' ? 'fantasy' : 'watchlist',
+  );
+  const rosterSourceFromUrl = initialParams.get('roster') === 'fantasy';
+  const rosterSourceTouched = useRef(false);
+  const setRosterSource = useCallback((next: RosterSource) => {
+    rosterSourceTouched.current = true;
+    setRosterSourceState(next);
+    api
+      .saveRosterSource(next)
+      .catch((e: Error) => console.error('saving roster source failed:', e.message));
+  }, []);
+
   // The research board, fetched per kind the first time that tab is opened and
   // kept for the session: it's the whole league in one blob, season-to-date, and
   // the server caches it for six hours — re-fetching on every tab switch would
@@ -305,6 +334,16 @@ export default function App() {
         // No URL param to reconcile against — the saved value is the only
         // source there is, so it applies unless the user has already spoken.
         if (!muteAudioTouched.current && prefs.muteAudio) setMuteAudioState(true);
+        // Same rule as hide-injured: the URL can only ever say `fantasy`, so
+        // silence there is unspecified rather than "watchlist", which is what
+        // lets the saved value fill it in.
+        if (
+          !rosterSourceTouched.current &&
+          !rosterSourceFromUrl &&
+          prefs.rosterSource === 'fantasy'
+        ) {
+          setRosterSourceState('fantasy');
+        }
         setResearchCols((prev) => {
           const next = { ...prev };
           for (const kind of ['batter', 'pitcher'] as const) {
@@ -321,7 +360,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [urlColumns, hideInjuredFromUrl]);
+  }, [urlColumns, hideInjuredFromUrl, rosterSourceFromUrl]);
 
   // Saving is debounced because the picker is a row of checkboxes — turning a
   // group on is one intent and a dozen state changes, and each would otherwise
@@ -369,7 +408,6 @@ export default function App() {
   // The research board is the whole league, so it marks its rows against the
   // watchlist rather than being built from it. Same key `PlayerAdder` dedupes
   // on, so the two agree about what "already watched" means.
-  const watchedKeys = useMemo(() => new Set(watchlist.map(playerKey)), [watchlist]);
   // Shared across both boards (see the prop's comment in ResearchTable), so it
   // survives the remount that switching board causes. Transient like the page's
   // other filters — deliberately not in the URL.
@@ -381,6 +419,246 @@ export default function App() {
   // In the URL like every other view, so it survives a reload and can be linked
   // to — which is the only way to hand someone the guide directly.
   const [helpOpen, setHelpOpen] = useState<boolean>(() => initialParams.get('help') === '1');
+
+  // ---- ESPN fantasy league ----
+  // The connection status is read once on boot, next to the preferences: it
+  // decides whether the research board offers its Free Agents pill, which is a
+  // thing the first render would otherwise get wrong and then correct.
+  // Deliberately not in the URL — a connection is an account fact, not a view.
+  const [espnOpen, setEspnOpen] = useState(false);
+  const [espnStatus, setEspnStatus] = useState<EspnStatus | null>(null);
+  const [ownership, setOwnership] = useState<EspnOwnership | null>(null);
+  const [espnLoading, setEspnLoading] = useState(false);
+  const [espnError, setEspnError] = useState<string | null>(null);
+  /** Why an invite link didn't work, shown on the page it opens. */
+  const [espnJoinError, setEspnJoinError] = useState<string | null>(null);
+
+  // Settled either way — read or failed. The report waits on this rather than
+  // on the status itself, so a failed read doesn't leave a `roster=fantasy`
+  // session waiting forever for an answer that isn't coming.
+  const [espnStatusSettled, setEspnStatusSettled] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .espn()
+      .then((s) => {
+        if (!cancelled) setEspnStatus(s);
+      })
+      // Not banner-worthy: with no status the board simply doesn't offer the
+      // pill, which is what an unconnected user sees anyway.
+      .catch((e: Error) => console.error('ESPN status unavailable:', e.message))
+      .finally(() => {
+        if (!cancelled) setEspnStatusSettled(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /**
+   * An invite link (`?league=<code>`) hands this user a leaguemate's
+   * connection. Redeemed once on load, before anything else asks about a
+   * league — and the page is then **opened**, rather than the app quietly
+   * changing state behind them: a link that silently rewires where your player
+   * list comes from is a surprise, and they have to pick their team anyway.
+   *
+   * The param needs no cleanup of its own: `App`'s URL sync writes the whole
+   * query string from the view state, and `league` isn't part of it, so the
+   * first sync drops it. That also means a reload can't redeem it twice.
+   */
+  const inviteCode = initialParams.get('league');
+  useEffect(() => {
+    if (!inviteCode) return;
+    let cancelled = false;
+    api
+      .joinEspn(inviteCode)
+      .then((s) => {
+        if (cancelled) return;
+        setEspnStatus(s);
+        setEspnOpen(true);
+      })
+      .catch((e: Error) => {
+        if (cancelled) return;
+        // Opened anyway, with the reason: an expired link that does nothing at
+        // all leaves someone staring at an app that ignored what they clicked.
+        setEspnJoinError(e.message);
+        setEspnOpen(true);
+      })
+      .finally(() => {
+        if (!cancelled) setEspnStatusSettled(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [inviteCode]);
+
+  const espnConnected = espnStatus?.connected === true;
+  const espnLeagueId = espnStatus?.connected ? espnStatus.leagueId : null;
+  const espnTeamId = espnStatus?.connected ? espnStatus.teamId : null;
+  const espnTeamName = espnStatus?.connected ? espnStatus.teamName : null;
+
+  /** Who is rostered in the connected league. The previous read is deliberately
+   *  left in place while this one is in flight, so a re-read doesn't blank a
+   *  table the user is reading. */
+  const loadOwnership = useCallback(() => {
+    setEspnLoading(true);
+    setEspnError(null);
+    api
+      .espnOwnership()
+      .then(setOwnership)
+      .catch((e: Error) => setEspnError(e.message))
+      .finally(() => setEspnLoading(false));
+  }, []);
+
+  /**
+   * Read lazily, and only for the board that needs it: the rosters are
+   * irrelevant until someone asks which players are free.
+   *
+   * This fires on **every entry** to the free-agent board rather than once a
+   * session, and that is the point — a roster changes whenever anyone in the
+   * league makes a move, so a set read at breakfast is the wrong answer by
+   * lunchtime. It costs nothing to re-ask: the server holds its own ten-minute
+   * cache, which is the single place freshness is decided, and repeats inside
+   * it are a lookup. The dependency list is exactly the set of things that can
+   * *be* an entry, so nothing else here re-triggers it — and deliberately not
+   * `ownership` or `espnLoading`, either of which would re-run the effect on
+   * its own result and spin.
+   */
+  useEffect(() => {
+    if (view !== 'research' || researchScope !== 'fa' || !espnConnected) return;
+    loadOwnership();
+  }, [view, researchScope, espnConnected, espnLeagueId, loadOwnership]);
+
+  // A different league (or a disconnect) invalidates the whole set.
+  useEffect(() => {
+    setOwnership(null);
+    setEspnError(null);
+  }, [espnLeagueId]);
+
+  const ownedIds = useMemo(
+    () => (ownership ? new Set(Object.keys(ownership.owned).map(Number)) : null),
+    [ownership],
+  );
+
+  // The fantasy roster itself — the slot chips, and the list the reorder screen
+  // and the adder must not pretend to edit. Only read while it is in use.
+  const [fantasyRoster, setFantasyRoster] = useState<EspnRoster | null>(null);
+  const usingFantasy = rosterSource === 'fantasy' && espnConnected;
+
+  useEffect(() => {
+    if (!usingFantasy) return;
+    let cancelled = false;
+    api
+      .espnRoster()
+      .then((r) => {
+        if (!cancelled) setFantasyRoster(r);
+      })
+      // The report request carries the same failure and banners it; a second
+      // copy of the same message would only say it twice.
+      .catch((e: Error) => console.error('fantasy roster unavailable:', e.message));
+    return () => {
+      cancelled = true;
+    };
+  }, [usingFantasy, espnLeagueId, start, end]);
+
+  /** Slot by player key, for the chips. Null when the views are reading the
+   *  saved watchlist, which is what makes every chip in the app disappear. */
+  const fantasySlots = useMemo(() => {
+    if (!usingFantasy || !fantasyRoster) return null;
+    const map = new Map<string, FantasySlot>();
+    for (const p of fantasyRoster.players) {
+      if (p.mlbId === null) continue;
+      for (const kind of p.kinds) {
+        map.set(`${kind}-${p.mlbId}`, { slot: p.slot, starting: p.starting });
+      }
+    }
+    return map;
+  }, [usingFantasy, fantasyRoster]);
+
+  /**
+   * The keys "my players" means on screen — the saved watchlist, or the fantasy
+   * roster when that is what the views are reading. This is what the research
+   * board's `My Players` scope selects on and what its ✓ marks, so both follow
+   * whichever list is actually being shown.
+   *
+   * Deliberately *not* what `PlayerAdder` dedupes against, which stays the
+   * saved list: that control's button adds to the saved list whatever mode the
+   * app is in, and it should show the state of the thing it changes.
+   */
+  const watchedKeys = useMemo(() => {
+    if (fantasySlots) return new Set(fantasySlots.keys());
+    return new Set(watchlist.map(playerKey));
+  }, [watchlist, fantasySlots]);
+
+  /** ESPN's global rostered percentage by MLB id, or null with no league —
+   *  which is also what turns the board's `Ros%` column on and off. */
+  const rosterPct = useMemo(() => {
+    if (!espnConnected || !ownership) return null;
+    const map = new Map<number, number>();
+    for (const [id, pct] of Object.entries(ownership.rosterPct)) map.set(Number(id), pct);
+    return map;
+  }, [espnConnected, ownership]);
+
+  /**
+   * Read the ownership map for the two surfaces that want roster % — the
+   * research board and the player page — as well as the free-agent filter that
+   * already asked for it.
+   *
+   * Unlike that one this fires **once**: roster % is ESPN's season-wide figure
+   * and moves by a fraction of a point a day, where a league's rosters change
+   * the moment anyone makes a move. Every guard here is a terminal state
+   * (loaded, failed, or in flight), so the effect cannot re-trigger on its own
+   * result.
+   */
+  useEffect(() => {
+    if (!espnConnected || ownership || espnLoading || espnError) return;
+    if (view !== 'research' && detailsKey === null) return;
+    loadOwnership();
+  }, [espnConnected, ownership, espnLoading, espnError, view, detailsKey, loadOwnership]);
+
+  /** How each roster % has moved lately, and over how long. Null without a
+   *  league, and also when the server has no baseline yet. */
+  const rosterTrend = useMemo(() => {
+    if (!espnConnected || !ownership?.trend) return null;
+    const map = new Map<number, number>();
+    for (const [id, d] of Object.entries(ownership.trend.delta)) map.set(Number(id), d);
+    return { delta: map, days: ownership.trend.days };
+  }, [espnConnected, ownership]);
+
+  /**
+   * The board's rows with roster % merged in. Client-side because the research
+   * board is cached per kind and window and served to every user alike, while
+   * this number is only shown to someone with a league connected — folding it
+   * into that blob would make a shared cache carry a per-user concern.
+   */
+  const researchRows = useMemo(() => {
+    const rows = research[researchCacheKey] ?? [];
+    if (!rosterPct) return rows;
+    return rows.map((r) => ({
+      ...r,
+      rosterPct: rosterPct.get(r.id) ?? null,
+      // Absent from the delta map means "hasn't moved", not "unknown": the
+      // server drops zeroes to keep the blob small, so a player with a roster %
+      // and no entry really is flat.
+      rosterTrend: rosterTrend ? (rosterPct.has(r.id) ? rosterTrend.delta.get(r.id) ?? 0 : null) : null,
+    }));
+  }, [research, researchCacheKey, rosterPct, rosterTrend]);
+
+  const openEspnSettings = useCallback(() => {
+    setSettingsOpen(false);
+    setEspnOpen(true);
+  }, []);
+
+  /** Stable, because the settings page has an effect that depends on it — an
+   *  inline arrow would hand that effect a new identity on every render. */
+  const onEspnStatusChange = useCallback((s: EspnStatus) => {
+    setEspnStatus(s);
+    // A fresh connection (or a disconnect) makes whatever was read before
+    // wrong; the board re-reads when it next needs it.
+    setOwnership(null);
+    setEspnError(null);
+  }, []);
   // The settings popover (gear next to the title) — the hide-injured toggle
   // (and the simulate one, when it's shown), then the way into the how-to page.
   // Closes on outside click or Escape.
@@ -486,6 +764,7 @@ export default function App() {
     }
     if (simulate) p.set('sim', '1');
     if (hideInjured) p.set('hideil', '1');
+    if (rosterSource === 'fantasy') p.set('roster', 'fantasy');
     if (helpOpen) p.set('help', '1');
     window.history.replaceState(null, '', `?${p.toString()}`);
   }, [
@@ -503,6 +782,7 @@ export default function App() {
     researchKind,
     simulate,
     hideInjured,
+    rosterSource,
     helpOpen,
   ]);
 
@@ -588,20 +868,28 @@ export default function App() {
     (quiet = false) => {
       if (!quiet) setReportLoading(true);
       api
-        .report(start, end)
+        .report(start, end, usingFantasy ? 'fantasy' : 'watchlist')
         .then((r) => setReports(r.players))
         .catch((e: Error) => setError(e.message))
         .finally(() => {
           if (!quiet) setReportLoading(false);
         });
     },
-    [start, end],
+    [start, end, usingFantasy],
   );
 
-  // Refresh report when date or watchlist changes.
+  // Refresh report when the date range, the watchlist, or which list is being
+  // read changes. `watchlist` is still a dependency in fantasy mode — it costs
+  // one refetch on a change that can't happen while the editor is hidden, and
+  // dropping it would mean a switch back showing the pre-edit list.
   useEffect(() => {
+    // A session that opens on `roster=fantasy` waits for the connection status
+    // first. Firing now would read the saved watchlist, render it, and replace
+    // it a moment later — a flash of the wrong list of players, which is worse
+    // than a slightly longer spinner.
+    if (rosterSource === 'fantasy' && !espnStatusSettled) return;
     loadReport();
-  }, [loadReport, watchlist]);
+  }, [loadReport, watchlist, rosterSource, espnStatusSettled]);
 
   // The reports as rendered: the real ones, or a synthetic live-day overlay when
   // the demo toggle is on. Everything downstream (nav, cards, feed, the live
@@ -870,6 +1158,16 @@ export default function App() {
   // which one to press. That is also why it is a fully-round pill — in this app
   // that shape means "label", and anything you can click takes the control
   // radius instead.
+  /** Says whose list is on screen, for the same reason `dateBadge` says which
+   *  days: with the source behind a menu, this is the only thing on the page
+   *  explaining why the player list is not the one you built. A label, not a
+   *  control — the round pill the app reserves for things you read. */
+  const fantasyBadge = usingFantasy ? (
+    <span className="date-badge fantasy-badge" title="Reading your ESPN fantasy roster">
+      {fantasyRoster?.teamName ?? espnTeamName ?? 'Fantasy team'}
+    </span>
+  ) : null;
+
   const dateBadge = (
     <span className="date-badge">
       <svg
@@ -945,8 +1243,11 @@ export default function App() {
         </svg>
       </button>
       {/* Opens the reorder screen in place of the player list. Hidden until
-          there's more than one player to put in an order. */}
-      {reports.length > 1 && (
+          there's more than one player to put in an order — and while the views
+          are reading the fantasy roster, where there is no order of ours to
+          edit and no player of ours to remove. ESPN owns that list; a screen
+          offering to rearrange it would be offering something it can't do. */}
+      {reports.length > 1 && !usingFantasy && (
         <button
           type="button"
           className={`edit-order-btn${editMode ? ' active' : ''}`}
@@ -1099,6 +1400,7 @@ export default function App() {
        which reads it, so the cards, the feed, the player page and the highlight
        reel are all covered without any of them handling the value. */
     <MutedContext.Provider value={muteAudio}>
+    <FantasyRosterContext.Provider value={fantasySlots}>
     <div
       className={`app${view === 'summary' ? ' summary-mode' : ''}${
         view === 'research' ? ' research-mode' : ''
@@ -1184,9 +1486,54 @@ export default function App() {
                   <span className="settings-dot" aria-hidden="true" />
                   Mute clip audio
                 </button>
-                {/* The checkable toggle(s) read together above; this one is a
-                    way out of the menu, so it sits below them and beside Sign
-                    out. */}
+                {/* Only offered once a league is connected and a team is known
+                    — without both there is no roster for it to switch to, and a
+                    toggle that can only fail is worse than no toggle. */}
+                {espnConnected && espnTeamId !== null && (
+                  <button
+                    type="button"
+                    className={`settings-toggle${usingFantasy ? ' active' : ''}`}
+                    role="menuitemcheckbox"
+                    aria-checked={usingFantasy}
+                    onClick={() =>
+                      setRosterSource(rosterSource === 'fantasy' ? 'watchlist' : 'fantasy')
+                    }
+                    title={
+                      espnTeamName
+                        ? `Read the Summary, Games and Feed views off ${espnTeamName} instead of your watchlist`
+                        : 'Read the watchlist views off your fantasy roster'
+                    }
+                  >
+                    <span className="settings-dot" aria-hidden="true" />
+                    Use my fantasy team
+                  </button>
+                )}
+                {/* Below the toggles with the how-to button: both open a page
+                    rather than flipping a setting, so they read as the menu's
+                    two ways *out* of it. */}
+                <button
+                  type="button"
+                  className="help-btn espn-menu-btn"
+                  role="menuitem"
+                  onClick={openEspnSettings}
+                  title="Connect an ESPN fantasy league — adds a Free Agents filter to the research board"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="15"
+                    height="15"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M4.5 7.5A7.5 7.5 0 0 1 8 15M19.5 7.5A7.5 7.5 0 0 0 16 15" />
+                  </svg>
+                  {espnConnected ? 'Fantasy league ✓' : 'Fantasy league'}
+                </button>
                 <button
                   type="button"
                   className="help-btn"
@@ -1376,6 +1723,7 @@ export default function App() {
                   does not. */}
               {view !== 'research' && kindTabs}
               {view !== 'research' && dateBadge}
+              {view !== 'research' && fantasyBadge}
             </div>
           )}
         </div>
@@ -1455,7 +1803,7 @@ export default function App() {
              to the other board (OF → SP) starts fresh rather than carrying a
              batter's column vocabulary onto a pitcher's table. */
           key={researchKind}
-          rows={research[researchCacheKey] ?? []}
+          rows={researchRows}
           kind={researchKind}
           loading={researchLoading && !research[researchCacheKey]}
           error={researchError}
@@ -1469,6 +1817,13 @@ export default function App() {
           onWindowChange={setResearchWindow}
           scope={researchScope}
           onScopeChange={setResearchScope}
+          hasRosterPct={rosterPct !== null}
+          trendDays={rosterTrend?.days ?? null}
+          ownedIds={ownedIds}
+          espnConnected={espnConnected}
+          espnLoading={espnLoading}
+          espnError={espnError}
+          onConnectEspn={openEspnSettings}
           watchedKeys={watchedKeys}
           onOpenDetails={setDetailsKey}
         />
@@ -1591,6 +1946,12 @@ export default function App() {
           position={detailsPlayer.position}
           isPitcher={detailsPlayer.kind === 'pitcher'}
           isWatched={detailsWatched}
+          rosterPct={rosterPct ? rosterPct.get(detailsPlayer.id) ?? null : undefined}
+          rosterTrend={
+            rosterTrend && rosterPct?.has(detailsPlayer.id)
+              ? { change: rosterTrend.delta.get(detailsPlayer.id) ?? 0, days: rosterTrend.days }
+              : undefined
+          }
           onAdd={() =>
             onAdd({
               id: detailsPlayer.id,
@@ -1607,7 +1968,17 @@ export default function App() {
       {/* Last, and above the player page in the stack: opened from a link it can
           sit over an already-open details view, and closing it puts that back. */}
       {helpOpen && <Tutorial onClose={() => setHelpOpen(false)} />}
+
+      {espnOpen && (
+        <EspnSettings
+          status={espnStatus}
+          joinError={espnJoinError}
+          onStatusChange={onEspnStatusChange}
+          onClose={() => setEspnOpen(false)}
+        />
+      )}
     </div>
+    </FantasyRosterContext.Provider>
     </MutedContext.Provider>
   );
 }

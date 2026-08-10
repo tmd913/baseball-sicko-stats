@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { PlayerGame, PlayerReport, RosterStatus } from '../types';
 import { playerKey } from '../types';
+import { FantasySlotTag } from './FantasySlot';
 import { useScrollIntoViewOnExpand } from '../hooks';
 import {
   absenceLabel,
@@ -394,21 +395,27 @@ export function DoubleheaderTag({ games }: { games: PlayerGame[] }) {
   );
 }
 
-/** Player name with the fielding position (and any roster-status flag) beside it. */
+/** Player name with the fielding position (and any roster-status flag) beside
+ *  it — plus the fantasy lineup slot, when the views are reading a fantasy
+ *  roster. `playerKey` is only needed for that last one, which is why it is
+ *  optional: a caller with no key simply gets the name as before. */
 export function PlayerName({
   name,
   position,
   status,
+  playerKey,
 }: {
   name: string;
   position?: string;
   status?: RosterStatus | null;
+  playerKey?: string;
 }) {
   return (
     <span className="player-name">
       {name}
       {position && <span className="player-pos">{position}</span>}
       <RosterStatusTag status={status ?? null} />
+      {playerKey && <FantasySlotTag playerKey={playerKey} />}
     </span>
   );
 }
@@ -438,7 +445,12 @@ export function PlayerCard({
         <div className="player-head">
           <Headshot id={report.id} name={report.name} onOpen={() => onOpenDetails(playerKey(report))} />
           <div className="player-id">
-            <PlayerName name={report.name} position={position} status={report.rosterStatus} />
+            <PlayerName
+              name={report.name}
+              position={position}
+              status={report.rosterStatus}
+              playerKey={playerKey(report)}
+            />
             {meta && <span className="player-meta">{meta}</span>}
           </div>
           <div className="player-summary">
@@ -490,7 +502,12 @@ export function PlayerCard({
         role={role}
       />
       <div className="player-id">
-        <PlayerName name={report.name} position={position} status={report.rosterStatus} />
+        <PlayerName
+              name={report.name}
+              position={position}
+              status={report.rosterStatus}
+              playerKey={playerKey(report)}
+            />
         <span className="player-meta">
           {report.seasonStats
             ? seasonStatsSummary(report.seasonStats)
