@@ -74,6 +74,16 @@ body {
   margin: 0 auto;
   padding: 14px 22px 80px;
 }
+/* A viewport-tall table pane ends the page — there is nothing below it worth
+   scrolling to, and 80px of padding under it is 80px of scroll that only slides
+   the pane back off the top (see the note above `.summary-view`). Matched with
+   `:has()` rather than a class on `.app`, so which view is on screen stays a
+   fact about what got rendered rather than something two files have to agree
+   on. */
+.app:has(.summary-scroll),
+.app:has(.research-scroll) {
+  padding-bottom: 0;
+}
 
 /* ---- Header ---- */
 .app-header {
@@ -2272,6 +2282,12 @@ body {
   background: var(--bg);
   padding: 20px 16px 64px;
 }
+/* As `.app` above: the Game Log's pane is as tall as the overlay, so the 64px
+   under it is scroll that would only unpin it. The gap below the Load-more
+   button comes from that button's own margin instead. */
+.details-view:has(.glog-scroll) {
+  padding-bottom: 0;
+}
 .reel-head {
   display: flex;
   align-items: center;
@@ -2802,19 +2818,28 @@ body {
 /* The details view's Game Log tab: one row per game of the season, newest
    first. Wider than the other tabs' reading column — it's a stat table, and on
    a phone it scrolls sideways inside its own box rather than pushing the page. */
+/* `display: contents` for the reason `.summary-view` has it: the pane below is
+   sticky, and a wrapper that hugs it leaves it nowhere to shift. Dropping this
+   box makes the overlay the containing block, so the head and tabs above the
+   table are the room the pane needs to stay pinned. The reading column it used
+   to set moves onto its two children — wider than the other tabs' 860px,
+   because this one has fourteen columns and at 860 the last of them fell off
+   the right of a laptop the moment the gutters got any room. */
 .details-gamelog {
-  /* Wider than the other tabs' 860px reading column: this one has fourteen
-     columns, and at 860 the last of them fell off the right of a laptop the
-     moment the gutters got any room. */
+  display: contents;
+}
+/* The pane, in the overlay's coordinates rather than the page's: it scrolls in
+   both axes, its header sticks to it, and it is itself stuck to the top of the
+   overlay once the head and tabs have scrolled away. `100dvh` less the
+   overlay's own 20px top padding and the same again below, so the pane ends
+   where the screen does rather than under it. */
+.glog-scroll {
   max-width: 1000px;
   margin: 0 auto;
-}
-/* No scroll box of its own — the overlay scrolls, in both axes, and the header
-   row sticks to it (see `.glog-table thead th`). As wide as its table so the
-   border wraps the content rather than stopping at the window edge. */
-.glog-scroll {
-  width: max-content;
-  min-width: 100%;
+  position: sticky;
+  top: 0;
+  max-height: calc(100dvh - 40px);
+  overflow: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg);
@@ -2847,11 +2872,9 @@ body {
   background: var(--panel-2);
 }
 .glog-table thead th {
-  /* Sticky against the overlay, which is the scroll container in both axes.
-     This tab used to reshape the overlay into a fixed-height column so the
-     table's own box could scroll and the header could stick to *that*; the box
-     is gone, so the whole tab scrolls as every other tab does and the header
-     pins to the top of the overlay on the way. */
+  /* Sticky against `.glog-scroll`, which scrolls in both axes — and which is
+     itself sticky to the top of the overlay, so the header ends up at the top
+     of the screen while the overlay is what the reader scrolls. */
   position: sticky;
   top: 0;
   z-index: 2;
@@ -2988,10 +3011,12 @@ body {
   text-transform: uppercase;
 }
 .glog-more {
-  flex: none;
   display: block;
   width: 100%;
-  margin-top: 12px;
+  max-width: 1000px;
+  /* Its own bottom gap, the overlay having given up its padding — see
+     `.details-view:has(.glog-scroll)`. */
+  margin: 12px auto 20px;
   padding: 10px 14px;
   min-height: var(--control-h);
   border: 1px solid var(--border);
@@ -3681,37 +3706,57 @@ body {
   letter-spacing: -0.02em;
 }
 
-/* ---- Summary view: a full-page stat table ----
+/* ---- Summary view: a sticky, viewport-tall table pane ----
 
-   **The page scrolls, and the table's own box does not.** These tables used to
-   live in a scroll box of their own inside a `height: 100dvh` app — the only
-   way to have a sticky header while the columns also scrolled sideways, since
-   an `overflow-x` container scrolls in both axes whether you want it to or not,
-   and a header can only stick to the box that actually scrolls.
+   Three things are wanted at once and CSS gives you any two: the **page** must
+   scroll (so a phone collapses its address bar and the rubber-band at the end
+   of a table is the page's), the **header row** must stick, and the table's
+   sideways scroll must stay **inside the table** rather than dragging the
+   chrome off the screen with it.
 
-   The cost of that was the whole page: nothing outside the box moved, so a
-   phone never collapsed its address bar, the scroll never chained anywhere, and
-   the rubber-band at the end of a table was the box's rather than the page's.
+   They fight because a sticky header can only stick to the box that actually
+   scrolls, and an `overflow-x` container is a scroll container in *both* axes
+   whether you want it to or not — so a header inside a horizontally-scrolling
+   box cannot stick to anything outside that box. Measured, not assumed: a
+   screen-width `overflow-x: auto` wrapper tall enough for all its rows keeps
+   the horizontal scroll in and pins the left-hand column, and its header
+   scrolls straight off the top with the page (`overflow-y: clip` behaves
+   identically — `clip` is not `visible`, so the box is still a scroll
+   container).
 
-   So the box is gone and the **document** is the scroll container in both axes.
-   Every `position: sticky` in these tables now resolves against the viewport,
-   which is what makes the header row and the pinned columns work while the
-   page itself scrolls. The consequence is that a table wider than the window
-   scrolls the *page* sideways, chrome and all — that is the trade, and it is
-   the one the ask makes: there is no CSS that keeps horizontal scrolling inside
-   a box while a header inside that box sticks to something outside it. */
+   The pane below is the shape that gives all three. The wrapper keeps its own
+   scroll — so the header sticks to *it* and the horizontal scroll stays in —
+   and is itself `position: sticky` at viewport height, so the page scrolls the
+   chrome away first and the table then fills the screen. The page is a real
+   scroller; the table never scrolls the page sideways.
+
+   **A sticky box shifts *down* within its containing block**, so the room it
+   needs is the space **below** it, not the chrome above — which is the thing
+   this got wrong first time and the measurement caught: with `.app`'s 80px of
+   bottom padding under it the pane had nowhere to shift (padding is outside the
+   content box), so it never pinned at all and slid 80px off the top at the end
+   of the page. Two rules follow, and both matter:
+
+   - `display: contents` on the wrapper, so `.app` is the containing block
+     rather than a box that hugs the pane and gives it a budget of zero.
+   - **`.app` drops its bottom padding while a pane is on screen** (the `:has()`
+     rule below). A viewport-tall pane has nothing worth scrolling past, so the
+     page's scroll range becomes exactly the height of the chrome above it: the
+     pane reaches the top of the screen precisely as the page runs out, and
+     stays there. `position: sticky` then has nothing left to do here — it is
+     kept because the Game Log *does* have content below its pane (the Load-more
+     button), and one shape for all three beats two. */
 
 .summary-view {
-  display: flex;
-  align-items: flex-start;
+  display: contents;
 }
-/* As wide as its table, so the border wraps the content rather than stopping at
-   the window; `min-width: 100%` keeps it spanning the page when the table is
-   narrower than that. Overflowing this box is what widens the document, which
-   is what gives the page its horizontal scroll. */
 .summary-scroll {
-  width: max-content;
-  min-width: 100%;
+  position: sticky;
+  top: 0;
+  /* Grow to content, but no taller than the screen — past that it scrolls
+     inside itself, which is what the sticky header sticks to. */
+  max-height: 100dvh;
+  overflow: auto;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--bg);
@@ -3779,8 +3824,9 @@ body {
 .summary-table td:last-child {
   padding-right: clamp(10px, 3vw, 32px);
 }
-/* Header row sticks to the top of the **viewport** while the page scrolls (see
-   the note above `.summary-view` — the table has no scroll box of its own). */
+/* Header row sticks to the top of the pane — which is itself stuck to the top
+   of the viewport once the chrome has scrolled away. See the note above
+   `.summary-view`. */
 .summary-table thead th {
   position: sticky;
   top: 0;
@@ -3795,9 +3841,7 @@ body {
 /* Only the headshot column sticks to the left while scrolling horizontally — the
    name scrolls away with the rest, so the stat columns get the room on a narrow
    screen. The soft right-edge shadow reads as a pinned edge as columns slide
-   underneath. `left: 0` is the window's edge rather than the app's 22px gutter:
-   the pinned block hugging the edge is what a pinned column looks like
-   everywhere else, and on a phone it is 22px the stats get to keep. */
+   underneath. */
 .summary-table .sum-img-col {
   position: sticky;
   left: 0;
@@ -4084,12 +4128,16 @@ body {
   flex-direction: column;
   gap: 10px;
 }
-/* As `.summary-scroll`: as wide as its table so the border wraps it, and no
-   scroll box of its own — the page scrolls, in both axes, and every sticky cell
-   in the table resolves against the viewport. */
+/* The same pane as `.summary-scroll` — sticky, viewport-tall, scrolling in both
+   axes inside itself. Its containing block is `.research-view` rather than
+   `.app`, which is the room it needs and has: the control bar and the count
+   line sit above it inside that block, and the pane only has to outlast the
+   page's remaining scroll once it pins. */
 .research-scroll {
-  width: max-content;
-  min-width: 100%;
+  position: sticky;
+  top: 0;
+  max-height: 100dvh;
+  overflow: auto;
   border: 1px solid var(--border);
   border-radius: var(--control-radius);
   background: var(--bg);
