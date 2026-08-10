@@ -165,10 +165,13 @@ body {
   background-clip: text;
   color: transparent;
 }
+/* Left-aligned, because these open as a row of the view bar under the tabs
+   rather than hanging off the right edge of the header, which is where they
+   used to be and what the flex-end alignment was for. */
 .date-control {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: 8px;
 }
 .date-row {
@@ -176,7 +179,7 @@ body {
   align-items: center;
   gap: 14px;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 /* The presets are a segmented control, not a row of separate buttons: they take
    the view/kind tabs' rules wholesale (see .view-switch / .view-tab), so the
@@ -184,7 +187,6 @@ body {
    merely resembling it. Only the row's own alignment lives here. */
 .date-presets {
   flex-wrap: nowrap;
-  justify-content: flex-end;
 }
 .date-preset {
   white-space: nowrap;
@@ -227,9 +229,6 @@ body {
   .date-control {
     align-items: stretch;
     width: 100%;
-  }
-  .date-row {
-    justify-content: flex-start;
   }
   /* Specific enough to beat the shared .view-switch rule below, which sets
      `display: inline-flex` and, being later in the file, would otherwise win
@@ -3384,25 +3383,23 @@ body {
   align-items: center;
   gap: 10px 12px;
 }
-/* The third tier — Roster's own Summary / Games / Feed — on a row of its own
-   under the two above. `flex: 1 1 100%` is the whole of "its own row": the view
-   bar already wraps, so claiming the full basis puts this on the next line at
-   every width rather than letting it ride up beside the section tabs when the
-   window happens to be wide (the same trick `.app.date-open .date-control`
-   uses for the date row). */
-.view-bar-sub {
-  flex: 1 1 100%;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 12px;
+/* Every group in that row is atomic: `flex: none` so none of them shrinks, and
+   the wrap then fits as many whole groups per line as the width allows and
+   breaks *between* two rather than inside one. That is the whole layout rule —
+   the roster tabs took a forced row of their own for a while (`flex: 1 1 100%`,
+   which reads as "its own line" in a wrapping bar), and a fixed break costs a
+   desktop a line it has the room for and doesn't save a phone one. Nothing here
+   pins which group lands where; the window decides. */
+.view-bar-tabs > * {
+  flex: none;
 }
-/* The date badge — see `dateBadge` in App.tsx. Shown at every width, because at
-   every width the date controls are behind the calendar button and this is the
-   only thing on the page saying which days its numbers are drawn from. Round
-   because it is a label: in this app that shape is reserved for things you
-   read, and anything you can press takes --control-radius. */
-.date-badge {
+/* The view bar's label pill. Round because it is a label: in this app that
+   shape is reserved for things you read, and anything you can press takes
+   --control-radius — which is what keeps it from reading as one more tab group
+   on the row it sits at the end of. It was `.date-badge` and carried the date
+   range as well; the calendar button says that itself now (`dateToggle`), so
+   the fantasy chip is what is left. */
+.bar-badge {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -3415,7 +3412,7 @@ body {
   font-weight: 700;
   white-space: nowrap;
 }
-.date-badge svg {
+.bar-badge svg {
   color: var(--faint);
   flex: none;
 }
@@ -3480,6 +3477,9 @@ body {
 .date-toggle,
 .search-bar-close {
   flex: none;
+  /* The calendar is the one member that is never a square — see .date-toggle
+     below — but it takes everything else here, so the button that ends the tab
+     row is the same height, corner, fill and hover as the chrome it left. */
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3530,23 +3530,20 @@ body {
 }
 /* Above 640px the search field is on screen and speaks for itself, so the
    magnifier would be a second way to reach what is already there, and the bar
-   it opens has nothing to add. The calendar is not in this list: the date
-   controls are behind it at *every* width now, so it is always a real control. */
+   it opens has nothing to add. */
 .search-toggle,
 .search-bar {
   display: none;
 }
 /* The date presets and the range picker are a disclosure at every width, not
-   just on a phone. They are the widest thing in the header by some way — 576px
-   of pills and picker against a 1136px content width — and they are set once
-   and then read for the rest of a session, which is the shape of a thing that
-   belongs behind a button. Folding them away is what lets the brand, the 418px
-   search field, Edit and the calendar share one line on a desktop.
+   just on a phone. They are 576px of pills and picker against a 1136px content
+   width — easily the widest thing in the chrome — and they are set once and
+   then read for the rest of a session, which is the shape of a thing that
+   belongs behind a button.
 
-   .app-header already wraps, so `flex: 1 1 100%` is the whole of "open as its
-   own row"; it keeps the base `align-items: flex-end` on a wide screen, which
-   sits the row under the calendar that opened it, and the narrow block below
-   stretches it instead. */
+   `.view-bar` already wraps, so `flex: 1 1 100%` is the whole of "open as its
+   own row", directly under the tab row whose last item is the button that
+   opened it. */
 .date-control {
   display: none;
 }
@@ -3565,19 +3562,37 @@ body {
   font-size: 13px;
   font-weight: 700;
 }
+/* The calendar carries the range it opens — "Today", or "8/1 – 8/9" — so it is
+   never the square the list above gives it, at any width. Where Edit drops its
+   word on a phone, this one keeps its label: the label is the only thing on the
+   page saying which days every number on it is drawn from, and the icon alone
+   would leave that unsaid. `white-space: nowrap` because it sits in a wrapping
+   row and must break to the next line whole rather than fold in half. */
+.date-toggle {
+  width: auto;
+  padding: 7px 13px;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.date-toggle svg {
+  flex: none;
+  color: var(--faint);
+}
+.date-toggle:hover svg,
+.date-toggle.active svg {
+  color: inherit;
+}
 
-/* Below 640px the date controls are the widest thing in the header by some way
-   — a preset dropdown and a range button, on a line the brand and three icons
-   have already taken. They go behind .date-toggle and come back as their own
-   full-width line: .app-header already wraps, so `flex: 1 1 100%` is all "a bar
-   across the top" takes, and the controls are rendered once either way rather
-   than duplicated into a second location. */
+/* The phone header: the field goes behind the magnifier and Edit loses its
+   word, leaving the brand and two squares on one line. */
 @media (max-width: 640px) {
-  /* The brand and the three icons make one line at 390px with about five
-     pixels to spare, and only with these two tightened: the gear joining the
-     36px squares grew the brand by 4px, which was exactly enough to wrap the
-     cluster onto a second line. Tighter spacing inside each group is cheaper
-     than a line of header on a phone, and a 6px cluster reads as a set. */
+  /* The brand and the icons make one line at 390px with room to spare, and
+     only with these two tightened: the gear joining the 36px squares grew the
+     brand by 4px, which was exactly enough to wrap the cluster onto a second
+     line. Tighter spacing inside each group is cheaper than a line of header on
+     a phone, and a 6px cluster reads as a set. */
   .brand {
     gap: 9px;
   }
@@ -3646,15 +3661,15 @@ body {
    dropped from the JSX because it is one statement of one idea — in this mode
    the chrome is not there — where the equivalent is five conditionals scattered
    through the render. It has to come after the rules it overrides, which is why
-   it sits below .view-bar rather than up with the header.
+   it sits below .view-bar rather than up with the header. The calendar and the
+   date row it opens are not named: they are inside .view-bar now, and hiding
+   their container hides them.
 
    The error banner is deliberately *not* in this list: a mode is no reason to
    stop telling someone the report failed. */
 .app.edit-mode .settings-menu,
-.app.edit-mode .date-control,
 .app.edit-mode .view-bar,
 .app.edit-mode .search-toggle,
-.app.edit-mode .date-toggle,
 .app.edit-mode .refreshing {
   display: none;
 }
@@ -6183,8 +6198,8 @@ body {
   color: var(--accent);
 }
 /* The view-bar chip naming the team whose roster is on screen. Takes
-   `.date-badge` outright — same shape, same job, one row apart — and differs
-   only in the accent that marks it as the fantasy source. */
+   `.bar-badge` outright — same shape, same job — and differs only in the accent
+   that marks it as the fantasy source. */
 .fantasy-badge {
   border-color: rgba(56, 189, 248, 0.4);
   color: var(--accent);

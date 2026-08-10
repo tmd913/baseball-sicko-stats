@@ -33,7 +33,7 @@ import {
 import type { ResearchPos, ResearchScope } from './components/ResearchTable';
 import { simulateLiveDay } from './simulate';
 import { PlayerDetails } from './components/PlayerDetails';
-import { DateRangePicker, shortRange } from './components/DateRangePicker';
+import { DateRangePicker, numericRange } from './components/DateRangePicker';
 import { FantasyRosterContext, MutedContext } from './hooks';
 import type { FantasySlot } from './hooks';
 import { Tutorial } from './components/Tutorial';
@@ -1217,57 +1217,25 @@ export default function App() {
       </button>
     </div>
   ) : null;
-  // What the date controls would say if they were on screen. Below 640px they
-  // are behind the calendar icon, so the range the whole page is reporting on
-  // has nothing showing it — every number on every card is drawn from a span
-  // the user can no longer see. This says it, in the view bar beside the roster
-  // tabs — the three views it qualifies — at every width, the date controls
-  // being behind the calendar at every width.
-  //
-  // A label, not a control: the calendar is two inches away and already opens
-  // the row, and a second thing that does the same job is a question about
-  // which one to press. That is also why it is a fully-round pill — in this app
-  // that shape means "label", and anything you can click takes the control
-  // radius instead.
-  /** Says whose list is on screen, for the same reason `dateBadge` says which
+  /** Says whose list is on screen, for the same reason the calendar says which
    *  days: with the source behind a menu, this is the only thing on the page
    *  explaining why the player list is not the one you built. A label, not a
-   *  control — the round pill the app reserves for things you read. */
+   *  control — the fully-round pill the app reserves for things you read, which
+   *  is what keeps it from reading as a fourth tab group on the row it ends. */
   const fantasyBadge = usingFantasy ? (
-    <span className="date-badge fantasy-badge" title="Reading your ESPN fantasy roster">
+    <span className="bar-badge fantasy-badge" title="Reading your ESPN fantasy roster">
       {fantasyRoster?.teamName ?? espnTeamName ?? 'Fantasy team'}
     </span>
   ) : null;
 
-  const dateBadge = (
-    <span className="date-badge">
-      <svg
-        viewBox="0 0 24 24"
-        width="12"
-        height="12"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
-        <rect x="3" y="4" width="18" height="17" rx="2" />
-        <path d="M3 9h18M8 2v4M16 2v4" />
-      </svg>
-      {/* The preset's own word while one is active, so it reads "Today" rather
-          than today's date — that is what was picked, and it survives the date
-          rolling over. A hand-picked range has no name and shows itself. */}
-      {activePreset ?? shortRange(start, end)}
-    </span>
-  );
-
-  // The header's icon cluster, left of the date controls: the roster search, the
-  // Edit (reorder) toggle, and — on a narrow screen only — the calendar that
-  // stands in for the date controls themselves. Icons rather than labelled
-  // buttons because a full search field is the widest thing in the row and is
-  // wanted for a few seconds at a time, so it earns its space only while it is
-  // being used; pressing one opens its own bar across the top instead.
+  // The header's cluster, at the top right: the roster search and the Edit
+  // (reorder) toggle. The calendar was the third of them and has moved down to
+  // the roster row (see `dateToggle`), which leaves the header holding only
+  // what belongs to the watchlist itself rather than to any one page of it.
+  // Icons rather than labelled buttons because a full search field is the
+  // widest thing in the row and is wanted for a few seconds at a time, so it
+  // earns its space only while it is being used; pressing one opens its own bar
+  // across the top instead.
   //
   // Only one bar at a time: they are alternatives, not a stack, and two of them
   // over a phone's view tabs is more chrome than page.
@@ -1374,38 +1342,127 @@ export default function App() {
           <span className="edit-order-label">{editMode ? 'Done' : 'Edit'}</span>
         </button>
       )}
-      {/* Shown below 640px only (CSS) — above it the date controls speak for
-          themselves and this would be a second way to reach what is already on
-          screen. Nothing on the research board is dated, so it goes there with
-          the controls it stands for. */}
-      {view !== 'research' && (
-        <button
-          type="button"
-          className={`date-toggle${dateOpen ? ' active' : ''}`}
-          onClick={() => {
-            setSearchOpen(false);
-            setDateOpen((v) => !v);
+    </div>
+  );
+
+  /* The calendar, which is both the disclosure for the date controls and the
+     one thing on the page saying which days every number on it is drawn from.
+     Those were two controls until now — a square icon up in the header and a
+     round `dateBadge` down in the view bar — which is the page telling you the
+     span in one place and letting you change it in another, and a chip that
+     could only be read sitting an inch from a button that only opened. One
+     control says both: the label *is* the state, and pressing the thing that
+     states the range is how you change it.
+
+     It lives on the roster row rather than in the header for the same reason
+     the roster tabs do: the dates qualify exactly these views and nothing on
+     the research board, so a header slot made it chrome belonging to the whole
+     app when it belongs to one page of it. Last in the row, after the tab
+     groups — it is the answer to "which days", which is the question you ask
+     after "which players" and "which reading of them". */
+  const dateToggle = (
+    <button
+      type="button"
+      className={`date-toggle${dateOpen ? ' active' : ''}`}
+      onClick={() => {
+        setSearchOpen(false);
+        setDateOpen((v) => !v);
+      }}
+      aria-expanded={dateOpen}
+      aria-label={dateOpen ? 'Close date controls' : 'Change dates'}
+      title={dateOpen ? 'Close dates' : 'Change dates'}
+    >
+      <svg
+        viewBox="0 0 24 24"
+        width="15"
+        height="15"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <rect x="3" y="4" width="18" height="17" rx="2" />
+        <path d="M3 9h18M8 2v4M16 2v4" />
+      </svg>
+      {/* The preset's own word while one is active, so it reads "Today" rather
+          than today's date — that is what was picked, and it survives the date
+          rolling over. A hand-picked range has no name and shows its numbers. */}
+      <span className="date-toggle-label">{activePreset ?? numericRange(start, end)}</span>
+    </button>
+  );
+
+  /* The presets and the range picker themselves. They open as a full-width row
+     of the view bar, directly under the button that opened them — they used to
+     hang off the header, which is where the calendar used to be; a disclosure
+     and the thing it discloses have to stay together, and following the button
+     down is the whole of that. Rendered once either way rather than duplicated
+     into a second location: `.view-bar` already wraps, so `flex: 1 1 100%` on
+     `.app.date-open .date-control` is all "its own row" takes. */
+  const dateControl = (
+    <div className="date-control">
+      <div className="date-row">
+        {/* Desktop: a row of preset pills. On phones this row is hidden and
+            the equivalent <select> below takes over (see styles.css). */}
+        <div className="date-presets">
+          {presets.map((p) => (
+            <button
+              key={p.label}
+              type="button"
+              className={`date-preset${activePreset === p.label ? ' active' : ''}`}
+              onClick={() => {
+                setStart(p.start);
+                setEnd(p.end);
+                setActivePreset(p.label);
+                // Same as the phone dropdown below: the row is a disclosure
+                // at every width now, and picking a preset is the errand it
+                // was opened for, so it closes behind you. The range picker
+                // still doesn't — its own popover needs the row to stay.
+                setDateOpen(false);
+              }}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+        {/* Phone-only equivalent of the pill row. A custom range (no active
+            preset) shows the disabled placeholder option. */}
+        <select
+          className="date-presets-select"
+          value={activePreset ?? ''}
+          onChange={(e) => {
+            const p = presets.find((x) => x.label === e.target.value);
+            if (!p) return;
+            setStart(p.start);
+            setEnd(p.end);
+            setActivePreset(p.label);
+            // As the pills above: picking a preset is the errand, so the
+            // row closes behind you.
+            setDateOpen(false);
           }}
-          aria-expanded={dateOpen}
-          aria-label={dateOpen ? 'Close date controls' : 'Change dates'}
-          title={dateOpen ? 'Close dates' : 'Change dates'}
+          aria-label="Date range preset"
         >
-          <svg
-            viewBox="0 0 24 24"
-            width="16"
-            height="16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <rect x="3" y="4" width="18" height="17" rx="2" />
-            <path d="M3 9h18M8 2v4M16 2v4" />
-          </svg>
-        </button>
-      )}
+          <option value="" disabled>
+            Custom range
+          </option>
+          {presets.map((p) => (
+            <option key={p.label} value={p.label}>
+              {p.label}
+            </option>
+          ))}
+        </select>
+        <DateRangePicker
+          start={start}
+          end={end}
+          max={maxDate}
+          onChange={(s, e) => {
+            setStart(s);
+            setEnd(e);
+            setActivePreset(null);
+          }}
+        />
+      </div>
     </div>
   );
 
@@ -1634,10 +1691,10 @@ export default function App() {
             and moving them here stopped the whole control row appearing and
             disappearing as you switched tabs.
 
-            Ahead of the date controls, which is what puts them to the left of
-            the date at every width — `margin-left: auto` on the cluster pushes
-            the pair of them to the right edge together, so the header reads
-            brand … search · edit · dates.
+            `margin-left: auto` pushes the cluster to the right edge, leaving
+            the brand alone on the left — the header reads brand … search ·
+            edit, the dates having moved down to the roster row where the views
+            they qualify are.
 
             They show on every view, the research board included. The reason the
             search used to be hidden there was that a second search box directly
@@ -1647,74 +1704,6 @@ export default function App() {
             this one adds a player to your watchlist, the board's filters the
             table. */}
         {headerTools}
-        {/* The research board is season-to-date and watchlist-independent, so
-            the range picker has nothing to act on there — left up, it would
-            invite a click that changes nothing on the page in front of you. */}
-        {view !== 'research' && (
-        <div className="date-control">
-          <div className="date-row">
-            {/* Desktop: a row of preset pills. On phones this row is hidden and
-                the equivalent <select> below takes over (see styles.css). */}
-            <div className="date-presets">
-              {presets.map((p) => (
-                <button
-                  key={p.label}
-                  type="button"
-                  className={`date-preset${activePreset === p.label ? ' active' : ''}`}
-                  onClick={() => {
-                    setStart(p.start);
-                    setEnd(p.end);
-                    setActivePreset(p.label);
-                    // Same as the phone dropdown below: the row is a disclosure
-                    // at every width now, and picking a preset is the errand it
-                    // was opened for, so it closes behind you. The range picker
-                    // still doesn't — its own popover needs the row to stay.
-                    setDateOpen(false);
-                  }}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-            {/* Phone-only equivalent of the pill row. A custom range (no active
-                preset) shows the disabled placeholder option. */}
-            <select
-              className="date-presets-select"
-              value={activePreset ?? ''}
-              onChange={(e) => {
-                const p = presets.find((x) => x.label === e.target.value);
-                if (!p) return;
-                setStart(p.start);
-                setEnd(p.end);
-                setActivePreset(p.label);
-                // As the pills above: picking a preset is the errand, so the
-                // row closes behind you.
-                setDateOpen(false);
-              }}
-              aria-label="Date range preset"
-            >
-              <option value="" disabled>
-                Custom range
-              </option>
-              {presets.map((p) => (
-                <option key={p.label} value={p.label}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-            <DateRangePicker
-              start={start}
-              end={end}
-              max={maxDate}
-              onChange={(s, e) => {
-                setStart(s);
-                setEnd(e);
-                setActivePreset(null);
-              }}
-            />
-          </div>
-        </div>
-        )}
       </header>
 
       {/* Across the top, under the header — see `searchBar`. */}
@@ -1773,17 +1762,18 @@ export default function App() {
                 Research
               </button>
             </div>
-            {/* Batters / Pitchers. Beside the section tabs when the row has
-                room for both, wrapping under them when it does not. */}
+            {/* Batters / Pitchers. */}
             {view !== 'research' && kindTabs}
-          </div>
-          {/* Third tier, on a row of its own: which way to read the roster,
-              and — since both of them describe exactly what these three tabs
-              are reading — the two badges saying which days and whose list.
-              They rode up beside the kind tabs before this row existed; down
-              here they cost a phone no extra line, which up there they did. */}
-          {section === 'roster' && showWatchlistViews && (
-            <div className="view-bar-sub">
+            {/* Roster's own three, then the calendar that says which days they
+                cover and the chip saying whose list it is. All of it in the one
+                wrapping row: each group is `flex: none`, so the row fits as
+                many whole groups per line as the width allows and breaks
+                between them rather than inside one — the order is the order the
+                questions come in (which page, which kind, which reading, which
+                days, whose list), and where the line falls is the window's
+                business rather than something fixed in the markup. */}
+            {section === 'roster' && showWatchlistViews && (
+              <>
               <div className="roster-switch" role="tablist" aria-label="Roster view">
                 <button
                   type="button"
@@ -1824,10 +1814,13 @@ export default function App() {
                   Feed
                 </button>
               </div>
-              {dateBadge}
+              {dateToggle}
               {fantasyBadge}
-            </div>
-          )}
+              </>
+            )}
+          </div>
+          {/* The disclosure's own row, under the tabs — see `dateControl`. */}
+          {view !== 'research' && dateControl}
         </div>
       )}
 
