@@ -108,10 +108,9 @@ const CHAPTERS: Chapter[] = [
       <>
         <p>
           Everything in the app is a read on the players <em>you</em> follow, so the
-          first thing to do is put some there. The roster search sits above the card
-          list on the <Ui>Players</Ui> view — and, while your watchlist is still
-          empty, at the top of whichever view you're on, since that's the only way out
-          of an empty list.
+          first thing to do is put some there. The roster search sits at the top right
+          of every page, next to the date controls — it belongs to your watchlist
+          rather than to any one view, so it is in the same place wherever you are.
         </p>
         <ol className="tut-steps">
           <Step>
@@ -190,7 +189,7 @@ const CHAPTERS: Chapter[] = [
           <div className="view-bar-tabs">
             <div className="view-switch">
               <span className="view-tab active">Summary</span>
-              <span className="view-tab">Players</span>
+              <span className="view-tab">Games</span>
               <span className="view-tab">Feed</span>
             </div>
             <div className="kind-switch">
@@ -212,7 +211,7 @@ const CHAPTERS: Chapter[] = [
             and inning during it, the final after. Scroll it sideways on a phone; the
             headshot column stays put.
           </dd>
-          <dt>Players</dt>
+          <dt>Games</dt>
           <dd>
             One card per player, in your own order. This is the deep read: every plate
             appearance, every pitch, the video. Cards start collapsed — tap a header
@@ -255,7 +254,7 @@ const CHAPTERS: Chapter[] = [
           </li>
           <li>
             <strong>The name</strong>, in the summary table or the feed, jumps to that
-            player's card on the <Ui>Players</Ui> view, expands it and scrolls it to
+            player's card on the <Ui>Games</Ui> view, expands it and scrolls it to
             the top — so you get from "he had a good night" to the pitch-by-pitch in
             one tap.
           </li>
@@ -280,7 +279,7 @@ const CHAPTERS: Chapter[] = [
     body: (
       <>
         <p>
-          On the <Ui>Players</Ui> view, a card's header is the whole summary: name,
+          On the <Ui>Games</Ui> view, a card's header is the whole summary: name,
           season line, the game's score, and a tag for anything live. Tap the header
           to expand it — and tap it again to close.
         </p>
@@ -388,7 +387,8 @@ const CHAPTERS: Chapter[] = [
           <Ui>
             <PencilIcon /> Edit
           </Ui>{' '}
-          button appears beside the search box on the <Ui>Players</Ui> view.
+          button appears beside the search box at the top right. Press it from
+          anywhere and it takes you to <Ui>Games</Ui>, where the reordering happens.
         </p>
         <ol className="tut-steps">
           <Step>

@@ -3374,12 +3374,31 @@ body {
 /* Search box + the Edit (reorder) button, side by side. Takes the .adder's old
    flex sizing so the pair grows into the free space and wraps to its own line
    when the tabs and it can't share a row. */
+/* Roster search + Edit. It lives in the header now, so it no longer grows to
+   fill a row of its own: `flex: 1` there would push the brand and the date
+   control apart and leave the search absurdly wide on a desktop. It takes the
+   width it needs and no more, and only spans the line once the header has
+   wrapped and it has the line to itself (below). */
 .players-bar {
-  flex: 1;
-  min-width: 280px;
+  flex: 0 1 auto;
+  min-width: 220px;
+  max-width: 420px;
+  /* Keeps it at the right edge on the line it shares with the brand and the
+     date control, *and* on its own line once the header wraps — without it a
+     wrapped line starts at flex-start and the control jumps from the top right
+     to the far left, which reads as a different control appearing. */
+  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 8px;
+}
+/* On a phone the header is one column and everything spans it; a search field
+   hugging the right of a 346px screen would just look mis-set. */
+@media (max-width: 640px) {
+  .players-bar {
+    flex: 1 1 100%;
+    max-width: none;
+  }
 }
 .players-bar .adder {
   min-width: 0;

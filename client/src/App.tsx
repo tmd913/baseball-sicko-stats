@@ -193,18 +193,22 @@ export default function App() {
   const [detailsKey, setDetailsKey] = useState<string | null>(
     () => readKeys(initialParams.get('player'))[0] ?? null,
   );
-  // Watchlist display mode: the grouped-by-player cards ('players'), the flat,
-  // most-recent-first stream of individual at-bats ('feed') for following live
-  // games, or a full-page stat table over the range ('summary'). Seeded from the
-  // URL so a reload/shared link restores the same view.
+  // Watchlist display mode: the grouped-by-player cards, one game block at a
+  // time ('games'), the flat, most-recent-first stream of individual at-bats
+  // ('feed') for following live games, or a full-page stat table over the range
+  // ('summary'). Seeded from the URL so a reload/shared link restores the view.
   // 'research' is the odd one out: the other three are reads on the watchlist
   // over the date range, while research is the whole league over the season. It
   // hides the date row for that reason, and is reachable with nothing watched —
   // finding players to watch is half of what it's for.
-  const [view, setView] = useState<'players' | 'feed' | 'summary' | 'research'>(() => {
+  const [view, setView] = useState<'games' | 'feed' | 'summary' | 'research'>(() => {
     const v = initialParams.get('view');
+    // `players` is what this view was called before it was named for what it
+    // shows; a link written under the old name still opens it, the same
+    // courtesy `readKeys` extends to pre-two-way player ids.
+    if (v === 'games' || v === 'players') return 'games';
     // Summary is the default view; the rest are opted into explicitly.
-    return v === 'players' || v === 'feed' || v === 'research' ? v : 'summary';
+    return v === 'feed' || v === 'research' ? v : 'summary';
   });
   // Which half of the watchlist the players view is showing. Its own tab row,
   // since a batter card and a pitcher card have nothing in common to scan down.
@@ -572,17 +576,6 @@ export default function App() {
   // one tab a new user can actually use.
   const showWatchlistViews = displayReports.length > 0;
   const showViewToggle = true;
-  // The roster search belongs to the players view, but it's also the only way
-  // out of an empty watchlist — and with nothing watched the view tabs are
-  // hidden too, so a new user on the default summary view would otherwise have
-  // no search bar *and* no way to reach the view that has one.
-  // …but never on the research board, which carries its own search over the
-  // whole league. A player is added from there through his details overlay,
-  // which is a click on his name away — two search boxes side by side, one
-  // over the watchlist roster and one over the table below it, would be a
-  // question about which one you're in.
-  const showAdder =
-    view !== 'research' && (view === 'players' || (watchlistLoaded && watchlist.length === 0));
   useEffect(() => {
     if (!hasRealLiveGame) return;
     const t = setInterval(() => loadReport(true), 20_000);
@@ -717,7 +710,7 @@ export default function App() {
       }
       setBackView(from);
       setEditMode(false);
-      setView('players');
+      setView('games');
       // The players view shows one kind at a time, so land on the tab this
       // player is actually in — otherwise the jump scrolls to nothing.
       const kind = reportsRef.current.find((r) => playerKey(r) === key)?.kind;
@@ -824,7 +817,6 @@ export default function App() {
   // under the tabs, with the list they act on; everywhere else — really just the
   // empty watchlist, the one case the search shows outside that view — the view
   // bar carries them, since there's no list to sit above.
-  const adderBelowTabs = view === 'players' && displayReports.length > 0;
   const playersBar = (
     <div className="players-bar">
       <PlayerAdder
@@ -840,7 +832,17 @@ export default function App() {
         <button
           type="button"
           className={`edit-order-btn${editMode ? ' active' : ''}`}
-          onClick={() => setEditMode((v) => !v)}
+          onClick={() => {
+            // The reorder screen only exists on the Games view, and from the
+            // header this button can be pressed from anywhere — so take the
+            // user there rather than flipping a mode with nothing on screen
+            // to show for it.
+            if (!editMode && view !== 'games') {
+              setBackView(null);
+              setView('games');
+            }
+            setEditMode((v) => !v);
+          }}
           title={editMode ? 'Finish editing' : 'Reorder players'}
           aria-pressed={editMode}
         >
@@ -980,7 +982,7 @@ export default function App() {
                   role="menuitemcheckbox"
                   aria-checked={hideInjured}
                   onClick={() => setHideInjured(!hideInjured)}
-                  title="Keep players on the IL off the players view — the summary table always leaves them off"
+                  title="Keep players on the IL off the Games view — the summary table always leaves them off"
                 >
                   <span className="settings-dot" aria-hidden="true" />
                   Hide injured players
@@ -1072,15 +1074,30 @@ export default function App() {
           </div>
         </div>
         )}
+        {/* Roster search + Edit, in the header rather than over the list: they
+            belong to the watchlist itself, not to whichever view is reading it,
+            and moving them here stops the whole control row appearing and
+            disappearing as you switch tabs. Last child, so it sits at the top
+            right on a wide screen and drops to its own full-width line when the
+            header wraps.
+
+            It shows on every view now, the research board included. The reason
+            it used to be hidden there was that a second search box directly
+            above the board's own would be "a question about which one you're
+            in" — a tier up in the header, past the view tabs and the board's
+            own bar, that ambiguity is gone. The two do different jobs anyway:
+            this one adds a player to your watchlist, the board's filters the
+            table. */}
+        {playersBar}
       </header>
 
       {/* Both tiers of tabs share one row when there's room for them, the second
-          wrapping under the first when there isn't. The row still renders with
-          just the search when the watchlist is empty (on any view — that's the
-          only way to add a first player, since the tabs are hidden until
-          something is watched); on the players view the search sits below
-          instead, with the list it acts on. */}
-      {(showViewToggle || (showAdder && !adderBelowTabs)) && (
+          wrapping under the first when there isn't. The search no longer appears
+          here in any case — it is in the header now, which is also what lets the
+          tabs stay hidden until something is watched without stranding a new
+          user: the only way to add a first player is app chrome, not a bar that
+          comes and goes with the view. */}
+      {showViewToggle && (
         <div className="view-bar">
           {showViewToggle && (
             <div className="view-bar-tabs">
@@ -1103,14 +1120,14 @@ export default function App() {
                 <button
                   type="button"
                   role="tab"
-                  aria-selected={view === 'players'}
-                  className={`view-tab${view === 'players' ? ' active' : ''}`}
+                  aria-selected={view === 'games'}
+                  className={`view-tab${view === 'games' ? ' active' : ''}`}
                   onClick={() => {
                     setBackView(null);
-                    setView('players');
+                    setView('games');
                   }}
                 >
-                  Players
+                  Games
                 </button>
                 <button
                   type="button"
@@ -1149,7 +1166,6 @@ export default function App() {
               {view !== 'research' && kindTabs}
             </div>
           )}
-          {showAdder && !adderBelowTabs && playersBar}
         </div>
       )}
 
@@ -1189,7 +1205,7 @@ export default function App() {
           <p className="empty-title">Nothing to show — everyone here is on the IL</p>
           <p>
             {view === 'summary'
-              ? 'Injured players are left off the summary table. Their cards are still on the Players view.'
+              ? 'Injured players are left off the summary table. Their cards are still on the Games view.'
               : 'Turn off “Hide injured players” in settings (the gear by the title) to see their cards.'}
           </p>
         </div>
@@ -1247,7 +1263,6 @@ export default function App() {
       >
         {editMode ? (
           <>
-            {adderBelowTabs && playersBar}
             <PlayerOrderEditor
               players={editPlayers}
               onMove={movePlayer}
@@ -1257,7 +1272,6 @@ export default function App() {
           </>
         ) : (
         <main className="player-list">
-          {adderBelowTabs && playersBar}
           {kindCards.map(renderCard)}
         </main>
         )}
@@ -1268,7 +1282,7 @@ export default function App() {
           the players page — returns to whichever view it came from. */}
       <button
         type="button"
-        className={`float-btn back-nav${view === 'players' && backView ? ' visible' : ''}`}
+        className={`float-btn back-nav${view === 'games' && backView ? ' visible' : ''}`}
         onClick={goBack}
         aria-label={`Back to ${backView === 'feed' ? 'feed' : 'summary'}`}
         title={`Back to ${backView === 'feed' ? 'Feed' : 'Summary'}`}
