@@ -461,6 +461,16 @@ export default function App() {
     setSettingsOpen(false);
     setEspnOpen(true);
   }, []);
+
+  /** Stable, because the settings page has an effect that depends on it — an
+   *  inline arrow would hand that effect a new identity on every render. */
+  const onEspnStatusChange = useCallback((s: EspnStatus) => {
+    setEspnStatus(s);
+    // A fresh connection (or a disconnect) makes whatever was read before
+    // wrong; the board re-reads when it next needs it.
+    setOwnership(null);
+    setEspnError(null);
+  }, []);
   // The settings popover (gear next to the title) — the hide-injured toggle
   // (and the simulate one, when it's shown), then the way into the how-to page.
   // Closes on outside click or Escape.
@@ -1719,13 +1729,7 @@ export default function App() {
       {espnOpen && (
         <EspnSettings
           status={espnStatus}
-          onStatusChange={(s) => {
-            setEspnStatus(s);
-            // A fresh connection (or a disconnect) makes whatever was read
-            // before wrong; the board re-reads when it next needs it.
-            setOwnership(null);
-            setEspnError(null);
-          }}
+          onStatusChange={onEspnStatusChange}
           onClose={() => setEspnOpen(false)}
         />
       )}
