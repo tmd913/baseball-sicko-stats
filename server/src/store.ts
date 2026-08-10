@@ -45,11 +45,34 @@ export interface UserPrefs {
   muteAudio?: boolean;
 }
 
+/**
+ * A user's ESPN fantasy league connection.
+ *
+ * Deliberately **not** a field on `UserPrefs`: `GET /api/prefs` hands that whole
+ * object to the browser, and `espnS2` is a live session cookie for the user's
+ * ESPN account. Keeping it a sibling means the leak would have to be written on
+ * purpose rather than inherited by adding a key. Nothing here is ever returned
+ * from the API — see the `/api/espn` routes, which answer with a status object
+ * built from the harmless half.
+ */
+export interface EspnLeague {
+  leagueId: number;
+  swid: string;
+  espnS2: string;
+  /** Cached at connect time so the status can name the league and the user's
+   *  own team without a round trip to ESPN. */
+  leagueName?: string;
+  teamId?: number | null;
+  teamName?: string | null;
+  savedAt: number;
+}
+
 /** The saved record plus the version it was read at, so a write can detect a
  *  lost update. */
 interface Versioned {
   players: WatchPlayer[];
   prefs: UserPrefs;
+  espn: EspnLeague | null;
   version: number;
 }
 
@@ -98,15 +121,16 @@ async function ddbLoad(userId: string): Promise<Versioned> {
     new Get({ TableName: TABLE, Key: { userId }, ConsistentRead: true }),
   );
   const item = res.Item as
-    | { players?: WatchPlayer[]; prefs?: UserPrefs; version?: number }
+    | { players?: WatchPlayer[]; prefs?: UserPrefs; espn?: EspnLeague; version?: number }
     | undefined;
   // Only a genuinely absent item is an empty watchlist. Anything else — a
   // throttle, a network blip — throws, because swallowing it would render the
   // "your watchlist is empty" state and then persist that emptiness.
-  if (!item) return { players: [], prefs: {}, version: 0 };
+  if (!item) return { players: [], prefs: {}, espn: null, version: 0 };
   return {
     players: migrate(item.players ?? []),
     prefs: item.prefs ?? {},
+    espn: item.espn ?? null,
     version: item.version ?? 0,
   };
 }
@@ -116,7 +140,15 @@ async function ddbPersist(userId: string, next: Versioned): Promise<void> {
   await doc.send(
     new Put({
       TableName: TABLE,
-      Item: { userId, players: next.players, prefs: next.prefs, version: next.version + 1 },
+      Item: {
+        userId,
+        players: next.players,
+        prefs: next.prefs,
+        // Absent rather than null when there is no connection, so disconnecting
+        // removes the credential from the item instead of leaving a tombstone.
+        ...(next.espn ? { espn: next.espn } : {}),
+        version: next.version + 1,
+      },
       // Reject the write if someone else moved the item since we read it.
       ConditionExpression: 'attribute_not_exists(version) OR version = :v',
       ExpressionAttributeValues: { ':v': next.version },
@@ -129,18 +161,25 @@ async function ddbPersist(userId: string, next: Versioned): Promise<void> {
 async function fileLoad(): Promise<Versioned> {
   try {
     const raw = await fs.readFile(FILE, 'utf8');
-    const parsed = JSON.parse(raw) as WatchPlayer[] | { players?: WatchPlayer[]; prefs?: UserPrefs };
+    const parsed = JSON.parse(raw) as
+      | WatchPlayer[]
+      | { players?: WatchPlayer[]; prefs?: UserPrefs; espn?: EspnLeague };
     // The file was a bare array before preferences existed, and a dev machine
     // will have one sitting there — so both shapes read, and the next write
     // saves the newer one.
     return Array.isArray(parsed)
-      ? { players: migrate(parsed), prefs: {}, version: 0 }
-      : { players: migrate(parsed.players ?? []), prefs: parsed.prefs ?? {}, version: 0 };
+      ? { players: migrate(parsed), prefs: {}, espn: null, version: 0 }
+      : {
+          players: migrate(parsed.players ?? []),
+          prefs: parsed.prefs ?? {},
+          espn: parsed.espn ?? null,
+          version: 0,
+        };
   } catch (err) {
     // A missing file is a new watchlist; a malformed one shouldn't be silently
     // replaced by an empty list on the next write.
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-      return { players: [], prefs: {}, version: 0 };
+      return { players: [], prefs: {}, espn: null, version: 0 };
     }
     throw err;
   }
@@ -148,7 +187,11 @@ async function fileLoad(): Promise<Versioned> {
 
 async function filePersist(next: Versioned): Promise<void> {
   await fs.mkdir(DATA_DIR, { recursive: true });
-  const body = { players: next.players, prefs: next.prefs };
+  const body = {
+    players: next.players,
+    prefs: next.prefs,
+    ...(next.espn ? { espn: next.espn } : {}),
+  };
   await fs.writeFile(FILE, JSON.stringify(body, null, 2), 'utf8');
 }
 
@@ -175,7 +218,7 @@ function isConflict(err: unknown): boolean {
  */
 async function mutate(
   userId: string,
-  change: (current: Versioned) => { players: WatchPlayer[]; prefs: UserPrefs } | null,
+  change: (current: Versioned) => Omit<Versioned, 'version'> | null,
 ): Promise<Versioned> {
   for (let attempt = 0; attempt < 2; attempt++) {
     const current = await load(userId);
@@ -201,7 +244,7 @@ async function update(
 ): Promise<WatchPlayer[]> {
   const next = await mutate(userId, (cur) => {
     const players = change(cur.players);
-    return players === null ? null : { players, prefs: cur.prefs };
+    return players === null ? null : { players, prefs: cur.prefs, espn: cur.espn };
   });
   return next.players;
 }
@@ -309,7 +352,7 @@ export async function setResearchColumns(
     const columns = { ...(cur.prefs.researchColumns ?? {}) };
     if (keys) columns[kind] = keys;
     else delete columns[kind];
-    return { players: cur.players, prefs: { ...cur.prefs, researchColumns: columns } };
+    return { players: cur.players, prefs: { ...cur.prefs, researchColumns: columns }, espn: cur.espn };
   });
   return next.prefs;
 }
@@ -325,7 +368,7 @@ export async function setHideInjured(userId: string, hide: boolean): Promise<Use
     const prefs = { ...cur.prefs };
     if (hide) prefs.hideInjured = true;
     else delete prefs.hideInjured;
-    return { players: cur.players, prefs };
+    return { players: cur.players, prefs, espn: cur.espn };
   });
   return next.prefs;
 }
@@ -341,7 +384,33 @@ export async function setMuteAudio(userId: string, mute: boolean): Promise<UserP
     const prefs = { ...cur.prefs };
     if (mute) prefs.muteAudio = true;
     else delete prefs.muteAudio;
-    return { players: cur.players, prefs };
+    return { players: cur.players, prefs, espn: cur.espn };
   });
   return next.prefs;
+}
+
+// ---- ESPN fantasy league ----------------------------------------------
+
+/**
+ * The user's saved ESPN connection, credentials and all. **Server-side callers
+ * only** — the routes narrow this to a status object before it goes anywhere
+ * near a response body.
+ */
+export async function getEspnLeague(userId: string): Promise<EspnLeague | null> {
+  return (await load(userId)).espn;
+}
+
+/** Save a connection, or `null` to disconnect — which drops the attribute
+ *  entirely rather than storing an empty one, so a user who disconnects has no
+ *  ESPN cookie left in the record at all. */
+export async function setEspnLeague(
+  userId: string,
+  espn: EspnLeague | null,
+): Promise<EspnLeague | null> {
+  const next = await mutate(userId, (cur) => ({
+    players: cur.players,
+    prefs: cur.prefs,
+    espn,
+  }));
+  return next.espn;
 }

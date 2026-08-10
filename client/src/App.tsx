@@ -3,6 +3,8 @@ import { api } from './api';
 import { SignOutButton } from './auth';
 import { playerKey } from './types';
 import type {
+  EspnOwnership,
+  EspnStatus,
   PlayerKind,
   PlayerReport,
   ResearchRow,
@@ -32,6 +34,7 @@ import { PlayerDetails } from './components/PlayerDetails';
 import { DateRangePicker, shortRange } from './components/DateRangePicker';
 import { MutedContext } from './hooks';
 import { Tutorial } from './components/Tutorial';
+import { EspnSettings } from './components/EspnSettings';
 
 // Breathing room above a card scrolled to the top of the viewport.
 const SCROLL_GAP = 12;
@@ -381,6 +384,83 @@ export default function App() {
   // In the URL like every other view, so it survives a reload and can be linked
   // to — which is the only way to hand someone the guide directly.
   const [helpOpen, setHelpOpen] = useState<boolean>(() => initialParams.get('help') === '1');
+
+  // ---- ESPN fantasy league ----
+  // The connection status is read once on boot, next to the preferences: it
+  // decides whether the research board offers its Free Agents pill, which is a
+  // thing the first render would otherwise get wrong and then correct.
+  // Deliberately not in the URL — a connection is an account fact, not a view.
+  const [espnOpen, setEspnOpen] = useState(false);
+  const [espnStatus, setEspnStatus] = useState<EspnStatus | null>(null);
+  const [ownership, setOwnership] = useState<EspnOwnership | null>(null);
+  const [espnLoading, setEspnLoading] = useState(false);
+  const [espnError, setEspnError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .espn()
+      .then((s) => {
+        if (!cancelled) setEspnStatus(s);
+      })
+      // Not banner-worthy: with no status the board simply doesn't offer the
+      // pill, which is what an unconnected user sees anyway.
+      .catch((e: Error) => console.error('ESPN status unavailable:', e.message));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const espnConnected = espnStatus?.connected === true;
+  const espnLeagueId = espnStatus?.connected ? espnStatus.leagueId : null;
+
+  /** Who is rostered in the connected league. The previous read is deliberately
+   *  left in place while this one is in flight, so a re-read doesn't blank a
+   *  table the user is reading. */
+  const loadOwnership = useCallback(() => {
+    setEspnLoading(true);
+    setEspnError(null);
+    api
+      .espnOwnership()
+      .then(setOwnership)
+      .catch((e: Error) => setEspnError(e.message))
+      .finally(() => setEspnLoading(false));
+  }, []);
+
+  /**
+   * Read lazily, and only for the board that needs it: the rosters are
+   * irrelevant until someone asks which players are free.
+   *
+   * This fires on **every entry** to the free-agent board rather than once a
+   * session, and that is the point — a roster changes whenever anyone in the
+   * league makes a move, so a set read at breakfast is the wrong answer by
+   * lunchtime. It costs nothing to re-ask: the server holds its own ten-minute
+   * cache, which is the single place freshness is decided, and repeats inside
+   * it are a lookup. The dependency list is exactly the set of things that can
+   * *be* an entry, so nothing else here re-triggers it — and deliberately not
+   * `ownership` or `espnLoading`, either of which would re-run the effect on
+   * its own result and spin.
+   */
+  useEffect(() => {
+    if (view !== 'research' || researchScope !== 'fa' || !espnConnected) return;
+    loadOwnership();
+  }, [view, researchScope, espnConnected, espnLeagueId, loadOwnership]);
+
+  // A different league (or a disconnect) invalidates the whole set.
+  useEffect(() => {
+    setOwnership(null);
+    setEspnError(null);
+  }, [espnLeagueId]);
+
+  const ownedIds = useMemo(
+    () => (ownership ? new Set(Object.keys(ownership.owned).map(Number)) : null),
+    [ownership],
+  );
+
+  const openEspnSettings = useCallback(() => {
+    setSettingsOpen(false);
+    setEspnOpen(true);
+  }, []);
   // The settings popover (gear next to the title) — the hide-injured toggle
   // (and the simulate one, when it's shown), then the way into the how-to page.
   // Closes on outside click or Escape.
@@ -1184,9 +1264,32 @@ export default function App() {
                   <span className="settings-dot" aria-hidden="true" />
                   Mute clip audio
                 </button>
-                {/* The checkable toggle(s) read together above; this one is a
-                    way out of the menu, so it sits below them and beside Sign
-                    out. */}
+                {/* Below the toggles with the how-to button: both open a page
+                    rather than flipping a setting, so they read as the menu's
+                    two ways *out* of it. */}
+                <button
+                  type="button"
+                  className="help-btn espn-menu-btn"
+                  role="menuitem"
+                  onClick={openEspnSettings}
+                  title="Connect an ESPN fantasy league — adds a Free Agents filter to the research board"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="15"
+                    height="15"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M4.5 7.5A7.5 7.5 0 0 1 8 15M19.5 7.5A7.5 7.5 0 0 0 16 15" />
+                  </svg>
+                  {espnConnected ? 'Fantasy league ✓' : 'Fantasy league'}
+                </button>
                 <button
                   type="button"
                   className="help-btn"
@@ -1469,6 +1572,11 @@ export default function App() {
           onWindowChange={setResearchWindow}
           scope={researchScope}
           onScopeChange={setResearchScope}
+          ownedIds={ownedIds}
+          espnConnected={espnConnected}
+          espnLoading={espnLoading}
+          espnError={espnError}
+          onConnectEspn={openEspnSettings}
           watchedKeys={watchedKeys}
           onOpenDetails={setDetailsKey}
         />
@@ -1607,6 +1715,20 @@ export default function App() {
       {/* Last, and above the player page in the stack: opened from a link it can
           sit over an already-open details view, and closing it puts that back. */}
       {helpOpen && <Tutorial onClose={() => setHelpOpen(false)} />}
+
+      {espnOpen && (
+        <EspnSettings
+          status={espnStatus}
+          onStatusChange={(s) => {
+            setEspnStatus(s);
+            // A fresh connection (or a disconnect) makes whatever was read
+            // before wrong; the board re-reads when it next needs it.
+            setOwnership(null);
+            setEspnError(null);
+          }}
+          onClose={() => setEspnOpen(false)}
+        />
+      )}
     </div>
     </MutedContext.Provider>
   );

@@ -685,3 +685,47 @@ export interface UserPrefs {
   /** Play every video clip with the sound off. Absent means off. */
   muteAudio?: boolean;
 }
+
+// ---- ESPN fantasy league ---------------------------------------------------
+
+/** One fantasy team in the connected league. */
+export interface EspnTeam {
+  id: number;
+  name: string;
+  abbrev: string;
+}
+
+/** What the server will say about a user's ESPN connection. Deliberately
+ *  credential-free: `espn_s2` goes in through `saveEspn` and never comes back,
+ *  so there is nothing here for the client to have to be careful with. */
+export type EspnStatus =
+  | { connected: false }
+  | {
+      connected: true;
+      leagueId: number;
+      leagueName: string | null;
+      teamId: number | null;
+      teamName: string | null;
+      savedAt: number;
+    };
+
+/** Who in the connected league is already rostered — keyed by **MLB** player
+ *  id, so the research board's free-agent test is a lookup on the id every row
+ *  already carries. Mirrors `EspnOwnership` in the server's `espn.ts`. */
+export interface EspnOwnership {
+  leagueId: number;
+  leagueName: string;
+  season: number;
+  teams: EspnTeam[];
+  myTeamId: number | null;
+  myTeamName: string | null;
+  /** MLB player id → the fantasy team id holding him. */
+  owned: Record<number, number>;
+  /** Roster entries read, and how many found an MLB player. The gap is
+   *  prospects who have never played a major-league game; it is carried so a
+   *  match that has silently stopped working is visible rather than showing up
+   *  as a league where everyone is a free agent. */
+  rosterCount: number;
+  matched: number;
+  fetchedAt: number;
+}

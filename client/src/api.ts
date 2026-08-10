@@ -1,5 +1,7 @@
 import type {
   BatterGameLog,
+  EspnOwnership,
+  EspnStatus,
   PitcherGameLog,
   SeasonArsenal,
   PlayerKind,
@@ -151,6 +153,29 @@ export const api = {
       body: JSON.stringify({ mute }),
     });
   },
+  // ---- ESPN fantasy league ----
+  // The credential (`espnS2`, an ESPN session cookie) travels one way: in
+  // through `saveEspn` and never back out, so nothing in this app's memory or
+  // in a devtools response pane holds it.
+  async espn(): Promise<EspnStatus> {
+    return request('/api/espn');
+  },
+  async saveEspn(leagueId: number, swid: string, espnS2: string): Promise<EspnStatus> {
+    return request('/api/espn', {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ leagueId, swid, espnS2 }),
+    });
+  },
+  async disconnectEspn(): Promise<EspnStatus> {
+    return request('/api/espn', { method: 'DELETE' });
+  },
+  /** `refresh` skips the server's ten-minute cache — for the user who has just
+   *  made a move and wants the board to agree with ESPN. */
+  async espnOwnership(refresh = false): Promise<EspnOwnership> {
+    return request(`/api/espn/ownership${refresh ? '?refresh=1' : ''}`);
+  },
+
   // Every player in the league on one board, season to date — the research
   // table. Watchlist-independent and season-wide, so it takes no date range.
   async research(

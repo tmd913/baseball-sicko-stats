@@ -473,11 +473,35 @@ const posTypeLabel = (t: string) => POSITION_TYPE_LABELS[t] ?? t;
  * out is `All Players` rather than a looser threshold. It names the way out, so
  * the default no longer has to be chosen around it.
  */
-export type ResearchScope = 'all' | 'mine';
+/**
+ * `'fa'` is the third: **Free Agents**, every player in the majors who isn't on
+ * a roster in the user's connected ESPN fantasy league. It belongs on this
+ * control rather than on a toggle of its own for the same reason the other two
+ * are here — it names a *set of players*, which is what scope means; sorting
+ * that set by any stat on the board is then the whole feature.
+ *
+ * It is only offered once a league is connected. An unconnected user picking it
+ * from a shared link lands on the board's own empty state, which is a way in
+ * rather than a dead end.
+ */
+export type ResearchScope = 'all' | 'mine' | 'fa';
 
 export function toResearchScope(v: string | null): ResearchScope {
-  return v === 'all' ? 'all' : 'mine';
+  if (v === 'all') return 'all';
+  return v === 'fa' ? 'fa' : 'mine';
 }
+
+const SCOPE_LABELS: Record<ResearchScope, string> = {
+  mine: 'My Players',
+  all: 'All Players',
+  fa: 'Free Agents',
+};
+
+const SCOPE_TITLES: Record<ResearchScope, string> = {
+  mine: 'Only the players on your watchlist',
+  all: 'Every player in the league',
+  fa: "Everyone who isn't on a roster in your ESPN fantasy league",
+};
 
 export function researchKindFor(pos: ResearchPos): PlayerKind {
   return POSITION_BY_KEY.get(pos)?.kind ?? 'batter';
@@ -544,6 +568,21 @@ interface Props {
    *  population the table describes, not the presentation of it. */
   scope: ResearchScope;
   onScopeChange: (s: ResearchScope) => void;
+  /** MLB ids of every player rostered in the connected fantasy league, or null
+   *  while there is no league connected and nothing has been read. The free
+   *  agents are the complement of this within the board — see `boardRows`. */
+  ownedIds: Set<number> | null;
+  /** Whether a league is connected at all, which is what decides if the Free
+   *  Agents pill is offered. Separate from `ownedIds` being null, since a
+   *  connected league whose read is still in flight is a third state. */
+  espnConnected: boolean;
+  espnLoading: boolean;
+  /** A failed read — usually an expired `espn_s2`. Shown on the board rather
+   *  than swallowed, because the alternative is a table that silently claims
+   *  every player is available. */
+  espnError: string | null;
+  /** Open the Fantasy league settings page. */
+  onConnectEspn: () => void;
   /** `${kind}-${id}` for everything on the watchlist — the app's player key, so
    *  a two-way player watched only as a pitcher is marked on the pitching board
    *  and not the batting one, which is what watching him as a pitcher means. */
@@ -578,6 +617,11 @@ export function ResearchTable({
   onWindowChange,
   scope,
   onScopeChange,
+  ownedIds,
+  espnConnected,
+  espnLoading,
+  espnError,
+  onConnectEspn,
   watchedKeys,
   onOpenDetails,
 }: Props) {
@@ -627,9 +671,14 @@ export function ResearchTable({
   // board it describes rather than quoting the league's 624.
   const boardRows = useMemo(() => {
     const byTrade = rows.filter(kind === 'pitcher' ? isPitcherByTrade : isBatterByTrade);
-    if (scope !== 'mine') return byTrade;
-    return byTrade.filter((r) => watchedKeys.has(`${r.kind}-${r.id}`));
-  }, [rows, kind, scope, watchedKeys]);
+    if (scope === 'mine') return byTrade.filter((r) => watchedKeys.has(`${r.kind}-${r.id}`));
+    // Free agency is read as the complement of ownership: a player nobody in
+    // the league holds is one you could add. Until the roster read lands the
+    // board shows nothing rather than everything — an empty table under a
+    // spinner is honest, where the whole league labelled "free agents" is not.
+    if (scope === 'fa') return ownedIds ? byTrade.filter((r) => !ownedIds.has(r.id)) : [];
+    return byTrade;
+  }, [rows, kind, scope, watchedKeys, ownedIds]);
 
   // Hiding the column you were sorting on leaves the table ordered by something
   // you can neither see nor reverse — there is no header left to click. So the
@@ -805,23 +854,24 @@ export function ResearchTable({
           position both apply, so folding these two into that row would read as
           one single-select where picking SS un-picks My Players. */}
       <div className="research-scope" role="tablist" aria-label="Whose players">
-        {(['mine', 'all'] as const).map((sc) => (
-          <button
-            key={sc}
-            type="button"
-            role="tab"
-            aria-selected={scope === sc}
-            className={`research-scope-tab${scope === sc ? ' active' : ''}`}
-            title={
-              sc === 'mine'
-                ? 'Only the players on your watchlist'
-                : 'Every player in the league'
-            }
-            onClick={() => onScopeChange(sc)}
-          >
-            {sc === 'mine' ? 'My Players' : 'All Players'}
-          </button>
-        ))}
+        {/* Free Agents only appears once a fantasy league is connected — an
+            unconnected user has no set for it to name. A `scope=fa` link still
+            selects it, and the board's empty state is then the way in. */}
+        {(['mine', 'all', ...(espnConnected || scope === 'fa' ? (['fa'] as const) : [])] as const).map(
+          (sc) => (
+            <button
+              key={sc}
+              type="button"
+              role="tab"
+              aria-selected={scope === sc}
+              className={`research-scope-tab${scope === sc ? ' active' : ''}`}
+              title={SCOPE_TITLES[sc]}
+              onClick={() => onScopeChange(sc)}
+            >
+              {SCOPE_LABELS[sc]}
+            </button>
+          ),
+        )}
       </div>
       {/* Out in the bar rather than inside the Filters panel: it decides which
           games every number on the board is drawn from, which is too large a
@@ -1149,6 +1199,51 @@ export function ResearchTable({
             </button>{' '}
             to add them.
           </p>
+        </div>
+      )}
+
+      {/* Free Agents, before the league has been read. Three different reasons
+          the table can be empty here, and they want three different ways out —
+          a generic "nothing found" would leave a user who has never connected
+          with nowhere to go. */}
+      {!loading && !error && scope === 'fa' && boardRows.length === 0 && (
+        <div className="empty-state">
+          {!espnConnected ? (
+            <>
+              <p className="empty-title">No fantasy league connected</p>
+              <p>
+                Connect an ESPN fantasy baseball league and this board shows every
+                player in the majors nobody in it has rostered.
+              </p>
+              <div className="empty-actions">
+                <button type="button" className="empty-help" onClick={onConnectEspn}>
+                  Connect a league
+                </button>
+              </div>
+            </>
+          ) : espnError ? (
+            <>
+              <p className="empty-title">Couldn't read your league</p>
+              <p>{espnError}</p>
+              <div className="empty-actions">
+                <button type="button" className="empty-help" onClick={onConnectEspn}>
+                  Fantasy league settings
+                </button>
+              </div>
+            </>
+          ) : espnLoading || !ownedIds ? (
+            /* Before the first read lands — `espnLoading` is a frame behind the
+               effect that starts it, and "nobody is available" is the one wrong
+               thing this state must never flash. */
+            <p className="empty-title">Reading your league…</p>
+          ) : (
+            <>
+              <p className="empty-title">
+                No {kind === 'pitcher' ? 'pitchers' : 'batters'} available
+              </p>
+              <p>Every one on this board is on a roster in your league.</p>
+            </>
+          )}
         </div>
       )}
 

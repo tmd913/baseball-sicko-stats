@@ -18,14 +18,24 @@ import type { ResearchWindow, SeasonArsenalPitch } from './types.js';
 import { getPitcherStats, getPlayerStats, getSeasonPlayers, resolveVideoUrl } from './mlbStats.js';
 import {
   addPlayer,
+  getEspnLeague,
   getPrefs,
   getWatchlist,
   removePlayer,
   reorderPlayers,
+  setEspnLeague,
   setHideInjured,
   setMuteAudio,
   setResearchColumns,
 } from './store.js';
+import type { EspnLeague } from './store.js';
+import {
+  EspnAuthError,
+  getLeagueInfo,
+  getOwnership,
+  normalizeS2,
+  normalizeSwid,
+} from './espn.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -262,6 +272,120 @@ app.put(
       return;
     }
     res.json(await setMuteAudio(userId(req), mute));
+  }),
+);
+
+// ---- ESPN fantasy league ------------------------------------------------
+//
+// Three routes over the saved connection and one over what it can read. The
+// credential — `espnS2`, a live ESPN session cookie — goes in through the PUT
+// and never comes back out: every response below is built from the harmless
+// half of the record, so there is no shape of this API that hands a browser
+// back the cookie it was given.
+
+/** What the client is told about a connection. No credentials, by construction:
+ *  it is assembled field by field rather than spread from the stored record. */
+function espnStatus(espn: EspnLeague | null) {
+  if (!espn) return { connected: false as const };
+  return {
+    connected: true as const,
+    leagueId: espn.leagueId,
+    leagueName: espn.leagueName ?? null,
+    teamId: espn.teamId ?? null,
+    teamName: espn.teamName ?? null,
+    savedAt: espn.savedAt,
+  };
+}
+
+/** ESPN rejecting the saved cookies is not an upstream fault to 502 over — it
+ *  is a thing the user can fix, and the client shows it as such. 409 rather
+ *  than 401, which `api.ts` treats as an expired *Cognito* token and retries. */
+function espnError(err: unknown, res: express.Response): boolean {
+  if (!(err instanceof EspnAuthError)) return false;
+  res.status(409).json({ error: err.message, code: 'espn-auth' });
+  return true;
+}
+
+app.get(
+  '/api/espn',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    res.json(espnStatus(await getEspnLeague(userId(req))));
+  }),
+);
+
+// Verified before it is stored: a set of cookies that cannot read the league is
+// worth rejecting while the user still has the form open and can see which
+// field is wrong, rather than at first use from a table that just looks empty.
+app.put(
+  '/api/espn',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const { leagueId, swid, espnS2 } = (req.body ?? {}) as {
+      leagueId?: unknown;
+      swid?: unknown;
+      espnS2?: unknown;
+    };
+    const id = typeof leagueId === 'number' ? leagueId : Number(leagueId);
+    if (!Number.isInteger(id) || id <= 0) {
+      res.status(400).json({ error: 'leagueId must be a positive integer' });
+      return;
+    }
+    if (typeof swid !== 'string' || typeof espnS2 !== 'string' || !swid.trim() || !espnS2.trim()) {
+      res.status(400).json({ error: 'swid and espnS2 are required' });
+      return;
+    }
+    const creds = {
+      leagueId: id,
+      swid: normalizeSwid(swid),
+      espnS2: normalizeS2(espnS2),
+    };
+    try {
+      const info = await getLeagueInfo(creds);
+      const saved = await setEspnLeague(userId(req), {
+        ...creds,
+        leagueName: info.leagueName,
+        teamId: info.myTeamId,
+        teamName: info.myTeamName,
+        savedAt: Date.now(),
+      });
+      res.json(espnStatus(saved));
+    } catch (err) {
+      if (!espnError(err, res)) throw err;
+    }
+  }),
+);
+
+app.delete(
+  '/api/espn',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    await setEspnLeague(userId(req), null);
+    res.json(espnStatus(null));
+  }),
+);
+
+// Who is on a roster, keyed by MLB player id — which is what makes the research
+// board's free-agent filter a set lookup on the id each row already carries.
+// `?refresh=1` skips the ten-minute cache, for the user who has just made a move.
+app.get(
+  '/api/espn/ownership',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const espn = await getEspnLeague(userId(req));
+    if (!espn) {
+      res.status(409).json({ error: 'No ESPN league connected', code: 'espn-missing' });
+      return;
+    }
+    try {
+      const own = await getOwnership(
+        { leagueId: espn.leagueId, swid: espn.swid, espnS2: espn.espnS2 },
+        req.query.refresh === '1',
+      );
+      res.json(own);
+    } catch (err) {
+      if (!espnError(err, res)) throw err;
+    }
   }),
 );
 

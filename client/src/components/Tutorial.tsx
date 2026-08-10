@@ -348,6 +348,13 @@ const CHAPTERS: Chapter[] = [
             watchlist. On <Ui>All Players</Ui> the people you already watch carry a
             small ✓.
           </li>
+          <li>
+            <strong>Free Agents.</strong> A third pill, once you've connected an ESPN
+            fantasy league under the gear's <Ui>Fantasy league</Ui> page: the board
+            drops everyone already on a roster in it, leaving the players you could
+            actually add — sortable and filterable like any other slice. That page
+            walks through where ESPN keeps the two cookies it needs.
+          </li>
         </ul>
         <h3 className="tut-sub">The four buttons</h3>
         <dl className="tut-defs">
