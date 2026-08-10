@@ -221,8 +221,9 @@ const CHAPTERS: Chapter[] = [
           at the top right, beside the search — it is the widest control in the app
           and you set it once, so it stays out of the way until you want it. Press it
           and the presets and the range picker open on a line of their own; picking a
-          preset closes them again. The chip beside the <Ui>Batters · Pitchers</Ui>{' '}
-          tabs is what tells you which days you are looking at meanwhile.
+          preset closes them again. The chip beside the{' '}
+          <Ui>Summary · Games · Feed</Ui> tabs is what tells you which days you are
+          looking at meanwhile.
         </p>
       </>
     ),
@@ -234,29 +235,39 @@ const CHAPTERS: Chapter[] = [
     body: (
       <>
         <p>
-          Three of the tabs under the header are takes on the same watchlist over the
-          same dates. Pick whichever answers the question you actually have.
+          <Ui>Roster</Ui> is your own players over the dates you picked, and it has
+          three tabs of its own on the row below — three takes on that same set of
+          players over those same days. Pick whichever answers the question you
+          actually have. (<Ui>Research</Ui> beside it is the other thing entirely:
+          the whole league, covered further down.)
         </p>
         <Demo label="The view bar — the kind tabs appear once you watch both">
-          <div className="view-bar-tabs">
-            <div className="view-switch">
-              <span className="view-tab active">Summary</span>
-              <span className="view-tab">Games</span>
-              <span className="view-tab">Feed</span>
-              <span className="view-tab">Research</span>
-            </div>
-            <div className="kind-switch">
-              <span className="kind-tab active">
-                Batters<span className="kind-tab-count">6</span>
+          <div className="view-bar">
+            <div className="view-bar-tabs">
+              <div className="view-switch">
+                <span className="view-tab active">Roster</span>
+                <span className="view-tab">Research</span>
+              </div>
+              <div className="kind-switch">
+                <span className="kind-tab active">
+                  Batters<span className="kind-tab-count">6</span>
+                </span>
+                <span className="kind-tab">
+                  Pitchers<span className="kind-tab-count">3</span>
+                </span>
+              </div>
+              <span className="date-badge">
+                <CalendarIcon />
+                Today
               </span>
-              <span className="kind-tab">
-                Pitchers<span className="kind-tab-count">3</span>
-              </span>
             </div>
-            <span className="date-badge">
-              <CalendarIcon />
-              Today
-            </span>
+            <div className="view-bar-sub">
+              <div className="roster-switch">
+                <span className="roster-tab active">Summary</span>
+                <span className="roster-tab">Games</span>
+                <span className="roster-tab">Feed</span>
+              </div>
+            </div>
           </div>
         </Demo>
         <dl className="tut-defs">
@@ -285,11 +296,11 @@ const CHAPTERS: Chapter[] = [
           </dd>
         </dl>
         <p className="tut-note">
-          Every view shows one kind at a time. Once you watch both batters and
-          pitchers, the <Ui>Batters</Ui> / <Ui>Pitchers</Ui> tabs appear beside the
-          view tabs and follow you from view to view. The fourth tab,{' '}
-          <Ui>Research</Ui>, is a different animal — the whole league rather than
-          your watchlist — and has the next chapter to itself.
+          Every one of the three shows one kind at a time. Once you watch both
+          batters and pitchers, the <Ui>Batters</Ui> / <Ui>Pitchers</Ui> tabs appear
+          on the row above and follow you from tab to tab. <Ui>Research</Ui>, beside{' '}
+          <Ui>Roster</Ui> at the top, is a different animal — the whole league rather
+          than your watchlist — and has the next chapter to itself.
         </p>
       </>
     ),
