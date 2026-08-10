@@ -501,11 +501,13 @@ export default function App() {
   /** Who is rostered in the connected league. The previous read is deliberately
    *  left in place while this one is in flight, so a re-read doesn't blank a
    *  table the user is reading. */
-  const loadOwnership = useCallback(() => {
+  const loadOwnership = useCallback((refresh = false) => {
     setEspnLoading(true);
     setEspnError(null);
-    api
-      .espnOwnership()
+    // Returned so a caller can wait on it: `refreshFantasy` busts this cache
+    // first and then lets the reads that share it come back through it.
+    return api
+      .espnOwnership(refresh)
       .then(setOwnership)
       .catch((e: Error) => setEspnError(e.message))
       .finally(() => setEspnLoading(false));
@@ -546,21 +548,42 @@ export default function App() {
   const [fantasyRoster, setFantasyRoster] = useState<EspnRoster | null>(null);
   const usingFantasy = rosterSource === 'fantasy' && espnConnected;
 
-  useEffect(() => {
-    if (!usingFantasy) return;
-    let cancelled = false;
-    api
-      .espnRoster()
+  /**
+   * The team the views are reading, or null while they are reading the saved
+   * watchlist. This is what makes a team change reload: `PUT /api/espn/team`
+   * answers with a new status and nothing else about the league moves, so
+   * without the id in these dependency lists the app kept showing the old
+   * team's players until a reload.
+   */
+  const fantasyTeamId = usingFantasy ? espnTeamId : null;
+
+  /**
+   * Read the fantasy team from ESPN. `refresh` skips the server's ten-minute
+   * cache; the previous roster is left in place while the read is in flight, so
+   * a re-read never blanks the slot chips.
+   *
+   * The sequence number is what the effect's `cancelled` flag used to be, and
+   * is needed for the same reason in a different shape: two team picks in quick
+   * succession are two reads in flight, and without it the slower one lands
+   * last and leaves the chips describing a team nobody chose.
+   */
+  const rosterRead = useRef(0);
+  const loadFantasyRoster = useCallback((refresh = false) => {
+    const seq = ++rosterRead.current;
+    return api
+      .espnRoster(refresh)
       .then((r) => {
-        if (!cancelled) setFantasyRoster(r);
+        if (seq === rosterRead.current) setFantasyRoster(r);
       })
       // The report request carries the same failure and banners it; a second
       // copy of the same message would only say it twice.
       .catch((e: Error) => console.error('fantasy roster unavailable:', e.message));
-    return () => {
-      cancelled = true;
-    };
-  }, [usingFantasy, espnLeagueId, start, end]);
+  }, []);
+
+  useEffect(() => {
+    if (!usingFantasy) return;
+    loadFantasyRoster();
+  }, [usingFantasy, espnLeagueId, fantasyTeamId, start, end, loadFantasyRoster]);
 
   /** Slot by player key, for the chips. Null when the views are reading the
    *  saved watchlist, which is what makes every chip in the app disappear. */
@@ -865,10 +888,10 @@ export default function App() {
   // `quiet` refreshes in the background (live polling) without flashing the
   // loading UI; the foreground load on date/watchlist change is not quiet.
   const loadReport = useCallback(
-    (quiet = false) => {
+    (quiet = false, refresh = false) => {
       if (!quiet) setReportLoading(true);
-      api
-        .report(start, end, usingFantasy ? 'fantasy' : 'watchlist')
+      return api
+        .report(start, end, usingFantasy ? 'fantasy' : 'watchlist', refresh)
         .then((r) => setReports(r.players))
         .catch((e: Error) => setError(e.message))
         .finally(() => {
@@ -889,7 +912,29 @@ export default function App() {
     // than a slightly longer spinner.
     if (rosterSource === 'fantasy' && !espnStatusSettled) return;
     loadReport();
-  }, [loadReport, watchlist, rosterSource, espnStatusSettled]);
+    // `fantasyTeamId` because the report is *about* that team's players: pick a
+    // different one on the Fantasy league page and this is what re-reads it.
+  }, [loadReport, watchlist, rosterSource, espnStatusSettled, fantasyTeamId]);
+
+  /**
+   * Re-read everything that comes from ESPN, past the server's ten-minute
+   * cache — the ownership map, the fantasy roster's slots, and the report the
+   * roster decides the players of. For the person who has just moved someone
+   * over on ESPN and has come back here to see it.
+   *
+   * Deliberately sequential, and only the first call carries the flag: all
+   * three read the same league payload, and `getOwnership(force)` bypasses the
+   * in-flight guard as well as the cache, so firing them together would send
+   * three copies of one 2MB upstream read instead of one and two lookups.
+   */
+  const refreshFantasy = useCallback(() => {
+    const fresh = espnConnected ? loadOwnership(true) : Promise.resolve();
+    return fresh.then(() => {
+      if (!usingFantasy) return;
+      loadFantasyRoster();
+      loadReport();
+    });
+  }, [espnConnected, usingFantasy, loadOwnership, loadFantasyRoster, loadReport]);
 
   // The reports as rendered: the real ones, or a synthetic live-day overlay when
   // the demo toggle is on. Everything downstream (nav, cards, feed, the live
@@ -1974,6 +2019,7 @@ export default function App() {
           status={espnStatus}
           joinError={espnJoinError}
           onStatusChange={onEspnStatusChange}
+          onRefresh={refreshFantasy}
           onClose={() => setEspnOpen(false)}
         />
       )}

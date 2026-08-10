@@ -96,12 +96,16 @@ export function EspnSettings({
   status,
   joinError,
   onStatusChange,
+  onRefresh,
   onClose,
 }: {
   status: EspnStatus | null;
   /** Why an invite link failed, when the page was opened by one. */
   joinError?: string | null;
   onStatusChange: (s: EspnStatus) => void;
+  /** Re-read the league past the server's ten-minute cache — the roster, the
+   *  report it decides the players of, and the ownership map. */
+  onRefresh: () => Promise<void> | void;
   onClose: () => void;
 }) {
   useLockBodyScroll();
@@ -119,6 +123,10 @@ export function EspnSettings({
   // — the one call that already knows them — and only once connected.
   const [teams, setTeams] = useState<EspnTeam[]>([]);
   const [saving, setSaving] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  // Marks the moment, for the button — there is nothing else on this page that
+  // would visibly change, the roster it re-read being shown on the views behind.
+  const [refreshed, setRefreshed] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // The form stays on screen after a successful connect — the panel above it
@@ -206,6 +214,33 @@ export function EspnSettings({
       // prompt declined). The link is on screen and selectable either way, so
       // this is a convenience failing rather than the feature failing.
       setCopied(false);
+    }
+  };
+
+  /**
+   * Read the league again, now, rather than on whatever the ten-minute cache
+   * decides. The button exists because the one thing this app cannot see is a
+   * move made on ESPN — a lineup swapped at 6.55 is a change in the roster
+   * every watchlist view is reporting on, and until now the only way to make it
+   * land was to reload the page.
+   *
+   * The team list is re-read after, not alongside: `onRefresh` has just made
+   * the server's copy current, so this is a lookup rather than a fourth trip to
+   * ESPN, and it is what keeps a leaguemate's rename from sitting in the picker.
+   */
+  const refresh = async () => {
+    setRefreshing(true);
+    setError(null);
+    setRefreshed(false);
+    try {
+      await onRefresh();
+      const own = await api.espnOwnership();
+      setTeams(own.teams);
+      setRefreshed(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not read the league');
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -352,15 +387,35 @@ export function EspnSettings({
                 </p>
               </div>
             </div>
-            <button
-              type="button"
-              className="espn-disconnect"
-              onClick={disconnect}
-              disabled={saving}
-            >
-              Disconnect
-            </button>
+            <div className="espn-status-actions">
+              <button
+                type="button"
+                className="espn-refresh"
+                onClick={refresh}
+                disabled={saving || refreshing}
+                title="Read your league from ESPN again — for a lineup or roster move you have just made there"
+              >
+                {refreshing ? 'Reading…' : refreshed ? 'Up to date ✓' : 'Refresh from ESPN'}
+              </button>
+              <button
+                type="button"
+                className="espn-disconnect"
+                onClick={disconnect}
+                disabled={saving || refreshing}
+              >
+                Disconnect
+              </button>
+            </div>
           </section>
+        )}
+
+        {connected && status.connected && (
+          <p className="espn-note espn-refresh-note">
+            The app holds ESPN's answer for ten minutes, so a move made over
+            there lands here within that. <strong>Refresh from ESPN</strong>{' '}
+            reads it now — the rosters, the lineup slots and who is a free
+            agent.
+          </p>
         )}
 
         {connected && status.connected && (

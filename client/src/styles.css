@@ -5778,6 +5778,42 @@ body {
   font-size: 12.5px;
   color: var(--muted);
 }
+/* The status panel's two buttons. They share a line and wrap together, so on a
+   phone the panel reads as a block of text over a row of controls rather than
+   as two rows that happen to be near each other. */
+.espn-status-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+}
+/* Reading the league again is an ordinary action, so it takes the page's accent
+   — the red beside it is reserved for the one control that undoes the
+   connection. */
+.espn-refresh {
+  flex: none;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 14px;
+  min-height: var(--control-h);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.14s ease, color 0.14s ease;
+}
+.espn-refresh:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.espn-refresh:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.espn-refresh-note {
+  margin-top: 8px;
+}
 /* The one destructive control on the page, so it takes the app's red rather
    than the accent every other button here carries. */
 .espn-disconnect {

@@ -125,10 +125,14 @@ export const api = {
    *  saved watchlist. Asked for explicitly rather than left to the server's
    *  view of the saved preference, so the report and the view rendering it can
    *  never disagree about which set of players it describes. */
+  /** `refresh` is only meaningful alongside `source=fantasy`: it skips the
+   *  server's ten-minute read of the ESPN league, so the players this report is
+   *  about follow a lineup change made a moment ago. */
   async report(
     start: string,
     end: string,
     source: RosterSource = 'watchlist',
+    refresh = false,
   ): Promise<{
     start: string;
     end: string;
@@ -137,7 +141,8 @@ export const api = {
     teamName?: string | null;
   }> {
     const src = source === 'fantasy' ? '&source=fantasy' : '';
-    return request(`/api/report?start=${start}&end=${end}${src}`);
+    const fresh = refresh && source === 'fantasy' ? '&refresh=1' : '';
+    return request(`/api/report?start=${start}&end=${end}${src}${fresh}`);
   },
   // What this user has customised, saved server-side against their id. One
   // request on boot; the research board's columns are the only entry so far.
@@ -226,9 +231,10 @@ export const api = {
       body: JSON.stringify({ code }),
     });
   },
-  /** The user's own roster, slot by slot. */
-  async espnRoster(): Promise<EspnRoster> {
-    return request('/api/espn/roster');
+  /** The user's own roster, slot by slot. `refresh` as on `espnOwnership` —
+   *  the two read the same upstream through the same cache. */
+  async espnRoster(refresh = false): Promise<EspnRoster> {
+    return request(`/api/espn/roster${refresh ? '?refresh=1' : ''}`);
   },
   /** `refresh` skips the server's ten-minute cache — for the user who has just
    *  made a move and wants the board to agree with ESPN. */
