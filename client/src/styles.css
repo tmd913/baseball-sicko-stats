@@ -3468,7 +3468,6 @@ body {
 .edit-order-btn,
 .search-toggle,
 .date-toggle,
-.fs-btn,
 .search-bar-close {
   flex: none;
   /* The calendar is the one member that is never a square — see .date-toggle
@@ -3490,7 +3489,6 @@ body {
 .settings-btn:hover,
 .fantasy-btn:hover,
 .edit-order-btn:hover,
-.fs-btn:hover,
 .search-toggle:hover,
 .date-toggle:hover,
 .search-bar-close:hover {
@@ -3500,7 +3498,6 @@ body {
 .settings-btn:focus-visible,
 .fantasy-btn:focus-visible,
 .edit-order-btn:focus-visible,
-.fs-btn:focus-visible,
 .search-toggle:focus-visible,
 .date-toggle:focus-visible,
 .search-bar-close:focus-visible {
@@ -3513,7 +3510,6 @@ body {
 .settings-btn.active,
 .fantasy-btn.active,
 .edit-order-btn.active,
-.fs-btn.on,
 .search-toggle.active,
 .date-toggle.active {
   background: var(--accent);
@@ -3716,56 +3712,75 @@ body {
   letter-spacing: -0.02em;
 }
 
-/* ---- Full screen -----------------------------------------------------------
-   The three wide tables each offer the screen to themselves — see
-   `hooks.ts::useFullscreen` for why there are two mechanisms behind one button.
+/* ---- Full page ------------------------------------------------------------
+   The three wide tables each offer themselves the whole browser page. Not the
+   Fullscreen API — see `hooks.ts::useFullPage` for why — so this is a plain
+   fixed box over everything the app draws.
 
-   The button always sits **inside** the element that goes full screen, which is
-   what makes it the way out as well as the way in: on the research board that
-   is free, its tool row already being inside `.research-view`, and the other
-   two get `.table-toolbar` — one right-aligned row, the height of a control,
-   above the table.
-
-   Both mechanisms are styled the same way. `:fullscreen` is the real thing (the
-   element is already the size of the screen, so it only needs the app's
-   background, which it does not inherit — the fullscreen backdrop is black by
-   default and the table's own cells are transparent over it) and `.is-full` is
-   the fallback overlay, which has to place itself. */
-.table-toolbar {
-  display: flex;
-  justify-content: flex-end;
-  flex: none;
-  margin-bottom: 8px;
-}
-.summary-view:fullscreen,
-.research-view:fullscreen,
-.details-gamelog:fullscreen {
-  background: var(--bg);
-  padding: 10px 12px;
-}
-.summary-view.is-full,
-.research-view.is-full,
-.details-gamelog.is-full {
+   The button that sets it is **in the table's own top-left header cell**, which
+   costs the page no vertical space and, being the one cell pinned on both axes
+   (the header row sticks to the top, the headshot column to the left), is on
+   screen wherever you have scrolled to. That is what lets the same button be
+   the way out: there is no separate control and nothing to go looking for. */
+.summary-view.is-expanded,
+.research-view.is-expanded,
+.details-gamelog.is-expanded {
   position: fixed;
   inset: 0;
   z-index: 90;
-  background: var(--bg);
-  padding: 10px 12px;
-}
-/* Whichever mechanism it is, the inside is the same column: the toolbar holds
-   its height at the top and the table takes everything left. `max-width: none`
-   undoes the reading column the game log sets for its place in the overlay —
-   full screen is the one moment that column is the wrong idea. */
-.summary-view:fullscreen,
-.research-view:fullscreen,
-.details-gamelog:fullscreen,
-.summary-view.is-full,
-.research-view.is-full,
-.details-gamelog.is-full {
   display: flex;
   flex-direction: column;
+  align-items: stretch;
+  background: var(--bg);
+  padding: 10px 12px;
+  /* Undoes the game log's reading column, that being the one moment it is the
+     wrong idea. */
   max-width: none;
   margin: 0;
+}
+
+/* Small enough to sit in a header cell without setting the width of a column
+   that exists to be narrow: the headshot column is 37px of photo between two
+   gutters. Its own look rather than the header's square icon family — those are
+   36px and sit on a control line, this one sits on a table cell's tinted
+   background. */
+.expand-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--faint);
+  cursor: pointer;
+  transition: color 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+}
+.expand-btn:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.expand-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.expand-btn.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+}
+/* The game log's corner cell is the one that carries a word, so the button sits
+   beside it — inline, and deliberately *not* by making the cell a flex box:
+   `display: flex` on a `<th>` takes it out of the table's layout altogether, and
+   the header cell stopped being the width of its column (22px against a 76px
+   column, its text overflowing into the next header's space). The button is
+   `inline-flex` already, so it needs nothing but a gap and a baseline.
+   Everywhere else the cell is empty and the button is all of it. */
+.glog-table thead .glog-date .expand-btn {
+  margin-right: 7px;
+  vertical-align: middle;
 }
 
 /* ---- Summary view: a full-page, scroll-locked stat table ---- */
@@ -3787,15 +3802,21 @@ body {
    is what lets a three-row table shrink to its content instead of leaving dead
    space below the total row, while a long one shrinks to the space available
    and scrolls past that. */
+/* The table area may use up to whatever height is left below the header + view
+   bar, but no more. align-items:flex-start keeps the scroll box from being
+   stretched to that full height, so with only a few rows it shrinks to its
+   content instead of leaving dead space below the total row. */
 .summary-view {
   flex: 1;
   min-height: 0;
   display: flex;
-  flex-direction: column;
+  align-items: flex-start;
 }
 .summary-scroll {
-  flex: 0 1 auto;
+  flex: 1;
   min-height: 0;
+  /* Grow to content, but cap at the available height and scroll past that. */
+  max-height: 100%;
   overflow: auto;
   border: 1px solid var(--border);
   border-radius: 12px;

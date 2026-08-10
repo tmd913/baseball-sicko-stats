@@ -136,85 +136,35 @@ export function useDismissable(
 }
 
 /**
- * Give one element the whole screen, and take it back.
+ * Give one element the whole browser page, and take it back.
  *
  * These tables are the app's widest things by some way — the research board
  * carries 44 columns — and they read out of a box a few hundred pixels tall
  * under a header, a tab row and a control bar. This is the button that says
- * "just show me the table", and what it buys on a laptop is both the browser's
- * chrome and the app's: a dozen more rows and several more columns at once.
+ * "just show me the table": the app's own chrome goes and the table takes
+ * everything the page has.
  *
- * **Two mechanisms, one state.** The Fullscreen API is the real thing and takes
- * the browser's own chrome with it, but iPhone Safari does not implement it for
- * elements (only for video) — so a request that throws, or an API that isn't
- * there, falls back to a fixed overlay over the app. That covers everything the
- * app draws, which on a phone is nearly the whole screen anyway. The caller
- * sees one `isFull` either way and never has to know which it got.
+ * **Deliberately not the Fullscreen API.** That takes the browser's chrome as
+ * well, which is a bigger thing than was asked for and a worse one to be in by
+ * accident — it swallows the tab strip and the address bar, needs a user
+ * gesture, is refused outright by iPhone Safari for elements, and leaves the
+ * page in a mode the browser rather than the app has to be asked to leave. A
+ * fixed overlay covers everything this app draws, behaves the same everywhere,
+ * and is undone by the same button that made it.
  *
- * `fullscreenchange` is what keeps the state honest: Escape and the browser's
- * own exit are not our button, and a flag we set ourselves would go stale the
- * first time either was used.
+ * Escape leaves, because a mode that fills the window should answer the key
+ * that means "out of this".
  */
-export function useFullscreen<T extends HTMLElement>(ref: RefObject<T | null>) {
-  // The fallback's own flag. Native fullscreen is read from the document rather
-  // than remembered, so there is nothing to keep in sync there.
-  const [overlay, setOverlay] = useState(false);
-  const [native, setNative] = useState(false);
-
+export function useFullPage() {
+  const [isFull, setFull] = useState(false);
   useEffect(() => {
-    const sync = () => {
-      const on = !!ref.current && document.fullscreenElement === ref.current;
-      setNative(on);
-      // The two must never both be on: a browser that ends up in real
-      // fullscreen *and* leaves the fallback flag set would drop back into the
-      // overlay when the user pressed Escape, which reads as an exit that
-      // didn't work. Checked because it is not hypothetical — a headless
-      // Chrome does exactly this, entering fullscreen and rejecting the promise
-      // that says it did.
-      if (on) setOverlay(false);
-    };
-    document.addEventListener('fullscreenchange', sync);
-    return () => document.removeEventListener('fullscreenchange', sync);
-  }, [ref]);
-
-  // Escape leaves native fullscreen on its own; the overlay has to be told.
-  useEffect(() => {
-    if (!overlay) return;
+    if (!isFull) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOverlay(false);
+      if (e.key === 'Escape') setFull(false);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [overlay]);
-
-  const toggle = useCallback(() => {
-    const el = ref.current;
-    if (!el) return;
-    if (document.fullscreenElement) {
-      setOverlay(false);
-      void document.exitFullscreen().catch(() => undefined);
-      return;
-    }
-    if (overlay) {
-      setOverlay(false);
-      return;
-    }
-    if (document.fullscreenEnabled && el.requestFullscreen) {
-      // A rejected request is not an error worth showing anyone — it is an
-      // iPhone, or a permissions policy. Take the overlay instead.
-      //
-      // The decision is made from `document.fullscreenElement` a frame later
-      // rather than from the rejection itself, because the two disagree: a
-      // headless Chrome rejects the promise *and* enters fullscreen, and taking
-      // the rejection at its word left both mechanisms on at once. Asking what
-      // actually happened is the answer that can't be lied to.
-      el.requestFullscreen().catch(() => {
-        requestAnimationFrame(() => setOverlay(document.fullscreenElement !== el));
-      });
-    } else {
-      setOverlay(true);
-    }
-  }, [ref, overlay]);
-
-  return { isFull: native || overlay, toggle };
+  }, [isFull]);
+  const toggle = useCallback(() => setFull((v) => !v), []);
+  return { isFull, toggle };
 }
