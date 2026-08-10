@@ -3738,6 +3738,20 @@ body {
   max-width: none;
   margin: 0;
 }
+/* On the research board that box holds the table *and* its whole control set —
+   scope, window, positions, the four disclosures and the count line, some 180px
+   of it. Expanding is a request for the table, so everything that isn't the
+   table goes: the point of the mode is rows and columns, and controls that
+   describe a table you asked to see more of are the first thing that should
+   give up the room. Sorting still works, being a click on the header row, and
+   the filters are one press of the same button away.
+
+   A rule rather than a branch in the JSX, for the reason `.app.edit-mode`'s is:
+   this is one statement of one idea where the equivalent is a conditional
+   around each of five children. */
+.research-view.is-expanded > :not(.research-scroll) {
+  display: none;
+}
 
 /* Small enough to sit in a header cell without setting the width of a column
    that exists to be narrow: the headshot column is 37px of photo between two
