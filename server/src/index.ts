@@ -212,12 +212,18 @@ app.get(
     // consulting the saved preference, so a report and the view rendering it
     // can never disagree about which set of players it describes — the
     // preference decides what the client asks for, and nothing else.
+    // `refresh=1` rides along with it — a lineup change moves which players the
+    // report is even about, so the two have to be re-read together or the slot
+    // chips and the cards would describe different rosters.
     const fantasy = req.query.source === 'fantasy';
     let watched: WatchPlayer[];
     let teamName: string | null = null;
     if (fantasy) {
       try {
-        ({ players: watched, teamName } = await fantasyWatchlist(userId(req)));
+        ({ players: watched, teamName } = await fantasyWatchlist(
+          userId(req),
+          req.query.refresh === '1',
+        ));
       } catch (err) {
         // A league that can't be read is the user's to fix, and the client
         // offers the way to — so 409 rather than the 502 `asyncRoute` would
@@ -376,9 +382,14 @@ function espnError(err: unknown, res: express.Response): boolean {
  * Throws `EspnAuthError` when there is nothing to read from — no league, or no
  * team chosen within it — so the caller answers 409 with something the user can
  * act on rather than a 502 about an upstream that was never asked.
+ *
+ * `refresh` skips the ten-minute ownership cache, the same escape hatch
+ * `/api/espn/ownership` carries and for the same person: someone who has just
+ * moved a player in ESPN and is looking at the app to see it.
  */
 async function fantasyWatchlist(
   user: string,
+  refresh = false,
 ): Promise<{ players: WatchPlayer[]; teamName: string | null; roster: EspnRosterPlayer[] }> {
   const espn = await getEspnLeague(user);
   if (!espn) throw new EspnAuthError('No ESPN league connected');
@@ -389,7 +400,7 @@ async function fantasyWatchlist(
   }
   const creds = await getEspnCreds(user);
   if (!creds) throw new EspnAuthError('No ESPN league connected');
-  const own = await getOwnership(creds);
+  const own = await getOwnership(creds, refresh);
   const roster = own.rosters[espn.teamId] ?? [];
   const team = own.teams.find((t) => t.id === espn.teamId);
   return { players: rosterToWatchlist(roster), teamName: team?.name ?? espn.teamName ?? null, roster };
@@ -405,12 +416,13 @@ app.get(
 
 // The user's own roster, slot by slot — what the app shows beside each player
 // when it is reading the fantasy team rather than the saved watchlist.
+// `?refresh=1` skips the ten-minute cache, for the lineup change just made.
 app.get(
   '/api/espn/roster',
   requireUser,
   asyncRoute(async (req, res) => {
     try {
-      const { roster, teamName } = await fantasyWatchlist(userId(req));
+      const { roster, teamName } = await fantasyWatchlist(userId(req), req.query.refresh === '1');
       res.json({ teamName, players: roster });
     } catch (err) {
       if (!espnError(err, res)) throw err;
