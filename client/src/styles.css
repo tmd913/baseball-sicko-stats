@@ -2971,8 +2971,19 @@ body {
   border-bottom: none;
   font-weight: 800;
 }
+/* The season label is three columns wide (a season has no one lineup spot, so
+   it eats that column too) *and* carries `.glog-date`, which is what pins the
+   date column to the left edge — so scrolling right slid the label along over
+   its own totals and swallowed AB and R.
+   It keeps the row's bottom pin and gives up the horizontal one: `left: auto`
+   leaves a sticky box constrained on one axis only, so the label scrolls away
+   like any other cell and the numbers it was covering are readable. The
+   pinned-edge shadow goes with it — there is no longer an edge for it to
+   mark. */
 .glog-table tfoot .glog-date {
   z-index: 3;
+  left: auto;
+  box-shadow: none;
 }
 .glog-total-label {
   color: var(--muted);
