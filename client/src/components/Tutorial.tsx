@@ -186,7 +186,7 @@ const CHAPTERS: Chapter[] = [
           The date control decides what every view is showing. The presets cover most
           of it:
         </p>
-        <Demo label="The presets, behind the calendar button at the top right">
+        <Demo label="The presets, behind the calendar button on the Roster row">
           <div className="date-presets">
             <span className="date-preset active">Today</span>
             <span className="date-preset">Tomorrow</span>
@@ -214,16 +214,13 @@ const CHAPTERS: Chapter[] = [
           range can run up to 62 days.
         </p>
         <p className="tut-note">
-          All of that lives behind the{' '}
-          <Ui>
-            <CalendarIcon />
-          </Ui>{' '}
-          at the top right, beside the search — it is the widest control in the app
-          and you set it once, so it stays out of the way until you want it. Press it
-          and the presets and the range picker open on a line of their own; picking a
-          preset closes them again. The chip beside the{' '}
-          <Ui>Summary · Games · Feed</Ui> tabs is what tells you which days you are
-          looking at meanwhile.
+          All of that lives behind the calendar button at the end of the{' '}
+          <Ui>Roster</Ui> tab row — it is the widest control in the app and you set
+          it once, so it stays out of the way until you want it. Press it and the
+          presets and the range picker open on a line of their own; picking a preset
+          closes them again. Meanwhile the button says which days you are looking at:
+          the preset's own word while one is on, and the dates themselves once you
+          pick a range by hand.
         </p>
       </>
     ),
@@ -236,12 +233,12 @@ const CHAPTERS: Chapter[] = [
       <>
         <p>
           <Ui>Roster</Ui> is your own players over the dates you picked, and it has
-          three tabs of its own on the row below — three takes on that same set of
-          players over those same days. Pick whichever answers the question you
-          actually have. (<Ui>Research</Ui> beside it is the other thing entirely:
-          the whole league, covered further down.)
+          three tabs of its own after the <Ui>Batters · Pitchers</Ui> pair — three
+          takes on that same set of players over those same days. Pick whichever
+          answers the question you actually have. (<Ui>Research</Ui> at the front
+          is the other thing entirely: the whole league, covered further down.)
         </p>
-        <Demo label="The view bar — the kind tabs appear once you watch both">
+        <Demo label="The view bar — the groups wrap as the window allows">
           <div className="view-bar">
             <div className="view-bar-tabs">
               <div className="view-switch">
@@ -256,17 +253,15 @@ const CHAPTERS: Chapter[] = [
                   Pitchers<span className="kind-tab-count">3</span>
                 </span>
               </div>
-              <span className="date-badge">
-                <CalendarIcon />
-                Today
-              </span>
-            </div>
-            <div className="view-bar-sub">
               <div className="roster-switch">
                 <span className="roster-tab active">Summary</span>
                 <span className="roster-tab">Games</span>
                 <span className="roster-tab">Feed</span>
               </div>
+              <span className="date-toggle">
+                <CalendarIcon />
+                <span className="date-toggle-label">Today</span>
+              </span>
             </div>
           </div>
         </Demo>
@@ -298,9 +293,9 @@ const CHAPTERS: Chapter[] = [
         <p className="tut-note">
           Every one of the three shows one kind at a time. Once you watch both
           batters and pitchers, the <Ui>Batters</Ui> / <Ui>Pitchers</Ui> tabs appear
-          on the row above and follow you from tab to tab. <Ui>Research</Ui>, beside{' '}
-          <Ui>Roster</Ui> at the top, is a different animal — the whole league rather
-          than your watchlist — and has the next chapter to itself.
+          ahead of them and follow you from tab to tab. <Ui>Research</Ui>, beside{' '}
+          <Ui>Roster</Ui> at the front of the row, is a different animal — the whole
+          league rather than your watchlist — and has the next chapter to itself.
         </p>
       </>
     ),

@@ -21,14 +21,23 @@ function prettyLong(date: string): string {
   });
 }
 
-/** "Aug 9", or "Aug 1 – Aug 9" across a range — the same words as
- *  `prettyRange` with the year left off. For the view bar's narrow-screen date
- *  badge, which has a phone's width to share with the kind tabs: the full form
- *  is 161px and wraps the badge onto a line of its own, this one is ~115px and
- *  sits beside them. The year is no loss — the app shows one season and says so
- *  nowhere else on the page either. */
-export function shortRange(start: string, end: string): string {
-  return start === end ? prettyShort(start) : `${prettyShort(start)} – ${prettyShort(end)}`;
+function numericShort(date: string): string {
+  return new Date(date + 'T12:00:00').toLocaleDateString(undefined, {
+    month: 'numeric',
+    day: 'numeric',
+  });
+}
+
+/** "8/9", or "8/1 – 8/9" across a range. This is what the calendar button says
+ *  when no preset is active, and it is deliberately the shortest form there is:
+ *  the button sits in a wrapping row of tab groups, so every character it
+ *  spends is one that can push the group after it onto the next line. A preset
+ *  labels itself with its own word ("Today"), which survives the date rolling
+ *  over; only a hand-picked range needs the dates spelled out, and the month
+ *  name buys nothing the number doesn't. The year is no loss either — the app
+ *  shows one season and says so nowhere else on the page. */
+export function numericRange(start: string, end: string): string {
+  return start === end ? numericShort(start) : `${numericShort(start)} – ${numericShort(end)}`;
 }
 
 function prettyRange(start: string, end: string): string {
