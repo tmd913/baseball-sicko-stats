@@ -160,11 +160,19 @@ export const api = {
   async espn(): Promise<EspnStatus> {
     return request('/api/espn');
   },
-  async saveEspn(leagueId: number, swid: string, espnS2: string): Promise<EspnStatus> {
+  /** `swid`/`espnS2` are omitted for a public league, which ESPN serves to
+   *  anyone; `teamId` is whatever the pasted league URL carried, used only when
+   *  there is no SWID to identify the user's own team with. */
+  async saveEspn(
+    leagueId: number,
+    swid: string,
+    espnS2: string,
+    teamId: number | null = null,
+  ): Promise<EspnStatus> {
     return request('/api/espn', {
       method: 'PUT',
       headers: JSON_HEADERS,
-      body: JSON.stringify({ leagueId, swid, espnS2 }),
+      body: JSON.stringify({ leagueId, swid, espnS2, teamId }),
     });
   },
   async disconnectEspn(): Promise<EspnStatus> {

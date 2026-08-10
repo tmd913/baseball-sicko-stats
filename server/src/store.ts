@@ -57,8 +57,11 @@ export interface UserPrefs {
  */
 export interface EspnLeague {
   leagueId: number;
-  swid: string;
-  espnS2: string;
+  /** Null for a **public** league, which ESPN serves to anyone: there is then
+   *  no credential stored for that user at all, which is the best version of
+   *  handling one. */
+  swid: string | null;
+  espnS2: string | null;
   /** Cached at connect time so the status can name the league and the user's
    *  own team without a round trip to ESPN. */
   leagueName?: string;

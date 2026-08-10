@@ -706,6 +706,10 @@ export type EspnStatus =
       leagueName: string | null;
       teamId: number | null;
       teamName: string | null;
+      /** Whether an ESPN cookie is stored for this connection at all — false
+       *  for a public league, which is read anonymously. The value itself is
+       *  never sent; this only says which of the two kinds it is. */
+      hasCredentials: boolean;
       savedAt: number;
     };
 

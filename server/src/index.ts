@@ -293,6 +293,10 @@ function espnStatus(espn: EspnLeague | null) {
     leagueName: espn.leagueName ?? null,
     teamId: espn.teamId ?? null,
     teamName: espn.teamName ?? null,
+    // Whether a cookie is stored at all — true for a private league, false for
+    // a public one read anonymously. The value itself never appears here; this
+    // is only so the page can say which of the two it is.
+    hasCredentials: Boolean(espn.swid && espn.espnS2),
     savedAt: espn.savedAt,
   };
 }
@@ -321,32 +325,46 @@ app.put(
   '/api/espn',
   requireUser,
   asyncRoute(async (req, res) => {
-    const { leagueId, swid, espnS2 } = (req.body ?? {}) as {
+    const { leagueId, swid, espnS2, teamId } = (req.body ?? {}) as {
       leagueId?: unknown;
       swid?: unknown;
       espnS2?: unknown;
+      teamId?: unknown;
     };
     const id = typeof leagueId === 'number' ? leagueId : Number(leagueId);
     if (!Number.isInteger(id) || id <= 0) {
       res.status(400).json({ error: 'leagueId must be a positive integer' });
       return;
     }
-    if (typeof swid !== 'string' || typeof espnS2 !== 'string' || !swid.trim() || !espnS2.trim()) {
-      res.status(400).json({ error: 'swid and espnS2 are required' });
+    // **Both cookies or neither.** They are optional because a public league
+    // needs none, but half a pair is a typo rather than a choice, and letting
+    // it through would read the league anonymously and then report the private
+    // league's 401 as though the value supplied were the wrong one.
+    const hasSwid = typeof swid === 'string' && swid.trim() !== '';
+    const hasS2 = typeof espnS2 === 'string' && espnS2.trim() !== '';
+    if (hasSwid !== hasS2) {
+      res.status(400).json({ error: 'swid and espnS2 must be given together' });
       return;
     }
     const creds = {
       leagueId: id,
-      swid: normalizeSwid(swid),
-      espnS2: normalizeS2(espnS2),
+      swid: hasSwid ? normalizeSwid(swid as string) : null,
+      espnS2: hasS2 ? normalizeS2(espnS2 as string) : null,
     };
+    // Only used when there is no SWID to identify the user's team with — i.e.
+    // a public league, where the `teamId` in the URL they pasted is the one
+    // place it appears.
+    const urlTeamId = Number(teamId);
+    const fallbackTeam = Number.isInteger(urlTeamId) && urlTeamId > 0 ? urlTeamId : null;
     try {
       const info = await getLeagueInfo(creds);
+      const myTeamId = info.myTeamId ?? fallbackTeam;
       const saved = await setEspnLeague(userId(req), {
         ...creds,
         leagueName: info.leagueName,
-        teamId: info.myTeamId,
-        teamName: info.myTeamName,
+        teamId: myTeamId,
+        teamName:
+          info.myTeamName ?? info.teams.find((t) => t.id === myTeamId)?.name ?? null,
         savedAt: Date.now(),
       });
       res.json(espnStatus(saved));

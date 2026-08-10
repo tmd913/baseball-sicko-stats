@@ -4,6 +4,39 @@ import { api } from '../api';
 import type { EspnStatus } from '../types';
 
 /**
+ * What a pasted ESPN league URL yields. Both ids are in the address bar of any
+ * league page — `leagueId` on every one of them, `teamId` on a team page — and
+ * neither cookie is, nor could be: a cookie belongs to the site that set it and
+ * no other page can read it. So the URL saves the two lookups it can, and the
+ * instructions below cover the two it can't.
+ */
+interface LeagueRef {
+  leagueId: string;
+  teamId: number | null;
+}
+
+/**
+ * Pull the ids out of anything the user is likely to paste — a team page, a
+ * league page, a standings page, or just the number itself.
+ *
+ * Deliberately a regex over the raw string rather than `new URL()`: half the
+ * time what lands in the field is a fragment rather than a whole address (a
+ * copied query string, a URL with the scheme trimmed off by the app it came
+ * from), and none of those parse. `leagueId=` is unambiguous wherever it sits.
+ */
+export function parseLeagueRef(raw: string): LeagueRef | null {
+  const text = raw.trim();
+  if (text === '') return null;
+  const league = /[?&#\/]leagueId=(\d+)/i.exec(text) ?? /\bleagueId[=:](\d+)/i.exec(text);
+  if (league) {
+    const team = /[?&#]teamId=(\d+)/i.exec(text);
+    return { leagueId: league[1], teamId: team ? Number(team[1]) : null };
+  }
+  // A bare id, which is what the field held before it learned to take a URL.
+  return /^\d+$/.test(text) ? { leagueId: text, teamId: null } : null;
+}
+
+/**
  * Connect the app to one ESPN fantasy baseball league.
  *
  * A full-screen overlay in the same shape as the how-to page and the player
@@ -35,6 +68,9 @@ export function EspnSettings({
   const [leagueId, setLeagueId] = useState(
     status?.connected ? String(status.leagueId) : '',
   );
+  // Whatever `teamId` the pasted URL carried. Only used when there is no SWID
+  // to identify the user's own team with — i.e. a public league.
+  const [urlTeamId, setUrlTeamId] = useState<number | null>(null);
   const [swid, setSwid] = useState('');
   const [espnS2, setEspnS2] = useState('');
   const [saving, setSaving] = useState(false);
@@ -58,7 +94,7 @@ export function EspnSettings({
     setError(null);
     setJustSaved(false);
     try {
-      const next = await api.saveEspn(Number(leagueId.trim()), swid, espnS2);
+      const next = await api.saveEspn(Number(leagueId.trim()), swid, espnS2, urlTeamId);
       onStatusChange(next);
       // Nothing keeps the cookie in the page once the server has it.
       setSwid('');
@@ -85,7 +121,28 @@ export function EspnSettings({
     }
   };
 
-  const ready = leagueId.trim() !== '' && swid.trim() !== '' && espnS2.trim() !== '';
+  /**
+   * Paste handling for the league field: a URL collapses to the id it contains
+   * the moment it lands, so what stays on screen is the number the app will
+   * use. Anything unrecognised is left exactly as typed — silently blanking a
+   * field someone is halfway through is worse than letting the submit fail.
+   */
+  const onLeagueInput = (raw: string) => {
+    const ref = parseLeagueRef(raw);
+    if (ref && ref.leagueId !== raw.trim()) {
+      setLeagueId(ref.leagueId);
+      setUrlTeamId(ref.teamId);
+      return;
+    }
+    setLeagueId(raw);
+    if (ref?.teamId != null) setUrlTeamId(ref.teamId);
+  };
+
+  // The cookies are a pair and optional: a public league needs neither, a
+  // private one needs both, and one of the two is a half-finished paste.
+  const cookiesGiven = swid.trim() !== '' || espnS2.trim() !== '';
+  const cookiesComplete = swid.trim() !== '' && espnS2.trim() !== '';
+  const ready = leagueId.trim() !== '' && (!cookiesGiven || cookiesComplete);
 
   return (
     <div className="details-view espn-view">
@@ -126,6 +183,7 @@ export function EspnSettings({
                 <p className="espn-status-sub">
                   League {status.leagueId}
                   {status.teamName ? ` · ${status.teamName}` : ''}
+                  {status.hasCredentials ? '' : ' · public, no credentials stored'}
                 </p>
               </div>
             </div>
@@ -143,25 +201,37 @@ export function EspnSettings({
         <section className="espn-section">
           <h2 className="espn-h2">Where to find these</h2>
           <p className="espn-note">
-            ESPN has no public API key for fantasy leagues. A private league is
-            visible only to someone signed in to it, so the app signs in as you,
-            using the two cookies your browser already holds. They stay on the
-            server, are never sent back to this page, and you can remove them at
-            any time with <strong>Disconnect</strong>.
+            ESPN has no public API key for fantasy leagues. A <em>public</em>{' '}
+            league it will hand to anyone, so all the app needs is which one. A{' '}
+            <em>private</em> league is visible only to someone signed in to it —
+            for that the app has to sign in as you, using two cookies your browser
+            already holds. Those stay on the server, are never sent back to this
+            page, and you can remove them at any time with{' '}
+            <strong>Disconnect</strong>.
           </p>
 
-          <h3 className="espn-h3">1. League ID</h3>
+          <h3 className="espn-h3">1. Your league</h3>
           <p className="espn-note">
-            Open your league on <code>fantasy.espn.com</code> and read it out of
-            the address bar — it's the <code>leagueId</code> parameter.
+            Open your league on <code>fantasy.espn.com</code> and paste the whole
+            address into the first field below — the app reads the ids out of it.
+            The bare number works too, if you'd rather.
           </p>
           <pre className="espn-code">
-            https://fantasy.espn.com/baseball/league?leagueId=<b>123456</b>
+            https://fantasy.espn.com/baseball/team?leagueId=<b>123456</b>&amp;teamId=<b>6</b>
           </pre>
 
-          <h3 className="espn-h3">2. SWID and espn_s2</h3>
+          <h3 className="espn-h3">2. SWID and espn_s2 — private leagues only</h3>
           <p className="espn-note">
-            These are cookies. With your league open, in the same tab:
+            <strong>Try connecting without these first.</strong> If your league is
+            public, ESPN will serve it to anyone and nothing else is needed — the
+            app stores no credential for you at all. If it's private you'll be
+            told so, and these two are what get you in.
+          </p>
+          <p className="espn-note">
+            They're cookies, which is why they aren't in the address bar: a cookie
+            belongs to the site that set it, and no other page can read it. You
+            have to copy them across by hand. With your league open, in the same
+            tab:
           </p>
           <ol className="espn-steps">
             <li>
@@ -196,19 +266,26 @@ export function EspnSettings({
         <form className="espn-form" onSubmit={submit}>
           <h2 className="espn-h2">{connected ? 'Reconnect' : 'Connect'}</h2>
           <label className="espn-field">
-            <span className="espn-label">League ID</span>
+            <span className="espn-label">League URL or ID</span>
             <input
               className="espn-input"
               type="text"
-              inputMode="numeric"
-              placeholder="123456"
+              placeholder="https://fantasy.espn.com/baseball/team?leagueId=…"
               value={leagueId}
-              onChange={(e) => setLeagueId(e.target.value)}
+              onChange={(e) => onLeagueInput(e.target.value)}
               autoComplete="off"
             />
+            {urlTeamId !== null && (
+              <span className="espn-field-note">
+                Read from the URL — league {leagueId}, team {urlTeamId}.
+              </span>
+            )}
           </label>
           <label className="espn-field">
-            <span className="espn-label">SWID</span>
+            <span className="espn-label">
+              SWID
+              <span className="espn-optional">private leagues only</span>
+            </span>
             <input
               className="espn-input"
               type="password"
@@ -219,7 +296,10 @@ export function EspnSettings({
             />
           </label>
           <label className="espn-field">
-            <span className="espn-label">espn_s2</span>
+            <span className="espn-label">
+              espn_s2
+              <span className="espn-optional">private leagues only</span>
+            </span>
             <input
               className="espn-input"
               type="password"
@@ -240,7 +320,9 @@ export function EspnSettings({
                 it is doing rather than "Save": a set of cookies that can't open
                 the league is worth rejecting while the form is still on screen. */}
             <span className="espn-hint">
-              Your credentials are checked against ESPN before they're saved.
+              {cookiesGiven
+                ? "Your credentials are checked against ESPN before they're saved."
+                : 'Checked against ESPN before saving — a private league will say so.'}
             </span>
           </div>
         </form>

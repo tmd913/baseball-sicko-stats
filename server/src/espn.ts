@@ -50,13 +50,19 @@ const INDEX_TTL_MS = 60 * 60 * 1000;
 
 // ---- Credentials ----------------------------------------------------------
 
-/** What a user has to supply to read their own league. `espnS2` is a session
- *  cookie for that user's ESPN account: it is stored server-side, never logged,
- *  and never sent back to the browser — see the `/api/espn` routes. */
+/**
+ * What is needed to read a league.
+ *
+ * **The cookies are optional**, because a *public* league needs none: ESPN
+ * serves it to anyone who asks. They are required only for a private one, which
+ * is the case the 401 below names. `espnS2` is a session cookie for that user's
+ * ESPN account: it is stored server-side, never logged, and never sent back to
+ * the browser — see the `/api/espn` routes.
+ */
 export interface EspnCreds {
   leagueId: number;
-  swid: string;
-  espnS2: string;
+  swid: string | null;
+  espnS2: string | null;
 }
 
 /** ESPN's cookie wants the SWID in braces; people paste it both ways. */
@@ -235,18 +241,29 @@ async function leagueGet(creds: EspnCreds, views: string[]): Promise<EspnRosterR
   const url =
     `${FANTASY_BASE}/${SEASON}/segments/0/leagues/${creds.leagueId}` +
     `?${views.map((v) => `view=${v}`).join('&')}`;
+  // Omitted entirely rather than sent empty when there is nothing to send: a
+  // public league is read anonymously, and `Cookie: SWID=; espn_s2=` is not the
+  // same request as no cookie header at all.
+  const authed = Boolean(creds.swid && creds.espnS2);
   const res = await fetch(url, {
     headers: {
       ...UA,
       // Sent as a raw Cookie header, exactly as a browser would: `espn_s2` is
       // already percent-encoded by ESPN and must not be encoded again.
-      Cookie: `SWID=${creds.swid}; espn_s2=${creds.espnS2}`,
+      ...(authed ? { Cookie: `SWID=${creds.swid}; espn_s2=${creds.espnS2}` } : {}),
     },
   });
   if (res.status === 401 || res.status === 403) {
+    // The two 401s mean opposite things to the person reading them: one is
+    // "this league is private, so it needs your cookies", the other is "the
+    // cookies you gave have expired". Saying the wrong one sends the user off
+    // to solve a problem they don't have.
     throw new EspnAuthError(
-      `ESPN rejected the saved credentials for league ${creds.leagueId}. ` +
-        'The espn_s2 cookie expires — sign in to ESPN again and re-copy it.',
+      authed
+        ? `ESPN rejected the saved credentials for league ${creds.leagueId}. ` +
+          'The espn_s2 cookie expires — sign in to ESPN again and re-copy it.'
+        : `League ${creds.leagueId} is private, so it can't be read without ` +
+          'your ESPN cookies. Add the SWID and espn_s2 values below.',
     );
   }
   if (res.status === 404) {
@@ -293,10 +310,15 @@ function leagueInfoFrom(creds: EspnCreds, data: EspnRosterResponse): EspnLeagueI
     name: t.name?.trim() || `Team ${t.id}`,
     abbrev: t.abbrev?.trim() || `T${t.id}`,
   }));
-  const swid = creds.swid.toUpperCase();
-  const mine = (data.teams ?? []).find((t) =>
-    [...(t.owners ?? []), t.primaryOwner].some((o) => (o ?? '').toUpperCase() === swid),
-  );
+  // Without a SWID there is nobody to match, so a public league connected
+  // anonymously has no "your team" — the caller may still know it from the URL
+  // the user pasted, which is the only other place it appears.
+  const swid = creds.swid?.toUpperCase() ?? null;
+  const mine = swid
+    ? (data.teams ?? []).find((t) =>
+        [...(t.owners ?? []), t.primaryOwner].some((o) => (o ?? '').toUpperCase() === swid),
+      )
+    : undefined;
   return {
     leagueId: creds.leagueId,
     leagueName: data.settings?.name?.trim() || `League ${creds.leagueId}`,
