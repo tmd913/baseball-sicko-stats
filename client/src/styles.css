@@ -3749,6 +3749,20 @@ body {
   max-width: none;
   margin: 0;
 }
+/* Only as tall as its rows. `flex: 0 1 auto` takes the content's height, and
+   `min-height: 0` lets it shrink back to the box when there is more content
+   than screen — which is the case where it scrolls, and the only case where it
+   should be full height. `flex: 1`, which is what these panes carry for their
+   place in the ordinary layout, filled the box either way: a short table sat in
+   a bordered expanse of nothing (581px of it on a 1300px window) with the total
+   row pinned to the far bottom, a gap below the last game that reads as a table
+   that has stopped scrolling. */
+.summary-view.is-expanded > .summary-scroll,
+.research-view.is-expanded > .research-scroll,
+.details-gamelog.is-expanded > .glog-scroll {
+  flex: 0 1 auto;
+  min-height: 0;
+}
 /* On the research board that box holds the table *and* its whole control set —
    scope, window, positions, the four disclosures and the count line, some 180px
    of it. Expanding is a request for the table, so everything that isn't the
