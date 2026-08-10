@@ -24,6 +24,7 @@ import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as r53targets from 'aws-cdk-lib/aws-route53-targets';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
+import * as ses from 'aws-cdk-lib/aws-ses';
 import type { Construct } from 'constructs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -66,15 +67,35 @@ export interface SickoStackProps extends StackProps {
    *  Omit both to deploy with email/password sign-in only. */
   googleClientId?: string;
   googleSecretName?: string;
-  /** Prefix for the Cognito hosted-UI domain. Must be globally unique. */
+  /** Prefix for the Cognito hosted-UI domain. Must be globally unique.
+   *
+   *  Sign-in is drawn by the app itself now (`client/src/auth.tsx`), so this
+   *  only serves the one page the app can't draw: the redirect that federates
+   *  to Google. */
   cognitoPrefix: string;
+  /**
+   * The address Cognito's confirmation and password-reset emails come *from*,
+   * e.g. `no-reply@statcastsicko.com`. Omit to keep Cognito's own shared
+   * sender.
+   *
+   * This is deliberately separate from `domainName`, which is what actually
+   * creates the SES identity and its DKIM records. The two are split because
+   * a new SES account is in the **sandbox**, where it may only email verified
+   * addresses — switching Cognito over before production access is granted
+   * would turn every sign-up into a `CodeDeliveryFailureException`. So the
+   * identity is created and verified on the first deploy, and this flag flips
+   * sending over on a later one, once the AWS console says the account is out
+   * of the sandbox.
+   */
+  sesFromEmail?: string;
 }
 
 export class SickoStack extends Stack {
   constructor(scope: Construct, id: string, props: SickoStackProps) {
     super(scope, id, props);
 
-    const { siteUrl, domainName, googleClientId, googleSecretName, cognitoPrefix } = props;
+    const { siteUrl, domainName, googleClientId, googleSecretName, cognitoPrefix, sesFromEmail } =
+      props;
 
     // ---- Storage ------------------------------------------------------
 
@@ -118,6 +139,118 @@ export class SickoStack extends Stack {
       autoDeleteObjects: true,
     });
 
+    // Shared by all three functions. Declared up here rather than beside the
+    // API function because the Cognito message trigger below is built before
+    // the user pool that calls it.
+    const bundling = {
+      format: OutputFormat.ESM,
+      target: 'node22',
+      sourceMap: true,
+      // Ship the SDK rather than trusting the runtime's copy. The default
+      // (external) is wrong here: `@aws-sdk/lib-dynamodb` — the DocumentClient
+      // the watchlist is written through — is not part of the SDK bundled into
+      // the Lambda runtime, so leaving it external is a MODULE_NOT_FOUND on the
+      // first watchlist read. Bundling also pins the version we tested against.
+      bundleAwsSDK: true,
+      // The server is ESM and uses import.meta.url, but some transitive deps
+      // still expect CommonJS's `require`. esbuild's ESM output has no `require`
+      // in scope, so re-create one.
+      banner:
+        "import{createRequire as __cr}from'module';const require=__cr(import.meta.url);",
+    } as const;
+
+    // ---- Email --------------------------------------------------------
+
+    // The zone is imported rather than created: Route 53 makes one when the
+    // domain is registered, and a second zone for the same name would serve
+    // records the registrar's delegation never points at. It is resolved here,
+    // ahead of everything that writes into it, because the SES identity's DKIM
+    // records are the first of them.
+    const zone = domainName
+      ? route53.HostedZone.fromLookup(this, 'Zone', { domainName })
+      : undefined;
+
+    /**
+     * Sending confirmation codes from a domain we own and sign.
+     *
+     * Cognito's default sender is `no-reply@verificationemail.com`, shared
+     * with every other user pool on the platform and aligned with nothing. A
+     * six-digit code from an address like that, about a product it can't name,
+     * is close to the definition of what a spam filter is looking for — which
+     * is why sign-up emails were landing in junk. Three records fix the half
+     * of that which is deliverability rather than wording:
+     *
+     *  - **DKIM**, written by `Identity.publicHostedZone` — three CNAMEs to
+     *    Amazon-managed keys, so every message carries a signature that
+     *    validates against `statcastsicko.com`.
+     *  - **A custom MAIL FROM subdomain**, which is what makes SPF *align*:
+     *    without one the envelope sender is an `amazonses.com` domain, so SPF
+     *    passes for Amazon and aligns with nobody. `mailFromDomain` writes its
+     *    MX and SPF records into the zone itself, so they aren't here.
+     *  - **DMARC**, at `p=none`, which is the one record nothing writes for us.
+     *    Gmail and Yahoo now require bulk senders to
+     *    publish one at all, and monitoring-only is the right first setting:
+     *    it asks nothing to be rejected while the domain has no sending
+     *    history.
+     *
+     * The identity is created whenever there's a zone, and costs nothing
+     * standing idle. Whether Cognito *uses* it is `sesFromEmail`'s decision —
+     * see the prop, and the sandbox it exists to survive.
+     */
+    let userPoolEmail: cognito.UserPoolEmail | undefined;
+    let sesIdentity: ses.EmailIdentity | undefined;
+    if (domainName && zone) {
+      sesIdentity = new ses.EmailIdentity(this, 'SesIdentity', {
+        identity: ses.Identity.publicHostedZone(zone),
+        mailFromDomain: `mail.${domainName}`,
+        // If the MX below is ever missing or misconfigured, fall back to
+        // Amazon's own envelope domain rather than refusing to send: a
+        // deliverability optimisation must not be able to stop a sign-up.
+        mailFromBehaviorOnMxFailure: ses.MailFromBehaviorOnMxFailure.USE_DEFAULT_VALUE,
+      });
+
+      new route53.TxtRecord(this, 'DmarcRecord', {
+        zone,
+        recordName: `_dmarc.${domainName}`,
+        values: ['v=DMARC1; p=none;'],
+        ttl: Duration.hours(1),
+      });
+
+      if (sesFromEmail) {
+        userPoolEmail = cognito.UserPoolEmail.withSES({
+          fromEmail: sesFromEmail,
+          // What a mail client shows instead of the address. The whole point
+          // of the exercise is that the reader recognises the sender.
+          fromName: 'Statcast Sicko',
+          sesVerifiedDomain: domainName,
+          sesRegion: this.region,
+        });
+      }
+    }
+
+    /**
+     * The wording of those emails, which is the other half of the problem.
+     *
+     * A pool has one verification template and uses it for sign-up *and* for
+     * password resets, so anything written there has to be vague enough to
+     * cover both — "Your confirmation code is 123456". A CustomMessage trigger
+     * is the only place Cognito exposes which of the two it is
+     * (`triggerSource`), so the copy lives in a function rather than in this
+     * file. See `infra/lambda/cognito-message.ts`, including what happens when
+     * it throws.
+     */
+    const messageFn = new NodejsFunction(this, 'CognitoMessageFunction', {
+      entry: path.join(__dirname, '..', 'lambda', 'cognito-message.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_22_X,
+      memorySize: 256,
+      timeout: Duration.seconds(5),
+      environment: {
+        SITE_URL: siteUrl ?? (domainName ? `https://${domainName}` : 'https://statcastsicko.com'),
+      },
+      bundling,
+    });
+
     // ---- Auth ---------------------------------------------------------
 
     const userPool = new cognito.UserPool(this, 'UserPool', {
@@ -133,10 +266,29 @@ export class SickoStack extends Stack {
         requireSymbols: false,
       },
       accountRecovery: cognito.AccountRecovery.EMAIL_ONLY,
+      // Who the codes come from (see the Email section above) and what they
+      // say. `userVerification` is the fallback the trigger displaces: it is
+      // only ever seen if `messageFn` is removed or a trigger source it
+      // doesn't handle comes up, so it is worded to fit sign-up and password
+      // reset alike — which is exactly the vagueness the trigger exists to
+      // avoid, and why it isn't the primary.
+      ...(userPoolEmail ? { email: userPoolEmail } : {}),
+      lambdaTriggers: { customMessage: messageFn },
+      userVerification: {
+        emailStyle: cognito.VerificationEmailStyle.CODE,
+        emailSubject: 'Your Statcast Sicko verification code',
+        emailBody:
+          'Your Statcast Sicko verification code is {####}. ' +
+          "If you didn't ask for it, you can ignore this email.",
+      },
       // Losing the pool means losing every account, and Cognito subs are the
       // watchlist's partition key — the two have to survive together.
       removalPolicy: RemovalPolicy.RETAIN,
     });
+
+    // Cognito must not be pointed at an SES identity that hasn't finished
+    // verifying, or the pool update fails on an unverified source.
+    if (sesIdentity && userPoolEmail) userPool.node.addDependency(sesIdentity);
 
     const userPoolDomain = userPool.addDomain('Domain', {
       cognitoDomain: { domainPrefix: cognitoPrefix },
@@ -185,7 +337,14 @@ export class SickoStack extends Stack {
     const userPoolClient = userPool.addClient('WebClient', {
       // A browser app can't keep a secret; PKCE covers the exchange instead.
       generateSecret: false,
-      authFlows: { userSrp: true },
+      // `userPassword` is what lets the app's own sign-in form authenticate
+      // without the hosted UI: it posts the password to Cognito inside the TLS
+      // body, where SRP would prove knowledge of it without sending it. The
+      // hosted UI posted the same password over the same TLS to the same
+      // service, so nothing is newly exposed — but see `cognito.ts::signIn`
+      // for the trade and the way back to SRP if it stops being worth it.
+      // `userSrp` stays on so that route needs no infrastructure change.
+      authFlows: { userSrp: true, userPassword: true },
       oAuth: {
         flows: { authorizationCodeGrant: true },
         scopes: [
@@ -227,23 +386,6 @@ export class SickoStack extends Stack {
       COGNITO_DOMAIN: cognitoDomain,
       NODE_OPTIONS: '--enable-source-maps',
     };
-
-    const bundling = {
-      format: OutputFormat.ESM,
-      target: 'node22',
-      sourceMap: true,
-      // Ship the SDK rather than trusting the runtime's copy. The default
-      // (external) is wrong here: `@aws-sdk/lib-dynamodb` — the DocumentClient
-      // the watchlist is written through — is not part of the SDK bundled into
-      // the Lambda runtime, so leaving it external is a MODULE_NOT_FOUND on the
-      // first watchlist read. Bundling also pins the version we tested against.
-      bundleAwsSDK: true,
-      // The server is ESM and uses import.meta.url, but some transitive deps
-      // still expect CommonJS's `require`. esbuild's ESM output has no `require`
-      // in scope, so re-create one.
-      banner:
-        "import{createRequire as __cr}from'module';const require=__cr(import.meta.url);",
-    } as const;
 
     const apiFn = new NodejsFunction(this, 'ApiFunction', {
       entry: path.join(REPO, 'server', 'src', 'lambda.ts'),
@@ -312,13 +454,6 @@ export class SickoStack extends Stack {
     const apiDomain = `${httpApi.apiId}.execute-api.${this.region}.${this.urlSuffix}`;
 
     // ---- Delivery -----------------------------------------------------
-
-    // The zone is imported rather than created: Route 53 makes one when the
-    // domain is registered, and a second zone for the same name would serve
-    // records the registrar's delegation never points at.
-    const zone = domainName
-      ? route53.HostedZone.fromLookup(this, 'Zone', { domainName })
-      : undefined;
 
     // CloudFront only accepts certificates from us-east-1, which is where this
     // stack already lives. Validation writes its CNAME into the zone above, so
@@ -466,6 +601,14 @@ export class SickoStack extends Stack {
     new CfnOutput(this, 'CognitoDomain', { value: cognitoDomain });
     new CfnOutput(this, 'CacheBucketName', { value: cacheBucket.bucketName });
     new CfnOutput(this, 'WatchlistTableName', { value: watchlistTable.tableName });
+    new CfnOutput(this, 'SesStatus', {
+      value: sesFromEmail
+        ? `Cognito sends as ${sesFromEmail} via SES`
+        : "SES identity created; Cognito still sends from Cognito's shared address. " +
+          'Once SES has production access, re-deploy with ' +
+          `-c sesFromEmail=no-reply@${domainName ?? 'example.com'}`,
+      description: 'Where confirmation and password-reset emails come from',
+    });
     new CfnOutput(this, 'GoogleRedirectUri', {
       value: `https://${cognitoDomain}/oauth2/idpresponse`,
       description: 'Add this as an authorized redirect URI on the Google OAuth client',

@@ -28,6 +28,11 @@ new SickoStack(app, ctx('stackName') ?? 'BaseballSicko', {
   googleClientId: ctx('googleClientId'),
   googleSecretName: ctx('googleSecretName') ?? 'baseball-sicko/google-oauth',
   // Cognito hosted-UI prefixes are globally unique, so make it easy to change.
+  // Only Google's redirect reaches it now — the app draws its own sign-in.
   cognitoPrefix: ctx('cognitoPrefix') ?? 'baseball-sicko',
+  // Set this once SES has production access; until then the identity is
+  // created and verified but Cognito keeps sending through its own shared
+  // address. See SickoStackProps.sesFromEmail.
+  sesFromEmail: ctx('sesFromEmail'),
   description: 'Statcast Sicko — API, watchlists, cache and static site',
 });
