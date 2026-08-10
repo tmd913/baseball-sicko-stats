@@ -45,13 +45,13 @@ interface CookiePaste {
 /**
  * Find one named cookie's value inside whatever the user pasted.
  *
- * Cookie viewers, devtools panels and phone inspectors all copy the **name
+ * Cookie viewers, devtools panels and browser extensions all copy the **name
  * along with the value**, and each of them punctuates it differently:
  * `espn_s2:"AEB…"`, `SWID={…}`, `"espn_s2": "AEB…"`, or the whole
  * `SWID={…}; espn_s2=AEB…` string at once. Every one of those pasted whole is
  * a value the app would otherwise reject, so the field reads them all rather
- * than asking the user to trim by hand — which on a phone, with a 300-character
- * token, is the step the whole thing founders on.
+ * than asking the user to trim a 300-character token by hand, which is the step
+ * the whole thing founders on.
  *
  * The value is quoted or it runs to the next separator. Neither cookie can
  * contain a space, a comma or a semicolon (`espn_s2` is percent-encoded and
@@ -316,8 +316,17 @@ export function EspnSettings({
           <p className="espn-note">
             They're cookies, which is why they aren't in the address bar: a cookie
             belongs to the site that set it, and no other page can read it. You
-            have to copy them across by hand. With your league open, in the same
-            tab:
+            have to copy them across by hand, and for that you need a{' '}
+            <strong>laptop or desktop</strong> — no mobile browser has a cookie
+            viewer, so this step can't be done from a phone.
+          </p>
+          <p className="espn-note">
+            <strong>You only have to do it once.</strong> This connection is saved
+            to your account rather than to a device, so set it up here on a
+            computer and your phone has it too — there's nothing to repeat there.
+          </p>
+          <p className="espn-note">
+            With your league open in a browser on that computer, in the same tab:
           </p>
           <ol className="espn-steps">
             <li>
@@ -347,80 +356,10 @@ export function EspnSettings({
             what your browser copied — <code>espn_s2:"AEB…"</code>,{' '}
             <code>SWID={'{ABCD…}'}</code>, or the whole{' '}
             <code>SWID=…; espn_s2=…</code> line — into either box. The fields read
-            the values out and sort themselves, which saves trimming a
-            300-character token by hand on a phone.
+            the values out and sort themselves, so a 300-character token never has
+            to be trimmed by hand.
           </p>
 
-          <details className="espn-details">
-            <summary className="espn-summary">On a phone or tablet</summary>
-            <p className="espn-note">
-              <strong>Easiest: don't.</strong> This connection is saved to your
-              account rather than to a device, so do it once from any computer and
-              your phone has it too — nothing to repeat here.
-            </p>
-            <p className="espn-note">
-              No mobile browser has a built-in cookie viewer, which is why the rest
-              of these still involve a computer, just briefly:
-            </p>
-            <p className="espn-note">
-              <strong>iPhone or iPad, with a Mac.</strong>
-            </p>
-            <ol className="espn-steps">
-              <li>
-                On the phone: <strong>Settings</strong> → <strong>Apps</strong> →{' '}
-                <strong>Safari</strong> (on older iOS, <strong>Settings</strong> →{' '}
-                <strong>Safari</strong>) → <strong>Advanced</strong> → turn on{' '}
-                <strong>Web Inspector</strong>.
-              </li>
-              <li>
-                On the Mac: <strong>Safari</strong> → <strong>Settings</strong> →{' '}
-                <strong>Advanced</strong> → tick{' '}
-                <strong>Show features for web developers</strong>.
-              </li>
-              <li>
-                Connect the two by cable and tap <strong>Trust</strong> if the phone
-                asks. Open your league in Safari on the phone.
-              </li>
-              <li>
-                On the Mac: <strong>Develop</strong> → your phone's name → the{' '}
-                <code>fantasy.espn.com</code> tab.
-              </li>
-              <li>
-                In the inspector, <strong>Storage</strong> → <strong>Cookies</strong>{' '}
-                → <code>fantasy.espn.com</code>.
-              </li>
-            </ol>
-            <p className="espn-note">
-              <strong>Android, with any computer.</strong>
-            </p>
-            <ol className="espn-steps">
-              <li>
-                On the phone: <strong>Settings</strong> →{' '}
-                <strong>About phone</strong> → tap <strong>Build number</strong>{' '}
-                seven times, then <strong>Developer options</strong> → turn on{' '}
-                <strong>USB debugging</strong>.
-              </li>
-              <li>
-                Connect by cable and allow debugging when asked. Open your league in
-                Chrome on the phone.
-              </li>
-              <li>
-                On the computer, in Chrome, go to{' '}
-                <code>chrome://inspect/#devices</code> and press{' '}
-                <strong>inspect</strong> under the{' '}
-                <code>fantasy.espn.com</code> tab.
-              </li>
-              <li>
-                Then <strong>Application</strong> → <strong>Cookies</strong> →{' '}
-                <code>https://fantasy.espn.com</code>, as above.
-              </li>
-            </ol>
-            <p className="espn-note">
-              Whichever route you take, the two values paste into this page from
-              anywhere — email them to yourself, or connect from the computer
-              you're already on.
-            </p>
-          </details>
           <p className="espn-note espn-warn">
             Treat <code>espn_s2</code> like a password: it is a live session for
             your ESPN account. It expires every so often, and when it does the
