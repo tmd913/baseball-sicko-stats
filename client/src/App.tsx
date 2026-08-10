@@ -29,7 +29,8 @@ import {
 import type { ResearchPos, ResearchScope } from './components/ResearchTable';
 import { simulateLiveDay } from './simulate';
 import { PlayerDetails } from './components/PlayerDetails';
-import { DateRangePicker } from './components/DateRangePicker';
+import { DateRangePicker, shortRange } from './components/DateRangePicker';
+import { MutedContext } from './hooks';
 import { Tutorial } from './components/Tutorial';
 
 // Breathing room above a card scrolled to the top of the viewport.
@@ -244,6 +245,23 @@ export default function App() {
       .saveHideInjured(hide)
       .catch((e: Error) => console.error('saving hide-injured failed:', e.message));
   }, []);
+  // Play every clip with the sound off. Saved per user like the toggle above,
+  // but deliberately **not** in the URL: hide-injured is there because it
+  // changes which players a view is reporting on, and a link that says so is
+  // saying something about the data. Muting is a preference about this person
+  // and this room — a shared link has no business carrying it, and there is no
+  // param for a recipient's own saved setting to have to defend itself against.
+  const [muteAudio, setMuteAudioState] = useState(false);
+  // As with hide-injured: set once the user works the toggle, so the saved
+  // value landing a moment later can't undo a choice they have just made.
+  const muteAudioTouched = useRef(false);
+  const setMuteAudio = useCallback((mute: boolean) => {
+    muteAudioTouched.current = true;
+    setMuteAudioState(mute);
+    api
+      .saveMuteAudio(mute)
+      .catch((e: Error) => console.error('saving mute-audio failed:', e.message));
+  }, []);
   // The research board, fetched per kind the first time that tab is opened and
   // kept for the session: it's the whole league in one blob, season-to-date, and
   // the server caches it for six hours — re-fetching on every tab switch would
@@ -284,6 +302,9 @@ export default function App() {
         if (!hideInjuredTouched.current && !hideInjuredFromUrl && prefs.hideInjured) {
           setHideInjuredState(true);
         }
+        // No URL param to reconcile against — the saved value is the only
+        // source there is, so it applies unless the user has already spoken.
+        if (!muteAudioTouched.current && prefs.muteAudio) setMuteAudioState(true);
         setResearchCols((prev) => {
           const next = { ...prev };
           for (const kind of ['batter', 'pitcher'] as const) {
@@ -382,10 +403,31 @@ export default function App() {
       window.removeEventListener('keydown', onKey);
     };
   }, [settingsOpen]);
-  // Edit mode (the pencil next to the search box): swaps the player list for the
+  // Edit mode (the pencil in the header): swaps the player list for the
   // drag-to-reorder edit screen. Deliberately not persisted in the URL — it's a
   // transient mode, not a view.
   const [editMode, setEditMode] = useState(false);
+  // The roster search is an icon in the header; pressing it opens the search
+  // bar across the top of the page. Transient for the same reason edit mode is
+  // — a search box you left open is not a view worth restoring from a link.
+  const [searchOpen, setSearchOpen] = useState(false);
+  // Same idea for the date controls, which are the widest thing in the header:
+  // below 640px they collapse behind the calendar icon and open as their own
+  // full-width line. Transient like the other two.
+  const [dateOpen, setDateOpen] = useState(false);
+  // "Search for a player" from the empty state has two things it could mean,
+  // depending on which of the two the breakpoint is showing: put the cursor in
+  // the header's field, or open the bar the icon opens. `offsetParent` is null
+  // for a `display: none` element, so the DOM answers which is up rather than a
+  // second copy of the 640px rule in JS drifting out of step with the first.
+  const openSearch = useCallback(() => {
+    const inline = document.querySelector<HTMLInputElement>('.header-search .adder-input');
+    if (inline && inline.offsetParent !== null) {
+      inline.focus();
+      return;
+    }
+    setSearchOpen(true);
+  }, []);
 
   // Scroll a player's card to the top of the viewport.
   //
@@ -428,9 +470,13 @@ export default function App() {
     if (view === 'research' && researchWindow !== 'season') {
       p.set('win', String(researchWindow));
     }
-    // 'all' is the default and stays out of the URL, so a shared research link
-    // only ever narrows to the sender's watchlist when they meant it to.
-    if (view === 'research' && researchScope !== 'all') p.set('scope', researchScope);
+    // 'mine' is the default and stays out of the URL. That does mean a bare
+    // research link opens on the *recipient's* watchlist rather than the
+    // sender's board — which is the right way round: the scope names a set of
+    // players, and it is their set the word "mine" refers to on their screen.
+    // A sender who means "look at the whole league" gets `scope=all` written
+    // for them, since that now differs from the default.
+    if (view === 'research' && researchScope !== 'mine') p.set('scope', researchScope);
     // The column set of the board on screen, and only once it differs from that
     // board's defaults — otherwise every link would carry twenty stat keys to
     // say "the usual". `pos=` is what tells a reader which board they describe.
@@ -813,19 +859,91 @@ export default function App() {
       </button>
     </div>
   ) : null;
-  // The roster search + the Edit (reorder) toggle. On the players view they sit
-  // under the tabs, with the list they act on; everywhere else — really just the
-  // empty watchlist, the one case the search shows outside that view — the view
-  // bar carries them, since there's no list to sit above.
-  const playersBar = (
-    <div className="players-bar">
-      <PlayerAdder
-        players={seasonPlayers}
-        watchlist={watchlist}
-        onAdd={onAdd}
-        onOpenDetails={setDetailsKey}
-        loading={playersLoading}
-      />
+  // What the date controls would say if they were on screen. Below 640px they
+  // are behind the calendar icon, so the range the whole page is reporting on
+  // has nothing showing it — every number on every card is drawn from a span
+  // the user can no longer see. This says it, in the view bar beside the kind
+  // tabs, and hides again above 640 where the controls speak for themselves.
+  //
+  // A label, not a control: the calendar is two inches away and already opens
+  // the row, and a second thing that does the same job is a question about
+  // which one to press. That is also why it is a fully-round pill — in this app
+  // that shape means "label", and anything you can click takes the control
+  // radius instead.
+  const dateBadge = (
+    <span className="date-badge">
+      <svg
+        viewBox="0 0 24 24"
+        width="12"
+        height="12"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <rect x="3" y="4" width="18" height="17" rx="2" />
+        <path d="M3 9h18M8 2v4M16 2v4" />
+      </svg>
+      {/* The preset's own word while one is active, so it reads "Today" rather
+          than today's date — that is what was picked, and it survives the date
+          rolling over. A hand-picked range has no name and shows itself. */}
+      {activePreset ?? shortRange(start, end)}
+    </span>
+  );
+
+  // The header's icon cluster, left of the date controls: the roster search, the
+  // Edit (reorder) toggle, and — on a narrow screen only — the calendar that
+  // stands in for the date controls themselves. Icons rather than labelled
+  // buttons because a full search field is the widest thing in the row and is
+  // wanted for a few seconds at a time, so it earns its space only while it is
+  // being used; pressing one opens its own bar across the top instead.
+  //
+  // Only one bar at a time: they are alternatives, not a stack, and two of them
+  // over a phone's view tabs is more chrome than page.
+  const headerTools = (
+    <div className="header-tools">
+      {/* The search form itself, shown from 641px up where there is room for it
+          and the icon below. Rendered alongside the toggle and swapped by a
+          media query rather than chosen in JS — the same way the date presets
+          and their phone dropdown already do it, which keeps one breakpoint in
+          the stylesheet instead of one in each place. Both are mounted, so each
+          keeps its own query; only one is ever on screen. */}
+      <div className="header-search">
+        <PlayerAdder
+          players={seasonPlayers}
+          watchlist={watchlist}
+          onAdd={onAdd}
+          onOpenDetails={setDetailsKey}
+          loading={playersLoading}
+        />
+      </div>
+      <button
+        type="button"
+        className={`search-toggle${searchOpen ? ' active' : ''}`}
+        onClick={() => {
+          setDateOpen(false);
+          setSearchOpen((v) => !v);
+        }}
+        aria-expanded={searchOpen}
+        aria-label={searchOpen ? 'Close player search' : 'Search for a player'}
+        title={searchOpen ? 'Close search' : 'Search for a player'}
+      >
+        <svg
+          viewBox="0 0 24 24"
+          width="17"
+          height="17"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          aria-hidden="true"
+        >
+          <circle cx="10.5" cy="10.5" r="6.5" />
+          <path d="m15.4 15.4 4.1 4.1" />
+        </svg>
+      </button>
       {/* Opens the reorder screen in place of the player list. Hidden until
           there's more than one player to put in an order. */}
       {reports.length > 1 && (
@@ -841,17 +959,22 @@ export default function App() {
               setBackView(null);
               setView('games');
             }
+            // The edit screen hides the rest of the chrome, the search bar
+            // included; closing it here stops it being restored on the way out
+            // of a mode it was never visible in.
+            setSearchOpen(false);
             setEditMode((v) => !v);
           }}
           title={editMode ? 'Finish editing' : 'Reorder players'}
+          aria-label={editMode ? 'Finish editing' : 'Reorder players'}
           aria-pressed={editMode}
         >
           <span className="edit-order-icon" aria-hidden="true">
             {editMode ? (
               <svg
                 viewBox="0 0 24 24"
-                width="16"
-                height="16"
+                width="17"
+                height="17"
                 fill="none"
                 stroke="currentColor"
                 strokeWidth="2.5"
@@ -863,8 +986,8 @@ export default function App() {
             ) : (
               <svg
                 viewBox="0 0 24 24"
-                width="16"
-                height="16"
+                width="17"
+                height="17"
                 fill="none"
                 stroke="currentColor"
                 strokeWidth="2"
@@ -876,11 +999,70 @@ export default function App() {
               </svg>
             )}
           </span>
-          {editMode ? 'Done' : 'Edit'}
+          <span className="edit-order-label">{editMode ? 'Done' : 'Edit'}</span>
+        </button>
+      )}
+      {/* Shown below 640px only (CSS) — above it the date controls speak for
+          themselves and this would be a second way to reach what is already on
+          screen. Nothing on the research board is dated, so it goes there with
+          the controls it stands for. */}
+      {view !== 'research' && (
+        <button
+          type="button"
+          className={`date-toggle${dateOpen ? ' active' : ''}`}
+          onClick={() => {
+            setSearchOpen(false);
+            setDateOpen((v) => !v);
+          }}
+          aria-expanded={dateOpen}
+          aria-label={dateOpen ? 'Close date controls' : 'Change dates'}
+          title={dateOpen ? 'Close dates' : 'Change dates'}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            width="16"
+            height="16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <rect x="3" y="4" width="18" height="17" rx="2" />
+            <path d="M3 9h18M8 2v4M16 2v4" />
+          </svg>
         </button>
       )}
     </div>
   );
+
+  // The search bar the header icon opens: a full-width row directly under the
+  // header, above the view tabs. It is a row of its own rather than an overlay
+  // so nothing it covers has to be guessed at — the page moves down by the
+  // height of one control and everything stays readable behind it.
+  const searchBar = searchOpen ? (
+    <div className="search-bar">
+      <PlayerAdder
+        players={seasonPlayers}
+        watchlist={watchlist}
+        onAdd={onAdd}
+        onOpenDetails={setDetailsKey}
+        loading={playersLoading}
+        autoFocus
+        onClose={() => setSearchOpen(false)}
+      />
+      <button
+        type="button"
+        className="search-bar-close"
+        onClick={() => setSearchOpen(false)}
+        aria-label="Close search"
+        title="Close search"
+      >
+        ✕
+      </button>
+    </div>
+  ) : null;
 
   // The reorder screen edits the raw watchlist order, one kind at a time, so it
   // reads `reports` rather than the simulate-overlaid copy the cards render.
@@ -913,10 +1095,14 @@ export default function App() {
   };
 
   return (
+    /* One provider over the whole app: every clip plays through `ClipVideo`,
+       which reads it, so the cards, the feed, the player page and the highlight
+       reel are all covered without any of them handling the value. */
+    <MutedContext.Provider value={muteAudio}>
     <div
       className={`app${view === 'summary' ? ' summary-mode' : ''}${
         view === 'research' ? ' research-mode' : ''
-      }`}
+      }${editMode ? ' edit-mode' : ''}${dateOpen ? ' date-open' : ''}`}
     >
       <header className="app-header">
         <div className="brand">
@@ -987,6 +1173,17 @@ export default function App() {
                   <span className="settings-dot" aria-hidden="true" />
                   Hide injured players
                 </button>
+                <button
+                  type="button"
+                  className={`settings-toggle${muteAudio ? ' active' : ''}`}
+                  role="menuitemcheckbox"
+                  aria-checked={muteAudio}
+                  onClick={() => setMuteAudio(!muteAudio)}
+                  title="Play every video clip with the sound off"
+                >
+                  <span className="settings-dot" aria-hidden="true" />
+                  Mute clip audio
+                </button>
                 {/* The checkable toggle(s) read together above; this one is a
                     way out of the menu, so it sits below them and beside Sign
                     out. */}
@@ -1014,6 +1211,24 @@ export default function App() {
             )}
           </div>
         </div>
+        {/* The icon cluster, in the header rather than over the list: these
+            belong to the watchlist itself, not to whichever view is reading it,
+            and moving them here stopped the whole control row appearing and
+            disappearing as you switched tabs.
+
+            Ahead of the date controls, which is what puts them to the left of
+            the date at every width — `margin-left: auto` on the cluster pushes
+            the pair of them to the right edge together, so the header reads
+            brand … search · edit · dates.
+
+            They show on every view, the research board included. The reason the
+            search used to be hidden there was that a second search box directly
+            above the board's own would be "a question about which one you're
+            in" — a tier up in the header, past the view tabs and the board's
+            own bar, that ambiguity is gone. The two do different jobs anyway:
+            this one adds a player to your watchlist, the board's filters the
+            table. */}
+        {headerTools}
         {/* The research board is season-to-date and watchlist-independent, so
             the range picker has nothing to act on there — left up, it would
             invite a click that changes nothing on the page in front of you. */}
@@ -1032,6 +1247,11 @@ export default function App() {
                     setStart(p.start);
                     setEnd(p.end);
                     setActivePreset(p.label);
+                    // Same as the phone dropdown below: the row is a disclosure
+                    // at every width now, and picking a preset is the errand it
+                    // was opened for, so it closes behind you. The range picker
+                    // still doesn't — its own popover needs the row to stay.
+                    setDateOpen(false);
                   }}
                 >
                   {p.label}
@@ -1049,6 +1269,9 @@ export default function App() {
                 setStart(p.start);
                 setEnd(p.end);
                 setActivePreset(p.label);
+                // As the pills above: picking a preset is the errand, so the
+                // row closes behind you.
+                setDateOpen(false);
               }}
               aria-label="Date range preset"
             >
@@ -1074,22 +1297,10 @@ export default function App() {
           </div>
         </div>
         )}
-        {/* Roster search + Edit, in the header rather than over the list: they
-            belong to the watchlist itself, not to whichever view is reading it,
-            and moving them here stops the whole control row appearing and
-            disappearing as you switch tabs. Last child, so it sits at the top
-            right on a wide screen and drops to its own full-width line when the
-            header wraps.
-
-            It shows on every view now, the research board included. The reason
-            it used to be hidden there was that a second search box directly
-            above the board's own would be "a question about which one you're
-            in" — a tier up in the header, past the view tabs and the board's
-            own bar, that ambiguity is gone. The two do different jobs anyway:
-            this one adds a player to your watchlist, the board's filters the
-            table. */}
-        {playersBar}
       </header>
+
+      {/* Across the top, under the header — see `searchBar`. */}
+      {searchBar}
 
       {/* Both tiers of tabs share one row when there's room for them, the second
           wrapping under the first when there isn't. The search no longer appears
@@ -1164,6 +1375,7 @@ export default function App() {
                   the row has room for both, wrapping under them when it
                   does not. */}
               {view !== 'research' && kindTabs}
+              {view !== 'research' && dateBadge}
             </div>
           )}
         </div>
@@ -1175,14 +1387,39 @@ export default function App() {
         <div className="empty-state">
           <p className="empty-title">Your watchlist is empty</p>
           <p>
-            Search for a player above to start tracking their plate
-            appearances, pitch sequences, and Statcast contact quality.
+            Search for a player to start tracking their plate appearances, pitch
+            sequences, and Statcast contact quality.
           </p>
-          {/* The one place a first-time user is guaranteed to land, so the guide
-              is offered here rather than only from the settings menu. */}
-          <button type="button" className="empty-help" onClick={() => setHelpOpen(true)}>
-            How does this work?
-          </button>
+          <div className="empty-actions">
+            {/* The search is an icon in the header now, which is a small target
+                to hand someone with nothing on screen — so the one page a new
+                user is guaranteed to land on opens it for them. */}
+            <button
+              type="button"
+              className="empty-search"
+              onClick={openSearch}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                width="15"
+                height="15"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                aria-hidden="true"
+              >
+                <circle cx="10.5" cy="10.5" r="6.5" />
+                <path d="m15.4 15.4 4.1 4.1" />
+              </svg>
+              Search for a player
+            </button>
+            {/* The one place a first-time user is guaranteed to land, so the
+                guide is offered here rather than only from the settings menu. */}
+            <button type="button" className="empty-help" onClick={() => setHelpOpen(true)}>
+              How does this work?
+            </button>
+          </div>
         </div>
       )}
 
@@ -1262,14 +1499,28 @@ export default function App() {
         className={`content-layout${showLoading && reports.length > 0 ? ' is-loading' : ''}`}
       >
         {editMode ? (
-          <>
+          /* The edit screen takes the page: the header keeps the title and the
+             Done button and nothing else, so this is the whole of what's on
+             screen and it carries its own heading rather than relying on the
+             chrome above to say where you are.
+
+             The kind switch comes with it. It is the header's own `kindTabs`,
+             rendered here because the view bar is hidden in this mode and it is
+             the only way to reach the other kind's order — hiding the chrome
+             shouldn't mean a watchlist whose pitchers can no longer be
+             reordered. It renders only when both kinds are watched, as ever. */
+          <div className="edit-page">
+            <div className="edit-page-head">
+              <h2 className="edit-page-title">Edit players</h2>
+              {kindTabs}
+            </div>
             <PlayerOrderEditor
               players={editPlayers}
               onMove={movePlayer}
               onCommit={commitOrder}
               onRemove={removeFromEditor}
             />
-          </>
+          </div>
         ) : (
         <main className="player-list">
           {kindCards.map(renderCard)}
@@ -1282,7 +1533,9 @@ export default function App() {
           the players page — returns to whichever view it came from. */}
       <button
         type="button"
-        className={`float-btn back-nav${view === 'games' && backView ? ' visible' : ''}`}
+        className={`float-btn back-nav${
+          view === 'games' && backView && !editMode ? ' visible' : ''
+        }`}
         onClick={goBack}
         aria-label={`Back to ${backView === 'feed' ? 'feed' : 'summary'}`}
         title={`Back to ${backView === 'feed' ? 'Feed' : 'Summary'}`}
@@ -1355,5 +1608,6 @@ export default function App() {
           sit over an already-open details view, and closing it puts that back. */}
       {helpOpen && <Tutorial onClose={() => setHelpOpen(false)} />}
     </div>
+    </MutedContext.Provider>
   );
 }

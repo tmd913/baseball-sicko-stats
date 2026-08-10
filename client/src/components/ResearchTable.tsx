@@ -461,14 +461,22 @@ const posTypeLabel = (t: string) => POSITION_TYPE_LABELS[t] ?? t;
  * switch of its own rather than two more pills on that row: picking SS must not
  * look like it deselects "My Players".
  *
- * `'all'` is the default and stays the default. This is the one view that works
- * with nothing watched, and defaulting to a watchlist that may be empty would
- * open a new user onto a blank table on the only page they can currently use.
+ * **`'mine'` is the default.** The board opens on the players you follow, which
+ * is what you are usually comparing against; `All Players` is one tap away and
+ * the position pills work the same on either.
+ *
+ * It used to default to `'all'`, on the reasoning that this is the one view
+ * that works with nothing watched and an empty watchlist would open a new user
+ * onto a blank table. That case is still real but it is not silent: with
+ * nothing watched of the board's kind, the table shows its own empty state —
+ * distinct from the filters one, because there is nothing to filter and the way
+ * out is `All Players` rather than a looser threshold. It names the way out, so
+ * the default no longer has to be chosen around it.
  */
 export type ResearchScope = 'all' | 'mine';
 
 export function toResearchScope(v: string | null): ResearchScope {
-  return v === 'mine' ? 'mine' : 'all';
+  return v === 'all' ? 'all' : 'mine';
 }
 
 export function researchKindFor(pos: ResearchPos): PlayerKind {
@@ -854,13 +862,23 @@ export function ResearchTable({
         ))}
       </div>
 
+        {/* One group, so the four buttons never split across two lines of the
+            bar. As individual flex children they wrapped one at a time, and on
+            a wide screen that stranded whichever one happened to fit at the end
+            of the position row — a lone Search up there, its three companions
+            below. `flex: none` on the group is what makes the whole run move
+            down together instead.
+
+            The phone's window dropdown is inside it too: it is rendered here so
+            that on a narrow screen it shares the buttons' line rather than
+            taking one of its own, and being in the group makes that true by
+            construction rather than by how the widths happen to fall. */}
+        <div className="research-tools">
         {/* The same tabs as a dropdown, for a phone. Rendered alongside them and
             swapped by a media query, which is how the header's date presets
-            already do it — and placed here, at the head of the buttons, so on a
-            narrow screen it shares their line instead of taking one of its own.
-            It keeps the tabs' short labels: a native select is as wide as its
-            widest option, and "Last 60 days" would cost back the width this is
-            here to save. */}
+            already do it. It keeps the tabs' short labels: a native select is as
+            wide as its widest option, and "Last 60 days" would cost back the
+            width this is here to save. */}
         <select
           className="research-window-select"
           value={String(statWindow)}
@@ -873,28 +891,9 @@ export function ResearchTable({
             </option>
           ))}
         </select>
-        {/* Not a disclosure like the three beside it — it has no panel, so it
-            takes `.on` and never `.active`. First of the buttons because it is
-            the one that changes *who* is in the table rather than what is shown
-            about them. */}
-        <button
-          type="button"
-          className={`research-toggle${qualifiedOnly ? ' on' : ''}`}
-          aria-pressed={qualifiedOnly}
-          onClick={() => onQualifiedChange(!qualifiedOnly)}
-          title={
-            kind === 'pitcher'
-              ? 'Only pitchers with enough of a season: starters at 1 inning per team game, relievers at 1 appearance per 3 team games'
-              : 'Only batters with 3.1 plate appearances per game their team has played'
-          }
-        >
-          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M20 6 9 17l-5-5" />
-          </svg>
-          <span className="research-toggle-label">Qualified</span>
-        </button>
-        {/* Each panel's button carries an `on` state whenever the panel holds
-            something, open or shut — a collapsed control must never be the
+        {/* Search and Filters first — the two disclosures you come to the board
+            with a question in. Each carries an `on` state whenever its panel
+            holds something, open or shut: a collapsed control must never be the
             only place a filter lives. */}
         <button
           type="button"
@@ -929,6 +928,26 @@ export function ResearchTable({
           <span className="research-toggle-label">Filters</span>
           {filters.length > 0 && <span className="research-toggle-count">{filters.length}</span>}
         </button>
+        {/* Not a disclosure like the three beside it — it has no panel, so it
+            takes `.on` and never `.active`. It sits after the two panels
+            because it belongs with them: all three narrow *who* is in the
+            table, where Columns after it changes what is shown about them. */}
+        <button
+          type="button"
+          className={`research-toggle${qualifiedOnly ? ' on' : ''}`}
+          aria-pressed={qualifiedOnly}
+          onClick={() => onQualifiedChange(!qualifiedOnly)}
+          title={
+            kind === 'pitcher'
+              ? 'Only pitchers with enough of a season: starters at 1 inning per team game, relievers at 1 appearance per 3 team games'
+              : 'Only batters with 3.1 plate appearances per game their team has played'
+          }
+        >
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M20 6 9 17l-5-5" />
+          </svg>
+          <span className="research-toggle-label">Qualified</span>
+        </button>
         <button
           type="button"
           className={`research-toggle${columnsOpen ? ' active' : ''}${
@@ -945,6 +964,7 @@ export function ResearchTable({
           <span className="research-toggle-label">Columns</span>
           <span className="research-toggle-count">{columns.length}</span>
         </button>
+        </div>
       </div>
 
       {searchOpen && (

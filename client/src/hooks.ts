@@ -1,4 +1,24 @@
-import { useEffect, useRef } from 'react';
+import { createContext, useContext, useEffect, useRef } from 'react';
+
+/**
+ * Whether clips play with the sound off — the settings menu's "Mute clip
+ * audio", saved per user.
+ *
+ * A context rather than a prop because the only component that needs it is a
+ * leaf: every clip in the app plays through `ClipVideo`, and reaching it from
+ * App means threading a boolean through PlayerCard, the game blocks, the plate
+ * appearance cards, the feed and the reel — six components that have no other
+ * interest in it. One provider at the top, one `useMuted()` in `ClipVideo`, and
+ * every clip in the app is covered including any added later.
+ *
+ * Defaults to false, so a clip rendered outside the provider (a test, a future
+ * standalone view) behaves as it always has.
+ */
+export const MutedContext = createContext(false);
+
+export function useMuted(): boolean {
+  return useContext(MutedContext);
+}
 
 /**
  * Returns a ref to attach to a collapsible element. When `expanded` flips from

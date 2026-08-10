@@ -89,7 +89,8 @@ body {
   align-items: center;
   gap: 11px;
 }
-/* A small tilted baseball on a vibrant tile — gives it back a full spin on hover. */
+/* A small tilted baseball on a vibrant tile. It used to take a full spin on
+   hover; the tilt is the look, the spin was decoration. */
 .brand-mark {
   font-size: 19px;
   width: 34px;
@@ -101,10 +102,6 @@ body {
   border-radius: 11px;
   box-shadow: 0 4px 14px rgba(56, 189, 248, 0.3);
   transform: rotate(-8deg);
-  transition: transform 0.3s ease;
-}
-.brand:hover .brand-mark {
-  transform: rotate(352deg);
 }
 .app-header h1 {
   margin: 0;
@@ -117,37 +114,8 @@ body {
   position: relative;
   display: inline-flex;
 }
-.settings-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: 1px solid var(--border);
-  background: var(--panel);
-  color: var(--muted);
-  cursor: pointer;
-  transition: color 0.14s ease, border-color 0.14s ease, background 0.14s ease;
-}
-.settings-btn:hover {
-  color: var(--text);
-  border-color: var(--accent);
-}
-.settings-btn.active {
-  color: var(--accent);
-  border-color: var(--accent);
-}
-.settings-btn svg {
-  transition: transform 0.25s ease;
-}
-.settings-btn.active svg {
-  transform: rotate(40deg);
-}
-.settings-btn:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
+/* .settings-btn is styled with the header's other icon buttons — see
+   .header-tools. */
 .settings-popover {
   position: absolute;
   top: calc(100% + 8px);
@@ -196,13 +164,6 @@ body {
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-}
-@media (prefers-reduced-motion: reduce) {
-  .brand-mark,
-  .brand:hover .brand-mark {
-    transition: none;
-    transform: rotate(-8deg);
-  }
 }
 .date-control {
   display: flex;
@@ -624,7 +585,11 @@ body {
 }
 
 /* ---- Edit screen: drag-to-reorder the watchlist ---- */
-.order-editor {
+/* The edit page and the list inside it share one column, folded into one rule
+   so the heading and the kind switch line up with the rows under them rather
+   than spanning a page the list is centred in. */
+.order-editor,
+.edit-page {
   max-width: 620px;
   width: 100%;
   margin: 0 auto;
@@ -2165,6 +2130,55 @@ body {
   opacity: 0.6;
   cursor: default;
 }
+/* ClipVideo's own wrapper — every clip in the app is one of these, whichever
+   player it belongs to. A plain block, so the three players keep the widths
+   their own classes give them; it exists only to be the positioning context for
+   the audio button. */
+.clip {
+  position: relative;
+}
+/* Per-clip mute, over the top-left of the frame. Left rather than right because
+   that is the edge all three players share: two fill their column and the
+   games-view one sizes to the clip itself, so a right-anchored button would
+   sometimes land beside the picture rather than on it. Top because the
+   browser's own control bar runs along the bottom. */
+.clip-audio {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: var(--control-radius);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  /* Its own dark chip rather than --panel: it sits on video, which can be any
+     colour from frame to frame, so it carries its own contrast with it. */
+  background: rgba(6, 12, 22, 0.62);
+  color: #fff;
+  cursor: pointer;
+  opacity: 0.78;
+  transition: opacity 0.14s ease, background 0.14s ease;
+}
+.clip-audio:hover {
+  opacity: 1;
+  background: rgba(6, 12, 22, 0.85);
+}
+.clip-audio:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* No hover to reveal it on a phone, and it is the only way to the audio there
+   while a clip plays — so it does not lean on hover to be findable. */
+@media (hover: none) {
+  .clip-audio {
+    opacity: 0.9;
+  }
+}
 .pa-video {
   margin-top: 10px;
   /* When the clip scrolls to the top on play, clear the sticky nav strip (same
@@ -3370,65 +3384,285 @@ body {
   align-items: center;
   gap: 10px 12px;
 }
+/* The date badge — see `dateBadge` in App.tsx. Shown at every width, because at
+   every width the date controls are behind the calendar button and this is the
+   only thing on the page saying which days its numbers are drawn from. Round
+   because it is a label: in this app that shape is reserved for things you
+   read, and anything you can press takes --control-radius. */
+.date-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.date-badge svg {
+  color: var(--faint);
+  flex: none;
+}
 
-/* Search box + the Edit (reorder) button, side by side. Takes the .adder's old
-   flex sizing so the pair grows into the free space and wraps to its own line
-   when the tabs and it can't share a row. */
-/* Roster search + Edit. It lives in the header now, so it no longer grows to
-   fill a row of its own: `flex: 1` there would push the brand and the date
-   control apart and leave the search absurdly wide on a desktop. It takes the
-   width it needs and no more, and only spans the line once the header has
-   wrapped and it has the line to itself (below). */
-.players-bar {
+/* The header's icon cluster — the roster search, Edit, and the calendar that
+   stands in for the date controls on a narrow screen. The first two were a full
+   search field plus a labelled button, which is the widest thing in the header
+   for a control wanted a few seconds at a time; each now opens its own bar and
+   the three cost one square apiece.
+
+   It sits *before* .date-control in the source, which is what puts it to the
+   left of the dates at every width. margin-left: auto then pushes the cluster
+   and the date controls to the right edge as a pair, leaving the brand alone on
+   the left — and it keeps them there on their own line once the header wraps,
+   where flex-start would otherwise jump them to the far left and read as a
+   different control appearing. */
+.header-tools {
+  /* Shrinkable, because from 641px up it carries the search field as well as
+     the buttons; on a phone it is icons only and goes back to `flex: none`. */
   flex: 0 1 auto;
-  min-width: 220px;
-  max-width: 420px;
-  /* Keeps it at the right edge on the line it shares with the brand and the
-     date control, *and* on its own line once the header wraps — without it a
-     wrapped line starts at flex-start and the control jumps from the top right
-     to the far left, which reads as a different control appearing. */
   margin-left: auto;
   display: flex;
   align-items: center;
   gap: 8px;
 }
-/* On a phone the header is one column and everything spans it; a search field
-   hugging the right of a 346px screen would just look mis-set. */
-@media (max-width: 640px) {
-  .players-bar {
-    flex: 1 1 100%;
-    max-width: none;
-  }
+/* The search form in the header, at the head of the cluster.
+   
+   418px is the **widest row the results menu can ever hold**, measured rather
+   than guessed: every one of the 1374 rows on the season roster was rendered
+   into a real `.adder-menu` and the widest came to 392px (Christian
+   Encarnacion-Strand, Baltimore Orioles · 3B). The number here is the worst
+   *possible* pairing rather than the widest one currently on the books — the
+   longest name against the longest club and the widest position label
+   ("Philadelphia Phillies · TWP") — so a trade can't outgrow it. The menu takes
+   the base `.adder-menu` rule's `width: 100%` off it, which is now exactly wide
+   enough that no result ever wraps or truncates.
+   
+   `width`, not `flex-basis`: an <input>'s *intrinsic* contribution is about 20
+   characters (~214px) whatever its basis says, so with a basis alone the cluster
+   still sized itself to 214 and shrank the field straight back down. Shrink is
+   left on, with a floor, so 641–1000px viewports narrow it instead of
+   overflowing. */
+.header-search {
+  flex: 0 1 auto;
+  width: 418px;
+  min-width: 170px;
 }
-.players-bar .adder {
+.header-search .adder {
+  /* The .adder's own 280px floor is a leftover from when it was the whole of
+     this bar; here the wrapper sets the width and the field fills it. */
+  flex: 1;
   min-width: 0;
 }
-.edit-order-btn {
+/* One square icon button, five uses — the settings gear included, which was a
+   32px circle of its own until it was folded in here. Folded into one selector
+   list rather than restyled to match, so every icon button in the header stays
+   identical by construction: square at --control-h and --control-radius, the
+   same height and corner as the date pills they share a line with. */
+.settings-btn,
+.edit-order-btn,
+.search-toggle,
+.date-toggle,
+.search-bar-close {
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
-  min-height: var(--control-h);
-  border-radius: 12px;
+  justify-content: center;
+  width: var(--control-h);
+  height: var(--control-h);
+  padding: 0;
+  border-radius: var(--control-radius);
   background: var(--panel);
   border: 1px solid var(--border);
   color: var(--muted);
-  font-size: 13px;
-  font-weight: 700;
   cursor: pointer;
+  transition: color 0.14s ease, border-color 0.14s ease, background 0.14s ease;
 }
-.edit-order-btn:hover {
+.settings-btn:hover,
+.edit-order-btn:hover,
+.search-toggle:hover,
+.date-toggle:hover,
+.search-bar-close:hover {
   color: var(--text);
   border-color: var(--accent);
 }
-.edit-order-btn.active {
+.settings-btn:focus-visible,
+.edit-order-btn:focus-visible,
+.search-toggle:focus-visible,
+.date-toggle:focus-visible,
+.search-bar-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* Open is open, whichever of them it is. The gear used to tint its outline
+   instead of filling, on the reasoning that a menu showing is a lesser thing
+   than a mode you are in; one look for the row beats that distinction. */
+.settings-btn.active,
+.edit-order-btn.active,
+.search-toggle.active,
+.date-toggle.active {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--bg);
 }
 .edit-order-icon {
   display: inline-flex;
+}
+/* The close button is the one with a glyph rather than an SVG in it. */
+.search-bar-close {
+  font-size: 14px;
+  line-height: 1;
+}
+/* Above 640px the search field is on screen and speaks for itself, so the
+   magnifier would be a second way to reach what is already there, and the bar
+   it opens has nothing to add. The calendar is not in this list: the date
+   controls are behind it at *every* width now, so it is always a real control. */
+.search-toggle,
+.search-bar {
+  display: none;
+}
+/* The date presets and the range picker are a disclosure at every width, not
+   just on a phone. They are the widest thing in the header by some way — 576px
+   of pills and picker against a 1136px content width — and they are set once
+   and then read for the rest of a session, which is the shape of a thing that
+   belongs behind a button. Folding them away is what lets the brand, the 418px
+   search field, Edit and the calendar share one line on a desktop.
+
+   .app-header already wraps, so `flex: 1 1 100%` is the whole of "open as its
+   own row"; it keeps the base `align-items: flex-end` on a wide screen, which
+   sits the row under the calendar that opened it, and the narrow block below
+   stretches it instead. */
+.date-control {
+  display: none;
+}
+.app.date-open .date-control {
+  display: flex;
+  flex: 1 1 100%;
+}
+/* Edit carries its label wherever there is room for it, so it overrides the
+   square the shared list gives it — everything else in that rule (the panel
+   fill, the border, the hover, the accent when active) is what it is there for.
+   Below 640px it goes back to the icon alone with the others. */
+.edit-order-btn {
+  width: auto;
+  padding: 7px 14px;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* Below 640px the date controls are the widest thing in the header by some way
+   — a preset dropdown and a range button, on a line the brand and three icons
+   have already taken. They go behind .date-toggle and come back as their own
+   full-width line: .app-header already wraps, so `flex: 1 1 100%` is all "a bar
+   across the top" takes, and the controls are rendered once either way rather
+   than duplicated into a second location. */
+@media (max-width: 640px) {
+  /* The brand and the three icons make one line at 390px with about five
+     pixels to spare, and only with these two tightened: the gear joining the
+     36px squares grew the brand by 4px, which was exactly enough to wrap the
+     cluster onto a second line. Tighter spacing inside each group is cheaper
+     than a line of header on a phone, and a 6px cluster reads as a set. */
+  .brand {
+    gap: 9px;
+  }
+  .header-tools {
+    gap: 6px;
+  }
+  .search-toggle {
+    display: inline-flex;
+  }
+  .search-bar {
+    display: flex;
+  }
+  /* Icons only: the field goes behind the magnifier and Edit loses its word. */
+  .header-search {
+    display: none;
+  }
+  .edit-order-label {
+    display: none;
+  }
+  .edit-order-btn {
+    width: var(--control-h);
+    padding: 0;
+    gap: 0;
+  }
+  .header-tools {
+    flex: none;
+  }
+  /* Full width rather than hugging the right: on a phone the row *is* the
+     line, and there is nothing for it to sit under. */
+  .app.date-open .date-control {
+    align-items: stretch;
+  }
+}
+
+/* The search bar the header icon opens: full width, directly under the header
+   and above the view tabs. A row rather than an overlay — it pushes the page
+   down by the height of one control instead of covering the top of it. */
+.search-bar {
+  /* No `display` here on purpose: it is set by the 640px pair above (none by
+     default, flex on a narrow screen), and re-declaring it at this point in the
+     file — after both — would win and leave the bar on screen at every width,
+     under a header that is already showing the field. */
+  /* summary/research turn .app into a fixed-height flex column; without this
+     the bar is a shrinkable item in it and a full table squashes it. */
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.search-bar .adder {
+  flex: 1;
+  /* The .adder's own 280px floor was sized for a header slot it no longer
+     occupies; here it spans the page and has to be free to shrink below that
+     on a phone. */
+  min-width: 0;
+}
+/* The results menu takes the .adder's width, which is now the whole page — a
+   full-width list of eight names across a desktop reads as a page rather than
+   a dropdown. Cap it; it stays left-aligned under the field it belongs to. */
+.search-bar .adder-menu {
+  max-width: 520px;
+}
+
+/* ---- Edit mode: the reorder screen takes the page ----
+   Everything but the title and the Done button goes. Hidden in CSS rather than
+   dropped from the JSX because it is one statement of one idea — in this mode
+   the chrome is not there — where the equivalent is five conditionals scattered
+   through the render. It has to come after the rules it overrides, which is why
+   it sits below .view-bar rather than up with the header.
+
+   The error banner is deliberately *not* in this list: a mode is no reason to
+   stop telling someone the report failed. */
+.app.edit-mode .settings-menu,
+.app.edit-mode .date-control,
+.app.edit-mode .view-bar,
+.app.edit-mode .search-toggle,
+.app.edit-mode .date-toggle,
+.app.edit-mode .refreshing {
+  display: none;
+}
+.edit-page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+/* The kind switch rides on this row — the view bar it normally lives in is
+   hidden here, and it is the only way to the other kind's order. */
+.edit-page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+}
+.edit-page-title {
+  margin: 0;
+  font-size: 17px;
+  letter-spacing: -0.02em;
 }
 
 /* ---- Summary view: a full-page, scroll-locked stat table ---- */
@@ -3857,6 +4091,20 @@ body {
    wraps, takes the width on its own and scrolls what doesn't fit. (A flex item
    with `overflow-x: auto` has an automatic minimum size of 0, which is what
    lets it shrink past its content instead of forcing the wrap wider.) */
+/* The four disclosure buttons (and, on a phone, the window dropdown at the head
+   of them) as one flex item. They were four separate children of .research-bar
+   and wrapped one at a time, which on a wide screen left whichever one still
+   fitted stranded at the end of the position row with the other three below it.
+   `flex: none` keeps the run intact: it moves to the next line whole or not at
+   all. It may wrap inside itself on a very narrow screen, which is the one case
+   where a second line of buttons is the lesser evil. */
+.research-tools {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
 .research-positions {
   flex: 0 1 auto;
   display: flex;
@@ -5308,7 +5556,12 @@ body {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
-/* The empty watchlist's way in — the one screen every new user lands on. */
+/* The empty watchlist's two ways in — the one screen every new user lands on.
+   `.empty-search` opens the header's search bar, which is an icon now and so a
+   thing to be pointed at rather than found. Folded into one selector list so
+   the pair stays identical by construction; only the layout of the one with an
+   icon in it differs. */
+.empty-search,
 .empty-help {
   margin-top: 16px;
   background: none;
@@ -5321,13 +5574,34 @@ body {
   cursor: pointer;
   transition: color 0.14s ease, border-color 0.14s ease;
 }
+.empty-search:hover,
 .empty-help:hover {
   border-color: var(--accent);
   color: var(--text);
 }
+.empty-search:focus-visible,
 .empty-help:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+/* .empty-state is centred block flow, so the two buttons would flow inline
+   separated by a single collapsed space. One row with a real gap instead, and
+   the margin moves here so it is stated once for the pair. */
+.empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+.empty-actions .empty-search,
+.empty-actions .empty-help {
+  margin-top: 0;
+}
+.empty-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
 }
 
 /* ---- Narrow-screen vertical rhythm -----------------------------------------

@@ -40,6 +40,9 @@ export interface UserPrefs {
   /** Keep players on the IL off the players view (the settings-menu toggle).
    *  Absent means off, which is the default — see `setHideInjured`. */
   hideInjured?: boolean;
+  /** Play every video clip with the sound off (the settings-menu toggle).
+   *  Absent means off, the same convention as `hideInjured`. */
+  muteAudio?: boolean;
 }
 
 /** The saved record plus the version it was read at, so a write can detect a
@@ -322,6 +325,22 @@ export async function setHideInjured(userId: string, hide: boolean): Promise<Use
     const prefs = { ...cur.prefs };
     if (hide) prefs.hideInjured = true;
     else delete prefs.hideInjured;
+    return { players: cur.players, prefs };
+  });
+  return next.prefs;
+}
+
+/**
+ * Save the "mute clip audio" toggle. Off is the absence of the entry, as with
+ * the two above: a user who has never touched it, and one who has turned it
+ * back off, are the same stored state, so the default can change without
+ * anyone's record needing revisiting.
+ */
+export async function setMuteAudio(userId: string, mute: boolean): Promise<UserPrefs> {
+  const next = await mutate(userId, (cur) => {
+    const prefs = { ...cur.prefs };
+    if (mute) prefs.muteAudio = true;
+    else delete prefs.muteAudio;
     return { players: cur.players, prefs };
   });
   return next.prefs;
