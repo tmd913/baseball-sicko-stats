@@ -1,6 +1,6 @@
 ---
 name: merge
-description: Land work from parallel agents — one PR or many, with worktrees to clean up after. Sequences the merges, resolves this repo's known conflict hotspots (CLAUDE.md, styles.css, App.tsx, the paired types.ts), rebuilds between each, and prunes stale worktrees and merged branches. Use when asked to merge, land, integrate, or ship branches/PRs, to resolve merge conflicts, or to clean up after running several agents at once.
+description: Land work from parallel agents — one PR, many, or a stack of dependent ones, with worktrees to clean up after. Sequences the merges, resolves this repo's known conflict hotspots (CLAUDE.md, styles.css, App.tsx, the paired types.ts), rebuilds between each, and prunes stale worktrees and merged branches. Use when asked to merge, land, integrate, or ship branches/PRs, to resolve merge conflicts, or to clean up after running several agents at once.
 ---
 
 # Merging parallel work
@@ -9,6 +9,11 @@ Several agents work at once here, each in its own worktree on a `worktree-<slug>
 branch cut from `main`. That produces N PRs that were all written against the *same*
 base and have never seen each other. The whole difficulty of merging in this repo
 follows from that one fact.
+
+Work arrives in a second shape too — a **stack**, where each PR is based on the one
+below because each was written on top of the last. It is the easier shape to merge
+and the easier one to break: see §3a, and check `baseRefName` in the survey before
+assuming which you have.
 
 **There is no CI, no test runner and no linter.** No branch protection on `main`, no
 GitHub Actions. So GitHub's `MERGEABLE` means *the text applies* — nothing more. The
@@ -19,7 +24,7 @@ Which is why the loop below builds after every single merge and never batches th
 ## 0. Survey before touching anything
 
 ```bash
-gh pr list --state open --json number,title,headRefName,mergeable,mergeStateStatus,isDraft,additions,deletions
+gh pr list --state open --json number,title,headRefName,baseRefName,mergeable,mergeStateStatus,isDraft,additions,deletions
 git worktree list
 git -C . status --short && git log --oneline -1
 ```
@@ -30,6 +35,10 @@ Then, for each worktree that isn't the root:
 git -C <worktree-path> status --short
 git -C <worktree-path> log --oneline origin/main..HEAD
 ```
+
+**Read `baseRefName` before anything else.** A PR based on another `worktree-*`
+branch rather than on `main` is a **stack**, not a parallel branch, and almost
+everything below changes shape — go to §3a first.
 
 **A worktree with uncommitted changes may be an agent still working in it.** Do not
 merge its branch, do not remove it, do not check anything out inside it. Ask the user
@@ -56,6 +65,11 @@ done
 Two branches sharing a filename are a *likely* conflict; two sharing none can still
 break each other semantically (see the traps at the bottom). Sharing one of the
 hotspot files below makes a conflict near-certain.
+
+**This test is meaningless on a stack.** Each branch there contains every branch
+below it, so a diff against `main` is cumulative and every pair "overlaps"
+everything. Compare each branch to *its own base* instead — which is what its PR
+diff already shows.
 
 ### Conflict hotspots, measured over the last 18 merged branches
 
@@ -130,6 +144,71 @@ may have an agent or a review attached to them, and a rebase rewrites hashes und
 both. Resolving on the branch also keeps the conflict resolution reviewable in the
 PR, instead of burying it in a merge commit on `main`.
 
+## 3a. Stacked PRs — do this before merging any of them
+
+A stack is a chain: each PR is based on the branch below it rather than on `main`,
+because each was written on top of the last. `baseRefName` in the survey is what
+tells you. It is a different object from the parallel branches the rest of this
+skill assumes, and merging it as though it weren't will close a PR.
+
+First confirm the chain really is linear — each branch should contain the one below:
+
+```bash
+prev=origin/main
+for b in <branch-1> <branch-2> <branch-3>; do   # bottom-up
+  git merge-base --is-ancestor $prev origin/$b \
+    && echo "OK    origin/$b contains ${prev#origin/}" \
+    || echo "BREAK origin/$b does NOT contain $prev"
+  prev=origin/$b
+done
+```
+
+**Merge order is forced: bottom-up.** §2's heuristics do not apply — a stack can
+only be landed in the order it was built.
+
+**Conflicts should not exist**, and that is the one thing a stack makes easier: each
+branch was written against the tip of the one below, so they cannot have diverged.
+Four stacked PRs all touching `CLAUDE.md`, `ResearchTable.tsx` and `styles.css` —
+three of the worst hotspots in the table above — merged with zero conflicts.
+
+### Retarget every child to `main` before merging anything
+
+```bash
+gh pr edit <child> --base main     # for every PR in the stack except the bottom one
+```
+
+Then merge bottom-up exactly as §3 says, `--delete-branch` and all.
+
+This is not tidiness, it is the whole point. **Deleting a branch closes any PR based
+on it** — so `gh pr merge <bottom> --delete-branch` takes out the base of the next PR
+up and GitHub closes it, `CONFLICTING/DIRTY`. It cannot then be reopened *or*
+retargeted, because both operations need the base branch to exist:
+
+```
+GraphQL: Could not open the pull request. (reopenPullRequest)
+GraphQL: Cannot change the base branch of a closed pull request. (updatePullRequest)
+```
+
+Retargeting up front means no PR is ever the base of another, and the deletion has
+nothing to take with it. The temporarily-inflated diff GitHub shows on a child
+retargeted ahead of its parent is cosmetic: by the time you merge it, `main` already
+holds everything below it, and the merge is just its own commits.
+
+### If it has already happened
+
+No work is lost — the branch and its commits are untouched, only the PR record
+closed. Push the deleted branch back at the merged commit's **second parent**, which
+is the tip of the branch that was merged, then reopen, retarget, and let the ordinary
+cleanup remove it at the end:
+
+```bash
+git push origin $(git rev-parse <merge-commit>^2):refs/heads/<deleted-branch>
+gh pr reopen <child> && gh pr edit <child> --base main
+```
+
+A push straight after the deletion can fail on a race with it propagating; retry once
+before believing it.
+
 ## 4. Resolving this repo's conflicts
 
 Read `CLAUDE.md` on whatever you are resolving before you resolve it. Nearly every
@@ -153,9 +232,15 @@ trusting either side.
 ### `client/src/styles.css` — order is load-bearing
 
 - The `@media (max-width: 640px)` narrow-screen block **must stay last in the file**
-  (currently line ~5151 of ~5172). A media query adds no specificity, so it only wins
-  by coming after the base rules it overrides. Resolving a conflict by appending new
-  rules to the end of the file breaks it. New base rules go *above* that block.
+  — a media query adds no specificity, so it only wins by coming after the base rules
+  it overrides. Resolving a conflict by appending new rules to the end of the file
+  breaks it; new base rules go *above* that block. Check it rather than trusting a
+  line number, which drifts every time the file grows:
+
+  ```bash
+  awk '/@media \(max-width: 640px\)/{l=NR} END{print "last 640px block: "l" of "NR}' \
+    client/src/styles.css
+  ```
 - There are four `@media (max-width: 640px)` blocks in the file — check which one a
   hunk belongs to before moving it.
 - This codebase deliberately **folds new controls into existing selector lists**
@@ -197,6 +282,9 @@ git rm --cached client/tsconfig.tsbuildinfo
 ```
 
 ## 5. When two branches need each other
+
+Not the same as a stack (§3a). A stack is already ordered and cannot conflict with
+itself; this is two *parallel* branches that turn out to collide.
 
 If two open branches both build on the same thing — both add an entry to the settings
 popover, both extend the same component — resolving `main` against each of them
@@ -270,6 +358,9 @@ the `deploy` skill is the next step, and it starts from the working tree.
 - **The silent semantic break `tsc` won't catch**: two branches editing the *paired*
   `types.ts` files, or a URL param written on one branch and read on another. Check
   both sides by hand.
+- **`--delete-branch` on a stacked PR closes the PR above it.** Deleting a branch
+  closes anything based on it, and a closed PR whose base is gone can be neither
+  reopened nor retargeted. Retarget the children to `main` first — §3a.
 - **Rebasing a pushed worktree branch** rewrites history an agent or reviewer may be
   sitting on. Merge `main` in instead.
 - **Touching a dirty worktree.** Uncommitted changes there are unbacked-up work, and
