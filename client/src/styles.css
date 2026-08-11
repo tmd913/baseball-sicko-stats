@@ -2686,8 +2686,8 @@ body {
   align-items: center;
   gap: 14px;
 }
-/* Add-to-watchlist action, pushed to the far end of the header row. Becomes a
-   quiet "On watchlist" indicator once the player is on the list. */
+/* Add-to-watchlist action, pushed to the far end of the header row. Gives way
+   to an "On watchlist" badge + Remove once the player is on the list. */
 .details-add {
   margin-left: auto;
   display: inline-flex;
@@ -2705,25 +2705,37 @@ body {
 .details-add:hover {
   filter: brightness(1.08);
 }
-/* On-watchlist state: a static "On watchlist" indicator — the app's baseball
-   beside the words, the same mark the fantasy button carries — paired with a
-   separate Remove button, pushed to the far end of the header row. */
+/* On-watchlist state: a static "On watchlist" badge — the app's baseball beside
+   the words, the same mark the research board's watched rows carry — paired
+   with a separate Remove button, pushed to the far end of the header row. */
 .details-watch-actions {
   margin-left: auto;
   display: inline-flex;
   align-items: center;
   gap: 12px;
 }
-.details-watched {
+/* The badge itself is the app's name-row chip — the same 12px/700 text in the
+   same 6px box .player-pos and .roster-status take, so being watched reads as
+   a state the player is in rather than as a second control beside Remove; a
+   plain run of muted text there read as a caption for the ✕ next to it. Tinted
+   in the accent because, unlike those two, it's a state the user put him in. */
+.details-watch-badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  color: var(--muted);
-  font-size: 13px;
+  gap: 5px;
+  vertical-align: middle;
+  font-size: 12px;
   font-weight: 700;
-}
-.details-watched svg {
+  letter-spacing: 0.02em;
   color: var(--accent);
+  background: rgba(56, 189, 248, 0.12);
+  /* Transparent rather than tinted, the way .roster-status carries its own
+     tone: an outline would pair it with the bordered ✕ beside it and read as
+     the second of two controls. */
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 3px 9px;
+  white-space: nowrap;
 }
 /* Narrow screens: the three parts of this header don't fit one row, and the
    headshot + name is by far the widest of them — so wrapping left Back alone on
@@ -2745,8 +2757,8 @@ body {
     order: 1;
     width: 100%;
   }
-  /* Back + "On watchlist" + Remove share one 390px row; the label and the
-     button need to sit closer than they do with room to spare. */
+  /* Back + the "On watchlist" badge + Remove share one 390px row; the badge and
+     the button need to sit closer than they do with room to spare. */
   .details-watch-actions {
     gap: 8px;
   }
