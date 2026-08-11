@@ -771,11 +771,14 @@ export function PlayerDetails({
         </div>
         {isWatched ? (
           <div className="details-watch-actions">
-            <span className="details-watched" title={`${name} is on your watchlist`}>
-              {/* The app's baseball, the same mark the fantasy button carries —
-                  a tick is what a form says when it accepts a value, where this
-                  is a state the player is in. */}
-              <BaseballMark size={15} width={2} />
+            {/* The app's baseball, the same mark the research board's watched
+                rows carry — a tick is what a form says when it accepts a value,
+                where this is a state the player is in. */}
+            <span
+              className="details-watch-badge"
+              title={`${name} is on your watchlist`}
+            >
+              <BaseballMark size={12} width={2} />
               On watchlist
             </span>
             <RemoveButton
