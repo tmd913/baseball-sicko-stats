@@ -5425,10 +5425,14 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
-.feed-base-item.kind-sb .feed-base-badge {
+/* Keyed off the badge's own kind rather than the item's: a play can be both a
+   steal and the run it turned into, and then the two badges sit side by side
+   and have to keep their own colours. The item's rail can only pick one (the
+   run's — see LiveFeed). */
+.feed-base-badge.kind-sb {
   color: var(--live-purple);
 }
-.feed-base-item.kind-run .feed-base-badge {
+.feed-base-badge.kind-run {
   color: var(--hit);
 }
 /* The score the event left behind, in the game badge's own away–home form —
