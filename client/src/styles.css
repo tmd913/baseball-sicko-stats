@@ -2695,7 +2695,8 @@ body {
 .details-add:hover {
   filter: brightness(1.08);
 }
-/* On-watchlist state: a static "✓ On watchlist" indicator paired with a
+/* On-watchlist state: a static "On watchlist" indicator — the app's baseball
+   beside the words, the same mark the fantasy button carries — paired with a
    separate Remove button, pushed to the far end of the header row. */
 .details-watch-actions {
   margin-left: auto;

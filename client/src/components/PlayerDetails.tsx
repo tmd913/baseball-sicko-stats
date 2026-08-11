@@ -14,6 +14,7 @@ import { headshotUrl, savantPlayerUrl } from '../lib';
 import { SeasonArsenalRow, SplitTabs } from './Arsenal';
 import type { SplitKey } from './Arsenal';
 import { RemoveButton } from './RemoveButton';
+import { BaseballMark } from './BaseballMark';
 import { RollingXwoba } from './RollingXwoba';
 import { GameLog } from './GameLog';
 import { useLockBodyScroll } from '../hooks';
@@ -771,9 +772,10 @@ export function PlayerDetails({
         {isWatched ? (
           <div className="details-watch-actions">
             <span className="details-watched" title={`${name} is on your watchlist`}>
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M20 6 9 17l-5-5" />
-              </svg>
+              {/* The app's baseball, the same mark the fantasy button carries —
+                  a tick is what a form says when it accepts a value, where this
+                  is a state the player is in. */}
+              <BaseballMark size={15} width={2} />
               On watchlist
             </span>
             <RemoveButton

@@ -348,7 +348,7 @@ const CHAPTERS: Chapter[] = [
           <li>
             <strong>My Players / All Players.</strong> Narrows the same board to your
             watchlist. On <Ui>All Players</Ui> the people you already watch carry a
-            small ✓.
+            small baseball.
           </li>
           <li>
             <strong>Free Agents.</strong> A third pill, once you've connected an ESPN

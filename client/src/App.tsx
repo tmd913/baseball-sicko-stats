@@ -15,6 +15,7 @@ import type {
   WatchPlayer,
 } from './types';
 import { isInjured } from './lib';
+import { BaseballMark } from './components/BaseballMark';
 import { PlayerAdder } from './components/PlayerAdder';
 import { PlayerOrderEditor } from './components/PlayerOrderEditor';
 import { PlayerCard } from './components/PlayerCard';
@@ -1662,20 +1663,7 @@ export default function App() {
             >
               {/* The same mark the league page and the old menu entry carry, so
                   one concept keeps one glyph across the app. */}
-              <svg
-                viewBox="0 0 24 24"
-                width="17"
-                height="17"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <circle cx="12" cy="12" r="9" />
-                <path d="M4.5 7.5A7.5 7.5 0 0 1 8 15M19.5 7.5A7.5 7.5 0 0 0 16 15" />
-              </svg>
+              <BaseballMark size={17} width={2} />
             </button>
             {espnConnected && fantasyOpen && (
               <div className="settings-popover fantasy-popover" role="menu">
@@ -1722,20 +1710,7 @@ export default function App() {
                   }}
                   title="Your league, your team, and the connection itself"
                 >
-                  <svg
-                    viewBox="0 0 24 24"
-                    width="15"
-                    height="15"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <circle cx="12" cy="12" r="9" />
-                    <path d="M4.5 7.5A7.5 7.5 0 0 1 8 15M19.5 7.5A7.5 7.5 0 0 0 16 15" />
-                  </svg>
+                  <BaseballMark size={15} width={2} />
                   League settings
                 </button>
               </div>

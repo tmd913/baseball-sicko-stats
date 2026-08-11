@@ -1,4 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { BaseballMark } from './BaseballMark';
 import { ExpandButton } from './ExpandButton';
 import { useFullPage } from '../hooks';
 import { RESEARCH_WINDOWS } from '../types';
@@ -1424,27 +1425,15 @@ export function ResearchTable({
                         {r.name}
                       </button>
                       {/* Only on All Players: on My Players every row would
-                          carry one, which marks nothing. The same accent check
-                          `PlayerDetails` uses for "On watchlist", so the app
-                          says this one thing one way. */}
+                          carry one, which marks nothing. The same baseball
+                          `PlayerDetails` shows beside "On watchlist", so the
+                          app says this one thing one way. */}
                       {scope === 'all' && watchedKeys.has(key) && (
                         <span
                           className="research-watched"
                           title={`${r.name} is on your watchlist`}
                         >
-                          <svg
-                            viewBox="0 0 24 24"
-                            width="13"
-                            height="13"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="3"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            aria-hidden="true"
-                          >
-                            <path d="M20 6 9 17l-5-5" />
-                          </svg>
+                          <BaseballMark size={13} width={2.4} />
                           <span className="sr-only">On your watchlist</span>
                         </span>
                       )}
