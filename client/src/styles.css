@@ -5392,6 +5392,45 @@ body {
    because nothing here opens, and in this feed a box is what something you can
    open looks like. Same 3px/11px as the live entry, so the two read as the one
    device used twice. */
+/* An at-bat is grouped the same way a base event is: the outcome's colour runs
+   as a rail down the whole item — header, card and clip — instead of being the
+   card's own left edge with the name loose above it and the video adrift
+   below. The card keeps its box, unlike a base event's detail: it opens, and a
+   box is what that means here. What it gives up is the coloured edge, which
+   would otherwise draw a second vertical line 11px inside the first saying the
+   same thing. Scoped to the feed — in the players view the card is the whole
+   item and its edge is the only place the outcome's colour can live. */
+.feed-at-bat {
+  border-left: 3px solid var(--border);
+  border-radius: 3px;
+  padding-left: 11px;
+}
+.feed-at-bat.kind-hr {
+  border-left-color: var(--hr);
+}
+.feed-at-bat.kind-hit {
+  border-left-color: var(--hit);
+}
+.feed-at-bat.kind-walk {
+  border-left-color: var(--walk);
+}
+.feed-at-bat.kind-strikeout {
+  border-left-color: var(--strikeout);
+}
+.feed-at-bat.kind-out {
+  border-left-color: var(--out);
+}
+.feed-at-bat.kind-other {
+  border-left-color: var(--faint);
+}
+/* The card's own accent, folded back to the plain border. This has to come
+   after `.pa-card.kind-*` (same specificity, later wins) — those rules live up
+   with the card, several thousand lines above, which is why it is stated here
+   rather than there. */
+.feed-at-bat .pa-card {
+  border-left-width: 1px;
+  border-left-color: var(--border);
+}
 .feed-base-item {
   border-left: 3px solid var(--border);
   border-radius: 3px;

@@ -10,6 +10,7 @@ import {
   isRotationStarter,
   liveRoleGame,
   liveRoleLabel,
+  outcomeKind,
   surname,
 } from '../lib';
 import type {
@@ -263,11 +264,17 @@ function FeedAtBat({
   onOpenDetails: (key: string) => void;
   onOpenPlayerDay: (key: string) => void;
 }) {
+  // The outcome's colour rides on the *item*, not the card, so one rail runs
+  // the header, the at-bat and the clip — who it was, what he did and the
+  // video of it, which is one thing to read. The card keeps its box because it
+  // opens, and in this feed that is what a box means; it gives up only its own
+  // coloured edge, which the rail outside it now carries (styles.css).
+  //
   // Expanding scrolls the whole item to the top so the player header stays in
   // view above the at-bat detail (the card itself doesn't self-scroll).
   const ref = useScrollIntoViewOnExpand<HTMLDivElement>(open);
   return (
-    <div className="feed-item" ref={ref}>
+    <div className={`feed-item feed-at-bat kind-${outcomeKind(pa.event)}`} ref={ref}>
       <div className="feed-item-head">
         <FeedHeadshot id={report.id} name={report.name} onOpen={() => onOpenDetails(playerKey(report))} />
         <div className="feed-item-id">
