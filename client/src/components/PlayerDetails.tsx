@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactElement } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactElement } from 'react';
 import { api } from '../api';
 import type {
   BatterGameLog,
@@ -494,6 +494,25 @@ export function PlayerDetails({
   useLockBodyScroll();
   const kind = isPitcher ? 'pitcher' : 'batter';
   const [tab, setTab] = useState<DetailsTab>('percentiles');
+
+  // Five tabs overflow a phone, so the selected one can sit off the end of the
+  // strip — cut in half, or out of sight entirely on a pitcher. Scrolled by
+  // hand rather than with `scrollIntoView`, which walks up every scrollable
+  // ancestor and would drag the overlay's own scroller with it.
+  const tabsRef = useRef<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    const row = tabsRef.current;
+    const el = row?.querySelector<HTMLElement>('.details-tab.is-active');
+    if (!row || !el) return;
+    const left = el.offsetLeft - row.offsetLeft;
+    const overLeft = left - row.scrollLeft;
+    const overRight = left + el.offsetWidth - (row.scrollLeft + row.clientWidth);
+    // Land it clear of the edge rather than flush against it, which reads as
+    // cut off and hides that there is more strip to swipe to.
+    const PEEK = 24;
+    if (overLeft < 0) row.scrollLeft += overLeft - PEEK;
+    else if (overRight > 0) row.scrollLeft += overRight + PEEK;
+  }, [tab]);
   // The Remove button arms on the first tap and commits on the second, as it
   // does on the reorder screen — see RemoveButton. There is no undo.
   const [armedRemove, setArmedRemove] = useState(false);
@@ -803,7 +822,7 @@ export function PlayerDetails({
         )}
       </div>
 
-      <div className="details-tabs" role="tablist">
+      <div className="details-tabs" role="tablist" ref={tabsRef}>
         <button
           type="button"
           role="tab"

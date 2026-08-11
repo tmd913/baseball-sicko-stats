@@ -3078,11 +3078,21 @@ body {
   gap: 6px;
   max-width: 680px;
   margin: 0 auto 16px;
-  border-bottom: 1px solid var(--border);
+  /* The rule under the strip is an inset shadow rather than a `border-bottom`,
+     which is what lets the strip scroll sideways *only*. A border would have to
+     be overlapped by each tab's own 2px underline (`margin-bottom: -1px`), and
+     that 1px of overflow is enough to make the strip scrollable on the block
+     axis too — one axis being non-`visible` computes the other to `auto`, so
+     iOS gave the row a pixel of vertical rubber-banding. An inset shadow paints
+     on the padding box, under the descendants, so the active tab's accent still
+     covers it at that spot with nothing hanging over the edge. */
+  box-shadow: inset 0 -1px 0 var(--border);
   /* Five tabs overflow a phone. They scroll sideways as one strip rather than
      wrapping, which would leave the first row's underline floating clear of the
      rule the active tab is supposed to sit on. */
   overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
   scrollbar-width: none;
 }
 .details-tabs::-webkit-scrollbar {
@@ -3094,7 +3104,6 @@ body {
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
   padding: 8px 14px;
   font-size: 14px;
   font-weight: 700;
@@ -5736,7 +5745,10 @@ body {
   top: 0;
   z-index: 2;
   background: var(--bg);
-  border-bottom: 1px solid var(--border);
+  /* An inset shadow rather than a border, for the reason `.details-tabs` uses
+     one: each chip's underline has to overlap the rule, and the pixel of
+     overflow that takes would make the strip scrollable vertically as well. */
+  box-shadow: inset 0 -1px 0 var(--border);
 }
 .tut-nav {
   max-width: 760px;
@@ -5745,6 +5757,8 @@ body {
   display: flex;
   gap: 4px;
   overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
   scrollbar-width: none;
 }
 .tut-nav::-webkit-scrollbar {
@@ -5756,7 +5770,6 @@ body {
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
   padding: 10px 12px;
   font-size: 13px;
   font-weight: 700;
