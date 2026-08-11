@@ -208,11 +208,13 @@ body {
 }
 /* The preset <select> replaces the pill row on phones (see the media query
    below); it's hidden on desktop where the pills are shown instead. The research
-   board's time-span dropdown is folded in here rather than restyled to match,
-   so the app's two "pills on a desktop, dropdown on a phone" controls are one
-   control by construction. */
+   board's three dropdowns — whose players, the time span and the position — are
+   folded in here rather than restyled to match, so every "pills on a desktop,
+   dropdown on a phone" control in the app is one control by construction. */
 .date-presets-select,
-.research-window-select {
+.research-scope-select,
+.research-window-select,
+.research-pos-select {
   display: none;
   /* Custom chevron (native arrow can't be inset from the edge): draw it as a
      background image positioned 14px in, and reserve room for it on the right. */
@@ -234,7 +236,9 @@ body {
   cursor: pointer;
 }
 .date-presets-select:hover,
-.research-window-select:hover {
+.research-scope-select:hover,
+.research-window-select:hover,
+.research-pos-select:hover {
   border-color: var(--accent);
 }
 /* On phones the header wraps and the date control spans the full width. Swap the
@@ -254,11 +258,17 @@ body {
   .date-presets-select {
     display: block;
   }
-  .research-window-select {
+  .research-scope-select,
+  .research-window-select,
+  .research-pos-select {
     display: block;
-    /* In a wrapping flex bar rather than the header's grid — it must not
-       stretch to fill the line it shares with the four icon buttons. */
+    /* In a wrapping flex bar rather than the header's grid — each must be only
+       as wide as its own widest option, so the three share a line and the four
+       icon buttons take the one below. */
     flex: none;
+    /* A select's minimum content size is its widest option, so at 360px and
+       below one of the three wraps rather than pushing the row off screen. */
+    min-width: 0;
   }
 }
 /* ---- Date range picker ---- */
@@ -4337,8 +4347,8 @@ body {
    wraps, takes the width on its own and scrolls what doesn't fit. (A flex item
    with `overflow-x: auto` has an automatic minimum size of 0, which is what
    lets it shrink past its content instead of forcing the wrap wider.) */
-/* The four disclosure buttons (and, on a phone, the window dropdown at the head
-   of them) as one flex item. They were four separate children of .research-bar
+/* The four disclosure buttons as one flex item. They were four separate
+   children of .research-bar
    and wrapped one at a time, which on a wide screen left whichever one still
    fitted stranded at the end of the position row with the other three below it.
    `flex: none` keeps the run intact: it moves to the next line whole or not at
@@ -4623,14 +4633,19 @@ body {
   }
 }
 
-/* On a phone the time-span tabs give way to the dropdown beside the buttons
-   (`.research-window-select`, styled with the header's preset dropdown). Two
-   classes deep because the shared `.view-switch` rule sets `display:
+/* On a phone all three of the bar's tab groups give way to dropdowns (styled
+   with the header's preset dropdown, up at the top of the file). Three rows of
+   pills — whose players, the time span, and eleven positions that scroll
+   sideways — were the best part of a phone's screen spent before the first
+   name, and on this page of all pages every pixel of height is a row of the
+   table. Two classes deep because the shared `.view-switch` rule sets `display:
    inline-flex` and comes later in the file — the same reason `.date-row
-   .date-presets` is written that way — and without the extra specificity the
-   row and its dropdown would both be on screen at once. */
+   .date-presets` is written that way — and without the extra specificity a row
+   and its dropdown would both be on screen at once. */
 @media (max-width: 640px) {
-  .research-bar .research-window-row {
+  .research-bar .research-scope,
+  .research-bar .research-window-row,
+  .research-bar .research-positions {
     display: none;
   }
 }

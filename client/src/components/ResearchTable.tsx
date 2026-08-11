@@ -505,6 +505,17 @@ const POSITIONS: PositionOption[] = [
 
 const POSITION_BY_KEY = new Map(POSITIONS.map((p) => [p.key, p]));
 
+/**
+ * The same eleven, in the same order, cut into the three runs they already read
+ * as. Only the phone's dropdown uses them: a row of pills shows the whole set
+ * at once and needs no headings, where a closed select shows one.
+ */
+const POSITION_GROUPS: { label: string; positions: PositionOption[] }[] = [
+  { label: 'Board', positions: POSITIONS.filter((p) => !p.match) },
+  { label: 'Batting', positions: POSITIONS.filter((p) => p.match && p.kind === 'batter') },
+  { label: 'Pitching', positions: POSITIONS.filter((p) => p.match && p.kind === 'pitcher') },
+];
+
 /** The group a row's position belongs to, for the Pos cell's tooltip — the
  *  Stats API's own `position.type` less its two unhelpful spellings (it calls
  *  the DH "Hitter" and files a player with no position on record under
@@ -1074,6 +1085,24 @@ export function ResearchTable({
           ),
         )}
       </div>
+      {/* The same switch as a dropdown, for a phone — rendered alongside the
+          pills and swapped by a media query, the pattern the header's date
+          presets use. See `.research-window-select` for why the three of them
+          sit together down there. */}
+      <select
+        className="research-scope-select"
+        value={scope}
+        onChange={(e) => onScopeChange(e.target.value as ResearchScope)}
+        aria-label="Whose players"
+      >
+        {(['mine', 'all', ...(espnConnected || scope === 'fa' ? (['fa'] as const) : [])] as const).map(
+          (sc) => (
+            <option key={sc} value={sc}>
+              {SCOPE_LABELS[sc]}
+            </option>
+          ),
+        )}
+      </select>
       {/* Out in the bar rather than inside the Filters panel: it decides which
           games every number on the board is drawn from, which is too large a
           thing to keep behind a disclosure — and being always visible, it needs
@@ -1097,6 +1126,21 @@ export function ResearchTable({
           </button>
         ))}
       </div>
+      {/* The same tabs as a dropdown, for a phone. It keeps the tabs' short
+          labels: a native select is as wide as its widest option, and "Last 60
+          days" would cost back the width this is here to save. */}
+      <select
+        className="research-window-select"
+        value={String(statWindow)}
+        onChange={(e) => onWindowChange(toResearchWindow(e.target.value))}
+        aria-label="Time span"
+      >
+        {RESEARCH_WINDOWS.map((w) => (
+          <option key={String(w)} value={String(w)}>
+            {windowLabel(w)}
+          </option>
+        ))}
+      </select>
       <div className="research-positions" role="tablist" aria-label="Position" ref={posRowRef}>
         {POSITIONS.map((p) => (
           <button
@@ -1112,6 +1156,28 @@ export function ResearchTable({
           </button>
         ))}
       </div>
+      {/* The eleven pills as one dropdown, for a phone. The pills' own labels,
+          which are two characters wide by design, are grouped under headings
+          here — a select shows one option at a time and "SS" alone in a closed
+          box says less than it does in a row with C and 1B beside it. Short
+          headings, because an optgroup label counts toward the width the same
+          way an option does. */}
+      <select
+        className="research-pos-select"
+        value={pos}
+        onChange={(e) => onPosChange(e.target.value as ResearchPos)}
+        aria-label="Position"
+      >
+        {POSITION_GROUPS.map((g) => (
+          <optgroup key={g.label} label={g.label}>
+            {g.positions.map((p) => (
+              <option key={p.key} value={p.key}>
+                {p.label}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
 
         {/* One group, so the four buttons never split across two lines of the
             bar. As individual flex children they wrapped one at a time, and on
@@ -1120,28 +1186,13 @@ export function ResearchTable({
             below. `flex: none` on the group is what makes the whole run move
             down together instead.
 
-            The phone's window dropdown is inside it too: it is rendered here so
-            that on a narrow screen it shares the buttons' line rather than
-            taking one of its own, and being in the group makes that true by
-            construction rather than by how the widths happen to fall. */}
+            The window dropdown used to sit at the head of it, to share the
+            buttons' line on a phone. It has moved back up beside its own pill
+            row now that the scope and position rows have dropdowns of their
+            own: three of them and four buttons were never going to be one
+            line, and the three belong together — they all name which slice of
+            the league the table is, where the buttons open panels. */}
         <div className="research-tools">
-        {/* The same tabs as a dropdown, for a phone. Rendered alongside them and
-            swapped by a media query, which is how the header's date presets
-            already do it. It keeps the tabs' short labels: a native select is as
-            wide as its widest option, and "Last 60 days" would cost back the
-            width this is here to save. */}
-        <select
-          className="research-window-select"
-          value={String(statWindow)}
-          onChange={(e) => onWindowChange(toResearchWindow(e.target.value))}
-          aria-label="Time span"
-        >
-          {RESEARCH_WINDOWS.map((w) => (
-            <option key={String(w)} value={String(w)}>
-              {windowLabel(w)}
-            </option>
-          ))}
-        </select>
         {/* Search and Filters first — the two disclosures you come to the board
             with a question in. Each carries an `on` state whenever its panel
             holds something, open or shut: a collapsed control must never be the
