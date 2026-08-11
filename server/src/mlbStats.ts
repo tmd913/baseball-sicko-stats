@@ -663,6 +663,15 @@ const FEED_FIELDS = [
   'wildPitches',
   'inheritedRunners',
   'inheritedRunnersScored',
+  // A base-running event's own play event (runners[].details.playIndex indexes
+  // into playEvents): `actionPlayId` is the clip id for a steal — the same guid
+  // a pitch carries as `playId` — and its details carry the description and the
+  // score the event left behind. `start` is the base a scoring runner came from.
+  'playIndex',
+  'actionPlayId',
+  'awayScore',
+  'homeScore',
+  'start',
   // The game's credits: a win/save duplicates liveData.decisions, but a hold is
   // only ever here.
   'wins',
@@ -699,17 +708,25 @@ interface FeedPlayEvent {
   isPitch?: boolean;
   pitchNumber?: number;
   playId?: string;
-  count?: { balls?: number; strikes?: number };
+  // A non-pitch event (a steal, a balk, a pickoff) carries its clip id here
+  // rather than as `playId` — the same guid the video route resolves.
+  actionPlayId?: string;
+  count?: { balls?: number; strikes?: number; outs?: number };
   details?: {
     call?: { code?: string; description?: string };
     type?: { code?: string; description?: string };
     isInPlay?: boolean;
+    // An action event describes itself ("X steals (4) 2nd base.") and carries the
+    // score it left behind; a pitch event has neither.
+    description?: string;
+    awayScore?: number;
+    homeScore?: number;
   };
   pitchData?: FeedPitchData;
   hitData?: FeedHitData;
 }
 interface FeedRunner {
-  movement?: { end?: string | null };
+  movement?: { start?: string | null; end?: string | null };
   // `earned` is set on a scoring runner (movement.end === 'score'): true when the
   // run is charged as earned, false when the defense's errors made it unearned.
   // `responsiblePitcher` is the pitcher charged with the run (an inherited runner
@@ -719,6 +736,9 @@ interface FeedRunner {
     runner?: { id?: number };
     earned?: boolean;
     responsiblePitcher?: { id?: number } | null;
+    // Index into the play's `playEvents` of the event this movement happened on
+    // — the pitch that was put in play, or the action a steal was recorded as.
+    playIndex?: number;
   };
 }
 interface FeedPlay {
@@ -740,7 +760,15 @@ interface FeedPlay {
     postOnSecond?: { id?: number } | null;
     postOnThird?: { id?: number } | null;
   };
-  result?: { event?: string; eventType?: string; description?: string; rbi?: number };
+  result?: {
+    event?: string;
+    eventType?: string;
+    description?: string;
+    rbi?: number;
+    // The score after the play — what a run scored on it left behind.
+    awayScore?: number;
+    homeScore?: number;
+  };
   runners?: FeedRunner[];
   playEvents?: FeedPlayEvent[];
 }
@@ -1155,6 +1183,27 @@ export interface StatsApiBaseEvent {
   timestamp: string | null;
   // For a stolen base, the base taken ("2nd" / "3rd" / "home"); null for a run.
   base: string | null;
+  // The clip id for the event itself — a steal's own `actionPlayId`, or the
+  // playId of the pitch a run scored on. The same guid a plate appearance
+  // carries, so /api/video resolves it with no special case.
+  playId: string | null;
+  // What happened, in MLB's words: the action's own line for a steal ("X steals
+  // (4) 2nd base."), the scoring play's for a run ("Y singles… X scores.").
+  description: string;
+  // The batter at the plate — the man a steal went behind, or the one who drove
+  // the run in. Null if the play carries no batter.
+  batterName: string | null;
+  pitcherName: string | null;
+  // The situation the event happened in, off the same play event.
+  balls: number | null;
+  strikes: number | null;
+  outs: number | null;
+  // For a run, the base the runner scored from ("1B" / "2B" / "3B"); null for a
+  // steal, whose origin is implied by the base taken.
+  fromBase: string | null;
+  // The score the event left behind (away, home) — a run's whole point.
+  awayScore: number | null;
+  homeScore: number | null;
 }
 
 export interface StatsApiGame {
@@ -1195,6 +1244,60 @@ export interface StatsApiGame {
   // feed's chronological stream. A run scored on the runner's own plate
   // appearance (a home run) is omitted, since the at-bat already shows it.
   baseEvents: Map<number, StatsApiBaseEvent[]>;
+}
+
+/**
+ * The detail a base-running event carries beyond "he stole 2nd": the clip, the
+ * description, the matchup and the count it happened on.
+ *
+ * A runner's movement names the play event it happened on (`playIndex`), and
+ * that event is where the clip id lives — as `playId` when a run scored on a
+ * pitch that was put in play, and as `actionPlayId` when the movement is its own
+ * action (a steal, a balk, a wild pitch). Both are the same kind of guid, so the
+ * video route resolves either without being told which it was handed.
+ *
+ * The description is the action's own line where there is one — it names the
+ * runner and the base, where the play's result describes the batter's eventual
+ * outcome instead ("...strikes out swinging" for the at-bat a steal happened
+ * during, which is not what the item is about). A run scored on a batted ball
+ * has no such line ("In play, run(s)"), so it takes the play's.
+ */
+function baseEventDetail(
+  play: FeedPlay,
+  runner: FeedRunner,
+  kind: 'sb' | 'run',
+): Pick<
+  StatsApiBaseEvent,
+  | 'playId'
+  | 'description'
+  | 'batterName'
+  | 'pitcherName'
+  | 'balls'
+  | 'strikes'
+  | 'outs'
+  | 'fromBase'
+  | 'awayScore'
+  | 'homeScore'
+> {
+  const idx = runner.details?.playIndex;
+  const ev = typeof idx === 'number' ? play.playEvents?.[idx] : undefined;
+  const actionText = ev && !ev.isPitch ? (ev.details?.description ?? null) : null;
+  return {
+    playId: ev?.playId ?? ev?.actionPlayId ?? null,
+    // A steal with no action line of its own gets nothing rather than the
+    // batter's outcome, which would describe a different event entirely.
+    description: actionText ?? (kind === 'run' ? (play.result?.description ?? '') : ''),
+    batterName: play.matchup?.batter?.fullName ?? null,
+    pitcherName: play.matchup?.pitcher?.fullName ?? null,
+    balls: ev?.count?.balls ?? null,
+    strikes: ev?.count?.strikes ?? null,
+    outs: ev?.count?.outs ?? null,
+    fromBase: kind === 'run' ? (runner.movement?.start ?? null) : null,
+    // The action's own score is the score at that moment; a run on a batted ball
+    // has only the play's, which is the same thing once the play is over.
+    awayScore: ev?.details?.awayScore ?? play.result?.awayScore ?? null,
+    homeScore: ev?.details?.homeScore ?? play.result?.homeScore ?? null,
+  };
 }
 
 const EMPTY_BASES: BaseState = { first: false, second: false, third: false };
@@ -1409,8 +1512,10 @@ async function getLiveData(gamePk: number): Promise<{ feed: LiveFeed; winExp: Ma
 // were frozen without them, re-fetch). v2 added the boxscore pitching line; v3
 // added liveData.decisions (W/L/S) and the per-batter pitch sequence; v4 added
 // runners[].details.earned (per-PA earned-run flag); v5 added responsiblePitcher;
-// v7 added the boxscore's per-game wins/saves/holds.
-const FEED_CACHE_VERSION = 7;
+// v7 added the boxscore's per-game wins/saves/holds; v8 added what a base-running
+// event needs to describe itself — runners[].details.playIndex, the action
+// events' actionPlayId/description/score, and movement.start.
+const FEED_CACHE_VERSION = 8;
 
 export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
   const finalCached = gameMemCache.get(gamePk);
@@ -1564,7 +1669,14 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
         // Skip a run scored on the runner's own at-bat (a home run) — the plate
         // appearance already shows it. Baserunner runs are their own feed event.
         if (rid !== batterId) {
-          addBaseEvent(rid, { kind: 'run', inning: evInning, half: evHalf, timestamp: evTime, base: null });
+          addBaseEvent(rid, {
+            kind: 'run',
+            inning: evInning,
+            half: evHalf,
+            timestamp: evTime,
+            base: null,
+            ...baseEventDetail(play, r, 'run'),
+          });
         }
       }
       if (isStolenBase(et)) {
@@ -1575,6 +1687,7 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
           half: evHalf,
           timestamp: evTime,
           base: stolenBaseTarget(et),
+          ...baseEventDetail(play, r, 'sb'),
         });
       } else if (isCaughtStealing(et)) {
         csByRunner.set(rid, (csByRunner.get(rid) ?? 0) + 1);

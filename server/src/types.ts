@@ -110,13 +110,31 @@ export interface ProbablePitcher {
   hand: string | null; // "L" | "R"
 }
 
-/** A base-running event (stolen base or run scored) for the feed's stream. */
+/**
+ * A base-running event (stolen base or run scored) for the feed's stream.
+ *
+ * It carries the same two things a plate appearance does — a description of what
+ * happened and a `playId` to play it back — because in the feed it is the same
+ * kind of item: something the watched player did, with a clip of him doing it.
+ * The clip is the steal's own action clip, or, for a run, the play that drove
+ * him in.
+ */
 export interface BaseEvent {
   kind: 'sb' | 'run';
   inning: number;
   half: string; // "Top" | "Bot"
   timestamp: string | null;
   base: string | null; // stolen-base target ("2nd"/"3rd"/"home"); null for a run
+  playId: string | null; // the clip, resolved through /api/video like any play
+  description: string; // MLB's own line for the event ('' when it has none)
+  batterName: string | null; // at the plate: stolen on, or drove the run in
+  pitcherName: string | null;
+  balls: number | null;
+  strikes: number | null;
+  outs: number | null;
+  fromBase: string | null; // run only: the base he scored from ("1B"/"2B"/"3B")
+  awayScore: number | null; // the score the event left behind
+  homeScore: number | null;
 }
 
 // ---- Pitcher model ---------------------------------------------------------

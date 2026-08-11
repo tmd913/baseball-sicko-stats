@@ -853,13 +853,7 @@ async function buildStatsApiDay(date: string): Promise<{
         // "probable" for this side — see the field's note.
         teamProbablePitcher: null,
         plateAppearances,
-        baseEvents: (g.baseEvents.get(bg.batterId) ?? []).map((e) => ({
-          kind: e.kind,
-          inning: e.inning,
-          half: e.half,
-          timestamp: e.timestamp,
-          base: e.base,
-        })),
+        baseEvents: (g.baseEvents.get(bg.batterId) ?? []).map((e) => ({ ...e })),
         // line is finalized after CSV enrichment is merged in (below), since
         // run value / avg exit velo depend on fields the enrichment fills in.
         line: buildLine(plateAppearances.filter((p) => p.event)),
@@ -993,8 +987,10 @@ function projectDay(day: ParsedDay, filter: DayFilter): ParsedDay {
  *  the pitching role (starter/reliever + entry inning) each game carries, the
  *  starting-pitcher ids the placeholder games read it from, the pitching line's
  *  win/save/hold credits, and each game's opposing team id; v4 fills the
- *  opposing probable starter on a pitcher's own game, which used to be null. */
-const DAY_SNAPSHOT_VERSION = 4;
+ *  opposing probable starter on a pitcher's own game, which used to be null; v5
+ *  gives each base event its clip, description, matchup and count, which a v4
+ *  snapshot has none of and would go on serving as a bare badge forever. */
+const DAY_SNAPSHOT_VERSION = 5;
 
 /**
  * The on-the-wire form of a day.

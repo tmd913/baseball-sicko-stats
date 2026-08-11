@@ -294,10 +294,51 @@ function baseEventLabel(ev: BaseEvent): string {
   return ev.base ? `Stole ${ev.base}` : 'Stolen Base';
 }
 
+/** A base as the feed says it: "2B" → "2nd". */
+function baseName(base: string): string {
+  return base === '1B' ? '1st' : base === '2B' ? '2nd' : base === '3B' ? '3rd' : base;
+}
+
+/** "2 outs" / "1 out" — MLB counts the outs already made. */
+function outsLabel(outs: number): string {
+  return `${outs} ${outs === 1 ? 'out' : 'outs'}`;
+}
+
+/**
+ * The situation the event happened in, as a list of phrases the row joins with
+ * dots. A run says where he came from; a steal says the count he went on and
+ * who the battery was — the two facts that decide whether a bag was there to be
+ * taken. Each piece is dropped rather than dashed when the feed didn't carry it.
+ */
+function baseEventMeta(ev: BaseEvent): string[] {
+  const parts: string[] = [];
+  if (ev.kind === 'run' && ev.fromBase) parts.push(`Scored from ${baseName(ev.fromBase)}`);
+  if (ev.kind === 'sb' && ev.balls !== null && ev.strikes !== null) {
+    parts.push(`${ev.balls}-${ev.strikes} count`);
+  }
+  if (ev.outs !== null) parts.push(outsLabel(ev.outs));
+  if (ev.kind === 'sb') {
+    if (ev.pitcherName) parts.push(`off ${surname(ev.pitcherName)}`);
+    if (ev.batterName) parts.push(`${surname(ev.batterName)} batting`);
+  }
+  return parts;
+}
+
+/** The score the event left behind, in the game badge's own form. */
+function baseEventScore(ev: BaseEvent, game: PlayerGame): string | null {
+  if (ev.awayScore === null || ev.homeScore === null) return null;
+  return `${game.awayTeam} ${ev.awayScore}–${ev.homeScore} ${game.homeTeam}`;
+}
+
 /**
  * One base-running event in the Recent section — a stolen base or a run scored.
- * Same player header as an at-bat, then a compact badge (no pitch card/video,
- * since it isn't a plate appearance).
+ *
+ * It reads as a plate appearance does, because in this stream it is the same
+ * kind of thing: the same player header, then what happened, then the clip of it
+ * (a steal's own action clip; for a run, the play that drove him in). It carries
+ * no pitch card — there is no sequence to show — so the detail is MLB's own line
+ * for the event plus the situation it happened in, and nothing toggles: the
+ * whole item is three short rows, where a caret would be hiding one of them.
  */
 function FeedBaseEvent({
   report,
@@ -312,6 +353,8 @@ function FeedBaseEvent({
   onOpenDetails: (key: string) => void;
   onOpenPlayerDay: (key: string) => void;
 }) {
+  const meta = baseEventMeta(ev);
+  const score = baseEventScore(ev, game);
   return (
     <div className="feed-item">
       <div className="feed-item-head">
@@ -322,11 +365,17 @@ function FeedBaseEvent({
         </div>
       </div>
       <div className={`feed-base kind-${ev.kind}`}>
-        <span className="feed-base-inning">
-          {ev.half} {ev.inning}
-        </span>
-        <span className="feed-base-badge">{baseEventLabel(ev)}</span>
+        <div className="feed-base-row">
+          <span className="feed-base-inning">
+            {ev.half} {ev.inning}
+          </span>
+          <span className="feed-base-badge">{baseEventLabel(ev)}</span>
+          {score && <span className="feed-base-score">{score}</span>}
+        </div>
+        {ev.description && <p className="feed-base-desc">{ev.description}</p>}
+        {meta.length > 0 && <div className="feed-base-meta">{meta.join(' · ')}</div>}
       </div>
+      {ev.playId && <InlineVideoClip playId={ev.playId} gamePk={game.gamePk} />}
     </div>
   );
 }
