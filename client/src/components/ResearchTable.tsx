@@ -1,10 +1,11 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { BaseballMark } from './BaseballMark';
 import { ExpandButton } from './ExpandButton';
-import { useFullPage } from '../hooks';
+import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
+import { useFullPage, usePlayerStatus } from '../hooks';
 import { RESEARCH_WINDOWS } from '../types';
 import type { PlayerKind, ResearchRow, ResearchWindow } from '../types';
-import { headshotUrl } from '../lib';
+import { headshotUrl, statusCorner } from '../lib';
 
 /**
  * A league-wide, season-to-date stat table: every player on one board, sortable
@@ -701,6 +702,50 @@ const freshBoard = (): BoardState => ({
   sortAsc: false,
   filters: [],
 });
+
+/**
+ * A board row's headshot, with today's two marks on it: the lineup pip on the
+ * top corner — a batting slot, `SP`, a reliever's entry inning — and the status
+ * code on the bottom edge, `IL10` or `DTD`.
+ *
+ * They matter more here than anywhere else in the app. Every other view draws
+ * players the user chose; this one is the whole league, most of it strangers,
+ * and the question it exists to answer is whether to pick somebody up. A man
+ * batting second tonight and a man who went on the IL this morning have the
+ * same season line, and the line is all this table showed of the difference.
+ *
+ * `usePlayerStatus` is what the summary table reads off a report — the board
+ * has no report for a player nobody is watching, so it reads the same facts off
+ * the league-wide status map instead. Absent until that one request lands, and
+ * absent afterwards for a player with nothing to say, which is most of them.
+ */
+function ResearchPhoto({
+  row,
+  playerKey: key,
+  onOpen,
+}: {
+  row: ResearchRow;
+  playerKey: string;
+  onOpen: (key: string) => void;
+}) {
+  const status = usePlayerStatus(row.id);
+  const badge = useStatusBadge(key, status?.rosterStatus ?? null);
+  return (
+    <button
+      type="button"
+      className="sum-photo-wrap"
+      onClick={() => onOpen(key)}
+      title={`${row.name} — Statcast details`}
+    >
+      <img className="sum-photo" src={headshotUrl(row.id)} alt="" />
+      <PhotoSpot
+        corner={status ? statusCorner(status, row.kind) : null}
+        className="sum-photo-spot"
+      />
+      <PhotoStatus badge={badge} className="sum-photo-status" />
+    </button>
+  );
+}
 
 export function ResearchTable({
   rows,
@@ -1575,14 +1620,7 @@ export function ResearchTable({
                 return (
                   <tr key={key}>
                     <td className="sum-img-col">
-                      <button
-                        type="button"
-                        className="sum-photo-wrap"
-                        onClick={() => onOpenDetails(key)}
-                        title={`${r.name} — Statcast details`}
-                      >
-                        <img className="sum-photo" src={headshotUrl(r.id)} alt="" />
-                      </button>
+                      <ResearchPhoto row={r} playerKey={key} onOpen={onOpenDetails} />
                     </td>
                     <td className="sum-name-col">
                       <button

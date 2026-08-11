@@ -552,6 +552,35 @@ export interface RosterStatus {
   description: string; // human label, e.g. "Active", "Injured 10-Day", "Suspended # days"
 }
 
+/**
+ * What is true of a player **today**, as against what he has done — his roster
+ * status, and where he sits in his team's game if they have one.
+ *
+ * The watchlist views read all of this off a `PlayerReport`, which carries a
+ * player's games and his roster status already. The research board and the
+ * details view cannot: the board is every player in the league and the details
+ * view opens on any of them, watched or not, and neither is going to pull a
+ * report per row to learn that a man is on the IL. So this is the same handful
+ * of facts, shorn of everything a report holds besides them, for the two views
+ * that want the facts without the report.
+ */
+export interface PlayerStatus {
+  /** His 40-man roster status when it isn't plain "Active" — see `RosterStatus`. */
+  rosterStatus: RosterStatus | null;
+  /** Where today's posted lineup has him, and in which slot. Null both when the
+   *  lineup hasn't posted and when his team isn't playing. */
+  lineupStatus: 'starting' | 'bench' | null;
+  lineupSpot: number | null;
+  /** The pitcher-side mirror: today's starter (announced or on the boxscore) or
+   *  a reliever, with the inning he came in. */
+  pitchingRole: 'starting' | 'relief' | null;
+  entryInning: number | null;
+  /** The state of the game these facts are about — the one thing here that is
+   *  about the game rather than the player, carried because a postponement is
+   *  the reason a posted lineup means nothing. */
+  gameState: GameStatus['state'] | null;
+}
+
 /** A player as returned in the day's report. */
 export interface PlayerReport extends WatchPlayer {
   found: boolean;

@@ -8,6 +8,7 @@ import type {
   EspnStatus,
   PlayerKind,
   PlayerReport,
+  PlayerStatus,
   ResearchRow,
   ResearchWindow,
   RosterSource,
@@ -35,7 +36,7 @@ import type { ResearchPos, ResearchScope } from './components/ResearchTable';
 import { simulateLiveDay } from './simulate';
 import { PlayerDetails } from './components/PlayerDetails';
 import { DateRangePicker, numericRange } from './components/DateRangePicker';
-import { FantasyRosterContext, MutedContext, useDismissable } from './hooks';
+import { FantasyRosterContext, MutedContext, PlayerStatusContext, useDismissable } from './hooks';
 import type { FantasySlot } from './hooks';
 import { Tutorial } from './components/Tutorial';
 import { EspnSettings } from './components/EspnSettings';
@@ -670,6 +671,44 @@ export default function App() {
     if (view !== 'research' && detailsKey === null) return;
     loadOwnership();
   }, [espnConnected, ownership, espnLoading, espnError, view, detailsKey, loadOwnership]);
+
+  /**
+   * What the league has to say about each player today — his roster status, and
+   * where his club's game has him. One request for everybody, because the two
+   * views that want it ask about players they hold no report for: the research
+   * board is several hundred rows of the whole league, and the details view
+   * opens on whoever it was pointing at.
+   *
+   * Re-read on **every entry**, like the free-agent ownership read above and
+   * for the same reason: a lineup posts a couple of hours before first pitch
+   * and a man goes on the IL at noon, so a map read at breakfast is the wrong
+   * answer by dinner. It costs nothing to re-ask — the server's day is cached
+   * ten minutes, fifteen seconds while a game is live — and the ref keeps two
+   * entries in quick succession from sending two requests.
+   *
+   * A failure is swallowed: this decorates a headshot, and the board it sits on
+   * is the thing the user actually came for.
+   */
+  const [playerStatuses, setPlayerStatuses] = useState<Map<number, PlayerStatus> | null>(null);
+  const statusesInFlight = useRef(false);
+  const loadStatuses = useCallback(() => {
+    if (statusesInFlight.current) return;
+    statusesInFlight.current = true;
+    api
+      .statuses()
+      .then((byId) =>
+        setPlayerStatuses(new Map(Object.entries(byId).map(([id, st]) => [Number(id), st]))),
+      )
+      .catch((e: Error) => console.error('player statuses unavailable:', e.message))
+      .finally(() => {
+        statusesInFlight.current = false;
+      });
+  }, []);
+
+  useEffect(() => {
+    if (view !== 'research' && detailsKey === null) return;
+    loadStatuses();
+  }, [view, detailsKey, loadStatuses]);
 
   /** How each roster % has moved lately, and over how long. Null without a
    *  league, and also when the server has no baseline yet. */
@@ -1522,6 +1561,7 @@ export default function App() {
        reel are all covered without any of them handling the value. */
     <MutedContext.Provider value={muteAudio}>
     <FantasyRosterContext.Provider value={fantasySlots}>
+    <PlayerStatusContext.Provider value={playerStatuses}>
     <div
       className={`app${view === 'summary' ? ' summary-mode' : ''}${
         view === 'research' ? ' research-mode' : ''
@@ -2126,6 +2166,7 @@ export default function App() {
         />
       )}
     </div>
+    </PlayerStatusContext.Provider>
     </FantasyRosterContext.Provider>
     </MutedContext.Provider>
   );
