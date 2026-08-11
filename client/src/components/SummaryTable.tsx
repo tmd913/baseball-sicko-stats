@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { FantasySlotTag, FantasyInjuryTag } from './FantasySlot';
-import { RosterStatusTag } from './PlayerCard';
+import { FantasySlotTag } from './FantasySlot';
 import { ExpandButton } from './ExpandButton';
-import { useFullPage } from '../hooks';
+import { useFullPage, useFantasySlot } from '../hooks';
 import type { BattingLine, PitchingLine, PlayerGame, PlayerReport } from '../types';
 import { playerKey } from '../types';
 import type { Corner, LiveRole } from '../lib';
@@ -13,6 +12,7 @@ import {
   eraOf,
   formatIp,
   formatRate,
+  espnInjuryBadge,
   gameStatusView,
   rosterStatusBadge,
   handThrows,
@@ -132,12 +132,44 @@ function aggregatePitching(report: PlayerReport): PitchingLine {
  * `role` paints the live-role ring (at bat / on deck / on base) and `corner`
  * pins the lineup-spot pip — the same colours and treatment the cards and feed use.
  */
+/**
+ * The player's status as a short code on the bottom edge of his headshot —
+ * `IL10`, `RA`, `DTD`, `OUT`, `DFA`.
+ *
+ * On the headshot rather than beside the name because that is where the row
+ * already carries what is *true of the player* as opposed to what he did: the
+ * lineup-spot pip is on the opposite corner of the same circle. It also costs
+ * the name column nothing, which matters on a table that overflows a phone —
+ * a "Rehab Assignment" chip beside a name was pushing stat columns off the
+ * right edge to say something four characters could.
+ *
+ * **MLB's status leads and ESPN's fills only the gap it leaves** — the `??`
+ * is the whole of that rule. Where ESPN says `TEN_DAY_DL` MLB has already said
+ * a 10-day IL stint, and one absence stated twice reads as two problems; what
+ * ESPN is here for is day-to-day and out, which MLB has no code for at all.
+ */
+function PhotoStatus({ r }: { r: PlayerReport }) {
+  const spot = useFantasySlot(playerKey(r));
+  const badge = rosterStatusBadge(r.rosterStatus) ?? espnInjuryBadge(spot?.injuryStatus);
+  if (!badge) return null;
+  return (
+    <span
+      className={`sum-photo-status status-${badge.tone}`}
+      title={badge.title}
+      aria-label={badge.title}
+    >
+      {badge.short}
+    </span>
+  );
+}
+
 function SumPhoto({
   id,
   playerKey: key,
   name,
   role,
   corner,
+  status,
   onOpen,
 }: {
   id: number;
@@ -145,6 +177,7 @@ function SumPhoto({
   name: string;
   role: LiveRole | null;
   corner: Corner;
+  status: ReactNode;
   onOpen: (key: string) => void;
 }) {
   const [failed, setFailed] = useState(false);
@@ -177,6 +210,7 @@ function SumPhoto({
           {corner.text}
         </span>
       )}
+      {status}
     </button>
   );
 }
@@ -203,7 +237,15 @@ function LeadCells({
   return (
     <>
       <td className="sum-img-col">
-        <SumPhoto id={r.id} playerKey={playerKey(r)} name={r.name} role={role} corner={corner} onOpen={onOpenDetails} />
+        <SumPhoto
+          id={r.id}
+          playerKey={playerKey(r)}
+          name={r.name}
+          role={role}
+          corner={corner}
+          status={<PhotoStatus r={r} />}
+          onOpen={onOpenDetails}
+        />
       </td>
       <th className="sum-name-col" scope="row">
         {/* Ahead of the name rather than after it, and only on this table: the
@@ -219,20 +261,11 @@ function LeadCells({
         >
           {r.name}
         </button>
-        {/* Trailing the name, as it does on the card. An injured player is on
-            this table whenever the hide-injured toggle is off, and over a range
-            that starts after he went down every stat of his is a dash — so the
-            row needs to say why, or it reads as missing data rather than as a
-            man who hasn't played.
-
-            MLB's status leads and ESPN's fills the gap it leaves, rather than
-            both showing: where ESPN says `TEN_DAY_DL` MLB has already said
-            `10-day IL`, and one absence stated twice on one row reads as two
-            different problems. What ESPN is here for is the case MLB has no
-            vocabulary for at all — day-to-day, or out tonight, neither of which
-            takes a man off the active roster. */}
-        <RosterStatusTag status={r.rosterStatus} />
-        {!rosterStatusBadge(r.rosterStatus) && <FantasyInjuryTag playerKey={playerKey(r)} />}
+        {/* The status is on the headshot (`PhotoStatus`), not here: an injured
+            player is on this table whenever the hide-injured toggle is off, so
+            the row must say why its stats are dashes — but it can say it in
+            four characters on a circle the row already draws, instead of a
+            chip that widens the one column this table can least afford. */}
       </th>
       <OpponentCell game={game} />
     </>

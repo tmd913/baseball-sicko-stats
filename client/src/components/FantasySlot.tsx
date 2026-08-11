@@ -1,5 +1,4 @@
 import { useFantasySlot } from '../hooks';
-import { espnInjuryBadge } from '../lib';
 
 /**
  * Where this player sits in the user's fantasy lineup today — `SS`, `UTIL`,
@@ -34,32 +33,6 @@ export function FantasySlotTag({ playerKey }: { playerKey: string }) {
       }
     >
       {spot.slot}
-    </span>
-  );
-}
-
-/**
- * ESPN's injury designation — `DTD`, `OUT` — beside the name.
- *
- * It exists because **MLB's roster status cannot say either**: a day-to-day
- * player is still on the active roster, so `rosterStatusBadge` correctly draws
- * nothing for him, and the row was a name with no hint that he is hurt. ESPN's
- * league roster is the only payload in the app that carries it (its cookie-free
- * season-wide list does not), which is why this rides on the fantasy roster
- * context and, like the slot chip, is simply absent the rest of the time.
- *
- * Takes the same `.roster-status` chip MLB's own badge uses rather than a chip
- * of its own: they occupy one slot on the row, they never appear together, and
- * two shapes for one idea would only invite the reader to look for a difference
- * that isn't there.
- */
-export function FantasyInjuryTag({ playerKey }: { playerKey: string }) {
-  const spot = useFantasySlot(playerKey);
-  const badge = espnInjuryBadge(spot?.injuryStatus);
-  if (!badge) return null;
-  return (
-    <span className={`roster-status roster-status-${badge.tone}`} title={badge.title}>
-      {badge.label}
     </span>
   );
 }

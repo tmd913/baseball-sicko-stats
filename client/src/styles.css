@@ -4167,6 +4167,55 @@ body {
   min-width: 15px;
   font-size: 8px;
 }
+/* Roster status as a short code on the bottom edge of the headshot — IL10, RA,
+   DTD, OUT, DFA. The opposite pole of the circle from the lineup-spot pip, so
+   the two never collide, and centred because unlike the pip it is a word rather
+   than a mark and reads from its middle.
+
+   It carries a **solid** ground rather than the tinted one `.roster-status` uses
+   beside a name — the same reasoning `.clip-audio` follows over video: this sits
+   on a photograph, which is a different colour behind every player, and a 13%
+   wash over one is unreadable on the next. Tone therefore lives in the text and
+   the border, which is all that is left once the fill is spoken for.
+
+   Sized to fit four characters (IL60 is the widest the app can print) inside a
+   37px circle without touching either rim. */
+.sum-photo-status {
+  position: absolute;
+  bottom: -3px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  height: 13px;
+  padding: 0 4px;
+  border-radius: 6px;
+  border: 1px solid;
+  background: #0a1120;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  white-space: nowrap;
+  /* The wrapper is a button and sets line-height 0 for the image's sake. */
+  font-family: inherit;
+}
+.sum-photo-status.status-il {
+  color: var(--strikeout);
+  border-color: rgba(248, 113, 113, 0.55);
+}
+/* Day-to-day and a suspension share the amber, as they do beside a name: both
+   are a lesser thing than an IL stint's red, since he may well play. */
+.sum-photo-status.status-dtd,
+.sum-photo-status.status-susp {
+  color: var(--hr);
+  border-color: rgba(251, 191, 36, 0.55);
+}
+.sum-photo-status.status-minors,
+.sum-photo-status.status-other {
+  color: var(--muted);
+  border-color: var(--border);
+}
 .sum-photo-empty {
   display: inline-block;
 }

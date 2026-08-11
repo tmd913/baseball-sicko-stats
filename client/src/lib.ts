@@ -693,9 +693,46 @@ export function isRotationStarter(report: PlayerReport): boolean {
  * player is active (or status is unknown), since an active player needs no
  * badge. `tone` drives the badge color; `title` is the API's full description.
  */
+/**
+ * Short codes for the statuses that have no natural abbreviation, keyed by
+ * MLB's own status code. The badge on a headshot has about four characters of
+ * room, so "Designated for Assignment" has to become something, and the
+ * something is worth writing down once rather than deriving: initials give
+ * `DFA` here but `RA` for "Rehab Assignment" only by luck, and `MLC` for
+ * "Minor League Contract" where the useful word is that he is in the minors.
+ */
+const SHORT_BY_CODE: Record<string, string> = {
+  RA: 'RA', // Rehab assignment — an IL stint with minor-league games attached.
+  SU: 'SUS',
+  RM: 'MIN',
+  MIN: 'MIN', // "Minor League Contract" — the same fact as RM for our purposes.
+  TR: 'TR',
+  RL: 'REL',
+  CL: 'CL',
+  DES: 'DFA',
+  FA: 'FA',
+  RES: 'RES',
+  BRV: 'BRV',
+  PL: 'PAT',
+  NRI: 'NRI',
+};
+
+/** Last resort for a code the table above hasn't got: the code itself if it is
+ *  already badge-sized, else the description's initials (so an unmapped
+ *  "Temporarily Inactive" reads `TI` rather than being blank or overflowing). */
+function fallbackShort(code: string, description: string): string {
+  if (code && code.length <= 4) return code.toUpperCase();
+  const initials = description
+    .split(/\s+/)
+    .filter((w) => /^[A-Za-z]/.test(w))
+    .map((w) => w[0].toUpperCase())
+    .join('');
+  return initials.slice(0, 4) || '•';
+}
+
 export function rosterStatusBadge(
   status: RosterStatus | null,
-): { label: string; title: string; tone: RosterTone } | null {
+): { label: string; short: string; title: string; tone: RosterTone } | null {
   if (!status) return null;
   const { code, description } = status;
   // Active (and the on-roster non-states) need no badge.
@@ -703,17 +740,29 @@ export function rosterStatusBadge(
   // Injured 10/15/60-Day → "IL" with the day count when the label carries one.
   if (/^D\d/.test(code) || description.startsWith('Injured')) {
     const days = description.match(/(\d+)-Day/)?.[1];
-    return { label: days ? `${days}-day IL` : 'IL', title: description, tone: 'il' };
+    return {
+      label: days ? `${days}-day IL` : 'IL',
+      // `IL10` rather than `10-day IL`: on a headshot the number is what
+      // distinguishes one stint from another, and the word is what doesn't fit.
+      short: days ? `IL${days}` : 'IL',
+      title: description,
+      tone: 'il',
+    };
   }
   if (code === 'SU' || description.startsWith('Suspended')) {
-    return { label: 'Suspended', title: description, tone: 'susp' };
+    return { label: 'Suspended', short: 'SUS', title: description, tone: 'susp' };
   }
   if (code === 'RM' || description.includes('Minors')) {
-    return { label: 'Minors', title: description, tone: 'minors' };
+    return { label: 'Minors', short: 'MIN', title: description, tone: 'minors' };
   }
   // Anything else (DFA, restricted, paternity, not-yet-reported, ...) shows the
   // API's own description, trimmed of the "# days" placeholder some carry.
-  return { label: description.replace(/\s*#\s*days?$/i, ''), title: description, tone: 'other' };
+  return {
+    label: description.replace(/\s*#\s*days?$/i, ''),
+    short: SHORT_BY_CODE[code] ?? fallbackShort(code, description),
+    title: description,
+    tone: 'other',
+  };
 }
 
 /**
@@ -755,28 +804,34 @@ export function isInjured(status: RosterStatus | null): boolean {
  */
 export function espnInjuryBadge(
   status: string | null | undefined,
-): { label: string; title: string; tone: RosterTone } | null {
+): { label: string; short: string; title: string; tone: RosterTone } | null {
   if (!status || status === 'ACTIVE') return null;
   if (status === 'DAY_TO_DAY') {
-    return { label: 'DTD', title: 'Day-to-day (ESPN)', tone: 'dtd' };
+    return { label: 'DTD', short: 'DTD', title: 'Day-to-day (ESPN)', tone: 'dtd' };
   }
   if (status === 'OUT') {
-    return { label: 'OUT', title: 'Out (ESPN)', tone: 'il' };
+    return { label: 'OUT', short: 'OUT', title: 'Out (ESPN)', tone: 'il' };
   }
   // TEN_DAY_DL -> "10-day IL", matching what MLB's own badge would have said.
   const dl = status.match(/^(SEVEN|TEN|FIFTEEN|SIXTY)_DAY_DL$/);
   if (dl) {
     const days = { SEVEN: 7, TEN: 10, FIFTEEN: 15, SIXTY: 60 }[dl[1] as
       'SEVEN' | 'TEN' | 'FIFTEEN' | 'SIXTY'];
-    return { label: `${days}-day IL`, title: `${days}-day IL (ESPN)`, tone: 'il' };
+    return {
+      label: `${days}-day IL`,
+      short: `IL${days}`,
+      title: `${days}-day IL (ESPN)`,
+      tone: 'il',
+    };
   }
   if (status === 'SUSPENSION') {
-    return { label: 'Suspended', title: 'Suspended (ESPN)', tone: 'susp' };
+    return { label: 'Suspended', short: 'SUS', title: 'Suspended (ESPN)', tone: 'susp' };
   }
-  // Anything ESPN adds later reads as itself — "NON_ROSTER" -> "Non roster" —
-  // rather than vanishing, which is the safe direction for a status to fail in.
+  // Anything ESPN adds later reads as itself — "NON_ROSTER" -> "Non roster",
+  // short `NR` — rather than vanishing, which is the safe direction to fail in.
   const label = status.replace(/_/g, ' ').toLowerCase().replace(/^./, (c) => c.toUpperCase());
-  return { label, title: `${label} (ESPN)`, tone: 'other' };
+  const short = status.split('_').map((w) => w[0]).join('').slice(0, 4);
+  return { label, short, title: `${label} (ESPN)`, tone: 'other' };
 }
 
 /** Exit velo · launch angle · distance for a batted ball, if any was tracked.
