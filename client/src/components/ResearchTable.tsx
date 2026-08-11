@@ -1191,9 +1191,24 @@ export function ResearchTable({
 
       {/* Outside the panel on purpose: the chips are the record of what the
           table is currently showing, so they stay whether the Filters panel is
-          open or shut. */}
-      {filters.length > 0 && (
+          open or shut. Qualified is one of them — it narrows the table exactly
+          as a threshold does, and it is the only one that used to leave no
+          trace here, so the row read as the whole story when it wasn't. */}
+      {(filters.length > 0 || qualifiedOnly) && (
         <div className="research-chips">
+          {qualifiedOnly && (
+            <button
+              type="button"
+              className="research-chip"
+              onClick={() => onQualifiedChange(false)}
+              title="Show every player, qualified or not"
+            >
+              Qualified
+              <span className="research-chip-x" aria-hidden="true">
+                ×
+              </span>
+            </button>
+          )}
           {filters.map((f) => (
             <button
               key={f.id}
@@ -1208,10 +1223,15 @@ export function ResearchTable({
               </span>
             </button>
           ))}
+          {/* Clears what the row shows, which now includes Qualified —
+              otherwise "Clear all" leaves a chip standing. */}
           <button
             type="button"
             className="research-clear"
-            onClick={() => setFilters([])}
+            onClick={() => {
+              setFilters([]);
+              onQualifiedChange(false);
+            }}
           >
             Clear all
           </button>
