@@ -5403,6 +5403,20 @@ body {
 .feed-base-item.kind-run {
   border-left-color: var(--hit);
 }
+/* Two events off one play are two kinds of thing — a steal of home is a steal
+   *and* a run — so the rail carries both, split at the middle in the badges'
+   own order. It has to be a gradient rather than a border: a border takes one
+   colour and there is no half of it to give the second. The border stays, at
+   the same 3px, and goes transparent so the gradient shows through it — which
+   is what `background-origin: border-box` is for, the default padding-box
+   starting the gradient inside the rail rather than on it. */
+.feed-base-item.kind-sb-run {
+  border-left-color: transparent;
+  background-image: linear-gradient(var(--live-purple) 0 50%, var(--hit) 50% 100%);
+  background-repeat: no-repeat;
+  background-size: 3px 100%;
+  background-origin: border-box;
+}
 .feed-base {
   display: flex;
   flex-direction: column;

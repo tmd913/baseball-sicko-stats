@@ -430,12 +430,14 @@ function FeedBaseEvent({
   const score = baseEventScore(lead, game);
   const description = evs.find((ev) => ev.description)?.description ?? '';
   const playId = evs.find((ev) => ev.playId)?.playId ?? null;
-  // A run is what the play *did*, whatever the runner did to cause it, so it
-  // takes the rail when both are here — the steal keeps its own colour on its
-  // badge, where the distinction still reads.
-  const railKind = evs.some((ev) => ev.kind === 'run') ? 'run' : lead.kind;
+  // The rail says what the play was, and with two events off one play that is
+  // two things: a steal of home is a steal *and* a run, so the rail splits in
+  // half rather than picking one of them and stating half of what happened.
+  // The kinds are listed in the badges' own order, so the halves read down the
+  // item the way the badges read across it — steal above, run below.
+  const railKinds = evs.map((ev) => ev.kind).filter((kind, i, all) => all.indexOf(kind) === i);
   return (
-    <div className={`feed-item feed-base-item kind-${railKind}`}>
+    <div className={`feed-item feed-base-item kind-${railKinds.join('-')}`}>
       <div className="feed-item-head">
         <FeedHeadshot id={report.id} name={report.name} onOpen={() => onOpenDetails(playerKey(report))} />
         <div className="feed-item-id">
