@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 
 /**
@@ -133,4 +133,38 @@ export function useDismissable(
       window.removeEventListener('keydown', onKey);
     };
   }, [open, ref, close]);
+}
+
+/**
+ * Give one element the whole browser page, and take it back.
+ *
+ * These tables are the app's widest things by some way — the research board
+ * carries 44 columns — and they read out of a box a few hundred pixels tall
+ * under a header, a tab row and a control bar. This is the button that says
+ * "just show me the table": the app's own chrome goes and the table takes
+ * everything the page has.
+ *
+ * **Deliberately not the Fullscreen API.** That takes the browser's chrome as
+ * well, which is a bigger thing than was asked for and a worse one to be in by
+ * accident — it swallows the tab strip and the address bar, needs a user
+ * gesture, is refused outright by iPhone Safari for elements, and leaves the
+ * page in a mode the browser rather than the app has to be asked to leave. A
+ * fixed overlay covers everything this app draws, behaves the same everywhere,
+ * and is undone by the same button that made it.
+ *
+ * Escape leaves, because a mode that fills the window should answer the key
+ * that means "out of this".
+ */
+export function useFullPage() {
+  const [isFull, setFull] = useState(false);
+  useEffect(() => {
+    if (!isFull) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setFull(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isFull]);
+  const toggle = useCallback(() => setFull((v) => !v), []);
+  return { isFull, toggle };
 }

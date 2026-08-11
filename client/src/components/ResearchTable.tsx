@@ -1,4 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { ExpandButton } from './ExpandButton';
+import { useFullPage } from '../hooks';
 import { RESEARCH_WINDOWS } from '../types';
 import type { PlayerKind, ResearchRow, ResearchWindow } from '../types';
 import { headshotUrl } from '../lib';
@@ -921,8 +923,31 @@ export function ResearchTable({
 
   const statcastStart = columns.findIndex((c) => c.statcast);
 
+  const { isFull, toggle } = useFullPage();
+
   return (
-    <div className="research-view">
+    <div className={`research-view${isFull ? ' is-expanded' : ''}`}>
+      {/* Expanded, the board's whole control set is hidden — but a table you
+          cannot see the controls of is a table you cannot read: "of 622" means
+          nothing without knowing it is the 30-day window, free agents only, and
+          shortstops. So every setting that is doing something states itself as
+          a badge. Labels, not controls: the app's round pill is the shape it
+          reserves for things you read, and the way to change any of them is the
+          same button that got you here. */}
+      {isFull && (
+        <div className="expanded-chrome research-badges">
+          <span className="research-badge">{POSITION_BY_KEY.get(pos)?.label ?? pos}</span>
+          <span className="research-badge">{SCOPE_LABELS[scope]}</span>
+          <span className="research-badge">{windowLabel(statWindow)}</span>
+          {qualifiedOnly && <span className="research-badge">Qualified</span>}
+          {search.trim() && <span className="research-badge">“{search.trim()}”</span>}
+          {filters.map((f) => (
+            <span key={f.id} className="research-badge">
+              {columnsByKey.get(f.column)?.label ?? f.column} {OP_LABEL[f.op]} {f.label}
+            </span>
+          ))}
+        </div>
+      )}
       {/* Positions, the two disclosure buttons and the count all share one
           wrapping row: the pills are only as wide as their content, so on a
           desktop the whole control set fits on a single line, and the row
@@ -1332,6 +1357,7 @@ export function ResearchTable({
               <tr>
                 <th className="sum-img-col" scope="col">
                   <span className="sr-only">Headshot</span>
+                  <ExpandButton isFull={isFull} onToggle={toggle} what="board" />
                 </th>
                 <th className="sum-name-col" scope="col">
                   Player

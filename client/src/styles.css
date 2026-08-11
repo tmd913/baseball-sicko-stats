@@ -2971,8 +2971,19 @@ body {
   border-bottom: none;
   font-weight: 800;
 }
+/* The season label is three columns wide (a season has no one lineup spot, so
+   it eats that column too) *and* carries `.glog-date`, which is what pins the
+   date column to the left edge — so scrolling right slid the label along over
+   its own totals and swallowed AB and R.
+   It keeps the row's bottom pin and gives up the horizontal one: `left: auto`
+   leaves a sticky box constrained on one axis only, so the label scrolls away
+   like any other cell and the numbers it was covering are readable. The
+   pinned-edge shadow goes with it — there is no longer an edge for it to
+   mark. */
 .glog-table tfoot .glog-date {
   z-index: 3;
+  left: auto;
+  box-shadow: none;
 }
 .glog-total-label {
   color: var(--muted);
@@ -3712,6 +3723,158 @@ body {
   letter-spacing: -0.02em;
 }
 
+/* ---- Full page ------------------------------------------------------------
+   The three wide tables each offer themselves the whole browser page. Not the
+   Fullscreen API — see `hooks.ts::useFullPage` for why — so this is a plain
+   fixed box over everything the app draws.
+
+   The button that sets it is **in the table's own top-left header cell**, which
+   costs the page no vertical space and, being the one cell pinned on both axes
+   (the header row sticks to the top, the headshot column to the left), is on
+   screen wherever you have scrolled to. That is what lets the same button be
+   the way out: there is no separate control and nothing to go looking for. */
+.summary-view.is-expanded,
+.research-view.is-expanded,
+.details-gamelog.is-expanded {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  background: var(--bg);
+  padding: 10px 12px;
+  /* Undoes the game log's reading column, that being the one moment it is the
+     wrong idea. */
+  max-width: none;
+  margin: 0;
+}
+/* The row above the table in the expanded box, carrying whatever of the page's
+   own chrome the table can't be read without: the kind tabs and the date
+   control on the summary view, a badge per active setting on the research
+   board, and who the log is about in the game log. `flex: none` so it keeps its
+   height and the table takes the rest; it wraps, which is what lets the date
+   control open as a line of its own underneath (`.app.date-open .date-control`
+   claims `flex: 1 1 100%`). */
+.expanded-chrome {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin-bottom: 8px;
+}
+
+/* One setting, stated. Round because it is a label — the shape this app
+   reserves for things you read — which is also what keeps a row of them from
+   reading as the control set they stand in for. The way to change any of them
+   is the button that expanded the table. */
+.research-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 11px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Who the game log is about, at the size of a row label rather than the page
+   header it stands in for. */
+.glog-id {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.glog-id-photo {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+}
+
+/* Only as tall as its rows. `flex: 0 1 auto` takes the content's height, and
+   `min-height: 0` lets it shrink back to the box when there is more content
+   than screen — which is the case where it scrolls, and the only case where it
+   should be full height. `flex: 1`, which is what these panes carry for their
+   place in the ordinary layout, filled the box either way: a short table sat in
+   a bordered expanse of nothing (581px of it on a 1300px window) with the total
+   row pinned to the far bottom, a gap below the last game that reads as a table
+   that has stopped scrolling. */
+.summary-view.is-expanded > .summary-scroll,
+.research-view.is-expanded > .research-scroll,
+.details-gamelog.is-expanded > .glog-scroll {
+  flex: 0 1 auto;
+  min-height: 0;
+}
+/* On the research board that box holds the table *and* its whole control set —
+   scope, window, positions, the four disclosures and the count line, some 180px
+   of it. Expanding is a request for the table, so everything that isn't the
+   table goes: the point of the mode is rows and columns, and controls that
+   describe a table you asked to see more of are the first thing that should
+   give up the room. Sorting still works, being a click on the header row, and
+   the filters are one press of the same button away.
+
+   A rule rather than a branch in the JSX, for the reason `.app.edit-mode`'s is:
+   this is one statement of one idea where the equivalent is a conditional
+   around each of five children. */
+.research-view.is-expanded > :not(.research-scroll):not(.expanded-chrome) {
+  display: none;
+}
+
+/* Small enough to sit in a header cell without setting the width of a column
+   that exists to be narrow: the headshot column is 37px of photo between two
+   gutters. Its own look rather than the header's square icon family — those are
+   36px and sit on a control line, this one sits on a table cell's tinted
+   background. */
+.expand-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--faint);
+  cursor: pointer;
+  transition: color 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+}
+.expand-btn:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.expand-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.expand-btn.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+}
+/* The game log's corner cell is the one that carries a word, so the button sits
+   beside it — inline, and deliberately *not* by making the cell a flex box:
+   `display: flex` on a `<th>` takes it out of the table's layout altogether, and
+   the header cell stopped being the width of its column (22px against a 76px
+   column, its text overflowing into the next header's space). The button is
+   `inline-flex` already, so it needs nothing but a gap and a baseline.
+   Everywhere else the cell is empty and the button is all of it. */
+.glog-table thead .glog-date .expand-btn {
+  margin-right: 7px;
+  vertical-align: middle;
+}
+
 /* ---- Summary view: a full-page, scroll-locked stat table ---- */
 
 /* In summary mode — and on the research board, which is the same wide table
@@ -3726,6 +3889,11 @@ body {
   flex-direction: column;
   overflow: hidden;
 }
+/* A column, since the full-screen button's row sits above the table. The table
+   may use up to whatever height is left below it, and no more: `flex: 0 1 auto`
+   is what lets a three-row table shrink to its content instead of leaving dead
+   space below the total row, while a long one shrinks to the space available
+   and scrolls past that. */
 /* The table area may use up to whatever height is left below the header + view
    bar, but no more. align-items:flex-start keeps the scroll box from being
    stretched to that full height, so with only a few rows it shrinks to its

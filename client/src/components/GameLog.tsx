@@ -1,5 +1,8 @@
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import type { BatterGameLog, PitcherGameLog } from '../types';
+import { ExpandButton } from './ExpandButton';
+import { useFullPage } from '../hooks';
 import { creditLabel, decisionColor, formatIp, formatRate, ordinal, prettyGameDate } from '../lib';
 
 /**
@@ -271,21 +274,34 @@ function PitcherTotals({ games }: { games: PitcherGameLog[] }) {
  * which is the only place in the app that shows how he got there.
  */
 export function GameLog(
-  log: { kind: 'batter'; games: BatterGameLog[] } | { kind: 'pitcher'; games: PitcherGameLog[] },
+  log: (
+    | { kind: 'batter'; games: BatterGameLog[] }
+    | { kind: 'pitcher'; games: PitcherGameLog[] }
+  ) & {
+    /** Who the log is about, for when the table has the page and the details
+     *  head that normally says so is behind it. Rendered only while expanded,
+     *  and smaller than that head: a name and a face, not a page header. */
+    chrome?: ReactNode;
+  },
 ) {
   const [shown, setShown] = useState(PAGE_SIZE);
+  // Above the early return: hooks are unconditional, and a player with no games
+  // takes that branch.
+  const { isFull, toggle } = useFullPage();
   if (log.games.length === 0) {
     return <div className="details-status">No games played this season.</div>;
   }
   const pitching = log.kind === 'pitcher';
   const more = log.games.length - shown;
   return (
-    <div className="details-gamelog">
+    <div className={`details-gamelog${isFull ? ' is-expanded' : ''}`}>
+      {isFull && log.chrome && <div className="expanded-chrome">{log.chrome}</div>}
       <div className="glog-scroll">
         <table className="glog-table">
           <thead>
             <tr>
               <th className="glog-date" scope="col">
+                <ExpandButton isFull={isFull} onToggle={toggle} what="log" />
                 Date
               </th>
               <th className="glog-opp" scope="col">

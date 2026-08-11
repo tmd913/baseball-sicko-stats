@@ -1,5 +1,8 @@
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { FantasySlotTag } from './FantasySlot';
+import { ExpandButton } from './ExpandButton';
+import { useFullPage } from '../hooks';
 import type { BattingLine, PitchingLine, PlayerGame, PlayerReport } from '../types';
 import { playerKey } from '../types';
 import type { Corner, LiveRole } from '../lib';
@@ -219,7 +222,19 @@ function LeadCells({
 }
 
 /** The batter stat table: one row per hitter, with an aggregate total row. */
-function BatterTable({ batters, handlers }: { batters: PlayerReport[]; handlers: RowHandlers }) {
+/** Full-page state, handed down to whichever table renders the corner cell the
+ *  button sits in. */
+type Expand = { isFull: boolean; toggle: () => void };
+
+function BatterTable({
+  batters,
+  handlers,
+  expand,
+}: {
+  batters: PlayerReport[];
+  handlers: RowHandlers;
+  expand: Expand;
+}) {
   const total = combineLines(batters.flatMap((r) => r.games.map((g) => g.line)));
   const cols = ['H/AB', 'R', 'HR', 'RBI', 'SB', 'OPS', 'BB', 'K'];
   return (
@@ -228,6 +243,7 @@ function BatterTable({ batters, handlers }: { batters: PlayerReport[]; handlers:
         <tr>
           <th className="sum-img-col" scope="col">
             <span className="sr-only">Photo</span>
+            <ExpandButton isFull={expand.isFull} onToggle={expand.toggle} what="table" />
           </th>
           <th className="sum-name-col" scope="col">
             Batter
@@ -269,7 +285,15 @@ function BatterTable({ batters, handlers }: { batters: PlayerReport[]; handlers:
 }
 
 /** The pitcher stat table: one row per pitcher, with an aggregate total row. */
-function PitcherTable({ pitchers, handlers }: { pitchers: PlayerReport[]; handlers: RowHandlers }) {
+function PitcherTable({
+  pitchers,
+  handlers,
+  expand,
+}: {
+  pitchers: PlayerReport[];
+  handlers: RowHandlers;
+  expand: Expand;
+}) {
   const totalLine = combinePitchingLines(
     pitchers.flatMap((r) => r.games.filter((g) => g.pitching).map((g) => g.pitching!.line)),
   );
@@ -280,6 +304,7 @@ function PitcherTable({ pitchers, handlers }: { pitchers: PlayerReport[]; handle
         <tr>
           <th className="sum-img-col" scope="col">
             <span className="sr-only">Photo</span>
+            <ExpandButton isFull={expand.isFull} onToggle={expand.toggle} what="table" />
           </th>
           <th className="sum-name-col" scope="col">
             Pitcher
@@ -329,24 +354,44 @@ export function SummaryTable({
   reports,
   onOpenDetails,
   onOpenPlayerDay,
+  chrome,
 }: {
   reports: PlayerReport[];
   // The headshot opens the player's details; the name jumps to their game log.
   onOpenDetails: (key: string) => void;
   onOpenPlayerDay: (key: string) => void;
+  /** What to keep from the app's own chrome once the table has the page: the
+   *  kind tabs and the date control, handed down as nodes because App owns both
+   *  the state behind them and the markup. Rendered only while expanded. */
+  chrome?: ReactNode;
 }) {
   const handlers = { onOpenDetails, onOpenPlayerDay };
   const batters = reports.filter((r) => r.kind !== 'pitcher');
   const pitchers = reports.filter((r) => r.kind === 'pitcher');
+  const { isFull, toggle } = useFullPage();
+  const expand = { isFull, toggle };
   return (
-    <div className="summary-view">
+    /* Full page is a class on this box, not the Fullscreen API — see
+       `hooks.ts::useFullPage`. The button that sets it is down in the table's
+       corner header cell, which is pinned on both axes and so is always the way
+       back out. */
+    <div className={`summary-view${isFull ? ' is-expanded' : ''}`}>
+      {/* Expanded, the app's header and tab rows are behind this box — but
+          which kind the table is showing and which days it covers are not
+          decoration, they are what the numbers *are*, and both are controls you
+          reach for while reading. They come along; nothing else does. */}
+      {isFull && chrome && <div className="expanded-chrome">{chrome}</div>}
       <div className="summary-scroll">
         {/* The tables sit in one max-content flex column so the narrower of the
             two stretches to the other's width — otherwise the batter table (fewer
             columns) would stop short of the scrolled-right edge. */}
         <div className="summary-tables">
-          {batters.length > 0 && <BatterTable batters={batters} handlers={handlers} />}
-          {pitchers.length > 0 && <PitcherTable pitchers={pitchers} handlers={handlers} />}
+          {batters.length > 0 && (
+            <BatterTable batters={batters} handlers={handlers} expand={expand} />
+          )}
+          {pitchers.length > 0 && (
+            <PitcherTable pitchers={pitchers} handlers={handlers} expand={expand} />
+          )}
         </div>
       </div>
     </div>
