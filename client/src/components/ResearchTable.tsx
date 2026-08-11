@@ -674,16 +674,19 @@ const windowLabel = (w: ResearchWindow) => (w === 'season' ? 'Season' : `${w}d`)
 /** What each board remembers while you are looking at the other one. */
 type BoardState = {
   search: string;
-  sortKey: string;
+  /** Null until the reader sorts something — see `freshBoard`. */
+  sortKey: string | null;
   sortAsc: boolean;
   filters: StatFilter[];
 };
 
-/** A board as it opens: its own default sort (PA for batters, IP for pitchers),
- *  descending, nothing searched and nothing filtered. */
-const freshBoard = (k: PlayerKind): BoardState => ({
+/** A board as it opens: descending, nothing searched, nothing filtered, and
+ *  **no sort of its own yet** — `sortKey: null` means "whatever this board's
+ *  default is", which is read at render because it depends on a column that
+ *  isn't there on the first one (see `defaultSortKey`). */
+const freshBoard = (): BoardState => ({
   search: '',
-  sortKey: DEFAULT_SORT[k],
+  sortKey: null,
   sortAsc: false,
   filters: [],
 });
@@ -774,8 +777,8 @@ export function ResearchTable({
    * selection App keeps per board is a saved preference with a route behind it.
    */
   const [boards, setBoards] = useState<Record<PlayerKind, BoardState>>(() => ({
-    batter: freshBoard('batter'),
-    pitcher: freshBoard('pitcher'),
+    batter: freshBoard(),
+    pitcher: freshBoard(),
   }));
   const board = boards[kind];
   /** Change the board on screen, leaving the other one alone. */
@@ -838,7 +841,27 @@ export function ResearchTable({
   // Hiding the column you were sorting on leaves the table ordered by something
   // you can neither see nor reverse — there is no header left to click. So the
   // sort falls back to the board's default, which is always a shown column.
-  const activeSortKey = visibleKeys.has(sortKey) ? sortKey : DEFAULT_SORT[kind];
+  /**
+   * What the board sorts by before anyone touches a header — and what it falls
+   * back to when the sorted column is switched off, since a table ordered by
+   * something you can neither see nor reverse is a trap.
+   *
+   * **Ros% when a fantasy league is connected**: it is the board's first column
+   * there and the one a fantasy manager is reading the league *by*, so the most
+   * widely rostered players lead. Without a league that column does not exist
+   * and the answer is the board's own counting stat — PA for batters, IP for
+   * pitchers, which lands you on names worth reading rather than the alphabet.
+   *
+   * Computed here rather than stored on the board, because `hasRosterPct` is
+   * false on the first render (the ESPN status is in flight) and anything
+   * seeded at mount would keep the answer from before the league arrived.
+   */
+  // Visible, not merely present: hiding the Ros% column must not leave the
+  // board ordered by it, which is the same trap the fallback exists for.
+  const defaultSortKey =
+    hasRosterPct && visibleKeys.has('rosterPct') ? 'rosterPct' : DEFAULT_SORT[kind];
+  const activeSortKey =
+    sortKey && visibleKeys.has(sortKey) ? sortKey : defaultSortKey;
 
   const posMatch = POSITION_BY_KEY.get(pos)?.match;
 
