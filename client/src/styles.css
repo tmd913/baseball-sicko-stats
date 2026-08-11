@@ -3757,6 +3757,9 @@ body {
    height and the table takes the rest; it wraps, which is what lets the date
    control open as a line of its own underneath (`.app.date-open .date-control`
    claims `flex: 1 1 100%`). */
+.research-view.is-expanded > .research-count {
+  flex: none;
+}
 .expanded-chrome {
   flex: none;
   display: flex;
@@ -3828,7 +3831,11 @@ body {
    A rule rather than a branch in the JSX, for the reason `.app.edit-mode`'s is:
    this is one statement of one idea where the equivalent is a conditional
    around each of five children. */
-.research-view.is-expanded > :not(.research-scroll):not(.expanded-chrome) {
+/* The count line stays too. It is not a control — it is the table's caption,
+   and "15 of 25 pitchers" is the one number that says what the badges above it
+   add up to. It sits directly above the table in this mode for the same reason
+   it does in the ordinary one: the number describes what is under it. */
+.research-view.is-expanded > :not(.research-scroll):not(.expanded-chrome):not(.research-count) {
   display: none;
 }
 
