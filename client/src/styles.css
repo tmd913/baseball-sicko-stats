@@ -2695,7 +2695,8 @@ body {
 .details-add:hover {
   filter: brightness(1.08);
 }
-/* On-watchlist state: a static "✓ On watchlist" indicator paired with a
+/* On-watchlist state: a static "On watchlist" indicator — the app's baseball
+   beside the words, the same mark the fantasy button carries — paired with a
    separate Remove button, pushed to the far end of the header row. */
 .details-watch-actions {
   margin-left: auto;
@@ -3756,6 +3757,9 @@ body {
    height and the table takes the rest; it wraps, which is what lets the date
    control open as a line of its own underneath (`.app.date-open .date-control`
    claims `flex: 1 1 100%`). */
+.research-view.is-expanded > .research-count {
+  flex: none;
+}
 .expanded-chrome {
   flex: none;
   display: flex;
@@ -3827,7 +3831,11 @@ body {
    A rule rather than a branch in the JSX, for the reason `.app.edit-mode`'s is:
    this is one statement of one idea where the equivalent is a conditional
    around each of five children. */
-.research-view.is-expanded > :not(.research-scroll):not(.expanded-chrome) {
+/* The count line stays too. It is not a control — it is the table's caption,
+   and "15 of 25 pitchers" is the one number that says what the badges above it
+   add up to. It sits directly above the table in this mode for the same reason
+   it does in the ordinary one: the number describes what is under it. */
+.research-view.is-expanded > :not(.research-scroll):not(.expanded-chrome):not(.research-count) {
   display: none;
 }
 
@@ -3965,6 +3973,29 @@ body {
 .summary-table .sum-img-col {
   width: 1%;
   text-align: center;
+}
+/* The slot chip leads the name cell on this table (and only here — see
+   `FantasySlotTag`).
+
+   A floor on its width, so every name in the column starts at the same x: a
+   chip that sizes to its own text would otherwise stagger them down the page.
+   42px is **measured, not chosen** — every slot the app can print was rendered
+   into a real chip and read back: `UTIL` is the widest at 42, `DH` next at 33,
+   `C` the narrowest at 24, so anything less than 42 leaves the UTIL rows out of
+   line.
+
+   `vertical-align: middle` on both the chip and the name is what centres them
+   against each other: they are inline boxes of different heights, and the
+   default baseline alignment sits a 15px pill and a 13px name on their
+   type baselines rather than through their middles. */
+.summary-table .sum-name-col .fantasy-slot {
+  min-width: 42px;
+  justify-content: center;
+  margin: 0 8px 0 0;
+  vertical-align: middle;
+}
+.summary-table .sum-name-col .fantasy-slot + .sum-name {
+  vertical-align: middle;
 }
 .summary-table .sum-name-col {
   min-width: clamp(92px, 26vw, 150px);
@@ -5007,17 +5038,6 @@ body {
 .kind-switch {
   align-self: flex-start;
 }
-.kind-tab-count {
-  font-size: 11px;
-  font-weight: 800;
-  color: var(--faint);
-  font-variant-numeric: tabular-nums;
-}
-.kind-tab.active .kind-tab-count {
-  color: var(--bg);
-  opacity: 0.65;
-}
-
 /* "Batters" / "Pitchers" divider — splits each feed section into its two
    halves. Only rendered when that section holds both kinds, so it never appears
    as a lone label over a single group. The trailing rule runs out to the full

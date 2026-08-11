@@ -204,6 +204,11 @@ function LeadCells({
         <SumPhoto id={r.id} playerKey={playerKey(r)} name={r.name} role={role} corner={corner} onOpen={onOpenDetails} />
       </td>
       <th className="sum-name-col" scope="row">
+        {/* Ahead of the name rather than after it, and only on this table: the
+            slot is what you scan a fantasy roster by, so it leads. Outside the
+            button, since the name is a link to that player's day and a slot
+            chip is a label rather than part of what you are pressing. */}
+        <FantasySlotTag playerKey={playerKey(r)} />
         <button
           type="button"
           className="sum-name sum-name-link"
@@ -212,9 +217,6 @@ function LeadCells({
         >
           {r.name}
         </button>
-        {/* Outside the button: the name is a link to that player's day, and a
-            slot chip is a label rather than part of what you are pressing. */}
-        <FantasySlotTag playerKey={playerKey(r)} />
       </th>
       <OpponentCell game={game} />
     </>

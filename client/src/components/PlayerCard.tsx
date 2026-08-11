@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import type { PlayerGame, PlayerReport, RosterStatus } from '../types';
 import { playerKey } from '../types';
-import { FantasySlotTag } from './FantasySlot';
 import { useScrollIntoViewOnExpand } from '../hooks';
 import {
   absenceLabel,
@@ -396,26 +395,22 @@ export function DoubleheaderTag({ games }: { games: PlayerGame[] }) {
 }
 
 /** Player name with the fielding position (and any roster-status flag) beside
- *  it — plus the fantasy lineup slot, when the views are reading a fantasy
- *  roster. `playerKey` is only needed for that last one, which is why it is
- *  optional: a caller with no key simply gets the name as before. */
+ *  it. The fantasy lineup slot used to ride here too and now lives only on the
+ *  summary table — with the `playerKey` prop that existed to feed it. */
 export function PlayerName({
   name,
   position,
   status,
-  playerKey,
 }: {
   name: string;
   position?: string;
   status?: RosterStatus | null;
-  playerKey?: string;
 }) {
   return (
     <span className="player-name">
       {name}
       {position && <span className="player-pos">{position}</span>}
       <RosterStatusTag status={status ?? null} />
-      {playerKey && <FantasySlotTag playerKey={playerKey} />}
     </span>
   );
 }
@@ -449,7 +444,6 @@ export function PlayerCard({
               name={report.name}
               position={position}
               status={report.rosterStatus}
-              playerKey={playerKey(report)}
             />
             {meta && <span className="player-meta">{meta}</span>}
           </div>
@@ -506,7 +500,6 @@ export function PlayerCard({
               name={report.name}
               position={position}
               status={report.rosterStatus}
-              playerKey={playerKey(report)}
             />
         <span className="player-meta">
           {report.seasonStats

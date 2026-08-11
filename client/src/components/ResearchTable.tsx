@@ -1,4 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { BaseballMark } from './BaseballMark';
 import { ExpandButton } from './ExpandButton';
 import { useFullPage } from '../hooks';
 import { RESEARCH_WINDOWS } from '../types';
@@ -660,6 +661,23 @@ export function toResearchWindow(v: string | null): ResearchWindow {
 
 const windowLabel = (w: ResearchWindow) => (w === 'season' ? 'Season' : `${w}d`);
 
+/** What each board remembers while you are looking at the other one. */
+type BoardState = {
+  search: string;
+  sortKey: string;
+  sortAsc: boolean;
+  filters: StatFilter[];
+};
+
+/** A board as it opens: its own default sort (PA for batters, IP for pitchers),
+ *  descending, nothing searched and nothing filtered. */
+const freshBoard = (k: PlayerKind): BoardState => ({
+  search: '',
+  sortKey: DEFAULT_SORT[k],
+  sortAsc: false,
+  filters: [],
+});
+
 export function ResearchTable({
   rows,
   kind,
@@ -723,7 +741,6 @@ export function ResearchTable({
     [allColumns, visibleKeys],
   );
 
-  const [search, setSearch] = useState('');
   // Search and the stat filters each sit behind their own button. The table is
   // the page; on a phone a permanently-open control bar cost it four rows
   // before the first name. Neither can hide state, though — see the `on`
@@ -731,12 +748,51 @@ export function ResearchTable({
   const [searchOpen, setSearchOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [columnsOpen, setColumnsOpen] = useState(false);
-  const [sortKey, setSortKey] = useState(DEFAULT_SORT[kind]);
-  const [sortAsc, setSortAsc] = useState(false);
-  const [filters, setFilters] = useState<StatFilter[]>([]);
+
+  /**
+   * The search, the sort and the filters, **kept per board**.
+   *
+   * The two boards have to keep their own: a batter's `PA ≥ 300` is not a
+   * condition the pitching board can even express, and each opens on its own
+   * sort. But they must also *survive* the trip to the other board and back —
+   * a look at the RP list should not cost you the four filters you built on the
+   * batters, which is exactly what it cost when App remounted this component on
+   * every crossing (`key={researchKind}`) and the state went with it.
+   *
+   * Both at once means one record with a slot per kind, held here rather than
+   * lifted to App: the shape is this component's own, where the column
+   * selection App keeps per board is a saved preference with a route behind it.
+   */
+  const [boards, setBoards] = useState<Record<PlayerKind, BoardState>>(() => ({
+    batter: freshBoard('batter'),
+    pitcher: freshBoard('pitcher'),
+  }));
+  const board = boards[kind];
+  /** Change the board on screen, leaving the other one alone. */
+  const patchBoard = (next: Partial<BoardState> | ((b: BoardState) => Partial<BoardState>)) =>
+    setBoards((prev) => ({
+      ...prev,
+      [kind]: { ...prev[kind], ...(typeof next === 'function' ? next(prev[kind]) : next) },
+    }));
+
+  const { search, sortKey, sortAsc, filters } = board;
+  const setSearch = (v: string) => patchBoard({ search: v });
+  const setSortKey = (v: string) => patchBoard({ sortKey: v });
+  const setSortAsc = (v: boolean | ((prev: boolean) => boolean)) =>
+    patchBoard((b) => ({ sortAsc: typeof v === 'function' ? v(b.sortAsc) : v }));
+  const setFilters = (v: StatFilter[] | ((prev: StatFilter[]) => StatFilter[])) =>
+    patchBoard((b) => ({ filters: typeof v === 'function' ? v(b.filters) : v }));
+
   // The half-built condition in the add-filter row, kept out of `filters` until
-  // it has a number in it — a blank threshold would filter everyone out.
-  const [draftColumn, setDraftColumn] = useState(allColumns[0].key);
+  // it has a number in it — a blank threshold would filter everyone out. Not
+  // per board, because it is a keystroke rather than a setting — but the column
+  // it names belongs to one board, so crossing to the other falls back to that
+  // board's first column rather than leaving the select on a value it has no
+  // option for.
+  const [draftColumnRaw, setDraftColumn] = useState(allColumns[0].key);
+  const draftColumn = allColumns.some((c) => c.key === draftColumnRaw)
+    ? draftColumnRaw
+    : allColumns[0].key;
   const [draftOp, setDraftOp] = useState<Op>('gte');
   const [draftValue, setDraftValue] = useState('');
   const nextFilterId = useRef(1);
@@ -1190,9 +1246,24 @@ export function ResearchTable({
 
       {/* Outside the panel on purpose: the chips are the record of what the
           table is currently showing, so they stay whether the Filters panel is
-          open or shut. */}
-      {filters.length > 0 && (
+          open or shut. Qualified is one of them — it narrows the table exactly
+          as a threshold does, and it is the only one that used to leave no
+          trace here, so the row read as the whole story when it wasn't. */}
+      {(filters.length > 0 || qualifiedOnly) && (
         <div className="research-chips">
+          {qualifiedOnly && (
+            <button
+              type="button"
+              className="research-chip"
+              onClick={() => onQualifiedChange(false)}
+              title="Show every player, qualified or not"
+            >
+              Qualified
+              <span className="research-chip-x" aria-hidden="true">
+                ×
+              </span>
+            </button>
+          )}
           {filters.map((f) => (
             <button
               key={f.id}
@@ -1207,10 +1278,15 @@ export function ResearchTable({
               </span>
             </button>
           ))}
+          {/* Clears what the row shows, which now includes Qualified —
+              otherwise "Clear all" leaves a chip standing. */}
           <button
             type="button"
             className="research-clear"
-            onClick={() => setFilters([])}
+            onClick={() => {
+              setFilters([]);
+              onQualifiedChange(false);
+            }}
           >
             Clear all
           </button>
@@ -1424,27 +1500,15 @@ export function ResearchTable({
                         {r.name}
                       </button>
                       {/* Only on All Players: on My Players every row would
-                          carry one, which marks nothing. The same accent check
-                          `PlayerDetails` uses for "On watchlist", so the app
-                          says this one thing one way. */}
+                          carry one, which marks nothing. The same baseball
+                          `PlayerDetails` shows beside "On watchlist", so the
+                          app says this one thing one way. */}
                       {scope === 'all' && watchedKeys.has(key) && (
                         <span
                           className="research-watched"
                           title={`${r.name} is on your watchlist`}
                         >
-                          <svg
-                            viewBox="0 0 24 24"
-                            width="13"
-                            height="13"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="3"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            aria-hidden="true"
-                          >
-                            <path d="M20 6 9 17l-5-5" />
-                          </svg>
+                          <BaseballMark size={13} width={2.4} />
                           <span className="sr-only">On your watchlist</span>
                         </span>
                       )}

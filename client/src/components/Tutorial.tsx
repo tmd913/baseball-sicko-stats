@@ -246,12 +246,8 @@ const CHAPTERS: Chapter[] = [
                 <span className="view-tab">Research</span>
               </div>
               <div className="kind-switch">
-                <span className="kind-tab active">
-                  Batters<span className="kind-tab-count">6</span>
-                </span>
-                <span className="kind-tab">
-                  Pitchers<span className="kind-tab-count">3</span>
-                </span>
+                <span className="kind-tab active">Batters</span>
+                <span className="kind-tab">Pitchers</span>
               </div>
               <div className="roster-switch">
                 <span className="roster-tab active">Summary</span>
@@ -352,7 +348,7 @@ const CHAPTERS: Chapter[] = [
           <li>
             <strong>My Players / All Players.</strong> Narrows the same board to your
             watchlist. On <Ui>All Players</Ui> the people you already watch carry a
-            small ✓.
+            small baseball.
           </li>
           <li>
             <strong>Free Agents.</strong> A third pill, once you've connected an ESPN

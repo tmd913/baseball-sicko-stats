@@ -15,6 +15,7 @@ import type {
   WatchPlayer,
 } from './types';
 import { isInjured } from './lib';
+import { BaseballMark } from './components/BaseballMark';
 import { PlayerAdder } from './components/PlayerAdder';
 import { PlayerOrderEditor } from './components/PlayerOrderEditor';
 import { PlayerCard } from './components/PlayerCard';
@@ -1201,7 +1202,6 @@ export default function App() {
         onClick={() => setPlayerKind('batter')}
       >
         Batters
-        <span className="kind-tab-count">{cardBatters.length}</span>
       </button>
       <button
         type="button"
@@ -1211,7 +1211,6 @@ export default function App() {
         onClick={() => setPlayerKind('pitcher')}
       >
         Pitchers
-        <span className="kind-tab-count">{cardPitchers.length}</span>
       </button>
     </div>
   ) : null;
@@ -1664,20 +1663,7 @@ export default function App() {
             >
               {/* The same mark the league page and the old menu entry carry, so
                   one concept keeps one glyph across the app. */}
-              <svg
-                viewBox="0 0 24 24"
-                width="17"
-                height="17"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <circle cx="12" cy="12" r="9" />
-                <path d="M4.5 7.5A7.5 7.5 0 0 1 8 15M19.5 7.5A7.5 7.5 0 0 0 16 15" />
-              </svg>
+              <BaseballMark size={17} width={2} />
             </button>
             {espnConnected && fantasyOpen && (
               <div className="settings-popover fantasy-popover" role="menu">
@@ -1724,20 +1710,7 @@ export default function App() {
                   }}
                   title="Your league, your team, and the connection itself"
                 >
-                  <svg
-                    viewBox="0 0 24 24"
-                    width="15"
-                    height="15"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <circle cx="12" cy="12" r="9" />
-                    <path d="M4.5 7.5A7.5 7.5 0 0 1 8 15M19.5 7.5A7.5 7.5 0 0 0 16 15" />
-                  </svg>
+                  <BaseballMark size={15} width={2} />
                   League settings
                 </button>
               </div>
@@ -1950,11 +1923,14 @@ export default function App() {
 
       {view === 'research' ? (
         <ResearchTable
-          /* Keyed on the board, not the pill: moving between positions of the
-             same kind (SS → OF) keeps the sort and the filters, while crossing
-             to the other board (OF → SP) starts fresh rather than carrying a
-             batter's column vocabulary onto a pitcher's table. */
-          key={researchKind}
+          /* Deliberately **not** keyed on the board. It was, so that crossing
+             from OF to SP remounted the table rather than carrying a batter's
+             column vocabulary onto a pitcher's — but a remount is a blunt way
+             to say "these are two boards", and it threw away the filters you
+             had built as the price of a look at the other one. The component
+             keeps a slot per kind instead (`BoardState`), so each board has its
+             own search, sort and filters *and* still has them when you come
+             back. */
           rows={researchRows}
           kind={researchKind}
           loading={researchLoading && !research[researchCacheKey]}
