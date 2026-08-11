@@ -4684,7 +4684,16 @@ body {
   align-items: center;
   margin-left: 6px;
   color: var(--accent);
+  /* `middle` is the baseline plus half the *x*-height — where lowercase sits,
+     not where a name reads from — so the ball hung a pixel and a half low,
+     dipping below the baseline of the name beside it. The nudge is the gap
+     between the two anchors, (cap height - x-height) / 2, in em so it scales
+     with the type: the ball now centres on the cap band. Done here rather
+     than by making the cell a flex box, which would take a `<td>` out of
+     table layout — and this one is sticky and sizes a column. */
   vertical-align: middle;
+  position: relative;
+  top: -0.09em;
 }
 
 /* A link that lives inside a sentence in an empty state, rather than a control
