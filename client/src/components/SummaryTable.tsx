@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { FantasySlotTag } from './FantasySlot';
+import { RosterStatusTag } from './PlayerCard';
 import { ExpandButton } from './ExpandButton';
 import { useFullPage } from '../hooks';
 import type { BattingLine, PitchingLine, PlayerGame, PlayerReport } from '../types';
@@ -217,6 +218,12 @@ function LeadCells({
         >
           {r.name}
         </button>
+        {/* Trailing the name, as it does on the card. An injured player is on
+            this table whenever the hide-injured toggle is off, and over a range
+            that starts after he went down every stat of his is a dash — so the
+            row needs to say why, or it reads as missing data rather than as a
+            man who hasn't played. */}
+        <RosterStatusTag status={r.rosterStatus} />
       </th>
       <OpponentCell game={game} />
     </>

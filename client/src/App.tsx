@@ -1159,23 +1159,26 @@ export default function App() {
   // shows it — even if the URL asked for the empty half.
   //
   // A player on the IL plays no games, so over any range that starts after he
-  // went down his row is a line of dashes. The summary table — nothing but those
-  // rows — drops him outright; the players view drops him only when the settings
-  // toggle asks, his card there still being able to say what he did before he
-  // got hurt. The feed is left alone either way: it's a record of things that
-  // happened, and it already keeps inactive players out of Upcoming.
+  // went down his row is a line of dashes. Whether that is worth showing is the
+  // user's call and nobody else's: the summary table and the players view both
+  // drop him only when the settings toggle asks. The summary used to drop him
+  // outright, on the reasoning that its rows are nothing *but* those columns —
+  // but a row of dashes against a name is itself the answer to "is he playing?",
+  // and a table that quietly omits a player you watch is a worse thing than a
+  // sparse one, since nothing on screen says he was left out. The feed is left
+  // alone either way: it's a record of things that happened, and it already
+  // keeps inactive players out of Upcoming.
   //
   // Filtering here, ahead of the kind split, is what keeps the tab counts equal
   // to the list under them. The reorder screen is deliberately upstream of it
   // (`editPlayers`, off raw `reports`) — dropping an injured player from the
   // watchlist is exactly what that screen is for.
-  const hidingInjured = view === 'summary' || hideInjured;
   const shownReports = useMemo(
     () =>
-      hidingInjured
+      hideInjured
         ? displayReports.filter((r) => !isInjured(r.rosterStatus))
         : displayReports,
-    [displayReports, hidingInjured],
+    [displayReports, hideInjured],
   );
   const cardBatters = shownReports.filter((r) => r.kind !== 'pitcher');
   const cardPitchers = shownReports.filter((r) => r.kind === 'pitcher');
@@ -1584,7 +1587,7 @@ export default function App() {
                   role="menuitemcheckbox"
                   aria-checked={hideInjured}
                   onClick={() => setHideInjured(!hideInjured)}
-                  title="Keep players on the IL off the Games view — the summary table always leaves them off"
+                  title="Keep players on the IL off the summary table and the Games view — the feed still shows what they did before they got hurt"
                 >
                   <span className="settings-dot" aria-hidden="true" />
                   Hide injured players
@@ -1907,17 +1910,16 @@ export default function App() {
         </div>
       )}
 
-      {/* Everyone the active view would show is on the IL. Without this the
-          summary is a header over a Total row of zeros, and the players view an
-          expanse of nothing with no hint that a setting is doing it. */}
+      {/* Everyone the active view would show is on the IL and the toggle is
+          hiding them. Without this the summary is a header over a Total row of
+          zeros, and the players view an expanse of nothing, with no hint on
+          either that a setting is doing it. One message for every view now: the
+          toggle is the only thing that can empty a view this way, where the
+          summary table used to drop them whatever it said. */}
       {view !== 'research' && displayReports.length > 0 && kindCards.length === 0 && !editMode && (
         <div className="empty-state">
           <p className="empty-title">Nothing to show — everyone here is on the IL</p>
-          <p>
-            {view === 'summary'
-              ? 'Injured players are left off the summary table. Their cards are still on the Games view.'
-              : 'Turn off “Hide injured players” in settings (the gear by the title) to see their cards.'}
-          </p>
+          <p>Turn off “Hide injured players” in settings (the gear by the title) to see them.</p>
         </div>
       )}
 
