@@ -1923,11 +1923,14 @@ export default function App() {
 
       {view === 'research' ? (
         <ResearchTable
-          /* Keyed on the board, not the pill: moving between positions of the
-             same kind (SS → OF) keeps the sort and the filters, while crossing
-             to the other board (OF → SP) starts fresh rather than carrying a
-             batter's column vocabulary onto a pitcher's table. */
-          key={researchKind}
+          /* Deliberately **not** keyed on the board. It was, so that crossing
+             from OF to SP remounted the table rather than carrying a batter's
+             column vocabulary onto a pitcher's — but a remount is a blunt way
+             to say "these are two boards", and it threw away the filters you
+             had built as the price of a look at the other one. The component
+             keeps a slot per kind instead (`BoardState`), so each board has its
+             own search, sort and filters *and* still has them when you come
+             back. */
           rows={researchRows}
           kind={researchKind}
           loading={researchLoading && !research[researchCacheKey]}
