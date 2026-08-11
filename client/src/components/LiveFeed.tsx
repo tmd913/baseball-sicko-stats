@@ -20,6 +20,7 @@ import type {
   PlayerReport,
 } from '../types';
 import { useScrollIntoViewOnExpand } from '../hooks';
+import { BaseDiamond } from './BaseDiamond';
 import { InlineVideoClip, PlateAppearanceCard } from './PlateAppearanceCard';
 import { GameStatusBadge, PlatoonSplit } from './PlayerCard';
 import { OpponentSection, PitchingTag, lineSummary } from './PitcherCard';
@@ -189,8 +190,22 @@ function FeedHeadshot({
 
 /**
  * One player in the Live section. The header carries the headshot (role ring),
- * name, matchup + inning, and the role tag; beneath it, the batter's current
- * at-bat while he's up — on base and on deck the row is the header alone.
+ * name, matchup + inning, the situation and the role tag; beneath it, the
+ * batter's current at-bat while he's up — on base and on deck the row is the
+ * header alone.
+ *
+ * **The situation is the point of this section**, and it used to be missing:
+ * "on base" said where the player was and nothing about the state he was in.
+ * The diamond is `BaseDiamond`, the same glyph an at-bat card and the summary
+ * table's live badge carry, so runners and outs read the one way everywhere —
+ * and it is drawn from `game.status`, which is the *current* state, where the
+ * at-bat card's is the state that at-bat began in.
+ *
+ * **What has happened during the at-bat rides under the header** (`pa.actions`)
+ * — a pitching change most of all, since the man on the mound is the whole
+ * question when your batter is up and the card's matchup line has already been
+ * overtaken by it. Only for a live at-bat, which is the only place the server
+ * fills them.
  */
 function LiveEntry({
   report,
@@ -228,8 +243,20 @@ function LiveEntry({
             {matchup(game)} · {liveInning(game)}
           </span>
         </div>
+        {game.status.bases && (
+          <BaseDiamond
+            bases={game.status.bases}
+            outs={game.status.outs ?? 0}
+            className="live-bases"
+          />
+        )}
         <span className={`live-role role-${role}`}>{liveRoleLabel(role)}</span>
       </div>
+      {pa?.actions.map((action, i) => (
+        <p key={`${action.type}-${i}`} className="live-action">
+          {action.description}
+        </p>
+      ))}
       {pa && (
         <PlateAppearanceCard
           pa={pa}
