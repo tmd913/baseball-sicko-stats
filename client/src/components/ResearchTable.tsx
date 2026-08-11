@@ -24,6 +24,9 @@ interface Column {
   key: string;
   label: string; // the header, kept to the width of its own numbers
   title: string; // the full name, on hover — a three-letter header says little
+  /** What the filter builder calls this column, for when `title` is a sentence
+   *  rather than a phrase and would truncate in a select. Defaults to `title`. */
+  pick?: string;
   // What the cell prints. Every sortable value is a number on the row, so the
   // formatter is about presentation alone (`.265`, `3.52`, `20.8%`).
   format: (r: ResearchRow) => string;
@@ -256,6 +259,13 @@ const ROSTER_PCT_COLUMN: Column = {
   label: 'Ros%',
   group: 'Fantasy',
   title: "Rostered in this share of all ESPN leagues \u2014 ESPN's own figure, not your league's",
+  // The filter builder lists columns by their tooltip, which for every other one
+  // is a short phrase ("Games played"). This one has to be a sentence, because
+  // "roster %" invites the wrong reading and the header is the place to say so —
+  // but a sentence truncates in a 240px select, and this is the option that
+  // select now *opens on* once a league is connected. Hence a short name for the
+  // picker alone, keeping the part that does the disambiguating.
+  pick: 'Rostered % (all ESPN leagues)',
   format: (r) => (r.rosterPct == null ? '\u2014' : `${r.rosterPct.toFixed(1)}%`),
   value: (r) => r.rosterPct ?? null,
 };
@@ -785,14 +795,23 @@ export function ResearchTable({
 
   // The half-built condition in the add-filter row, kept out of `filters` until
   // it has a number in it — a blank threshold would filter everyone out. Not
-  // per board, because it is a keystroke rather than a setting — but the column
-  // it names belongs to one board, so crossing to the other falls back to that
-  // board's first column rather than leaving the select on a value it has no
-  // option for.
-  const [draftColumnRaw, setDraftColumn] = useState(allColumns[0].key);
-  const draftColumn = allColumns.some((c) => c.key === draftColumnRaw)
-    ? draftColumnRaw
-    : allColumns[0].key;
+  // per board, because it is a keystroke rather than a setting.
+  //
+  // **Null until the user picks one**, rather than seeded with a key at mount.
+  // Two things follow, and the first is the bug the second was hiding: the
+  // board's first column is `Ros%` when a fantasy league is connected, but
+  // `hasRosterPct` is false on the first render — the ESPN status is still in
+  // flight — so a seeded default captured `G` and stayed there for the session,
+  // with Ros% sitting at the head of the very list the select was ignoring.
+  // Reading `allColumns[0]` live opens the builder on Ros% for anyone with a
+  // league, and on `G` for anyone without. It also covers the other case for
+  // free: a column the *other* board doesn't have is not a value this select
+  // can show, so crossing falls back rather than leaving it on a dead option.
+  const [draftColumnRaw, setDraftColumn] = useState<string | null>(null);
+  const draftColumn =
+    draftColumnRaw && allColumns.some((c) => c.key === draftColumnRaw)
+      ? draftColumnRaw
+      : allColumns[0].key;
   const [draftOp, setDraftOp] = useState<Op>('gte');
   const [draftValue, setDraftValue] = useState('');
   const nextFilterId = useRef(1);
@@ -1207,7 +1226,7 @@ export function ResearchTable({
           >
             {allColumns.map((c) => (
               <option key={c.key} value={c.key}>
-                {c.title}
+                {c.pick ?? c.title}
               </option>
             ))}
           </select>
