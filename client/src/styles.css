@@ -3775,7 +3775,17 @@ body {
 .details-gamelog.is-expanded {
   position: fixed;
   inset: 0;
-  z-index: 90;
+  /* Over the page and under the overlays, which is the whole of what this mode
+     is: it takes the app's own chrome (which tops out at 40 — the settings
+     popover and the search menu), and it is still a *view*, so the player page
+     (50) and the reel, how-to and league pages (60) open over it as they open
+     over any other. At 90 they opened behind it instead: a headshot clicked in
+     an expanded table put a player's page on screen with the table still
+     covering it, so the click read as though nothing had happened. Closing the
+     overlay comes back here, which is the other half of the argument for
+     stacking rather than dropping out of the mode — you are returned to the
+     table you were reading, at the row you left. */
+  z-index: 45;
   display: flex;
   flex-direction: column;
   align-items: stretch;

@@ -419,14 +419,14 @@ export function SummaryTable({
   const handlers = { onOpenDetails, onOpenPlayerDay };
   const batters = reports.filter((r) => r.kind !== 'pitcher');
   const pitchers = reports.filter((r) => r.kind === 'pitcher');
-  const { isFull, toggle } = useFullPage();
+  const { isFull, toggle, ref: fullRef } = useFullPage<HTMLDivElement>();
   const expand = { isFull, toggle };
   return (
     /* Full page is a class on this box, not the Fullscreen API — see
        `hooks.ts::useFullPage`. The button that sets it is down in the table's
        corner header cell, which is pinned on both axes and so is always the way
        back out. */
-    <div className={`summary-view${isFull ? ' is-expanded' : ''}`}>
+    <div ref={fullRef} className={`summary-view${isFull ? ' is-expanded' : ''}`}>
       {/* Expanded, the app's header and tab rows are behind this box — but
           which kind the table is showing and which days it covers are not
           decoration, they are what the numbers *are*, and both are controls you

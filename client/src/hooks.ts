@@ -157,18 +157,41 @@ export function useDismissable(
  * and is undone by the same button that made it.
  *
  * Escape leaves, because a mode that fills the window should answer the key
- * that means "out of this".
+ * that means "out of this" — but only while it is the thing on top. A player
+ * page opened from an expanded table covers it (see `.is-expanded`'s z-index),
+ * and one press of Escape must undo one thing: without the `overlayAbove` test
+ * both listeners fire, so closing the player you just opened also collapsed the
+ * table you opened him from.
+ *
+ * The returned `ref` goes on the box that takes the class, and is what makes
+ * that test a question about *stacking* rather than "is any overlay open": the
+ * game log's own expanded box lives **inside** `.details-view`, so an ancestor
+ * overlay is behind it rather than above it and Escape is still its to answer.
  */
-export function useFullPage() {
+export function useFullPage<T extends HTMLElement = HTMLDivElement>() {
   const [isFull, setFull] = useState(false);
+  const ref = useRef<T | null>(null);
   useEffect(() => {
     if (!isFull) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setFull(false);
+      if (e.key === 'Escape' && !overlayAbove(ref.current)) setFull(false);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [isFull]);
   const toggle = useCallback(() => setFull((v) => !v), []);
-  return { isFull, toggle };
+  return { isFull, toggle, ref };
+}
+
+/**
+ * The app's full-screen overlays. `.details-view` is three of them — the player
+ * page, the how-to page and the ESPN settings page all ride on it — and
+ * `.reel-view` is the highlight reel.
+ */
+const OVERLAYS = '.details-view, .reel-view';
+
+/** Is one of those overlays stacked over `box` rather than behind or around it? */
+function overlayAbove(box: HTMLElement | null) {
+  if (!box) return false;
+  return [...document.querySelectorAll(OVERLAYS)].some((el) => !el.contains(box));
 }

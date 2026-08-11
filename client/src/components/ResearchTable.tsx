@@ -1032,10 +1032,10 @@ export function ResearchTable({
 
   const statcastStart = columns.findIndex((c) => c.statcast);
 
-  const { isFull, toggle } = useFullPage();
+  const { isFull, toggle, ref: fullRef } = useFullPage<HTMLDivElement>();
 
   return (
-    <div className={`research-view${isFull ? ' is-expanded' : ''}`}>
+    <div ref={fullRef} className={`research-view${isFull ? ' is-expanded' : ''}`}>
       {/* Expanded, the board's whole control set is hidden — but a table you
           cannot see the controls of is a table you cannot read: "of 622" means
           nothing without knowing it is the 30-day window, free agents only, and
