@@ -72,7 +72,7 @@ function roleAtBat(role: LiveRole, game: PlayerGame): PlateAppearance | null {
  * a watched pitcher's whole outing (one item, grouped by inning below). */
 type FeedEntry =
   | { type: 'pa'; report: PlayerReport; game: PlayerGame; pa: PlateAppearance }
-  | { type: 'base'; report: PlayerReport; game: PlayerGame; ev: BaseEvent; i: number }
+  | { type: 'base'; report: PlayerReport; game: PlayerGame; evs: BaseEvent[]; key: string }
   | { type: 'pitching'; report: PlayerReport; game: PlayerGame };
 
 /** When a pitcher's outing last saw action — the batters faced are in play
@@ -90,7 +90,7 @@ function entryTime(e: FeedEntry): number {
       ? e.pa.timestamp
       : e.type === 'pitching'
         ? lastFacedTime(e.game)
-        : e.ev.timestamp;
+        : e.evs[0].timestamp;
   if (ts) {
     const t = Date.parse(ts);
     if (!Number.isNaN(t)) return t;
@@ -110,7 +110,7 @@ function entryTime(e: FeedEntry): number {
  */
 function playOrder(e: FeedEntry): number {
   if (e.type !== 'base') return 0;
-  return e.ev.kind === 'run' ? 2 : 1;
+  return e.evs.some((ev) => ev.kind === 'run') ? 2 : 1;
 }
 
 /**
@@ -294,6 +294,47 @@ function baseEventLabel(ev: BaseEvent): string {
   return ev.base ? `Stole ${ev.base}` : 'Stolen Base';
 }
 
+/**
+ * Base events that happened on the same play, gathered into one item.
+ *
+ * A steal of home is **two** events — he took a base and he scored — and the
+ * feed listed them separately: same description, same clip, one directly above
+ * the other, as though two things had happened. It is one thing, and it now
+ * reads as one item carrying both badges. So does the runner who steals second
+ * and comes home on the throw.
+ *
+ * `playId` is the id of the play event both were read off, so it is the key;
+ * the timestamp stands in when a play has no clip id, since every event of one
+ * play carries that play's `endTime` — which is exactly why `playOrder` had to
+ * exist. An event with neither stays on its own rather than being lumped in
+ * with every other keyless one.
+ *
+ * Within a group the steal leads and the run follows, cause before effect,
+ * which is how the badges read.
+ */
+function groupBaseEvents(events: BaseEvent[]): BaseEvent[][] {
+  const groups: BaseEvent[][] = [];
+  const byKey = new Map<string, BaseEvent[]>();
+  for (const ev of events) {
+    const key = ev.playId ?? ev.timestamp;
+    const existing = key === null ? undefined : byKey.get(key);
+    if (existing) {
+      existing.push(ev);
+      continue;
+    }
+    const group = [ev];
+    groups.push(group);
+    if (key !== null) byKey.set(key, group);
+  }
+  for (const group of groups) group.sort((a, b) => kindOrder(a) - kindOrder(b));
+  return groups;
+}
+
+/** Steal before run within one play: he took the base, and so he scored. */
+function kindOrder(ev: BaseEvent): number {
+  return ev.kind === 'sb' ? 0 : 1;
+}
+
 /** A base as the feed says it: "2B" → "2nd". */
 function baseName(base: string): string {
   return base === '1B' ? '1st' : base === '2B' ? '2nd' : base === '3B' ? '3rd' : base;
@@ -320,6 +361,26 @@ function baseEventMeta(ev: BaseEvent): string[] {
   if (ev.kind === 'sb') {
     if (ev.pitcherName) parts.push(`off ${surname(ev.pitcherName)}`);
     if (ev.batterName) parts.push(`${surname(ev.batterName)} batting`);
+  }
+  return parts;
+}
+
+/**
+ * The situation for a whole play, when more than one event came off it.
+ *
+ * The two lists overlap by construction — both events carry the play's outs —
+ * so it dedupes rather than concatenating. And a run that came of a **steal of
+ * home** drops its "Scored from 3rd": stealing home says where he was standing,
+ * and the phrase would only restate the badge beside it.
+ */
+function playMeta(evs: BaseEvent[]): string[] {
+  const stoleHome = evs.some((ev) => ev.kind === 'sb' && ev.base === 'home');
+  const parts: string[] = [];
+  for (const ev of evs) {
+    for (const part of baseEventMeta(ev)) {
+      if (stoleHome && part.startsWith('Scored from')) continue;
+      if (!parts.includes(part)) parts.push(part);
+    }
   }
   return parts;
 }
@@ -351,20 +412,32 @@ function baseEventScore(ev: BaseEvent, game: PlayerGame): string | null {
 function FeedBaseEvent({
   report,
   game,
-  ev,
+  evs,
   onOpenDetails,
   onOpenPlayerDay,
 }: {
   report: PlayerReport;
   game: PlayerGame;
-  ev: BaseEvent;
+  evs: BaseEvent[];
   onOpenDetails: (key: string) => void;
   onOpenPlayerDay: (key: string) => void;
 }) {
-  const meta = baseEventMeta(ev);
-  const score = baseEventScore(ev, game);
+  // Everything but the badges belongs to the play rather than to either event:
+  // one inning, one description (both were read off the same play event, so the
+  // line is the same string), one score, one clip.
+  const lead = evs[0];
+  const meta = playMeta(evs);
+  const score = baseEventScore(lead, game);
+  const description = evs.find((ev) => ev.description)?.description ?? '';
+  const playId = evs.find((ev) => ev.playId)?.playId ?? null;
+  // The rail says what the play was, and with two events off one play that is
+  // two things: a steal of home is a steal *and* a run, so the rail splits in
+  // half rather than picking one of them and stating half of what happened.
+  // The kinds are listed in the badges' own order, so the halves read down the
+  // item the way the badges read across it — steal above, run below.
+  const railKinds = evs.map((ev) => ev.kind).filter((kind, i, all) => all.indexOf(kind) === i);
   return (
-    <div className={`feed-item feed-base-item kind-${ev.kind}`}>
+    <div className={`feed-item feed-base-item kind-${railKinds.join('-')}`}>
       <div className="feed-item-head">
         <FeedHeadshot id={report.id} name={report.name} onOpen={() => onOpenDetails(playerKey(report))} />
         <div className="feed-item-id">
@@ -375,15 +448,19 @@ function FeedBaseEvent({
       <div className="feed-base">
         <div className="feed-base-row">
           <span className="feed-base-inning">
-            {ev.half} {ev.inning}
+            {lead.half} {lead.inning}
           </span>
-          <span className="feed-base-badge">{baseEventLabel(ev)}</span>
+          {evs.map((ev, i) => (
+            <span key={`${ev.kind}-${i}`} className={`feed-base-badge kind-${ev.kind}`}>
+              {baseEventLabel(ev)}
+            </span>
+          ))}
           {score && <span className="feed-base-score">{score}</span>}
         </div>
-        {ev.description && <p className="feed-base-desc">{ev.description}</p>}
+        {description && <p className="feed-base-desc">{description}</p>}
         {meta.length > 0 && <div className="feed-base-meta">{meta.join(' · ')}</div>}
       </div>
-      {ev.playId && <InlineVideoClip playId={ev.playId} gamePk={game.gamePk} />}
+      {playId && <InlineVideoClip playId={playId} gamePk={game.gamePk} />}
     </div>
   );
 }
@@ -673,7 +750,18 @@ export function LiveFeed({
               ...game.plateAppearances
                 .filter((pa) => pa.event)
                 .map((pa): FeedEntry => ({ type: 'pa', report, game, pa })),
-              ...game.baseEvents.map((ev, i): FeedEntry => ({ type: 'base', report, game, ev, i })),
+              ...groupBaseEvents(game.baseEvents).map(
+                (evs, i): FeedEntry => ({
+                  type: 'base',
+                  report,
+                  game,
+                  evs,
+                  // The play's own id where it has one, so the item keeps its
+                  // identity as the day's events arrive; the index only stands
+                  // in for a play with neither a clip nor a timestamp.
+                  key: `${report.id}-${game.gamePk}-${evs[0].playId ?? evs[0].timestamp ?? i}`,
+                }),
+              ),
             ],
       ),
     )
@@ -749,13 +837,13 @@ export function LiveFeed({
           <div className="feed-items">
             {recent.slice(0, shown).map((entry) => {
               if (entry.type === 'base') {
-                const { report, game, ev, i } = entry;
+                const { report, game, evs, key } = entry;
                 return (
                   <FeedBaseEvent
-                    key={`base-${report.id}-${game.gamePk}-${i}`}
+                    key={`base-${key}`}
                     report={report}
                     game={game}
-                    ev={ev}
+                    evs={evs}
                     onOpenDetails={onOpenDetails}
                     onOpenPlayerDay={onOpenPlayerDay}
                   />
