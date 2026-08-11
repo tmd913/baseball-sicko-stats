@@ -56,24 +56,16 @@ function currentAtBat(game: PlayerGame): PlateAppearance | null {
   return inProgress.length ? inProgress[inProgress.length - 1] : null;
 }
 
-/** The batter's most recent completed plate appearance in a game (highest at-bat number). */
-function mostRecentCompleted(game: PlayerGame): PlateAppearance | null {
-  let best: PlateAppearance | null = null;
-  for (const pa of game.plateAppearances) {
-    if (pa.event && (!best || pa.atBatNumber > best.atBatNumber)) best = pa;
-  }
-  return best;
-}
-
 /**
  * The at-bat to surface for a player's live role: the current (in-progress)
- * at-bat while they're batting, their most recent completed at-bat (the one that
- * put them there) while on base. On deck there's nothing to show yet.
+ * at-bat while he's batting, and nothing otherwise. A runner on base has only a
+ * *completed* at-bat behind him, which the Recent section already carries in
+ * full — repeating it, and its clip, in the Live section stated the same thing
+ * twice and pushed the players actually batting down the page. On deck there's
+ * nothing to show yet either.
  */
 function roleAtBat(role: LiveRole, game: PlayerGame): PlateAppearance | null {
-  if (role === 'at-bat') return currentAtBat(game);
-  if (role === 'on-base') return mostRecentCompleted(game);
-  return null;
+  return role === 'at-bat' ? currentAtBat(game) : null;
 }
 
 /** A recent-stream item: a batter's plate appearance, a base-running event, or
@@ -198,7 +190,7 @@ function FeedHeadshot({
 /**
  * One player in the Live section. The header carries the headshot (role ring),
  * name, matchup + inning, and the role tag; beneath it, the batter's current
- * at-bat (while up) or most recent one (while on base) — nothing extra on deck.
+ * at-bat while he's up — on base and on deck the row is the header alone.
  */
 function LiveEntry({
   report,
