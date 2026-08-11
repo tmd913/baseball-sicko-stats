@@ -1020,7 +1020,12 @@ body {
   background: rgba(248, 113, 113, 0.13);
   border-color: rgba(248, 113, 113, 0.4);
 }
-.roster-status-susp {
+/* Day-to-day shares the suspension amber: both are a lesser thing than an IL
+   stint's red — he may well play — and folding the selector into that rule
+   rather than writing a second one is what keeps the two identical by
+   construction, the way the app's controls are. */
+.roster-status-susp,
+.roster-status-dtd {
   color: var(--hr);
   background: rgba(251, 191, 36, 0.13);
   border-color: rgba(251, 191, 36, 0.4);

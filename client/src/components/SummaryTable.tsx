@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { FantasySlotTag } from './FantasySlot';
+import { FantasySlotTag, FantasyInjuryTag } from './FantasySlot';
 import { RosterStatusTag } from './PlayerCard';
 import { ExpandButton } from './ExpandButton';
 import { useFullPage } from '../hooks';
@@ -14,6 +14,7 @@ import {
   formatIp,
   formatRate,
   gameStatusView,
+  rosterStatusBadge,
   handThrows,
   headshotUrl,
   lineupCorner,
@@ -222,8 +223,16 @@ function LeadCells({
             this table whenever the hide-injured toggle is off, and over a range
             that starts after he went down every stat of his is a dash — so the
             row needs to say why, or it reads as missing data rather than as a
-            man who hasn't played. */}
+            man who hasn't played.
+
+            MLB's status leads and ESPN's fills the gap it leaves, rather than
+            both showing: where ESPN says `TEN_DAY_DL` MLB has already said
+            `10-day IL`, and one absence stated twice on one row reads as two
+            different problems. What ESPN is here for is the case MLB has no
+            vocabulary for at all — day-to-day, or out tonight, neither of which
+            takes a man off the active roster. */}
         <RosterStatusTag status={r.rosterStatus} />
+        {!rosterStatusBadge(r.rosterStatus) && <FantasyInjuryTag playerKey={playerKey(r)} />}
       </th>
       <OpponentCell game={game} />
     </>

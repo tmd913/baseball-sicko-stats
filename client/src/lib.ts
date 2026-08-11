@@ -662,7 +662,7 @@ export function seasonStatsSummary(s: SeasonStats): string {
   return `${s.ops} OPS, ${s.hr} HR, ${s.rbi} RBI, ${s.runs} R, ${s.sb} SB`;
 }
 
-export type RosterTone = 'il' | 'susp' | 'minors' | 'other';
+export type RosterTone = 'il' | 'susp' | 'dtd' | 'minors' | 'other';
 
 /**
  * Whether the player is on the active roster and can appear in a game today.
@@ -733,6 +733,50 @@ export function isInjured(status: RosterStatus | null): boolean {
   // of hiding a player who won't play, it's the same thing.
   if (status.code === 'RA' || /rehab/i.test(status.description)) return true;
   return rosterStatusBadge(status)?.tone === 'il';
+}
+
+/**
+ * ESPN's injury designation as a badge, the counterpart to `rosterStatusBadge`
+ * for the one thing MLB's roster status cannot say.
+ *
+ * **Day-to-day and out exist nowhere else in the app.** MLB publishes a roster
+ * status, and a day-to-day player is still on the active roster — checked
+ * league-wide, its vocabulary is `Active`, the 10/15/60-day IL stints, minors,
+ * traded, released, claimed, DFA, free agent and suspended, and nothing in it
+ * marks a man who is playing hurt or sitting tonight. ESPN's league roster
+ * carries both, so they arrive with the fantasy slot and share its limits: a
+ * connected league, and the views reading that roster.
+ *
+ * The IL codes are here for completeness rather than for display — where ESPN
+ * says `TEN_DAY_DL`, MLB has already said `10-day IL`, which is the better
+ * label of the two because it is the one the rest of the app uses. The summary
+ * table shows this only where MLB's own badge is absent, so the two never state
+ * one absence twice.
+ */
+export function espnInjuryBadge(
+  status: string | null | undefined,
+): { label: string; title: string; tone: RosterTone } | null {
+  if (!status || status === 'ACTIVE') return null;
+  if (status === 'DAY_TO_DAY') {
+    return { label: 'DTD', title: 'Day-to-day (ESPN)', tone: 'dtd' };
+  }
+  if (status === 'OUT') {
+    return { label: 'OUT', title: 'Out (ESPN)', tone: 'il' };
+  }
+  // TEN_DAY_DL -> "10-day IL", matching what MLB's own badge would have said.
+  const dl = status.match(/^(SEVEN|TEN|FIFTEEN|SIXTY)_DAY_DL$/);
+  if (dl) {
+    const days = { SEVEN: 7, TEN: 10, FIFTEEN: 15, SIXTY: 60 }[dl[1] as
+      'SEVEN' | 'TEN' | 'FIFTEEN' | 'SIXTY'];
+    return { label: `${days}-day IL`, title: `${days}-day IL (ESPN)`, tone: 'il' };
+  }
+  if (status === 'SUSPENSION') {
+    return { label: 'Suspended', title: 'Suspended (ESPN)', tone: 'susp' };
+  }
+  // Anything ESPN adds later reads as itself — "NON_ROSTER" -> "Non roster" —
+  // rather than vanishing, which is the safe direction for a status to fail in.
+  const label = status.replace(/_/g, ' ').toLowerCase().replace(/^./, (c) => c.toUpperCase());
+  return { label, title: `${label} (ESPN)`, tone: 'other' };
 }
 
 /** Exit velo · launch angle · distance for a batted ball, if any was tracked.

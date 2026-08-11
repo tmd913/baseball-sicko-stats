@@ -26,6 +26,10 @@ export function useMuted(): boolean {
 export interface FantasySlot {
   slot: string;
   starting: boolean;
+  /** ESPN's injury designation for him, raw — see `espnInjuryBadge`. It rides
+   *  on this map rather than taking one of its own because it comes off the
+   *  same roster read and reaches the same leaves. */
+  injuryStatus: string | null;
 }
 
 /**

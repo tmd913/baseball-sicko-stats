@@ -811,6 +811,11 @@ export interface EspnRosterPlayer {
   /** In today's lineup: neither benched nor on the IL. */
   starting: boolean;
   injured: boolean;
+  /** ESPN's injury designation, raw (`DAY_TO_DAY`, `OUT`, `TEN_DAY_DL`, …), or
+   *  null when active. The app's only source for day-to-day and out — MLB's
+   *  roster status has no code for either. `espnInjuryBadge` in `lib.ts` turns
+   *  it into a label, as `rosterStatusBadge` does for MLB's own. */
+  injuryStatus: string | null;
 }
 
 export interface EspnRoster {
