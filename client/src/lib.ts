@@ -717,9 +717,10 @@ export function rosterStatusBadge(
 }
 
 /**
- * Whether the player is on the injured list. The summary table drops these rows
- * outright and the players view offers to (the settings menu's "Hide injured"),
- * since a line of dashes says less than the badge already does. Narrower than
+ * Whether the player is on the injured list. The summary table and the players
+ * view both offer to drop these rows (the settings menu's "Hide injured"), and
+ * neither does so unasked — a line of dashes beside the badge is a fair answer
+ * to "is he playing?", and hiding him says nothing at all. Narrower than
  * "has a status badge at all", on purpose: a suspension or an option to the
  * minors is a few days and can end with a recall mid-day, an IL stint is weeks
  * — only the latter is worth a standing filter.

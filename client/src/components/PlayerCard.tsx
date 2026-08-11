@@ -367,8 +367,11 @@ export function Headshot({
   );
 }
 
-/** A small tag flagging an off-roster status (IL, suspended, optioned). */
-function RosterStatusTag({ status }: { status: RosterStatus | null }) {
+/** A small tag flagging an off-roster status (IL, suspended, optioned).
+ *  Exported for the summary table, which shows injured players whenever the
+ *  hide-injured toggle is off and would otherwise give a row of dashes with
+ *  nothing on it saying why. */
+export function RosterStatusTag({ status }: { status: RosterStatus | null }) {
   const badge = rosterStatusBadge(status);
   if (!badge) return null;
   return (
