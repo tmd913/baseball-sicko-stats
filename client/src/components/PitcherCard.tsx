@@ -554,7 +554,6 @@ export function PitcherCard({
           name={report.name}
           position={position ?? 'P'}
           status={report.rosterStatus}
-          playerKey={playerKey(report)}
         />
           {meta && <span className="player-meta">{meta}</span>}
         </div>
@@ -642,7 +641,6 @@ export function PitcherCard({
           name={report.name}
           position={position ?? 'P'}
           status={report.rosterStatus}
-          playerKey={playerKey(report)}
         />
         <span className="player-meta">
           {report.pitcherSeasonStats

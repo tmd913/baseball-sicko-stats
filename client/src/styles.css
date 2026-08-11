@@ -3965,6 +3965,22 @@ body {
 .summary-table .sum-img-col {
   width: 1%;
   text-align: center;
+  /* The slot chip sits ahead of the headshot here (and only here — see
+     `FantasySlotTag`), so the two must stay on one line. */
+  white-space: nowrap;
+}
+/* A floor on the chip's width, so every headshot in the column lands on the
+   same line down the page: a shrink-to-fit column centred on its content would
+   otherwise stagger the faces. 42px is **measured, not chosen** — every slot
+   the app can print was rendered into a real chip: `UTIL` is the widest at 42,
+   `DH` next at 33, and `C` the narrowest at 24. A 36px floor left the one UTIL
+   row's face 3px right of every other. The margin flips to the right — the chip
+   leads the cell now, where everywhere else it trailed a name. */
+.summary-table .sum-img-col .fantasy-slot {
+  min-width: 42px;
+  justify-content: center;
+  margin: 0 8px 0 0;
+  vertical-align: middle;
 }
 .summary-table .sum-name-col {
   min-width: clamp(92px, 26vw, 150px);
