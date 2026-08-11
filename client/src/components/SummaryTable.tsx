@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { FantasySlotTag } from './FantasySlot';
 import { ExpandButton } from './ExpandButton';
 import { useFullPage } from '../hooks';
@@ -353,11 +354,16 @@ export function SummaryTable({
   reports,
   onOpenDetails,
   onOpenPlayerDay,
+  chrome,
 }: {
   reports: PlayerReport[];
   // The headshot opens the player's details; the name jumps to their game log.
   onOpenDetails: (key: string) => void;
   onOpenPlayerDay: (key: string) => void;
+  /** What to keep from the app's own chrome once the table has the page: the
+   *  kind tabs and the date control, handed down as nodes because App owns both
+   *  the state behind them and the markup. Rendered only while expanded. */
+  chrome?: ReactNode;
 }) {
   const handlers = { onOpenDetails, onOpenPlayerDay };
   const batters = reports.filter((r) => r.kind !== 'pitcher');
@@ -370,6 +376,11 @@ export function SummaryTable({
        corner header cell, which is pinned on both axes and so is always the way
        back out. */
     <div className={`summary-view${isFull ? ' is-expanded' : ''}`}>
+      {/* Expanded, the app's header and tab rows are behind this box — but
+          which kind the table is showing and which days it covers are not
+          decoration, they are what the numbers *are*, and both are controls you
+          reach for while reading. They come along; nothing else does. */}
+      {isFull && chrome && <div className="expanded-chrome">{chrome}</div>}
       <div className="summary-scroll">
         {/* The tables sit in one max-content flex column so the narrower of the
             two stretches to the other's width — otherwise the batter table (fewer

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import type { BatterGameLog, PitcherGameLog } from '../types';
 import { ExpandButton } from './ExpandButton';
 import { useFullPage } from '../hooks';
@@ -273,7 +274,15 @@ function PitcherTotals({ games }: { games: PitcherGameLog[] }) {
  * which is the only place in the app that shows how he got there.
  */
 export function GameLog(
-  log: { kind: 'batter'; games: BatterGameLog[] } | { kind: 'pitcher'; games: PitcherGameLog[] },
+  log: (
+    | { kind: 'batter'; games: BatterGameLog[] }
+    | { kind: 'pitcher'; games: PitcherGameLog[] }
+  ) & {
+    /** Who the log is about, for when the table has the page and the details
+     *  head that normally says so is behind it. Rendered only while expanded,
+     *  and smaller than that head: a name and a face, not a page header. */
+    chrome?: ReactNode;
+  },
 ) {
   const [shown, setShown] = useState(PAGE_SIZE);
   // Above the early return: hooks are unconditional, and a player with no games
@@ -286,6 +295,7 @@ export function GameLog(
   const more = log.games.length - shown;
   return (
     <div className={`details-gamelog${isFull ? ' is-expanded' : ''}`}>
+      {isFull && log.chrome && <div className="expanded-chrome">{log.chrome}</div>}
       <div className="glog-scroll">
         <table className="glog-table">
           <thead>

@@ -866,7 +866,21 @@ export function PlayerDetails({
           Couldn’t load the game log: {gameLogError}
         </div>
       )}
-      {tab === 'gamelog' && gameLog && !gameLogLoading && <GameLog {...gameLog} />}
+      {tab === 'gamelog' && gameLog && !gameLogLoading && (
+        <GameLog
+          {...gameLog}
+          /* Expanded, this table covers the head that says whose season it is.
+             A face and a name put that back at a size that belongs above a
+             table rather than at the top of a page. */
+          chrome={
+            <span className="glog-id">
+              <img className="glog-id-photo" src={headshotUrl(playerId)} alt="" />
+              {name}
+              {position && <span className="player-pos">{position}</span>}
+            </span>
+          }
+        />
+      )}
 
       {tab === 'rolling' && xwobaLoading && (
         <div className="details-status">Loading season xwOBA…</div>

@@ -3749,6 +3749,59 @@ body {
   max-width: none;
   margin: 0;
 }
+/* The row above the table in the expanded box, carrying whatever of the page's
+   own chrome the table can't be read without: the kind tabs and the date
+   control on the summary view, a badge per active setting on the research
+   board, and who the log is about in the game log. `flex: none` so it keeps its
+   height and the table takes the rest; it wraps, which is what lets the date
+   control open as a line of its own underneath (`.app.date-open .date-control`
+   claims `flex: 1 1 100%`). */
+.expanded-chrome {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin-bottom: 8px;
+}
+
+/* One setting, stated. Round because it is a label — the shape this app
+   reserves for things you read — which is also what keeps a row of them from
+   reading as the control set they stand in for. The way to change any of them
+   is the button that expanded the table. */
+.research-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 11px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Who the game log is about, at the size of a row label rather than the page
+   header it stands in for. */
+.glog-id {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.glog-id-photo {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+}
+
 /* Only as tall as its rows. `flex: 0 1 auto` takes the content's height, and
    `min-height: 0` lets it shrink back to the box when there is more content
    than screen — which is the case where it scrolls, and the only case where it
@@ -3774,7 +3827,7 @@ body {
    A rule rather than a branch in the JSX, for the reason `.app.edit-mode`'s is:
    this is one statement of one idea where the equivalent is a conditional
    around each of five children. */
-.research-view.is-expanded > :not(.research-scroll) {
+.research-view.is-expanded > :not(.research-scroll):not(.expanded-chrome) {
   display: none;
 }
 

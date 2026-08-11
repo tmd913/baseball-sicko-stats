@@ -1985,6 +1985,19 @@ export default function App() {
             reports={kindCards}
             onOpenDetails={setDetailsKey}
             onOpenPlayerDay={openPlayerDay}
+            /* Kept when the table takes the page. The same nodes render in the
+               view bar as well, which is behind the expanded box and so never
+               on screen at the same time — the alternative is lifting the
+               expanded flag out of the table that owns it so App can decide
+               where to put them, which is a lot of wiring to avoid two
+               invisible elements. */
+            chrome={
+              <>
+                {kindTabs}
+                {dateToggle}
+                {dateControl}
+              </>
+            }
           />
         )
       ) : view === 'feed' ? (
