@@ -3965,21 +3965,28 @@ body {
 .summary-table .sum-img-col {
   width: 1%;
   text-align: center;
-  /* The slot chip sits ahead of the headshot here (and only here — see
-     `FantasySlotTag`), so the two must stay on one line. */
-  white-space: nowrap;
 }
-/* A floor on the chip's width, so every headshot in the column lands on the
-   same line down the page: a shrink-to-fit column centred on its content would
-   otherwise stagger the faces. 42px is **measured, not chosen** — every slot
-   the app can print was rendered into a real chip: `UTIL` is the widest at 42,
-   `DH` next at 33, and `C` the narrowest at 24. A 36px floor left the one UTIL
-   row's face 3px right of every other. The margin flips to the right — the chip
-   leads the cell now, where everywhere else it trailed a name. */
-.summary-table .sum-img-col .fantasy-slot {
+/* The slot chip leads the name cell on this table (and only here — see
+   `FantasySlotTag`).
+
+   A floor on its width, so every name in the column starts at the same x: a
+   chip that sizes to its own text would otherwise stagger them down the page.
+   42px is **measured, not chosen** — every slot the app can print was rendered
+   into a real chip and read back: `UTIL` is the widest at 42, `DH` next at 33,
+   `C` the narrowest at 24, so anything less than 42 leaves the UTIL rows out of
+   line.
+
+   `vertical-align: middle` on both the chip and the name is what centres them
+   against each other: they are inline boxes of different heights, and the
+   default baseline alignment sits a 15px pill and a 13px name on their
+   type baselines rather than through their middles. */
+.summary-table .sum-name-col .fantasy-slot {
   min-width: 42px;
   justify-content: center;
   margin: 0 8px 0 0;
+  vertical-align: middle;
+}
+.summary-table .sum-name-col .fantasy-slot + .sum-name {
   vertical-align: middle;
 }
 .summary-table .sum-name-col {

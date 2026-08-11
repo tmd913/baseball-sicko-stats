@@ -200,16 +200,15 @@ function LeadCells({
 } & RowHandlers) {
   return (
     <>
-      {/* Ahead of the face rather than after the name, and only here: the slot
-          is what you scan a fantasy roster by, so it wants to be the first
-          thing in the row and in a column of its own width — see the `min-width`
-          on it, which is what keeps every headshot on the same line down the
-          page whether the slot is `C` or `UTIL`. */}
       <td className="sum-img-col">
-        <FantasySlotTag playerKey={playerKey(r)} />
         <SumPhoto id={r.id} playerKey={playerKey(r)} name={r.name} role={role} corner={corner} onOpen={onOpenDetails} />
       </td>
       <th className="sum-name-col" scope="row">
+        {/* Ahead of the name rather than after it, and only on this table: the
+            slot is what you scan a fantasy roster by, so it leads. Outside the
+            button, since the name is a link to that player's day and a slot
+            chip is a label rather than part of what you are pressing. */}
+        <FantasySlotTag playerKey={playerKey(r)} />
         <button
           type="button"
           className="sum-name sum-name-link"
