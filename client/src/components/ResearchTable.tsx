@@ -1594,15 +1594,15 @@ export function ResearchTable({
                       </button>
                       {/* Only on All Players: on My Players every row would
                           carry one, which marks nothing. The same baseball
-                          `PlayerDetails` shows beside "On watchlist", so the
+                          `PlayerDetails` shows beside "On roster", so the
                           app says this one thing one way. */}
                       {scope === 'all' && watchedKeys.has(key) && (
                         <span
                           className="research-watched"
-                          title={`${r.name} is on your watchlist`}
+                          title={`${r.name} is on your roster`}
                         >
                           <BaseballMark size={13} width={2.4} />
-                          <span className="sr-only">On your watchlist</span>
+                          <span className="sr-only">On your roster</span>
                         </span>
                       )}
                     </td>

@@ -2687,7 +2687,7 @@ body {
   gap: 14px;
 }
 /* Add-to-watchlist action, pushed to the far end of the header row. Gives way
-   to an "On watchlist" badge + Remove once the player is on the list. */
+   to an "On roster" badge + Remove once the player is on the list. */
 .details-add {
   margin-left: auto;
   display: inline-flex;
@@ -2705,7 +2705,7 @@ body {
 .details-add:hover {
   filter: brightness(1.08);
 }
-/* On-watchlist state: a static "On watchlist" badge — the app's baseball beside
+/* On-roster state: a static "On roster" badge — the app's baseball beside
    the words, the same mark the research board's watched rows carry — paired
    with a separate Remove button, pushed to the far end of the header row. */
 .details-watch-actions {
@@ -2757,7 +2757,7 @@ body {
     order: 1;
     width: 100%;
   }
-  /* Back + the "On watchlist" badge + Remove share one 390px row; the badge and
+  /* Back + the "On roster" badge + Remove share one 390px row; the badge and
      the button need to sit closer than they do with room to spare. */
   .details-watch-actions {
     gap: 8px;
@@ -4676,7 +4676,7 @@ body {
 }
 
 /* The watchlist mark on an All Players row. The same accent check
-   `PlayerDetails` shows as "On watchlist", reduced to the glyph — a table row
+   `PlayerDetails` shows as "On roster", reduced to the glyph — a table row
    has no space for the words, and the tick is doing the same job. Sits after
    the name and never pushes it: the name column is already the width it is. */
 .research-watched {

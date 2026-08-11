@@ -776,10 +776,10 @@ export function PlayerDetails({
                 where this is a state the player is in. */}
             <span
               className="details-watch-badge"
-              title={`${name} is on your watchlist`}
+              title={`${name} is on your roster`}
             >
               <BaseballMark size={12} width={2} />
-              On watchlist
+              On roster
             </span>
             <RemoveButton
               name={name}
