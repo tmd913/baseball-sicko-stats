@@ -719,6 +719,10 @@ interface FeedPlayEvent {
     // An action event describes itself ("X steals (4) 2nd base.") and carries the
     // score it left behind; a pitch event has neither.
     description?: string;
+    // What kind of action it was, e.g. 'pitching_substitution'. Already in
+    // FEED_FIELDS for `result.eventType`, which is leaf-matched, so it arrives
+    // here too.
+    eventType?: string;
     awayScore?: number;
     homeScore?: number;
   };
@@ -1105,6 +1109,53 @@ export interface StatsApiPitch {
   hBreak: number | null; // horizontal break, inches
 }
 
+/**
+ * Something that happened during a plate appearance that wasn't a pitch — a
+ * pitching change, a mound visit, a pickoff throw, a runner going.
+ *
+ * `afterPitch` is how many pitches had been thrown when it happened, which is
+ * what puts a pitching change *before* the first pitch of the at-bat it is
+ * filed under, where MLB records it.
+ */
+export interface PlayAction {
+  // MLB's own `eventType`, e.g. 'pitching_substitution'.
+  type: string;
+  description: string;
+  afterPitch: number;
+}
+
+/**
+ * The non-pitch events worth showing, as what they are *not*: a denylist, so a
+ * kind MLB adds later shows up rather than being silently dropped — the safe
+ * direction when the whole point is to say what is going on. What is excluded
+ * is the set that means nothing happened: the batter stepping out, the pitcher
+ * stepping off, a pitching timeout, and `game_advisory`, which is MLB talking
+ * to itself ("Status Change - Pre-Game").
+ */
+const QUIET_ACTIONS = new Set([
+  'game_advisory',
+  'batter_timeout',
+  'pitching_timeout',
+  'stepoff',
+]);
+
+/** The non-pitch events of a play, in the order they happened. */
+function playActions(play: FeedPlay): PlayAction[] {
+  const actions: PlayAction[] = [];
+  let pitches = 0;
+  for (const ev of play.playEvents ?? []) {
+    if (ev.isPitch) {
+      pitches += 1;
+      continue;
+    }
+    const type = ev.details?.eventType;
+    const description = ev.details?.description;
+    if (!type || !description || QUIET_ACTIONS.has(type)) continue;
+    actions.push({ type, description, afterPitch: pitches });
+  }
+  return actions;
+}
+
 export interface StatsApiPlateAppearance {
   atBatNumber: number;
   inning: number;
@@ -1128,6 +1179,13 @@ export interface StatsApiPlateAppearance {
   bbType: string | null;
   deltaWinExp: number | null;
   pitches: StatsApiPitch[];
+  // Non-pitch events, and **only while the at-bat is in progress** — the live
+  // feed is the one place they are read, and confining them there is what keeps
+  // them out of every stored blob: a day snapshot is written once every game is
+  // final, so no at-bat in one can be in progress and no stored day can be
+  // stale for want of a field it could never have held. (The same argument
+  // `teamProbablePitcher` makes.) A completed at-bat carries an empty list.
+  actions: PlayAction[];
 }
 
 export interface StatsApiBatterGame {
@@ -1715,6 +1773,9 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
       bbType: lastHit?.trajectory ?? null,
       deltaWinExp: winExpByAtBat.get(atBatIndex) ?? null,
       pitches,
+      // In progress = no result yet, which is exactly the at-bat the Live
+      // section is showing. See the field's note on why it stops there.
+      actions: play.result?.eventType ? [] : playActions(play),
     });
 
     // Pitcher's-eye view: the same play, regrouped under the pitcher who threw it.

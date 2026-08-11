@@ -823,6 +823,7 @@ async function buildStatsApiDay(date: string): Promise<{
         deltaRunExp: null,
         deltaWinExp: pa.deltaWinExp,
         pitches: pa.pitches.map(toClientPitch),
+        actions: pa.actions,
       }));
 
       const batterTeam = bg.isHome ? g.homeTeam : g.awayTeam;
