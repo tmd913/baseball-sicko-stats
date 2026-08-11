@@ -339,6 +339,14 @@ function baseEventScore(ev: BaseEvent, game: PlayerGame): string | null {
  * no pitch card — there is no sequence to show — so the detail is MLB's own line
  * for the event plus the situation it happened in, and nothing toggles: the
  * whole item is three short rows, where a caret would be hiding one of them.
+ *
+ * Who, what happened and the clip of it are **one thing to read**, so the
+ * kind's rail runs down the whole item rather than boxing the middle of it —
+ * the way a live entry's role rail runs header and card together. It used to
+ * be three detached blocks: the name loose above a bordered box, the video in
+ * a box of its own below, with nothing tying them together. A rail groups them
+ * without any row posing as a control, which matters here because none of it
+ * opens (see styles.css).
  */
 function FeedBaseEvent({
   report,
@@ -356,7 +364,7 @@ function FeedBaseEvent({
   const meta = baseEventMeta(ev);
   const score = baseEventScore(ev, game);
   return (
-    <div className="feed-item">
+    <div className={`feed-item feed-base-item kind-${ev.kind}`}>
       <div className="feed-item-head">
         <FeedHeadshot id={report.id} name={report.name} onOpen={() => onOpenDetails(playerKey(report))} />
         <div className="feed-item-id">
@@ -364,7 +372,7 @@ function FeedBaseEvent({
           <span className="feed-context">{matchup(game)}</span>
         </div>
       </div>
-      <div className={`feed-base kind-${ev.kind}`}>
+      <div className="feed-base">
         <div className="feed-base-row">
           <span className="feed-base-inning">
             {ev.half} {ev.inning}

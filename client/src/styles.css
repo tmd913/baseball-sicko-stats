@@ -5384,26 +5384,34 @@ body {
    happened and the situation it happened in. No pitch card — there is no
    sequence to show — but the clip hangs below the box like an at-bat's. The left
    accent mirrors the at-bat card's outcome stripe. */
+/* Who it was, what happened and the clip of it are one thing to read, so the
+   rail runs down the whole item — header, detail and video together — the way
+   `.live-entry`'s role rail does. It was a bordered box around the detail
+   alone, which left the name loose above it and the clip in a second box
+   below: three detached blocks for one event. A rail rather than a card
+   because nothing here opens, and in this feed a box is what something you can
+   open looks like. Same 3px/11px as the live entry, so the two read as the one
+   device used twice. */
+.feed-base-item {
+  border-left: 3px solid var(--border);
+  border-radius: 3px;
+  padding-left: 11px;
+}
+.feed-base-item.kind-sb {
+  border-left-color: var(--live-purple);
+}
+.feed-base-item.kind-run {
+  border-left-color: var(--hit);
+}
 .feed-base {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 10px 14px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-left-width: 4px;
-  border-radius: 12px;
 }
 .feed-base-row {
   display: flex;
   align-items: center;
   gap: 12px;
-}
-.feed-base.kind-sb {
-  border-left-color: var(--live-purple);
-}
-.feed-base.kind-run {
-  border-left-color: var(--hit);
 }
 .feed-base-inning {
   min-width: 42px;
@@ -5417,10 +5425,10 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
-.feed-base.kind-sb .feed-base-badge {
+.feed-base-item.kind-sb .feed-base-badge {
   color: var(--live-purple);
 }
-.feed-base.kind-run .feed-base-badge {
+.feed-base-item.kind-run .feed-base-badge {
   color: var(--hit);
 }
 /* The score the event left behind, in the game badge's own away–home form —
