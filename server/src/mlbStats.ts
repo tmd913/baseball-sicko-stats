@@ -1877,10 +1877,30 @@ async function getHighlightVideosByPlayId(gamePk: number): Promise<Map<string, s
   const data = JSON.parse(text) as ContentResponse;
   const items = data.highlights?.highlights?.items ?? [];
   const byPlayId = new Map<string, string>();
+  // How many plays each asset is claimed by. Two guids on one video means MLB
+  // has attached a single clip to two different plays, and nothing in the
+  // payload says which of them owns it — so neither gets it (below).
+  const claims = new Map<string, number>();
   for (const item of items) {
     if (!item.guid) continue;
     const mp4 = item.playbacks?.find((p) => p.name === 'mp4Avc')?.url;
-    if (mp4) byPlayId.set(item.guid, mp4);
+    if (mp4) {
+      byPlayId.set(item.guid, mp4);
+      claims.set(mp4, (claims.get(mp4) ?? 0) + 1);
+    }
+  }
+  // Seen on 2026-08-10: the reel's "Soderstrom swipes home" item carried the
+  // *RBI double's* video — same `mediaPlaybackId`, same caption file — so the
+  // steal in the feed played a clip of a hit from four batters earlier. The
+  // guid was right and the join was right; the reel itself was wrong. The
+  // payload offers no way to tell which of the two the asset belongs to (both
+  // items' slugs correctly name their own play), so both are dropped rather
+  // than one guessed: the play falls through to Savant, which has essentially
+  // every clip a day later. A missing clip is an absence the UI already shows;
+  // the wrong clip is a lie about what happened. It costs almost nothing —
+  // zero collisions across 113 clips on eight finished games.
+  for (const [playId, mp4] of byPlayId) {
+    if ((claims.get(mp4) ?? 0) > 1) byPlayId.delete(playId);
   }
 
   const settled = final && byPlayId.size > 0;
