@@ -25,6 +25,14 @@ export interface Pitch {
   swingLength: number | null;
 }
 
+/** A non-pitch event inside a plate appearance, e.g. a pitching change.
+ *  `afterPitch` is the number of pitches thrown before it. */
+export interface PlayAction {
+  type: string;
+  description: string;
+  afterPitch: number;
+}
+
 export interface PlateAppearance {
   atBatNumber: number;
   inning: number;
@@ -49,6 +57,11 @@ export interface PlateAppearance {
   deltaRunExp: number | null;
   deltaWinExp: number | null;
   pitches: Pitch[];
+  // Non-pitch events during the at-bat — a pitching change, a mound visit, a
+  // pickoff, a runner going. Filled **only while it is in progress**, which is
+  // the Live section, the one place they are shown; see `StatsApiPlateAppearance`
+  // for why that keeps every stored blob honest. Empty otherwise.
+  actions: PlayAction[];
 }
 
 export interface BattingLine {
