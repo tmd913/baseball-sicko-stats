@@ -5030,17 +5030,6 @@ body {
 .kind-switch {
   align-self: flex-start;
 }
-.kind-tab-count {
-  font-size: 11px;
-  font-weight: 800;
-  color: var(--faint);
-  font-variant-numeric: tabular-nums;
-}
-.kind-tab.active .kind-tab-count {
-  color: var(--bg);
-  opacity: 0.65;
-}
-
 /* "Batters" / "Pitchers" divider — splits each feed section into its two
    halves. Only rendered when that section holds both kinds, so it never appears
    as a lone label over a single group. The trailing rule runs out to the full

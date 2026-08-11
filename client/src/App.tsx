@@ -1201,7 +1201,6 @@ export default function App() {
         onClick={() => setPlayerKind('batter')}
       >
         Batters
-        <span className="kind-tab-count">{cardBatters.length}</span>
       </button>
       <button
         type="button"
@@ -1211,7 +1210,6 @@ export default function App() {
         onClick={() => setPlayerKind('pitcher')}
       >
         Pitchers
-        <span className="kind-tab-count">{cardPitchers.length}</span>
       </button>
     </div>
   ) : null;
