@@ -5362,17 +5362,24 @@ body {
   font-weight: 600;
   color: var(--muted);
 }
-/* A base-running feed item (stolen base / run scored): a compact badge row, no
-   pitch card. The left accent mirrors the at-bat card's outcome stripe. */
+/* A base-running feed item (stolen base / run scored): the badge row, then what
+   happened and the situation it happened in. No pitch card — there is no
+   sequence to show — but the clip hangs below the box like an at-bat's. The left
+   accent mirrors the at-bat card's outcome stripe. */
 .feed-base {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
+  gap: 6px;
   padding: 10px 14px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-left-width: 4px;
   border-radius: 12px;
+}
+.feed-base-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 .feed-base.kind-sb {
   border-left-color: var(--live-purple);
@@ -5397,6 +5404,29 @@ body {
 }
 .feed-base.kind-run .feed-base-badge {
   color: var(--hit);
+}
+/* The score the event left behind, in the game badge's own away–home form —
+   hugging the right end, the way a card's summary sits opposite its identity. */
+.feed-base-score {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  white-space: nowrap;
+}
+/* MLB's own line for the event. */
+.feed-base-desc {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text);
+}
+.feed-base-meta {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
 }
 /* The player's name in a feed row doubles as a link to their full day on the
    players view. Inherits the .feed-player-name text styles; this just strips the
