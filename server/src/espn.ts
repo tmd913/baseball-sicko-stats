@@ -450,7 +450,13 @@ interface EspnRosterResponse {
       entries?: {
         lineupSlotId?: number;
         playerPoolEntry?: {
-          player?: { id?: number; fullName?: string; proTeamId?: number; injured?: boolean };
+          player?: {
+            id?: number;
+            fullName?: string;
+            proTeamId?: number;
+            injured?: boolean;
+            injuryStatus?: string;
+          };
         };
       }[];
     };
@@ -578,6 +584,24 @@ export interface EspnRosterPlayer {
   /** ESPN's own injury flag, which is about the real player rather than the
    *  fantasy slot — a manager can leave an injured player in a lineup spot. */
   injured: boolean;
+  /**
+   * ESPN's injury designation, raw (`DAY_TO_DAY`, `OUT`, `TEN_DAY_DL`, …), or
+   * null when he is `ACTIVE` or it is absent.
+   *
+   * Carried raw rather than pre-labelled, the way `RosterStatus` carries MLB's
+   * code and description: presentation is `lib.ts`'s job on the client, and one
+   * of these maps to a badge the app already draws.
+   *
+   * **This is the only source in the app for day-to-day and out.** MLB's roster
+   * status has no such code — checked league-wide, it publishes only `A`, the
+   * `D10`/`D15`/`D60` IL stints, minors, traded, released, claimed, DFA, free
+   * agent and suspended — because a day-to-day player is still on the active
+   * roster and MLB has nothing to say about him. ESPN's league roster does, and
+   * the cookie-free season-wide player list does **not** (checked: the field is
+   * absent on all 3,921 rows), so this rides on the one payload that carries it
+   * and is therefore a fantasy-mode fact, like the lineup slot beside it.
+   */
+  injuryStatus: string | null;
 }
 
 export interface EspnOwnership extends EspnLeagueInfo {
@@ -664,6 +688,11 @@ export async function getOwnership(creds: EspnCreds, force = false): Promise<Esp
           slotId,
           starting: slotId !== BENCH_SLOT && slotId !== IL_SLOT,
           injured: player.injured === true,
+          // 'ACTIVE' is the overwhelming majority and means nothing worth
+          // saying, so it is normalised to null here rather than filtered at
+          // every read site.
+          injuryStatus:
+            player.injuryStatus && player.injuryStatus !== 'ACTIVE' ? player.injuryStatus : null,
         });
       }
       // Lineup first, then the bench, then the IL — the order a manager reads

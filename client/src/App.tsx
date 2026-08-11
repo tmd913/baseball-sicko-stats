@@ -620,7 +620,11 @@ export default function App() {
     for (const p of fantasyRoster.players) {
       if (p.mlbId === null) continue;
       for (const kind of p.kinds) {
-        map.set(`${kind}-${p.mlbId}`, { slot: p.slot, starting: p.starting });
+        map.set(`${kind}-${p.mlbId}`, {
+          slot: p.slot,
+          starting: p.starting,
+          injuryStatus: p.injuryStatus,
+        });
       }
     }
     return map;
