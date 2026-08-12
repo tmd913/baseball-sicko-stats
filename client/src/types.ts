@@ -102,6 +102,10 @@ export interface GameStatus {
   onDeckId: number | null;
   onBaseIds: number[];
   pitchingId: number | null; // the pitcher currently on the mound (live only)
+  // The pitcher each side still has in the game — one per team, live only. See
+  // the server's copy: `pitchingId` is the half's mound, this is who has not
+  // been taken out of the game.
+  inGamePitcherIds: number[];
 }
 
 export interface ProbablePitcher {

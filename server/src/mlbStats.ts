@@ -1400,7 +1400,42 @@ function buildGameStatus(feed: LiveFeed): GameStatus {
       ? [o?.first?.id, o?.second?.id, o?.third?.id].filter((x): x is number => typeof x === 'number')
       : [],
     pitchingId: live ? ls?.defense?.pitcher?.id ?? null : null,
+    inGamePitcherIds: live ? inGamePitchers(feed) : [],
   };
+}
+
+/**
+ * The pitcher each side currently has **in the game** — one per team, live only.
+ *
+ * `linescore.defense.pitcher` (above) is the man on the mound *this half*, which
+ * is a different question and answers it for one side only: while his own team
+ * bats, a pitcher in the middle of a start is nobody's `defense.pitcher`. Half
+ * the game, therefore, the app had nothing to say about him — he fell out of the
+ * feed's Live section between innings and climbed back in when his half came
+ * round again.
+ *
+ * A side's boxscore `pitchers[]` is who has taken the mound for it, in order, so
+ * the **last entry is the one who has not yet been replaced**. It is filled from
+ * warmup on, the same property `startingPitchers` relies on. Checked against
+ * nine live games: for whichever side was fielding it named exactly the same
+ * pitcher `defense.pitcher` did, and for the other it named the man in the
+ * dugout — which is the half this exists for.
+ *
+ * Live-only by nature, so no `DAY_SNAPSHOT_VERSION` bump: a day is only
+ * persisted once every game in it is final, and a final game's list is empty
+ * either way. Note it needs the *unfiltered* feed (`pitchers` is not in
+ * `FEED_FIELDS`) — which is what a live game is always read from, the compact
+ * one being for finals.
+ */
+function inGamePitchers(feed: LiveFeed): number[] {
+  const teams = feed.liveData?.boxscore?.teams;
+  const out: number[] = [];
+  for (const team of [teams?.away, teams?.home]) {
+    const used = team?.pitchers;
+    const current = used?.[used.length - 1];
+    if (typeof current === 'number') out.push(current);
+  }
+  return out;
 }
 
 function probablePitcher(
