@@ -257,6 +257,12 @@ app.get(
     // `refresh=1` rides along with it — a lineup change moves which players the
     // report is even about, so the two have to be re-read together or the slot
     // chips and the cards would describe different rosters.
+    //
+    // The range's **`end`** decides which day's lineup the roster is read at,
+    // which is the same day `/api/espn/roster` is asked for — deliberately, and
+    // for the same reason the refresh carries: the report's player order *is*
+    // the lineup order, and a report ordered by today's lineup under chips
+    // drawn from tomorrow's would be one roster described two ways.
     const fantasy = req.query.source === 'fantasy';
     let watched: WatchPlayer[];
     let teamName: string | null = null;
@@ -265,6 +271,7 @@ app.get(
         ({ players: watched, teamName } = await fantasyWatchlist(
           userId(req),
           req.query.refresh === '1',
+          end,
         ));
       } catch (err) {
         // A league that can't be read is the user's to fix, and the client
@@ -471,10 +478,20 @@ function espnError(err: unknown, res: express.Response): boolean {
  * `refresh` skips the ten-minute ownership cache, the same escape hatch
  * `/api/espn/ownership` carries and for the same person: someone who has just
  * moved a player in ESPN and is looking at the app to see it.
+ *
+ * `date` is the day to read the **lineup** for — the last day of the range the
+ * views are reporting on, so the `Tomorrow` preset shows the lineup set for
+ * tomorrow rather than the one being played out today. Today and anything
+ * earlier read ESPN's current period; see `espn.ts`'s **Which day's lineup**.
+ * It reaches the roster *order* as well as the slots, which is the point of
+ * passing it here rather than only to the route that draws the chips: the
+ * report's player list is that order, so without it a Tomorrow report would
+ * list the lineup one way and chip it another.
  */
 async function fantasyWatchlist(
   user: string,
   refresh = false,
+  date?: string | null,
 ): Promise<{ players: WatchPlayer[]; teamName: string | null; roster: EspnRosterPlayer[] }> {
   const espn = await getEspnLeague(user);
   if (!espn) throw new EspnAuthError('No ESPN league connected');
@@ -485,7 +502,7 @@ async function fantasyWatchlist(
   }
   const creds = await getEspnCreds(user);
   if (!creds) throw new EspnAuthError('No ESPN league connected');
-  const own = await getOwnership(creds, refresh);
+  const own = await getOwnership(creds, refresh, date);
   const roster = own.rosters[espn.teamId] ?? [];
   const team = own.teams.find((t) => t.id === espn.teamId);
   return { players: rosterToWatchlist(roster), teamName: team?.name ?? espn.teamName ?? null, roster };
@@ -502,12 +519,25 @@ app.get(
 // The user's own roster, slot by slot — what the app shows beside each player
 // when it is reading the fantasy team rather than the saved watchlist.
 // `?refresh=1` skips the ten-minute cache, for the lineup change just made.
+//
+// `?date=` is the day to read the lineup for — the end of the range on screen.
+// Validated for shape and otherwise left to `getOwnership`, which clamps
+// anything at or before today back onto ESPN's current period, so a nonsense
+// date can only ever cost the caller today's answer rather than someone else's
+// team from June.
 app.get(
   '/api/espn/roster',
   requireUser,
   asyncRoute(async (req, res) => {
+    const date = typeof req.query.date === 'string' && DATE_RE.test(req.query.date)
+      ? req.query.date
+      : null;
     try {
-      const { roster, teamName } = await fantasyWatchlist(userId(req), req.query.refresh === '1');
+      const { roster, teamName } = await fantasyWatchlist(
+        userId(req),
+        req.query.refresh === '1',
+        date,
+      );
       res.json({ teamName, players: roster });
     } catch (err) {
       if (!espnError(err, res)) throw err;

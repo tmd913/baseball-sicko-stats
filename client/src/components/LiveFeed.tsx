@@ -4,7 +4,6 @@ import { playerKey } from '../types';
 import {
   baseEventLabel,
   baseEventTone,
-  baseName,
   creditLabel,
   decisionColor,
   formatStartTime,
@@ -394,31 +393,35 @@ function kindOrder(ev: BaseEvent): number {
 }
 
 /**
- * What the situation glyph can't say: for a steal or a pickoff the count he
- * went on and who the battery was — the two facts that decide whether a bag was
- * there to be taken — and for a run, where he came from.
+ * What the situation glyph can't say: for a steal or a pickoff the count he went
+ * on and who was on the mound — the two facts that decide whether a bag was
+ * there to be taken — and who was at the plate while he ran.
  *
- * It used to carry the outs too, and no longer does: the diamond beside the
- * badges draws them, and a row that says "1 out" beside a picture of one out is
- * saying it twice. Each piece is dropped rather than dashed when the feed
- * didn't carry it.
+ * Everything it carried about **where the runners were** is gone, because the
+ * glyph beside it draws exactly that. The outs went first ("1 out" beside a
+ * picture of one out), and "Scored from 3rd" follows them for the same reason:
+ * the diamond on a run's own item is the state he scored out of, so the man on
+ * third in the picture *is* him. That used to be a special case — a run off a
+ * steal of home dropped the phrase because the badge beside it already said
+ * where he was standing — and a special case is what it should never have been:
+ * the badge is one drawing of the situation and the diamond is the other, and
+ * every run has the second one. Each piece is dropped rather than dashed when
+ * the feed didn't carry it.
+ *
+ * Only a **runner's** item reaches this now: a pitcher's events are read inside
+ * his outing rather than as items of their own (see the stream below). The half
+ * of the rule that named the runner instead of the man on the mound, on the
+ * grounds that "off Luzardo" tells Luzardo nothing, is not lost with it — it is
+ * what an inning row states when it names the runner and no pitcher at all.
  */
-function baseEventMeta(ev: BaseEvent, kind: PlayerKind): string[] {
+function baseEventMeta(ev: BaseEvent): string[] {
   const parts: string[] = [];
-  if (ev.kind === 'run' && ev.fromBase) parts.push(`Scored from ${baseName(ev.fromBase)}`);
   const onThePitch = ev.kind === 'sb' || ev.kind === 'cs' || ev.kind === 'pocs';
   if (onThePitch && ev.balls !== null && ev.strikes !== null) {
     parts.push(`${ev.balls}-${ev.strikes} count`);
   }
   if (ev.kind !== 'run') {
-    // Whoever the item is *not* about. On a runner's feed the man on the mound
-    // is the other half of the play; on a pitcher's own feed "off Luzardo" on a
-    // Luzardo item names him to himself, so the runner takes that slot instead.
-    if (kind === 'pitcher') {
-      if (ev.runnerName) parts.push(surname(ev.runnerName));
-    } else if (ev.pitcherName) {
-      parts.push(`off ${surname(ev.pitcherName)}`);
-    }
+    if (ev.pitcherName) parts.push(`off ${surname(ev.pitcherName)}`);
     if (ev.batterName) parts.push(`${surname(ev.batterName)} batting`);
   }
   return parts;
@@ -428,18 +431,12 @@ function baseEventMeta(ev: BaseEvent, kind: PlayerKind): string[] {
  * The situation for a whole play, when more than one event came off it.
  *
  * The lists overlap by construction — every event of one play names the same
- * battery and the same batter — so it dedupes rather than concatenating, which
- * on a pitcher's item is also what turns one wild pitch that moved two runners
- * into one line naming both. And a run that came off a **steal of home** drops
- * its "Scored from 3rd": stealing home says where he was standing, and the
- * phrase would only restate the badge beside it.
+ * battery and the same batter — so it dedupes rather than concatenating.
  */
-function playMeta(evs: BaseEvent[], kind: PlayerKind): string[] {
-  const stoleHome = evs.some((ev) => ev.kind === 'sb' && ev.base === 'home');
+function playMeta(evs: BaseEvent[]): string[] {
   const parts: string[] = [];
   for (const ev of evs) {
-    for (const part of baseEventMeta(ev, kind)) {
-      if (stoleHome && part.startsWith('Scored from')) continue;
+    for (const part of baseEventMeta(ev)) {
       if (!parts.includes(part)) parts.push(part);
     }
   }
@@ -482,7 +479,7 @@ function FeedBaseEvent({
   // one inning, one situation, one description (both were read off the same
   // play event, so the line is the same string), one score, one clip.
   const lead = evs[0];
-  const meta = playMeta(evs, report.kind);
+  const meta = playMeta(evs);
   const description = evs.find((ev) => ev.description)?.description ?? '';
   const playId = evs.find((ev) => ev.playId)?.playId ?? null;
   // One badge per *kind*. A runner's play is never two of the same, but a
@@ -821,15 +818,23 @@ export function LiveFeed({
   const livePinned = new Set(liveRows.map((r) => `${r.report.id}-${r.game.gamePk}`));
 
   // Everything that has happened, interleaved newest-first: for a batter every
-  // completed plate appearance, for a pitcher his outing as a single item, and
-  // for **both** every base-running event on his game — his own baserunning on
-  // one side, the balk / wild pitch / pickoff / bag taken off him on the other.
-  // The in-progress at-bat (no event yet) lives in the Live section above.
+  // completed plate appearance and every base-running event of his own, and for
+  // a pitcher his whole outing as a single item. The in-progress at-bat (no
+  // event yet) lives in the Live section above.
   //
-  // A pitcher's outing is one item and can be pinned to Live; his base events
-  // are not, and stay in the stream where they happened. Pinning them would put
-  // a balk from the second inning back at the top of the page every time he
-  // came out to throw the seventh.
+  // **A pitcher's base events are not items of their own**, and a batter's are.
+  // The difference is what each stream's item *is*: a batter's is one play, so
+  // the bag he took is a play like the at-bat above it, while a pitcher's is the
+  // whole outing — his balk belongs inside it, in the inning he threw it, which
+  // is where `InningsList` puts it and where his card has always read it. Drawn
+  // as a stream item too it was the same event twice on one page: once in the
+  // fourth inning of the outing and again a few hundred pixels below it, timed
+  // by its own clock and so detached from the outing by whatever else happened
+  // in between. So the outing is now the one place his game is read, and the
+  // rule it replaces — that his events were never pinned to Live but stayed in
+  // the stream where they happened — is honoured more literally than before: a
+  // balk from the second sits in the second, not at the top of the page and not
+  // adrift in the middle of it.
   const baseEntries = (report: PlayerReport, game: PlayerGame): FeedEntry[] =>
     groupBaseEvents(game.baseEvents).map((evs, i): FeedEntry => ({
       type: 'base',
@@ -845,12 +850,9 @@ export function LiveFeed({
     .flatMap((report) =>
       report.games.flatMap((game): FeedEntry[] =>
         report.kind === 'pitcher'
-          ? [
-              ...(game.pitching && !livePinned.has(`${report.id}-${game.gamePk}`)
-                ? [{ type: 'pitching' as const, report, game }]
-                : []),
-              ...baseEntries(report, game),
-            ]
+          ? game.pitching && !livePinned.has(`${report.id}-${game.gamePk}`)
+            ? [{ type: 'pitching' as const, report, game }]
+            : []
           : [
               ...game.plateAppearances
                 .filter((pa) => pa.event)

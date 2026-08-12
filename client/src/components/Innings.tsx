@@ -36,6 +36,14 @@ interface InningGroup {
  * inning, which is exactly right for the one case that produces it — a caught
  * stealing for the third out, where MLB files the play under the batter who was
  * up and `savant.ts` drops it as the non-plate-appearance it is.
+ *
+ * The groups are **sorted by inning** rather than left in the order they were
+ * created, because that same case can produce an inning made of nothing but an
+ * event — a reliever brought in for one batter who picks the runner off to end
+ * it — and an inning first seen while merging the events would otherwise be
+ * appended after every inning he actually faced someone in. On the card that is
+ * a half-inning at the wrong end of the outing; in the feed, where the list is
+ * reversed, it is one at the very top.
  */
 function groupByInning(faced: FacedBatter[], events: BaseEvent[]): InningGroup[] {
   const groups: InningGroup[] = [];
@@ -62,28 +70,77 @@ function groupByInning(faced: FacedBatter[], events: BaseEvent[]): InningGroup[]
     const seen = new Set(group.batters.map((fb) => fb.atBatNumber));
     for (const ev of pending) if (!seen.has(ev.atBatNumber)) group.rows.push({ ev });
   }
-  return groups;
+  return groups.sort((a, b) => a.inning - b.inning);
 }
 
 /**
  * A base-running event inside an inning block — the balk, the wild pitch, the
  * bag taken off him, the runner he picked off.
  *
- * A **static row**, not a card: there is no pitch sequence under it to reveal,
- * which is the same reason the feed's base-event item doesn't open either. It
- * takes `.faced-row`'s shape so it lines up with the batters around it — the
+ * It takes `.faced-row`'s shape so it lines up with the batters around it — the
  * situation the event happened in where a batter's row carries his, then the
- * badge, then who it was — and its full description rides in the `title`, the
- * row being one line in a table read for its shape.
+ * badge, then who it was, and at the right end the count it went on where the
+ * batter's row carries his pitch count. That count is the one thing about a
+ * steal that neither the glyph nor MLB's own line for the play ever says, and
+ * it is what decides whether the bag was there to be taken.
+ *
+ * It **opens onto whatever is under it**, exactly as `FacedBatterCard` does and
+ * on the same test — MLB's line for the play and the clip of it, where a
+ * batter's card holds a description and a pitch sequence. It was a static row
+ * with its description hidden in a `title` (which a phone cannot show at all)
+ * for as long as the feed drew a second, watchable copy of every one of these
+ * beside the outing; the pitcher stream no longer does (see `LiveFeed.tsx`), so
+ * the outing has to be readable as the outing, video and all. An event with
+ * neither a line nor a clip stays the static row it was, which is the same rule
+ * the batter card above applies to a batter with no pitches recorded.
  */
-function InningBaseEvent({ ev }: { ev: BaseEvent }) {
+function InningBaseEvent({ ev, gamePk }: { ev: BaseEvent; gamePk: number }) {
+  const [open, setOpen] = useState(false);
   const tone = baseEventTone(ev.kind);
-  return (
-    <div className={`faced-row faced-event tone-${tone}`} title={ev.description || undefined}>
+  const expandable = Boolean(ev.description || ev.playId);
+  // The count only means something on an event the runner went on a pitch for:
+  // a balk or a wild pitch is the pitcher's doing, and the count he was working
+  // on says nothing about it.
+  const onThePitch = ev.kind === 'sb' || ev.kind === 'cs' || ev.kind === 'pocs';
+  const count =
+    onThePitch && ev.balls !== null && ev.strikes !== null ? `${ev.balls}-${ev.strikes}` : null;
+  // As on a batter faced: opening brings the row to the top of the screen.
+  const cardRef = useScrollIntoViewOnExpand<HTMLDivElement>(open);
+
+  const summary = (
+    <>
       <span className="faced-seq" aria-hidden="true" />
       <BaseDiamond bases={ev.onBase} outs={ev.outs ?? 0} className="pa-bases" />
       <span className={`pa-badge tone-${tone}`}>{baseEventLabel(ev)}</span>
       {ev.runnerName && <span className="faced-batter">{ev.runnerName}</span>}
+      {count && (
+        <span className="faced-pitches" title={`${count} count`}>
+          {count}
+        </span>
+      )}
+    </>
+  );
+
+  if (!expandable) {
+    return <div className={`faced-row faced-event tone-${tone}`}>{summary}</div>;
+  }
+
+  return (
+    <div ref={cardRef} className={`faced-card faced-event tone-${tone}${open ? ' expanded' : ''}`}>
+      <button
+        type="button"
+        className="faced-row faced-summary"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        {summary}
+      </button>
+      {open && (
+        <div className="faced-detail">
+          {ev.description && <p className="pa-des">{ev.description}</p>}
+          {ev.playId && <VideoClip playId={ev.playId} gamePk={gamePk} />}
+        </div>
+      )}
     </div>
   );
 }
@@ -242,7 +299,7 @@ function InningBlock({
                   gamePk={gamePk}
                 />
               ) : (
-                <InningBaseEvent key={`e-${row.ev.kind}-${i}`} ev={row.ev} />
+                <InningBaseEvent key={`e-${row.ev.kind}-${i}`} ev={row.ev} gamePk={gamePk} />
               ),
             );
           })()}

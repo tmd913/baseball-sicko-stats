@@ -266,9 +266,18 @@ export const api = {
     });
   },
   /** The user's own roster, slot by slot. `refresh` as on `espnOwnership` —
-   *  the two read the same upstream through the same cache. */
-  async espnRoster(refresh = false): Promise<EspnRoster> {
-    return request(`/api/espn/roster${refresh ? '?refresh=1' : ''}`);
+   *  the two read the same upstream through the same cache.
+   *
+   *  `date` is the day to read the **lineup** for: a manager sets tomorrow's
+   *  lineup today, and ESPN files it under tomorrow, so a view reporting on
+   *  tomorrow has to ask for tomorrow or it draws today's slots. The server
+   *  reads anything at or before today as today. */
+  async espnRoster(refresh = false, date?: string | null): Promise<EspnRoster> {
+    const q = new URLSearchParams();
+    if (refresh) q.set('refresh', '1');
+    if (date) q.set('date', date);
+    const qs = q.toString();
+    return request(`/api/espn/roster${qs ? `?${qs}` : ''}`);
   },
   /** `refresh` skips the server's ten-minute cache — for the user who has just
    *  made a move and wants the board to agree with ESPN. */
