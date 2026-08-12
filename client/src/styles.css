@@ -3170,16 +3170,15 @@ body {
    first. Wider than the other tabs' reading column — it's a stat table, and on
    a phone it scrolls sideways inside its own box rather than pushing the page. */
 .details-gamelog {
-  /* Wider than the other tabs' 860px reading column: this one has fourteen
-     columns, and at 860 the last of them fell off the right of a laptop the
-     moment the gutters got any room. 1400 rather than 1000 since the app
-     stopped capping itself — this is one of the three wide tables, and on a
-     wide monitor the fourteen columns fit without a sideways scroll at all. The
-     other tabs keep theirs: a percentile plot is a label, a bar and a number,
-     and spreading those over 1900px puts the label at one end of the room and
-     the number at the other. */
-  max-width: 1400px;
-  margin: 0 auto;
+  /* No reading column at all, where the other tabs keep theirs: this is one of
+     the three wide tables and it is *scanned*, so it takes the window the way
+     the summary table and the research board do. It was capped at 1400px, which
+     on a monitor left the fourteen columns huddled in the middle of the overlay
+     with a margin either side and a dead gap in the opponent column — the cap
+     was buying nothing, the columns having long since stopped needing the
+     sideways scroll it was there to spare them. A percentile plot is still a
+     label, a bar and a number and still keeps its 860. */
+  max-width: none;
 }
 .glog-scroll {
   overflow-x: auto;
@@ -3205,7 +3204,7 @@ body {
    this pane scrolls anyway. */
 .glog-table th,
 .glog-table td {
-  padding: 10px clamp(5px, 1.6vw, 14px);
+  padding: 11px clamp(5px, 1.6vw, 22px);
   line-height: 1.35;
   white-space: nowrap;
   border-bottom: 1px solid var(--border);
@@ -3234,8 +3233,12 @@ body {
   text-transform: uppercase;
   color: var(--muted);
 }
+/* A share of the slack rather than content width — see `.sum-num`, which this
+   is the game log's copy of: capped at 1%, fourteen columns of single digits
+   sat in a huddle at the right of the overlay with the opponent column holding
+   a third of the window and nothing in it. */
 .glog-table .glog-num {
-  width: 1%;
+  width: auto;
   min-width: clamp(28px, 4.4vw, 46px);
   text-align: right;
   font-variant-numeric: tabular-nums;
@@ -4174,8 +4177,9 @@ body {
   align-items: stretch;
   background: var(--bg);
   padding: 10px 12px;
-  /* Undoes the game log's reading column, that being the one moment it is the
-     wrong idea. */
+  /* Belt and braces on the width: the game log no longer carries a reading
+     column to undo, but a fixed box that takes the page must not inherit one if
+     either view is ever given one back. */
   max-width: none;
   margin: 0;
 }
@@ -4382,7 +4386,7 @@ body {
    Full width at desktop sizes, where the whole table already fits. */
 .summary-table th,
 .summary-table td {
-  padding: 8px clamp(5px, 1.6vw, 13px);
+  padding: 10px clamp(5px, 1.6vw, 22px);
   white-space: nowrap;
   border-bottom: 1px solid var(--border);
   background: var(--bg);
@@ -4396,11 +4400,21 @@ body {
 .summary-table tbody tr:nth-child(even) .sum-name-col {
   background: var(--panel);
 }
-/* Numeric columns hug their content (width:1% + nowrap) so the player column
-   absorbs the slack on wide screens; right-aligned with tabular figures. */
+/* Numeric columns take a share of the slack rather than hugging their content,
+   which is what makes a wide screen read as a table rather than as a table's
+   worth of numbers pinned to the right edge of one. They carried `width: 1%`,
+   so every pixel a monitor had over the table's own content went to the one
+   auto column — the player's name — and the board spanned 1920px with a 600px
+   hole in the middle of every row and the nine stats crushed together past it.
+   Auto lets the browser distribute the surplus across all of them in proportion
+   to what they hold, so the name and opponent columns still take the largest
+   share (they hold the most) and the numbers spread out instead of huddling.
+   Nothing changes on a phone: the table overflows there, and an overflowing
+   table is laid out on its content's own widths whatever this says. */
 .summary-table .sum-num {
-  width: 1%;
-  /* Floor only — past the narrow end the numbers themselves set the width. */
+  width: auto;
+  /* Floor only, and only at the narrow end — past it the numbers themselves and
+     the share above set the width. */
   min-width: clamp(32px, 5vw, 54px);
   text-align: right;
   font-variant-numeric: tabular-nums;
@@ -5410,6 +5424,21 @@ body {
 }
 
 /* ---- Table ---- */
+/* This board keeps the *tighter* gutters the summary table has just grown out
+   of, and the reason is the one that widened them over there: slack. The summary
+   table has nine stat columns and a monitor's worth of width it has no use for,
+   so it spends it. This board carries 23 to 44 and overflows a 1920px screen
+   with every one of them at its own width — there is nothing here to spend, and
+   every pixel added to a gutter is a column pushed off the right edge and
+   another swipe to reach it. Same table, opposite problem. (The `width: auto` on
+   the numeric columns needs no such exception: it only does anything when there
+   is surplus to share, which on this board there is not — and on the one where
+   there is, a board narrowed to a handful of columns, it is just as welcome.) */
+.research-table th,
+.research-table td {
+  padding-left: clamp(5px, 1.6vw, 13px);
+  padding-right: clamp(5px, 1.6vw, 13px);
+}
 /* Team and position hug their content; both scroll away with the name, only the
    headshot staying pinned (as in the summary table, so stat columns get the
    room on a phone). */
