@@ -912,10 +912,12 @@ export interface EspnRosterPlayer {
   savantName: string | null;
   /** One kind, or two for a two-way player. */
   kinds: PlayerKind[];
-  /** Today's fantasy slot — 'SS', 'UTIL', 'SP', 'BE', 'IL'. */
+  /** The fantasy slot he is in on the day this was read for — 'SS', 'UTIL',
+   *  'SP', 'BE', 'IL'. Today's, unless the range in view asked for a future
+   *  one; the server's copy of this interface has the whole rule. */
   slot: string;
   slotId: number;
-  /** In today's lineup: neither benched nor on the IL. */
+  /** In that day's lineup: neither benched nor on the IL. */
   starting: boolean;
   injured: boolean;
   /** ESPN's injury designation, raw (`DAY_TO_DAY`, `OUT`, `TEN_DAY_DL`, …), or
