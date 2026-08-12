@@ -2120,6 +2120,29 @@ body {
 .faced-card.kind-other {
   border-left-color: var(--faint);
 }
+/* A base-running event inside an inning block — the balk, the wild pitch, the
+   bag taken off him. It takes `.faced-row` outright so it lines up with the
+   batters around it, and only its left accent differs: the same four tones the
+   feed's rail uses, so one event reads the same colour on the card as it does
+   in the stream. It carries a quieter ground than a batter's row, being
+   background to the at-bat it happened inside rather than a result of its own —
+   and it never becomes a `.faced-card`, since there is no pitch sequence under
+   it to open. */
+.faced-event {
+  background: var(--bg-2);
+}
+.faced-event.tone-take {
+  border-left-color: var(--live-purple);
+}
+.faced-event.tone-free {
+  border-left-color: var(--walk);
+}
+.faced-event.tone-out {
+  border-left-color: var(--out);
+}
+.faced-event.tone-run {
+  border-left-color: var(--hit);
+}
 .pa-summary-row {
   display: flex;
   align-items: center;
@@ -2196,6 +2219,28 @@ body {
 .pa-badge.kind-other {
   background: rgba(92, 111, 151, 0.2);
   color: var(--muted);
+}
+/* The same badge for a base-running event, keyed by tone rather than outcome —
+   the four `baseEventTone` groups, at the tint the outcome badges use. `take`
+   and `free` have no outcome equivalent (nothing at the plate is a live purple
+   or a runner's free base), so they carry their own; `out` and `run` deliberately
+   match `kind-out` and `kind-hit`, an out on the bases and a run being the same
+   two things they are at the plate. */
+.pa-badge.tone-take {
+  background: rgba(192, 132, 252, 0.18);
+  color: var(--live-purple);
+}
+.pa-badge.tone-free {
+  background: rgba(96, 165, 250, 0.18);
+  color: var(--walk);
+}
+.pa-badge.tone-out {
+  background: rgba(100, 116, 139, 0.22);
+  color: #cbd5e1;
+}
+.pa-badge.tone-run {
+  background: rgba(52, 211, 153, 0.18);
+  color: var(--hit);
 }
 .pa-rbi {
   font-size: 11px;
@@ -5789,10 +5834,10 @@ body {
   font-weight: 600;
   color: var(--muted);
 }
-/* A base-running feed item (stolen base / run scored): the badge row, then what
-   happened and the situation it happened in. No pitch card — there is no
-   sequence to show — but the clip hangs below the box like an at-bat's. The left
-   accent mirrors the at-bat card's outcome stripe. */
+/* A base-running feed item — a steal, a caught stealing, a pickoff, a balk, a
+   wild pitch, a passed ball, an indifference, a run: the situation and the
+   badges, then what happened. No pitch card — there is no sequence to show —
+   but the clip hangs below like an at-bat's. */
 /* Who it was, what happened and the clip of it are one thing to read, so the
    rail runs down the whole item — header, detail and video together — the way
    `.live-entry`'s role rail does. It was a bordered box around the detail
@@ -5840,46 +5885,82 @@ body {
   border-left-width: 1px;
   border-left-color: var(--border);
 }
+/* The rail is one gradient at every width, and the two tone classes are what
+   fill it. A rail with one tone sets only `--rail-a`, and `--rail-b` resolves
+   through it, so the gradient paints one colour top to bottom and reads as a
+   solid edge; a play that was two things (a steal of home is a steal *and* a
+   run) adds `rail2-*` and the two halves show, in the badges' own order —
+   whatever moved him above, the run below.
+
+   It has to be a gradient rather than a border colour even in the one-tone
+   case: a border takes one colour and has no half to give a second, and
+   switching between the two mechanisms per item would mean every tone written
+   twice. `background-origin: border-box` starts the gradient *on* the rail
+   rather than inside it, the border itself going transparent to let it through.
+
+   Ten kinds are painted by four tones (see `baseEventTone`), which is what
+   keeps this at eight rules instead of a hundred. */
 .feed-base-item {
-  border-left: 3px solid var(--border);
+  --rail-a: var(--border);
+  --rail-b: var(--rail-a);
+  border-left: 3px solid transparent;
   border-radius: 3px;
   padding-left: 11px;
-}
-.feed-base-item.kind-sb {
-  border-left-color: var(--live-purple);
-}
-.feed-base-item.kind-run {
-  border-left-color: var(--hit);
-}
-/* Two events off one play are two kinds of thing — a steal of home is a steal
-   *and* a run — so the rail carries both, split at the middle in the badges'
-   own order. It has to be a gradient rather than a border: a border takes one
-   colour and there is no half of it to give the second. The border stays, at
-   the same 3px, and goes transparent so the gradient shows through it — which
-   is what `background-origin: border-box` is for, the default padding-box
-   starting the gradient inside the rail rather than on it. */
-.feed-base-item.kind-sb-run {
-  border-left-color: transparent;
-  background-image: linear-gradient(var(--live-purple) 0 50%, var(--hit) 50% 100%);
+  background-image: linear-gradient(var(--rail-a) 0 50%, var(--rail-b) 50% 100%);
   background-repeat: no-repeat;
   background-size: 3px 100%;
   background-origin: border-box;
+}
+.feed-base-item.rail-take {
+  --rail-a: var(--live-purple);
+}
+.feed-base-item.rail-free {
+  --rail-a: var(--walk);
+}
+.feed-base-item.rail-out {
+  --rail-a: var(--out);
+}
+.feed-base-item.rail-run {
+  --rail-a: var(--hit);
+}
+.feed-base-item.rail2-take {
+  --rail-b: var(--live-purple);
+}
+.feed-base-item.rail2-free {
+  --rail-b: var(--walk);
+}
+.feed-base-item.rail2-out {
+  --rail-b: var(--out);
+}
+.feed-base-item.rail2-run {
+  --rail-b: var(--hit);
+}
+/* A pitcher's outing takes the same rail, in `decisionColor`'s colour — set
+   inline, since that function is the app's one definition of what a W, an L, a
+   save and a hold look like and a second copy here would drift from the credit
+   chip sitting on the bar an inch away. On the mound he is a `.live-entry`
+   instead and the role rail wins; `.feed-outing` is only ever set when it
+   isn't, so the two never both apply. */
+.feed-outing {
+  border-left: 3px solid var(--muted);
+  border-radius: 3px;
+  padding-left: 11px;
 }
 .feed-base {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
+/* The situation glyph, then the badges. The row used to lead with a 42px
+   "Bot 5" text cell and close on the score; it now opens with the same
+   `PlaySituation` an at-bat card does — half-inning, runners, outs — so an
+   event and an at-bat in one stream state their situation identically instead
+   of one drawing a diamond and the other spelling it out. The score moved up
+   to the item's header, which is the row the two shapes share. */
 .feed-base-row {
   display: flex;
   align-items: center;
   gap: 12px;
-}
-.feed-base-inning {
-  min-width: 42px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--muted);
 }
 .feed-base-badge {
   font-size: 13px;
@@ -5887,20 +5968,29 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
-/* Keyed off the badge's own kind rather than the item's: a play can be both a
+/* Keyed off the badge's own tone rather than the item's: a play can be both a
    steal and the run it turned into, and then the two badges sit side by side
-   and have to keep their own colours. The item's rail can only pick one (the
-   run's — see LiveFeed). */
-.feed-base-badge.kind-sb {
+   and have to keep their own colours where the rail carries them in halves. */
+.feed-base-badge.tone-take {
   color: var(--live-purple);
 }
-.feed-base-badge.kind-run {
+.feed-base-badge.tone-free {
+  color: var(--walk);
+}
+.feed-base-badge.tone-out {
+  color: var(--out);
+}
+.feed-base-badge.tone-run {
   color: var(--hit);
 }
-/* The score the event left behind, in the game badge's own away–home form —
-   hugging the right end, the way a card's summary sits opposite its identity. */
-.feed-base-score {
+/* The score the item left behind, at the right end of its identity row —
+   `margin-left: auto`, the way a card's summary sits opposite its identity.
+   Both item shapes carry it there: an at-bat's card is shared with the players
+   view and a base event's detail is a badge row, so the header is the one row
+   the two genuinely have in common. */
+.feed-score {
   margin-left: auto;
+  flex: none;
   font-size: 12px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;

@@ -3,7 +3,7 @@ import type { PlateAppearance } from '../types';
 import { api } from '../api';
 import { useScrollIntoViewOnExpand } from '../hooks';
 import { contactHighlight, eventLabel, finalSwingBatSpeed, outcomeKind } from '../lib';
-import { BaseDiamond } from './BaseDiamond';
+import { PlaySituation } from './BaseDiamond';
 import { ClipVideo } from './ClipVideo';
 import { PitchTable } from './PitchSequence';
 import { StrikeZone } from './StrikeZone';
@@ -160,7 +160,6 @@ export function PlateAppearanceCard({
   const kind = outcomeKind(pa.event);
   const contact = contactHighlight(pa);
   const swingSpeed = finalSwingBatSpeed(pa);
-  const isTop = pa.half === 'Top';
 
   // On expand, bring this at-bat to the top of the screen so its detail isn't
   // left off-screen below the fold. Skipped when the caller owns the scroll.
@@ -174,19 +173,12 @@ export function PlateAppearanceCard({
         aria-expanded={open}
         onClick={onToggle}
       >
-        <span className="pa-inning">
-          <svg
-            className="pa-inning-arrow"
-            viewBox="0 0 12 10"
-            aria-hidden="true"
-            fill="currentColor"
-          >
-            <path d={isTop ? 'M6 0 12 10 0 10Z' : 'M0 0 12 0 6 10Z'} />
-          </svg>
-          {pa.inning}
-          <span className="sr-only">{isTop ? 'Top' : 'Bottom'} of inning</span>
-        </span>
-        <BaseDiamond bases={pa.onBase} outs={pa.outsWhenUp ?? 0} className="pa-bases" />
+        <PlaySituation
+          inning={pa.inning}
+          half={pa.half}
+          bases={pa.onBase}
+          outs={pa.outsWhenUp ?? 0}
+        />
         <span className={`pa-badge kind-${kind}`}>{eventLabel(pa.event)}</span>
         {pa.rbi > 0 && <span className="pa-rbi">{pa.rbi} RBI</span>}
         {pa.pitcherName && (

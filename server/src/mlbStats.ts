@@ -2,6 +2,7 @@ import { readBlob, writeBlob } from './storage.js';
 import { toSavantName } from './names.js';
 import { fipLike, ipToOuts } from './leagueRates.js';
 import type {
+  BaseEventKind,
   BaseState,
   GameStatus,
   PitcherSeasonStats,
@@ -773,7 +774,7 @@ interface FeedRunner {
   // stays charged to the pitcher who allowed him, not the one now on the mound).
   details?: {
     eventType?: string;
-    runner?: { id?: number };
+    runner?: { id?: number; fullName?: string };
     earned?: boolean;
     responsiblePitcher?: { id?: number } | null;
     // Index into the play's `playEvents` of the event this movement happened on
@@ -1114,13 +1115,99 @@ const isStolenBase = (et: string): boolean => et.startsWith('stolen_base');
 const isCaughtStealing = (et: string): boolean =>
   et.startsWith('caught_stealing') || et.startsWith('pickoff_caught_stealing');
 
-/** The base taken on a stolen_base_* event type, for the feed label. */
-const stolenBaseTarget = (et: string): string | null => {
+/** The base named by an event type that ends in one — `_1b`/`_2b`/`_3b`/`_home`. */
+const eventTypeBase = (et: string): string | null => {
+  if (et.endsWith('_1b')) return '1st';
   if (et.endsWith('_2b')) return '2nd';
   if (et.endsWith('_3b')) return '3rd';
   if (et.endsWith('_home')) return 'home';
   return null;
 };
+
+/** A base as MLB's `movement` spells it ("2B", or "score") in the form the app
+ *  prints. Unrecognised values pass through rather than becoming null — an
+ *  unfamiliar spelling is better read literally than dropped. */
+const movementBase = (base: string | null | undefined): string | null => {
+  if (!base) return null;
+  if (base === 'score') return 'home';
+  if (base === '1B') return '1st';
+  if (base === '2B') return '2nd';
+  if (base === '3B') return '3rd';
+  return base;
+};
+
+/**
+ * MLB's runner `details.eventType` → the kind of base-running event it is, or
+ * null when the movement belongs to a plate appearance rather than to something
+ * that happened off one.
+ *
+ * The vocabulary was taken from what the payload actually holds: every runner
+ * row of 111 games (8,385 plays). The list below is everything in it that
+ * happens **outside** a batter's result, and two things it deliberately leaves
+ * out, both because the measurement said so rather than by preference.
+ *
+ * - **`error`** is not a kind. 58 of the 68 in that sample point at the *pitch*
+ *   that was put in play — a runner taking an extra base on a throw during a
+ *   batted ball, which the at-bat's own description already narrates in full —
+ *   and the other 10 ride on a steal or a wild pitch that is already its own
+ *   item, whose line ends "…on a throwing error by catcher X". The one error
+ *   that genuinely stands alone is the **pickoff** throw into the outfield, and
+ *   that has its own type (`pickoff_error_*` → `poe`).
+ * - **`other_out`** likewise: 44 of 45 are a runner thrown out advancing on a
+ *   batted ball, and the 45th was a reviewed tag play. An eleventh badge for
+ *   one event in forty games, stating what the at-bat beside it already says.
+ *
+ * A **disengagement violation** (`forced_balk`) is a balk by rule — the runner
+ * is awarded the base exactly as on one — so it takes the `balk` kind, and
+ * MLB's own line under the badge is what says which of the two it was.
+ */
+const BASE_EVENT_KINDS: Record<string, BaseEventKind> = {
+  stolen_base_1b: 'sb',
+  stolen_base_2b: 'sb',
+  stolen_base_3b: 'sb',
+  stolen_base_home: 'sb',
+  caught_stealing_2b: 'cs',
+  caught_stealing_3b: 'cs',
+  caught_stealing_home: 'cs',
+  pickoff_1b: 'po',
+  pickoff_2b: 'po',
+  pickoff_3b: 'po',
+  pickoff_caught_stealing_2b: 'pocs',
+  pickoff_caught_stealing_3b: 'pocs',
+  pickoff_caught_stealing_home: 'pocs',
+  pickoff_error_1b: 'poe',
+  pickoff_error_2b: 'poe',
+  pickoff_error_3b: 'poe',
+  balk: 'balk',
+  forced_balk: 'balk',
+  wild_pitch: 'wp',
+  passed_ball: 'pb',
+  defensive_indiff: 'di',
+};
+
+const baseEventKind = (et: string): BaseEventKind | null => BASE_EVENT_KINDS[et] ?? null;
+
+/**
+ * The kinds that also land on the **pitcher's** game, because they happened
+ * between him and the runner: the bag taken off him, the runner thrown out
+ * behind him, the man he picked off, the throw he sent into right field, his
+ * balk and his wild pitch.
+ *
+ * Three are deliberately absent. A **passed ball** is charged to the catcher; a
+ * **defensive indifference** is the defence declining to contest and belongs to
+ * nobody; and a **run** is already on his line twice over — the boxscore counts
+ * it and the innings section shows the play that scored it — where an item per
+ * run allowed would be four or five a start of pure repetition.
+ */
+const PITCHER_BASE_EVENTS: ReadonlySet<BaseEventKind> = new Set<BaseEventKind>([
+  'sb',
+  'cs',
+  'po',
+  'pocs',
+  'poe',
+  'balk',
+  'wp',
+]);
 
 // ---- Public per-game model ----------------------------------------------
 
@@ -1209,6 +1296,8 @@ export interface StatsApiPlateAppearance {
   description: string;
   rbi: number;
   playId: string | null;
+  awayScore: number | null;
+  homeScore: number | null;
   launchSpeed: number | null;
   launchAngle: number | null;
   hitDistance: number | null;
@@ -1237,6 +1326,7 @@ export interface StatsApiFacedBatter {
   batterId: number;
   batterName: string;
   stand: string | null;
+  atBatNumber: number;
   inning: number;
   half: string;
   outsWhenUp: number;
@@ -1267,15 +1357,17 @@ export interface StatsApiPitcherGame {
   pitches: StatsApiPitch[]; // every pitch thrown, for arsenal/whiff aggregation
 }
 
-// A base-running event by a runner (not a plate appearance) — a stolen base or a
-// run scored — captured so the feed can interleave them chronologically with
-// at-bats. Keyed by runner id in StatsApiGame.baseEvents.
+// A base-running event by a runner (not a plate appearance) — everything in
+// `BASE_EVENT_KINDS` plus a run scored — captured so the feed can interleave
+// them chronologically with at-bats. Keyed by runner id in
+// StatsApiGame.baseEvents, and by pitcher id in StatsApiGame.pitcherBaseEvents.
 export interface StatsApiBaseEvent {
-  kind: 'sb' | 'run';
+  kind: BaseEventKind;
   inning: number;
   half: 'Top' | 'Bot';
   timestamp: string | null;
-  // For a stolen base, the base taken ("2nd" / "3rd" / "home"); null for a run.
+  atBatNumber: number;
+  // The base the event names ("1st" / "2nd" / "3rd" / "home"); null for a run.
   base: string | null;
   // The clip id for the event itself — a steal's own `actionPlayId`, or the
   // playId of the pitch a run scored on. The same guid a plate appearance
@@ -1286,14 +1378,15 @@ export interface StatsApiBaseEvent {
   description: string;
   // The batter at the plate — the man a steal went behind, or the one who drove
   // the run in. Null if the play carries no batter.
+  runnerName: string | null;
   batterName: string | null;
   pitcherName: string | null;
   // The situation the event happened in, off the same play event.
   balls: number | null;
   strikes: number | null;
   outs: number | null;
-  // For a run, the base the runner scored from ("1B" / "2B" / "3B"); null for a
-  // steal, whose origin is implied by the base taken.
+  onBase: BaseState;
+  // The base the runner came from ("1B" / "2B" / "3B"), as MLB spells it.
   fromBase: string | null;
   // The score the event left behind (away, home) — a run's whole point.
   awayScore: number | null;
@@ -1334,21 +1427,30 @@ export interface StatsApiGame {
   runsByRunner: Map<number, number>;
   sbByRunner: Map<number, number>;
   csByRunner: Map<number, number>;
-  // Per-runner base events (stolen bases, runs scored) in play order — for the
-  // feed's chronological stream. A run scored on the runner's own plate
-  // appearance (a home run) is omitted, since the at-bat already shows it.
+  // Per-runner base events in play order — for the feed's chronological stream.
+  // A run scored on the runner's own plate appearance (a home run) is omitted,
+  // since the at-bat already shows it.
   baseEvents: Map<number, StatsApiBaseEvent[]>;
+  // The same events again, keyed by the **pitcher** who was on the mound, and
+  // narrowed to the ones he is a party to (`PITCHER_BASE_EVENTS`). A separate
+  // map rather than a lookup at read time because one play can put an event on
+  // two different players' games and each reads its own list.
+  pitcherBaseEvents: Map<number, StatsApiBaseEvent[]>;
 }
 
 /**
  * The detail a base-running event carries beyond "he stole 2nd": the clip, the
- * description, the matchup and the count it happened on.
+ * description, the matchup, and the situation it happened in.
  *
  * A runner's movement names the play event it happened on (`playIndex`), and
  * that event is where the clip id lives — as `playId` when a run scored on a
  * pitch that was put in play, and as `actionPlayId` when the movement is its own
  * action (a steal, a balk, a wild pitch). Both are the same kind of guid, so the
- * video route resolves either without being told which it was handed.
+ * video route resolves either without being told which it was handed. The two
+ * are **not** a clean split by kind, which is why the kind is read off
+ * `details.eventType` and only the clip off whichever event it turned out to be:
+ * 19 of the 36 caught stealings in a checked 111 games hang off the *pitch* the
+ * runner went on rather than off an action of their own.
  *
  * The description is the action's own line where there is one — it names the
  * runner and the base, where the play's result describes the batter's eventual
@@ -1359,16 +1461,19 @@ export interface StatsApiGame {
 function baseEventDetail(
   play: FeedPlay,
   runner: FeedRunner,
-  kind: 'sb' | 'run',
+  kind: BaseEventKind,
+  before: BaseState,
 ): Pick<
   StatsApiBaseEvent,
   | 'playId'
   | 'description'
+  | 'runnerName'
   | 'batterName'
   | 'pitcherName'
   | 'balls'
   | 'strikes'
   | 'outs'
+  | 'onBase'
   | 'fromBase'
   | 'awayScore'
   | 'homeScore'
@@ -1378,20 +1483,61 @@ function baseEventDetail(
   const actionText = ev && !ev.isPitch ? (ev.details?.description ?? null) : null;
   return {
     playId: ev?.playId ?? ev?.actionPlayId ?? null,
-    // A steal with no action line of its own gets nothing rather than the
+    // An event with no action line of its own gets nothing rather than the
     // batter's outcome, which would describe a different event entirely.
     description: actionText ?? (kind === 'run' ? (play.result?.description ?? '') : ''),
+    runnerName: runner.details?.runner?.fullName ?? null,
     batterName: play.matchup?.batter?.fullName ?? null,
     pitcherName: play.matchup?.pitcher?.fullName ?? null,
     balls: ev?.count?.balls ?? null,
     strikes: ev?.count?.strikes ?? null,
     outs: ev?.count?.outs ?? null,
-    fromBase: kind === 'run' ? (runner.movement?.start ?? null) : null,
+    onBase: playBases(play, before, typeof idx === 'number' ? idx : null),
+    fromBase: runner.movement?.start ?? null,
     // The action's own score is the score at that moment; a run on a batted ball
     // has only the play's, which is the same thing once the play is over.
     awayScore: ev?.details?.awayScore ?? play.result?.awayScore ?? null,
     homeScore: ev?.details?.homeScore ?? play.result?.homeScore ?? null,
   };
+}
+
+/**
+ * The bases as they stood partway through a play — the state the batter came up
+ * to, with every movement recorded **before** `upTo` applied (all of them when
+ * it is null).
+ *
+ * It has to be reconstructed because MLB publishes only the state a play
+ * *ended* in (`matchup.postOn*`), and a steal happens in the middle of one.
+ * Applied **per runner** — he leaves the first base he is listed as starting
+ * from and arrives at the last one he is listed as reaching — which is the
+ * load-bearing part: MLB emits a man going first to third as two rows, and
+ * treating those as two independent base changes leaves second occupied by
+ * someone standing on third. Checked against `postOn*` across 8,385 plays of
+ * 111 games: 6,389 of 6,414 exact. The other 25 are the extra-innings automatic
+ * runner, whom MLB places with an action carrying no movement row at all — and
+ * who is already in the state this starts from, since that comes off the
+ * previous play's `postOn*`.
+ */
+function playBases(play: FeedPlay, before: BaseState, upTo: number | null): BaseState {
+  const state = { ...before };
+  const from = new Map<number, string | null | undefined>();
+  const to = new Map<number, string | null | undefined>();
+  for (const r of play.runners ?? []) {
+    const idx = r.details?.playIndex;
+    if (upTo !== null && !(typeof idx === 'number' && idx < upTo)) continue;
+    const rid = r.details?.runner?.id;
+    if (typeof rid !== 'number') continue;
+    if (!from.has(rid)) from.set(rid, r.movement?.start);
+    to.set(rid, r.movement?.end);
+  }
+  const set = (base: string | null | undefined, on: boolean) => {
+    if (base === '1B') state.first = on;
+    else if (base === '2B') state.second = on;
+    else if (base === '3B') state.third = on;
+  };
+  for (const base of from.values()) set(base, false);
+  for (const base of to.values()) set(base, true);
+  return state;
 }
 
 const EMPTY_BASES: BaseState = { first: false, second: false, third: false };
@@ -1699,10 +1845,24 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
   const sbByRunner = new Map<number, number>();
   const csByRunner = new Map<number, number>();
   const baseEvents = new Map<number, StatsApiBaseEvent[]>();
-  const addBaseEvent = (rid: number, ev: StatsApiBaseEvent) => {
-    const list = baseEvents.get(rid);
+  const pitcherBaseEvents = new Map<number, StatsApiBaseEvent[]>();
+  const push = (map: Map<number, StatsApiBaseEvent[]>, id: number, ev: StatsApiBaseEvent) => {
+    const list = map.get(id);
     if (list) list.push(ev);
-    else baseEvents.set(rid, [ev]);
+    else map.set(id, [ev]);
+  };
+  /**
+   * File one event under the runner it happened to, and — when it is one of the
+   * kinds that happened *between* him and the man on the mound — under that
+   * pitcher too. The same object goes in both lists; nothing mutates a
+   * `StatsApiBaseEvent` after it is built, and `savant.ts` copies each one on
+   * its way onto a `PlayerGame`.
+   */
+  const addBaseEvent = (rid: number, pid: number | undefined, ev: StatsApiBaseEvent) => {
+    push(baseEvents, rid, ev);
+    if (typeof pid === 'number' && PITCHER_BASE_EVENTS.has(ev.kind)) {
+      push(pitcherBaseEvents, pid, ev);
+    }
   };
 
   let outsInHalf = 0;
@@ -1798,28 +1958,34 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
         // Skip a run scored on the runner's own at-bat (a home run) — the plate
         // appearance already shows it. Baserunner runs are their own feed event.
         if (rid !== batterId) {
-          addBaseEvent(rid, {
+          addBaseEvent(rid, playPitcherId, {
             kind: 'run',
             inning: evInning,
             half: evHalf,
             timestamp: evTime,
+            atBatNumber: atBatIndex + 1,
             base: null,
-            ...baseEventDetail(play, r, 'run'),
+            ...baseEventDetail(play, r, 'run', onBase),
           });
         }
       }
-      if (isStolenBase(et)) {
-        sbByRunner.set(rid, (sbByRunner.get(rid) ?? 0) + 1);
-        addBaseEvent(rid, {
-          kind: 'sb',
+      if (isStolenBase(et)) sbByRunner.set(rid, (sbByRunner.get(rid) ?? 0) + 1);
+      else if (isCaughtStealing(et)) csByRunner.set(rid, (csByRunner.get(rid) ?? 0) + 1);
+      const kind = baseEventKind(et);
+      if (kind) {
+        addBaseEvent(rid, playPitcherId, {
+          kind,
           inning: evInning,
           half: evHalf,
           timestamp: evTime,
-          base: stolenBaseTarget(et),
-          ...baseEventDetail(play, r, 'sb'),
+          atBatNumber: atBatIndex + 1,
+          // The bag the event is named for where the event type names one, and
+          // the base he ended up on for the kinds that are pure advances — a
+          // balk and a wild pitch say nothing about a base, only about a man
+          // who is now standing on one.
+          base: eventTypeBase(et) ?? movementBase(r.movement?.end),
+          ...baseEventDetail(play, r, kind, onBase),
         });
-      } else if (isCaughtStealing(et)) {
-        csByRunner.set(rid, (csByRunner.get(rid) ?? 0) + 1);
       }
     }
 
@@ -1838,6 +2004,8 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
       description: play.result?.description ?? '',
       rbi: play.result?.rbi ?? 0,
       playId: lastPlayId,
+      awayScore: play.result?.awayScore ?? null,
+      homeScore: play.result?.homeScore ?? null,
       launchSpeed: lastHit?.launchSpeed ?? null,
       launchAngle: lastHit?.launchAngle ?? null,
       hitDistance: lastHit?.totalDistance ?? null,
@@ -1865,6 +2033,7 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
         batterId,
         batterName,
         stand: play.matchup?.batSide?.code ?? null,
+        atBatNumber: atBatIndex + 1,
         inning: play.about?.inning ?? 0,
         half: evHalf,
         outsWhenUp,
@@ -1916,6 +2085,7 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
     sbByRunner,
     csByRunner,
     baseEvents,
+    pitcherBaseEvents,
   };
   // Final games are immutable — memoize forever. Live games are rebuilt each
   // request from the (throttled) snapshot in liveState, so don't cache them here.
