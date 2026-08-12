@@ -15,3 +15,7 @@ server/data/
 # CDK synth output
 infra/cdk.out/
 infra/cdk.context.json
+
+# Agent worktrees the harness creates under the repo — checkouts of this same
+# repository, never content of it.
+.claude/worktrees/

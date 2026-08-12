@@ -3665,8 +3665,7 @@ body {
 .fantasy-btn,
 .edit-order-btn,
 .search-toggle,
-.date-toggle,
-.search-bar-close {
+.date-toggle {
   flex: none;
   /* The calendar is the one member that is never a square — see .date-toggle
      below — but it takes everything else here, so the button that ends the tab
@@ -3688,8 +3687,7 @@ body {
 .fantasy-btn:hover,
 .edit-order-btn:hover,
 .search-toggle:hover,
-.date-toggle:hover,
-.search-bar-close:hover {
+.date-toggle:hover {
   color: var(--text);
   border-color: var(--accent);
 }
@@ -3697,8 +3695,7 @@ body {
 .fantasy-btn:focus-visible,
 .edit-order-btn:focus-visible,
 .search-toggle:focus-visible,
-.date-toggle:focus-visible,
-.search-bar-close:focus-visible {
+.date-toggle:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -3739,11 +3736,6 @@ body {
 }
 .edit-order-icon {
   display: inline-flex;
-}
-/* The close button is the one with a glyph rather than an SVG in it. */
-.search-bar-close {
-  font-size: 14px;
-  line-height: 1;
 }
 /* Above 640px the search field is on screen and speaks for itself, so the
    magnifier would be a second way to reach what is already there, and the bar
@@ -3856,7 +3848,6 @@ body {
      the bar is a shrinkable item in it and a full table squashes it. */
   flex: none;
   align-items: center;
-  gap: 8px;
   margin-bottom: 14px;
 }
 .search-bar .adder {

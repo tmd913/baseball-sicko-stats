@@ -1641,6 +1641,12 @@ export default function App() {
   // header, above the view tabs. It is a row of its own rather than an overlay
   // so nothing it covers has to be guessed at — the page moves down by the
   // height of one control and everything stays readable behind it.
+  //
+  // It carries no close button. The magnifier that opened it is still on screen
+  // directly above, lit, and closes it on a second press — an ✕ beside the field
+  // was a second control for a thing one press already undoes, and it cost the
+  // field 44 of the ~350px a phone has to offer it. Escape closes it too (via
+  // `onClose`, after a first press that clears the query).
   const searchBar = searchOpen ? (
     <div className="search-bar">
       <PlayerAdder
@@ -1652,15 +1658,6 @@ export default function App() {
         autoFocus
         onClose={() => setSearchOpen(false)}
       />
-      <button
-        type="button"
-        className="search-bar-close"
-        onClick={() => setSearchOpen(false)}
-        aria-label="Close search"
-        title="Close search"
-      >
-        ✕
-      </button>
     </div>
   ) : null;
 
