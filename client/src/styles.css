@@ -2927,11 +2927,99 @@ body {
      too. No-op on platforms with overlay scrollbars. */
   scrollbar-gutter: stable;
   background: var(--bg);
-  padding: 20px 16px 64px;
+  /* **No top padding**, and that is what makes the pinned head sit flush.
+     Sticky offsets resolve against the scrollport's *content* box, so a
+     `top: 0` child of a box with 20px of padding is held 20px down — measured,
+     the head stuck at y=20 with rows sliding up through the bare strip above
+     it, and a negative top margin cannot help, the constraint being exactly
+     what undoes it. So the 20px moves onto `.details-chrome`, which is the
+     first child and now the only thing that needs it. The two other pages
+     riding on this class (`.tutorial-view`, `.espn-view`) already replace this
+     padding wholesale and carry it on their own heads, for the same reason. */
+  padding: 0 16px 64px;
   /* The game log is one of the three wide tables and takes the window inside
      this overlay exactly as the other two take it inside `.app`; 16px is this
      box's own side padding, which is what it has to give back. */
   --table-bleed: 16px;
+  /* The overlay hands its own descendants their own scroll offset, because the
+     one on `:root` describes the wrong bar: `--chrome-h` is the *page's* pinned
+     chrome, which this box covers entirely (41 against 50), so anything in here
+     scrolled to the top was already clearing 115px of a bar nobody can see. The
+     bar it does have to clear is `.details-chrome`, whose height is written on
+     this element by `hooks.ts::useOverlayChromeOffset` — measured, for the
+     reason the page's own is: it is 139px on a desktop and 193px on a phone,
+     and zero on the pages that have no such head (the how-to and league pages
+     ride on this same class) and whenever the head isn't actually pinned. The
+     0px here is that default, which the hook then overrides in place. */
+  --details-chrome-h: 0px;
+  --scroll-offset: calc(var(--details-chrome-h) + 12px);
+}
+/* ---- The player page's own pinned chrome --------------------------------
+   The identity head and the tab strip in one box, held against the top of the
+   overlay's scroller. The argument is `.app-chrome`'s, one level down: they are
+   one statement — *who you are reading, and which reading of him* — and the
+   tabs are the navigation for the thing being read, which is the last thing
+   that should scroll away. A percentile card runs to 1,782px on a phone and a
+   season's game log to a few thousand, so both halves were an inch of page you
+   had to go back up for: the name the numbers belong to, and the only way to
+   another tab or out of the view at all.
+
+   **Both halves or neither**, rather than pinning the tabs and letting the head
+   go. Measured on a live player: the whole box is 139px on a desktop and 193px
+   at 390 wide (the head stacks into two rows below 640, see its own media query
+   below) against an 844px phone viewport — 23% of it, where the page's own
+   chrome takes 159px of the same screen and is accepted. That is not the "too
+   tall to pin" case, so there is nothing here for a condensed state to buy: a
+   head that dropped its portrait or its Rostered line on scroll would be a
+   second layout to keep true, saving 65px of a screen that can spare them.
+
+   It carries `.app-chrome`'s tone for the same reason that one does — the
+   `--panel` → `--bg-2` ombré under a soft accent glow, a shade off the flat
+   `--bg` behind it, so it reads as a permanent part of the view at rest rather
+   than as something that appears once you scroll. The negative side margins let
+   it bleed to the overlay's own 16px gutters while the head and tabs inside
+   keep their 680px column, and the view's whole top padding has moved onto it —
+   see `.details-view`, where the reason is that a sticky `top: 0` is resolved
+   against the scrollport's content box and so cannot reach past a padding the
+   scroller keeps for itself.
+
+   The hairline is the **chrome's**, not the tab strip's, and the strip's own is
+   removed below: this box spans the window where the strip is a 680px column,
+   so left there the rule stopped a third of the way across a desktop. It is an
+   inset shadow rather than a border for the reason `.tut-nav-wrap` uses one —
+   it paints on the padding box, under the descendants, so the active tab's 2px
+   accent still covers it at that spot instead of being underlined by a second
+   line 1px below. */
+.details-chrome {
+  position: sticky;
+  top: 0;
+  /* Over everything else in the overlay and under the game log's full-page box
+     (45), which is a fixed sheet over the whole view and covers this as it
+     covers the rest. Nothing else in here is positioned. */
+  z-index: 5;
+  /* The side margins bleed it to the overlay's own 16px gutters while the head
+     and the tabs inside keep their 680px reading column; the 20px of padding is
+     the top padding the view gave up so that `top: 0` could mean the top (see
+     there). The 16px below is the gap to the content, outside the sticky box so
+     it doesn't ride down the page with it. */
+  margin: 0 -16px 16px;
+  padding: 20px 16px 0;
+  background:
+    radial-gradient(760px 260px at 82% -40%, rgba(56, 189, 248, 0.09), transparent 70%),
+    linear-gradient(180deg, var(--panel) 0%, var(--bg-2) 100%);
+  box-shadow:
+    inset 0 -1px 0 var(--border),
+    0 6px 16px rgba(0, 0, 0, 0.22);
+}
+/* A short window gets the old behaviour back, on the page's own threshold and
+   for its own reason: a phone held sideways is about 390px tall, and 139px of
+   chrome is 36% of it. Less brutal than the 303-of-390 the page's bar reaches —
+   this is a closer call — but the bargain is the same one, and one threshold
+   across the app beats two that nearly agree. */
+@media (max-height: 560px) {
+  .details-chrome {
+    position: static;
+  }
 }
 .details-head {
   display: flex;
@@ -3422,16 +3510,23 @@ body {
   padding-bottom: 20px;
 }
 /* Everything above the table keeps its natural height; only the pane flexes.
-   `width: 100%` is not redundant: both of these center themselves with `margin:
-   0 auto`, and an auto margin on the cross axis suppresses a flex item's
-   stretch — so in this mode alone they shrank to their content and centered
-   *that*, leaving the header and tabs sitting a good 30px right of where every
-   other tab puts them. At full width the max-width centers them as it does in
-   normal flow. */
-.details-view.gamelog-mode > .details-head,
-.details-view.gamelog-mode > .details-tabs {
+   The head and the tabs are one flex item now rather than two, which is also
+   what retired the `width: 100%` this rule used to carry: each of them centres
+   itself with `margin: 0 auto`, and an auto margin on the cross axis suppresses
+   a flex item's stretch — so in this mode alone they shrank to their content
+   and centred *that*, sitting a good 30px right of where every other tab puts
+   them. Inside `.details-chrome` they are ordinary blocks again and the auto
+   margins do what they were written to do.
+
+   The chrome is **static** here, and says so rather than leaning on sticky
+   being a no-op in a column that doesn't scroll — which it isn't, quite:
+   `overflow: hidden` makes this a scrollport of its own, and a sticky box in
+   one is held against its padding box, which would undo the negative top margin
+   and leave a 20px strip of page above the head that no other tab shows. It is
+   the same trap `.app.summary-mode .app-chrome` opts out of, one level down. */
+.details-view.gamelog-mode > .details-chrome {
   flex: none;
-  width: 100%;
+  position: static;
 }
 .details-view.gamelog-mode .details-gamelog {
   flex: 1;
@@ -3473,16 +3568,17 @@ body {
   display: flex;
   gap: 6px;
   max-width: 680px;
-  margin: 0 auto 16px;
-  /* The rule under the strip is an inset shadow rather than a `border-bottom`,
-     which is what lets the strip scroll sideways *only*. A border would have to
-     be overlapped by each tab's own 2px underline (`margin-bottom: -1px`), and
-     that 1px of overflow is enough to make the strip scrollable on the block
-     axis too — one axis being non-`visible` computes the other to `auto`, so
-     iOS gave the row a pixel of vertical rubber-banding. An inset shadow paints
-     on the padding box, under the descendants, so the active tab's accent still
-     covers it at that spot with nothing hanging over the edge. */
-  box-shadow: inset 0 -1px 0 var(--border);
+  /* No bottom margin and no rule of its own: both belong to `.details-chrome`,
+     which this is the last child of. The rule has to be the wider box's or it
+     would stop at this 680px column (see there), and the gap to the content
+     below has to be outside the sticky box or it would ride down the page with
+     it. The reasoning for an inset shadow over a `border-bottom` is unchanged
+     and now lives up there: a border would have to be overlapped by each tab's
+     own 2px underline, and that 1px of overflow is enough to make the strip
+     scrollable on the block axis too — one axis being non-`visible` computes
+     the other to `auto`, so iOS gave the row a pixel of vertical
+     rubber-banding. */
+  margin: 0 auto;
   /* Five tabs overflow a phone. They scroll sideways as one strip rather than
      wrapping, which would leave the first row's underline floating clear of the
      rule the active tab is supposed to sit on. */
@@ -5218,10 +5314,11 @@ body {
 /* ---- Disclosure bar: Search and Filters, each behind its own button ----
    `.starters-toggle` — the summary table's "only today's starters" filter, up
    in the roster row — is folded into every one of these lists rather than
-   restyled to resemble them. It is the same object as Qualified two views over:
-   a plain toggle with no panel, narrowing who is in a table, which is why it
-   takes `.on` and never `.active` and why it reads identically by
-   construction. */
+   restyled to resemble them. It is the same object as the board's own
+   Watchlist button: a plain toggle with no panel, deciding who is in a table,
+   which is why it takes `.on` and never `.active` and why it reads identically
+   by construction. (Qualified was the closer twin of the two and is gone —
+   see `research.ts`.) */
 .research-toggle,
 .starters-toggle {
   display: inline-flex;
