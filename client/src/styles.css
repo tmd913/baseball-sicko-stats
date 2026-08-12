@@ -4159,53 +4159,6 @@ body {
   background: var(--bg);
   color: var(--accent);
 }
-@media (max-width: 640px) {
-  /* Both buttons become the app's own 36px square — the shape every icon
-     button in the header already takes — rather than whatever their padding
-     leaves around a 15px glyph, so the pair reads as a set. */
-  .starters-toggle,
-  .date-toggle {
-    width: var(--control-h);
-    padding: 0;
-    justify-content: center;
-  }
-  .starters-toggle-label,
-  .date-toggle-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-  }
-  .date-toggle-bubble {
-    display: block;
-  }
-  /* **The left overhang is the only one that has to be paid for.** Centred, a
-     bubble reaches half its excess past each edge of the button. To the right
-     that lands in the app's own 22px gutter, the calendar being the last group
-     in the row — the widest the app can print is `10/29–10/31` at 65px, i.e.
-     14.5px over, which the gutter swallows whole. To the left it is the starters
-     toggle, and the row's 12px gap leaves 3px on a fortnight's range, which is
-     the collision.
-
-     10px, and the number is the row's slack rather than a preference: at 390
-     the roster tabs and the two squares come to 315px of the 346 the gutters
-     leave, so 31px are available before the calendar is pushed back onto a line
-     of its own — which is the whole thing this swap bought. 16 each side was
-     tried and cost exactly that row at both 375 and 390; 10 on the left alone
-     clears the starters button by 13px on a fortnight and by 10 on the widest
-     range that can appear beside it at all (that button is only drawn over a
-     range holding today, and two two-digit months cannot both fall inside one,
-     the season ending in October — so ten characters and 59px is the ceiling
-     there rather than 65). */
-  .date-toggle {
-    margin-left: 10px;
-  }
-}
 
 /* The phone header: the field goes behind the magnifier and Edit loses its
    word, leaving the brand and two squares on one line. */
@@ -5452,6 +5405,68 @@ body {
     clip: rect(0, 0, 0, 0);
     white-space: nowrap;
     border: 0;
+  }
+}
+
+/* ---- The roster row's two filters on a phone --------------------------------
+   Starters and the calendar go to their glyphs under 640px, which is what gets
+   the roster tabs and both filters onto one line — the pair is 84px where the
+   two labels were 174. The rules live *here*, below the whole
+   `.research-toggle` family, and not up beside `.date-toggle` where they were
+   first written: a media query adds no specificity, so `padding: 0` there lost
+   to `.research-toggle, .starters-toggle { padding: 0 12px }` five hundred
+   lines further down, and the 20px clipboard was overflowing a 12px content
+   box — centred, so it *looked* right, and shrinking to fit it before the
+   glyph was given `flex: none`. That is the same trap `.date-row
+   .date-presets` and the `.research-bar` dropdowns are each written two
+   classes deep to avoid; the honest fix for a whole block is to put it after
+   what it overrides. `.date-toggle`'s own base rules are above, so it was
+   never affected — it is here for the pair to be read as one thing. */
+@media (max-width: 640px) {
+  /* Both buttons become the app's own 36px square — the shape every icon
+     button in the header already takes — rather than whatever their padding
+     leaves around a 15px glyph, so the pair reads as a set. */
+  .starters-toggle,
+  .date-toggle {
+    width: var(--control-h);
+    padding: 0;
+    justify-content: center;
+  }
+  .starters-toggle-label,
+  .date-toggle-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .date-toggle-bubble {
+    display: block;
+  }
+  /* **The left overhang is the only one that has to be paid for.** Centred, a
+     bubble reaches half its excess past each edge of the button. To the right
+     that lands in the app's own 22px gutter, the calendar being the last group
+     in the row — the widest the app can print is `10/29–10/31` at 65px, i.e.
+     14.5px over, which the gutter swallows whole. To the left it is the starters
+     toggle, and the row's 12px gap leaves 3px on a fortnight's range, which is
+     the collision.
+
+     10px, and the number is the row's slack rather than a preference: at 390
+     the roster tabs and the two squares come to 315px of the 346 the gutters
+     leave, so 31px are available before the calendar is pushed back onto a line
+     of its own — which is the whole thing this swap bought. 16 each side was
+     tried and cost exactly that row at both 375 and 390; 10 on the left alone
+     clears the starters button by 13px on a fortnight and by 10 on the widest
+     range that can appear beside it at all (that button is only drawn over a
+     range holding today, and two two-digit months cannot both fall inside one,
+     the season ending in October — so ten characters and 59px is the ceiling
+     there rather than 65). */
+  .date-toggle {
+    margin-left: 10px;
   }
 }
 
