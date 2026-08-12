@@ -58,11 +58,15 @@
   --stack-gap: 12px;
 
   --radius: 14px;
-  /* The width a column of cards stops growing at. The app itself is uncapped —
-     see `.app` — and the wide tables take the whole window; this is for the two
-     views that are a single column of cards (the games list and the feed),
-     where the page can be wider than a card usefully is. */
-  --card-column: 1600px;
+  /* The width a column of cards stops growing at — `none`, so it doesn't. The
+     two views that are a single column of cards (the games list and the feed)
+     span the window exactly as the wide tables and a phone do, which is what
+     "full width" was asked for and the one answer that is the same at every
+     size. It was 1600px for a day, which filled a 1440 laptop and left a
+     16:9 monitor two margins to explain. The token stays because a cap is one
+     line away if a card ever does look stranded on a very wide screen: put a
+     length back here and both views take it. */
+  --card-column: none;
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
   font-synthesis: none;
 }
@@ -916,13 +920,14 @@ body {
 }
 
 /* ---- Player list ---- */
-/* One cap, and it is not the app's: with `.app` uncapped a card list on a
-   2560px monitor would be a single 2500px-wide box holding a pitch table with
-   an inch between its columns. 1600px is where a card still reads as a card —
-   it fills a 1440 and most of a 1920 laptop, which is what "full width" was
-   asked for, and stops short of the widths where the eye has to travel from a
-   headshot on one side of the room to an exit velocity on the other. The feed
-   takes the same number for the same reason: its items are these cards. */
+/* The list takes the window, like everything else — see `--card-column`, which
+   is `none` and is the one place to put a cap back. What a wide card actually
+   buys is worth saying, since the instinct is that a card wants to be narrow:
+   the width goes to the pitch table and the strike-zone plot inside an expanded
+   card, which is where a watchlist is read, and to the game bar's badges, which
+   sit at the far right of the row and were being crowded at 1180 while two
+   inches of empty page sat beside them. The feed takes the same rule for the
+   same reason: its items are these cards. */
 .player-list {
   flex: 1 1 auto;
   min-width: 0;
@@ -5330,11 +5335,11 @@ body {
 }
 
 /* ---- Live feed (per-at-bat stream) ---- */
-/* The same column the games view's cards take (`--card-column`), where this was
-   860px: a stream of at-bats is read down rather than across, but so is that
-   list, and the two are made of the same cards — a feed narrower than the view
-   beside it reads as a different page rather than another way of reading the
-   same days. */
+/* The same column the games view's cards take (`--card-column`, now uncapped),
+   where this was 860px: a stream of at-bats is read down rather than across,
+   but so is that list, and the two are made of the same cards — a feed narrower
+   than the view beside it reads as a different page rather than another way of
+   reading the same days. */
 .live-feed {
   max-width: var(--card-column);
   width: 100%;
