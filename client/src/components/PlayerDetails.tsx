@@ -538,6 +538,9 @@ export function PlayerDetails({
   // hand rather than with `scrollIntoView`, which walks up every scrollable
   // ancestor and would drag the overlay's own scroller with it.
   const tabsRef = useRef<HTMLDivElement | null>(null);
+  // The overlay itself, read only to ask whether something inside it has taken
+  // the page — see the Escape handler below.
+  const viewRef = useRef<HTMLDivElement | null>(null);
   useLayoutEffect(() => {
     const row = tabsRef.current;
     const el = row?.querySelector<HTMLElement>('.details-tab.is-active');
@@ -614,10 +617,17 @@ export function PlayerDetails({
     return () => ro.disconnect();
   }, [data]);
 
-  // Close on Escape, matching a modal/back affordance.
+  // Close on Escape, matching a modal/back affordance — unless the game log
+  // inside has taken the page, in which case that box is the thing on top and
+  // Escape is its to answer (`hooks.ts::useFullPage` declines the key from the
+  // other side, when *this* view is the one on top). One press, one thing
+  // undone: without this, leaving an expanded log threw you out of the player
+  // page it belongs to as well.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key !== 'Escape') return;
+      if (viewRef.current?.querySelector('.is-expanded')) return;
+      onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -766,7 +776,7 @@ export function PlayerDetails({
     // The Game Log makes the overlay a fixed-height column so only its table
     // scrolls — see `.details-view.gamelog-mode`, which is the only way its
     // header row can stick over a season's worth of rows.
-    <div className={`details-view${tab === 'gamelog' ? ' gamelog-mode' : ''}`}>
+    <div ref={viewRef} className={`details-view${tab === 'gamelog' ? ' gamelog-mode' : ''}`}>
       <div className="details-head">
         <button type="button" className="details-back" onClick={onClose}>
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
