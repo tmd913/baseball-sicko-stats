@@ -58,15 +58,12 @@
   --stack-gap: 12px;
 
   --radius: 14px;
-  /* The width a column of cards stops growing at — `none`, so it doesn't. The
-     two views that are a single column of cards (the games list and the feed)
-     span the window exactly as the wide tables and a phone do, which is what
-     "full width" was asked for and the one answer that is the same at every
-     size. It was 1600px for a day, which filled a 1440 laptop and left a
-     16:9 monitor two margins to explain. The token stays because a cap is one
-     line away if a card ever does look stranded on a very wide screen: put a
-     length back here and both views take it. */
-  --card-column: none;
+  /* The width a column of cards stops growing at. The app itself is uncapped —
+     see `.app` — and the three wide tables take the whole window, which is where
+     the room was wanted; a card does not need it. The two views that are a
+     single column of cards (the games list and the feed) stop here, which fills
+     a 1440 laptop and most of a 1920 one. */
+  --card-column: 1600px;
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
   font-synthesis: none;
 }
@@ -920,14 +917,12 @@ body {
 }
 
 /* ---- Player list ---- */
-/* The list takes the window, like everything else — see `--card-column`, which
-   is `none` and is the one place to put a cap back. What a wide card actually
-   buys is worth saying, since the instinct is that a card wants to be narrow:
-   the width goes to the pitch table and the strike-zone plot inside an expanded
-   card, which is where a watchlist is read, and to the game bar's badges, which
-   sit at the far right of the row and were being crowded at 1180 while two
-   inches of empty page sat beside them. The feed takes the same rule for the
-   same reason: its items are these cards. */
+/* One cap, and it is not the app's: a list of cards is read down rather than
+   across, and uncapped on a wide monitor it is a single 2500px-wide box holding
+   a pitch table with an inch between its columns. `--card-column` is where a
+   card stops reading as a card — it fills a 1440 and most of a 1920 laptop, and
+   the window the tables wanted goes to the tables. The feed takes the same
+   number for the same reason: its items are these cards. */
 .player-list {
   flex: 1 1 auto;
   min-width: 0;
@@ -4609,26 +4604,47 @@ body {
    season). Only what differs is styled here: the filter bar above it, the
    sortable headers, and the Statcast group at the right end. */
 
-/* The board's control set lives **in the pinned chrome**, in a box App renders
-   inside `.app-chrome` and `ResearchTable` portals its bar into. The bar, its
-   three panels and the chips row were children of `.research-view` and so sat
-   below the chrome as a second band of controls — the app's own box, a
-   hairline, and then 80 to 180px more of the same kind of thing, with nothing
-   on screen to say why they were two. They are one sentence: the tabs say which
-   page and this says which players, which span, which position and which
-   columns of them.
+/* The board's control set lives **in the pinned chrome, in the tab row itself**
+   — App renders an empty box inside `.view-bar-tabs` and `ResearchTable` portals
+   its bar into it. The bar, its three panels and the chips row were children of
+   `.research-view` and so sat below the chrome as a second band of controls: the
+   app's own box, a hairline, and then 80 to 180px more of the same kind of
+   thing, with nothing on screen to say why they were two. They are one sentence
+   — the pills say which page, and these say which players, which span, which
+   position and which columns of them.
 
-   Only the placement moved. The count line stayed on the page below, being the
-   table's caption rather than a control, and the rows keep the 10px `.research-
-   view` gave them as its children so the bar reads exactly as it did. The 14px
-   below is what `.view-bar` leaves in every other view — the chrome's own
-   padding stops at its top, so its last child is what sets the distance to the
-   hairline. */
-.research-chrome {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 14px;
+   **Both wrappers are `display: contents`**, and that is the whole layout rule.
+   `.view-bar-tabs` is already the app's answer to "more groups than fit on a
+   line": every group in it is atomic, and the wrap fits as many whole ones per
+   line as the width allows, breaking *between* two rather than inside one. For
+   the scope pills, the window tabs, the position row and the tools to take part
+   in that they have to be items of *that* flex container, which is what
+   `contents` buys — a box of its own would move as one block, so the control set
+   would sit beside the Roster/Research pills or drop wholesale to the next line
+   with nothing in between. With it, a wide window finishes the tab row with the
+   whole set and a narrower one peels the last group off the end, which is the
+   behaviour the kind tabs and the date button have always had here. The gap
+   becomes the row's own 10/12px rather than the bar's old 8, which is right: it
+   is that row now.
+
+   The panels and the chips row take `flex: 1 1 100%` — the same "its own line"
+   `.date-control` uses one level up — since a filter builder has no business
+   sharing a line with the button that opened it. The count line stayed on the
+   page below, being the table's caption rather than a control. */
+.research-chrome,
+.research-bar {
+  display: contents;
+}
+/* Each of them a full line of its own, under whatever row of controls it was
+   opened from. Selected through `.research-chrome`, not through `.view-bar-tabs`:
+   `display: contents` hoists the *boxes* into that flex container but leaves the
+   DOM tree alone, so a child combinator still has to name the parent these
+   elements really have. Written the other way (`.view-bar-tabs > .research-panel`)
+   it matches nothing, and the panel takes its content width — a 168px search
+   field wedged onto the end of the tab row. */
+.research-chrome > .research-panel,
+.research-chrome > .research-chips {
+  flex: 1 1 100%;
 }
 
 .research-view {
@@ -4734,12 +4750,6 @@ body {
 }
 
 /* ---- Disclosure bar: Search and Filters, each behind its own button ---- */
-.research-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
 .research-toggle {
   display: inline-flex;
   align-items: center;
@@ -5335,8 +5345,8 @@ body {
 }
 
 /* ---- Live feed (per-at-bat stream) ---- */
-/* The same column the games view's cards take (`--card-column`, now uncapped),
-   where this was 860px: a stream of at-bats is read down rather than across,
+/* The same column the games view's cards take (`--card-column`), where this was
+   860px: a stream of at-bats is read down rather than across,
    but so is that list, and the two are made of the same cards — a feed narrower
    than the view beside it reads as a different page rather than another way of
    reading the same days. */
@@ -6909,13 +6919,6 @@ body {
   }
   .view-bar-tabs {
     gap: var(--stack-gap);
-  }
-  /* Its bottom margin only — the 10px *inside* it is the space between a
-     control and the panel it opened, which is a tighter relationship than the
-     one between rows of the chrome, and this is the page where every pixel of
-     height is a row of the table. */
-  .research-chrome {
-    margin-bottom: var(--stack-gap);
   }
   .player-list {
     gap: var(--stack-gap);
