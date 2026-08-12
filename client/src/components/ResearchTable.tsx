@@ -1207,6 +1207,85 @@ export function ResearchTable({
     else if (overRight > 0) row.scrollLeft += overRight + PEEK;
   }, [pos]);
 
+  /**
+   * Changing **which players are in the table, or what order they are in**
+   * puts the table back at the top.
+   *
+   * Four hundred rows down the board, a tap on `30d` or on the `SS` pill used
+   * to leave the reader at the same offset in a table that had become a
+   * different set of players — rows with nothing to do with where they were,
+   * and the row they were actually reading gone. An offset only ever meant
+   * "where I am in *this* list", so a new list has no place to keep.
+   *
+   * The line is drawn on **population and order**, and the signature below is
+   * therefore a read on the table as it comes out rather than a list of the
+   * controls that can move it:
+   *
+   * - **Population** — the board (`kind`/`pos`), the window, the include set,
+   *   the watchlist filter, Qualified, the search term and the stat filters.
+   *   Every one of them changes who is in the table, and every one of them is
+   *   worked from the chrome pinned *above* the table, which gives no hint
+   *   that the top of it has changed under you.
+   * - **Order** — the sorted column and its direction. This is the one that
+   *   looks arguable, and the header row being **sticky** is what settles it:
+   *   the point of clicking `HR` is to bring the home-run leaders to the top,
+   *   and because the header is reachable from anywhere in the table the
+   *   reader can ask for that from row 400 and never see the answer. On a
+   *   table you had to scroll to the top to click, this reset would be a
+   *   no-op; here it is the difference between getting what you asked for and
+   *   not. It reads `activeSortKey` rather than the board's stored `sortKey`,
+   *   so hiding the sorted column — which quietly falls the order back to the
+   *   board's default — counts as the reorder it is.
+   *
+   * Deliberately **not** in it: the column picker. It changes what is shown
+   * *about* the same players in the same order, so the row under your eye is
+   * still the row you were reading — and it is worked a checkbox at a time
+   * with the panel open, where a reset per tick would yank the table away
+   * fifteen times while you build the view you wanted.
+   *
+   * **`scrollTop` only — `scrollLeft` stays.** The two axes ask different
+   * questions on this table: down it is *which players*, across it is *which
+   * stat you are reading about them*. Narrowing to shortstops does not change
+   * the second answer, and this is the app's widest table — a reader out at
+   * Chase% who lost the horizontal scroll on every pill would swipe back
+   * across forty columns each time. The pinned name column and the pinned
+   * sorted column keep a row legible from out there, so nothing is lost by
+   * staying where you are.
+   */
+  const boardSignature = [
+    kind,
+    pos,
+    statWindow,
+    includeKeys(include).join('+'),
+    watchlistOnly,
+    qualifiedOnly,
+    search.trim().toLowerCase(),
+    filters.map((f) => `${f.column}${f.op}${f.value}`).join(','),
+    activeSortKey,
+    sortAsc,
+  ].join('|');
+  // App keeps a scroll offset per view (keyed `'research'`) and restores it in
+  // a layout effect of its own, so leaving the board and coming back lands
+  // where the reader left it. This must not race that: the signature as it
+  // stands at mount describes the board the reader is arriving *on*, not a
+  // change they made to it, so a mount places nothing and the restore wins.
+  //
+  // The guard is the **last signature placed**, not a "have I mounted yet"
+  // flag, and the difference is not academic: StrictMode runs a mounting
+  // effect, tears it down and runs it again, which a flag reads as a second
+  // visit and answers by scrolling to nought — undoing App's restore on every
+  // return to the board in development. Comparing signatures makes the effect
+  // idempotent for a given table, so a re-run of any kind is a no-op and only
+  // a genuine change of population or order moves anything.
+  const placedSignature = useRef(boardSignature);
+  useLayoutEffect(() => {
+    if (placedSignature.current === boardSignature) return;
+    placedSignature.current = boardSignature;
+    // A layout effect, so the new rows are never painted once at the old
+    // offset before being yanked to the top.
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, [boardSignature]);
+
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
     const out = boardRows.filter((r) => {
