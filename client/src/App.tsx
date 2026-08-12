@@ -63,6 +63,11 @@ const USER_SCROLLS = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const;
 // it at the call site.
 const SCROLL_GAP = 12;
 
+// How long the header's refresh keeps spinning at a minimum — see `refreshAll`.
+// A warm `/api/report` comes back in about 16ms, which is a spinner nobody
+// sees, and a button that answers a press with nothing at all reads as broken.
+const MIN_SPIN = 450;
+
 /** The three ways of reading one set of players over one span of days. They are
  *  tabs *within* Roster rather than siblings of Research — see `section`. */
 type RosterTab = 'summary' | 'games' | 'feed';
@@ -769,9 +774,11 @@ export default function App() {
   const [playerStatuses, setPlayerStatuses] = useState<Map<number, PlayerStatus> | null>(null);
   const statusesInFlight = useRef(false);
   const loadStatuses = useCallback(() => {
-    if (statusesInFlight.current) return;
+    // Returns a promise so the header's refresh can wait on it — an in-flight
+    // read resolves immediately rather than sending a second copy of itself.
+    if (statusesInFlight.current) return Promise.resolve();
     statusesInFlight.current = true;
-    api
+    return api
       .statuses()
       .then((byId) =>
         setPlayerStatuses(new Map(Object.entries(byId).map(([id, st]) => [Number(id), st]))),
@@ -1090,6 +1097,89 @@ export default function App() {
       loadReport();
     });
   }, [espnConnected, usingFantasy, loadOwnership, loadFantasyRoster, loadReport]);
+
+  /**
+   * Re-read the board on screen, past the copy this session is holding. The
+   * research blob is fetched once per kind and window and then kept for the
+   * life of the tab — which is the right default for a megabyte of league-wide
+   * season stats behind a six-hour server cache, and the one thing about it
+   * that goes stale on a tab left open all day.
+   *
+   * The rows already on screen are left standing until the new ones land:
+   * `research` is only written on success, and the table's `loading` prop is
+   * gated on the cache being *empty*, so nothing blanks while this is in
+   * flight.
+   */
+  const reloadResearch = useCallback(() => {
+    return api
+      .research(researchKind, researchWindow)
+      .then((r) => {
+        setResearchError(null);
+        setResearch((prev) => ({ ...prev, [`${r.kind}:${r.window}`]: r.rows }));
+      })
+      .catch((e: Error) => setResearchError(e.message));
+  }, [researchKind, researchWindow]);
+
+  /**
+   * The header's refresh: **re-read every source the page in front of you is
+   * drawn from**, and nothing else. That rule is what decides each of the four
+   * reads below — a button that re-fetched the whole app would spend a 2MB
+   * league read and a megabyte of leaderboard to update a summary table.
+   *
+   * - **ESPN first**, and only when a league is connected *and* something on
+   *   screen is drawn from it (the ownership map has been read, or the views
+   *   are reading the fantasy roster). It is the same sequential dance
+   *   `refreshFantasy` does and for the same reason: `?refresh=1` on the
+   *   ownership call is the only true cache bypass in the app, it bypasses the
+   *   server's in-flight guard as well, and the roster and the report read the
+   *   same league payload — so firing them together would send three copies of
+   *   one upstream read instead of one and two lookups.
+   * - **The report always.** It is what the three roster views are, and in
+   *   fantasy mode it is *about* the roster the call above just re-read.
+   * - **The statuses map** on the two views that draw it (the research board
+   *   and the details view) — lineups post and IL moves land through the day.
+   * - **The research blob** on the research view alone.
+   *
+   * Every one of those keeps what is on screen until its replacement arrives:
+   * the report goes through `loadReport`'s quiet path, so the page's own
+   * "Updating…" badge stays away and the button is the only thing that says a
+   * read is happening.
+   */
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshAll = useCallback(() => {
+    setRefreshing(true);
+    const espnFirst =
+      espnConnected && (ownership !== null || usingFantasy)
+        ? loadOwnership(true)
+        : Promise.resolve();
+    const work = espnFirst.then(() => {
+      const rest: Promise<unknown>[] = [loadReport(true)];
+      if (usingFantasy) rest.push(loadFantasyRoster());
+      if (view === 'research' || detailsKey !== null) rest.push(loadStatuses());
+      if (view === 'research') rest.push(reloadResearch());
+      return Promise.all(rest);
+    });
+    // Spin for at least `MIN_SPIN` however fast the answer comes. Measured: a
+    // warm server answers `/api/report` in **16ms**, which is one frame of
+    // spinner — a press that leaves no trace at all reads as a dead button, and
+    // the one thing this control has to say is "I heard you and I have gone and
+    // looked". Long enough to be seen, short enough that a genuinely quick read
+    // still feels quick.
+    return Promise.all([work, new Promise((r) => setTimeout(r, MIN_SPIN))]).finally(() =>
+      setRefreshing(false),
+    );
+  }, [
+    espnConnected,
+    ownership,
+    usingFantasy,
+    view,
+    detailsKey,
+    loadOwnership,
+    loadReport,
+    loadFantasyRoster,
+    loadStatuses,
+    reloadResearch,
+  ]);
 
   // The reports as rendered: the real ones, or a synthetic live-day overlay when
   // the demo toggle is on. Everything downstream (nav, cards, feed, the live
@@ -1481,10 +1571,12 @@ export default function App() {
       </button>
     </div>
   ) : null;
-  // The header's cluster, at the top right: the roster search and the Edit
-  // (reorder) toggle. The calendar was the third of them and has moved down to
-  // the roster row (see `dateToggle`), which leaves the header holding only
-  // what belongs to the watchlist itself rather than to any one page of it.
+  // The header's cluster, at the top right: the roster search and the refresh
+  // button. The calendar was once the third of them and moved down to the
+  // roster row (see `dateToggle`); Edit was the third after that and is now an
+  // entry in the settings menu, which is what left room here for a control that
+  // acts on every view rather than on the watchlist alone.
+  //
   // Icons rather than labelled buttons because a full search field is the
   // widest thing in the row and is wanted for a few seconds at a time, so it
   // earns its space only while it is being used; pressing one opens its own bar
@@ -1534,67 +1626,49 @@ export default function App() {
           <path d="m15.4 15.4 4.1 4.1" />
         </svg>
       </button>
-      {/* Opens the reorder screen in place of the player list. Hidden until
-          there's more than one player to put in an order — and while the views
-          are reading the fantasy roster, where there is no order of ours to
-          edit and no player of ours to remove. ESPN owns that list; a screen
-          offering to rearrange it would be offering something it can't do. */}
-      {reports.length > 1 && !usingFantasy && (
-        <button
-          type="button"
-          className={`edit-order-btn${editMode ? ' active' : ''}`}
-          onClick={() => {
-            // The reorder screen only exists on the Games view, and from the
-            // header this button can be pressed from anywhere — so take the
-            // user there rather than flipping a mode with nothing on screen
-            // to show for it.
-            if (!editMode && view !== 'games') {
-              setBackView(null);
-              setView('games');
-            }
-            // The edit screen hides the rest of the chrome, the search bar
-            // included; closing it here stops it being restored on the way out
-            // of a mode it was never visible in.
-            setSearchOpen(false);
-            setEditMode((v) => !v);
-          }}
-          title={editMode ? 'Finish editing' : 'Reorder players'}
-          aria-label={editMode ? 'Finish editing' : 'Reorder players'}
-          aria-pressed={editMode}
-        >
-          <span className="edit-order-icon" aria-hidden="true">
-            {editMode ? (
-              <svg
-                viewBox="0 0 24 24"
-                width="17"
-                height="17"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M20 6 9 17l-5-5" />
-              </svg>
-            ) : (
-              <svg
-                viewBox="0 0 24 24"
-                width="17"
-                height="17"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M12 20h9" />
-                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-              </svg>
-            )}
-          </span>
-          <span className="edit-order-label">{editMode ? 'Done' : 'Edit'}</span>
-        </button>
-      )}
+      {/* Reload what is on screen. The app re-polls on its own only while a
+          real game is live, and even then only the report — so this is the one
+          control that says "read it all again now": the report, the statuses
+          map behind the headshot marks, the research blob, and the connected
+          league past its ten-minute cache. See `refreshAll` for the rule and
+          why the order matters.
+
+          It sits at the end of the cluster, in the slot Edit vacated when it
+          moved into the settings menu — the last thing in the header, since it
+          acts on everything below it rather than on any one part. Disabled
+          while a read is in flight, with the app's own `.spinner` in place of
+          the icon rather than a second spinner invented for the header. */}
+      <button
+        type="button"
+        className="refresh-btn"
+        onClick={refreshAll}
+        disabled={refreshing}
+        aria-label={refreshing ? 'Refreshing' : 'Refresh'}
+        aria-busy={refreshing}
+        title={refreshing ? 'Refreshing…' : 'Refresh what is on screen'}
+      >
+        {refreshing ? (
+          <span className="spinner" aria-hidden="true" />
+        ) : (
+          <svg
+            viewBox="0 0 24 24"
+            width="17"
+            height="17"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.1"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            {/* Three quarters of a circle with an arrowhead on the open end —
+                the same gesture at 17px as the 13px spinner that replaces it,
+                so the swap reads as the icon starting to turn. */}
+            <path d="M20 12a8 8 0 1 1-2.34-5.66" />
+            <path d="M20 4v4.5h-4.5" />
+          </svg>
+        )}
+      </button>
     </div>
   );
 
@@ -1929,6 +2003,58 @@ export default function App() {
                     toggle and the league page — and have moved out to their own
                     button beside the gear, where the state they control can be
                     read without opening anything. */}
+                {/* Edit players came the other way, out of the header cluster
+                    and into the menu. It takes `.help-btn` rather than
+                    `.settings-toggle` because it is that kind of entry: it
+                    opens a screen instead of flipping a setting, so it reads
+                    with "How to use" below it rather than with the two
+                    toggles above. Offered on the same terms it always was —
+                    something to put in an order, and a list of ours to put it
+                    in. */}
+                {reports.length > 1 && !usingFantasy && (
+                  <button
+                    type="button"
+                    className="help-btn"
+                    role="menuitem"
+                    onClick={() => {
+                      // The menu has to go with the press: edit mode hides the
+                      // whole chrome, gear included, so a popover left open
+                      // would be floating over a screen that has hidden
+                      // everything it belongs to.
+                      setSettingsOpen(false);
+                      // The reorder screen only exists on the Games view, and
+                      // this can be pressed from anywhere — so take the user
+                      // there rather than flipping a mode with nothing on
+                      // screen to show for it.
+                      if (view !== 'games') {
+                        setBackView(null);
+                        setView('games');
+                      }
+                      // The edit screen hides the search bar too; closing it
+                      // here stops it being restored on the way out of a mode
+                      // it was never visible in.
+                      setSearchOpen(false);
+                      setEditMode(true);
+                    }}
+                    title="Reorder your players, or remove one"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="15"
+                      height="15"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 20h9" />
+                      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                    </svg>
+                    Edit players
+                  </button>
+                )}
                 <button
                   type="button"
                   className="help-btn"
@@ -2387,10 +2513,20 @@ export default function App() {
         className={`content-layout${showLoading && reports.length > 0 ? ' is-loading' : ''}`}
       >
         {editMode ? (
-          /* The edit screen takes the page: the header keeps the title and the
-             Done button and nothing else, so this is the whole of what's on
-             screen and it carries its own heading rather than relying on the
-             chrome above to say where you are.
+          /* The edit screen takes the page: the chrome above is hidden
+             entirely, so this is the whole of what's on screen and it carries
+             its own heading rather than relying on a header to say where you
+             are.
+
+             **Done is on this row, not up in the header**, and it had to move
+             here when Edit went into the settings menu: the header button was
+             both the way in and the way out, and a menu entry can only be the
+             way in — the gear is hidden in this mode, so a Done left inside it
+             would be behind a button that isn't there. A mode with no visible
+             way out is a trap, which is the one rule this screen has always
+             had. It keeps `.edit-order-btn`, the very class the header button
+             wore, so the control that leaves the mode is the same control that
+             used to enter it.
 
              The kind switch comes with it. It is the header's own `kindTabs`,
              rendered here because the view bar is hidden in this mode and it is
@@ -2401,6 +2537,29 @@ export default function App() {
             <div className="edit-page-head">
               <h2 className="edit-page-title">Edit players</h2>
               {kindTabs}
+              <button
+                type="button"
+                className="edit-order-btn active"
+                onClick={() => setEditMode(false)}
+                title="Finish editing"
+                aria-label="Finish editing"
+              >
+                <span className="edit-order-icon" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="17"
+                    height="17"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                </span>
+                <span className="edit-order-label">Done</span>
+              </button>
             </div>
             <PlayerOrderEditor
               players={editPlayers}

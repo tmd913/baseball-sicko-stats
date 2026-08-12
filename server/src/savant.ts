@@ -642,6 +642,7 @@ function buildPitcherGame(
     batterId: fb.batterId,
     batterName: fb.batterName,
     stand: fb.stand,
+    atBatNumber: fb.atBatNumber,
     inning: fb.inning,
     half: fb.half,
     outsWhenUp: fb.outsWhenUp,
@@ -802,32 +803,43 @@ async function buildStatsApiDay(date: string): Promise<{
       awayStarters: g.awayStarters,
     });
     for (const bg of g.batters.values()) {
-      const plateAppearances: PlateAppearance[] = bg.plateAppearances.map((pa) => ({
-        atBatNumber: pa.atBatNumber,
-        inning: pa.inning,
-        half: pa.half,
-        timestamp: pa.timestamp,
-        outsWhenUp: pa.outsWhenUp,
-        onBase: pa.onBase,
-        stand: pa.stand,
-        pThrows: pa.pThrows,
-        pitcherId: pa.pitcherId,
-        pitcherName: pa.pitcherName,
-        event: pa.event,
-        description: pa.description,
-        rbi: pa.rbi,
-        playId: pa.playId,
-        launchSpeed: pa.launchSpeed,
-        launchAngle: pa.launchAngle,
-        hitDistance: pa.hitDistance,
-        bbType: pa.bbType,
-        xba: null,
-        xwoba: null,
-        deltaRunExp: null,
-        deltaWinExp: pa.deltaWinExp,
-        pitches: pa.pitches.map(toClientPitch),
-        actions: pa.actions,
-      }));
+      // A play whose *result* is a baserunning event carries the batter who was
+      // up but is not his plate appearance — MLB only files one that way when it
+      // ended the half-inning (all 31 of them in a checked 111 games were the
+      // third out), so the at-bat itself resumes in the next inning and this row
+      // is somebody else's caught stealing wearing his name. It was showing up
+      // in his feed as an out and counting toward his PA total; the pitcher side
+      // has excluded it since `buildPitcherGame`, and now both do.
+      const plateAppearances: PlateAppearance[] = bg.plateAppearances
+        .filter((pa) => !isBaserunningEvent(pa.event))
+        .map((pa) => ({
+          atBatNumber: pa.atBatNumber,
+          inning: pa.inning,
+          half: pa.half,
+          timestamp: pa.timestamp,
+          outsWhenUp: pa.outsWhenUp,
+          onBase: pa.onBase,
+          stand: pa.stand,
+          pThrows: pa.pThrows,
+          pitcherId: pa.pitcherId,
+          pitcherName: pa.pitcherName,
+          event: pa.event,
+          description: pa.description,
+          rbi: pa.rbi,
+          playId: pa.playId,
+          awayScore: pa.awayScore,
+          homeScore: pa.homeScore,
+          launchSpeed: pa.launchSpeed,
+          launchAngle: pa.launchAngle,
+          hitDistance: pa.hitDistance,
+          bbType: pa.bbType,
+          xba: null,
+          xwoba: null,
+          deltaRunExp: null,
+          deltaWinExp: pa.deltaWinExp,
+          pitches: pa.pitches.map(toClientPitch),
+          actions: pa.actions,
+        }));
 
       const batterTeam = bg.isHome ? g.homeTeam : g.awayTeam;
       const opponent = bg.isHome ? g.awayTeam : g.homeTeam;
@@ -914,7 +926,11 @@ async function buildStatsApiDay(date: string): Promise<{
         // As above: he has thrown a pitch, so his side's starter is settled.
         teamProbablePitcher: null,
         plateAppearances: [],
-        baseEvents: [],
+        // The half of the day's base events he was a party to — his balk, his
+        // wild pitch, the bag taken off him, the man he picked off. Same shape
+        // and same feed item as a runner's, so the pitcher stream reads the way
+        // the batter stream does.
+        baseEvents: (g.pitcherBaseEvents.get(pg.pitcherId) ?? []).map((e) => ({ ...e })),
         line: buildLine([]),
         pitching: buildPitcherGame(
           pg,
@@ -994,7 +1010,7 @@ function projectDay(day: ParsedDay, filter: DayFilter): ParsedDay {
  *  opposing probable starter on a pitcher's own game, which used to be null; v5
  *  gives each base event its clip, description, matchup and count, which a v4
  *  snapshot has none of and would go on serving as a bare badge forever. */
-const DAY_SNAPSHOT_VERSION = 5;
+const DAY_SNAPSHOT_VERSION = 6;
 
 /**
  * The on-the-wire form of a day.
