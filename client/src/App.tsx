@@ -1563,9 +1563,44 @@ export default function App() {
    */
   const summaryReports = useMemo(() => {
     if (!startersActive) return kindCards;
+    // Reading the fantasy team, the button answers a different question, so it
+    // reads a different fact: not "is he in tonight's lineup" but "am I
+    // starting him". The two are genuinely different populations, and in this
+    // mode only one of them is the honest reading of the word. A man in your
+    // lineup whom his real manager left out is still your start — he is
+    // accruing you a zero tonight, which is exactly the thing you opened the
+    // table to find out — while a player on your bench accrues you nothing
+    // however he hits, so keeping him because MLB has him batting third would
+    // be answering about somebody else's roster.
+    //
+    // Deliberately **not** the union of the two tests, which was the obvious
+    // alternative: the union is "starting for anyone", a set that belongs to no
+    // question anybody asks of this table, and it would put every benched
+    // player back on a table narrowed precisely to the ones you are playing.
+    // Nor is anything lost by the swap — whether one of your starters is in his
+    // own club's lineup is already on his headshot, as the pip this filter and
+    // that pip are both drawn from, so the narrowed table is where you read it.
+    //
+    // `fantasySlots` is null in saved-roster mode, which is what leaves that
+    // mode untouched. It is *also* null while the roster read is in flight or
+    // after it has failed, and falling back to the MLB test there is the right
+    // direction to fail in: an empty table under a lit toggle reads as "nobody
+    // is starting", which would be a claim where the truth is that the app
+    // hasn't been told yet.
+    if (fantasySlots) {
+      return kindCards.filter((r) => fantasySlots.get(playerKey(r))?.starting === true);
+    }
     const today = baseballToday();
     return kindCards.filter((r) => isStartingOn(r, today));
-  }, [kindCards, startersActive]);
+  }, [kindCards, startersActive, fantasySlots]);
+  /**
+   * Which of the two rules the toggle applies — see `summaryReports`. The
+   * button's tooltip and the empty state under it both have to say which set
+   * they are talking about, and neither should hold a second copy of the test:
+   * the map being there is what makes the filter read the fantasy lineup, so
+   * the map being there is what these read too.
+   */
+  const startersReadFantasy = fantasySlots !== null;
   // Each page keeps its own place, and going back to it lands where you left.
   //
   // Games and Feed are two readings of the same days over one window scroller,
@@ -1846,7 +1881,14 @@ export default function App() {
         className={`starters-toggle${startersOnly ? ' on' : ''}`}
         aria-pressed={startersOnly}
         onClick={() => setStartersOnly((v) => !v)}
-        title="Only the players starting today — hitters in a posted lineup, pitchers named as today's starter"
+        /* The word means one thing on your own roster and another on your
+           fantasy team, so the tooltip says which. The label can't — it is one
+           word, and "Starters" is the right word for both readings. */
+        title={
+          startersReadFantasy
+            ? 'Only the players in your fantasy starting lineup — your bench and IL are hidden whatever their clubs do with them'
+            : "Only the players starting today — hitters in a posted lineup, pitchers named as today's starter"
+        }
       >
         <svg
           viewBox="0 0 24 24"
@@ -2557,12 +2599,30 @@ export default function App() {
         summaryReports.length === 0 &&
         !editMode && (
           <div className="empty-state">
-            <p className="empty-title">Nothing to show — nobody here is starting today</p>
-            <p>
-              Turn off “Starters” in the row above to see everyone. Lineups post a couple of
-              hours before first pitch, so an empty table in the morning may only mean they
-              aren’t out yet.
+            <p className="empty-title">
+              {startersReadFantasy
+                ? 'Nothing to show — nobody here is in your lineup today'
+                : 'Nothing to show — nobody here is starting today'}
             </p>
+            {/* Two causes, two messages. The MLB reading can be empty simply
+                because the day is young, which is the thing a reader most needs
+                told at 9am; the fantasy reading cannot — your lineup is set the
+                moment you set it, so an empty table there means the kind on
+                screen really is all bench and IL, and offering the lineup-card
+                excuse would send someone off to wait for something that has
+                already happened. */}
+            {startersReadFantasy ? (
+              <p>
+                Turn off “Starters” in the row above to see your whole team — your bench and
+                IL are what it is hiding.
+              </p>
+            ) : (
+              <p>
+                Turn off “Starters” in the row above to see everyone. Lineups post a couple of
+                hours before first pitch, so an empty table in the morning may only mean they
+                aren’t out yet.
+              </p>
+            )}
           </div>
         )}
 
