@@ -46,10 +46,17 @@ function MetricRow({ metric }: { metric: PercentileMetric }) {
   const { label, percentile, value, estimated } = metric;
   const has = percentile !== null;
   const color = has ? pctColor(percentile) : undefined;
+  // A row with a value but no percentile is not the same as a row with nothing:
+  // it is a stat Savant measures and publishes no league distribution for, so
+  // there is no honest bar to draw (the two baserunning splits — see the note on
+  // them in `percentiles.ts`). Saying "no data" over a printed number read as a
+  // bug in the number rather than an absence of the rank beside it.
   const title = has
     ? `${label} — ${percentile}th percentile${value ? ` (${value})` : ''}` +
       (estimated ? ' · estimated from league avg (no exact Savant rank)' : '')
-    : `${label} — no data`;
+    : value
+      ? `${label} — ${value} · no league rank published for this stat`
+      : `${label} — no data`;
   return (
     <div className="pct-row" title={title}>
       <span className="pct-label">{label}</span>
