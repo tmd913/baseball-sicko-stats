@@ -3,7 +3,6 @@ import type {
   BaseEventKind,
   BaseState,
   BattingLine,
-  PitcherSeasonStats,
   PitchingCredit,
   PitchingLine,
   PlateAppearance,
@@ -13,7 +12,6 @@ import type {
   PlayerReport,
   PlayerStatus,
   RosterStatus,
-  SeasonStats,
 } from './types';
 
 /** Category used for color-coding an outcome. */
@@ -187,26 +185,30 @@ export function whipOf(line: PitchingLine): string {
   return (((line.walks + line.hits) * 3) / line.outs).toFixed(2);
 }
 
-/** A compact pitcher season summary for the card header. */
-export function pitcherSeasonSummary(s: PitcherSeasonStats): string {
-  // No estimators here. xERA and xFIP used to ride along paired with the number
-  // each estimates ("3.20/3.74 ERA/xERA"), which doubled the width of the two
-  // leading items and made a line meant to be scanned into one to be read. The
-  // pairing itself is right — the comparison is the whole point of carrying them
-  // — so it survives where there's room to land: the Season tab, which shows
-  // each estimator immediately after the number it estimates.
-  const parts = [`${s.era} ERA`];
-  if (s.fip) parts.push(`${s.fip} FIP`);
-  parts.push(`${s.whip} WHIP`);
-  const per9 = (v: string, label: string) => {
-    if (v && v !== '—') parts.push(`${v} ${label}`);
+/**
+ * A pitcher's line over the range in view, as the rates the counting line
+ * beside it can't give: "2.45 ERA, 1.09 WHIP, 29% K, 7% BB". This is the card
+ * header's line now. The season one it replaced (ERA · FIP · WHIP · K/9 · BB/9
+ * · HR/9) stated a different span from everything under it — the card is a read
+ * on the days in view — and it isn't lost: the details view's Season tab shows
+ * it whole, a tap away, with the room to pair each estimator with the number it
+ * estimates.
+ *
+ * K and BB are shares of **batters faced** rather than the season line's per-9
+ * rates. A season has innings to spare where a range can be one appearance, and
+ * a single inning turns K/9 into 18.0 where a share of the batters he faced
+ * reads the same at any sample — and it is already the vocabulary of the card's
+ * own Rates strip below.
+ */
+export function rangePitchingSummary(line: PitchingLine): string {
+  const parts = [`${eraOf(line)} ERA`, `${whipOf(line)} WHIP`];
+  const share = (n: number, label: string) => {
+    if (line.battersFaced > 0)
+      parts.push(`${Math.round((n / line.battersFaced) * 100)}% ${label}`);
   };
-  per9(s.strikeoutsPer9, 'K/9');
-  per9(s.walksPer9, 'BB/9');
-  per9(s.homeRunsPer9, 'HR/9');
-  // Stops here on purpose: BAA and the rate splits are a tap away in the
-  // details view, and a collapsed card is meant to be scanned, not read.
-  // Comma-separated to match the batter card's season line (`seasonStatsSummary`).
+  share(line.strikeouts, 'K');
+  share(line.walks, 'BB');
+  // Comma-separated to match the batter card's line (`rangeBattingSummary`).
   return parts.join(', ');
 }
 
@@ -846,11 +848,29 @@ export function basesLabel(b: BaseState): string {
 }
 
 /**
- * Compact season line for the card header, e.g.
- * ".722 OPS, 11 HR, 30 RBI, 35 R, 1 SB". Commas separate the groups.
+ * A batter's line over the range in view: "4 G · .313/.389/.625". The card
+ * header's line now, in place of the season one (".722 OPS, 11 HR, 30 RBI, 35
+ * R, 1 SB"), which stated a different span from everything under it; the season
+ * reads whole on the details view's Season tab, a tap away.
+ *
+ * The slash rather than the counting stats, because the counting line sits in
+ * the same header a few centimetres to the right (`lineSummary` — "5-16, 3 R, 2
+ * HR, 5 RBI") and the two halves of a slash line are the one thing it cannot
+ * say. Its own OPS is left out for that same reason: the line beside it already
+ * ends in one, and this is that number's two halves.
  */
-export function seasonStatsSummary(s: SeasonStats): string {
-  return `${s.ops} OPS, ${s.hr} HR, ${s.rbi} RBI, ${s.runs} R, ${s.sb} SB`;
+export function rangeBattingSummary(line: BattingLine, games: number): string {
+  const g = `${games} G`;
+  // A range of nothing but walks has no at-bat to divide by, and the plate
+  // appearances are then the whole of what happened.
+  if (line.ab === 0) return `${g} · ${line.pa} PA`;
+  // The OBP denominator is lineOps's — sacrifice flies aren't on the line, so
+  // it runs a hair high when one happened.
+  const obpDen = line.ab + line.bb + line.hbp;
+  const obp = obpDen ? (line.hits + line.bb + line.hbp) / obpDen : 0;
+  return `${g} · ${formatRate(line.hits / line.ab)}/${formatRate(obp)}/${formatRate(
+    line.totalBases / line.ab,
+  )}`;
 }
 
 export type RosterTone = 'il' | 'susp' | 'dtd' | 'minors' | 'other';
