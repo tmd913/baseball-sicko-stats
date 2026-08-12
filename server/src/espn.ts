@@ -448,12 +448,53 @@ export async function getRosterPct(): Promise<Record<number, number>> {
 // regardless — and it means the number has a definition the app can print: the
 // change over exactly the span reported beside it.
 
-/** How far back to look for a baseline, and how far back is still worth using
- *  if that day is missing. Seven days is the fantasy convention for "trending";
- *  the wider bound is what makes the feature work before a full week of
- *  history exists, rather than showing nothing for a week. */
-const TREND_TARGET_DAYS = 7;
-const TREND_MAX_DAYS = 14;
+/**
+ * The spans a trend is reported over, ascending.
+ *
+ * Five rather than one because they are five different questions. A 1D move is
+ * a reaction — last night's start, this morning's IL placement — where a 30D one
+ * is a player the league has been coming round to all month, and the two
+ * routinely disagree in sign about the same man. One column could only ever
+ * answer one of them, and seven days — the convention it borrowed from the rest
+ * of fantasy — is the least useful of the five on the day something happens.
+ */
+export const TREND_WINDOWS = [1, 3, 7, 15, 30] as const;
+export type TrendWindow = (typeof TREND_WINDOWS)[number];
+
+/**
+ * How far a window's baseline may drift when the exact day back is missing, in
+ * days either side of it.
+ *
+ * There cannot be one number for this, which is why it is a table. The old
+ * single column walked out to **fourteen** days from a target of seven, and the
+ * same tolerance on a 1D column would report a fortnight's movement under a
+ * header saying yesterday. So the drift is roughly a sixth of the span, and the
+ * shortest window gets **none at all**: yesterday's snapshot is either there or
+ * it isn't, and there is no near miss for it that is still the thing the column
+ * claims to be.
+ *
+ * The wide old fallback was buying *coverage*: with one column, falling back
+ * from seven days to three was the difference between a trend and nothing at
+ * all. That argument goes away the moment a 3D column sits beside the 7D one —
+ * a short span now has a column of its own to be reported in, so a long one
+ * blurring into it would only be two columns saying one thing under two
+ * headers.
+ *
+ * The numbers are also picked so the **bands do not touch**: [1], [2-4], [5-9],
+ * [12-18], [25-35]. No two windows can therefore resolve to the same measured
+ * span, which matters because each column's label states the span it actually
+ * measured rather than the one it asked for — two headers both reading
+ * "Δ4d" over different columns would be unreadable, and this makes that
+ * impossible rather than merely unlikely.
+ */
+const TREND_DRIFT: Record<TrendWindow, number> = { 1: 0, 3: 1, 7: 2, 15: 3, 30: 5 };
+
+/** The furthest back any window can reach, and so how much history a snapshot
+ *  has to survive to be useful. Nothing prunes these blobs — the cache bucket's
+ *  lifecycle rule expires the whole `cache/` prefix at 400 days, an order of
+ *  magnitude past this — so the only thing that ever limited the history was
+ *  this constant, which used to be 14. */
+export const TREND_MAX_DAYS = 30 + TREND_DRIFT[30];
 
 const snapshotKey = (date: string) => `espn-ownership-${date}.json`;
 
@@ -481,26 +522,76 @@ function daysAgo(date: string, n: number): string {
   return new Date(Date.UTC(y, m - 1, d) - n * 86_400_000).toISOString().slice(0, 10);
 }
 
-export interface RosterTrend {
-  /** Change in roster % per MLB player id over `days`. Only players present in
-   *  both the baseline and today appear — a player ESPN has newly added has no
-   *  "change", and inventing one from zero would put every call-up at the top
-   *  of the risers. */
-  delta: Record<number, number>;
-  /** The span actually measured, which is the target once a week of history
-   *  exists and whatever is available before then. Reported rather than assumed
-   *  because the column's header says it: "7d" means seven days. */
-  days: number;
+/** Which days back to try for one window, best first: the exact day, then
+ *  further back, then nearer, so a gap in the history costs accuracy rather
+ *  than the column. Further back before nearer, because a delta measured over
+ *  slightly too long a span overstates the movement by a little where the short
+ *  one reports several days of it as one. */
+function baselineOrder(window: TrendWindow): number[] {
+  const drift = TREND_DRIFT[window];
+  const order: number[] = [window];
+  for (let i = 1; i <= drift; i++) {
+    order.push(window + i);
+    if (window - i >= 1) order.push(window - i);
+  }
+  return order;
 }
 
-/**
- * The trend map, or null when there is not yet a second day of history to
- * measure against.
+/** Today's map less a baseline, for the players in both.
  *
- * Null is the honest answer on a cold install and the client hides the column
- * for it, exactly as it hides roster % without a league. The alternative — a
- * column of zeroes — would read as "nobody is moving", which is a claim rather
- * than an absence.
+ *  Rounded to a tenth, which is the precision the figure is published at;
+ *  without it floating-point noise gives half the league a "trend". Zeroes are
+ *  dropped, so the client reads "absent but has a roster %" as flat rather than
+ *  unknown. A player missing from the baseline is **excluded rather than
+ *  treated as rising from zero**, which would put every newly-added prospect at
+ *  the top of the risers — and does so per window, so a call-up is missing from
+ *  30D while appearing in 1D, which is exactly right. */
+function diffAgainst(
+  current: Record<number, number>,
+  base: Record<number, number>,
+): Record<number, number> {
+  const delta: Record<number, number> = {};
+  for (const [id, pct] of Object.entries(current)) {
+    const was = base[id as unknown as number];
+    if (typeof was !== 'number') continue;
+    const change = Math.round((pct - was) * 10) / 10;
+    if (change !== 0) delta[Number(id)] = change;
+  }
+  return delta;
+}
+
+export interface RosterTrendWindow {
+  /** The span asked for — one of `TREND_WINDOWS`. This is the column's
+   *  identity, and stays fixed while the measurement under it drifts, so a
+   *  saved column set and a `cols=` link go on naming the same column. */
+  window: TrendWindow;
+  /** The span actually measured, within `TREND_DRIFT[window]` of it. Reported
+   *  rather than assumed because the header says it: a column labelled "7d"
+   *  that measured five days would be a lie the reader has no way to catch. */
+  days: number;
+  /** Change in roster % per MLB player id over `days`. */
+  delta: Record<number, number>;
+}
+
+/** One entry per window that had a usable baseline, ascending. A window with
+ *  none is **absent** rather than present and empty: the client removes that
+ *  column entirely, since a column of zeroes reads as "nobody is moving", which
+ *  is a claim where the truth is an absence. */
+export type RosterTrend = RosterTrendWindow[];
+
+/**
+ * The trend windows, or null when not one of them has a baseline to measure
+ * against — a cold install, whose history starts accumulating today.
+ *
+ * The columns therefore arrive one at a time as it grows: 1D tomorrow, 3D in
+ * three days, 30D in a month. That is the honest shape of the thing, and it is
+ * why nothing here falls back to the earliest snapshot it happens to hold and
+ * calls the answer a month.
+ *
+ * The windows resolve concurrently and each walks only its own band, which
+ * cannot overlap another's (see `TREND_DRIFT`), so no date is read twice.
+ * Typically that is five 19KB reads, one per window, each hitting its exact
+ * day; a miss is a 404 against the cache and costs nothing.
  */
 export async function getRosterTrend(): Promise<RosterTrend | null> {
   const today = baseballToday();
@@ -509,29 +600,18 @@ export async function getRosterTrend(): Promise<RosterTrend | null> {
     console.error('ESPN ownership snapshot failed:', err.message),
   );
 
-  // Walk out from the target span: the exact day if it is there, then further
-  // back, then nearer, so a gap in the history costs accuracy rather than the
-  // whole feature.
-  const order = [TREND_TARGET_DAYS];
-  for (let i = 1; i <= TREND_MAX_DAYS; i++) {
-    if (TREND_TARGET_DAYS + i <= TREND_MAX_DAYS) order.push(TREND_TARGET_DAYS + i);
-    if (TREND_TARGET_DAYS - i >= 1) order.push(TREND_TARGET_DAYS - i);
-  }
-  for (const days of order) {
-    const base = await readSnapshot(daysAgo(today, days));
-    if (!base) continue;
-    const delta: Record<number, number> = {};
-    for (const [id, pct] of Object.entries(current)) {
-      const was = base[id as unknown as number];
-      if (typeof was !== 'number') continue;
-      // Rounded to a tenth, which is the precision the figure is published at;
-      // without it floating-point noise gives half the league a "trend".
-      const change = Math.round((pct - was) * 10) / 10;
-      if (change !== 0) delta[Number(id)] = change;
-    }
-    return { delta, days };
-  }
-  return null;
+  const resolved = await Promise.all(
+    TREND_WINDOWS.map(async (window): Promise<RosterTrendWindow | null> => {
+      for (const days of baselineOrder(window)) {
+        const base = await readSnapshot(daysAgo(today, days));
+        if (!base) continue;
+        return { window, days, delta: diffAgainst(current, base) };
+      }
+      return null;
+    }),
+  );
+  const found = resolved.filter((w): w is RosterTrendWindow => w !== null);
+  return found.length > 0 ? found : null;
 }
 
 // ---- Reading the league ---------------------------------------------------
@@ -842,8 +922,11 @@ export interface EspnOwnership extends EspnLeagueInfo {
    * `compression()` has had it — against the 2MB league read it rides on.
    */
   eligibility: Record<number, string[]>;
-  /** How each roster % has moved lately, and over how long — null until there
-   *  is a second day of history to measure against. See `getRosterTrend`. */
+  /** How each roster % has moved, over each of the five spans a baseline could
+   *  be found for, and how long each of those spans really was — null until
+   *  there is a second day of history to measure against at all. A window with
+   *  no baseline is missing from the list rather than present and empty, which
+   *  is what removes its column. See `getRosterTrend`. */
   trend: RosterTrend | null;
   /** Every team's roster, by fantasy team id. Keyed by team rather than
    *  narrowed to the caller's, because this whole object is cached **per

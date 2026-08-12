@@ -13,6 +13,7 @@ import type {
   ResearchWindow,
   RosterSource,
   SeasonPlayer,
+  TrendWindow,
   WatchPlayer,
 } from './types';
 import { isInjured, isStartingOn } from './lib';
@@ -910,13 +911,24 @@ export default function App() {
     loadStatuses();
   }, [view, detailsKey, loadStatuses]);
 
-  /** How each roster % has moved lately, and over how long. Null without a
-   *  league, and also when the server has no baseline yet. */
+  /** How each roster % has moved, one entry per span the server found a
+   *  baseline for. Null without a league, and also when it has no history at
+   *  all yet — see `getRosterTrend`, where a window with no baseline is left
+   *  out rather than sent empty.
+   *
+   *  Each delta becomes a `Map` here because the merge below asks after every
+   *  row on the board in every window — up to five lookups a row across some
+   *  1,500 of them — and a numeric key into a plain object goes through a
+   *  string conversion each time. */
   const rosterTrend = useMemo(() => {
     if (!espnConnected || !ownership?.trend) return null;
-    const map = new Map<number, number>();
-    for (const [id, d] of Object.entries(ownership.trend.delta)) map.set(Number(id), d);
-    return { delta: map, days: ownership.trend.days };
+    return ownership.trend.map((w) => ({
+      window: w.window,
+      days: w.days,
+      delta: new Map<number, number>(
+        Object.entries(w.delta).map(([id, d]) => [Number(id), d]),
+      ),
+    }));
   }, [espnConnected, ownership]);
 
   /**
@@ -928,17 +940,25 @@ export default function App() {
   const researchRows = useMemo(() => {
     const rows = research[researchCacheKey] ?? [];
     if (!rosterPct && !eligibility) return rows;
-    return rows.map((r) => ({
-      ...r,
-      rosterPct: rosterPct?.get(r.id) ?? null,
-      // Absent from the delta map means "hasn't moved", not "unknown": the
-      // server drops zeroes to keep the blob small, so a player with a roster %
-      // and no entry really is flat.
-      rosterTrend: rosterTrend ? (rosterPct?.has(r.id) ? rosterTrend.delta.get(r.id) ?? 0 : null) : null,
-      // Absent here means the opposite of absent above: ESPN doesn't know him,
-      // so the board falls back to MLB's listed position for him.
-      eligible: eligibility?.get(r.id) ?? null,
-    }));
+    return rows.map((r) => {
+      // Absent from a delta map means "hasn't moved", not "unknown": the server
+      // drops zeroes to keep the blob small, so a player with a roster % and no
+      // entry really is flat. A player with no roster % at all gets a null,
+      // which the column dashes. Built key by key rather than with
+      // `Object.fromEntries` so the window keys stay typed as windows.
+      const rosterTrends: Partial<Record<TrendWindow, number | null>> = {};
+      for (const w of rosterTrend ?? []) {
+        rosterTrends[w.window] = rosterPct?.has(r.id) ? w.delta.get(r.id) ?? 0 : null;
+      }
+      return {
+        ...r,
+        rosterPct: rosterPct?.get(r.id) ?? null,
+        rosterTrends: rosterTrend ? rosterTrends : undefined,
+        // Absent here means the opposite of absent above: ESPN doesn't know him,
+        // so the board falls back to MLB's listed position for him.
+        eligible: eligibility?.get(r.id) ?? null,
+      };
+    });
   }, [research, researchCacheKey, rosterPct, rosterTrend, eligibility]);
 
   const openEspnSettings = useCallback(() => {
@@ -2835,7 +2855,7 @@ export default function App() {
           onWatchlistOnlyChange={setResearchWatchlistOnly}
           hasRosterPct={rosterPct !== null}
           hasEligibility={eligibility !== null}
-          trendDays={rosterTrend?.days ?? null}
+          trendWindows={rosterTrend}
           ownedIds={ownedIds}
           espnConnected={espnConnected}
           espnError={espnError}
@@ -3031,9 +3051,13 @@ export default function App() {
           }
           rosterPct={rosterPct ? rosterPct.get(detailsPlayer.id) ?? null : undefined}
           eligible={eligibility ? eligibility.get(detailsPlayer.id) ?? null : undefined}
-          rosterTrend={
+          rosterTrends={
             rosterTrend && rosterPct?.has(detailsPlayer.id)
-              ? { change: rosterTrend.delta.get(detailsPlayer.id) ?? 0, days: rosterTrend.days }
+              ? rosterTrend.map((w) => ({
+                  window: w.window,
+                  days: w.days,
+                  change: w.delta.get(detailsPlayer.id) ?? 0,
+                }))
               : undefined
           }
           onAdd={() =>

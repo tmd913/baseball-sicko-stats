@@ -7466,15 +7466,39 @@ body {
   font-weight: 800;
 }
 
-/* The trend beside the rostered figure, and in the board's own column. Green
+/* The trends beside the rostered figure, and in the board's own columns. Green
    up, red down — the app's `--hit` and `--strikeout`, the same pair the arsenal
    tables use for a delta, so a rise reads the same way everywhere. A flat
    player takes neither: nothing happened, and colouring that would give the
-   eye something to catch on. */
-.details-trend {
+   eye something to catch on.
+
+   There are up to five of them now, one per span, so they are a wrapping row
+   rather than a single trailing phrase: at 390px the whole set is about 150px
+   of text and shares the line with "Rostered 63.4%", and wraps under it when
+   it can't. `column-gap` is wider than `row-gap` because the spans have to
+   read as separate items across but as one block down. */
+.details-trends {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 10px;
+  row-gap: 2px;
   margin-left: 8px;
+}
+.details-trend {
   font-weight: 700;
   color: var(--faint);
+  white-space: nowrap;
+}
+/* The span each figure is measured over, ahead of it and quieter than it: it is
+   the label and the number is the news. Never wraps away from its own value —
+   the whole item is `nowrap` — so "7d" can't end a line with its move on the
+   next one, which would read as a different span's. */
+.details-trend-span {
+  margin-right: 3px;
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--muted);
 }
 .details-trend.up {
   color: var(--hit);
