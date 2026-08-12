@@ -1,4 +1,6 @@
 import type {
+  BaseEvent,
+  BaseEventKind,
   BaseState,
   BattingLine,
   PitchingCredit,
@@ -208,6 +210,94 @@ export function rangePitchingSummary(line: PitchingLine): string {
   share(line.walks, 'BB');
   // Comma-separated to match the batter card's line (`rangeBattingSummary`).
   return parts.join(', ');
+}
+
+/**
+ * What a base-running event did for the runner, which is what its colour says.
+ *
+ * Ten kinds is far too many colours, and the distinction the eye actually wants
+ * off a feed is not *which* rule sent him down the line but whether he gained,
+ * was given, lost or scored:
+ *
+ * - `take` he took the base himself (a steal) — the live purple the on-base
+ *   ring already uses;
+ * - `free` he was handed it (a balk, a wild pitch, a passed ball, a pickoff
+ *   throw into right field, the defence declining to contest) — `--walk`, the
+ *   colour of a free base at the plate, which is what this is on the paths;
+ * - `out` he was thrown out (caught stealing, picked off) — `--out`, the same
+ *   grey an at-bat's out takes;
+ * - `run` he scored — `--hit`.
+ */
+export type BaseEventTone = 'take' | 'free' | 'out' | 'run';
+
+const BASE_EVENT_TONES: Record<BaseEventKind, BaseEventTone> = {
+  sb: 'take',
+  cs: 'out',
+  po: 'out',
+  pocs: 'out',
+  poe: 'free',
+  balk: 'free',
+  wp: 'free',
+  pb: 'free',
+  di: 'free',
+  run: 'run',
+};
+
+export const baseEventTone = (kind: BaseEventKind): BaseEventTone => BASE_EVENT_TONES[kind];
+
+/**
+ * The badge on a base-running feed item, and on the row it takes in a pitcher's
+ * inning block.
+ *
+ * The base rides in the label only for the kinds the base *is* the event —
+ * stealing second, being caught at third. For a balk or a wild pitch the badge
+ * names the infraction and MLB's own line directly under it says who moved and
+ * where to, so carrying it here would be the same fact twice on two adjacent
+ * rows. `pocs` and `po` share their wording deliberately: "picked off" is what
+ * happened either way, and they name different bases (he is picked off *at*
+ * first, or caught out between first and second), so the two never read alike.
+ */
+export function baseEventLabel(ev: BaseEvent): string {
+  switch (ev.kind) {
+    case 'run':
+      return 'Run Scored';
+    case 'sb':
+      return ev.base ? `Stole ${ev.base}` : 'Stolen Base';
+    case 'cs':
+      return ev.base ? `Caught Stealing ${ev.base}` : 'Caught Stealing';
+    case 'po':
+    case 'pocs':
+      return ev.base ? `Picked Off ${ev.base}` : 'Picked Off';
+    case 'poe':
+      return 'Pickoff Error';
+    case 'balk':
+      return 'Balk';
+    case 'wp':
+      return 'Wild Pitch';
+    case 'pb':
+      return 'Passed Ball';
+    case 'di':
+      return 'Indifference';
+  }
+}
+
+/** A base as MLB's `movement` spells it ("2B") in the form the app prints. */
+export function baseName(base: string): string {
+  return base === '1B' ? '1st' : base === '2B' ? '2nd' : base === '3B' ? '3rd' : base;
+}
+
+/**
+ * The score a play or an event left behind, in the game badge's own away–home
+ * form. One helper because a feed item states it in one place whichever kind of
+ * item it is — an at-bat and a base event both read it off the same pair.
+ */
+export function scoreLine(
+  game: { awayTeam: string; homeTeam: string },
+  away: number | null,
+  home: number | null,
+): string | null {
+  if (away === null || home === null) return null;
+  return `${game.awayTeam} ${away}–${home} ${game.homeTeam}`;
 }
 
 /** The color keyed to a credit (W/L/S/HLD) — the accent on a pitcher's line,
@@ -600,6 +690,36 @@ export function statusCorner(status: PlayerStatus, kind: PlayerKind): Corner {
     entryInning: status.entryInning,
   };
   return kind === 'pitcher' ? pitcherCorner(facts) : battingCorner(facts);
+}
+
+/**
+ * Is this player starting on `date` — in the posted lineup if he's a hitter,
+ * the announced (or actual) starting pitcher if he isn't.
+ *
+ * The summary table's one filter reads this. It is deliberately drawn from the
+ * player's own `PlayerGame` rather than from the league-wide `/api/statuses`
+ * map: the summary is a read on the watchlist, so every row already carries the
+ * report the pip on its headshot is drawn from, and a row marked "2" is exactly
+ * a row this keeps. The board and the details view fetch that map because they
+ * have *no* report — asking a hundred kilobytes of the whole league for the
+ * twenty players already in hand would be a second source that could disagree
+ * with the pip beside it.
+ *
+ * Reading a game rather than a report is what makes the date explicit, and it
+ * has to be: a report spans the range in view, and "starting" said of a game
+ * four days ago is a fact about a night that has already happened. A
+ * doubleheader passes on either game — `some`, not the first one found.
+ *
+ * A postponed game is not a start. The lineup for one is posted and then means
+ * nothing, which is exactly what the "!" pip on the headshot says.
+ */
+export function isStartingOn(report: PlayerReport, date: string): boolean {
+  return report.games.some((g) => {
+    if (g.date !== date || g.status.state === 'postponed') return false;
+    return report.kind === 'pitcher'
+      ? g.pitchingRole === 'starting'
+      : g.lineupStatus === 'starting';
+  });
 }
 
 /**

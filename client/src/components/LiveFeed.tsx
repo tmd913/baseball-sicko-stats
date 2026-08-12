@@ -2,7 +2,11 @@ import { useState } from 'react';
 import type { LiveRole } from '../lib';
 import { playerKey } from '../types';
 import {
+  baseEventLabel,
+  baseEventTone,
+  baseName,
   creditLabel,
+  decisionColor,
   formatStartTime,
   handThrows,
   headshotUrl,
@@ -11,6 +15,7 @@ import {
   liveRoleGame,
   liveRoleLabel,
   outcomeKind,
+  scoreLine,
   surname,
 } from '../lib';
 import type {
@@ -21,7 +26,7 @@ import type {
   PlayerReport,
 } from '../types';
 import { useScrollIntoViewOnExpand } from '../hooks';
-import { BaseDiamond } from './BaseDiamond';
+import { BaseDiamond, PlaySituation } from './BaseDiamond';
 import { InlineVideoClip, PlateAppearanceCard } from './PlateAppearanceCard';
 import { GameStatusBadge, PlatoonSplit } from './PlayerCard';
 import { OpponentSection, PitchingTag, lineSummary } from './PitcherCard';
@@ -308,6 +313,7 @@ function FeedAtBat({
           <FeedPlayerName playerKey={playerKey(report)} name={report.name} onOpen={onOpenPlayerDay} />
           <span className="feed-context">{matchup(game)}</span>
         </div>
+        <FeedScore game={game} away={pa.awayScore} home={pa.homeScore} />
       </div>
       <PlateAppearanceCard
         pa={pa}
@@ -322,10 +328,27 @@ function FeedAtBat({
   );
 }
 
-/** The label for a base-running feed event, e.g. "Stole 2nd" or "Run Scored". */
-function baseEventLabel(ev: BaseEvent): string {
-  if (ev.kind === 'run') return 'Run Scored';
-  return ev.base ? `Stole ${ev.base}` : 'Stolen Base';
+/**
+ * The score a feed item left behind, at the right end of its identity row.
+ *
+ * Both kinds of item say it, and both say it **here** rather than each in its
+ * own place: an at-bat's card is `PlateAppearanceCard`, shared with the players
+ * view, where a running score under every row would be noise against the game
+ * block's own header — and a base event's detail row is a badge row, which is
+ * where the score used to sit alone. The header is the one row the two shapes
+ * genuinely have in common, so that is where the fact lives.
+ */
+function FeedScore({
+  game,
+  away,
+  home,
+}: {
+  game: PlayerGame;
+  away: number | null;
+  home: number | null;
+}) {
+  const score = scoreLine(game, away, home);
+  return score ? <span className="feed-score">{score}</span> : null;
 }
 
 /**
@@ -334,8 +357,8 @@ function baseEventLabel(ev: BaseEvent): string {
  * A steal of home is **two** events — he took a base and he scored — and the
  * feed listed them separately: same description, same clip, one directly above
  * the other, as though two things had happened. It is one thing, and it now
- * reads as one item carrying both badges. So does the runner who steals second
- * and comes home on the throw.
+ * reads as one item carrying both badges. So does the runner who goes to second
+ * on a wild pitch and comes home on the next throw.
  *
  * `playId` is the id of the play event both were read off, so it is the key;
  * the timestamp stands in when a play has no clip id, since every event of one
@@ -343,8 +366,8 @@ function baseEventLabel(ev: BaseEvent): string {
  * exist. An event with neither stays on its own rather than being lumped in
  * with every other keyless one.
  *
- * Within a group the steal leads and the run follows, cause before effect,
- * which is how the badges read.
+ * Within a group the run goes last, cause before effect: whatever put him in
+ * motion is what he then scored on, and that is how the badges read.
  */
 function groupBaseEvents(events: BaseEvent[]): BaseEvent[][] {
   const groups: BaseEvent[][] = [];
@@ -364,36 +387,38 @@ function groupBaseEvents(events: BaseEvent[]): BaseEvent[][] {
   return groups;
 }
 
-/** Steal before run within one play: he took the base, and so he scored. */
+/** Whatever moved him before the run it turned into: he took the base, and so
+ *  he scored. */
 function kindOrder(ev: BaseEvent): number {
-  return ev.kind === 'sb' ? 0 : 1;
-}
-
-/** A base as the feed says it: "2B" → "2nd". */
-function baseName(base: string): string {
-  return base === '1B' ? '1st' : base === '2B' ? '2nd' : base === '3B' ? '3rd' : base;
-}
-
-/** "2 outs" / "1 out" — MLB counts the outs already made. */
-function outsLabel(outs: number): string {
-  return `${outs} ${outs === 1 ? 'out' : 'outs'}`;
+  return ev.kind === 'run' ? 1 : 0;
 }
 
 /**
- * The situation the event happened in, as a list of phrases the row joins with
- * dots. A run says where he came from; a steal says the count he went on and
- * who the battery was — the two facts that decide whether a bag was there to be
- * taken. Each piece is dropped rather than dashed when the feed didn't carry it.
+ * What the situation glyph can't say: for a steal or a pickoff the count he
+ * went on and who the battery was — the two facts that decide whether a bag was
+ * there to be taken — and for a run, where he came from.
+ *
+ * It used to carry the outs too, and no longer does: the diamond beside the
+ * badges draws them, and a row that says "1 out" beside a picture of one out is
+ * saying it twice. Each piece is dropped rather than dashed when the feed
+ * didn't carry it.
  */
-function baseEventMeta(ev: BaseEvent): string[] {
+function baseEventMeta(ev: BaseEvent, kind: PlayerKind): string[] {
   const parts: string[] = [];
   if (ev.kind === 'run' && ev.fromBase) parts.push(`Scored from ${baseName(ev.fromBase)}`);
-  if (ev.kind === 'sb' && ev.balls !== null && ev.strikes !== null) {
+  const onThePitch = ev.kind === 'sb' || ev.kind === 'cs' || ev.kind === 'pocs';
+  if (onThePitch && ev.balls !== null && ev.strikes !== null) {
     parts.push(`${ev.balls}-${ev.strikes} count`);
   }
-  if (ev.outs !== null) parts.push(outsLabel(ev.outs));
-  if (ev.kind === 'sb') {
-    if (ev.pitcherName) parts.push(`off ${surname(ev.pitcherName)}`);
+  if (ev.kind !== 'run') {
+    // Whoever the item is *not* about. On a runner's feed the man on the mound
+    // is the other half of the play; on a pitcher's own feed "off Luzardo" on a
+    // Luzardo item names him to himself, so the runner takes that slot instead.
+    if (kind === 'pitcher') {
+      if (ev.runnerName) parts.push(surname(ev.runnerName));
+    } else if (ev.pitcherName) {
+      parts.push(`off ${surname(ev.pitcherName)}`);
+    }
     if (ev.batterName) parts.push(`${surname(ev.batterName)} batting`);
   }
   return parts;
@@ -402,16 +427,18 @@ function baseEventMeta(ev: BaseEvent): string[] {
 /**
  * The situation for a whole play, when more than one event came off it.
  *
- * The two lists overlap by construction — both events carry the play's outs —
- * so it dedupes rather than concatenating. And a run that came of a **steal of
- * home** drops its "Scored from 3rd": stealing home says where he was standing,
- * and the phrase would only restate the badge beside it.
+ * The lists overlap by construction — every event of one play names the same
+ * battery and the same batter — so it dedupes rather than concatenating, which
+ * on a pitcher's item is also what turns one wild pitch that moved two runners
+ * into one line naming both. And a run that came off a **steal of home** drops
+ * its "Scored from 3rd": stealing home says where he was standing, and the
+ * phrase would only restate the badge beside it.
  */
-function playMeta(evs: BaseEvent[]): string[] {
+function playMeta(evs: BaseEvent[], kind: PlayerKind): string[] {
   const stoleHome = evs.some((ev) => ev.kind === 'sb' && ev.base === 'home');
   const parts: string[] = [];
   for (const ev of evs) {
-    for (const part of baseEventMeta(ev)) {
+    for (const part of baseEventMeta(ev, kind)) {
       if (stoleHome && part.startsWith('Scored from')) continue;
       if (!parts.includes(part)) parts.push(part);
     }
@@ -419,29 +446,24 @@ function playMeta(evs: BaseEvent[]): string[] {
   return parts;
 }
 
-/** The score the event left behind, in the game badge's own form. */
-function baseEventScore(ev: BaseEvent, game: PlayerGame): string | null {
-  if (ev.awayScore === null || ev.homeScore === null) return null;
-  return `${game.awayTeam} ${ev.awayScore}–${ev.homeScore} ${game.homeTeam}`;
-}
-
 /**
- * One base-running event in the Recent section — a stolen base or a run scored.
+ * One base-running event in the Recent section — a steal, a caught stealing, a
+ * pickoff, a balk, a wild pitch, a passed ball, an indifference, or a run.
  *
  * It reads as a plate appearance does, because in this stream it is the same
- * kind of thing: the same player header, then what happened, then the clip of it
- * (a steal's own action clip; for a run, the play that drove him in). It carries
- * no pitch card — there is no sequence to show — so the detail is MLB's own line
- * for the event plus the situation it happened in, and nothing toggles: the
- * whole item is three short rows, where a caret would be hiding one of them.
+ * kind of thing: the same player header with the same score at the end of it,
+ * then **the same situation glyph** the at-bat card leads with (`PlaySituation`
+ * — the half-inning, the runners and the outs), then what happened, then the
+ * clip of it. It carries no pitch card — there is no sequence to show — so the
+ * detail is MLB's own line for the event plus what the glyph can't draw, and
+ * nothing toggles: the whole item is three short rows, where a caret would be
+ * hiding one of them.
  *
- * Who, what happened and the clip of it are **one thing to read**, so the
+ * Who it was, what happened and the clip of it are **one thing to read**, so the
  * kind's rail runs down the whole item rather than boxing the middle of it —
- * the way a live entry's role rail runs header and card together. It used to
- * be three detached blocks: the name loose above a bordered box, the video in
- * a box of its own below, with nothing tying them together. A rail groups them
- * without any row posing as a control, which matters here because none of it
- * opens (see styles.css).
+ * the way a live entry's role rail runs header and card together. A rail groups
+ * them without any row posing as a control, which matters here because none of
+ * it opens (see styles.css).
  */
 function FeedBaseEvent({
   report,
@@ -457,39 +479,48 @@ function FeedBaseEvent({
   onOpenPlayerDay: (key: string) => void;
 }) {
   // Everything but the badges belongs to the play rather than to either event:
-  // one inning, one description (both were read off the same play event, so the
-  // line is the same string), one score, one clip.
+  // one inning, one situation, one description (both were read off the same
+  // play event, so the line is the same string), one score, one clip.
   const lead = evs[0];
-  const meta = playMeta(evs);
-  const score = baseEventScore(lead, game);
+  const meta = playMeta(evs, report.kind);
   const description = evs.find((ev) => ev.description)?.description ?? '';
   const playId = evs.find((ev) => ev.playId)?.playId ?? null;
+  // One badge per *kind*. A runner's play is never two of the same, but a
+  // pitcher's is: one wild pitch that moves two runners is two events on his
+  // list, and two WILD PITCH chips side by side say it twice — the description
+  // under them names both men, which is the part that differs.
+  const badges = evs.filter((ev, i) => evs.findIndex((o) => o.kind === ev.kind) === i);
   // The rail says what the play was, and with two events off one play that is
   // two things: a steal of home is a steal *and* a run, so the rail splits in
   // half rather than picking one of them and stating half of what happened.
-  // The kinds are listed in the badges' own order, so the halves read down the
-  // item the way the badges read across it — steal above, run below.
-  const railKinds = evs.map((ev) => ev.kind).filter((kind, i, all) => all.indexOf(kind) === i);
+  // Tones rather than kinds — ten kinds would be ten colours and a hundred
+  // pairs, where four tones are four and a handful (see `baseEventTone`). The
+  // first two are enough: no play in the vocabulary puts three on one runner.
+  const tones = evs.map((ev) => baseEventTone(ev.kind)).filter((t, i, all) => all.indexOf(t) === i);
+  const rail = `rail-${tones[0]}${tones[1] ? ` rail2-${tones[1]}` : ''}`;
   return (
-    <div className={`feed-item feed-base-item kind-${railKinds.join('-')}`}>
+    <div className={`feed-item feed-base-item ${rail}`}>
       <div className="feed-item-head">
         <FeedHeadshot id={report.id} name={report.name} onOpen={() => onOpenDetails(playerKey(report))} />
         <div className="feed-item-id">
           <FeedPlayerName playerKey={playerKey(report)} name={report.name} onOpen={onOpenPlayerDay} />
           <span className="feed-context">{matchup(game)}</span>
         </div>
+        <FeedScore game={game} away={lead.awayScore} home={lead.homeScore} />
       </div>
       <div className="feed-base">
         <div className="feed-base-row">
-          <span className="feed-base-inning">
-            {lead.half} {lead.inning}
-          </span>
-          {evs.map((ev, i) => (
-            <span key={`${ev.kind}-${i}`} className={`feed-base-badge kind-${ev.kind}`}>
+          <PlaySituation
+            inning={lead.inning}
+            half={lead.half}
+            bases={lead.onBase}
+            outs={lead.outs ?? 0}
+          />
+          {badges.map((ev) => (
+            <span key={ev.kind} className={`feed-base-badge tone-${baseEventTone(ev.kind)}`}>
               {baseEventLabel(ev)}
             </span>
           ))}
-          {score && <span className="feed-base-score">{score}</span>}
         </div>
         {description && <p className="feed-base-desc">{description}</p>}
         {meta.length > 0 && <div className="feed-base-meta">{meta.join(' · ')}</div>}
@@ -534,8 +565,28 @@ function FeedPitcherGame({
 }) {
   const pg = game.pitching!;
   const ref = useScrollIntoViewOnExpand<HTMLDivElement>(open);
+  // The rail. Every other item shape in this feed groups itself with one — the
+  // outcome's colour on an at-bat, the role's on a live entry, the event's on a
+  // base event — and the outing was the one that didn't, so the pitcher feed
+  // read as a list of loose blocks where the batter feed read as items.
+  //
+  // The colour is **`decisionColor`**, which is the pitcher side's existing
+  // answer to "what did this outing come to": the same green/red/accent/amber
+  // the credit chip on the bar takes, the game line's own accent on the card,
+  // and the log's W/L/S/HLD. A fifth definition here would be a fourth place
+  // for those four colours to drift. `--muted` for a start still in progress or
+  // a no-decision relief appearance — the item is grouped either way, and a
+  // grey rail claims nothing about how it went, which is the truth at that
+  // point. While he is **on the mound** the role rail wins outright: `.live-entry`
+  // is what says a group is happening now, and a decision he hasn't got yet is
+  // the lesser fact.
+  const rail = role ? undefined : { borderLeftColor: decisionColor(pg.decision) };
   return (
-    <div className={`feed-item feed-pitcher${role ? ` live-entry role-${role}` : ''}`} ref={ref}>
+    <div
+      className={`feed-item feed-pitcher${role ? ` live-entry role-${role}` : ' feed-outing'}`}
+      style={rail}
+      ref={ref}
+    >
       {/* Identity only, and deliberately NOT the toggle: the headshot and the
           name are links, and while they sat inside the expand target a thumb
           that missed either one navigated away instead of opening the outing.
@@ -770,32 +821,41 @@ export function LiveFeed({
   const livePinned = new Set(liveRows.map((r) => `${r.report.id}-${r.game.gamePk}`));
 
   // Everything that has happened, interleaved newest-first: for a batter every
-  // completed plate appearance plus every base-running event (stolen bases, runs
-  // scored); for a pitcher his outing, as a single item. The in-progress at-bat
-  // (no event yet) lives in the Live section above, not here.
+  // completed plate appearance, for a pitcher his outing as a single item, and
+  // for **both** every base-running event on his game — his own baserunning on
+  // one side, the balk / wild pitch / pickoff / bag taken off him on the other.
+  // The in-progress at-bat (no event yet) lives in the Live section above.
+  //
+  // A pitcher's outing is one item and can be pinned to Live; his base events
+  // are not, and stay in the stream where they happened. Pinning them would put
+  // a balk from the second inning back at the top of the page every time he
+  // came out to throw the seventh.
+  const baseEntries = (report: PlayerReport, game: PlayerGame): FeedEntry[] =>
+    groupBaseEvents(game.baseEvents).map((evs, i): FeedEntry => ({
+      type: 'base',
+      report,
+      game,
+      evs,
+      // The play's own id where it has one, so the item keeps its identity as
+      // the day's events arrive; the index only stands in for a play with
+      // neither a clip nor a timestamp.
+      key: `${report.id}-${game.gamePk}-${evs[0].playId ?? evs[0].timestamp ?? i}`,
+    }));
   const recent = reports
     .flatMap((report) =>
       report.games.flatMap((game): FeedEntry[] =>
         report.kind === 'pitcher'
-          ? game.pitching && !livePinned.has(`${report.id}-${game.gamePk}`)
-            ? [{ type: 'pitching', report, game }]
-            : []
+          ? [
+              ...(game.pitching && !livePinned.has(`${report.id}-${game.gamePk}`)
+                ? [{ type: 'pitching' as const, report, game }]
+                : []),
+              ...baseEntries(report, game),
+            ]
           : [
               ...game.plateAppearances
                 .filter((pa) => pa.event)
                 .map((pa): FeedEntry => ({ type: 'pa', report, game, pa })),
-              ...groupBaseEvents(game.baseEvents).map(
-                (evs, i): FeedEntry => ({
-                  type: 'base',
-                  report,
-                  game,
-                  evs,
-                  // The play's own id where it has one, so the item keeps its
-                  // identity as the day's events arrive; the index only stands
-                  // in for a play with neither a clip nor a timestamp.
-                  key: `${report.id}-${game.gamePk}-${evs[0].playId ?? evs[0].timestamp ?? i}`,
-                }),
-              ),
+              ...baseEntries(report, game),
             ],
       ),
     )
