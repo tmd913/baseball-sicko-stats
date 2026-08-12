@@ -840,6 +840,20 @@ export default function App() {
   }, [espnConnected, ownership]);
 
   /**
+   * The positions ESPN has each player eligible at, or null with no league —
+   * which is also what makes the board's position pills mean ESPN eligibility
+   * rather than MLB's single listed position.
+   */
+  const eligibility = useMemo(() => {
+    if (!espnConnected || !ownership) return null;
+    const map = new Map<number, string[]>();
+    for (const [id, list] of Object.entries(ownership.eligibility ?? {})) {
+      map.set(Number(id), list);
+    }
+    return map;
+  }, [espnConnected, ownership]);
+
+  /**
    * Read the ownership map for the two surfaces that want roster % — the
    * research board and the player page — as well as the free-agent filter that
    * already asked for it.
@@ -913,16 +927,19 @@ export default function App() {
    */
   const researchRows = useMemo(() => {
     const rows = research[researchCacheKey] ?? [];
-    if (!rosterPct) return rows;
+    if (!rosterPct && !eligibility) return rows;
     return rows.map((r) => ({
       ...r,
-      rosterPct: rosterPct.get(r.id) ?? null,
+      rosterPct: rosterPct?.get(r.id) ?? null,
       // Absent from the delta map means "hasn't moved", not "unknown": the
       // server drops zeroes to keep the blob small, so a player with a roster %
       // and no entry really is flat.
-      rosterTrend: rosterTrend ? (rosterPct.has(r.id) ? rosterTrend.delta.get(r.id) ?? 0 : null) : null,
+      rosterTrend: rosterTrend ? (rosterPct?.has(r.id) ? rosterTrend.delta.get(r.id) ?? 0 : null) : null,
+      // Absent here means the opposite of absent above: ESPN doesn't know him,
+      // so the board falls back to MLB's listed position for him.
+      eligible: eligibility?.get(r.id) ?? null,
     }));
-  }, [research, researchCacheKey, rosterPct, rosterTrend]);
+  }, [research, researchCacheKey, rosterPct, rosterTrend, eligibility]);
 
   const openEspnSettings = useCallback(() => {
     setSettingsOpen(false);
@@ -2817,6 +2834,7 @@ export default function App() {
           watchlistOnly={researchWatchlistOnly}
           onWatchlistOnlyChange={setResearchWatchlistOnly}
           hasRosterPct={rosterPct !== null}
+          hasEligibility={eligibility !== null}
           trendDays={rosterTrend?.days ?? null}
           ownedIds={ownedIds}
           espnConnected={espnConnected}
@@ -3012,6 +3030,7 @@ export default function App() {
             toggleWatchlisted(`${detailsPlayer.kind}-${detailsPlayer.id}`, on)
           }
           rosterPct={rosterPct ? rosterPct.get(detailsPlayer.id) ?? null : undefined}
+          eligible={eligibility ? eligibility.get(detailsPlayer.id) ?? null : undefined}
           rosterTrend={
             rosterTrend && rosterPct?.has(detailsPlayer.id)
               ? { change: rosterTrend.delta.get(detailsPlayer.id) ?? 0, days: rosterTrend.days }
