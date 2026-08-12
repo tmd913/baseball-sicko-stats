@@ -1970,14 +1970,22 @@ export default function App() {
         {/* A lineup card, which is what the filter is: the men written on
             tonight's. It was three shortening rules — a "list" glyph, and a
             fair drawing of a filtered list, but on a phone this button is the
-            icon and nothing else, and that one is *optically* tiny: the strokes
-            span 10 of the viewBox's 24 units, so at 15px they came to 6px of
-            ink in the middle of a 36px square. The clipboard fills its box, so
-            the same 17px reads as an icon rather than as three marks. */}
+            icon and nothing else, and that one was *optically* tiny rather than
+            small: its strokes span 10 of the viewBox's 24 units, so at 15px they
+            came to about 6px of ink adrift in the middle of a 36px square.
+
+            Which is also why the first clipboard drawn here still read small at
+            17px and then at 20: it was 16 units wide against the calendar's 18,
+            and a tall narrow outline carries less weight than a wide one
+            whatever its box says. This one spans **3–21 across and 2–22 down**,
+            so the glyph is the size the number claims. 20px in a 36px square,
+            with the calendar beside it raised to the 17 every other icon button
+            in the app uses — the pair has to read as a pair, and this one leads
+            it. */}
         <svg
           viewBox="0 0 24 24"
-          width="17"
-          height="17"
+          width="20"
+          height="20"
           fill="none"
           stroke="currentColor"
           strokeWidth="2"
@@ -1986,8 +1994,8 @@ export default function App() {
           aria-hidden="true"
         >
           <rect x="8" y="2" width="8" height="4" rx="1" />
-          <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
-          <path d="M8.5 11.5h7M8.5 16h4" />
+          <path d="M16 5h3a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h3" />
+          <path d="M7 12.5h10M7 17h6" />
         </svg>
         <span className="starters-toggle-label">Starters</span>
       </button>
@@ -2020,10 +2028,13 @@ export default function App() {
       aria-label={dateOpen ? 'Close date controls' : 'Change dates'}
       title={dateOpen ? 'Close dates' : 'Change dates'}
     >
+      {/* 17px, the size every other icon button in the app draws at — it was
+          15, which was fine beside a label and small once a phone made this
+          button the glyph alone beside a 20px clipboard. */}
       <svg
         viewBox="0 0 24 24"
-        width="15"
-        height="15"
+        width="17"
+        height="17"
         fill="none"
         stroke="currentColor"
         strokeWidth="2"

@@ -4080,8 +4080,19 @@ body {
   font-weight: 700;
   white-space: nowrap;
 }
-.date-toggle svg {
+/* `flex: none` is load-bearing on both, not decoration: an `<svg>` in a flex
+   row is a flex *item*, and its `width` attribute is a basis it will shrink
+   below the moment the line is tight. The starters toggle was missing it and
+   its 20px clipboard rendered **10px wide by 20 tall** — squashed to half its
+   width on the very button where the glyph is all there is. That, rather than
+   the number in the attribute, is why raising it from 15 to 17 to 20 kept
+   looking small. Only the calendar takes the muted fill; the toggle's glyph
+   follows its own text colour, which is what carries its `.on` state. */
+.date-toggle svg,
+.starters-toggle svg {
   flex: none;
+}
+.date-toggle svg {
   color: var(--faint);
 }
 .date-toggle:hover svg,
