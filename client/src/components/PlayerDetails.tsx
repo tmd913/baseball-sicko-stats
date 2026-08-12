@@ -6,18 +6,20 @@ import type {
   PitcherSeasonStats,
   PlayerPercentiles,
   PercentileMetric,
+  PlayerKind,
   SeasonArsenal,
   SeasonStats,
   XwobaSeries,
 } from '../types';
-import { headshotUrl, savantPlayerUrl } from '../lib';
+import { headshotUrl, savantPlayerUrl, statusCorner } from '../lib';
 import { SeasonArsenalRow, SplitTabs } from './Arsenal';
 import type { SplitKey } from './Arsenal';
 import { RemoveButton } from './RemoveButton';
+import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
 import { BaseballMark } from './BaseballMark';
 import { RollingXwoba } from './RollingXwoba';
 import { GameLog } from './GameLog';
-import { useLockBodyScroll } from '../hooks';
+import { useLockBodyScroll, usePlayerStatus } from '../hooks';
 
 /**
  * Savant's diverging percentile scale: deep blue (poor, 0) → neutral grey
@@ -460,6 +462,42 @@ function ArsenalTab({
   );
 }
 
+/**
+ * The portrait at the head of the details view, carrying today's two marks: the
+ * lineup pip on the corner — a batting slot, `SP`, a reliever's entry inning —
+ * and the status code on the bottom edge, `IL10` or `DTD`.
+ *
+ * This view opens from everywhere in the app and on anybody, watchlisted or
+ * not, which is exactly why it should say them. A user arrives here from a
+ * board row to decide something about a player he doesn't follow, and the two
+ * questions under every such decision — is he playing today, and is he hurt —
+ * were answered by every other view in the app and not by this one. The marks
+ * are the same ones the summary table and the board draw, in the same places,
+ * scaled to a 64px portrait rather than a 37px row circle.
+ */
+function DetailsPhoto({
+  playerId,
+  name,
+  kind,
+}: {
+  playerId: number;
+  name: string;
+  kind: PlayerKind;
+}) {
+  const status = usePlayerStatus(playerId);
+  const badge = useStatusBadge(`${kind}-${playerId}`, status?.rosterStatus ?? null);
+  return (
+    <span className="details-photo-wrap">
+      <img className="details-photo" src={headshotUrl(playerId)} alt={name} />
+      <PhotoSpot
+        corner={status ? statusCorner(status, kind) : null}
+        className="details-photo-spot"
+      />
+      <PhotoStatus badge={badge} className="details-photo-status" />
+    </span>
+  );
+}
+
 export function PlayerDetails({
   playerId,
   name,
@@ -737,7 +775,7 @@ export function PlayerDetails({
           Back
         </button>
         <div className="details-id">
-          <img className="details-photo" src={headshotUrl(playerId)} alt={name} />
+          <DetailsPhoto playerId={playerId} name={name} kind={kind} />
           <div>
             <h1 className="details-name">
               {name}

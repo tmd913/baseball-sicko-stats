@@ -5,8 +5,11 @@ import type {
   PitchingCredit,
   PitchingLine,
   PlateAppearance,
+  GameStatus,
   PlayerGame,
+  PlayerKind,
   PlayerReport,
+  PlayerStatus,
   RosterStatus,
   SeasonStats,
 } from './types';
@@ -473,22 +476,54 @@ export type CornerTone = 'in' | 'out' | 'postponed' | 'start' | 'relief';
 export type Corner = { text: string; title: string; tone: CornerTone } | null;
 
 /**
+ * The five facts a corner pip is drawn from, named apart from the game they
+ * usually arrive on.
+ *
+ * A watchlist view has a whole `PlayerGame` to read them off; the research
+ * board and the details view have a `PlayerStatus`, which is these five and
+ * nothing else precisely because they are all a pip needs. Pulling them out
+ * keeps one definition of what "batting 3rd" and "SP" look like rather than a
+ * second, drifting copy for the views with no report behind them.
+ */
+export interface CornerFacts {
+  state: GameStatus['state'] | null;
+  lineupStatus: 'starting' | 'bench' | null;
+  lineupSpot: number | null;
+  pitchingRole: 'starting' | 'relief' | null;
+  entryInning: number | null;
+}
+
+function factsOfGame(game: PlayerGame): CornerFacts {
+  return {
+    state: game.status.state,
+    lineupStatus: game.lineupStatus,
+    lineupSpot: game.lineupSpot,
+    pitchingRole: game.pitchingRole,
+    entryInning: game.entryInning,
+  };
+}
+
+/**
  * Corner badge for a player headshot: the batting-order number when the player is
  * in the lineup, an exclamation mark when a posted lineup left them out or the
  * game was postponed. Null when the lineup hasn't posted (or a starter has no
  * known spot) — nothing to show.
  */
-export function lineupCorner(game: PlayerGame): Corner {
-  if (game.status.state === 'postponed') {
+export function battingCorner(f: CornerFacts): Corner {
+  if (f.state === 'postponed') {
     return { text: '!', title: 'Postponed', tone: 'postponed' };
   }
-  if (game.lineupStatus === 'bench') {
+  if (f.lineupStatus === 'bench') {
     return { text: '!', title: 'Not in lineup', tone: 'out' };
   }
-  if (game.lineupStatus === 'starting' && game.lineupSpot) {
-    return { text: String(game.lineupSpot), title: `Batting ${ordinal(game.lineupSpot)}`, tone: 'in' };
+  if (f.lineupStatus === 'starting' && f.lineupSpot) {
+    return { text: String(f.lineupSpot), title: `Batting ${ordinal(f.lineupSpot)}`, tone: 'in' };
   }
   return null;
+}
+
+export function lineupCorner(game: PlayerGame): Corner {
+  return battingCorner(factsOfGame(game));
 }
 
 /**
@@ -497,21 +532,21 @@ export function lineupCorner(game: PlayerGame): Corner {
  * the boxscore after), "RP 7th" for a reliever, naming the inning he came in.
  * Null when he hasn't pitched and isn't the posted probable.
  */
-export function pitchingBadge(
-  game: PlayerGame,
+export function pitchingRoleBadge(
+  f: CornerFacts,
 ): { label: string; title: string; tone: 'start' | 'relief' } | null {
-  if (game.pitchingRole === 'starting') {
+  if (f.pitchingRole === 'starting') {
     return {
       label: 'SP',
-      title: game.status.state === 'scheduled' ? 'Probable starting pitcher' : 'Started the game',
+      title: f.state === 'scheduled' ? 'Probable starting pitcher' : 'Started the game',
       tone: 'start',
     };
   }
-  if (game.pitchingRole === 'relief') {
-    return game.entryInning
+  if (f.pitchingRole === 'relief') {
+    return f.entryInning
       ? {
-          label: `RP ${ordinal(game.entryInning)}`,
-          title: `Relieved in the ${ordinal(game.entryInning)}`,
+          label: `RP ${ordinal(f.entryInning)}`,
+          title: `Relieved in the ${ordinal(f.entryInning)}`,
           tone: 'relief',
         }
       : { label: 'RP', title: 'Relief appearance', tone: 'relief' };
@@ -519,22 +554,50 @@ export function pitchingBadge(
   return null;
 }
 
+export function pitchingBadge(
+  game: PlayerGame,
+): { label: string; title: string; tone: 'start' | 'relief' } | null {
+  return pitchingRoleBadge(factsOfGame(game));
+}
+
 /**
- * Corner badge for a pitcher headshot, the counterpart of lineupCorner: "SP"
+ * Corner badge for a pitcher headshot, the counterpart of battingCorner: "SP"
  * for a starter, the entry inning for a reliever (a bare number, like a batting
  * slot — the title spells it out), or an exclamation mark for a postponed game.
  */
-export function pitchingCorner(game: PlayerGame): Corner {
-  if (game.status.state === 'postponed') {
+export function pitcherCorner(f: CornerFacts): Corner {
+  if (f.state === 'postponed') {
     return { text: '!', title: 'Postponed', tone: 'postponed' };
   }
-  const badge = pitchingBadge(game);
+  const badge = pitchingRoleBadge(f);
   if (!badge) return null;
   return {
-    text: game.pitchingRole === 'relief' && game.entryInning ? String(game.entryInning) : 'SP',
+    text: f.pitchingRole === 'relief' && f.entryInning ? String(f.entryInning) : 'SP',
     title: badge.title,
     tone: badge.tone,
   };
+}
+
+export function pitchingCorner(game: PlayerGame): Corner {
+  return pitcherCorner(factsOfGame(game));
+}
+
+/**
+ * The corner pip for a player with no report behind him — the research board
+ * and the details view, which know a `PlayerStatus` and nothing else about his
+ * day. Reads exactly as the watchlist's does, because it is the same two
+ * functions: a batting slot for a hitter, "SP" or an entry inning for a
+ * pitcher, "!" for a postponement or a lineup that left him out.
+ */
+export function statusCorner(status: PlayerStatus, kind: PlayerKind): Corner {
+  const facts: CornerFacts = {
+    state: status.gameState,
+    lineupStatus: status.lineupStatus,
+    lineupSpot: status.lineupSpot,
+    pitchingRole: status.pitchingRole,
+    entryInning: status.entryInning,
+  };
+  return kind === 'pitcher' ? pitcherCorner(facts) : battingCorner(facts);
 }
 
 /**

@@ -2,7 +2,8 @@ import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { FantasySlotTag } from './FantasySlot';
 import { ExpandButton } from './ExpandButton';
-import { useFullPage, useFantasySlot } from '../hooks';
+import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
+import { useFullPage } from '../hooks';
 import type { BattingLine, PitchingLine, PlayerGame, PlayerReport } from '../types';
 import { playerKey } from '../types';
 import type { Corner, LiveRole } from '../lib';
@@ -12,9 +13,7 @@ import {
   eraOf,
   formatIp,
   formatRate,
-  espnInjuryBadge,
   gameStatusView,
-  rosterStatusBadge,
   handThrows,
   headshotUrl,
   lineupCorner,
@@ -143,24 +142,12 @@ function aggregatePitching(report: PlayerReport): PitchingLine {
  * a "Rehab Assignment" chip beside a name was pushing stat columns off the
  * right edge to say something four characters could.
  *
- * **MLB's status leads and ESPN's fills only the gap it leaves** — the `??`
- * is the whole of that rule. Where ESPN says `TEN_DAY_DL` MLB has already said
- * a 10-day IL stint, and one absence stated twice reads as two problems; what
- * ESPN is here for is day-to-day and out, which MLB has no code for at all.
+ * The badge itself is `useStatusBadge`'s, shared with the research board and
+ * the details view; the only thing this adds is the report it reads the roster
+ * status off, which those two haven't got.
  */
-function PhotoStatus({ r }: { r: PlayerReport }) {
-  const spot = useFantasySlot(playerKey(r));
-  const badge = rosterStatusBadge(r.rosterStatus) ?? espnInjuryBadge(spot?.injuryStatus);
-  if (!badge) return null;
-  return (
-    <span
-      className={`sum-photo-status status-${badge.tone}`}
-      title={badge.title}
-      aria-label={badge.title}
-    >
-      {badge.short}
-    </span>
-  );
+function SumStatus({ r }: { r: PlayerReport }) {
+  return <PhotoStatus badge={useStatusBadge(playerKey(r), r.rosterStatus)} className="sum-photo-status" />;
 }
 
 function SumPhoto({
@@ -201,15 +188,7 @@ function SumPhoto({
           onError={() => setFailed(true)}
         />
       )}
-      {corner && (
-        <span
-          className={`lineup-spot sum-photo-spot spot-${corner.tone}`}
-          title={corner.title}
-          aria-label={corner.title}
-        >
-          {corner.text}
-        </span>
-      )}
+      <PhotoSpot corner={corner} className="sum-photo-spot" />
       {status}
     </button>
   );
@@ -243,7 +222,7 @@ function LeadCells({
           name={r.name}
           role={role}
           corner={corner}
-          status={<PhotoStatus r={r} />}
+          status={<SumStatus r={r} />}
           onOpen={onOpenDetails}
         />
       </td>
