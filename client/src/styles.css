@@ -4029,13 +4029,22 @@ body {
 /* The phone header: the field goes behind the magnifier and Edit loses its
    word, leaving the brand and two squares on one line. */
 @media (max-width: 640px) {
-  /* The brand and the icons make one line at 390px with room to spare, and
-     only with these two tightened: the gear joining the 36px squares grew the
-     brand by 4px, which was exactly enough to wrap the cluster onto a second
-     line. Tighter spacing inside each group is cheaper than a line of header on
-     a phone, and a 6px cluster reads as a set. */
+  /* The brand and the icons make one line at 390px, and only with these two
+     tightened: the gear joining the 36px squares grew the brand by 4px, which
+     was exactly enough to wrap the cluster onto a second line. Tighter spacing
+     inside each group is cheaper than a line of header on a phone, and a 6px
+     cluster reads as a set.
+
+     **9px again became 8 when refresh moved in beside them.** A fifth item in
+     this row costs its own 36px plus a gap, and the measurement came out at
+     347px against the 346 a 390px phone leaves inside the app's gutters —
+     over by one pixel, which is the tightest a miss gets. Taking the four gaps
+     down a pixel each buys 4 and lands it at 343 with 3 to spare. Below 390 it
+     is two lines (375 would need 283px of brand against 295, which no gap can
+     find), and that is the honest cost: the same widths where the research
+     bar already takes a row it doesn't take at 390. */
   .brand {
-    gap: 9px;
+    gap: 8px;
   }
   .header-tools {
     gap: 6px;
@@ -4113,6 +4122,13 @@ body {
    stop telling someone the report failed. */
 .app.edit-mode .settings-menu,
 .app.edit-mode .fantasy-menu,
+/* Named on its own now that it sits in `.brand` rather than inside
+   `.header-tools`, which used to take it away with the rest of the cluster.
+   It goes for the same reason the other two do: this screen is a list of rows
+   and a control that re-reads every source behind the page has nothing to act
+   on here — and it would be the one square left in a header the mode has
+   otherwise emptied. */
+.app.edit-mode .refresh-btn,
 .app.edit-mode .view-bar,
 .app.edit-mode .header-tools,
 .app.edit-mode .refreshing {
@@ -4780,6 +4796,27 @@ body {
 .help-btn:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+/* Refresh from ESPN, in the fantasy popover. A `.help-btn` like the entry below
+   it rather than a control of its own — the two are the same kind of row and
+   folding the class on keeps them identical by construction.
+
+   The one thing it adds is a glyph slot that doesn't move: the app's `.spinner`
+   is 13px and the arrow it replaces is 15, so without this the label steps 2px
+   left the moment the read starts and back when it lands — the same reason the
+   header's refresh swaps its icon inside a square that holds its size. */
+.fantasy-refresh > .spinner,
+.fantasy-refresh > svg {
+  flex: none;
+  width: 15px;
+  height: 15px;
+}
+.fantasy-refresh:disabled {
+  cursor: default;
+  /* Held at the hover colour rather than dimmed: it is disabled *because* it is
+     working, which is a busier state than idle and not a lesser one. */
+  color: var(--text);
+  border-color: var(--accent);
 }
 .sim-dot,
 .settings-dot {
