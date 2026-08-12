@@ -507,7 +507,7 @@ export function PlayerDetails({
   isWatchlisted,
   onWatchlistToggle,
   rosterPct,
-  rosterTrend,
+  rosterTrends,
   onAdd,
   onRemove,
   onClose,
@@ -528,9 +528,11 @@ export function PlayerDetails({
    *  connected, which is what hides the line; `null` when there is one but
    *  ESPN has no figure for this player. */
   rosterPct?: number | null;
-  /** How that figure has moved, and over how long. Absent with no league or no
-   *  baseline; a `change` of 0 is a real answer and renders as "flat". */
-  rosterTrend?: { change: number; days: number };
+  /** How that figure has moved, over every span the server had a baseline for —
+   *  the same set the research board draws columns from, and in the same
+   *  ascending order. Absent with no league or no history at all; a `change` of
+   *  0 is a real answer and is drawn as a flat 0.0 rather than dropped. */
+  rosterTrends?: { window: number; days: number; change: number }[];
   onAdd: () => void;
   onRemove: () => void;
   onClose: () => void;
@@ -813,24 +815,31 @@ export function PlayerDetails({
               >
                 Rostered{' '}
                 <strong>{rosterPct === null ? '—' : `${rosterPct.toFixed(1)}%`}</strong>
-                {rosterPct !== null && rosterTrend && (
-                  <span
-                    className={`details-trend${
-                      rosterTrend.change > 0
-                        ? ' up'
-                        : rosterTrend.change < 0
-                          ? ' down'
-                          : ''
-                    }`}
-                    title={`Change over the last ${rosterTrend.days} day${
-                      rosterTrend.days === 1 ? '' : 's'
-                    }`}
-                  >
-                    {rosterTrend.change === 0
-                      ? `flat over ${rosterTrend.days}d`
-                      : `${rosterTrend.change > 0 ? '▲' : '▼'} ${Math.abs(
-                          rosterTrend.change,
-                        ).toFixed(1)} in ${rosterTrend.days}d`}
+                {/* One span per column the board can draw, in the same order,
+                    so the page and the table agree about what is available.
+                    Each states its own span rather than the sentence a single
+                    trend used to read ("▲ 1.2 in 7d"): five of those is a
+                    paragraph, where the span up front and the move behind it
+                    is a row that can be scanned across. A flat window keeps
+                    its 0.0 in the muted colour — the server drops zeroes from
+                    the wire and the client fills them back, so flat is a real
+                    answer here and not an absence. */}
+                {rosterPct !== null && rosterTrends && rosterTrends.length > 0 && (
+                  <span className="details-trends">
+                    {rosterTrends.map((t) => (
+                      <span
+                        key={t.window}
+                        className={`details-trend${
+                          t.change > 0 ? ' up' : t.change < 0 ? ' down' : ''
+                        }`}
+                        title={`Change over the last ${t.days} day${t.days === 1 ? '' : 's'}`}
+                      >
+                        <span className="details-trend-span">{t.days}d</span>
+                        {t.change === 0
+                          ? '0.0'
+                          : `${t.change > 0 ? '▲' : '▼'}${Math.abs(t.change).toFixed(1)}`}
+                      </span>
+                    ))}
                   </span>
                 )}
               </p>

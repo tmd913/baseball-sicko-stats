@@ -128,7 +128,13 @@ export async function warm(event: WarmEvent = {}): Promise<{ mode: string; dates
     // it writes the day's snapshot, which is the baseline every future trend is
     // measured against. Nothing else guarantees a snapshot on a day nobody
     // happens to open the research board, and a missing day is a gap in the
-    // history for the fortnight it stays inside the trend window.
+    // history for the `TREND_MAX_DAYS` (35) it stays inside the longest window.
+    //
+    // A missed night costs more than it used to, and unevenly: the columns each
+    // have only their own narrow drift to route around a hole (none at all on
+    // 1D), so one skipped day takes the 1D column out entirely the following
+    // morning while the 30D one never notices. Nothing prunes these blobs, so
+    // the history is exactly the set of days this ran on.
     await getRosterTrend().catch((err) =>
       console.error('ESPN ownership snapshot failed:', err),
     );

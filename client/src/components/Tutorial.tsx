@@ -416,7 +416,12 @@ const CHAPTERS: Chapter[] = [
             a rostered figure to each player's page: the share of all ESPN leagues
             he's on a roster in, which sorts and filters like any other column — and a{' '}
             <Ui>Δ7d</Ui> beside it for which way that has been moving. Sort by it once
-            for the week's biggest adds, twice for the drops.
+            for the week's biggest adds, twice for the drops. Four more spans are a
+            tick away in <Ui>Columns</Ui> — <Ui>Δ1d</Ui>, <Ui>Δ3d</Ui>,{' '}
+            <Ui>Δ15d</Ui> and <Ui>Δ30d</Ui> — and they often disagree: the
+            man everyone dropped last month can be the one they're picking back up
+            today. Each label says the span it actually measured, and a span with no
+            history behind it yet isn't offered at all.
           </li>
         </ul>
         <h3 className="tut-sub">The five buttons</h3>

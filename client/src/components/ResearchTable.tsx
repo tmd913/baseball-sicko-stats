@@ -4,8 +4,14 @@ import { BaseballMark } from './BaseballMark';
 import { ExpandButton } from './ExpandButton';
 import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
 import { useFullPage, usePlayerStatus } from '../hooks';
-import { RESEARCH_INCLUDE_KEYS, RESEARCH_WINDOWS } from '../types';
-import type { PlayerKind, ResearchIncludeKey, ResearchRow, ResearchWindow } from '../types';
+import { RESEARCH_INCLUDE_KEYS, RESEARCH_WINDOWS, TREND_WINDOWS } from '../types';
+import type {
+  PlayerKind,
+  ResearchIncludeKey,
+  ResearchRow,
+  ResearchWindow,
+  TrendWindow,
+} from '../types';
 import { headshotUrl, statusCorner } from '../lib';
 
 /**
@@ -227,34 +233,55 @@ function inningsToOuts(ip: number): number {
 // them, then the Statcast group behind its divider.
 
 /**
- * Which way a roster % has moved lately.
+ * Which way a roster % has moved, one column per span.
  *
- * The label carries the span (`\u03947d`) because the span is not fixed: it is
- * seven days once a week of history exists and whatever is available before
- * then, and a header saying "7d" when it means three would be a lie the reader
- * has no way to catch. `ResearchTable` rewrites the label from the value the
- * server reports.
+ * Five of them because a move over a night and a move over a month are
+ * different facts about a player and regularly point opposite ways — the man
+ * everyone dropped in April and has been picked back up all week is falling on
+ * 30D and rising on 1D, and a single column has to pick one of those to say.
  *
- * Sorts descending first, like every other counting column — the question
+ * **The key is the window, the label is the measurement.** `rosterTrend` stays
+ * the seven-day column's key rather than becoming `rosterTrend7`, because saved
+ * column sets and every `cols=` link in the wild name it, and renaming it would
+ * silently drop the one trend column anybody has today. The label is written
+ * from what the server actually measured (`\u03946d` if the seventh day back is
+ * missing and the sixth is not), since a header saying "7d" when it means six
+ * would be a lie the reader has no way to catch — see `TREND_DRIFT` on the
+ * server for why no two of these can ever land on the same span.
+ *
+ * Each sorts descending first, like every other counting column: the question
  * people bring to a trend column is "who is being added", and one tap answers
- * it. One more tap gives the drops.
+ * it. One more gives the drops.
  */
-const TREND_COLUMN: Column = {
-  key: 'rosterTrend',
-  label: '\u0394 Ros%',
-  title: 'Change in roster % over the last week',
-  format: (r) =>
-    r.rosterTrend == null
-      ? '\u2014'
-      : `${r.rosterTrend > 0 ? '+' : '\u2212'}${Math.abs(r.rosterTrend).toFixed(1)}`,
-  value: (r) => r.rosterTrend ?? null,
-  cellClass: (r) =>
-    r.rosterTrend == null || r.rosterTrend === 0
-      ? undefined
-      : r.rosterTrend > 0
-        ? 'research-trend-up'
-        : 'research-trend-down',
-};
+const trendKey = (w: TrendWindow): string => (w === 7 ? 'rosterTrend' : `rosterTrend${w}`);
+
+const trendOf = (r: ResearchRow, w: TrendWindow): number | null => r.rosterTrends?.[w] ?? null;
+
+const trendColumn = (w: TrendWindow): Column => ({
+  key: trendKey(w),
+  label: `\u0394${w}d`,
+  title: `Change in roster % over the last ${w === 1 ? 'day' : `${w} days`}`,
+  format: (r) => {
+    const v = trendOf(r, w);
+    // Zero takes no sign at all. It used to come out as "\u22120.0", the sign
+    // being chosen on `> 0` — which reads as a fall of nothing, and there are a
+    // great many flat players on a board that drops zeroes from the wire.
+    if (v === null) return '\u2014';
+    if (v === 0) return '0.0';
+    return `${v > 0 ? '+' : '\u2212'}${Math.abs(v).toFixed(1)}`;
+  },
+  value: (r) => trendOf(r, w),
+  cellClass: (r) => {
+    const v = trendOf(r, w);
+    return v === null || v === 0 ? undefined : v > 0 ? 'research-trend-up' : 'research-trend-down';
+  },
+});
+
+const TREND_COLUMNS: Column[] = TREND_WINDOWS.map(trendColumn);
+
+/** Which window a column key belongs to, for the two places that have to tell a
+ *  trend column from an ordinary one without re-deriving the names. */
+const TREND_BY_KEY = new Map<string, TrendWindow>(TREND_WINDOWS.map((w) => [trendKey(w), w]));
 
 const ROSTER_PCT_COLUMN: Column = {
   key: 'rosterPct',
@@ -274,7 +301,7 @@ const ROSTER_PCT_COLUMN: Column = {
 
 const BATTER_COLUMNS: Column[] = [
   ROSTER_PCT_COLUMN,
-  TREND_COLUMN,
+  ...TREND_COLUMNS,
   { key: 'games', label: 'G', group: 'Counting', title: 'Games played', format: (r) => count(r.games), value: (r) => r.games },
   { key: 'pa', label: 'PA', title: 'Plate appearances', format: (r) => count(r.pa), value: (r) => r.pa },
   { key: 'ab', label: 'AB', title: 'At bats', format: (r) => count(r.ab), value: (r) => r.ab },
@@ -307,7 +334,7 @@ const BATTER_COLUMNS: Column[] = [
 
 const PITCHER_COLUMNS: Column[] = [
   ROSTER_PCT_COLUMN,
-  TREND_COLUMN,
+  ...TREND_COLUMNS,
   { key: 'games', label: 'G', group: 'Counting', title: 'Games pitched', format: (r) => count(r.games), value: (r) => r.games },
   { key: 'gamesStarted', label: 'GS', title: 'Games started', format: (r) => count(r.gamesStarted), value: (r) => r.gamesStarted },
   // Shown as thirds ("158.1") and ordered on the out count behind it — 6.2 is
@@ -367,13 +394,24 @@ const PITCHER_COLUMNS: Column[] = [
 // Expressed as what's *off* rather than what's on, so a column added later
 // shows up by default instead of being invisible until someone remembers to
 // list it — the safe direction for this to fail in.
+//
+// The four new trend windows are the case that tests that rule and are listed
+// off deliberately. They are not a *new* stat, which is what the rule protects:
+// they are four more resolutions of one already on the board, and left on they
+// would put five near-identical signed columns at the very front of the table
+// for every connected user — before games played. So the one that has always
+// been there (7d, the fantasy convention) stays on and the rest are a tick
+// away in the Columns panel, next to it, under the same Fantasy heading where
+// nobody has to know they exist to find them.
 const DEFAULT_OFF: Record<PlayerKind, ReadonlySet<string>> = {
   batter: new Set([
+    'rosterTrend1', 'rosterTrend3', 'rosterTrend15', 'rosterTrend30',
     'ab', 'cs', 'iso', 'babip', 'bbPerK', 'paPerHr', 'sbRate',
     'launchAngle', 'sweetSpotRate', 'gbRate', 'ldRate', 'fbRate',
     'whiffRate', 'chaseRate', 'firstPitchStrikeRate', 'sprintSpeed',
   ]),
   pitcher: new Set([
+    'rosterTrend1', 'rosterTrend3', 'rosterTrend15', 'rosterTrend30',
     // SV and HLD are off because SVHD is on — the sum is the read, and the
     // split between them is the follow-up question rather than the first one.
     'battersFaced', 'saves', 'holds', 'runs', 'hitBatsmen', 'avgAgainst',
@@ -718,9 +756,11 @@ interface Props {
    *  so this gate is about relevance rather than access: to someone with no
    *  fantasy league it is a column of noise. */
   hasRosterPct: boolean;
-  /** The span the trend column measures, or null when there isn't enough
-   *  history yet — which is what removes the column entirely. */
-  trendDays: number | null;
+  /** The spans the trend columns measure — one entry per window the server
+   *  found a baseline for, carrying both the window (the column's identity) and
+   *  the days actually measured (its label). Null, or simply missing an entry,
+   *  is what removes a column entirely. */
+  trendWindows: readonly { window: TrendWindow; days: number }[] | null;
   /** MLB ids of every player rostered in the connected fantasy league, or null
    *  while there is no league connected and nothing has been read. The free
    *  agents are the complement of this within the board — see `boardRows`. */
@@ -942,7 +982,7 @@ export function ResearchTable({
   watchlistOnly,
   onWatchlistOnlyChange,
   hasRosterPct,
-  trendDays,
+  trendWindows,
   ownedIds,
   espnConnected,
   espnError,
@@ -960,24 +1000,29 @@ export function ResearchTable({
   // Roster % drops out of the vocabulary entirely without a league, rather than
   // showing as a column of dashes: a column you cannot fill is worse than one
   // that isn't offered, and it would otherwise sit at the very front.
+  const measured = useMemo(
+    () => new Map((trendWindows ?? []).map((t) => [trendKey(t.window), t.days])),
+    [trendWindows],
+  );
   const allColumns = useMemo(() => {
     const base = kind === 'pitcher' ? PITCHER_COLUMNS : BATTER_COLUMNS;
     return base
       .filter((c) => (c.key === 'rosterPct' ? hasRosterPct : true))
-      // Dropped rather than dashed until there is a second day of history to
-      // measure against: a column of zeroes would read as "nobody is moving",
-      // which is a claim where the truth is an absence.
-      .filter((c) => (c.key === 'rosterTrend' ? trendDays !== null : true))
-      .map((c) =>
-        c.key === 'rosterTrend' && trendDays !== null
-          ? {
+      // A window with no baseline is dropped rather than dashed, and so is
+      // every one of them on a cold install: a column of zeroes would read as
+      // "nobody is moving", which is a claim where the truth is an absence.
+      .filter((c) => (TREND_BY_KEY.has(c.key) ? measured.has(c.key) : true))
+      .map((c) => {
+        const days = measured.get(c.key);
+        return days === undefined
+          ? c
+          : {
               ...c,
-              label: `\u0394${trendDays}d`,
-              title: `Change in roster % over the last ${trendDays} day${trendDays === 1 ? '' : 's'}`,
-            }
-          : c,
-      );
-  }, [kind, hasRosterPct, trendDays]);
+              label: `\u0394${days}d`,
+              title: `Change in roster % over the last ${days} day${days === 1 ? '' : 's'}`,
+            };
+      });
+  }, [kind, hasRosterPct, measured]);
   const columnsByKey = useMemo(
     () => new Map(allColumns.map((c) => [c.key, c])),
     [allColumns],
