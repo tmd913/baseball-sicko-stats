@@ -744,6 +744,17 @@ export default function App() {
   // below 640px they collapse behind the calendar icon and open as their own
   // full-width line. Transient like the other two.
   const [dateOpen, setDateOpen] = useState(false);
+  // Whether the chrome at the top of the page is showing. It is pinned there
+  // (`.app-chrome`, `position: sticky`), which is what makes a way to put it
+  // away necessary: three rows of tabs held permanently against the top of a
+  // phone is a third of the screen that never shows a stat. The menu button is
+  // the one thing that stays behind, so the mode can always be left.
+  //
+  // Open by default and transient — deliberately not in the URL, matching edit
+  // mode, the search bar and the date row. It says nothing about which players
+  // a view is reporting on, only how much of the page is theirs, and a link
+  // that arrived with the navigation folded away would be a puzzle.
+  const [navOpen, setNavOpen] = useState(true);
   // "Search for a player" from the empty state has two things it could mean,
   // depending on which of the two the breakpoint is showing: put the cursor in
   // the header's field, or open the bar the icon opens. `offsetParent` is null
@@ -1335,6 +1346,48 @@ export default function App() {
           <span className="edit-order-label">{editMode ? 'Done' : 'Edit'}</span>
         </button>
       )}
+      {/* The way out of the chrome, and back into it. Last in the cluster
+          because it is the only control here that acts on the bar it sits in
+          rather than on the page below, and because it is the one thing that
+          survives a close — everything to its left goes with the rest of the
+          top section, so the row collapses toward this button rather than
+          around a hole in the middle of it.
+
+          It fills when the section is **closed**, which is the other way round
+          from the gear, the magnifier, the pencil and the calendar — see
+          `.nav-toggle.folded`: their default is off, this one's default is on,
+          and the state worth marking is the one you cannot see. */}
+      <button
+        type="button"
+        className={`nav-toggle${navOpen ? '' : ' folded'}`}
+        onClick={() => {
+          // Closing takes the search bar and the date row with it — both are
+          // part of what folds away, and leaving either flagged open would
+          // spring it back on the next press for no reason the user gave.
+          if (navOpen) {
+            setSearchOpen(false);
+            setDateOpen(false);
+          }
+          setNavOpen((v) => !v);
+        }}
+        aria-expanded={navOpen}
+        aria-controls="app-chrome"
+        aria-label={navOpen ? 'Hide menu' : 'Show menu'}
+        title={navOpen ? 'Hide menu' : 'Show menu'}
+      >
+        <svg
+          viewBox="0 0 24 24"
+          width="18"
+          height="18"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          aria-hidden="true"
+        >
+          <path d="M4 7h16M4 12h16M4 17h16" />
+        </svg>
+      </button>
     </div>
   );
 
@@ -1525,8 +1578,22 @@ export default function App() {
     <div
       className={`app${view === 'summary' ? ' summary-mode' : ''}${
         view === 'research' ? ' research-mode' : ''
-      }${editMode ? ' edit-mode' : ''}${dateOpen ? ' date-open' : ''}`}
+      }${editMode ? ' edit-mode' : ''}${dateOpen ? ' date-open' : ''}${
+        navOpen ? '' : ' nav-closed'
+      }`}
     >
+      {/* Everything above the page's content, in one box so it can be pinned to
+          the top of the window as one thing (`position: sticky`). They were
+          three siblings — the header, the search bar and the view bar — and
+          they belong together: each is a statement of *where you are and what
+          you are looking at*, which is exactly what should not scroll away
+          under a page you are reading.
+
+          Pinning it is also what makes the menu button beside the pencil worth
+          having: chrome that scrolls off costs you nothing once it has gone,
+          where chrome that stays costs the same rows all the way down the
+          page. See `.app-chrome` and `.app.nav-closed`. */}
+      <div className="app-chrome" id="app-chrome">
       <header className="app-header">
         <div className="brand">
           <div className="brand-mark" aria-hidden="true">
@@ -1860,7 +1927,12 @@ export default function App() {
           {view !== 'research' && dateControl}
         </div>
       )}
+      </div>
 
+      {/* Outside the pinned box on purpose: a failed report is news about the
+          page rather than a control over it, and it would otherwise hold a
+          permanent row against the top of the window — and be folded away by a
+          menu button that has nothing to do with it. */}
       {error && <div className="error-banner">⚠ {error}</div>}
 
       {watchlistLoaded && watchlist.length === 0 && !error && view !== 'research' && (
