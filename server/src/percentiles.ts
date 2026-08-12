@@ -122,7 +122,17 @@ const SECTIONS: SectionDef[] = [
     metrics: [
       // Sprint speed's percentile is `percent_speed_order` (no `percent_rank_` prefix).
       { key: 'sprint', label: 'Sprint Speed', pct: 'percent_speed_order', raw: 'sprint_speed', fmt: 'dec1' },
-      // Baserunning run value split into its stealing and extra-base-taking parts.
+      // Baserunning run value split into its stealing and extra-base-taking
+      // parts. These two are the only rows on either card that an unqualified
+      // player gets no bar for, and it is deliberate: Savant summarises neither
+      // (so there is nothing to estimate from) and the page prints each as a
+      // **whole run**, which is far too coarse to rank. Measured against the
+      // 242-man baserunning-run-value board: a printed "0" of Basestealing Runs
+      // spans the 26th to the 70th percentile and a printed "1" of Extra-Base
+      // Runs the 52nd to the 86th, so any single number drawn from it would be
+      // a bar placed up to 22 points from the truth. The unrounded figure exists
+      // only on that board, which lists nobody unqualified. A value with no bar
+      // is the honest reading; don't add a `RANK_FALLBACK` entry for them.
       { key: 'runner_sb', label: 'Basestealing Runs', pct: 'percent_rank_runner_runs_sb', raw: 'runner_runs_sb', fmt: 'int' },
       { key: 'runner_xb', label: 'Extra-Base Runs', pct: 'percent_rank_runner_runs_xb', raw: 'runner_runs_xb', fmt: 'int' },
     ],
@@ -477,13 +487,13 @@ async function getDistribution(
   return values;
 }
 
-function batTrackingUrl(year: number): string {
+function batTrackingUrl(year: number, type: 'batter' | 'pitcher', minSwings: string): string {
   const params = new URLSearchParams({
     attackZone: '', batSide: '', contactType: '', count: '',
     dateStart: '', dateEnd: '', gameType: '', isHardHit: '',
-    minSwings: 'q', minGroupSwings: '1', pitchHand: '', pitchType: '',
+    minSwings, minGroupSwings: '1', pitchHand: '', pitchType: '',
     seasonStart: String(year), seasonEnd: String(year),
-    team: '', type: 'batter', csv: 'true',
+    team: '', type, csv: 'true',
   });
   return `https://baseballsavant.mlb.com/leaderboard/bat-tracking?${params.toString()}`;
 }
@@ -499,7 +509,7 @@ function hrLeaderboardUrl(year: number): string {
 /** `hard_swing_rate` on the leaderboard is a proportion; scale it to the percent
  * the player page's `fast_swing_rate` uses. */
 const getFastSwingDist = (year: number) =>
-  getDistribution('fast-swing', year, batTrackingUrl(year), 'hard_swing_rate', (v) => v * 100);
+  getDistribution('fast-swing', year, batTrackingUrl(year, 'batter', 'q'), 'hard_swing_rate', (v) => v * 100);
 
 /** Actual home-run counts among qualified batters, to rank `home_run` against. */
 const getHrDist = (year: number) =>
@@ -516,6 +526,147 @@ function leaguePercentile(
   if (values.length === 0) return null;
   const beaten = values.filter((v) => (lowerBetter ? v > value : v < value)).length;
   return Math.max(0, Math.min(100, Math.round((beaten / values.length) * 100)));
+}
+
+// ---- Rows Savant ranks but publishes no distribution for -------------------
+// The estimated-percentile fallback above can only fire where `metricSummaryStats`
+// carries a mean and a stddev, and that blob does not cover the whole card: it
+// holds 56 metrics on the batter page against the 67 the row carries a
+// `percent_rank_` for, and 48 of 67 on the pitcher page. So a handful of rows
+// are ranked by Savant for a qualified player and had **no way at all** to be
+// ranked for anyone else — the bar simply vanished from an unqualified card
+// while the value stayed. Those rows are ranked here instead, against the
+// leaderboard that publishes the same column league-wide, which is the same
+// answer `PITCHER_COMPUTED` reaches for the rows Savant ranks for nobody.
+//
+// Keyed by the metric's **raw** field, exactly as `metricSummaryStats` is, so a
+// metric needs no new declaration on `MetricDef` to opt in.
+
+interface RankBoardDef {
+  url: (year: number) => string;
+  /** The column the population slice is taken in order of — playing time on
+   *  whatever this board measures (batted balls, competitive swings). */
+  volume: string;
+  /** The summarised metric off the same page whose `n` sizes that slice. Savant
+   *  publishes the size of the population it ranks within beside every metric it
+   *  does summarise, and a sibling read off the same board is the closest thing
+   *  to the one it used here (checked below). Missing, the whole board stands. */
+  population: string;
+}
+
+const RANK_BOARDS = {
+  battedBall: {
+    url: (year: number) =>
+      `https://baseballsavant.mlb.com/leaderboard/batted-ball?type=batter&year=${year}&min=1&csv=true`,
+    volume: 'bbe',
+    population: 'groundballs_percent',
+  },
+  pitcherSwings: {
+    url: (year: number) => batTrackingUrl(year, 'pitcher', '1'),
+    volume: 'swings_competitive',
+    population: 'avg_swing_speed',
+  },
+} satisfies Record<string, RankBoardDef>;
+
+type RankBoard = keyof typeof RANK_BOARDS;
+
+/** `scale` converts the board's units to the player page's: both of these boards
+ *  publish a proportion where the page prints a percent. */
+const RANK_FALLBACK: Record<string, { board: RankBoard; column: string; scale: number }> = {
+  airballs_percent: { board: 'battedBall', column: 'air_rate', scale: 100 },
+  pull_percent_airballs: { board: 'battedBall', column: 'pull_air_rate', scale: 100 },
+  blasts_swing: { board: 'pitcherSwings', column: 'blast_per_swing', scale: 100 },
+};
+
+interface RankRow {
+  volume: number;
+  values: Record<string, number | null>;
+}
+interface RankDist {
+  year: number;
+  rows: RankRow[];
+  updatedAt: string;
+}
+
+const rankMem = new Map<string, RankDist>();
+
+/** Every player's volume and fallback columns from one leaderboard, cached in
+ *  memory and in the storage tier on the same freshness rule as the other
+ *  distributions. Unsliced, because the population size comes from the player
+ *  page rather than from here. */
+async function getRankRows(board: RankBoard, year: number): Promise<RankRow[]> {
+  const key = `${board}-${year}`;
+  const mem = rankMem.get(key);
+  if (mem && distFresh(mem)) return mem.rows;
+
+  const file = `rank-${board}-${year}.json`;
+  const raw = await readBlob(file);
+  if (raw !== null) {
+    try {
+      const stored = JSON.parse(raw) as RankDist;
+      if (distFresh(stored)) {
+        rankMem.set(key, stored);
+        return stored.rows;
+      }
+    } catch {
+      // corrupt entry — fall through and re-fetch
+    }
+  }
+
+  const def = RANK_BOARDS[board];
+  const res = await fetch(def.url(year), { headers: { 'User-Agent': BROWSER_UA } });
+  if (!res.ok) {
+    throw new Error(`${board} leaderboard returned ${res.status} ${res.statusText}`);
+  }
+  const records: Record<string, string>[] = parse(await res.text(), {
+    columns: true,
+    skip_empty_lines: true,
+    bom: true,
+    relax_column_count: true,
+  });
+  const columns = Object.values(RANK_FALLBACK)
+    .filter((f) => f.board === board)
+    .map((f) => f.column);
+  const rows: RankRow[] = [];
+  for (const r of records) {
+    const volume = toNum(r[def.volume]);
+    if (volume === null) continue;
+    const values: Record<string, number | null> = {};
+    for (const c of columns) values[c] = toNum(r[c]);
+    rows.push({ volume, values });
+  }
+
+  const built: RankDist = { year, rows, updatedAt: new Date().toISOString() };
+  rankMem.set(key, built);
+  await writeBlob(file, JSON.stringify(built));
+  return rows;
+}
+
+/** The `n` busiest players' values for one column, ascending and in the page's
+ *  units — the slice Savant ranks within, less anyone it is blank for. */
+function rankDistribution(rows: RankRow[], n: number, column: string, scale: number): number[] {
+  return [...rows]
+    .sort((a, b) => b.volume - a.volume)
+    .slice(0, n)
+    .map((r) => r.values[column])
+    .filter((v): v is number => v !== null)
+    .map((v) => v * scale)
+    .sort((a, b) => a - b);
+}
+
+/** Which fallback boards this card actually needs: a board is only worth a
+ *  request when some row it backs has no Savant rank **and** a value to rank, so
+ *  a qualified player's card costs nothing new. */
+function neededRankBoards(row: StatcastRow, defs: SectionDef[]): Set<RankBoard> {
+  const boards = new Set<RankBoard>();
+  for (const sec of defs) {
+    for (const m of sec.metrics) {
+      const fallback = RANK_FALLBACK[m.raw];
+      if (!fallback) continue;
+      if (toPercentile(row[m.pct]) === null && toNum(row[m.raw]) !== null) boards.add(fallback.board);
+    }
+  }
+  return boards;
 }
 
 // ---- Rows a pitcher's page shows but doesn't rank -------------------------
@@ -745,6 +896,10 @@ interface Computed {
   fastSwingRates: number[]; // batter
   hrCounts: number[]; // batter
   pitcherDists: Record<string, number[]>; // pitcher, keyed by leaderboard column
+  // The fallback distributions behind the scraped rows Savant ranks but doesn't
+  // summarise, keyed by the metric's raw field (see RANK_FALLBACK). Empty for a
+  // qualified player, whose rows all carry a `percent_rank_` of their own.
+  rankDists: Record<string, number[]>;
 }
 
 function buildSections(
@@ -760,13 +915,24 @@ function buildSections(
     for (const m of sec.metrics) {
       let percentile = toPercentile(row[m.pct]);
       const value = formatValue(row[m.raw], m.fmt);
-      // Savant left this player un-ranked but still has a value: estimate the
-      // percentile from the season league distribution, the way its own slider
-      // does. Marked `estimated` so the card can flag it as approximate.
+      // Savant left this player un-ranked but still has a value: rank him
+      // ourselves, from the season league distribution it publishes beside the
+      // metric (the way its own slider does), or — for the metrics it ranks but
+      // publishes no distribution for — against the leaderboard carrying that
+      // column league-wide. Either way the bar is ours rather than Savant's, so
+      // it is marked `estimated` and the card draws it dotted; solid on a
+      // scraped row means Savant ranked this player itself.
       let estimated = false;
       if (percentile === null && value !== null) {
         const rawVal = toNum(row[m.raw]);
-        const est = rawVal === null ? null : estimatePercentile(rawVal, dist[m.raw], !!m.lowerBetter);
+        const fallback = RANK_FALLBACK[m.raw];
+        const est =
+          rawVal === null
+            ? null
+            : estimatePercentile(rawVal, dist[m.raw], !!m.lowerBetter) ??
+              (fallback
+                ? leaguePercentile(rawVal, computed.rankDists[m.raw] ?? [], !!m.lowerBetter)
+                : null);
         if (est !== null) {
           percentile = est;
           estimated = true;
@@ -821,8 +987,10 @@ function cacheFile(playerId: number, year: number, kind: 'batter' | 'pitcher'): 
  * widened the pitcher card (run value, OBP/ISO/HR pairs, BABIP, curve spin, run
  * value by pitch group, command rates, swings against, more batted ball), v4
  * split the batter card's one long Batting section into Batting / Batted Ball /
- * Swing / Plate Discipline. */
-const CARD_VERSION = 4;
+ * Swing / Plate Discipline, v5 gave the rows Savant ranks but doesn't summarise
+ * (Air %, Pull Air %, Blast %) a leaderboard to be ranked against, which a
+ * stored v4 card holds as a bar-less row and would go on serving that way. */
+const CARD_VERSION = 5;
 
 /** A cached card is fresh if it was built by this version of the card and is
  * either a past season (immutable) or, for the current season, younger than the
@@ -871,7 +1039,24 @@ async function scrape(
   // ranked against a leaderboard rather than read off the page. A failed fetch
   // leaves those distributions empty, which costs their bars a percentile and
   // nothing else.
-  const computed: Computed = { fastSwingRates: [], hrCounts: [], pitcherDists: {} };
+  const computed: Computed = { fastSwingRates: [], hrCounts: [], pitcherDists: {}, rankDists: {} };
+  // The rows Savant ranks but publishes no distribution for, which is the one
+  // way a bar could go missing from an unqualified card entirely. Only fetched
+  // when such a row is actually un-ranked on *this* page, so a qualified
+  // player's card pays nothing; one try per board, so a board that fails costs
+  // its own bars and no more.
+  for (const board of neededRankBoards(row, defs)) {
+    try {
+      const rows = await getRankRows(board, year);
+      const n = toNum(dist[RANK_BOARDS[board].population]?.n) ?? rows.length;
+      for (const [rawField, f] of Object.entries(RANK_FALLBACK)) {
+        if (f.board !== board) continue;
+        computed.rankDists[rawField] = rankDistribution(rows, n, f.column, f.scale);
+      }
+    } catch (err) {
+      console.error(`${board} leaderboard unavailable for ${year}:`, err);
+    }
+  }
   if (kind === 'batter') {
     try {
       computed.fastSwingRates = await getFastSwingDist(year);

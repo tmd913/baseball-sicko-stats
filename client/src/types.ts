@@ -620,7 +620,9 @@ export interface PercentileMetric {
   label: string;
   percentile: number | null; // 0-100 league rank; null when the player has no data
   value: string | null; // the raw stat, pre-formatted for display (".415", "94.1")
-  estimated?: boolean; // percentile estimated from the league mean/stddev, not an exact rank
+  // Our rank rather than Savant's: estimated from the league mean/stddev it
+  // publishes, or computed against a leaderboard where it publishes none.
+  estimated?: boolean;
 }
 
 export interface PercentileSection {
@@ -689,9 +691,25 @@ export interface ResearchRow {
    *  shown to a user with a fantasy league connected. Absent means either no
    *  league or no match for the player. */
   rosterPct?: number | null;
-  /** How that roster % has moved over the trend window — client-merged too, and
-   *  absent when there is no league or no movement to report. */
-  rosterTrend?: number | null;
+  /** How that roster % has moved over each trend window the server could find a
+   *  baseline for — client-merged too, and absent entirely when there is no
+   *  league or no history yet.
+   *
+   *  A window present with a `null` is a player ESPN has no roster % for at
+   *  all; a window present with a `0` is a player who really has not moved,
+   *  since the server drops zeroes from the wire and the client fills them back
+   *  in. A window that is **missing** from the object had no baseline, and its
+   *  column is not on the board to ask about it. */
+  rosterTrends?: Partial<Record<TrendWindow, number | null>>;
+  /** The positions ESPN has him eligible at — `['2B', 'SS', 'OF']` — in the
+   *  board's own vocabulary and its own order.
+   *
+   *  **Merged in by the client** like the two above, and for the same reason:
+   *  the research blob is cached per kind and window and served to everyone,
+   *  where this is a fantasy fact shown only to a user with a league connected.
+   *  Absent means no league, or a player ESPN can't be joined to, and the
+   *  position pills fall back to MLB's single listed one for him. */
+  eligible?: string[] | null;
   savantName: string;
   kind: PlayerKind;
   team: string; // "MIL" — the abbreviation; a full name is column-wide
@@ -803,11 +821,17 @@ export interface UserPrefs {
   /** Read the roster views off the ESPN fantasy team rather than the saved
    *  list. Absent means the saved list, which is the default. */
   rosterSource?: 'fantasy';
-  /** Which sets of players the research board includes. Absent means the
+  /** Which ownership sets the research board includes. Absent means the
    *  default (free agents alone); `[]` is the real state of a user who has
    *  turned all three off. */
   researchInclude?: ResearchIncludeKey[];
-  /** Narrow the research board to the watchlist. Absent means off. */
+  /** Put the watchlist on the research board **as well as** those sets — a
+   *  union, not a narrowing. Absent means off. */
+  researchWatchlist?: boolean;
+  /** @deprecated The same flag under its old name, from when it narrowed the
+   *  board rather than widening it. Read on the way in so a preference saved
+   *  before the change survives; never written — a record migrates the first
+   *  time the user touches the control. */
   researchWatchlistOnly?: boolean;
 }
 
@@ -823,7 +847,10 @@ export interface UserPrefs {
  *   one ownership is unknowable and it is simply everyone off your roster.
  *
  * Disjoint by construction, `mine` winning where it and ESPN disagree — so all
- * three on is the whole board and none on is an empty one.
+ * three on is the whole board and none on is an empty one. They partition
+ * **ownership** and nothing else, which is why the watchlist is not a fourth
+ * key: it is a fact about the user rather than about who holds a player, so it
+ * rides beside this as its own flag and is unioned on top (`researchWatchlist`).
  */
 export type ResearchIncludeKey = 'mine' | 'others' | 'fa';
 
@@ -872,6 +899,22 @@ export type EspnStatus =
 /** Who in the connected league is already rostered — keyed by **MLB** player
  *  id, so the research board's free-agent test is a lookup on the id every row
  *  already carries. Mirrors `EspnOwnership` in the server's `espn.ts`. */
+/**
+ * The spans the board reports a roster-% move over. Mirrors `TREND_WINDOWS` in
+ * the server's `espn.ts`, which is where the reasoning for the set lives.
+ */
+export const TREND_WINDOWS = [1, 3, 7, 15, 30] as const;
+export type TrendWindow = (typeof TREND_WINDOWS)[number];
+
+/** One window's worth of movement. `days` is what was **measured** — within the
+ *  server's per-window drift of `window` — and is what every label in the app
+ *  prints, so a column can never claim a span it didn't measure. */
+export interface RosterTrendWindow {
+  window: TrendWindow;
+  days: number;
+  delta: Record<number, number>;
+}
+
 export interface EspnOwnership {
   leagueId: number;
   leagueName: string;
@@ -883,9 +926,17 @@ export interface EspnOwnership {
   owned: Record<number, number>;
   /** ESPN's global rostered percentage by MLB player id — see `ResearchRow.rosterPct`. */
   rosterPct: Record<number, number>;
-  /** How those percentages have moved, and over how long. Null until a second
-   *  day of history exists to measure against. */
-  trend: { delta: Record<number, number>; days: number } | null;
+  /** The positions ESPN has each player eligible at, by MLB player id — see
+   *  `ResearchRow.eligible`. A player with none in the board's vocabulary is
+   *  **absent** rather than carrying an empty list, which is the same shape as
+   *  a player ESPN has never heard of and reads as the same instruction: fall
+   *  back to MLB's listed position. */
+  eligibility: Record<number, string[]>;
+  /** How those percentages have moved over each span a baseline was found for,
+   *  ascending. Null until a second day of history exists to measure against at
+   *  all; a window with no baseline of its own is simply absent from the list,
+   *  and its column is dropped rather than shown full of zeroes. */
+  trend: RosterTrendWindow[] | null;
   /** Roster entries read, and how many found an MLB player. The gap is
    *  prospects who have never played a major-league game; it is carried so a
    *  match that has silently stopped working is visible rather than showing up

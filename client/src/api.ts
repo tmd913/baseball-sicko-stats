@@ -193,9 +193,10 @@ export const api = {
       body: JSON.stringify({ source }),
     });
   },
-  /** The board's population settings, both at once: which of the three sets it
-   *  includes (null for the default) and whether it is narrowed to the
-   *  watchlist. One route, because they are one control set. */
+  /** The board's population settings, both at once: which of the three
+   *  ownership sets it includes (null for the default) and whether the
+   *  watchlist is unioned onto them. One route, because they are one control
+   *  set. */
   async saveResearchInclude(
     include: ResearchIncludeKey[] | null,
     watchlist: boolean,

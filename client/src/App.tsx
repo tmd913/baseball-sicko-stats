@@ -13,6 +13,7 @@ import type {
   ResearchWindow,
   RosterSource,
   SeasonPlayer,
+  TrendWindow,
   WatchPlayer,
 } from './types';
 import { isInjured, isStartingOn } from './lib';
@@ -420,26 +421,33 @@ export default function App() {
   );
 
   /**
-   * Which sets of players the board includes, and whether it is narrowed to the
-   * watchlist. Shared across both boards and both windows like the window above
-   * — they are statements about *you* rather than about a board — and in the
-   * URL for the same reason it is: each decides which players the table is
-   * about, which is what a link has to carry.
+   * Which sets of players the board includes, and whether the watchlist is on
+   * the board as well. Shared across both boards and both windows like the
+   * window above — they are statements about *you* rather than about a board —
+   * and in the URL for the same reason it is: each decides which players the
+   * table is about, which is what a link has to carry.
    *
    * Both are **saved per user** as well (`researchInclude` /
-   * `researchWatchlistOnly`), which is what "it keeps what I set it to" means
-   * for a control someone sets once and then reads for a season. The URL wins
-   * where it speaks, exactly as `cols=` does: a link someone was handed should
-   * show what it says, and it doesn't overwrite what they had saved.
+   * `researchWatchlist`), which is what "it keeps what I set it to" means for a
+   * control someone sets once and then reads for a season. The URL wins where
+   * it speaks, exactly as `cols=` does: a link someone was handed should show
+   * what it says, and it doesn't overwrite what they had saved.
+   *
+   * **`watch=1` keeps its spelling although its meaning has widened** — it once
+   * narrowed the board to the watchlist and now unions it in. Renaming the
+   * param would have cost every open tab and every link already shared, and it
+   * buys nothing: the word never said "only", and the widening is the safe
+   * direction for an old link to be read in. A `watch=1` link shows the
+   * watchlisted players it promised, plus whatever its `inc=` asked for, rather
+   * than fewer than either.
    */
   const includeFromUrl =
     initialParams.get('inc') !== null || initialParams.get('scope') !== null;
   const [researchInclude, setResearchIncludeState] = useState<ResearchInclude>(() =>
     toResearchInclude(initialParams.get('inc'), initialParams.get('scope')),
   );
-  const watchlistOnlyFromUrl = initialParams.get('watch') === '1';
-  const [researchWatchlistOnly, setResearchWatchlistOnlyState] =
-    useState(watchlistOnlyFromUrl);
+  const watchlistFromUrl = initialParams.get('watch') === '1';
+  const [researchWatchlist, setResearchWatchlistState] = useState(watchlistFromUrl);
   const researchIncludeTouched = useRef(false);
   // One PUT for the pair, because the server holds them as one control set —
   // and because either of them changing means re-reading who is on the board,
@@ -458,13 +466,13 @@ export default function App() {
   const setResearchInclude = useCallback(
     (next: ResearchInclude) => {
       setResearchIncludeState(next);
-      saveInclude(next, researchWatchlistOnly);
+      saveInclude(next, researchWatchlist);
     },
-    [saveInclude, researchWatchlistOnly],
+    [saveInclude, researchWatchlist],
   );
-  const setResearchWatchlistOnly = useCallback(
+  const setResearchWatchlist = useCallback(
     (next: boolean) => {
-      setResearchWatchlistOnlyState(next);
+      setResearchWatchlistState(next);
       saveInclude(researchInclude, next);
     },
     [saveInclude, researchInclude],
@@ -500,12 +508,19 @@ export default function App() {
         if (!researchIncludeTouched.current && !includeFromUrl && prefs.researchInclude) {
           setResearchIncludeState(fromIncludeKeys(prefs.researchInclude));
         }
+        // The stored key was renamed when the control stopped meaning "only"
+        // (`researchWatchlistOnly` → `researchWatchlist`), so the **old one is
+        // still read** — a record only migrates on the next write, so a user
+        // who set this a month ago and hasn't touched it since has nothing but
+        // the old key, and dropping it would silently reset a saved preference
+        // on deploy. The same courtesy `fileLoad` extends to every older shape
+        // of the stored item.
         if (
           !researchIncludeTouched.current &&
-          !watchlistOnlyFromUrl &&
-          prefs.researchWatchlistOnly
+          !watchlistFromUrl &&
+          (prefs.researchWatchlist ?? prefs.researchWatchlistOnly)
         ) {
-          setResearchWatchlistOnlyState(true);
+          setResearchWatchlistState(true);
         }
         setResearchCols((prev) => {
           const next = { ...prev };
@@ -523,7 +538,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [urlColumns, hideInjuredFromUrl, rosterSourceFromUrl, includeFromUrl, watchlistOnlyFromUrl]);
+  }, [urlColumns, hideInjuredFromUrl, rosterSourceFromUrl, includeFromUrl, watchlistFromUrl]);
 
   // Saving is debounced because the picker is a row of checkboxes — turning a
   // group on is one intent and a dozen state changes, and each would otherwise
@@ -840,6 +855,20 @@ export default function App() {
   }, [espnConnected, ownership]);
 
   /**
+   * The positions ESPN has each player eligible at, or null with no league —
+   * which is also what makes the board's position pills mean ESPN eligibility
+   * rather than MLB's single listed position.
+   */
+  const eligibility = useMemo(() => {
+    if (!espnConnected || !ownership) return null;
+    const map = new Map<number, string[]>();
+    for (const [id, list] of Object.entries(ownership.eligibility ?? {})) {
+      map.set(Number(id), list);
+    }
+    return map;
+  }, [espnConnected, ownership]);
+
+  /**
    * Read the ownership map for the two surfaces that want roster % — the
    * research board and the player page — as well as the free-agent filter that
    * already asked for it.
@@ -896,13 +925,24 @@ export default function App() {
     loadStatuses();
   }, [view, detailsKey, loadStatuses]);
 
-  /** How each roster % has moved lately, and over how long. Null without a
-   *  league, and also when the server has no baseline yet. */
+  /** How each roster % has moved, one entry per span the server found a
+   *  baseline for. Null without a league, and also when it has no history at
+   *  all yet — see `getRosterTrend`, where a window with no baseline is left
+   *  out rather than sent empty.
+   *
+   *  Each delta becomes a `Map` here because the merge below asks after every
+   *  row on the board in every window — up to five lookups a row across some
+   *  1,500 of them — and a numeric key into a plain object goes through a
+   *  string conversion each time. */
   const rosterTrend = useMemo(() => {
     if (!espnConnected || !ownership?.trend) return null;
-    const map = new Map<number, number>();
-    for (const [id, d] of Object.entries(ownership.trend.delta)) map.set(Number(id), d);
-    return { delta: map, days: ownership.trend.days };
+    return ownership.trend.map((w) => ({
+      window: w.window,
+      days: w.days,
+      delta: new Map<number, number>(
+        Object.entries(w.delta).map(([id, d]) => [Number(id), d]),
+      ),
+    }));
   }, [espnConnected, ownership]);
 
   /**
@@ -913,16 +953,27 @@ export default function App() {
    */
   const researchRows = useMemo(() => {
     const rows = research[researchCacheKey] ?? [];
-    if (!rosterPct) return rows;
-    return rows.map((r) => ({
-      ...r,
-      rosterPct: rosterPct.get(r.id) ?? null,
-      // Absent from the delta map means "hasn't moved", not "unknown": the
-      // server drops zeroes to keep the blob small, so a player with a roster %
-      // and no entry really is flat.
-      rosterTrend: rosterTrend ? (rosterPct.has(r.id) ? rosterTrend.delta.get(r.id) ?? 0 : null) : null,
-    }));
-  }, [research, researchCacheKey, rosterPct, rosterTrend]);
+    if (!rosterPct && !eligibility) return rows;
+    return rows.map((r) => {
+      // Absent from a delta map means "hasn't moved", not "unknown": the server
+      // drops zeroes to keep the blob small, so a player with a roster % and no
+      // entry really is flat. A player with no roster % at all gets a null,
+      // which the column dashes. Built key by key rather than with
+      // `Object.fromEntries` so the window keys stay typed as windows.
+      const rosterTrends: Partial<Record<TrendWindow, number | null>> = {};
+      for (const w of rosterTrend ?? []) {
+        rosterTrends[w.window] = rosterPct?.has(r.id) ? w.delta.get(r.id) ?? 0 : null;
+      }
+      return {
+        ...r,
+        rosterPct: rosterPct?.get(r.id) ?? null,
+        rosterTrends: rosterTrend ? rosterTrends : undefined,
+        // Absent here means the opposite of absent above: ESPN doesn't know him,
+        // so the board falls back to MLB's listed position for him.
+        eligible: eligibility?.get(r.id) ?? null,
+      };
+    });
+  }, [research, researchCacheKey, rosterPct, rosterTrend, eligibility]);
 
   const openEspnSettings = useCallback(() => {
     setSettingsOpen(false);
@@ -1043,7 +1094,7 @@ export default function App() {
     // In the URL for the reason `hideil=1` is: it changes which players the
     // view reports on. Off is the absence of the param, so a link can only ever
     // turn it on and a saved preference has something to fill in.
-    if (view === 'research' && researchWatchlistOnly) p.set('watch', '1');
+    if (view === 'research' && researchWatchlist) p.set('watch', '1');
     // The column set of the board on screen, and only once it differs from that
     // board's defaults — otherwise every link would carry twenty stat keys to
     // say "the usual". `pos=` is what tells a reader which board they describe.
@@ -1069,7 +1120,7 @@ export default function App() {
     researchPos,
     researchWindow,
     researchInclude,
-    researchWatchlistOnly,
+    researchWatchlist,
     researchCols,
     researchKind,
     simulate,
@@ -2852,10 +2903,11 @@ export default function App() {
           onWindowChange={setResearchWindow}
           include={researchInclude}
           onIncludeChange={setResearchInclude}
-          watchlistOnly={researchWatchlistOnly}
-          onWatchlistOnlyChange={setResearchWatchlistOnly}
+          includeWatchlist={researchWatchlist}
+          onIncludeWatchlistChange={setResearchWatchlist}
           hasRosterPct={rosterPct !== null}
-          trendDays={rosterTrend?.days ?? null}
+          hasEligibility={eligibility !== null}
+          trendWindows={rosterTrend}
           ownedIds={ownedIds}
           espnConnected={espnConnected}
           espnError={espnError}
@@ -3051,9 +3103,14 @@ export default function App() {
             toggleWatchlisted(`${detailsPlayer.kind}-${detailsPlayer.id}`, on)
           }
           rosterPct={rosterPct ? rosterPct.get(detailsPlayer.id) ?? null : undefined}
-          rosterTrend={
+          eligible={eligibility ? eligibility.get(detailsPlayer.id) ?? null : undefined}
+          rosterTrends={
             rosterTrend && rosterPct?.has(detailsPlayer.id)
-              ? { change: rosterTrend.delta.get(detailsPlayer.id) ?? 0, days: rosterTrend.days }
+              ? rosterTrend.map((w) => ({
+                  window: w.window,
+                  days: w.days,
+                  change: w.delta.get(detailsPlayer.id) ?? 0,
+                }))
               : undefined
           }
           onAdd={() =>
