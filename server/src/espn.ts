@@ -171,6 +171,64 @@ const LINEUP_SLOTS: Record<number, string> = {
 const BENCH_SLOT = 16;
 const IL_SLOT = 17;
 
+/**
+ * The same slot ids again, reduced to the vocabulary the research board's
+ * position pills are written in — which is what `eligibleSlots` has to be
+ * translated into to be any use as a filter.
+ *
+ * Three kinds of slot are deliberately absent, and each for its own reason.
+ *
+ * **The composite slots say nothing new.** `2B/SS` (6), `1B/3B` (7) and `IF`
+ * (19) are places a manager may *play* him, and ESPN grants each of them off
+ * the single positions he is already eligible at — checked across all 3,922
+ * rows of the season-wide pool: not one player carries `2B/SS` without 2B or
+ * SS, `1B/3B` without 1B or 3B, or `IF` without one of the four infield spots.
+ * So carrying them would be the same fact twice, at the price of a wider cell;
+ * the board's own `IF` pill is that group, and it reads it off the four.
+ *
+ * **`LF`/`CF`/`RF` (8–10) collapse into `OF`** for the same reason and by the
+ * same check: slot 5 is present on every row that carries any of the three, 0
+ * exceptions. The board has one outfield pill, so three would only be three
+ * ways of lighting it.
+ *
+ * **`UTIL` (12), `P` (13), `BE` (16) and `IL` (17) are not positions at all** —
+ * two are "anywhere", two are where he sits when he isn't playing. ESPN's
+ * minor-league slots (21 and 22, 84 rows between them and every one of them a
+ * player the MLB index has never heard of) go with them.
+ */
+const ELIGIBLE_POSITIONS: Record<number, string> = {
+  0: 'C',
+  1: '1B',
+  2: '2B',
+  3: '3B',
+  4: 'SS',
+  5: 'OF',
+  8: 'OF',
+  9: 'OF',
+  10: 'OF',
+  11: 'DH',
+  14: 'SP',
+  15: 'RP',
+};
+
+/** The order an eligibility list reads in: round the infield from the plate
+ *  out, then the outfield, then the two slots that are a role rather than a
+ *  place. Fixed rather than ESPN's own array order so two players eligible at
+ *  the same pair read identically. */
+const ELIGIBILITY_ORDER = ['C', '1B', '2B', '3B', 'SS', 'OF', 'DH', 'SP', 'RP'];
+
+/** ESPN's `eligibleSlots` as the board's positions, de-duplicated (three
+ *  outfield slots are one `OF`) and in that order. */
+function eligiblePositions(slots: number[] | undefined): string[] {
+  if (!slots) return [];
+  const have = new Set<string>();
+  for (const slot of slots) {
+    const pos = ELIGIBLE_POSITIONS[slot];
+    if (pos) have.add(pos);
+  }
+  return ELIGIBILITY_ORDER.filter((p) => have.has(p));
+}
+
 // ---- The MLB name index ---------------------------------------------------
 
 /**
@@ -272,40 +330,68 @@ function matchPlayer(
   return onTeam.length === 1 ? onTeam[0] : null;
 }
 
-// ---- Roster %: how much of ESPN has this player --------------------------
+// ---- The season-wide player pool: roster % and eligibility ---------------
 
 /**
- * ESPN's **rostered percentage** for every player in its universe, keyed by MLB
- * id.
+ * What the app reads off ESPN's own list of every player it knows about, keyed
+ * by MLB id: the **rostered percentage** and the **positions he is eligible
+ * at**.
  *
- * Note what this number is: the share of *all* ESPN leagues in which the player
- * is on a roster — ESPN's own global figure, which is what "roster %" means
- * everywhere in fantasy. It is **not** the share of teams in the user's league,
- * which for a 12-team league would only ever be 0% or 8.3% and tell you
+ * One fetch for both because they arrive on the same row, and because the join
+ * behind either of them — a name and a club against the MLB index — is the
+ * expensive half and is worth doing once.
+ *
+ * Note what the **percentage** is: the share of *all* ESPN leagues in which the
+ * player is on a roster — ESPN's own global figure, which is what "roster %"
+ * means everywhere in fantasy. It is **not** the share of teams in the user's
+ * league, which for a 12-team league would only ever be 0% or 8.3% and tell you
  * nothing.
  *
- * Two things make this much cheaper than it might be. It comes off the
- * **season-wide** players endpoint rather than the league board — 3,921 rows
+ * And note what the **eligibility** is, because that one could plausibly have
+ * been league-specific and isn't. ESPN grants a position off games played there,
+ * and a league *may* set its own threshold — so the honest question was whether
+ * the global list agrees with the one the user's own league is scored by. It
+ * does: `mRoster` carries `eligibleSlots` for every rostered player, and against
+ * a live 12-team league all **320 of them came back byte-identical** to the
+ * global pool's, 0 differences. So the cookie-free list is not an approximation
+ * of the league's answer, it *is* the league's answer, and there is no case for
+ * the 10MB cookied board that would give it per league.
+ *
+ * Two things make all of this much cheaper than it might be. It comes off the
+ * **season-wide** players endpoint rather than the league board — 3,922 rows
  * and ~940KB against `kona_player_info`'s 3,602 rows and 10MB — and that
  * endpoint takes **no cookies at all**, since none of it is league-specific. So
  * one fetch serves every user of the app, and the map is cached globally rather
  * than per league.
  *
- * Gating it on having a league connected is therefore a product decision rather
- * than a technical one: the number is available to anyone, and it is hidden
- * from people with no fantasy league because to them it is noise.
+ * Gating either on having a league connected is therefore a product decision
+ * rather than a technical one: both are available to anyone, and to someone
+ * with no fantasy team a roster percentage is noise and an ESPN position is a
+ * second opinion he has no use for.
  */
+export interface EspnPlayerPool {
+  /** MLB player id → ESPN's global rostered percentage. */
+  pct: Record<number, number>;
+  /** MLB player id → the positions ESPN has him eligible at, in
+   *  `ELIGIBILITY_ORDER`. Players with none in the board's vocabulary are
+   *  **absent** rather than carrying an empty array: the client reads an
+   *  absence as "fall back to MLB's listed position", which is the same thing
+   *  it does for a player ESPN has never heard of, and one shape for one
+   *  meaning is what keeps that rule single. */
+  eligible: Record<number, string[]>;
+}
+
 const ROSTER_PCT_TTL_MS = 6 * 60 * 60 * 1000;
-let rosterPctCache: { pct: Record<number, number>; fetchedAt: number } | null = null;
-let rosterPctInFlight: Promise<Record<number, number>> | null = null;
+let poolCache: { pool: EspnPlayerPool; fetchedAt: number } | null = null;
+let poolInFlight: Promise<EspnPlayerPool> | null = null;
 
-export async function getRosterPct(): Promise<Record<number, number>> {
-  if (rosterPctCache && Date.now() - rosterPctCache.fetchedAt < ROSTER_PCT_TTL_MS) {
-    return rosterPctCache.pct;
+export async function getPlayerPool(): Promise<EspnPlayerPool> {
+  if (poolCache && Date.now() - poolCache.fetchedAt < ROSTER_PCT_TTL_MS) {
+    return poolCache.pool;
   }
-  if (rosterPctInFlight) return rosterPctInFlight;
+  if (poolInFlight) return poolInFlight;
 
-  rosterPctInFlight = (async () => {
+  poolInFlight = (async () => {
     const url = `${FANTASY_BASE}/${SEASON}/players?view=players_wl`;
     const res = await fetch(url, {
       headers: { ...UA, 'x-fantasy-filter': JSON.stringify({ filterActive: { value: true } }) },
@@ -315,23 +401,38 @@ export async function getRosterPct(): Promise<Record<number, number>> {
       id?: number;
       fullName?: string;
       proTeamId?: number;
+      eligibleSlots?: number[];
       ownership?: { percentOwned?: number };
     }[];
     const index = await getMlbIndex();
     const pct: Record<number, number> = {};
+    const eligible: Record<number, string[]> = {};
     for (const row of rows) {
-      const owned = row.ownership?.percentOwned;
-      if (typeof owned !== 'number' || !row.fullName) continue;
+      if (!row.fullName) continue;
+      // The join first, once, and the two readings of the row after it: they
+      // are the same player either way, and `matchPlayer` is the costly part.
       const found = matchPlayer(index, row.fullName, row.proTeamId);
-      if (found) pct[found.id] = owned;
+      if (!found) continue;
+      const owned = row.ownership?.percentOwned;
+      if (typeof owned === 'number') pct[found.id] = owned;
+      const positions = eligiblePositions(row.eligibleSlots);
+      if (positions.length > 0) eligible[found.id] = positions;
     }
-    rosterPctCache = { pct, fetchedAt: Date.now() };
-    return pct;
+    const pool = { pct, eligible };
+    poolCache = { pool, fetchedAt: Date.now() };
+    return pool;
   })().finally(() => {
-    rosterPctInFlight = null;
+    poolInFlight = null;
   });
 
-  return rosterPctInFlight;
+  return poolInFlight;
+}
+
+/** Just the percentages — what the trend is measured on, and what it snapshots.
+ *  A wrapper rather than a fetch of its own, so there is still one request and
+ *  one cache behind both halves. */
+export async function getRosterPct(): Promise<Record<number, number>> {
+  return (await getPlayerPool()).pct;
 }
 
 // ---- Trending: which way a roster % is moving ----------------------------
@@ -801,12 +902,26 @@ export interface EspnRosterPlayer {
 export interface EspnOwnership extends EspnLeagueInfo {
   /** MLB player id to the fantasy team id that holds him. */
   owned: Record<number, number>;
-  /** ESPN's global rostered percentage, by MLB player id — see `getRosterPct`.
+  /** ESPN's global rostered percentage, by MLB player id — see `getPlayerPool`.
    *  It rides along here rather than getting a route of its own because this is
    *  the call a connected client already makes, and the gate on both is the
    *  same: having a league. Its own cache is six hours, so the ten-minute
    *  ownership refresh re-reads a map rather than an upstream. */
   rosterPct: Record<number, number>;
+  /**
+   * The positions ESPN has each player eligible at, by MLB player id — off the
+   * same pool read and here for the same reason.
+   *
+   * It could not have gone on the research blob, which is where the board's
+   * other position facts live: that blob is cached per kind and window and
+   * served to **every** user alike, and this is a fact about a fantasy provider
+   * that only a user with a league connected is shown. The same rule already
+   * puts `rosterPct` here and has the client merge it into the rows.
+   *
+   * ~24KB of JSON for ~1,376 major leaguers, 6KB down the wire once
+   * `compression()` has had it — against the 2MB league read it rides on.
+   */
+  eligibility: Record<number, string[]>;
   /** How each roster % has moved, over each of the five spans a baseline could
    *  be found for, and how long each of those spans really was — null until
    *  there is a second day of history to measure against at all. A window with
@@ -877,14 +992,15 @@ export async function getOwnership(
   if (running && !force) return running;
 
   const job = (async () => {
-    const [data, index, rosterPct, trend] = await Promise.all([
+    const [data, index, pool, trend] = await Promise.all([
       leagueGet(creds, ['mRoster', 'mTeam', 'mSettings'], period),
       getMlbIndex(),
-      // A failed read here costs one column, not the whole connection: the
-      // free-agent filter and the fantasy roster don't depend on it.
-      getRosterPct().catch((err: Error) => {
-        console.error('ESPN roster% unavailable:', err.message);
-        return {} as Record<number, number>;
+      // A failed read here costs one column and the board's ESPN positions —
+      // which fall back to MLB's listed one — not the whole connection: the
+      // free-agent filter and the fantasy roster don't depend on either.
+      getPlayerPool().catch((err: Error) => {
+        console.error('ESPN player pool unavailable:', err.message);
+        return { pct: {}, eligible: {} } as EspnPlayerPool;
       }),
       getRosterTrend().catch((err: Error) => {
         console.error('ESPN roster trend unavailable:', err.message);
@@ -937,7 +1053,8 @@ export async function getOwnership(
     const result: EspnOwnership = {
       ...info,
       owned,
-      rosterPct,
+      rosterPct: pool.pct,
+      eligibility: pool.eligible,
       trend,
       rosters,
       rosterCount,

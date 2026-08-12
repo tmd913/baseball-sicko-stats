@@ -507,13 +507,166 @@ function isBatterByTrade(r: ResearchRow): boolean {
   return r.positionType !== 'Pitcher';
 }
 
+/**
+ * **What a position pill matches, and why it is two different facts.**
+ *
+ * With a fantasy league connected the batting pills read **ESPN's eligibility**
+ * (`ResearchRow.eligible`), which is multi-valued: Willi Castro is eligible at
+ * 1B, 2B, 3B, SS and OF at once, and a manager filtering to SS wants him. MLB's
+ * single listed position cannot express that — 301 of the 628 batters ESPN
+ * could be joined to carry more than one, 95 carry three or more — and it is
+ * not merely narrower but sometimes *wrong* for the purpose: on a checked board
+ * 21 batters have an MLB primary ESPN doesn't grant at all (Scott Kingery lists
+ * SS and is eligible at 2B and OF), so a fantasy manager was being shown a
+ * position his league would not let him use.
+ *
+ * Without a league — or for a player the name-and-club join can't place — it
+ * falls back to MLB's listed position, which is exactly what the board did
+ * before and reads identically: `Infielder`/`Outfielder` are precisely the four
+ * infield and three outfield abbreviations, so IF and OF answer the same as the
+ * `positionType` tests they replace.
+ */
+const MLB_TO_ELIGIBLE: Record<string, string> = {
+  C: 'C',
+  '1B': '1B',
+  '2B': '2B',
+  '3B': '3B',
+  SS: 'SS',
+  LF: 'OF',
+  CF: 'OF',
+  RF: 'OF',
+  OF: 'OF',
+  DH: 'DH',
+};
+
+/** The half of ESPN's vocabulary a batting board can act on. `SP`/`RP` ride on
+ *  the same map — the player page prints them — but no pill here reads them. */
+const BATTING_ELIGIBLE = new Set(['C', '1B', '2B', '3B', 'SS', 'OF', 'DH']);
+
+/**
+ * The positions a row counts as, in the board's own vocabulary.
+ *
+ * **The pitching board is deliberately not part of this**, and the reasoning is
+ * worth keeping. ESPN grants SP and RP the same way it grants 2B — off games
+ * started — so it is the same *kind* of fact, but three things say the board
+ * should keep `ResearchRow.starter`. It **partitions**: 143 of the 749 pitchers
+ * on a checked board are eligible at both, so the two pills would overlap and
+ * stop adding up to the board. It is **the window's answer rather than the
+ * season's**: `starter` is recomputed for 7d/15d/30d/60d, where an eligibility
+ * is a season-long qualification that a 7-day board would contradict. And it is
+ * **what the qualifier reads** — the whole reason `starter` is computed
+ * server-side is that the SP/RP pills and the innings-versus-appearances rule
+ * must not disagree about who is a starter, and pointing the pills at a second
+ * definition would put that back. Where the two can be compared they mostly
+ * agree anyway: of the 601 with a single ESPN answer, 561 match, and the 40 that
+ * don't are almost all organisational starters who have so far only relieved in
+ * the majors (Ty Blach, 1 G, 0 GS, ESPN `SP`) — which is ESPN describing a role
+ * where this board describes a season.
+ */
+function espnPositions(r: ResearchRow): string[] | null {
+  if (r.kind === 'pitcher' || !r.eligible) return null;
+  const list = r.eligible.filter((p) => BATTING_ELIGIBLE.has(p));
+  // An empty list after the filter is the same as no list at all: it means ESPN
+  // has nothing to say about him as a batter, which is what the fallback is for.
+  return list.length > 0 ? list : null;
+}
+
+function eligibleFor(r: ResearchRow): string[] {
+  const espn = espnPositions(r);
+  if (espn) return espn;
+  const one = MLB_TO_ELIGIBLE[r.position];
+  return one ? [one] : [];
+}
+
+/**
+ * **How many codes the Pos cell prints before it starts counting.**
+ *
+ * Two, and the number is the table's width rather than a preference. This
+ * column held two characters and hugs its content (`width: 1%`), so an uncapped
+ * list takes the widest row in the league — `1B/2B/3B/SS/OF`, fourteen
+ * characters — and spends the difference on the app's widest table, which on a
+ * phone is a stat column off the right edge. Measured at 390px by rewriting the
+ * rendered cells three ways: **39px** of column for the single code (1522px
+ * table), **108px** uncapped (1591), **65px** at this cap (1548). Two plus a
+ * count is bounded at seven characters (`2B/SS+3`) and is complete on its own
+ * for **533 of the 628** matched batters, which is also the form a fantasy site
+ * prints in a roster row. The three that would be lost never are: see the hoist
+ * below.
+ */
+const POS_CELL_MAX = 2;
+
+/**
+ * The Pos cell's text and its tooltip.
+ *
+ * Two rules beyond the cap. **DH reads only when it is all he has**: no pill
+ * selects it, ESPN grants it to a third of batters who are eligible somewhere
+ * else as well, and `C/DH` spends half the cell saying nothing the reader can
+ * act on — but for the ~33 players it is the whole of (a Luken Baker, an
+ * Ohtani's bat) it is the only true answer there is. And **the active pill's
+ * codes are hoisted to the front**, so a reader who has filtered to SS and sees
+ * a utility man on row four reads `SS/2B+2` rather than a truncation that has
+ * quietly dropped the one position that put him there. That is what makes a cap
+ * safe at all: the cell can never hide the reason the row is on screen.
+ */
+function posCellText(
+  r: ResearchRow,
+  leadCodes: string[] | undefined,
+): { text: string; title: string } {
+  const all = eligibleFor(r);
+  // Nothing in the board's vocabulary: a pitcher (`P`), a two-way player
+  // (`TWP`), or a position MLB has no record of. The cell prints MLB's own
+  // spelling and its old tooltip, which is exactly what it did before any of
+  // this — the pitching board in particular is untouched by eligibility.
+  if (all.length === 0) {
+    return {
+      text: r.position || '—',
+      title: r.position ? posTypeLabel(r.positionType) : 'No position listed',
+    };
+  }
+  const trimmed = all.length > 1 ? all.filter((p) => p !== 'DH') : all;
+  const lead = leadCodes ? trimmed.filter((p) => leadCodes.includes(p)) : [];
+  const ordered = lead.length
+    ? [...lead, ...trimmed.filter((p) => !lead.includes(p))]
+    : trimmed;
+  const shown = ordered.slice(0, POS_CELL_MAX);
+  const extra = ordered.length - shown.length;
+  const source = espnPositions(r)
+    ? `Eligible in ESPN at ${ordered.join(', ')}`
+    : `${ordered.join(', ')} — MLB's listed position; ESPN has no eligibility for him`;
+  return { text: shown.join('/') + (extra > 0 ? `+${extra}` : ''), title: source };
+}
+
 interface PositionOption {
   key: ResearchPos;
   label: string;
   title: string;
+  /** What the title becomes once ESPN eligibility is what the pill reads. The
+   *  two are genuinely different claims — "shortstops" against "anyone your
+   *  league will let you start at short" — and a pill that said the first while
+   *  doing the second would be the label lying about the filter. */
+  espnTitle?: string;
   kind: PlayerKind;
-  /** Absent on the two whole-board entries, which filter nothing. */
+  /** The eligibility codes this pill selects on — one for a single position,
+   *  four for `IF`. Absent on the whole-board entries and on SP/RP, which read
+   *  `match` instead. */
+  codes?: string[];
+  /** Absent on the two whole-board entries, which filter nothing, and on every
+   *  batting pill, which is `codes`. */
   match?: (r: ResearchRow) => boolean;
+}
+
+/** A pill that filters at all — anything but the two whole-board entries. */
+const filtersRows = (p: PositionOption) => Boolean(p.codes || p.match);
+
+/** One pill's test, whichever half of `PositionOption` carries it. */
+function positionMatcher(pos: ResearchPos): ((r: ResearchRow) => boolean) | undefined {
+  const option = POSITION_BY_KEY.get(pos);
+  if (!option) return undefined;
+  if (option.codes) {
+    const codes = option.codes;
+    return (r) => eligibleFor(r).some((p) => codes.includes(p));
+  }
+  return option.match;
 }
 
 /**
@@ -521,22 +674,25 @@ interface PositionOption {
  * from the plate outwards, then the two pitching roles.
  *
  * Note there is no DH pill — a player whose listed position is DH is on the
- * Batters board and nowhere else. C/1B/2B/3B/SS match his listed position;
- * IF and OF are the group he belongs to (an infielder is any of the four, an
- * outfielder any of LF/CF/RF), so those two overlap the individual pills by
- * design — IF is the whole infield, not "some other infielder". SP and RP do
- * partition Pitchers, the board they slice being pitchers already.
+ * Batters board and nowhere else. C/1B/2B/3B/SS match a position he is eligible
+ * at (ESPN's list with a league connected, MLB's single listed one without);
+ * IF and OF are the group (an infielder is any of the four, an outfielder any
+ * of LF/CF/RF), so those two overlap the individual pills by design — IF is the
+ * whole infield, not "some other infielder". **A multi-position player is now on
+ * more than one pill**, which is the point of reading eligibility: the pills
+ * were a partition of the batting board and are a cover of it. SP and RP still
+ * do partition Pitchers — see `espnPositions` for why they keep `starter`.
  */
 const POSITIONS: PositionOption[] = [
   { key: 'batters', label: 'Batters', title: 'Every batter', kind: 'batter' },
   { key: 'pitchers', label: 'Pitchers', title: 'Every pitcher', kind: 'pitcher' },
-  { key: 'C', label: 'C', title: 'Catchers', kind: 'batter', match: (r) => r.position === 'C' },
-  { key: '1B', label: '1B', title: 'First basemen', kind: 'batter', match: (r) => r.position === '1B' },
-  { key: '2B', label: '2B', title: 'Second basemen', kind: 'batter', match: (r) => r.position === '2B' },
-  { key: '3B', label: '3B', title: 'Third basemen', kind: 'batter', match: (r) => r.position === '3B' },
-  { key: 'SS', label: 'SS', title: 'Shortstops', kind: 'batter', match: (r) => r.position === 'SS' },
-  { key: 'IF', label: 'IF', title: 'Infielders — 1B, 2B, 3B and SS', kind: 'batter', match: (r) => r.positionType === 'Infielder' },
-  { key: 'OF', label: 'OF', title: 'Outfielders — LF, CF and RF', kind: 'batter', match: (r) => r.positionType === 'Outfielder' },
+  { key: 'C', label: 'C', title: 'Catchers', espnTitle: 'Eligible at catcher in ESPN', kind: 'batter', codes: ['C'] },
+  { key: '1B', label: '1B', title: 'First basemen', espnTitle: 'Eligible at first base in ESPN', kind: 'batter', codes: ['1B'] },
+  { key: '2B', label: '2B', title: 'Second basemen', espnTitle: 'Eligible at second base in ESPN', kind: 'batter', codes: ['2B'] },
+  { key: '3B', label: '3B', title: 'Third basemen', espnTitle: 'Eligible at third base in ESPN', kind: 'batter', codes: ['3B'] },
+  { key: 'SS', label: 'SS', title: 'Shortstops', espnTitle: 'Eligible at shortstop in ESPN', kind: 'batter', codes: ['SS'] },
+  { key: 'IF', label: 'IF', title: 'Infielders — 1B, 2B, 3B and SS', espnTitle: 'Eligible somewhere in the infield in ESPN — 1B, 2B, 3B or SS', kind: 'batter', codes: ['1B', '2B', '3B', 'SS'] },
+  { key: 'OF', label: 'OF', title: 'Outfielders — LF, CF and RF', espnTitle: 'Eligible in the outfield in ESPN', kind: 'batter', codes: ['OF'] },
   // `starter` comes off the row rather than being re-derived here, so these
   // pills and the qualifier the server applies can't disagree about who is one.
   { key: 'SP', label: 'SP', title: 'Starting pitchers — a majority of his appearances are starts', kind: 'pitcher', match: (r) => r.starter },
@@ -551,9 +707,9 @@ const POSITION_BY_KEY = new Map(POSITIONS.map((p) => [p.key, p]));
  * at once and needs no headings, where a closed select shows one.
  */
 const POSITION_GROUPS: { label: string; positions: PositionOption[] }[] = [
-  { label: 'Board', positions: POSITIONS.filter((p) => !p.match) },
-  { label: 'Batting', positions: POSITIONS.filter((p) => p.match && p.kind === 'batter') },
-  { label: 'Pitching', positions: POSITIONS.filter((p) => p.match && p.kind === 'pitcher') },
+  { label: 'Board', positions: POSITIONS.filter((p) => !filtersRows(p)) },
+  { label: 'Batting', positions: POSITIONS.filter((p) => filtersRows(p) && p.kind === 'batter') },
+  { label: 'Pitching', positions: POSITIONS.filter((p) => filtersRows(p) && p.kind === 'pitcher') },
 ];
 
 /** The group a row's position belongs to, for the Pos cell's tooltip — the
@@ -756,6 +912,12 @@ interface Props {
    *  so this gate is about relevance rather than access: to someone with no
    *  fantasy league it is a column of noise. */
   hasRosterPct: boolean;
+  /** Whether ESPN's eligibility map has landed, and so whether the position
+   *  pills read it rather than MLB's single listed position. It decides only
+   *  the *wording* — the pill titles and the Pos cell's tooltip; which rows
+   *  match is decided per row off `ResearchRow.eligible`, so a player ESPN
+   *  can't place falls back on his own rather than by a page-wide flag. */
+  hasEligibility: boolean;
   /** The spans the trend columns measure — one entry per window the server
    *  found a baseline for, carrying both the window (the column's identity) and
    *  the days actually measured (its label). Null, or simply missing an entry,
@@ -982,6 +1144,7 @@ export function ResearchTable({
   watchlistOnly,
   onWatchlistOnlyChange,
   hasRosterPct,
+  hasEligibility,
   trendWindows,
   ownedIds,
   espnConnected,
@@ -1184,7 +1347,12 @@ export function ResearchTable({
   const activeSortKey =
     sortKey && visibleKeys.has(sortKey) ? sortKey : defaultSortKey;
 
-  const posMatch = POSITION_BY_KEY.get(pos)?.match;
+  // Memoised on the pill alone: a fresh closure every render would break the
+  // `visible` memo below, which lists this among its dependencies.
+  const posMatch = useMemo(() => positionMatcher(pos), [pos]);
+  /** The codes the active pill selects on, so the Pos cell can lead with them —
+   *  see `posCellText`. Undefined on the whole-board pills and on SP/RP. */
+  const posCodes = POSITION_BY_KEY.get(pos)?.codes;
 
   // Keep the selected pill on screen. The row scrolls sideways and holds eleven
   // of them, so on a phone the one you're on is often past the right edge —
@@ -1708,7 +1876,7 @@ export function ResearchTable({
                 role="tab"
                 aria-selected={pos === p.key}
                 className={`research-pos-tab${pos === p.key ? ' active' : ''}`}
-                title={p.title}
+                title={(hasEligibility && p.espnTitle) || p.title}
                 onClick={() => onPosChange(p.key)}
               >
                 {p.label}
@@ -2110,6 +2278,7 @@ export function ResearchTable({
             <tbody>
               {visible.map((r) => {
                 const key = `${r.kind}-${r.id}`;
+                const posCell = posCellText(r, posCodes);
                 return (
                   <tr key={key}>
                     <td className="sum-img-col">
@@ -2148,8 +2317,13 @@ export function ResearchTable({
                       />
                     </td>
                     <td className="research-team-col">{r.team || '—'}</td>
-                    <td className="research-pos-col" title={posTypeLabel(r.positionType)}>
-                      {r.position || '—'}
+                    {/* The one cell that says *why* a filtered row is on the
+                        board — see `posCellText` for the cap, the hoist and
+                        what happens to DH. The tooltip names its source, since
+                        `SS` alone can't say whether it came from ESPN or is the
+                        fallback for a player the join couldn't place. */}
+                    <td className="research-pos-col" title={posCell.title}>
+                      {posCell.text}
                     </td>
                     {columns.map((c, i) => (
                       <td

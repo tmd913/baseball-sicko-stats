@@ -699,6 +699,15 @@ export interface ResearchRow {
    *  in. A window that is **missing** from the object had no baseline, and its
    *  column is not on the board to ask about it. */
   rosterTrends?: Partial<Record<TrendWindow, number | null>>;
+  /** The positions ESPN has him eligible at — `['2B', 'SS', 'OF']` — in the
+   *  board's own vocabulary and its own order.
+   *
+   *  **Merged in by the client** like the two above, and for the same reason:
+   *  the research blob is cached per kind and window and served to everyone,
+   *  where this is a fantasy fact shown only to a user with a league connected.
+   *  Absent means no league, or a player ESPN can't be joined to, and the
+   *  position pills fall back to MLB's single listed one for him. */
+  eligible?: string[] | null;
   savantName: string;
   kind: PlayerKind;
   team: string; // "MIL" — the abbreviation; a full name is column-wide
@@ -906,6 +915,12 @@ export interface EspnOwnership {
   owned: Record<number, number>;
   /** ESPN's global rostered percentage by MLB player id — see `ResearchRow.rosterPct`. */
   rosterPct: Record<number, number>;
+  /** The positions ESPN has each player eligible at, by MLB player id — see
+   *  `ResearchRow.eligible`. A player with none in the board's vocabulary is
+   *  **absent** rather than carrying an empty list, which is the same shape as
+   *  a player ESPN has never heard of and reads as the same instruction: fall
+   *  back to MLB's listed position. */
+  eligibility: Record<number, string[]>;
   /** How those percentages have moved over each span a baseline was found for,
    *  ascending. Null until a second day of history exists to measure against at
    *  all; a window with no baseline of its own is simply absent from the list,
