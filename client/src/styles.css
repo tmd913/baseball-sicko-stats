@@ -3720,11 +3720,12 @@ body {
   flex: none;
 }
 
-/* The header's icon cluster — the roster search, Edit, and the calendar that
-   stands in for the date controls on a narrow screen. The first two were a full
-   search field plus a labelled button, which is the widest thing in the header
-   for a control wanted a few seconds at a time; each now opens its own bar and
-   the three cost one square apiece.
+/* The header's icon cluster — the roster search and the refresh button. Edit
+   was the third of them and is an entry in the settings menu now, which on a
+   desktop buys the header back the ~66px its labelled pill cost and on a phone
+   a whole square: the field is 418px measured, and this row is where the
+   header's line budget is spent, so a control read once a session is the wrong
+   thing to keep in it.
 
    It sits *before* .date-control in the source, which is what puts it to the
    left of the dates at every width. margin-left: auto then pushes the cluster
@@ -3769,13 +3770,16 @@ body {
   flex: 1;
   min-width: 0;
 }
-/* One square icon button, five uses — the settings gear included, which was a
-   32px circle of its own until it was folded in here. Folded into one selector
-   list rather than restyled to match, so every icon button in the header stays
-   identical by construction: square at --control-h and --control-radius, the
-   same height and corner as the date pills they share a line with. */
+/* One square icon button, six uses — the settings gear included, which was a
+   32px circle of its own until it was folded in here, and the refresh button,
+   which took the slot Edit left when it moved into the gear's menu. Folded into
+   one selector list rather than restyled to match, so every icon button in the
+   header stays identical by construction: square at --control-h and
+   --control-radius, the same height and corner as the date pills they share a
+   line with. */
 .settings-btn,
 .fantasy-btn,
+.refresh-btn,
 .edit-order-btn,
 .search-toggle,
 .date-toggle {
@@ -3798,6 +3802,7 @@ body {
 }
 .settings-btn:hover,
 .fantasy-btn:hover,
+.refresh-btn:hover,
 .edit-order-btn:hover,
 .search-toggle:hover,
 .date-toggle:hover {
@@ -3806,6 +3811,7 @@ body {
 }
 .settings-btn:focus-visible,
 .fantasy-btn:focus-visible,
+.refresh-btn:focus-visible,
 .edit-order-btn:focus-visible,
 .search-toggle:focus-visible,
 .date-toggle:focus-visible {
@@ -3817,6 +3823,7 @@ body {
    than a mode you are in; one look for the row beats that distinction. */
 .settings-btn.active,
 .fantasy-btn.active,
+.refresh-btn.active,
 .edit-order-btn.active,
 .search-toggle.active,
 .date-toggle.active {
@@ -3847,6 +3854,22 @@ body {
   color: var(--bg);
   border-color: var(--accent);
 }
+/* Refreshing: the button holds its place and its size — the 13px `.spinner`
+   swaps in for the 17px icon inside a square that doesn't move, so nothing in
+   the header shifts while a read is in flight. Disabled rather than merely
+   ignored, so a second press is refused by the browser and says so; the muted
+   fill is the only thing that changes, since a spinner turning is already the
+   loudest thing on the row. */
+.refresh-btn:disabled {
+  cursor: default;
+  border-color: var(--border);
+  color: var(--faint);
+}
+.refresh-btn .spinner {
+  /* Its own 13px is right beside a 17px icon: the disc reads as the same
+     weight as the arrow it replaces rather than as a smaller thing. */
+  flex: none;
+}
 .edit-order-icon {
   display: inline-flex;
 }
@@ -3873,10 +3896,14 @@ body {
   display: flex;
   flex: 1 1 100%;
 }
-/* Edit carries its label wherever there is room for it, so it overrides the
-   square the shared list gives it — everything else in that rule (the panel
-   fill, the border, the hover, the accent when active) is what it is there for.
-   Below 640px it goes back to the icon alone with the others. */
+/* Edit carries its label, so it overrides the square the shared list gives it —
+   everything else in that rule (the panel fill, the border, the hover, the
+   accent when active) is what it is there for. It renders in one place now, as
+   the edit screen's own Done button: the class stays in the header's selector
+   list because that is where it is *from*, and keeping it there is what makes
+   the control that leaves the mode look like the one that used to enter it. It
+   keeps the label at every width — there is no line budget to defend on a
+   screen whose whole content is a list of rows. */
 .edit-order-btn {
   width: auto;
   padding: 7px 14px;
@@ -3927,17 +3954,14 @@ body {
   .search-bar {
     display: flex;
   }
-  /* Icons only: the field goes behind the magnifier and Edit loses its word. */
+  /* Icons only: the field goes behind the magnifier, leaving the brand, the
+     magnifier and the refresh button on one line. Edit used to drop its word
+     here too and no longer has to — it is an entry in the settings menu now, so
+     the phone header is one square shorter than it was and `.edit-order-btn`
+     keeps its label wherever it renders (which is the edit screen's own head,
+     as Done). */
   .header-search {
     display: none;
-  }
-  .edit-order-label {
-    display: none;
-  }
-  .edit-order-btn {
-    width: var(--control-h);
-    padding: 0;
-    gap: 0;
   }
   .header-tools {
     flex: none;
@@ -3986,11 +4010,19 @@ body {
    date row it opens are not named: they are inside .view-bar now, and hiding
    their container hides them.
 
+   The whole of `.header-tools` goes now, where the list used to name the
+   magnifier inside it: the cluster held the Edit button, which had to survive
+   as Done, so its container could not be hidden wholesale. With Edit in the
+   gear's menu and Done on the edit screen's own head, nothing in the header is
+   wanted here — the fantasy button included, which was the one control left
+   standing in a mode where it could only swap the very list being edited.
+
    The error banner is deliberately *not* in this list: a mode is no reason to
    stop telling someone the report failed. */
 .app.edit-mode .settings-menu,
+.app.edit-mode .fantasy-menu,
 .app.edit-mode .view-bar,
-.app.edit-mode .search-toggle,
+.app.edit-mode .header-tools,
 .app.edit-mode .refreshing {
   display: none;
 }
@@ -4000,16 +4032,24 @@ body {
   gap: 14px;
 }
 /* The kind switch rides on this row — the view bar it normally lives in is
-   hidden here, and it is the only way to the other kind's order. */
+   hidden here, and it is the only way to the other kind's order — and so does
+   Done, which is the only way *out* now that Edit is a menu entry behind a gear
+   this mode hides. `margin-right: auto` on the title is what keeps those two
+   together at the right end: with three items, `space-between` alone would
+   strand the switch in the middle of the row. At 390px the row wraps and Done
+   takes a line of its own under the switch, still right-aligned — a full 36px
+   target rather than a squeezed one, which is the right way for this row to run
+   out of width. */
 .edit-page-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   flex-wrap: wrap;
   gap: 10px 12px;
 }
 .edit-page-title {
   margin: 0;
+  margin-right: auto;
   font-size: 17px;
   letter-spacing: -0.02em;
 }
