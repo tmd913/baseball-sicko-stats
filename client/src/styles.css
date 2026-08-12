@@ -5314,10 +5314,11 @@ body {
 /* ---- Disclosure bar: Search and Filters, each behind its own button ----
    `.starters-toggle` — the summary table's "only today's starters" filter, up
    in the roster row — is folded into every one of these lists rather than
-   restyled to resemble them. It is the same object as Qualified two views over:
-   a plain toggle with no panel, narrowing who is in a table, which is why it
-   takes `.on` and never `.active` and why it reads identically by
-   construction. */
+   restyled to resemble them. It is the same object as the board's own
+   Watchlist button: a plain toggle with no panel, deciding who is in a table,
+   which is why it takes `.on` and never `.active` and why it reads identically
+   by construction. (Qualified was the closer twin of the two and is gone —
+   see `research.ts`.) */
 .research-toggle,
 .starters-toggle {
   display: inline-flex;

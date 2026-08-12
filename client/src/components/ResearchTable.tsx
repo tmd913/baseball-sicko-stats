@@ -554,10 +554,13 @@ const BATTING_ELIGIBLE = new Set(['C', '1B', '2B', '3B', 'SS', 'OF', 'DH']);
  * stop adding up to the board. It is **the window's answer rather than the
  * season's**: `starter` is recomputed for 7d/15d/30d/60d, where an eligibility
  * is a season-long qualification that a 7-day board would contradict. And it is
- * **what the qualifier reads** — the whole reason `starter` is computed
- * server-side is that the SP/RP pills and the innings-versus-appearances rule
- * must not disagree about who is a starter, and pointing the pills at a second
- * definition would put that back. Where the two can be compared they mostly
+ * **what the server's qualifier reads** — `starter` is computed server-side so
+ * that the SP/RP pills and the innings-versus-appearances rule cannot disagree
+ * about who is a starter, and pointing the pills at a second definition would
+ * put that back. (That rule no longer reaches the screen — the `Qualified`
+ * toggle it fed is gone — so `ResearchRow.qualified` is a field nothing renders
+ * and this third argument is the weakest of the three; the first two stand on
+ * their own.) Where the two can be compared they mostly
  * agree anyway: of the 601 with a single ESPN answer, 561 match, and the 40 that
  * don't are almost all organisational starters who have so far only relieved in
  * the majors (Ty Blach, 1 G, 0 GS, ESPN `SP`) — which is ESPN describing a role
@@ -694,7 +697,8 @@ const POSITIONS: PositionOption[] = [
   { key: 'IF', label: 'IF', title: 'Infielders — 1B, 2B, 3B and SS', espnTitle: 'Eligible somewhere in the infield in ESPN — 1B, 2B, 3B or SS', kind: 'batter', codes: ['1B', '2B', '3B', 'SS'] },
   { key: 'OF', label: 'OF', title: 'Outfielders — LF, CF and RF', espnTitle: 'Eligible in the outfield in ESPN', kind: 'batter', codes: ['OF'] },
   // `starter` comes off the row rather than being re-derived here, so these
-  // pills and the qualifier the server applies can't disagree about who is one.
+  // pills and the server's own qualification rule can't disagree about who is
+  // one — even now that the rule has no control on the page left to feed.
   { key: 'SP', label: 'SP', title: 'Starting pitchers — a majority of his appearances are starts', kind: 'pitcher', match: (r) => r.starter },
   { key: 'RP', label: 'RP', title: 'Relief pitchers', kind: 'pitcher', match: (r) => !r.starter },
 ];
@@ -884,21 +888,10 @@ interface Props {
    *  for the same reason `pos` is — and so the URL can carry it. */
   columnKeys: string[] | null;
   onColumnsChange: (keys: string[] | null) => void;
-  /** The one filter worth a button of its own: almost every rate question on
-   *  this page ("who has the best xwOBA") is really about the players with
-   *  enough of a season behind them, and building it by hand means knowing
-   *  today's PA threshold.
-   *
-   *  Lifted to App like `pos` — unlike the search and the stat filters, which
-   *  are phrased in one board's vocabulary and are right to clear when the
-   *  board changes, "qualified" means the same thing on both, so losing it on
-   *  a tab switch would be a silent change of population. */
-  qualifiedOnly: boolean;
-  onQualifiedChange: (on: boolean) => void;
-  /** How much of the season the numbers cover. Lifted to App alongside `pos`
-   *  and `qualifiedOnly`: it survives the remount a board switch causes, and it
-   *  is the one page control the URL carries, since it decides which games the
-   *  table is about rather than which of its rows are shown. */
+  /** How much of the season the numbers cover. Lifted to App alongside `pos`:
+   *  it survives the remount a board switch causes, and it is the one page
+   *  control the URL carries, since it decides which games the table is about
+   *  rather than which of its rows are shown. */
   window: ResearchWindow;
   onWindowChange: (w: ResearchWindow) => void;
   /** Which of the three sets of players the board includes. Lifted to App with
@@ -1012,8 +1005,8 @@ const freshBoard = (): BoardState => ({
  * summary cost you the four filters you had built and put the sort back to its
  * default — precisely the loss `BoardState` was written to prevent between the
  * two boards, happening one level up between the two views. App already holds
- * the position, the window, the include set, the columns and the qualifier for that
- * same reason; these are the rest of that set, and keeping half the board's
+ * the position, the window, the include set and the columns for that same
+ * reason; these are the rest of that set, and keeping half the board's
  * settings in each place is why only half of them survived.
  *
  * The vocabulary stays here: App stores this object and hands it back, and
@@ -1142,8 +1135,6 @@ export function ResearchTable({
   onPosChange,
   columnKeys,
   onColumnsChange,
-  qualifiedOnly,
-  onQualifiedChange,
   window: statWindow,
   onWindowChange,
   include,
@@ -1460,7 +1451,7 @@ export function ResearchTable({
    * controls that can move it:
    *
    * - **Population** — the board (`kind`/`pos`), the window, the include set,
-   *   the watchlist filter, Qualified, the search term and the stat filters.
+   *   the watchlist filter, the search term and the stat filters.
    *   Every one of them changes who is in the table, and every one of them is
    *   worked from the chrome pinned *above* the table, which gives no hint
    *   that the top of it has changed under you.
@@ -1496,7 +1487,6 @@ export function ResearchTable({
     statWindow,
     includeKeys(include).join('+'),
     includeWatchlist,
-    qualifiedOnly,
     search.trim().toLowerCase(),
     filters.map((f) => `${f.column}${f.op}${f.value}`).join(','),
     activeSortKey,
@@ -1527,7 +1517,6 @@ export function ResearchTable({
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
     const out = boardRows.filter((r) => {
-      if (qualifiedOnly && !r.qualified) return false;
       if (posMatch && !posMatch(r)) return false;
       if (q && !r.name.toLowerCase().includes(q) && !r.team.toLowerCase().includes(q)) {
         return false;
@@ -1559,7 +1548,7 @@ export function ResearchTable({
       if (av === bv) return a.name.localeCompare(b.name);
       return (av - bv) * dir;
     });
-  }, [boardRows, search, qualifiedOnly, posMatch, filters, activeSortKey, sortAsc, columnsByKey]);
+  }, [boardRows, search, posMatch, filters, activeSortKey, sortAsc, columnsByKey]);
 
   function toggleSort(col: Column) {
     if (activeSortKey === col.key) {
@@ -1803,7 +1792,6 @@ export function ResearchTable({
           )}
           {includeWatchlist && <span className="research-badge">Watchlist</span>}
           <span className="research-badge">{windowLabel(statWindow)}</span>
-          {qualifiedOnly && <span className="research-badge">Qualified</span>}
           {search.trim() && <span className="research-badge">“{search.trim()}”</span>}
           {filters.map((f) => (
             <span key={f.id} className="research-badge">
@@ -1986,14 +1974,14 @@ export function ResearchTable({
              *
              * It reads first in the run instead, which is the honest ordering
              * once it widens the board: **add who, then narrow who** (Search,
-             * Filters, Qualified), then change what is shown about them
-             * (Columns). It also puts it as close to the include group as a bar
-             * that wraps between groups allows.
+             * Filters), then change what is shown about them (Columns). It also
+             * puts it as close to the include group as a bar that wraps between
+             * groups allows.
              *
-             * Panel-less like Qualified, so it takes `.on` and never `.active`,
-             * and it carries the count for the same reason the Filters button
-             * does — a control that holds something has to say so with its panel
-             * shut, and this one has no panel at all.
+             * The one button in the run with **no panel**, so it takes `.on` and
+             * never `.active`, and it carries the count for the same reason the
+             * Filters button does — a control that holds something has to say so
+             * with its panel shut, and this one has no panel at all.
              */}
             <button
               type="button"
@@ -2047,26 +2035,8 @@ export function ResearchTable({
               <span className="research-toggle-label">Filters</span>
               {filters.length > 0 && <span className="research-toggle-count">{filters.length}</span>}
             </button>
-            {/* Not a disclosure like the three beside it — it has no panel, so it
-                takes `.on` and never `.active`. It sits after the two panels
-                because it belongs with them: all three narrow *who* is in the
-                table, where Columns after it changes what is shown about them. */}
-            <button
-              type="button"
-              className={`research-toggle${qualifiedOnly ? ' on' : ''}`}
-              aria-pressed={qualifiedOnly}
-              onClick={() => onQualifiedChange(!qualifiedOnly)}
-              title={
-                kind === 'pitcher'
-                  ? 'Only pitchers with enough of a season: starters at 1 inning per team game, relievers at 1 appearance per 3 team games'
-                  : 'Only batters with 3.1 plate appearances per game their team has played'
-              }
-            >
-              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M20 6 9 17l-5-5" />
-              </svg>
-              <span className="research-toggle-label">Qualified</span>
-            </button>
+            {/* Columns reads last: the three before it narrow *who* is in the
+                table, where this changes what is shown about them. */}
             <button
               type="button"
               className={`research-toggle${columnsOpen ? ' active' : ''}${
@@ -2156,9 +2126,8 @@ export function ResearchTable({
 
           {/* Outside the panel on purpose: the chips are the record of what the
               table is currently showing, so they stay whether the Filters panel is
-              open or shut. Qualified is one of them — it narrows the table exactly
-              as a threshold does, and it is the only one that used to leave no
-              trace here, so the row read as the whole story when it wasn't.
+              open or shut. The stat thresholds are now the whole of it — Qualified
+              carried a chip here too until it was cut (see below).
 
               **The watchlist had a chip here and has lost it**, which is the one
               piece of the old design the union genuinely retires. Every member
@@ -2170,21 +2139,8 @@ export function ResearchTable({
               include buttons keep no chips either, for the same reason this one
               no longer needs one — it is always on screen in the bar above,
               lit, with its count beside it. */}
-          {(filters.length > 0 || qualifiedOnly) && (
+          {filters.length > 0 && (
             <div className="research-chips">
-              {qualifiedOnly && (
-                <button
-                  type="button"
-                  className="research-chip"
-                  onClick={() => onQualifiedChange(false)}
-                  title="Show every player, qualified or not"
-                >
-                  Qualified
-                  <span className="research-chip-x" aria-hidden="true">
-                    ×
-                  </span>
-                </button>
-              )}
               {filters.map((f) => (
                 <button
                   key={f.id}
@@ -2199,20 +2155,14 @@ export function ResearchTable({
                   </span>
                 </button>
               ))}
-              {/* Clears exactly what the row shows — the thresholds and
-                  Qualified — and nothing else. It used to clear the watchlist
-                  too, which was right while that narrowed the table and is
-                  wrong now that it widens it: a button for undoing filters must
-                  not be able to take players *off* the board, still less empty
-                  it outright with the three ownership buttons off. */}
-              <button
-                type="button"
-                className="research-clear"
-                onClick={() => {
-                  setFilters([]);
-                  onQualifiedChange(false);
-                }}
-              >
+              {/* Clears exactly what the row shows — the stat thresholds — and
+                  nothing else. It used to clear the watchlist too, which was
+                  right while that narrowed the table and is wrong now that it
+                  widens it: a button for undoing filters must not be able to
+                  take players *off* the board, still less empty it outright
+                  with the three ownership buttons off. It also cleared the
+                  Qualified toggle, which no longer exists. */}
+              <button type="button" className="research-clear" onClick={() => setFilters([])}>
                 Clear all
               </button>
             </div>

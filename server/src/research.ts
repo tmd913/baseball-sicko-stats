@@ -67,6 +67,17 @@ async function getTeamAbbrevs(): Promise<Map<number, string>> {
 // The rate-stat qualifier is 3.1 plate appearances (or 1.0 inning) per game
 // **his team** has played — which is why it needs the standings and can't be
 // read off the leaderboard, whose only game count is the player's own.
+//
+// **Nothing reads `ResearchRow.qualified` any more.** The board's `Qualified`
+// toggle was its only reader in either workspace and has been removed, so
+// everything below still runs on every cold build of the blob and still ships a
+// boolean on every row, answering a question nothing on screen asks. It is kept
+// deliberately: the reasoning is unchanged and correct, and one client-side
+// filter would make it useful again. Pruning it would drop this whole section,
+// `getTeamGames`/`getTeamGamesInRange`'s standings and schedule calls, and the
+// field from both `types.ts` — and would need the storage key's `-v6` bumped,
+// or a stored blob keeps deserializing with it. `starter` must survive either
+// way: the SP/RP position pills read it.
 
 /** Games played, per team id, from the standings. */
 /**

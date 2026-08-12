@@ -566,9 +566,10 @@ export default function App() {
   );
 
   // Which slice of the season the board is reading. Shared across both boards
-  // like `qualified` and for the same reason: "the last 30 days" means the same
-  // thing on either, so a tab switch dropping it would silently change the
-  // population. In the URL, unlike the page's transient filters — it changes
+  // like the position and the include set, and for the same reason: "the last
+  // 30 days" means the same thing on either, so a tab switch dropping it would
+  // silently change the population. In the URL, unlike the page's transient
+  // filters — it changes
   // *which* season a shared link is about, which is the kind of thing a link
   // has to carry.
   const [researchWindow, setResearchWindow] = useState<ResearchWindow>(() =>
@@ -578,13 +579,6 @@ export default function App() {
   // and both are kept, so flipping back to a window already read is instant.
   const [research, setResearch] = useState<Record<string, ResearchRow[]>>({});
   const researchCacheKey = `${researchKind}:${researchWindow}`;
-  // The research board is the whole league, so it marks its rows against the
-  // watchlist rather than being built from it. Same key `PlayerAdder` dedupes
-  // on, so the two agree about what "already watched" means.
-  // Shared across both boards (see the prop's comment in ResearchTable), so it
-  // survives the remount that switching board causes. Transient like the page's
-  // other filters — deliberately not in the URL.
-  const [researchQualified, setResearchQualified] = useState(false);
   const [researchLoading, setResearchLoading] = useState(false);
   const [researchError, setResearchError] = useState<string | null>(null);
   /**
@@ -593,7 +587,7 @@ export default function App() {
    * typed into the filter builder (`ResearchUi`, defined beside the rules that
    * govern it).
    *
-   * It is here for the reason the five above it are: `ResearchTable` is
+   * It is here for the reason the ones above it are: `ResearchTable` is
    * unmounted the moment the view changes, so anything it holds is thrown away
    * by a glance at the Roster tab. Half the board's settings lived up here and
    * half in the component, and coming back landed you on a board that had kept
@@ -2007,11 +2001,12 @@ export default function App() {
 
      It is a plain toggle with no panel, so it takes `.on` and never `.active`,
      and it is folded into `.research-toggle`'s selector lists rather than
-     restyled to resemble the Qualified button it is the twin of — a filter that
-     narrows who is in a table, stated on the control that opens it. It keeps
-     its word at every width, where the board's four drop theirs on a phone:
-     those four are a known run of icons and this is one button on a row of
-     tabs, with nothing beside it to say what the icon would mean. */
+     restyled to resemble the board's own panel-less toggle, the Watchlist
+     button it is the twin of — a plain switch that decides who is in a table,
+     stated on the control that opens it. It keeps its word at every width,
+     where the board's four drop theirs on a phone: those four are a known run
+     of icons and this is one button on a row of tabs, with nothing beside it to
+     say what the icon would mean. */
   const startersToggle =
     rosterTab === 'summary' && rangeHasToday ? (
       <button
@@ -2897,8 +2892,6 @@ export default function App() {
           onPosChange={setResearchPos}
           columnKeys={researchCols[researchKind] ?? null}
           onColumnsChange={setResearchColumns}
-          qualifiedOnly={researchQualified}
-          onQualifiedChange={setResearchQualified}
           window={researchWindow}
           onWindowChange={setResearchWindow}
           include={researchInclude}
