@@ -127,8 +127,9 @@ body {
   position: sticky;
   top: 0;
   /* Above everything in the page's own flow — the float button (20), the date
-     popover (30) — and below the overlays (the player page at 50, the how-to
-     and league pages at 60), which cover the chrome as they cover the rest.
+     popover (30) — and below both the full-page table mode (45) and the
+     overlays (the player page at 50, the how-to and league pages at 60), all
+     of which cover the chrome as they cover the rest.
      Its own children keep their z-indexes inside the stacking context this
      opens, so the settings popover and the search results (both 40) still hang
      over the page below. */
@@ -3925,8 +3926,8 @@ body {
   position: fixed;
   inset: 0;
   /* Over the page and under the overlays, which is the whole of what this mode
-     is: it takes the app's own chrome (which tops out at 40 — the settings
-     popover and the search menu), and it is still a *view*, so the player page
+     is: it takes the app's own chrome (which tops out at 41 — the pinned bar,
+     with its popovers at 40 inside it), and it is still a *view*, so the player page
      (50) and the reel, how-to and league pages (60) open over it as they open
      over any other. At 90 they opened behind it instead: a headshot clicked in
      an expanded table put a player's page on screen with the table still
