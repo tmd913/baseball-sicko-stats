@@ -10,6 +10,7 @@ import type {
   PlayerPercentiles,
   PlayerReport,
   PlayerStatus,
+  ResearchIncludeKey,
   ResearchRow,
   RosterSource,
   SeasonPlayer,
@@ -93,9 +94,28 @@ export const api = {
   async players(): Promise<{ season: number; players: SeasonPlayer[] }> {
     return request('/api/players');
   },
-  async watchlist(): Promise<WatchPlayer[]> {
+  /** The user's **roster** — the saved list the three roster views report on.
+   *  The path is still `/api/watchlist` and stays that way: renaming a route
+   *  breaks every tab open at the moment of a deploy. The board's watchlist is
+   *  `watchlist()` below, on `/api/watch`. */
+  async roster(): Promise<WatchPlayer[]> {
     const r = await request<{ players: WatchPlayer[] }>('/api/watchlist');
     return r.players;
+  },
+  /** The **watchlist** — `${kind}-${id}` keys followed on the research board.
+   *  Keys rather than entries: membership is the whole of it, and the board
+   *  already holds every row it could mark. */
+  async watchlist(): Promise<string[]> {
+    const r = await request<{ keys: string[] }>('/api/watch');
+    return r.keys;
+  },
+  async setWatchlisted(key: string, on: boolean): Promise<string[]> {
+    const r = await request<{ keys: string[] }>('/api/watch', {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ key, on }),
+    });
+    return r.keys;
   },
   async addPlayer(p: WatchPlayer): Promise<WatchPlayer[]> {
     const r = await request<{ players: WatchPlayer[] }>('/api/watchlist', {
@@ -122,8 +142,8 @@ export const api = {
     });
     return r.players;
   },
-  /** `source: 'fantasy'` reports on the user's ESPN roster instead of their
-   *  saved watchlist. Asked for explicitly rather than left to the server's
+  /** `source: 'fantasy'` reports on the user's ESPN team instead of their
+   *  saved roster. Asked for explicitly rather than left to the server's
    *  view of the saved preference, so the report and the view rendering it can
    *  never disagree about which set of players it describes. */
   /** `refresh` is only meaningful alongside `source=fantasy`: it skips the
@@ -132,7 +152,7 @@ export const api = {
   async report(
     start: string,
     end: string,
-    source: RosterSource = 'watchlist',
+    source: RosterSource = 'saved',
     refresh = false,
   ): Promise<{
     start: string;
@@ -171,6 +191,19 @@ export const api = {
       method: 'PUT',
       headers: JSON_HEADERS,
       body: JSON.stringify({ source }),
+    });
+  },
+  /** The board's population settings, both at once: which of the three sets it
+   *  includes (null for the default) and whether it is narrowed to the
+   *  watchlist. One route, because they are one control set. */
+  async saveResearchInclude(
+    include: ResearchIncludeKey[] | null,
+    watchlist: boolean,
+  ): Promise<UserPrefs> {
+    return request('/api/prefs/research-include', {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ include, watchlist }),
     });
   },
   async saveMuteAudio(mute: boolean): Promise<UserPrefs> {

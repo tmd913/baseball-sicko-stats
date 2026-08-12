@@ -36,7 +36,7 @@ letting it grow past it.
 
 @docs/claude/data-sources.md
 
-**Watchlist, users and auth** — per-user watchlist and prefs, DynamoDB/file backends, Cognito sign-in and session handling.
+**Roster, watchlist, users and auth** — the two per-user player lists (the roster the views report on, the watchlist the research board follows) and the saved prefs, DynamoDB/file backends, Cognito sign-in and session handling.
 
 @docs/claude/auth-and-storage.md
 
@@ -56,6 +56,6 @@ letting it grow past it.
 
 @docs/claude/client.md
 
-**Pitchers on the watchlist** — the pitcher-side pipeline and cards.
+**Pitchers on the roster** — the pitcher-side pipeline and cards.
 
 @docs/claude/pitchers.md

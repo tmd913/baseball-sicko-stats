@@ -33,7 +33,7 @@ import { OpponentSection, PitchingTag, lineSummary } from './PitcherCard';
 import { InningsList } from './Innings';
 
 /** How many stream items the Recent section shows at a time — a day of at-bats
- * across a watchlist runs to hundreds, and every one of them mounts a card. */
+ * across a roster runs to hundreds, and every one of them mounts a card. */
 const PAGE_SIZE = 20;
 
 /** Priority order for the Live section: at bat, then on deck, then on base. */
@@ -769,7 +769,7 @@ function UpcomingRow({
 }
 
 /**
- * The watchlist as a flat, most-recent-first stream — shown while games are
+ * The roster as a flat, most-recent-first stream — shown while games are
  * active. A "Live" section pins whoever is at bat, on deck, on base or on the
  * mound to the top; below it, everything that has happened reads newest-first,
  * with none of the per-player stats, season line or score chrome the grouped

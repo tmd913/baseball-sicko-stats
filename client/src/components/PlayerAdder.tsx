@@ -93,7 +93,7 @@ export function PlayerAdder({
           {matches.map((p) => (
             <li key={p.id} className="adder-row">
               {/* Tapping the name opens the details view (works without adding);
-                  the ＋ button adds the player to the watchlist. */}
+                  the ＋ button adds the player to the roster. */}
               <button
                 className="adder-option"
                 onMouseDown={() => openDetails(p)}
@@ -108,8 +108,8 @@ export function PlayerAdder({
               <button
                 className="adder-add"
                 onMouseDown={() => select(p)}
-                title={`Add ${p.name} to watchlist`}
-                aria-label={`Add ${p.name} to watchlist`}
+                title={`Add ${p.name} to your roster`}
+                aria-label={`Add ${p.name} to your roster`}
               >
                 +
               </button>

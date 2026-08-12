@@ -336,7 +336,6 @@ body {
    folded in here rather than restyled to match, so every "pills on a desktop,
    dropdown on a phone" control in the app is one control by construction. */
 .date-presets-select,
-.research-scope-select,
 .research-window-select,
 .research-pos-select {
   display: none;
@@ -360,7 +359,6 @@ body {
   cursor: pointer;
 }
 .date-presets-select:hover,
-.research-scope-select:hover,
 .research-window-select:hover,
 .research-pos-select:hover {
   border-color: var(--accent);
@@ -382,7 +380,6 @@ body {
   .date-presets-select {
     display: block;
   }
-  .research-scope-select,
   .research-window-select,
   .research-pos-select {
     display: block;
@@ -2937,10 +2934,10 @@ body {
   align-items: center;
   gap: 14px;
 }
-/* Add-to-watchlist action, pushed to the far end of the header row. Gives way
-   to an "On roster" badge + Remove once the player is on the list. */
+/* Add-to-roster action. Gives way to an "On roster" badge + Remove once the
+   player is on the list; the watchlist star sits beside it either way, and the
+   pair is pushed to the far end of the header row by their shared box. */
 .details-add {
-  margin-left: auto;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -2956,14 +2953,47 @@ body {
 .details-add:hover {
   filter: brightness(1.08);
 }
-/* On-roster state: a static "On roster" badge — the app's baseball beside
-   the words, the same mark the research board's watched rows carry — paired
-   with a separate Remove button, pushed to the far end of the header row. */
+/* The header's two controls, over two different lists: the **watchlist** star,
+   always present, and the **roster** control beside it — an Add button, or the
+   "On roster" badge with its Remove. Pushed to the far end of the header row as
+   a pair, which is why `margin-left: auto` lives here rather than on either of
+   the things inside it. */
 .details-watch-actions {
   margin-left: auto;
   display: inline-flex;
   align-items: center;
   gap: 12px;
+}
+/* The star reads as the lesser of the two: outlined where Add is filled,
+   because rostering a player is what changes every other view in the app and
+   watching him changes one board. It keeps its word — this page has the room a
+   table row does not, and "Watch" is a verb the star alone doesn't supply. */
+.details-watch-star {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 14px;
+  border-radius: var(--control-radius);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.details-watch-star:hover {
+  color: var(--text);
+}
+.details-watch-star.on {
+  color: var(--accent);
+  border-color: rgba(56, 189, 248, 0.5);
+  background: rgba(56, 189, 248, 0.12);
+}
+.details-watch-star:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 /* The badge itself is the app's name-row chip — the same 12px/700 text in the
    same 6px box .player-pos and .roster-status take, so being watched reads as
@@ -5167,30 +5197,102 @@ body {
    .date-presets` is written that way — and without the extra specificity a row
    and its dropdown would both be on screen at once. */
 @media (max-width: 640px) {
-  .research-bar .research-scope,
   .research-bar .research-window-row,
   .research-bar .research-positions {
     display: none;
   }
 }
 
-/* Whose-players switch, ahead of the position pills. The control is the app's
-   segmented switch (folded into `.view-switch`/`.view-tab`'s lists above), so
-   only its behaviour in the wrapping bar is its own: it never shrinks and never
-   wraps internally, so when the bar breaks to two lines it travels intact with
-   the position row rather than splitting across the break. */
-.research-scope {
+/* Which players the board includes — three buttons, ahead of the position
+   pills. They are `.research-toggle`s rather than a segmented switch, and that
+   is the whole statement of the control: a segment says "pick one of these",
+   where these three compose and each is independently on or off. `.on` already
+   means "this control is doing something" on every other button in this bar, so
+   folding them onto that selector is what keeps the row one set of chrome
+   rather than two that resemble each other.
+
+   The group is `flex: none` for the reason `.research-tools` is: it travels to
+   the next line whole rather than stranding one button at the end of the row
+   above. It may wrap within itself on a very narrow screen, which is the one
+   place a second line of these is the lesser evil. */
+.research-include {
   flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
 }
-.research-scope-tab {
-  flex: none;
-  white-space: nowrap;
+/* Long label on a desktop, short one on a phone — both rendered, swapped by the
+   query below, which is how every "one control, two widths" pair in this app is
+   built (the date presets, the window tabs, the position row). The labels can't
+   go the way the disclosure buttons' do, to an icon: "my roster", "other
+   rosters" and "free agents" have no glyphs anyone would read. */
+.research-inc-abbr {
+  display: none;
+}
+/* On a phone the three go to their short labels — and to a tighter box with
+   them, which is not cosmetic: at 390px the tab row holds `Roster · Research`
+   (159px) and then whatever fits in the 346px the app's gutters leave, and this
+   group at its desktop padding came to 198 and pushed itself onto a line of its
+   own. 8px of padding and a 6px gap take it to 170 — measured, and the margin
+   is a few pixels: 159 + the row's 12px gap + 170 is 341 against the 346 a 390px
+   phone leaves inside the app's gutters. That is what keeps the two on one line
+   and the whole chrome at three rows rather than four, which is 48px, more than
+   a row of the table. */
+@media (max-width: 640px) {
+  .research-inc-full {
+    display: none;
+  }
+  .research-inc-abbr {
+    display: inline;
+  }
+  .research-include {
+    gap: 6px;
+  }
+  .research-inc {
+    padding: 0 8px;
+  }
 }
 
-/* The watchlist mark on an All Players row. The same accent check
-   `PlayerDetails` shows as "On roster", reduced to the glyph — a table row
-   has no space for the words, and the tick is doing the same job. Sits after
-   the name and never pushes it: the name column is already the width it is. */
+/* The watchlist star on a board row — the control that puts a player on it.
+   After the name, and 19px of a fluid column: the name column absorbs the
+   table's slack, so on a desktop this costs the stats nothing, and ahead of the
+   name it would have pushed every name in the column along by its own width.
+   Muted when off, accent when on, filled when on — see `WatchStar`. */
+.research-watch {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  /* The same baseline nudge `.research-watched` carries, and for the same
+     reason: `middle` is half the x-height, so a 13px glyph beside a name hangs
+     a pixel and a half low. */
+  vertical-align: middle;
+  position: relative;
+  top: -0.09em;
+}
+.research-watch:hover {
+  color: var(--text);
+}
+.research-watch.on {
+  color: var(--accent);
+}
+.research-watch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* The **roster** mark on a board row — a different list from the star beside
+   it, and deliberately a different kind of thing: a label rather than a
+   control. The same accent baseball `PlayerDetails` shows as "On roster",
+   reduced to the glyph, since a table row has no space for the words. Sits
+   after the name and never pushes it: the name column is already the width it
+   is. */
 .research-watched {
   display: inline-flex;
   align-items: center;
@@ -5474,7 +5576,6 @@ body {
 .kind-switch,
 .roster-switch,
 .research-window-row,
-.research-scope,
 .date-presets {
   display: inline-flex;
   align-items: center;
@@ -5489,7 +5590,6 @@ body {
 .kind-tab,
 .roster-tab,
 .research-window-tab,
-.research-scope-tab,
 .date-preset {
   display: inline-flex;
   align-items: center;
@@ -5508,7 +5608,6 @@ body {
 .kind-tab:hover,
 .roster-tab:hover,
 .research-window-tab:hover,
-.research-scope-tab:hover,
 .date-preset:hover {
   color: var(--text);
 }
@@ -5516,7 +5615,6 @@ body {
 .kind-tab.active,
 .roster-tab.active,
 .research-window-tab.active,
-.research-scope-tab.active,
 .date-preset.active {
   color: var(--bg);
   background: var(--accent);
@@ -5525,7 +5623,6 @@ body {
 .kind-tab:focus-visible,
 .roster-tab:focus-visible,
 .research-window-tab:focus-visible,
-.research-scope-tab:focus-visible,
 .date-preset:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;

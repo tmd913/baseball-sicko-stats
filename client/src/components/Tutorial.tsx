@@ -155,15 +155,23 @@ interface Chapter {
 const CHAPTERS: Chapter[] = [
   {
     id: 'tut-watchlist',
-    tab: 'Watchlist',
-    title: 'Build your watchlist',
+    tab: 'Roster',
+    title: 'Build your roster',
     body: (
       <>
         <p>
-          Everything in the app is a read on the players <em>you</em> follow, so the
-          first thing to do is put some there. The roster search sits at the top right
-          of every page, beside the date controls — it belongs to your watchlist
+          Everything on the <Ui>Roster</Ui> page is a read on the players{' '}
+          <em>you</em> follow every day, so the first thing to do is put some there.
+          The search sits at the top right of every page — it belongs to your roster
           rather than to any one view, so it is in the same place wherever you are.
+        </p>
+        <p className="tut-note">
+          Two lists, and it's worth getting the words straight now.{' '}
+          <strong>Your roster</strong> is this one: the players the Summary, Games and
+          Feed views report on.{' '}
+          <strong>Your watchlist</strong> is a separate list you build on the{' '}
+          <Ui>Research</Ui> board, out of players you're keeping an eye on but haven't
+          taken on — a free agent you might pick up belongs there and not here.
         </p>
         <ol className="tut-steps">
           <Step>
@@ -183,12 +191,13 @@ const CHAPTERS: Chapter[] = [
           <Step>
             Tap the <strong>name</strong> instead and you get their player page
             without adding them — season line, percentile rankings, game log. There's
-            an <Ui>Add to watchlist</Ui> button up there if you like what you see.
+            an <Ui>Add to roster</Ui> button up there if you like what you see, and a{' '}
+            <Ui>Watch</Ui> star beside it if you'd rather just keep an eye on him.
           </Step>
         </ol>
         <p className="tut-note">
           Two-way players appear twice in the search — once as a batter, once as a
-          pitcher — and are watched separately. Add one, the other, or both; each gets
+          pitcher — and are rostered separately. Add one, the other, or both; each gets
           its own card.
         </p>
       </>
@@ -309,7 +318,7 @@ const CHAPTERS: Chapter[] = [
           batters and pitchers, the <Ui>Batters</Ui> / <Ui>Pitchers</Ui> tabs appear
           ahead of them and follow you from tab to tab. <Ui>Research</Ui>, beside{' '}
           <Ui>Roster</Ui> at the front of the row, is a different animal — the whole
-          league rather than your watchlist — and has the next chapter to itself.
+          league rather than your roster — and has the next chapter to itself.
         </p>
       </>
     ),
@@ -321,11 +330,28 @@ const CHAPTERS: Chapter[] = [
     body: (
       <>
         <p>
-          <Ui>Research</Ui> is the one page that isn't about your watchlist: every
+          <Ui>Research</Ui> is the one page that isn't about your roster: every
           player in the league on a single sortable table. It answers the other
           question — not "how did my guys do tonight" but "who else is doing this".
           It needs nothing watched, which makes it the one view that works before
           you've added anybody.
+        </p>
+        <Demo label="Which players the board includes — three buttons, not a choice of one">
+          <div className="research-include">
+            <span className="research-toggle research-inc">My Roster</span>
+            <span className="research-toggle research-inc">Other Rosters</span>
+            <span className="research-toggle research-inc on">Free Agents</span>
+          </div>
+        </Demo>
+        <p>
+          Those three say <em>whose</em> players are on the board, and they{' '}
+          <strong>compose</strong> — each one is separately on or off, so "my roster
+          and the free agents" is a thing you can ask for. It opens on{' '}
+          <Ui>Free Agents</Ui>, which is the question the board is usually being asked;
+          turn all three on for the whole league. Without a fantasy league connected
+          there is no way to know who is on somebody else's team, so the third button
+          reads <Ui>Everyone Else</Ui> and means exactly that, and the middle one
+          isn't offered at all.
         </p>
         <Demo label="The position row — it picks the board and filters it at once">
           <div className="research-positions">
@@ -364,33 +390,36 @@ const CHAPTERS: Chapter[] = [
             carries.
           </li>
           <li>
-            <strong>My Players / All Players.</strong> Narrows the same board to your
-            watchlist. On <Ui>All Players</Ui> the people you already watch carry a
-            small baseball.
+            <strong>The star beside a name.</strong> That's your{' '}
+            <strong>watchlist</strong> — nothing to do with your roster, and the
+            reason both exist. Star the free agent you're thinking about, the
+            leaguemate's shortstop you're eyeing for a trade, anybody. The{' '}
+            <Ui>Watchlist</Ui> button up top then narrows the board to them, and it
+            composes with everything else: the position, the window, the filters.
+            Players who are on your <em>roster</em> carry a small baseball instead,
+            wherever the board is showing more than just them.
           </li>
           <li>
-            <strong>Free Agents.</strong> A third pill, once you've connected an ESPN
-            fantasy league from the baseball button beside the gear: the board
-            drops everyone already on a roster in it, leaving the players you could
-            actually add — sortable and filterable like any other slice. That page
-            walks through where ESPN keeps the two cookies it needs, and it's also
-            where you say which team in the league is yours. With that set, the
-            button's <Ui>Use my fantasy team</Ui> swaps the other three views over to
-            your roster — same tables, your team instead of your watchlist, each
-            player carrying the slot he's in today (his position if he's in the
-            lineup, <Ui>BE</Ui> or <Ui>IL</Ui> if he isn't). Your watchlist is
-            untouched and comes back when you switch off. And you only need one
-            person in a league to do any of this: whoever connects first can turn
-            on a share link, and everyone else joins by opening it — no cookies,
-            no league ID. Connecting also adds a <Ui>Ros%</Ui> column to the
-            board and a rostered figure to each player's page: the share of all
-            ESPN leagues he's on a roster in, which sorts and filters like any
-            other column — and a <Ui>Δ7d</Ui> beside it for which way that has
-            been moving. Sort by it once for the week's biggest adds, twice for
-            the drops.
+            <strong>Connect a fantasy league</strong> from the baseball button beside
+            the gear and the board learns who owns whom: <Ui>Free Agents</Ui> becomes
+            the players nobody in your league has, and <Ui>Other Rosters</Ui> the ones
+            they do. That page walks through where ESPN keeps the two cookies it
+            needs, and it's also where you say which team in the league is yours. With
+            that set, the button's <Ui>Use my fantasy team</Ui> swaps the other three
+            views over to it — same tables, your fantasy team instead of the roster
+            you built here, each player carrying the slot he's in today (his position
+            if he's in the lineup, <Ui>BE</Ui> or <Ui>IL</Ui> if he isn't). The roster
+            you built is untouched and comes back when you switch off. And you only
+            need one person in a league to do any of this: whoever connects first can
+            turn on a share link, and everyone else joins by opening it — no cookies,
+            no league ID. Connecting also adds a <Ui>Ros%</Ui> column to the board and
+            a rostered figure to each player's page: the share of all ESPN leagues
+            he's on a roster in, which sorts and filters like any other column — and a{' '}
+            <Ui>Δ7d</Ui> beside it for which way that has been moving. Sort by it once
+            for the week's biggest adds, twice for the drops.
           </li>
         </ul>
-        <h3 className="tut-sub">The four buttons</h3>
+        <h3 className="tut-sub">The five buttons</h3>
         <dl className="tut-defs">
           <dt>Search</dt>
           <dd>Find one player by name, anywhere in the league.</dd>
@@ -400,6 +429,12 @@ const CHAPTERS: Chapter[] = [
             many as you like — "300+ PA" and ".350+ xwOBA" is two of them — and each
             shows as a chip under the bar that stays put whether the panel is open or
             shut. A filter on a column you've hidden still applies.
+          </dd>
+          <dt>Watchlist</dt>
+          <dd>
+            Narrows the board to the players you've starred. The number on the button
+            is how many of them are on this board — batters or pitchers, whichever
+            you're looking at.
           </dd>
           <dt>Qualified</dt>
           <dd>
@@ -419,7 +454,7 @@ const CHAPTERS: Chapter[] = [
           The count above the table — "622 of 622 batters" — always says how much of
           the board you're looking at, so a short table reads as a tight filter rather
           than a short league. Tap any name to open that player's page, which is where
-          the <Ui>Add to watchlist</Ui> button is.
+          the <Ui>Add to roster</Ui> button is.
         </p>
       </>
     ),
@@ -532,7 +567,7 @@ const CHAPTERS: Chapter[] = [
       <>
         <p>
           Tapping any headshot opens the season-long view of that player. It works for
-          anyone on the season roster, watchlisted or not, and its tabs are:
+          anyone on the season roster, on your list or not, and its tabs are:
         </p>
         <dl className="tut-defs">
           <dt>Percentile Rankings</dt>
@@ -564,8 +599,9 @@ const CHAPTERS: Chapter[] = [
           </dd>
         </dl>
         <p>
-          The header carries <Ui>Add to watchlist</Ui> when he isn't on it and a
-          remove button when he is, plus a link out to his Baseball Savant page.
+          The header carries <Ui>Add to roster</Ui> when he isn't on it and a remove
+          button when he is, a <Ui>Watch</Ui> star for the other list, and a link out
+          to his Baseball Savant page.
         </p>
       </>
     ),
@@ -577,7 +613,7 @@ const CHAPTERS: Chapter[] = [
     body: (
       <>
         <p>
-          Your watchlist keeps the order you put it in, and that order is what every
+          Your roster keeps the order you put it in, and that order is what every
           view reads down. Once you're watching more than one player,{' '}
           <Ui>
             <PencilIcon /> Edit players

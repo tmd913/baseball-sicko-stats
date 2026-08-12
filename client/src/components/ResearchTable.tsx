@@ -4,8 +4,8 @@ import { BaseballMark } from './BaseballMark';
 import { ExpandButton } from './ExpandButton';
 import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
 import { useFullPage, usePlayerStatus } from '../hooks';
-import { RESEARCH_WINDOWS } from '../types';
-import type { PlayerKind, ResearchRow, ResearchWindow } from '../types';
+import { RESEARCH_INCLUDE_KEYS, RESEARCH_WINDOWS } from '../types';
+import type { PlayerKind, ResearchIncludeKey, ResearchRow, ResearchWindow } from '../types';
 import { headshotUrl, statusCorner } from '../lib';
 
 /**
@@ -530,52 +530,117 @@ const posTypeLabel = (t: string) => POSITION_TYPE_LABELS[t] ?? t;
 
 /** Which board a position sits on — what App fetches and keys the table on. */
 /**
- * Whose players the board is showing. Orthogonal to the position pills — scope
- * narrows *who* is eligible, position narrows it again — which is why it is a
- * switch of its own rather than two more pills on that row: picking SS must not
- * look like it deselects "My Players".
+ * **Which players the board includes** — three independent buttons rather than
+ * the single-select `My Players / All Players / Free Agents` this replaced.
  *
- * **`'mine'` is the default.** The board opens on the players you follow, which
- * is what you are usually comparing against; `All Players` is one tap away and
- * the position pills work the same on either.
+ * The old control could only ever name one set, and the question a fantasy
+ * manager actually arrives with spans two of them: "my roster and the free
+ * agents", or "everyone who isn't already spoken for". Three switches that
+ * compose say all eight of those states, and the sets are disjoint by
+ * construction — a row belongs to exactly one, `mine` winning where your roster
+ * and ESPN's view of ownership disagree — so all three on is the whole board
+ * and none on is an empty one, with an empty state that says why.
  *
- * It used to default to `'all'`, on the reasoning that this is the one view
- * that works with nothing watched and an empty watchlist would open a new user
- * onto a blank table. That case is still real but it is not silent: with
- * nothing watched of the board's kind, the table shows its own empty state —
- * distinct from the filters one, because there is nothing to filter and the way
- * out is `All Players` rather than a looser threshold. It names the way out, so
- * the default no longer has to be chosen around it.
+ * **Free agents is the default**, and it is the right one for both kinds of
+ * user. With a league connected the board opens on the players you could
+ * actually add, which is what it is *for*; with no league there is no ownership
+ * to read, so the same button means "everyone else" and the board opens on
+ * essentially the whole league, which is what `All Players` used to do.
+ * Orthogonal to the position pills, exactly as scope was: position narrows who
+ * is eligible, this names which rosters they may be on.
+ *
+ * Note what is deliberately *not* a fourth button here: the **watchlist**. That
+ * is a filter over whatever these three let through — you can follow a free
+ * agent and a leaguemate's shortstop at once — so it is a toggle beside Search
+ * and Qualified rather than a fourth set to union in.
  */
-/**
- * `'fa'` is the third: **Free Agents**, every player in the majors who isn't on
- * a roster in the user's connected ESPN fantasy league. It belongs on this
- * control rather than on a toggle of its own for the same reason the other two
- * are here — it names a *set of players*, which is what scope means; sorting
- * that set by any stat on the board is then the whole feature.
- *
- * It is only offered once a league is connected. An unconnected user picking it
- * from a shared link lands on the board's own empty state, which is a way in
- * rather than a dead end.
- */
-export type ResearchScope = 'all' | 'mine' | 'fa';
+export type ResearchInclude = Record<ResearchIncludeKey, boolean>;
 
-export function toResearchScope(v: string | null): ResearchScope {
-  if (v === 'all') return 'all';
-  return v === 'fa' ? 'fa' : 'mine';
+/** The board as it opens. */
+export const DEFAULT_INCLUDE: ResearchInclude = { mine: false, others: false, fa: true };
+
+const includeKeys = (i: ResearchInclude): ResearchIncludeKey[] =>
+  RESEARCH_INCLUDE_KEYS.filter((k) => i[k]);
+
+export const fromIncludeKeys = (keys: ResearchIncludeKey[]): ResearchInclude => ({
+  mine: keys.includes('mine'),
+  others: keys.includes('others'),
+  fa: keys.includes('fa'),
+});
+
+export const isDefaultInclude = (i: ResearchInclude): boolean =>
+  RESEARCH_INCLUDE_KEYS.every((k) => i[k] === DEFAULT_INCLUDE[k]);
+
+/** The URL form: the active keys, comma-joined. Null when it is the default,
+ *  which keeps `inc=` out of a link that isn't saying anything. `none` is a
+ *  real state and has to be spellable, since an empty string reads as absent. */
+export function includeParam(i: ResearchInclude): string | null {
+  if (isDefaultInclude(i)) return null;
+  const keys = includeKeys(i);
+  return keys.length ? keys.join(',') : 'none';
 }
 
-const SCOPE_LABELS: Record<ResearchScope, string> = {
-  mine: 'My Players',
-  all: 'All Players',
-  fa: 'Free Agents',
+/**
+ * Read `inc=`, falling back to the **legacy `scope=`** so every link written
+ * before this control existed still opens on the board it describes:
+ * `scope=mine` was your own players, `scope=fa` the free agents, and
+ * `scope=all` was everybody — which is all three switches on, since that is
+ * what "everybody" is now made of.
+ */
+export function toResearchInclude(inc: string | null, scope: string | null): ResearchInclude {
+  if (inc !== null) {
+    if (inc === 'none') return { mine: false, others: false, fa: false };
+    const keys = inc
+      .split(',')
+      .filter((k): k is ResearchIncludeKey =>
+        RESEARCH_INCLUDE_KEYS.includes(k as ResearchIncludeKey),
+      );
+    // Nothing recognised — an older build's spelling — falls back to the
+    // default rather than to an empty board, the rule `toColumnKeys` follows.
+    return keys.length ? fromIncludeKeys(keys) : { ...DEFAULT_INCLUDE };
+  }
+  if (scope === 'mine') return { mine: true, others: false, fa: false };
+  if (scope === 'all') return { mine: true, others: true, fa: true };
+  return { ...DEFAULT_INCLUDE };
+}
+
+/**
+ * What each button is called. `fa` carries a second wording for the
+ * unconnected case, because with no league the set genuinely is a different
+ * one: ownership is unknowable, so the button means "everyone off your roster"
+ * and says so rather than promising a free agency it cannot check. The `abbr`
+ * is what a phone shows — both are rendered and swapped by the 640px query,
+ * the pattern the date presets and the window tabs already use.
+ */
+const INCLUDE_META: Record<
+  ResearchIncludeKey,
+  { full: string; abbr: string; title: string; solo?: { full: string; abbr: string; title: string } }
+> = {
+  mine: {
+    full: 'My Roster',
+    abbr: 'Mine',
+    title: 'Players on your roster — the list the Summary, Games and Feed views report on',
+  },
+  others: {
+    full: 'Other Rosters',
+    abbr: 'Others',
+    title: "Players on somebody else's roster in your ESPN fantasy league",
+  },
+  fa: {
+    full: 'Free Agents',
+    abbr: 'Free',
+    title: 'Players nobody in your ESPN fantasy league has rostered',
+    solo: {
+      full: 'Everyone Else',
+      abbr: 'Rest',
+      title:
+        'Every other player in the majors. With no fantasy league connected there is no ownership to read, so this is everyone who is not on your roster',
+    },
+  },
 };
 
-const SCOPE_TITLES: Record<ResearchScope, string> = {
-  mine: 'Only the players on your watchlist',
-  all: 'Every player in the league',
-  fa: "Everyone who isn't on a roster in your ESPN fantasy league",
-};
+const includeMeta = (k: ResearchIncludeKey, connected: boolean) =>
+  (!connected && INCLUDE_META[k].solo) || INCLUDE_META[k];
 
 export function researchKindFor(pos: ResearchPos): PlayerKind {
   return POSITION_BY_KEY.get(pos)?.kind ?? 'batter';
@@ -637,11 +702,17 @@ interface Props {
    *  table is about rather than which of its rows are shown. */
   window: ResearchWindow;
   onWindowChange: (w: ResearchWindow) => void;
-  /** Whose players to show. Lifted to App with the other cross-board controls,
-   *  and in the URL for the same reason the window is: it changes the
-   *  population the table describes, not the presentation of it. */
-  scope: ResearchScope;
-  onScopeChange: (s: ResearchScope) => void;
+  /** Which of the three sets of players the board includes. Lifted to App with
+   *  the other cross-board controls, and in the URL for the same reason the
+   *  window is: it changes the population the table describes, not the
+   *  presentation of it. */
+  include: ResearchInclude;
+  onIncludeChange: (i: ResearchInclude) => void;
+  /** Narrow all of that to the watchlist. A *filter* rather than a fourth
+   *  include, since a watched player can be on any of the three sets — see
+   *  `ResearchInclude`. Lifted and persisted alongside it. */
+  watchlistOnly: boolean;
+  onWatchlistOnlyChange: (on: boolean) => void;
   /** Whether a fantasy league is connected, and so whether the board carries a
    *  roster-% column at all. The figure is ESPN's own and needs no credentials,
    *  so this gate is about relevance rather than access: to someone with no
@@ -658,17 +729,23 @@ interface Props {
    *  Agents pill is offered. Separate from `ownedIds` being null, since a
    *  connected league whose read is still in flight is a third state. */
   espnConnected: boolean;
-  espnLoading: boolean;
   /** A failed read — usually an expired `espn_s2`. Shown on the board rather
    *  than swallowed, because the alternative is a table that silently claims
    *  every player is available. */
   espnError: string | null;
   /** Open the Fantasy league settings page. */
   onConnectEspn: () => void;
-  /** `${kind}-${id}` for everything on the watchlist — the app's player key, so
-   *  a two-way player watched only as a pitcher is marked on the pitching board
-   *  and not the batting one, which is what watching him as a pitcher means. */
-  watchedKeys: Set<string>;
+  /** `${kind}-${id}` for everything on the user's **roster** — the saved list,
+   *  or the ESPN team when the views are reading that. What `My Roster`
+   *  selects on and what the baseball beside a name marks. */
+  rosterKeys: Set<string>;
+  /** `${kind}-${id}` for everything on the **watchlist** — a different list
+   *  from the roster (see `store.ts`), the one each row's star toggles. Keyed
+   *  by the app's player key, so a two-way player followed only as a pitcher is
+   *  starred on the pitching board and not the batting one. */
+  watchlistKeys: Set<string>;
+  /** Put a player on the watchlist, or take him off. */
+  onWatchlistToggle: (key: string, on: boolean) => void;
   /** Open the details overlay (percentiles, game log, season splits) for a row.
    *  Takes a player key, the same currency the rest of the app navigates in. */
   onOpenDetails: (key: string) => void;
@@ -726,7 +803,7 @@ const freshBoard = (): BoardState => ({
  * summary cost you the four filters you had built and put the sort back to its
  * default — precisely the loss `BoardState` was written to prevent between the
  * two boards, happening one level up between the two views. App already holds
- * the position, the window, the scope, the columns and the qualifier for that
+ * the position, the window, the include set, the columns and the qualifier for that
  * same reason; these are the rest of that set, and keeping half the board's
  * settings in each place is why only half of them survived.
  *
@@ -797,6 +874,56 @@ function ResearchPhoto({
   );
 }
 
+/**
+ * The star that puts a row on the watchlist, or takes it off.
+ *
+ * It sits **after the name**, and the cost is the reason: this is the app's
+ * widest table by some way, every pixel of the name column is a stat pushed off
+ * the right edge of a phone, and a control ahead of the name would push every
+ * name in the column along by its own width. Trailing, it takes 19px (a 13px
+ * glyph in a 6px gutter) of a column that is fluid anyway — it absorbs the
+ * table's slack — so on a desktop it costs the stats nothing at all and on a
+ * phone it costs them one character of a name that was already truncating.
+ *
+ * Drawn on **every** row rather than on hover, because half this app's traffic
+ * has no hover to give: an outline star is "not watched" and a filled one is
+ * "watched", which is the same read a checkbox would give at three times the
+ * width and with a form's grammar rather than a state's.
+ */
+function WatchStar({
+  on,
+  name,
+  onToggle,
+}: {
+  on: boolean;
+  name: string;
+  onToggle: (on: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={`research-watch${on ? ' on' : ''}`}
+      aria-pressed={on}
+      title={on ? `Remove ${name} from your watchlist` : `Add ${name} to your watchlist`}
+      onClick={() => onToggle(!on)}
+    >
+      <svg
+        viewBox="0 0 24 24"
+        width="13"
+        height="13"
+        fill={on ? 'currentColor' : 'none'}
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="m12 3.6 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9Z" />
+      </svg>
+      <span className="sr-only">{on ? 'On your watchlist' : 'Add to watchlist'}</span>
+    </button>
+  );
+}
+
 export function ResearchTable({
   rows,
   kind,
@@ -810,16 +937,19 @@ export function ResearchTable({
   onQualifiedChange,
   window: statWindow,
   onWindowChange,
-  scope,
-  onScopeChange,
+  include,
+  onIncludeChange,
+  watchlistOnly,
+  onWatchlistOnlyChange,
   hasRosterPct,
   trendDays,
   ownedIds,
   espnConnected,
-  espnLoading,
   espnError,
   onConnectEspn,
-  watchedKeys,
+  rosterKeys,
+  watchlistKeys,
+  onWatchlistToggle,
   onOpenDetails,
   ui,
   onUiChange,
@@ -941,19 +1071,48 @@ export function ResearchTable({
   // a plate appearance, position players who mopped up an eleven-run loss — and
   // both are dropped here rather than per pill, which is what makes the count
   // line's "of N" a number some pill can actually reach.
-  // Trade first, then scope. Both narrow the *population* the count line is
-  // measured against, so that "12 of 12" on My Players is honest about the
-  // board it describes rather than quoting the league's 624.
+  /**
+   * Trade first, then which rosters, then the watchlist. All three narrow the
+   * *population* the count line is measured against, so that "12 of 12" on your
+   * own roster is honest about the board it describes rather than quoting the
+   * league's 624.
+   *
+   * The three include sets are read as a **partition**, in one pass, and the
+   * order of the tests is what makes them disjoint: your roster wins first, so
+   * a player you hold who ESPN says is on a leaguemate's team (possible in
+   * saved-roster mode, where the two lists are unrelated) is counted once, as
+   * yours. Free agency is then the complement of ownership — a player nobody in
+   * the league holds is one you could add — and with **no** league connected
+   * there is no ownership to read, so the third set quietly becomes "everyone
+   * off your roster", which is what its own label says there.
+   *
+   * With a league connected but the read still in flight, everything but your
+   * own roster falls out rather than falling *in*: an empty table under
+   * "Reading your league…" is honest, where the whole league labelled free
+   * agents is not.
+   */
   const boardRows = useMemo(() => {
     const byTrade = rows.filter(kind === 'pitcher' ? isPitcherByTrade : isBatterByTrade);
-    if (scope === 'mine') return byTrade.filter((r) => watchedKeys.has(`${r.kind}-${r.id}`));
-    // Free agency is read as the complement of ownership: a player nobody in
-    // the league holds is one you could add. Until the roster read lands the
-    // board shows nothing rather than everything — an empty table under a
-    // spinner is honest, where the whole league labelled "free agents" is not.
-    if (scope === 'fa') return ownedIds ? byTrade.filter((r) => !ownedIds.has(r.id)) : [];
-    return byTrade;
-  }, [rows, kind, scope, watchedKeys, ownedIds]);
+    const picked = byTrade.filter((r) => {
+      const key = `${r.kind}-${r.id}`;
+      if (rosterKeys.has(key)) return include.mine;
+      if (!espnConnected) return include.fa;
+      if (!ownedIds) return false;
+      return ownedIds.has(r.id) ? include.others : include.fa;
+    });
+    return watchlistOnly
+      ? picked.filter((r) => watchlistKeys.has(`${r.kind}-${r.id}`))
+      : picked;
+  }, [rows, kind, include, watchlistOnly, rosterKeys, watchlistKeys, ownedIds, espnConnected]);
+
+  /** How many of the watchlist are on *this* board — the count on the Watchlist
+   *  button, and what its empty state tests. A key carries its own kind, so
+   *  this needs no lookup against the rows. */
+  const watchlistCount = useMemo(
+    () => [...watchlistKeys].filter((k) => k.startsWith(`${kind}-`)).length,
+    [watchlistKeys, kind],
+  );
+  const nothingIncluded = !include.mine && !include.others && !include.fa;
 
   // Hiding the column you were sorting on leaves the table ordered by something
   // you can neither see nor reverse — there is no header left to click. So the
@@ -1141,6 +1300,139 @@ export function ResearchTable({
     setDraftValue('');
   }
 
+  /** Only your own roster is on the board, so every row would carry the
+   *  baseball and it would mark nothing — the rule the old `My Players` scope
+   *  followed. */
+  const onlyMine = include.mine && !include.others && !include.fa;
+
+  /**
+   * Why the board is empty, and the way out.
+   *
+   * Three include buttons and a watchlist filter make sixteen states, and
+   * several of them are legitimately empty — nothing included at all, a
+   * watchlist with nobody on it, a league that hasn't been read yet. **Every
+   * one of them has to name its own cause**, which is the standard the old
+   * three-state free-agent message set; a generic "nothing found" would leave a
+   * user staring at a table with no idea which of four controls emptied it.
+   *
+   * Tested in the order the causes *govern*: nothing included beats everything
+   * else (no set can be empty if no set was asked for), then the watchlist
+   * filter, then the league read the last two buttons depend on, and last the
+   * ordinary case of a set that genuinely holds nobody.
+   */
+  function emptyBoard() {
+    const noun = kind === 'pitcher' ? 'pitchers' : 'batters';
+    const faLabel = includeMeta('fa', espnConnected).full;
+    if (nothingIncluded) {
+      return (
+        <div className="empty-state">
+          <p className="empty-title">No players included</p>
+          <p>
+            Every one of the buttons up top is off, so the board has nobody to
+            draw. Turn on{' '}
+            <button
+              type="button"
+              className="empty-inline-link"
+              onClick={() => onIncludeChange({ ...include, fa: true })}
+            >
+              {faLabel}
+            </button>{' '}
+            — or any of the others — to put players back on it.
+          </p>
+        </div>
+      );
+    }
+    if (watchlistOnly && watchlistCount === 0) {
+      return (
+        <div className="empty-state">
+          <p className="empty-title">No {noun} on your watchlist</p>
+          <p>
+            The star beside a player's name adds him to it — it is a list of who
+            you are keeping an eye on, and nothing to do with your roster. Or{' '}
+            <button
+              type="button"
+              className="empty-inline-link"
+              onClick={() => onWatchlistOnlyChange(false)}
+            >
+              show everyone
+            </button>
+            .
+          </p>
+        </div>
+      );
+    }
+    if (espnConnected && (include.others || include.fa) && !ownedIds) {
+      /* The league read the last two buttons are defined by. `espnLoading` is a
+         frame behind the effect that starts it, so the in-flight case is
+         "nothing has landed yet" rather than a flag — and "nobody is available"
+         is the one wrong thing this state must never flash. */
+      return espnError ? (
+        <div className="empty-state">
+          <p className="empty-title">Couldn't read your league</p>
+          <p>{espnError}</p>
+          <div className="empty-actions">
+            <button type="button" className="empty-help" onClick={onConnectEspn}>
+              Fantasy league settings
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="empty-state">
+          <p className="empty-title">Reading your league…</p>
+        </div>
+      );
+    }
+    if (!espnConnected && include.others) {
+      /* Reachable only from a link, since the button isn't offered without a
+         league — and it is then the only thing turned on, or one of the others
+         would have filled the table. */
+      return (
+        <div className="empty-state">
+          <p className="empty-title">No fantasy league connected</p>
+          <p>
+            Connect an ESPN fantasy baseball league and the board can tell who is
+            on a leaguemate's roster from who is free to pick up.
+          </p>
+          <div className="empty-actions">
+            <button type="button" className="empty-help" onClick={onConnectEspn}>
+              Connect a league
+            </button>
+          </div>
+        </div>
+      );
+    }
+    if (onlyMine) {
+      return (
+        <div className="empty-state">
+          <p className="empty-title">No {noun} on your roster</p>
+          <p>
+            Turn on{' '}
+            <button
+              type="button"
+              className="empty-inline-link"
+              onClick={() => onIncludeChange({ ...include, fa: true })}
+            >
+              {faLabel}
+            </button>{' '}
+            to read the rest of the league, and open a player to add him.
+          </p>
+        </div>
+      );
+    }
+    return (
+      <div className="empty-state">
+        <p className="empty-title">No {noun} to show</p>
+        <p>
+          Nobody on this board is{' '}
+          {includeKeys(include)
+            .map((k) => includeMeta(k, espnConnected).full.toLowerCase())
+            .join(' or ')}
+          . Turn on another of the buttons up top, or pick a different position.
+        </p>
+      </div>
+    );
+  }
+
   const statcastStart = columns.findIndex((c) => c.statcast);
 
   const { isFull, toggle, ref: fullRef } = useFullPage<HTMLDivElement>();
@@ -1157,7 +1449,19 @@ export function ResearchTable({
       {isFull && (
         <div className="expanded-chrome research-badges">
           <span className="research-badge">{POSITION_BY_KEY.get(pos)?.label ?? pos}</span>
-          <span className="research-badge">{SCOPE_LABELS[scope]}</span>
+          {/* One badge per set the board is including — or one saying it is
+              including none, which is a state the buttons can reach and a
+              blank row would leave unexplained. */}
+          {nothingIncluded ? (
+            <span className="research-badge">Nobody included</span>
+          ) : (
+            includeKeys(include).map((k) => (
+              <span key={k} className="research-badge">
+                {includeMeta(k, espnConnected).full}
+              </span>
+            ))
+          )}
+          {watchlistOnly && <span className="research-badge">Watchlist</span>}
           <span className="research-badge">{windowLabel(statWindow)}</span>
           {qualifiedOnly && <span className="research-badge">Qualified</span>}
           {search.trim() && <span className="research-badge">“{search.trim()}”</span>}
@@ -1184,55 +1488,56 @@ export function ResearchTable({
           thread a dozen values back down. The one price is the host having to
           exist first, which is the `controlsHost &&` below.
 
-          Positions, the scope and window switches and the four disclosure
-          buttons all share one wrapping row: the pills are only as wide as
-          their content, so on a desktop the whole control set fits on a single
-          line, and the row breaks to two (or three) as the screen narrows. */}
+          The include buttons, the window tabs, the positions and the five
+          disclosure buttons all share one wrapping row: every group is only as
+          wide as its own content, so on a desktop the whole control set fits on
+          a single line, and the row breaks to two (or three) as the screen
+          narrows. */}
       {controlsHost &&
         createPortal(
           <>
           <div className="research-bar">
-          {/* Ahead of the position pills, and a separate control from them: scope and
-              position both apply, so folding these two into that row would read as
-              one single-select where picking SS un-picks My Players. */}
-          <div className="research-scope" role="tablist" aria-label="Whose players">
-            {/* Free Agents only appears once a fantasy league is connected — an
-                unconnected user has no set for it to name. A `scope=fa` link still
-                selects it, and the board's empty state is then the way in. */}
-            {(['mine', 'all', ...(espnConnected || scope === 'fa' ? (['fa'] as const) : [])] as const).map(
-              (sc) => (
+          {/* Ahead of the position pills, and a separate control from them:
+              which rosters and which position both apply, so folding them into
+              one row would read as a single-select where picking SS un-picks
+              your own roster.
+
+              Three `.research-toggle`s rather than the segmented switch this
+              replaced, and that is the whole point of the change: a segment
+              says "pick one of these", a lit toggle says "this set is in". They
+              take the disclosure buttons' shape for exactly that reason — `.on`
+              already means "this control is doing something" everywhere else in
+              the bar. */}
+          <div className="research-include" role="group" aria-label="Which players">
+            {RESEARCH_INCLUDE_KEYS.filter(
+              // Other rosters needs a league to name a set at all. A link that
+              // arrives with it on keeps the button, so the state is always
+              // visible and always undoable — the courtesy the Free Agents pill
+              // used to extend to an unconnected visitor.
+              (k) => k !== 'others' || espnConnected || include.others,
+            ).map((k) => {
+              const meta = includeMeta(k, espnConnected);
+              const on = include[k];
+              return (
                 <button
-                  key={sc}
+                  key={k}
                   type="button"
-                  role="tab"
-                  aria-selected={scope === sc}
-                  className={`research-scope-tab${scope === sc ? ' active' : ''}`}
-                  title={SCOPE_TITLES[sc]}
-                  onClick={() => onScopeChange(sc)}
+                  className={`research-toggle research-inc${on ? ' on' : ''}`}
+                  aria-pressed={on}
+                  title={meta.title}
+                  onClick={() => onIncludeChange({ ...include, [k]: !on })}
                 >
-                  {SCOPE_LABELS[sc]}
+                  {/* Both rendered, swapped by the 640px query — the pattern
+                      the date presets and the window tabs already use, so the
+                      breakpoint lives in one place. A phone has no room for
+                      "Other Rosters" three times over, and an icon would say
+                      nothing at all here. */}
+                  <span className="research-inc-full">{meta.full}</span>
+                  <span className="research-inc-abbr">{meta.abbr}</span>
                 </button>
-              ),
-            )}
+              );
+            })}
           </div>
-          {/* The same switch as a dropdown, for a phone — rendered alongside the
-              pills and swapped by a media query, the pattern the header's date
-              presets use. See `.research-window-select` for why the three of them
-              sit together down there. */}
-          <select
-            className="research-scope-select"
-            value={scope}
-            onChange={(e) => onScopeChange(e.target.value as ResearchScope)}
-            aria-label="Whose players"
-          >
-            {(['mine', 'all', ...(espnConnected || scope === 'fa' ? (['fa'] as const) : [])] as const).map(
-              (sc) => (
-                <option key={sc} value={sc}>
-                  {SCOPE_LABELS[sc]}
-                </option>
-              ),
-            )}
-          </select>
           {/* Out in the bar rather than inside the Filters panel: it decides which
               games every number on the board is drawn from, which is too large a
               thing to keep behind a disclosure — and being always visible, it needs
@@ -1318,10 +1623,9 @@ export function ResearchTable({
 
                 The window dropdown used to sit at the head of it, to share the
                 buttons' line on a phone. It has moved back up beside its own pill
-                row now that the scope and position rows have dropdowns of their
-                own: three of them and four buttons were never going to be one
-                line, and the three belong together — they all name which slice of
-                the league the table is, where the buttons open panels. */}
+                row now that the position row has a dropdown of its own: the two
+                belong together — they name which slice of the league the table
+                is, where the buttons open panels. */}
             <div className="research-tools">
             {/* Search and Filters first — the two disclosures you come to the board
                 with a question in. Each carries an `on` state whenever its panel
@@ -1359,6 +1663,29 @@ export function ResearchTable({
               </svg>
               <span className="research-toggle-label">Filters</span>
               {filters.length > 0 && <span className="research-toggle-count">{filters.length}</span>}
+            </button>
+            {/* The watchlist as a *filter*, not a fourth include button: a
+                watched player can be on your roster, on a leaguemate's or free,
+                so this narrows whatever the three buttons let through rather
+                than naming a set beside them. Panel-less like Qualified below
+                it, so it takes `.on` and never `.active`, and it carries the
+                count for the same reason the Filters button does — a control
+                that holds something has to say so with its panel shut, and this
+                one has no panel at all. */}
+            <button
+              type="button"
+              className={`research-toggle${watchlistOnly ? ' on' : ''}`}
+              aria-pressed={watchlistOnly}
+              onClick={() => onWatchlistOnlyChange(!watchlistOnly)}
+              title="Only the players on your watchlist — the star on each row is what puts them there"
+            >
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
+                <path d="m12 3.6 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9Z" />
+              </svg>
+              <span className="research-toggle-label">Watchlist</span>
+              {watchlistCount > 0 && (
+                <span className="research-toggle-count">{watchlistCount}</span>
+              )}
             </button>
             {/* Not a disclosure like the three beside it — it has no panel, so it
                 takes `.on` and never `.active`. It sits after the two panels
@@ -1472,8 +1799,21 @@ export function ResearchTable({
               open or shut. Qualified is one of them — it narrows the table exactly
               as a threshold does, and it is the only one that used to leave no
               trace here, so the row read as the whole story when it wasn't. */}
-          {(filters.length > 0 || qualifiedOnly) && (
+          {(filters.length > 0 || qualifiedOnly || watchlistOnly) && (
             <div className="research-chips">
+              {watchlistOnly && (
+                <button
+                  type="button"
+                  className="research-chip"
+                  onClick={() => onWatchlistOnlyChange(false)}
+                  title="Show everyone, watchlisted or not"
+                >
+                  Watchlist
+                  <span className="research-chip-x" aria-hidden="true">
+                    ×
+                  </span>
+                </button>
+              )}
               {qualifiedOnly && (
                 <button
                   type="button"
@@ -1509,6 +1849,7 @@ export function ResearchTable({
                 onClick={() => {
                   setFilters([]);
                   onQualifiedChange(false);
+                  onWatchlistOnlyChange(false);
                 }}
               >
                 Clear all
@@ -1588,72 +1929,9 @@ export function ResearchTable({
         </div>
       )}
 
-      {/* My Players with nothing on the watchlist of this kind. Distinct from the
-          message above, which is about filters — here there is nothing to filter,
-          and the way out is All Players rather than a looser threshold. */}
-      {!loading && !error && scope === 'mine' && boardRows.length === 0 && (
-        <div className="empty-state">
-          <p className="empty-title">
-            No {kind === 'pitcher' ? 'pitchers' : 'batters'} on your watchlist
-          </p>
-          <p>
-            Open a player from{' '}
-            <button
-              type="button"
-              className="empty-inline-link"
-              onClick={() => onScopeChange('all')}
-            >
-              All Players
-            </button>{' '}
-            to add them.
-          </p>
-        </div>
-      )}
-
-      {/* Free Agents, before the league has been read. Three different reasons
-          the table can be empty here, and they want three different ways out —
-          a generic "nothing found" would leave a user who has never connected
-          with nowhere to go. */}
-      {!loading && !error && scope === 'fa' && boardRows.length === 0 && (
-        <div className="empty-state">
-          {!espnConnected ? (
-            <>
-              <p className="empty-title">No fantasy league connected</p>
-              <p>
-                Connect an ESPN fantasy baseball league and this board shows every
-                player in the majors nobody in it has rostered.
-              </p>
-              <div className="empty-actions">
-                <button type="button" className="empty-help" onClick={onConnectEspn}>
-                  Connect a league
-                </button>
-              </div>
-            </>
-          ) : espnError ? (
-            <>
-              <p className="empty-title">Couldn't read your league</p>
-              <p>{espnError}</p>
-              <div className="empty-actions">
-                <button type="button" className="empty-help" onClick={onConnectEspn}>
-                  Fantasy league settings
-                </button>
-              </div>
-            </>
-          ) : espnLoading || !ownedIds ? (
-            /* Before the first read lands — `espnLoading` is a frame behind the
-               effect that starts it, and "nobody is available" is the one wrong
-               thing this state must never flash. */
-            <p className="empty-title">Reading your league…</p>
-          ) : (
-            <>
-              <p className="empty-title">
-                No {kind === 'pitcher' ? 'pitchers' : 'batters'} available
-              </p>
-              <p>Every one on this board is on a roster in your league.</p>
-            </>
-          )}
-        </div>
-      )}
+      {/* Every reason the board can be empty, each naming its own cause and the
+          way out — see `emptyBoard`. */}
+      {!loading && !error && boardRows.length === 0 && emptyBoard()}
 
       {visible.length > 0 && (
         <div className="research-scroll" ref={scrollRef}>
@@ -1721,11 +1999,16 @@ export function ResearchTable({
                       >
                         {r.name}
                       </button>
-                      {/* Only on All Players: on My Players every row would
-                          carry one, which marks nothing. The same baseball
-                          `PlayerDetails` shows beside "On roster", so the
-                          app says this one thing one way. */}
-                      {scope === 'all' && watchedKeys.has(key) && (
+                      {/* Two marks, two different lists, and keeping them
+                          distinct is the point of the pair. The **baseball** is
+                          the same one `PlayerDetails` shows beside "On roster"
+                          and says exactly that; it is suppressed when your
+                          roster is all that is on the board, where every row
+                          would carry one and so it would mark nothing. The
+                          **star** is the watchlist, and is a control rather
+                          than a label — it is on every row, because the point
+                          of it is to be pressed. */}
+                      {!onlyMine && rosterKeys.has(key) && (
                         <span
                           className="research-watched"
                           title={`${r.name} is on your roster`}
@@ -1734,6 +2017,11 @@ export function ResearchTable({
                           <span className="sr-only">On your roster</span>
                         </span>
                       )}
+                      <WatchStar
+                        on={watchlistKeys.has(key)}
+                        name={r.name}
+                        onToggle={(on) => onWatchlistToggle(key, on)}
+                      />
                     </td>
                     <td className="research-team-col">{r.team || '—'}</td>
                     <td className="research-pos-col" title={posTypeLabel(r.positionType)}>

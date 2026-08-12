@@ -2,10 +2,31 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { playerKey } from './types.js';
-import type { PlayerKind, WatchPlayer } from './types.js';
+import type { PlayerKind, ResearchIncludeKey, WatchPlayer } from './types.js';
 
 /**
- * The watchlist, one list per user.
+ * Everything saved for one user — and there are **two** lists of players in it,
+ * which the app spent a long time calling by one name.
+ *
+ * - The **roster** (`players`) is the list the Summary, Games and Feed views
+ *   report on. It is what the reorder screen edits and what a fantasy team
+ *   stands in for when `rosterSource` says so.
+ * - The **watchlist** (`watchlist`) is a set of `playerKey` strings followed on
+ *   the research board — a free agent you are thinking about is on it and not
+ *   on your roster, which is the whole point of having two.
+ *
+ * The exports below are named for that split (`getRoster`, `addRosterPlayer`, …
+ * against `getWatchlist`, `setWatchlisted`), which means **`getWatchlist` has
+ * changed meaning**: it used to return the roster and now returns the
+ * watchlist's keys. The types differ (`WatchPlayer[]` against `string[]`), so
+ * every call site of the old one is a compile error rather than a silent
+ * change of behaviour. Two names are deliberately *not* touched: the
+ * `WATCHLIST_TABLE` environment variable, which infra owns and which naming is
+ * not worth a stack update over, and the `/api/watchlist` routes, which every
+ * browser tab open at deploy time is still calling for its roster.
+ *
+ * The stored item's own attribute names were already neutral: `players` for the
+ * roster, so nothing had to be migrated to tell the two apart.
  *
  * Two backends, chosen by whether `WATCHLIST_TABLE` is set: DynamoDB (one item
  * per Cognito `sub`) when deployed, and the original `server/data/watchlist.json`
@@ -47,11 +68,22 @@ export interface UserPrefs {
   /** Play every video clip with the sound off (the settings-menu toggle).
    *  Absent means off, the same convention as `hideInjured`. */
   muteAudio?: boolean;
-  /** Read the watchlist views off the user's **ESPN fantasy roster** instead of
-   *  the list they built here. Absent means the saved watchlist, which is the
-   *  default and the only thing a user without a connected league can have —
-   *  the same absence-is-the-default convention as the two toggles above. */
+  /** Read the roster views off the user's **ESPN fantasy team** instead of the
+   *  list they built here. Absent means the saved roster, which is the default
+   *  and the only thing a user without a connected league can have — the same
+   *  absence-is-the-default convention as the two toggles above. */
   rosterSource?: 'fantasy';
+  /**
+   * Which of the three sets of players the research board includes. Absent
+   * means the default — free agents alone — the same absence-is-the-default
+   * convention the toggles above follow, so the default can change without
+   * anyone's record needing revisiting. An empty array is a real state (the
+   * user has turned all three off) and is stored as such, which is why this
+   * can't lean on `[]` meaning absent.
+   */
+  researchInclude?: ResearchIncludeKey[];
+  /** Narrow the research board to the watchlist. Absent means off. */
+  researchWatchlistOnly?: boolean;
 }
 
 /**
@@ -88,7 +120,13 @@ export interface EspnLeague {
 /** The saved record plus the version it was read at, so a write can detect a
  *  lost update. */
 interface Versioned {
+  /** The roster — the saved list the Summary, Games and Feed views read. */
   players: WatchPlayer[];
+  /** The watchlist — `playerKey` strings followed on the research board.
+   *  Keys rather than entries: the board already holds every row it could
+   *  mark, so a stored copy of the name would only be a second and staler one,
+   *  and membership is the whole of what this list is. */
+  watchlist: string[];
   prefs: UserPrefs;
   espn: EspnLeague | null;
   version: number;
@@ -140,14 +178,21 @@ async function ddbLoad(userId: string): Promise<Versioned> {
     new Get({ TableName: TABLE, Key: { userId }, ConsistentRead: true }),
   );
   const item = res.Item as
-    | { players?: WatchPlayer[]; prefs?: UserPrefs; espn?: EspnLeague; version?: number }
+    | {
+        players?: WatchPlayer[];
+        watchlist?: string[];
+        prefs?: UserPrefs;
+        espn?: EspnLeague;
+        version?: number;
+      }
     | undefined;
   // Only a genuinely absent item is an empty watchlist. Anything else — a
   // throttle, a network blip — throws, because swallowing it would render the
   // "your watchlist is empty" state and then persist that emptiness.
-  if (!item) return { players: [], prefs: {}, espn: null, version: 0 };
+  if (!item) return { players: [], watchlist: [], prefs: {}, espn: null, version: 0 };
   return {
     players: migrate(item.players ?? []),
+    watchlist: item.watchlist ?? [],
     prefs: item.prefs ?? {},
     espn: item.espn ?? null,
     version: item.version ?? 0,
@@ -162,6 +207,10 @@ async function ddbPersist(userId: string, next: Versioned): Promise<void> {
       Item: {
         userId,
         players: next.players,
+        // Absent rather than empty, for the reason `espn` is: a user who has
+        // never watchlisted anybody and one who has cleared the list are the
+        // same stored state.
+        ...(next.watchlist.length ? { watchlist: next.watchlist } : {}),
         prefs: next.prefs,
         // Absent rather than null when there is no connection, so disconnecting
         // removes the credential from the item instead of leaving a tombstone.
@@ -220,11 +269,13 @@ async function fileLoad(userId: string): Promise<Versioned> {
   const db = await fileDb();
   const item = (db[userId] ?? db.__legacy ?? {}) as {
     players?: WatchPlayer[];
+    watchlist?: string[];
     prefs?: UserPrefs;
     espn?: EspnLeague;
   };
   return {
     players: migrate(item.players ?? []),
+    watchlist: item.watchlist ?? [],
     prefs: item.prefs ?? {},
     espn: item.espn ?? null,
     version: 0,
@@ -236,6 +287,7 @@ async function filePersist(userId: string, next: Versioned): Promise<void> {
   delete db.__legacy;
   db[userId] = {
     players: next.players,
+    ...(next.watchlist.length ? { watchlist: next.watchlist } : {}),
     prefs: next.prefs,
     ...(next.espn ? { espn: next.espn } : {}),
   };
@@ -265,12 +317,17 @@ function isConflict(err: unknown): boolean {
  */
 async function mutate(
   userId: string,
-  change: (current: Versioned) => Omit<Versioned, 'version'> | null,
+  change: (current: Versioned) => Partial<Omit<Versioned, 'version'>> | null,
 ): Promise<Versioned> {
   for (let attempt = 0; attempt < 2; attempt++) {
     const current = await load(userId);
-    const next = change(current);
-    if (next === null) return current; // no-op, nothing to write
+    const patch = change(current);
+    if (patch === null) return current; // no-op, nothing to write
+    // A **patch** rather than a whole record, so a mutation names only the
+    // field it touches: the item now carries a roster, a watchlist, the
+    // preferences and the ESPN reference, and a caller that has to restate all
+    // four is a caller that will one day drop one of them by omission.
+    const next = { ...current, ...patch };
     try {
       await persist(userId, { ...next, version: current.version });
       return { ...next, version: current.version + 1 };
@@ -282,27 +339,30 @@ async function mutate(
   throw new Error('user record update failed: too much concurrent modification');
 }
 
-/** The watchlist half of `mutate`, so the list mutations below read as they
- *  always have — they don't touch preferences, and a write carries the prefs
- *  it just read back unchanged. */
+/** The roster half of `mutate`, so the list mutations below read as they always
+ *  have — they name the one field they change and everything else on the item
+ *  rides through untouched. */
 async function update(
   userId: string,
   change: (players: WatchPlayer[]) => WatchPlayer[] | null,
 ): Promise<WatchPlayer[]> {
   const next = await mutate(userId, (cur) => {
     const players = change(cur.players);
-    return players === null ? null : { players, prefs: cur.prefs, espn: cur.espn };
+    return players === null ? null : { players };
   });
   return next.players;
 }
 
-export async function getWatchlist(userId: string): Promise<WatchPlayer[]> {
+/** The user's roster — the list the Summary, Games and Feed views report on.
+ *  (Named `getWatchlist` until the two lists were told apart; that name now
+ *  belongs to the research board's list, further down.) */
+export async function getRoster(userId: string): Promise<WatchPlayer[]> {
   return (await load(userId)).players;
 }
 
 /** Adds unless the same player is already watched *as that kind* — a two-way
  * player is two separate entries, one per kind. */
-export async function addPlayer(userId: string, player: WatchPlayer): Promise<WatchPlayer[]> {
+export async function addRosterPlayer(userId: string, player: WatchPlayer): Promise<WatchPlayer[]> {
   return update(userId, (list) => {
     const key = playerKey(player);
     if (list.some((p) => playerKey(p) === key)) return null;
@@ -312,7 +372,7 @@ export async function addPlayer(userId: string, player: WatchPlayer): Promise<Wa
 
 /** Removes one entry. Without `kind`, removes every entry for the id — which is
  * what a client that predates two-way support means by "remove this player". */
-export async function removePlayer(
+export async function removeRosterPlayer(
   userId: string,
   id: number,
   kind?: PlayerKind,
@@ -332,7 +392,7 @@ export async function removePlayer(
  * submitted kind that's missing from `keys` keeps its place too, so a stale
  * client can't accidentally drop or bury players.
  */
-export async function reorderPlayers(userId: string, keys: string[]): Promise<WatchPlayer[]> {
+export async function reorderRoster(userId: string, keys: string[]): Promise<WatchPlayer[]> {
   return update(userId, (list) => {
     const byKey = new Map(list.map((p) => [playerKey(p), p]));
     const moving = keys.map((k) => byKey.get(k)).filter((p): p is WatchPlayer => p !== undefined);
@@ -352,11 +412,15 @@ export async function reorderPlayers(userId: string, keys: string[]): Promise<Wa
 }
 
 /**
- * Every watchlisted player across every user, deduped by player key — the set
+ * Every **rostered** player across every user, deduped by player key — the set
  * the scheduled warmer pre-fetches season data for. DynamoDB only; a local run
  * has the single dev list and no warmer.
+ *
+ * Deliberately not the watchlists: those are keys rather than entries, and a
+ * board row costs nothing to draw — the season data this warms is what a
+ * *report* needs, and a watchlisted player has no report until he is rostered.
  */
-export async function getAllWatchedPlayers(): Promise<WatchPlayer[]> {
+export async function getAllRosterPlayers(): Promise<WatchPlayer[]> {
   if (!TABLE) return (await fileLoad(DEV_USER)).players;
   const { doc, Scan } = await ddb();
   const seen = new Map<string, WatchPlayer>();
@@ -375,6 +439,47 @@ export async function getAllWatchedPlayers(): Promise<WatchPlayer[]> {
     startKey = res.LastEvaluatedKey as Record<string, unknown> | undefined;
   } while (startKey);
   return [...seen.values()];
+}
+
+// ---- The watchlist ----------------------------------------------------
+//
+// A different list from the roster above, and the reason both exist: the
+// roster is who the Summary, Games and Feed views are *about*, while the
+// watchlist is who you are keeping an eye on over on the research board. A free
+// agent you are thinking of picking up belongs on the second and not the first,
+// and before this the app had nowhere to put him but the list every view
+// reports on.
+//
+// Stored as `playerKey` strings — "batter-660271" — rather than as
+// `WatchPlayer` entries. The board holds every row it could ever mark, so a
+// saved copy of the name and the Savant spelling would be a second and staler
+// one of what the leaderboard already carries; membership is the whole of what
+// this list is.
+
+/** The keys this user is watching, in the order they were added (newest
+ *  first, matching the roster's own convention). */
+export async function getWatchlist(userId: string): Promise<string[]> {
+  return (await load(userId)).watchlist;
+}
+
+/**
+ * Add or remove one key. Idempotent in both directions, which is what makes the
+ * lost-update replay in `mutate` the right resolution rather than a failure: a
+ * board row's star is pressed from one tab while another is doing something
+ * else with the item, and replaying "make sure this key is (not) in the list"
+ * against the newer record is exactly correct.
+ */
+export async function setWatchlisted(
+  userId: string,
+  key: string,
+  on: boolean,
+): Promise<string[]> {
+  const next = await mutate(userId, (cur) => {
+    const has = cur.watchlist.includes(key);
+    if (has === on) return null; // already so — nothing to write
+    return { watchlist: on ? [key, ...cur.watchlist] : cur.watchlist.filter((k) => k !== key) };
+  });
+  return next.watchlist;
 }
 
 // ---- Preferences ------------------------------------------------------
@@ -399,7 +504,7 @@ export async function setResearchColumns(
     const columns = { ...(cur.prefs.researchColumns ?? {}) };
     if (keys) columns[kind] = keys;
     else delete columns[kind];
-    return { players: cur.players, prefs: { ...cur.prefs, researchColumns: columns }, espn: cur.espn };
+    return { prefs: { ...cur.prefs, researchColumns: columns } };
   });
   return next.prefs;
 }
@@ -415,7 +520,7 @@ export async function setHideInjured(userId: string, hide: boolean): Promise<Use
     const prefs = { ...cur.prefs };
     if (hide) prefs.hideInjured = true;
     else delete prefs.hideInjured;
-    return { players: cur.players, prefs, espn: cur.espn };
+    return { prefs };
   });
   return next.prefs;
 }
@@ -431,7 +536,35 @@ export async function setMuteAudio(userId: string, mute: boolean): Promise<UserP
     const prefs = { ...cur.prefs };
     if (mute) prefs.muteAudio = true;
     else delete prefs.muteAudio;
-    return { players: cur.players, prefs, espn: cur.espn };
+    return { prefs };
+  });
+  return next.prefs;
+}
+
+/**
+ * Save which sets of players the research board includes, and whether it is
+ * narrowed to the watchlist.
+ *
+ * **One route for both**, unlike the three toggles above, because they are one
+ * control set: the three include buttons and the watchlist filter are read
+ * together every time the board decides who is on it, and a client that has
+ * just changed one holds the other anyway. `null` for `include` is "back to the
+ * default" and stores the absence of the entry, the same rule the research
+ * columns follow — where `[]` is the real, storable state of a user who has
+ * turned all three off.
+ */
+export async function setResearchInclude(
+  userId: string,
+  include: ResearchIncludeKey[] | null,
+  watchlistOnly: boolean,
+): Promise<UserPrefs> {
+  const next = await mutate(userId, (cur) => {
+    const prefs = { ...cur.prefs };
+    if (include) prefs.researchInclude = include;
+    else delete prefs.researchInclude;
+    if (watchlistOnly) prefs.researchWatchlistOnly = true;
+    else delete prefs.researchWatchlistOnly;
+    return { prefs };
   });
   return next.prefs;
 }
@@ -454,29 +587,25 @@ export async function setEspnLeague(
   userId: string,
   espn: EspnLeague | null,
 ): Promise<EspnLeague | null> {
-  const next = await mutate(userId, (cur) => ({
-    players: cur.players,
-    prefs: cur.prefs,
-    espn,
-  }));
+  const next = await mutate(userId, () => ({ espn }));
   return next.espn;
 }
 
 /**
- * Which list the watchlist views read from. `'watchlist'` is stored as the
- * absence of the entry, as the toggles above are — so a user who switches back
- * is indistinguishable from one who never switched, and the default can change
+ * Which list the roster views read from. `'saved'` is stored as the absence of
+ * the entry, as the toggles above are — so a user who switches back is
+ * indistinguishable from one who never switched, and the default can change
  * without anyone's record needing revisiting.
  */
 export async function setRosterSource(
   userId: string,
-  source: 'watchlist' | 'fantasy',
+  source: 'saved' | 'fantasy',
 ): Promise<UserPrefs> {
   const next = await mutate(userId, (cur) => {
     const prefs = { ...cur.prefs };
     if (source === 'fantasy') prefs.rosterSource = 'fantasy';
     else delete prefs.rosterSource;
-    return { players: cur.players, prefs, espn: cur.espn };
+    return { prefs };
   });
   return next.prefs;
 }
@@ -495,13 +624,7 @@ export async function setEspnTeam(
   teamName: string | null,
 ): Promise<EspnLeague | null> {
   const next = await mutate(userId, (cur) =>
-    cur.espn === null
-      ? null
-      : {
-          players: cur.players,
-          prefs: cur.prefs,
-          espn: { ...cur.espn, teamId, teamName },
-        },
+    cur.espn === null ? null : { espn: { ...cur.espn, teamId, teamName } },
   );
   return next.espn;
 }
@@ -741,8 +864,6 @@ export async function attachEspnLeague(
   leagueName: string | null,
 ): Promise<EspnLeague | null> {
   const next = await mutate(userId, (cur) => ({
-    players: cur.players,
-    prefs: cur.prefs,
     espn: {
       leagueId,
       leagueName,

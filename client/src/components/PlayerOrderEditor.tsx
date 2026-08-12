@@ -52,7 +52,7 @@ export function PlayerOrderEditor({
   onCommit,
   onRemove,
 }: {
-  // Already narrowed to the kind being edited, in watchlist order.
+  // Already narrowed to the kind being edited, in roster order.
   players: { id: number; key: string; name: string }[];
   onMove: (fromKey: string, toKey: string) => void;
   onCommit: () => void;

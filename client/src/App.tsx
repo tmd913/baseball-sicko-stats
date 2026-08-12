@@ -26,14 +26,17 @@ import { SummaryTable } from './components/SummaryTable';
 import {
   ResearchTable,
   freshResearchUi,
+  includeParam,
   isDefaultColumns,
+  isDefaultInclude,
+  fromIncludeKeys,
   researchKindFor,
   toColumnKeys,
+  toResearchInclude,
   toResearchPos,
-  toResearchScope,
   toResearchWindow,
 } from './components/ResearchTable';
-import type { ResearchPos, ResearchScope, ResearchUi } from './components/ResearchTable';
+import type { ResearchInclude, ResearchPos, ResearchUi } from './components/ResearchTable';
 import { simulateLiveDay } from './simulate';
 import { PlayerDetails } from './components/PlayerDetails';
 import { DateRangePicker, numericRange } from './components/DateRangePicker';
@@ -215,11 +218,25 @@ export default function App() {
   const maxDate = useMemo(() => `${baseballToday().slice(0, 4)}-12-31`, []);
   const [seasonPlayers, setSeasonPlayers] = useState<SeasonPlayer[]>([]);
   const [playersLoading, setPlayersLoading] = useState(true);
-  const [watchlist, setWatchlist] = useState<WatchPlayer[]>([]);
+  /** The user's **roster** — the saved list the Summary, Games and Feed views
+   *  report on. Called `watchlist` until the two lists were told apart; the
+   *  watchlist proper is `watchlistKeys` below, and is the research board's. */
+  const [roster, setRoster] = useState<WatchPlayer[]>([]);
   const [reports, setReports] = useState<PlayerReport[]>([]);
   const [reportLoading, setReportLoading] = useState(false);
   const [showLoading, setShowLoading] = useState(false);
-  const [watchlistLoaded, setWatchlistLoaded] = useState(false);
+  const [rosterLoaded, setRosterLoaded] = useState(false);
+  /**
+   * The **watchlist** — `${kind}-${id}` keys the user is following on the
+   * research board, independent of whether they are on his roster. A free agent
+   * he is thinking about picking up belongs here and not there, which is the
+   * whole reason the two lists exist separately.
+   *
+   * Keys rather than entries, matching what the server stores: the board holds
+   * every row it could mark, so a name saved beside the key would only be a
+   * second and staler copy of one the leaderboard already carries.
+   */
+  const [watchlistKeys, setWatchlistKeys] = useState<Set<string>>(() => new Set());
   const [error, setError] = useState<string | null>(null);
   // Player cards are collapsed by default; the URL tracks the keys the user has
   // explicitly expanded (so a fresh visit — and any newly-added player — starts
@@ -352,8 +369,8 @@ export default function App() {
       .catch((e: Error) => console.error('saving mute-audio failed:', e.message));
   }, []);
   /**
-   * Which set of players the four watchlist views describe: the list built here,
-   * or the user's ESPN fantasy roster.
+   * Which set of players the three roster views describe: the list built here,
+   * or the user's ESPN fantasy team.
    *
    * In the URL like `hideil=1`, and for the same reason — it changes *which
    * players a view is reporting on*, so a shared link that says so is saying
@@ -362,7 +379,7 @@ export default function App() {
    * undo a switch just made.
    */
   const [rosterSource, setRosterSourceState] = useState<RosterSource>(() =>
-    initialParams.get('roster') === 'fantasy' ? 'fantasy' : 'watchlist',
+    initialParams.get('roster') === 'fantasy' ? 'fantasy' : 'saved',
   );
   const rosterSourceFromUrl = initialParams.get('roster') === 'fantasy';
   const rosterSourceTouched = useRef(false);
@@ -402,6 +419,56 @@ export default function App() {
     () => (urlColumns ? { [urlColumns.kind]: urlColumns.keys } : {}),
   );
 
+  /**
+   * Which sets of players the board includes, and whether it is narrowed to the
+   * watchlist. Shared across both boards and both windows like the window above
+   * — they are statements about *you* rather than about a board — and in the
+   * URL for the same reason it is: each decides which players the table is
+   * about, which is what a link has to carry.
+   *
+   * Both are **saved per user** as well (`researchInclude` /
+   * `researchWatchlistOnly`), which is what "it keeps what I set it to" means
+   * for a control someone sets once and then reads for a season. The URL wins
+   * where it speaks, exactly as `cols=` does: a link someone was handed should
+   * show what it says, and it doesn't overwrite what they had saved.
+   */
+  const includeFromUrl =
+    initialParams.get('inc') !== null || initialParams.get('scope') !== null;
+  const [researchInclude, setResearchIncludeState] = useState<ResearchInclude>(() =>
+    toResearchInclude(initialParams.get('inc'), initialParams.get('scope')),
+  );
+  const watchlistOnlyFromUrl = initialParams.get('watch') === '1';
+  const [researchWatchlistOnly, setResearchWatchlistOnlyState] =
+    useState(watchlistOnlyFromUrl);
+  const researchIncludeTouched = useRef(false);
+  // One PUT for the pair, because the server holds them as one control set —
+  // and because either of them changing means re-reading who is on the board,
+  // so the client has both to hand whenever one moves.
+  const saveInclude = useCallback((inc: ResearchInclude, watch: boolean) => {
+    researchIncludeTouched.current = true;
+    api
+      .saveResearchInclude(
+        isDefaultInclude(inc)
+          ? null
+          : (['mine', 'others', 'fa'] as const).filter((k) => inc[k]),
+        watch,
+      )
+      .catch((e: Error) => console.error('saving board players failed:', e.message));
+  }, []);
+  const setResearchInclude = useCallback(
+    (next: ResearchInclude) => {
+      setResearchIncludeState(next);
+      saveInclude(next, researchWatchlistOnly);
+    },
+    [saveInclude, researchWatchlistOnly],
+  );
+  const setResearchWatchlistOnly = useCallback(
+    (next: boolean) => {
+      setResearchWatchlistOnlyState(next);
+      saveInclude(researchInclude, next);
+    },
+    [saveInclude, researchInclude],
+  );
   // The user's saved columns, fetched once. Applied only to boards the URL
   // didn't already speak for, and only where the user hasn't already changed
   // something in the seconds before this landed.
@@ -427,6 +494,19 @@ export default function App() {
         ) {
           setRosterSourceState('fantasy');
         }
+        // The board's population settings, on the same rule: the URL wins
+        // where it spoke, and a user who has already worked the buttons in the
+        // second before this landed keeps what they pressed.
+        if (!researchIncludeTouched.current && !includeFromUrl && prefs.researchInclude) {
+          setResearchIncludeState(fromIncludeKeys(prefs.researchInclude));
+        }
+        if (
+          !researchIncludeTouched.current &&
+          !watchlistOnlyFromUrl &&
+          prefs.researchWatchlistOnly
+        ) {
+          setResearchWatchlistOnlyState(true);
+        }
         setResearchCols((prev) => {
           const next = { ...prev };
           for (const kind of ['batter', 'pitcher'] as const) {
@@ -443,7 +523,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [urlColumns, hideInjuredFromUrl, rosterSourceFromUrl]);
+  }, [urlColumns, hideInjuredFromUrl, rosterSourceFromUrl, includeFromUrl, watchlistOnlyFromUrl]);
 
   // Saving is debounced because the picker is a row of checkboxes — turning a
   // group on is one intent and a dozen state changes, and each would otherwise
@@ -478,11 +558,6 @@ export default function App() {
   // has to carry.
   const [researchWindow, setResearchWindow] = useState<ResearchWindow>(() =>
     toResearchWindow(initialParams.get('win')),
-  );
-  // Whose players the board shows. Shared across both boards and both windows
-  // like the two above — it is a statement about you, not about the board.
-  const [researchScope, setResearchScope] = useState<ResearchScope>(() =>
-    toResearchScope(initialParams.get('scope')),
   );
   // Keyed by board **and** window: each is its own fetch and its own megabyte,
   // and both are kept, so flipping back to a window already read is instant.
@@ -638,9 +713,19 @@ export default function App() {
    * its own result and spin.
    */
   useEffect(() => {
-    if (view !== 'research' || researchScope !== 'fa' || !espnConnected) return;
+    if (view !== 'research' || !espnConnected) return;
+    // Two of the three include buttons are *defined* by who owns whom, so
+    // either of them being on is what makes the read worth doing.
+    if (!researchInclude.fa && !researchInclude.others) return;
     loadOwnership();
-  }, [view, researchScope, espnConnected, espnLeagueId, loadOwnership]);
+  }, [
+    view,
+    researchInclude.fa,
+    researchInclude.others,
+    espnConnected,
+    espnLeagueId,
+    loadOwnership,
+  ]);
 
   // A different league (or a disconnect) invalidates the whole set.
   useEffect(() => {
@@ -714,19 +799,21 @@ export default function App() {
   }, [usingFantasy, fantasyRoster]);
 
   /**
-   * The keys "my players" means on screen — the saved watchlist, or the fantasy
-   * roster when that is what the views are reading. This is what the research
-   * board's `My Players` scope selects on and what its ✓ marks, so both follow
-   * whichever list is actually being shown.
+   * The keys "your roster" means on screen — the saved list, or the fantasy
+   * team when that is what the views are reading. This is what the research
+   * board's `My Roster` button selects on and what its baseball marks, so both
+   * follow whichever list is actually being shown.
    *
    * Deliberately *not* what `PlayerAdder` dedupes against, which stays the
    * saved list: that control's button adds to the saved list whatever mode the
-   * app is in, and it should show the state of the thing it changes.
+   * app is in, and it should show the state of the thing it changes. And
+   * deliberately nothing to do with `watchlistKeys`, which is the other list
+   * entirely.
    */
-  const watchedKeys = useMemo(() => {
+  const rosterKeys = useMemo(() => {
     if (fantasySlots) return new Set(fantasySlots.keys());
-    return new Set(watchlist.map(playerKey));
-  }, [watchlist, fantasySlots]);
+    return new Set(roster.map(playerKey));
+  }, [roster, fantasySlots]);
 
   /** ESPN's global rostered percentage by MLB id, or null with no league —
    *  which is also what turns the board's `Ros%` column on and off. */
@@ -930,13 +1017,18 @@ export default function App() {
     if (view === 'research' && researchWindow !== 'season') {
       p.set('win', String(researchWindow));
     }
-    // 'mine' is the default and stays out of the URL. That does mean a bare
-    // research link opens on the *recipient's* watchlist rather than the
-    // sender's board — which is the right way round: the scope names a set of
-    // players, and it is their set the word "mine" refers to on their screen.
-    // A sender who means "look at the whole league" gets `scope=all` written
-    // for them, since that now differs from the default.
-    if (view === 'research' && researchScope !== 'mine') p.set('scope', researchScope);
+    // The three include buttons as one param, and only when they differ from
+    // the default — free agents alone. A bare research link therefore opens on
+    // *the recipient's* sets rather than the sender's, which is the right way
+    // round: `mine` names a set of players, and on their screen it is theirs.
+    // `inc=none` is spelled out because turning everything off is a real state
+    // and an empty value reads as an absent one.
+    const inc = view === 'research' ? includeParam(researchInclude) : null;
+    if (inc) p.set('inc', inc);
+    // In the URL for the reason `hideil=1` is: it changes which players the
+    // view reports on. Off is the absence of the param, so a link can only ever
+    // turn it on and a saved preference has something to fill in.
+    if (view === 'research' && researchWatchlistOnly) p.set('watch', '1');
     // The column set of the board on screen, and only once it differs from that
     // board's defaults — otherwise every link would carry twenty stat keys to
     // say "the usual". `pos=` is what tells a reader which board they describe.
@@ -961,7 +1053,8 @@ export default function App() {
     playerKind,
     researchPos,
     researchWindow,
-    researchScope,
+    researchInclude,
+    researchWatchlistOnly,
     researchCols,
     researchKind,
     simulate,
@@ -1025,15 +1118,15 @@ export default function App() {
     };
   }, []);
 
-  // Load watchlist once. A failure here used to be swallowed, which rendered the
-  // "your watchlist is empty" state — actively misleading now that the list
+  // Load the roster once. A failure here used to be swallowed, which rendered
+  // the "your roster is empty" state — actively misleading now that the list
   // lives server-side per user, where a failure means "we couldn't read it".
   useEffect(() => {
     api
-      .watchlist()
-      .then(setWatchlist)
+      .roster()
+      .then(setRoster)
       .catch((e: Error) => setError(e.message))
-      .finally(() => setWatchlistLoaded(true));
+      .finally(() => setRosterLoaded(true));
   }, []);
 
   // Only surface the loading UI if the fetch is slow enough to matter — quick
@@ -1047,13 +1140,63 @@ export default function App() {
     return () => clearTimeout(t);
   }, [reportLoading]);
 
+  /**
+   * The watchlist, read once on boot beside the roster — it decides whether a
+   * board row's star is filled, and a first render that got that wrong would
+   * then correct itself under the reader's eye.
+   *
+   * A failure is logged rather than bannered, the rule the preferences follow:
+   * the board opens with nobody starred, which is exactly what a user who has
+   * never watchlisted anyone sees.
+   */
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .watchlist()
+      .then((keys) => {
+        if (!cancelled) setWatchlistKeys(new Set(keys));
+      })
+      .catch((e: Error) => console.error('watchlist unavailable:', e.message));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /**
+   * Star a player, or unstar him. Applied **optimistically** and reconciled
+   * with the server's answer: this is a mark on a row in a table of six hundred
+   * of them, and a press that waits a round trip to fill in reads as a press
+   * that missed. A failure puts it back and says so in the console — nothing
+   * here is worth a banner over the board it sits on.
+   */
+  const toggleWatchlisted = useCallback((key: string, on: boolean) => {
+    setWatchlistKeys((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(key);
+      else next.delete(key);
+      return next;
+    });
+    api
+      .setWatchlisted(key, on)
+      .then((keys) => setWatchlistKeys(new Set(keys)))
+      .catch((e: Error) => {
+        console.error('saving watchlist failed:', e.message);
+        setWatchlistKeys((prev) => {
+          const back = new Set(prev);
+          if (on) back.delete(key);
+          else back.add(key);
+          return back;
+        });
+      });
+  }, []);
+
   // `quiet` refreshes in the background (live polling) without flashing the
-  // loading UI; the foreground load on date/watchlist change is not quiet.
+  // loading UI; the foreground load on date/roster change is not quiet.
   const loadReport = useCallback(
     (quiet = false, refresh = false) => {
       if (!quiet) setReportLoading(true);
       return api
-        .report(start, end, usingFantasy ? 'fantasy' : 'watchlist', refresh)
+        .report(start, end, usingFantasy ? 'fantasy' : 'saved', refresh)
         .then((r) => setReports(r.players))
         .catch((e: Error) => setError(e.message))
         .finally(() => {
@@ -1063,8 +1206,8 @@ export default function App() {
     [start, end, usingFantasy],
   );
 
-  // Refresh report when the date range, the watchlist, or which list is being
-  // read changes. `watchlist` is still a dependency in fantasy mode — it costs
+  // Refresh report when the date range, the roster, or which list is being
+  // read changes. `roster` is still a dependency in fantasy mode — it costs
   // one refetch on a change that can't happen while the editor is hidden, and
   // dropping it would mean a switch back showing the pre-edit list.
   useEffect(() => {
@@ -1076,7 +1219,7 @@ export default function App() {
     loadReport();
     // `fantasyTeamId` because the report is *about* that team's players: pick a
     // different one on the Fantasy league page and this is what re-reads it.
-  }, [loadReport, watchlist, rosterSource, espnStatusSettled, fantasyTeamId]);
+  }, [loadReport, roster, rosterSource, espnStatusSettled, fantasyTeamId]);
 
   /**
    * Re-read everything that comes from ESPN, past the server's ten-minute
@@ -1198,7 +1341,7 @@ export default function App() {
   // not-yet-started games. Research needs nothing, so the row itself always
   // renders — with an empty watchlist it's the lone Research pill, which is the
   // one tab a new user can actually use.
-  const showWatchlistViews = displayReports.length > 0;
+  const showRosterViews = displayReports.length > 0;
   const showViewToggle = true;
   useEffect(() => {
     if (!hasRealLiveGame) return;
@@ -1240,10 +1383,10 @@ export default function App() {
   };
 
   const onAdd = async (p: WatchPlayer) => {
-    setWatchlist(await api.addPlayer(p));
+    setRoster(await api.addPlayer(p));
   };
   const onRemove = async (p: { id: number; kind: PlayerKind }) => {
-    setWatchlist(await api.removePlayer(p.id, p.kind));
+    setRoster(await api.removePlayer(p.id, p.kind));
   };
   // Remove from the edit screen. The row goes as soon as it's tapped — the
   // watchlist update refetches the report, which would otherwise leave the
@@ -1257,7 +1400,7 @@ export default function App() {
     setReports(next);
     api
       .removePlayer(player.id, player.kind)
-      .then(setWatchlist)
+      .then(setRoster)
       .catch((e: Error) => setError(e.message));
   }, []);
 
@@ -1278,12 +1421,12 @@ export default function App() {
     setReports(next);
   }, []);
 
-  // Persist the order; setWatchlist keeps the server's copy in sync (and triggers
+  // Persist the order; setRoster keeps the server's copy in sync (and triggers
   // a cached report refetch, which returns the same order).
   const commitOrder = useCallback(() => {
     api
       .reorderPlayers(reportsRef.current.map(playerKey))
-      .then(setWatchlist)
+      .then(setRoster)
       .catch((e: Error) => setError(e.message));
   }, []);
 
@@ -1359,8 +1502,8 @@ export default function App() {
     };
   }, [detailsKey, reports, seasonPlayers, positionById]);
   const detailsWatched = useMemo(
-    () => (detailsKey ? watchlist.some((p) => playerKey(p) === detailsKey) : false),
-    [detailsKey, watchlist],
+    () => (detailsKey ? roster.some((p) => playerKey(p) === detailsKey) : false),
+    [detailsKey, roster],
   );
 
   // The player list is one kind at a time, picked by its own tab row (each half
@@ -1595,7 +1738,7 @@ export default function App() {
       <div className="header-search">
         <PlayerAdder
           players={seasonPlayers}
-          watchlist={watchlist}
+          watchlist={roster}
           onAdd={onAdd}
           onOpenDetails={setDetailsKey}
           loading={playersLoading}
@@ -1856,7 +1999,7 @@ export default function App() {
     <div className="search-bar">
       <PlayerAdder
         players={seasonPlayers}
-        watchlist={watchlist}
+        watchlist={roster}
         onAdd={onAdd}
         onOpenDetails={setDetailsKey}
         loading={playersLoading}
@@ -2136,12 +2279,12 @@ export default function App() {
                     role="menuitemcheckbox"
                     aria-checked={usingFantasy}
                     onClick={() =>
-                      setRosterSource(rosterSource === 'fantasy' ? 'watchlist' : 'fantasy')
+                      setRosterSource(rosterSource === 'fantasy' ? 'saved' : 'fantasy')
                     }
                     title={
                       espnTeamName
-                        ? `Read the Summary, Games and Feed views off ${espnTeamName} instead of your watchlist`
-                        : 'Read the watchlist views off your fantasy roster'
+                        ? `Read the Summary, Games and Feed views off ${espnTeamName} instead of the roster you built here`
+                        : 'Read the Summary, Games and Feed views off your fantasy team'
                     }
                   >
                     <span className="settings-dot" aria-hidden="true" />
@@ -2209,7 +2352,7 @@ export default function App() {
             <div className="view-switch" role="tablist" aria-label="Section">
               {/* Nothing watched, nothing to put on a roster page — so this
                   pill only appears once there is something to read. */}
-              {showWatchlistViews && (
+              {showRosterViews && (
                 <button
                   type="button"
                   role="tab"
@@ -2254,7 +2397,7 @@ export default function App() {
                 questions come in (which page, which kind, which reading, which
                 days, whose list), and where the line falls is the window's
                 business rather than something fixed in the markup. */}
-            {section === 'roster' && showWatchlistViews && (
+            {section === 'roster' && showRosterViews && (
               <>
               <div className="roster-switch" role="tablist" aria-label="Roster view">
                 <button
@@ -2340,9 +2483,9 @@ export default function App() {
           menu button that has nothing to do with it. */}
       {error && <div className="error-banner">⚠ {error}</div>}
 
-      {watchlistLoaded && watchlist.length === 0 && !error && view !== 'research' && (
+      {rosterLoaded && roster.length === 0 && !error && view !== 'research' && (
         <div className="empty-state">
-          <p className="empty-title">Your watchlist is empty</p>
+          <p className="empty-title">Your roster is empty</p>
           <p>
             Search for a player to start tracking their plate appearances, pitch
             sequences, and Statcast contact quality.
@@ -2446,16 +2589,19 @@ export default function App() {
           onQualifiedChange={setResearchQualified}
           window={researchWindow}
           onWindowChange={setResearchWindow}
-          scope={researchScope}
-          onScopeChange={setResearchScope}
+          include={researchInclude}
+          onIncludeChange={setResearchInclude}
+          watchlistOnly={researchWatchlistOnly}
+          onWatchlistOnlyChange={setResearchWatchlistOnly}
           hasRosterPct={rosterPct !== null}
           trendDays={rosterTrend?.days ?? null}
           ownedIds={ownedIds}
           espnConnected={espnConnected}
-          espnLoading={espnLoading}
           espnError={espnError}
           onConnectEspn={openEspnSettings}
-          watchedKeys={watchedKeys}
+          rosterKeys={rosterKeys}
+          watchlistKeys={watchlistKeys}
+          onWatchlistToggle={toggleWatchlisted}
           onOpenDetails={setDetailsKey}
           /* Held here so leaving the page doesn't throw it away, and handed
              back whole — see `researchUi`. */
@@ -2637,7 +2783,11 @@ export default function App() {
           name={detailsPlayer.name}
           position={detailsPlayer.position}
           isPitcher={detailsPlayer.kind === 'pitcher'}
-          isWatched={detailsWatched}
+          isOnRoster={detailsWatched}
+          isWatchlisted={watchlistKeys.has(`${detailsPlayer.kind}-${detailsPlayer.id}`)}
+          onWatchlistToggle={(on) =>
+            toggleWatchlisted(`${detailsPlayer.kind}-${detailsPlayer.id}`, on)
+          }
           rosterPct={rosterPct ? rosterPct.get(detailsPlayer.id) ?? null : undefined}
           rosterTrend={
             rosterTrend && rosterPct?.has(detailsPlayer.id)
