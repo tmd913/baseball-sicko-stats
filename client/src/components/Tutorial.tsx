@@ -108,6 +108,24 @@ const PencilIcon = () => (
   </svg>
 );
 
+const RefreshIcon = () => (
+  <svg
+    viewBox="0 0 24 24"
+    width="14"
+    height="14"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.1"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+    className="tut-inline-icon"
+  >
+    <path d="M20 12a8 8 0 1 1-2.34-5.66" />
+    <path d="M20 4v4.5h-4.5" />
+  </svg>
+);
+
 const CollapseIcon = () => (
   <svg
     viewBox="0 0 24 24"
@@ -560,19 +578,23 @@ const CHAPTERS: Chapter[] = [
       <>
         <p>
           Your watchlist keeps the order you put it in, and that order is what every
-          view reads down. Once you're watching more than one player, an{' '}
+          view reads down. Once you're watching more than one player,{' '}
           <Ui>
-            <PencilIcon /> Edit
+            <PencilIcon /> Edit players
           </Ui>{' '}
-          button appears beside the search at the top right — the pencil alone on a
-          phone. Press it from anywhere and it takes you to <Ui>Games</Ui>, where the
-          reordering happens.
+          appears in the{' '}
+          <Ui>
+            <GearIcon /> Settings
+          </Ui>{' '}
+          menu beside the title. Press it from anywhere and it takes you to{' '}
+          <Ui>Games</Ui>, where the reordering happens.
         </p>
         <ol className="tut-steps">
           <Step>
-            Tap <Ui>Edit</Ui>. The edit screen takes the whole page — the tabs, the
-            dates and the search all step out of the way, leaving the list and the
-            title above it. The button becomes <Ui>Done</Ui>, which is the way back.
+            Tap <Ui>Edit players</Ui>. The edit screen takes the whole page — the
+            tabs, the dates and the search all step out of the way, leaving the list
+            and the title above it, with <Ui>Done</Ui> beside that title as the way
+            back.
           </Step>
           <Step>
             Drag a row to move it. On a phone, drag from the <Ui>⠿</Ui> grip — the
@@ -585,7 +607,7 @@ const CHAPTERS: Chapter[] = [
             takes two.
           </Step>
           <Step>
-            Tap <Ui>Done</Ui> at the top right to go back to the cards.
+            Tap <Ui>Done</Ui> beside the title to go back to the cards.
           </Step>
         </ol>
         <p className="tut-note">
@@ -605,7 +627,14 @@ const CHAPTERS: Chapter[] = [
       <>
         <p>
           When any watched player is in a game that's in progress, the app re-polls
-          every 20 seconds on its own — no refreshing.
+          every 20 seconds on its own — no refreshing. That poll is only for live
+          games, so anything else that changes during the day — a lineup posting, an
+          IL move, a trade on your fantasy league — waits for the{' '}
+          <Ui>
+            <RefreshIcon /> Refresh
+          </Ui>{' '}
+          button at the top right, which re-reads whatever the page you're on is made
+          of and leaves it on screen while it does.
         </p>
         <ul className="tut-list">
           <li>
@@ -661,9 +690,9 @@ const CHAPTERS: Chapter[] = [
             <strong>
               <GearIcon /> Settings
             </strong>{' '}
-            — beside the title: hiding injured players, muting clip audio, this
-            guide, and sign out. The two toggles are saved to your account, so they
-            follow you to another device.
+            — beside the title: hiding injured players, muting clip audio, editing
+            your player order, this guide, and sign out. The two toggles are saved to
+            your account, so they follow you to another device.
           </li>
           <li>
             <strong>Expanding scrolls.</strong> Whatever you open — a card, a game, an
