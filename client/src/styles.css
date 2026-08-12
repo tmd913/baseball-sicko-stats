@@ -4770,8 +4770,15 @@ body {
   outline-offset: -2px;
 }
 
-/* ---- Disclosure bar: Search and Filters, each behind its own button ---- */
-.research-toggle {
+/* ---- Disclosure bar: Search and Filters, each behind its own button ----
+   `.starters-toggle` — the summary table's "only today's starters" filter, up
+   in the roster row — is folded into every one of these lists rather than
+   restyled to resemble them. It is the same object as Qualified two views over:
+   a plain toggle with no panel, narrowing who is in a table, which is why it
+   takes `.on` and never `.active` and why it reads identically by
+   construction. */
+.research-toggle,
+.starters-toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -4786,7 +4793,8 @@ body {
   font-weight: 700;
   cursor: pointer;
 }
-.research-toggle:hover {
+.research-toggle:hover,
+.starters-toggle:hover {
   color: var(--text);
 }
 /* `.active` is "the panel is open"; `.on` is "the panel holds something",
@@ -4796,12 +4804,26 @@ body {
   color: var(--text);
   border-color: var(--accent);
 }
-.research-toggle.on {
+/* It sits in the wrapping tab row, where every group is atomic: no shrink, and
+   it breaks to the next line whole rather than folding in half — the same two
+   declarations `.date-toggle` carries for the same reason, it being the other
+   labelled button on that row. Its label has a class of its own rather than
+   `.research-toggle-label` deliberately: that one is visually hidden on a
+   phone, which is right for four icons in a known run and wrong for a lone
+   button on a row of tabs, where nothing beside it would say what the glyph
+   meant. */
+.starters-toggle {
+  flex: none;
+  white-space: nowrap;
+}
+.research-toggle.on,
+.starters-toggle.on {
   color: var(--accent);
   border-color: rgba(56, 189, 248, 0.5);
   background: rgba(56, 189, 248, 0.12);
 }
-.research-toggle:focus-visible {
+.research-toggle:focus-visible,
+.starters-toggle:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
