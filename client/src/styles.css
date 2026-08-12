@@ -62,14 +62,27 @@
      see `.app` — and the three wide tables take the whole window, which is where
      the room was wanted; a card does not need it.
 
-     1136px is not a new number: it is exactly what `.app`'s old 1180px cap left
-     inside its 44px of gutters, so the games list and the feed are the width
-     they have always been and only the tables gained. It was 1600 for an hour
-     and that was no cap at all on the machine anyone uses — a laptop is 1440 or
-     1512 wide, under it either way, so the cards went on filling the window and
-     the token read as if it were doing something. A cap has to be narrower than
-     the screen it is meant to hold. */
-  --card-column: 1136px;
+     800px is a third off the 1136 these two views inherited from `.app`'s old
+     1180px cap, and the point is that a card was never using that width: the
+     header is a name at one end and a line of stats at the other, so widening it
+     only pushes the two apart and leaves the middle empty. The way here was 1600
+     (no cap at all on a 1440 or 1512 laptop — the cards went on filling the
+     window while the token read as though it were doing something) and then 1136
+     (the old width, still wider than the content wants). A cap has to be
+     narrower than the screen it is meant to hold, and this one narrower again
+     than that.
+
+     **800 rather than the 757 a third would give**, and the 43px is measured
+     rather than rounded to: at 760 the longest name on a real watchlist —
+     "Pete Crow-Armstrong" with its position chip — wraps to a second line and
+     takes the header from 88px to 100, while at 800 nothing on the list wraps at
+     all. A longer name than that exists (the roster's widest row is Christian
+     Encarnacion-Strand) so this is not proof, only the width where the cost
+     starts. It also stays clear of `.player-card`'s own container queries, which
+     switch to the phone layout under 480px and an intermediate one between 481
+     and 700, so an expanded card keeps its full pitch table and strike-zone
+     plot. */
+  --card-column: 800px;
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
   font-synthesis: none;
 }
@@ -925,11 +938,12 @@ body {
 /* ---- Player list ---- */
 /* One cap, and it is not the app's: a list of cards is read down rather than
    across, and uncapped it is a single window-wide box holding a pitch table with
-   an inch between its columns. `--card-column` keeps these two views at the
-   width they had under the old app-wide cap, so what the width change did was
-   give the room to the three wide tables rather than take a column of cards and
-   stretch it. The feed takes the same number for the same reason: its items are
-   these cards. */
+   an inch between its columns. `--card-column` is narrower than these two views
+   have ever been, because the card's own contents are what set it: a name at one
+   end of the header and a line of stats at the other, with nothing in between to
+   fill. So the width change gave the room to the three wide tables and took some
+   back off the cards. The feed takes the same number for the same reason: its
+   items are these cards. */
 .player-list {
   flex: 1 1 auto;
   min-width: 0;
