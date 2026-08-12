@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api';
 import { SignOutButton } from './auth';
 import { playerKey } from './types';
@@ -1103,10 +1103,16 @@ export default function App() {
   // summary view scrolls its inner table, the feed scrolls the window.
   const [backView, setBackView] = useState<'summary' | 'feed' | null>(null);
   const backScroll = useRef(0);
+  // Set by the two paths that place the scroll themselves — the jump to a
+  // player's day and the back button that undoes it — so the view swap they
+  // each perform doesn't get reset to the top from under them (see the effect
+  // below the kind tabs).
+  const scrollPlaced = useRef(false);
   const goBack = () => {
     if (!backView) return;
     const dest = backView;
     const top = backScroll.current;
+    scrollPlaced.current = true;
     setBackView(null);
     setView(dest);
     // Restore the previous scroll once the destination view has re-mounted.
@@ -1130,6 +1136,7 @@ export default function App() {
       } else if (from === 'feed') {
         backScroll.current = window.scrollY;
       }
+      scrollPlaced.current = true;
       setBackView(from);
       setEditMode(false);
       setView('games');
@@ -1212,6 +1219,32 @@ export default function App() {
         ? 'pitcher'
         : playerKind;
   const kindCards = shownKind === 'pitcher' ? cardPitchers : cardBatters;
+  // A swap of what the page is showing starts that page at the top.
+  //
+  // Games and Feed are two readings of the same days and they share the
+  // window's scroller, so the offset carried straight across: leaving Games
+  // 800px down opened the Feed 800px into a stream of somebody else's at-bats,
+  // and coming back clamped to wherever the shorter page ended. The same is
+  // true of the kind tabs, which swap the whole list for a different set of
+  // players. It only became reachable when the chrome was pinned: the tabs
+  // used to be at the top of the page, so getting to one meant scrolling back
+  // up first, and the reset was a side effect of having to go there. Now they
+  // are always under the thumb and nothing puts the page back.
+  //
+  // Not on the date range, which is a change to the numbers in the rows rather
+  // than to which rows they are — the row you were reading is still there.
+  const firstView = useRef(true);
+  useLayoutEffect(() => {
+    // A jump to a player's day and the back button out of it both place the
+    // scroll themselves; the browser's own restore on a reload owns the first
+    // pass.
+    if (firstView.current || scrollPlaced.current) {
+      firstView.current = false;
+      scrollPlaced.current = false;
+      return;
+    }
+    window.scrollTo(0, 0);
+  }, [view, shownKind]);
   // The second tier of tabs, in the view bar beside the view switch: every view
   // below shows a single kind at a time, so the pair reads as one control.
   const kindTabs = showKindTabs ? (
