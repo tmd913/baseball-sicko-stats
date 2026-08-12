@@ -74,7 +74,7 @@ export interface UserPrefs {
    *  absence-is-the-default convention as the two toggles above. */
   rosterSource?: 'fantasy';
   /**
-   * Which of the three sets of players the research board includes. Absent
+   * Which of the three **ownership** sets the research board includes. Absent
    * means the default — free agents alone — the same absence-is-the-default
    * convention the toggles above follow, so the default can change without
    * anyone's record needing revisiting. An empty array is a real state (the
@@ -82,7 +82,18 @@ export interface UserPrefs {
    * can't lean on `[]` meaning absent.
    */
   researchInclude?: ResearchIncludeKey[];
-  /** Narrow the research board to the watchlist. Absent means off. */
+  /** Put the watchlist on the research board **as well as** those sets. Absent
+   *  means off. */
+  researchWatchlist?: boolean;
+  /**
+   * @deprecated The same flag under the name it carried when it *narrowed* the
+   * board to the watchlist rather than adding the watchlist to it. Kept on the
+   * type because `GET /api/prefs` hands the stored object straight to the
+   * browser and the client reads it as a fallback; the next write of this
+   * control drops it, so a record migrates as it is used — the rule
+   * `getEspnCreds` follows for the legacy inline credential rather than a
+   * migration script over every user.
+   */
   researchWatchlistOnly?: boolean;
 }
 
@@ -542,28 +553,36 @@ export async function setMuteAudio(userId: string, mute: boolean): Promise<UserP
 }
 
 /**
- * Save which sets of players the research board includes, and whether it is
- * narrowed to the watchlist.
+ * Save which ownership sets the research board includes, and whether the
+ * watchlist is on the board beside them.
  *
  * **One route for both**, unlike the three toggles above, because they are one
- * control set: the three include buttons and the watchlist filter are read
- * together every time the board decides who is on it, and a client that has
- * just changed one holds the other anyway. `null` for `include` is "back to the
- * default" and stores the absence of the entry, the same rule the research
- * columns follow — where `[]` is the real, storable state of a user who has
- * turned all three off.
+ * control set: the three include buttons and the watchlist are read together
+ * every time the board decides who is on it, and a client that has just changed
+ * one holds the other anyway. `null` for `include` is "back to the default" and
+ * stores the absence of the entry, the same rule the research columns follow —
+ * where `[]` is the real, storable state of a user who has turned all three
+ * off. Note that `[]` is no longer an empty board on its own: with the
+ * watchlist on it is exactly the watchlist, which is a state someone wants.
+ *
+ * **The legacy key is deleted on every write, whichever way the flag goes.**
+ * `researchWatchlistOnly` said "only" and the control no longer means that, so
+ * leaving a stale copy beside the new one would give a record two answers to
+ * one question, and the client reads the old key as a fallback — it would win
+ * for a user who had it set and has since turned the new control off.
  */
 export async function setResearchInclude(
   userId: string,
   include: ResearchIncludeKey[] | null,
-  watchlistOnly: boolean,
+  watchlist: boolean,
 ): Promise<UserPrefs> {
   const next = await mutate(userId, (cur) => {
     const prefs = { ...cur.prefs };
     if (include) prefs.researchInclude = include;
     else delete prefs.researchInclude;
-    if (watchlistOnly) prefs.researchWatchlistOnly = true;
-    else delete prefs.researchWatchlistOnly;
+    if (watchlist) prefs.researchWatchlist = true;
+    else delete prefs.researchWatchlist;
+    delete prefs.researchWatchlistOnly;
     return { prefs };
   });
   return next.prefs;

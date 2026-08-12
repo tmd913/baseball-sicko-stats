@@ -366,14 +366,21 @@ app.put(
 );
 
 /**
- * Which sets of players the research board includes, and whether it is narrowed
- * to the watchlist. **One route for two fields**, where the three above are one
- * each: those are independent settings that happen to live on one item, while
- * these are one control set — the client reads them together to decide who is
- * on the board and holds both whenever either moves.
+ * Which ownership sets the research board includes, and whether the watchlist
+ * is on the board beside them. **One route for two fields**, where the three
+ * above are one each: those are independent settings that happen to live on one
+ * item, while these are one control set — the client reads them together to
+ * decide who is on the board and holds both whenever either moves.
  *
  * `include: null` is "back to the default"; `[]` is the real state of a user
- * who has turned all three off, and is stored.
+ * who has turned all three off, and is stored — which with `watchlist: true` is
+ * a board that is exactly the watchlist, and so a state worth storing rather
+ * than an empty one.
+ *
+ * The **body field keeps the name `watchlist`**, which is what it always was;
+ * only the stored key was renamed when the flag stopped meaning "only" (see
+ * `setResearchInclude`), so an older tab's PUT is read correctly and simply
+ * means a wider board than it did when the tab was opened.
  */
 app.put(
   '/api/prefs/research-include',

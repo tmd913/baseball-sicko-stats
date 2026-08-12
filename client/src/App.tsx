@@ -421,26 +421,33 @@ export default function App() {
   );
 
   /**
-   * Which sets of players the board includes, and whether it is narrowed to the
-   * watchlist. Shared across both boards and both windows like the window above
-   * — they are statements about *you* rather than about a board — and in the
-   * URL for the same reason it is: each decides which players the table is
-   * about, which is what a link has to carry.
+   * Which sets of players the board includes, and whether the watchlist is on
+   * the board as well. Shared across both boards and both windows like the
+   * window above — they are statements about *you* rather than about a board —
+   * and in the URL for the same reason it is: each decides which players the
+   * table is about, which is what a link has to carry.
    *
    * Both are **saved per user** as well (`researchInclude` /
-   * `researchWatchlistOnly`), which is what "it keeps what I set it to" means
-   * for a control someone sets once and then reads for a season. The URL wins
-   * where it speaks, exactly as `cols=` does: a link someone was handed should
-   * show what it says, and it doesn't overwrite what they had saved.
+   * `researchWatchlist`), which is what "it keeps what I set it to" means for a
+   * control someone sets once and then reads for a season. The URL wins where
+   * it speaks, exactly as `cols=` does: a link someone was handed should show
+   * what it says, and it doesn't overwrite what they had saved.
+   *
+   * **`watch=1` keeps its spelling although its meaning has widened** — it once
+   * narrowed the board to the watchlist and now unions it in. Renaming the
+   * param would have cost every open tab and every link already shared, and it
+   * buys nothing: the word never said "only", and the widening is the safe
+   * direction for an old link to be read in. A `watch=1` link shows the
+   * watchlisted players it promised, plus whatever its `inc=` asked for, rather
+   * than fewer than either.
    */
   const includeFromUrl =
     initialParams.get('inc') !== null || initialParams.get('scope') !== null;
   const [researchInclude, setResearchIncludeState] = useState<ResearchInclude>(() =>
     toResearchInclude(initialParams.get('inc'), initialParams.get('scope')),
   );
-  const watchlistOnlyFromUrl = initialParams.get('watch') === '1';
-  const [researchWatchlistOnly, setResearchWatchlistOnlyState] =
-    useState(watchlistOnlyFromUrl);
+  const watchlistFromUrl = initialParams.get('watch') === '1';
+  const [researchWatchlist, setResearchWatchlistState] = useState(watchlistFromUrl);
   const researchIncludeTouched = useRef(false);
   // One PUT for the pair, because the server holds them as one control set —
   // and because either of them changing means re-reading who is on the board,
@@ -459,13 +466,13 @@ export default function App() {
   const setResearchInclude = useCallback(
     (next: ResearchInclude) => {
       setResearchIncludeState(next);
-      saveInclude(next, researchWatchlistOnly);
+      saveInclude(next, researchWatchlist);
     },
-    [saveInclude, researchWatchlistOnly],
+    [saveInclude, researchWatchlist],
   );
-  const setResearchWatchlistOnly = useCallback(
+  const setResearchWatchlist = useCallback(
     (next: boolean) => {
-      setResearchWatchlistOnlyState(next);
+      setResearchWatchlistState(next);
       saveInclude(researchInclude, next);
     },
     [saveInclude, researchInclude],
@@ -501,12 +508,19 @@ export default function App() {
         if (!researchIncludeTouched.current && !includeFromUrl && prefs.researchInclude) {
           setResearchIncludeState(fromIncludeKeys(prefs.researchInclude));
         }
+        // The stored key was renamed when the control stopped meaning "only"
+        // (`researchWatchlistOnly` → `researchWatchlist`), so the **old one is
+        // still read** — a record only migrates on the next write, so a user
+        // who set this a month ago and hasn't touched it since has nothing but
+        // the old key, and dropping it would silently reset a saved preference
+        // on deploy. The same courtesy `fileLoad` extends to every older shape
+        // of the stored item.
         if (
           !researchIncludeTouched.current &&
-          !watchlistOnlyFromUrl &&
-          prefs.researchWatchlistOnly
+          !watchlistFromUrl &&
+          (prefs.researchWatchlist ?? prefs.researchWatchlistOnly)
         ) {
-          setResearchWatchlistOnlyState(true);
+          setResearchWatchlistState(true);
         }
         setResearchCols((prev) => {
           const next = { ...prev };
@@ -524,7 +538,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [urlColumns, hideInjuredFromUrl, rosterSourceFromUrl, includeFromUrl, watchlistOnlyFromUrl]);
+  }, [urlColumns, hideInjuredFromUrl, rosterSourceFromUrl, includeFromUrl, watchlistFromUrl]);
 
   // Saving is debounced because the picker is a row of checkboxes — turning a
   // group on is one intent and a dozen state changes, and each would otherwise
@@ -1080,7 +1094,7 @@ export default function App() {
     // In the URL for the reason `hideil=1` is: it changes which players the
     // view reports on. Off is the absence of the param, so a link can only ever
     // turn it on and a saved preference has something to fill in.
-    if (view === 'research' && researchWatchlistOnly) p.set('watch', '1');
+    if (view === 'research' && researchWatchlist) p.set('watch', '1');
     // The column set of the board on screen, and only once it differs from that
     // board's defaults — otherwise every link would carry twenty stat keys to
     // say "the usual". `pos=` is what tells a reader which board they describe.
@@ -1106,7 +1120,7 @@ export default function App() {
     researchPos,
     researchWindow,
     researchInclude,
-    researchWatchlistOnly,
+    researchWatchlist,
     researchCols,
     researchKind,
     simulate,
@@ -2851,8 +2865,8 @@ export default function App() {
           onWindowChange={setResearchWindow}
           include={researchInclude}
           onIncludeChange={setResearchInclude}
-          watchlistOnly={researchWatchlistOnly}
-          onWatchlistOnlyChange={setResearchWatchlistOnly}
+          includeWatchlist={researchWatchlist}
+          onIncludeWatchlistChange={setResearchWatchlist}
           hasRosterPct={rosterPct !== null}
           hasEligibility={eligibility !== null}
           trendWindows={rosterTrend}

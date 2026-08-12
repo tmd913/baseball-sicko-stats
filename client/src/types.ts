@@ -819,11 +819,17 @@ export interface UserPrefs {
   /** Read the roster views off the ESPN fantasy team rather than the saved
    *  list. Absent means the saved list, which is the default. */
   rosterSource?: 'fantasy';
-  /** Which sets of players the research board includes. Absent means the
+  /** Which ownership sets the research board includes. Absent means the
    *  default (free agents alone); `[]` is the real state of a user who has
    *  turned all three off. */
   researchInclude?: ResearchIncludeKey[];
-  /** Narrow the research board to the watchlist. Absent means off. */
+  /** Put the watchlist on the research board **as well as** those sets — a
+   *  union, not a narrowing. Absent means off. */
+  researchWatchlist?: boolean;
+  /** @deprecated The same flag under its old name, from when it narrowed the
+   *  board rather than widening it. Read on the way in so a preference saved
+   *  before the change survives; never written — a record migrates the first
+   *  time the user touches the control. */
   researchWatchlistOnly?: boolean;
 }
 
@@ -839,7 +845,10 @@ export interface UserPrefs {
  *   one ownership is unknowable and it is simply everyone off your roster.
  *
  * Disjoint by construction, `mine` winning where it and ESPN disagree — so all
- * three on is the whole board and none on is an empty one.
+ * three on is the whole board and none on is an empty one. They partition
+ * **ownership** and nothing else, which is why the watchlist is not a fourth
+ * key: it is a fact about the user rather than about who holds a player, so it
+ * rides beside this as its own flag and is unioned on top (`researchWatchlist`).
  */
 export type ResearchIncludeKey = 'mine' | 'others' | 'fa';
 
