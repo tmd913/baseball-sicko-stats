@@ -4473,6 +4473,47 @@ body {
   flex-direction: column;
   overflow: hidden;
 }
+/* And on the summary view the column gives its vertical margins back too, the
+   way the three wide tables give back the side gutters (`--table-bleed`). The
+   pane here is the whole of the page — there is nothing under it to separate it
+   from and nothing above it but the bar — so the 14px below it was the app's own
+   padding held against the bottom of the window, and the 14px above it the
+   chrome's bottom margin. Neither is doing any work: the table's business is to
+   run from the bar to the edge of the screen, and both were a strip of page
+   showing through where a reader expects rows.
+
+   Note the 80px `.app` normally carries at the bottom never reached this view —
+   the rule above has overridden it to 14 since summary mode was written — so
+   what is left is a *pair* of 14s, one from each box, and both have to go or the
+   table meets one edge and not the other.
+
+   `padding-bottom` rather than the whole padding: the top 14px is already
+   covered by the chrome's own negative top margin, and the side gutters are what
+   `--table-bleed` reads to know how far the table may bleed back out through
+   them.
+
+   Summary only, although the research board shares the flex column above it:
+   what the chrome's margin holds off there is the **count line**, which is a
+   caption rather than a bordered pane and reads as part of the bar when the two
+   touch, and the board's error banner and empty states are children of that same
+   column. The games view and the feed keep the full 80px — they are lists of
+   cards, and that padding is what stops the last one sitting on the edge of the
+   window. */
+.app.summary-mode {
+  padding-bottom: 0;
+}
+.app.summary-mode .app-chrome {
+  margin-bottom: 0;
+}
+/* The seam at the top goes with the margin, for the reason the sides went with
+   theirs: the chrome closes itself with a hairline of its own, so the pane's
+   would be the second of two lines a pixel apart. The bottom rule stays — on a
+   short roster the pane ends above the fold and that line is what closes it,
+   and on a long one it lands exactly on the edge of the window, where a hairline
+   reads as the edge of the screen rather than as a border. */
+.app.summary-mode .summary-view:not(.is-expanded) > .summary-scroll {
+  border-top: none;
+}
 /* A column, since the full-screen button's row sits above the table. The table
    may use up to whatever height is left below it, and no more: `flex: 0 1 auto`
    is what lets a three-row table shrink to its content instead of leaving dead
