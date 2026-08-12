@@ -25,6 +25,7 @@ import { LiveFeed } from './components/LiveFeed';
 import { SummaryTable } from './components/SummaryTable';
 import {
   ResearchTable,
+  freshResearchUi,
   isDefaultColumns,
   researchKindFor,
   toColumnKeys,
@@ -32,7 +33,7 @@ import {
   toResearchScope,
   toResearchWindow,
 } from './components/ResearchTable';
-import type { ResearchPos, ResearchScope } from './components/ResearchTable';
+import type { ResearchPos, ResearchScope, ResearchUi } from './components/ResearchTable';
 import { simulateLiveDay } from './simulate';
 import { PlayerDetails } from './components/PlayerDetails';
 import { DateRangePicker, numericRange } from './components/DateRangePicker';
@@ -459,6 +460,32 @@ export default function App() {
   const [researchQualified, setResearchQualified] = useState(false);
   const [researchLoading, setResearchLoading] = useState(false);
   const [researchError, setResearchError] = useState<string | null>(null);
+  /**
+   * The rest of what the board is set to — each board's search, sort and stat
+   * filters, which of the three disclosures are open, and the condition being
+   * typed into the filter builder (`ResearchUi`, defined beside the rules that
+   * govern it).
+   *
+   * It is here for the reason the five above it are: `ResearchTable` is
+   * unmounted the moment the view changes, so anything it holds is thrown away
+   * by a glance at the Roster tab. Half the board's settings lived up here and
+   * half in the component, and coming back landed you on a board that had kept
+   * its position, window and columns and lost its filters and its sort — which
+   * read as a bug rather than as a rule. All of it survives now, and the board
+   * comes back exactly as it was left.
+   */
+  const [researchUi, setResearchUi] = useState<ResearchUi>(freshResearchUi);
+  /**
+   * Where the board's control set renders: a box inside the pinned chrome, so
+   * the research page has **one** top section instead of the app's chrome with
+   * a second band of controls stacked under it.
+   *
+   * State rather than a ref because a portal needs the element itself, and a
+   * ref's value is not a render's to read. The callback runs in the commit
+   * phase, so the re-render it triggers lands before the browser paints and the
+   * bar is never visibly absent.
+   */
+  const [researchChrome, setResearchChrome] = useState<HTMLDivElement | null>(null);
 
   // The how-to page (settings menu → How to use, and the empty state's button).
   // In the URL like every other view, so it survives a reload and can be linked
@@ -2050,6 +2077,20 @@ export default function App() {
           {view !== 'research' && dateControl}
         </div>
       )}
+
+      {/* The research board's own controls, inside the chrome with the rest of
+          it. They are the same kind of statement as the tabs above them — which
+          players, which span, which position, which columns — and they used to
+          sit below the box as a band of their own, so the page opened on two
+          stacked control areas separated by a hairline. One top section now,
+          sharing the chrome's ombré, its edge and its gutters.
+
+          The box is empty here and filled by `ResearchTable`, which portals its
+          bar into it: the controls are inseparable from the board's column
+          vocabulary and belong in the file that owns it (see the portal there).
+          Rendered only on the research view, so no other page carries an empty
+          row of chrome. */}
+      {view === 'research' && <div className="research-chrome" ref={setResearchChrome} />}
       </div>
 
       {/* Outside the pinned box on purpose: a failed report is news about the
@@ -2128,10 +2169,11 @@ export default function App() {
              from OF to SP remounted the table rather than carrying a batter's
              column vocabulary onto a pitcher's — but a remount is a blunt way
              to say "these are two boards", and it threw away the filters you
-             had built as the price of a look at the other one. The component
-             keeps a slot per kind instead (`BoardState`), so each board has its
-             own search, sort and filters *and* still has them when you come
-             back. */
+             had built as the price of a look at the other one. A slot per kind
+             does that job instead (`BoardState`), so each board has its own
+             search, sort and filters *and* still has them when you come back —
+             and it is held up here (`researchUi`) rather than in the component,
+             which the bigger crossing, to Roster and back, unmounts. */
           rows={researchRows}
           kind={researchKind}
           loading={researchLoading && !research[researchCacheKey]}
@@ -2155,6 +2197,12 @@ export default function App() {
           onConnectEspn={openEspnSettings}
           watchedKeys={watchedKeys}
           onOpenDetails={setDetailsKey}
+          /* Held here so leaving the page doesn't throw it away, and handed
+             back whole — see `researchUi`. */
+          ui={researchUi}
+          onUiChange={setResearchUi}
+          /* The chrome box above, which the board's control set renders into. */
+          controlsHost={researchChrome}
         />
       ) : view === 'summary' ? (
         kindCards.length > 0 && (

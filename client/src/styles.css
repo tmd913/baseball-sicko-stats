@@ -4016,17 +4016,18 @@ body {
   flex: 0 1 auto;
   min-height: 0;
 }
-/* On the research board that box holds the table *and* its whole control set —
-   scope, window, positions, the four disclosures and the count line, some 180px
-   of it. Expanding is a request for the table, so everything that isn't the
-   table goes: the point of the mode is rows and columns, and controls that
-   describe a table you asked to see more of are the first thing that should
-   give up the room. Sorting still works, being a click on the header row, and
-   the filters are one press of the same button away.
+/* Expanding is a request for the table, so everything in the box that isn't the
+   table goes. Most of the control set is no longer among them — scope, window,
+   positions and the four disclosures live up in the chrome now, which this
+   fixed box covers as it covers the header and the view tabs — but the board's
+   error banner and its empty states are still children here, and they have no
+   more business in a full-page table than the pills did. Sorting still works,
+   being a click on the header row, and the filters are one press of the button
+   that got you here away.
 
    A rule rather than a branch in the JSX, for the reason `.app.edit-mode`'s is:
    this is one statement of one idea where the equivalent is a conditional
-   around each of five children. */
+   around each child. */
 /* The count line stays too. It is not a control — it is the table's caption,
    and "15 of 25 pitchers" is the one number that says what the badges above it
    add up to. It sits directly above the table in this mode for the same reason
@@ -4557,6 +4558,28 @@ body {
    two are one object cut two ways (the watchlist over a range, the league over a
    season). Only what differs is styled here: the filter bar above it, the
    sortable headers, and the Statcast group at the right end. */
+
+/* The board's control set lives **in the pinned chrome**, in a box App renders
+   inside `.app-chrome` and `ResearchTable` portals its bar into. The bar, its
+   three panels and the chips row were children of `.research-view` and so sat
+   below the chrome as a second band of controls — the app's own box, a
+   hairline, and then 80 to 180px more of the same kind of thing, with nothing
+   on screen to say why they were two. They are one sentence: the tabs say which
+   page and this says which players, which span, which position and which
+   columns of them.
+
+   Only the placement moved. The count line stayed on the page below, being the
+   table's caption rather than a control, and the rows keep the 10px `.research-
+   view` gave them as its children so the bar reads exactly as it did. The 14px
+   below is what `.view-bar` leaves in every other view — the chrome's own
+   padding stops at its top, so its last child is what sets the distance to the
+   hairline. */
+.research-chrome {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+}
 
 .research-view {
   flex: 1;
@@ -6814,6 +6837,13 @@ body {
   }
   .view-bar-tabs {
     gap: var(--stack-gap);
+  }
+  /* Its bottom margin only — the 10px *inside* it is the space between a
+     control and the panel it opened, which is a tighter relationship than the
+     one between rows of the chrome, and this is the page where every pixel of
+     height is a row of the table. */
+  .research-chrome {
+    margin-bottom: var(--stack-gap);
   }
   .player-list {
     gap: var(--stack-gap);
