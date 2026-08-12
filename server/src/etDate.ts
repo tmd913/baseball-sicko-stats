@@ -44,3 +44,18 @@ export function addDays(date: string, delta: number): string {
   dt.setUTCDate(dt.getUTCDate() + delta);
   return dt.toISOString().slice(0, 10);
 }
+
+/**
+ * Whole days from `from` to `to`, negative when `to` is the earlier of the two.
+ *
+ * Both are parsed as UTC midnight rather than local, which is what makes the
+ * subtraction exact: an ET-local `Date` would put a DST boundary between two
+ * dates 23 or 25 hours apart and round the wrong way twice a year.
+ */
+export function daysBetween(from: string, to: string): number {
+  const at = (d: string) => {
+    const [y, m, day] = d.split('-').map(Number);
+    return Date.UTC(y, m - 1, day);
+  };
+  return Math.round((at(to) - at(from)) / 86_400_000);
+}

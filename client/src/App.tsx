@@ -761,19 +761,34 @@ export default function App() {
    * is needed for the same reason in a different shape: two team picks in quick
    * succession are two reads in flight, and without it the slower one lands
    * last and leaves the chips describing a team nobody chose.
+   *
+   * **The range's end decides which day's lineup comes back.** A lineup is a
+   * fact about a day and ESPN answers for one day at a time, so the `Tomorrow`
+   * preset — which exists to show a watched player's scheduled games before
+   * they are played — has to ask for tomorrow, or its chips describe the lineup
+   * being played out today while the games beside them are tomorrow's. The
+   * server reads anything at or before today as today, so the other four
+   * presets are unaffected; see `espn.ts`'s **Which day's lineup**. It is the
+   * same date `/api/report` derives from its own range, which is what keeps the
+   * chips and the rows the report orders one roster rather than two.
    */
   const rosterRead = useRef(0);
   const loadFantasyRoster = useCallback((refresh = false) => {
     const seq = ++rosterRead.current;
     return api
-      .espnRoster(refresh)
+      .espnRoster(refresh, end)
       .then((r) => {
         if (seq === rosterRead.current) setFantasyRoster(r);
       })
       // The report request carries the same failure and banners it; a second
       // copy of the same message would only say it twice.
       .catch((e: Error) => console.error('fantasy roster unavailable:', e.message));
-  }, []);
+    // `end` rather than nothing: it decides which day's lineup is asked for, so
+    // a stale closure would hold the chips on the day the range was last
+    // changed *from*. It re-identifies this callback on a date change, which
+    // the effect below wanted anyway — it already lists `end` — so the two move
+    // together and it still fires once.
+  }, [end]);
 
   useEffect(() => {
     if (!usingFantasy) return;
@@ -1240,6 +1255,55 @@ export default function App() {
       loadReport();
     });
   }, [espnConnected, usingFantasy, loadOwnership, loadFantasyRoster, loadReport]);
+
+  /**
+   * The same read, from the fantasy popover — one press from any view.
+   *
+   * It was only on the Fantasy league page, which put two navigations between
+   * "I just moved somebody on ESPN" and the app agreeing: open the popover,
+   * open the page, press. That is the wrong distance for the one thing this app
+   * cannot see for itself, and the popover is already where every other fantasy
+   * control ended up for exactly that reason.
+   *
+   * **It stays on the league page too**, and the two are not quite the same
+   * control. That one re-reads the **team picker** after the league (see
+   * `EspnSettings`'s `refresh`), which is the page's own business and nothing
+   * the popover has any use for; the page also carries the paragraph explaining
+   * the ten-minute cache, and a note naming a button that isn't there is worse
+   * than a second doorway. They are never on screen together — opening the page
+   * closes the popover — so this is one action reached from two places rather
+   * than the duplicated affordance the search bar's own close button was.
+   *
+   * `refreshFantasy` is called unchanged, sequencing and all: the flag rides on
+   * the ownership read alone and the roster and report follow through the cache
+   * it just filled.
+   */
+  const [fantasyRefreshing, setFantasyRefreshing] = useState(false);
+  const [fantasyRefreshed, setFantasyRefreshed] = useState(false);
+  const refreshFantasyFromMenu = useCallback(() => {
+    setFantasyRefreshing(true);
+    setFantasyRefreshed(false);
+    // The same `MIN_SPIN` floor the header's refresh takes, for the same
+    // measured reason: a warm league answers in milliseconds, and a menu row
+    // that flickers and settles reads as a press that did nothing.
+    Promise.all([
+      Promise.resolve(refreshFantasy()),
+      new Promise((r) => setTimeout(r, MIN_SPIN)),
+    ])
+      .then(() => setFantasyRefreshed(true))
+      // Silent here on purpose: the report's own request carries the same
+      // failure and banners it across the page, where this row could only
+      // repeat it inside a popover that is about to be dismissed.
+      .catch((e: Error) => console.error('fantasy refresh failed:', e.message))
+      .finally(() => setFantasyRefreshing(false));
+  }, [refreshFantasy]);
+
+  // "Up to date ✓" is about the press, not a standing state, so it is dropped
+  // the moment the menu is reopened — otherwise a tick from an hour ago greets
+  // someone who has come back precisely because they suspect it isn't.
+  useEffect(() => {
+    if (fantasyOpen) setFantasyRefreshed(false);
+  }, [fantasyOpen]);
 
   /**
    * Re-read the board on screen, past the copy this session is holding. The
@@ -1714,11 +1778,67 @@ export default function App() {
       </button>
     </div>
   ) : null;
-  // The header's cluster, at the top right: the roster search and the refresh
-  // button. The calendar was once the third of them and moved down to the
-  // roster row (see `dateToggle`); Edit was the third after that and is now an
-  // entry in the settings menu, which is what left room here for a control that
-  // acts on every view rather than on the watchlist alone.
+  /**
+   * Reload what is on screen. The app re-polls on its own only while a real
+   * game is live, and even then only the report — so this is the one control
+   * that says "read it all again now": the report, the statuses map behind the
+   * headshot marks, the research blob, and the connected league past its
+   * ten-minute cache. See `refreshAll` for the rule and why the order matters.
+   *
+   * **It lives in the brand cluster, beside the gear and the fantasy button**,
+   * where it used to sit at the right-hand end of `.header-tools` behind the
+   * search field. Two things put it here. It is *app* chrome — it acts on
+   * whatever page you are on rather than on the roster, which is exactly what
+   * the other two squares beside the title are, where the cluster it left is
+   * the roster's own search. And the header's one-line budget is measured in
+   * whether a 418px field fits: the cluster is the side that overflows first,
+   * so a 44px square is worth more given away than kept.
+   *
+   * Disabled while a read is in flight, with the app's own `.spinner` in place
+   * of the icon inside a square that doesn't move — so nothing in the header
+   * shifts, which matters more here than it did on the right-hand end, the
+   * title and two buttons now sitting to its left.
+   */
+  const refreshButton = (
+    <button
+      type="button"
+      className="refresh-btn"
+      onClick={refreshAll}
+      disabled={refreshing}
+      aria-label={refreshing ? 'Refreshing' : 'Refresh'}
+      aria-busy={refreshing}
+      title={refreshing ? 'Refreshing…' : 'Refresh what is on screen'}
+    >
+      {refreshing ? (
+        <span className="spinner" aria-hidden="true" />
+      ) : (
+        <svg
+          viewBox="0 0 24 24"
+          width="17"
+          height="17"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.1"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          {/* Three quarters of a circle with an arrowhead on the open end —
+              the same gesture at 17px as the 13px spinner that replaces it,
+              so the swap reads as the icon starting to turn. */}
+          <path d="M20 12a8 8 0 1 1-2.34-5.66" />
+          <path d="M20 4v4.5h-4.5" />
+        </svg>
+      )}
+    </button>
+  );
+
+  // The header's cluster, at the top right: the roster search, and nothing
+  // else. The calendar was once beside it and moved down to the roster row (see
+  // `dateToggle`); Edit was the next and is now an entry in the settings menu;
+  // refresh was the last, and has gone to the brand cluster on the left, where
+  // the controls that act on the whole app already are. What is left is the one
+  // thing in this header that belongs to the roster rather than to the app.
   //
   // Icons rather than labelled buttons because a full search field is the
   // widest thing in the row and is wanted for a few seconds at a time, so it
@@ -1768,49 +1888,6 @@ export default function App() {
           <circle cx="10.5" cy="10.5" r="6.5" />
           <path d="m15.4 15.4 4.1 4.1" />
         </svg>
-      </button>
-      {/* Reload what is on screen. The app re-polls on its own only while a
-          real game is live, and even then only the report — so this is the one
-          control that says "read it all again now": the report, the statuses
-          map behind the headshot marks, the research blob, and the connected
-          league past its ten-minute cache. See `refreshAll` for the rule and
-          why the order matters.
-
-          It sits at the end of the cluster, in the slot Edit vacated when it
-          moved into the settings menu — the last thing in the header, since it
-          acts on everything below it rather than on any one part. Disabled
-          while a read is in flight, with the app's own `.spinner` in place of
-          the icon rather than a second spinner invented for the header. */}
-      <button
-        type="button"
-        className="refresh-btn"
-        onClick={refreshAll}
-        disabled={refreshing}
-        aria-label={refreshing ? 'Refreshing' : 'Refresh'}
-        aria-busy={refreshing}
-        title={refreshing ? 'Refreshing…' : 'Refresh what is on screen'}
-      >
-        {refreshing ? (
-          <span className="spinner" aria-hidden="true" />
-        ) : (
-          <svg
-            viewBox="0 0 24 24"
-            width="17"
-            height="17"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.1"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            {/* Three quarters of a circle with an arrowhead on the open end —
-                the same gesture at 17px as the 13px spinner that replaces it,
-                so the swap reads as the icon starting to turn. */}
-            <path d="M20 12a8 8 0 1 1-2.34-5.66" />
-            <path d="M20 4v4.5h-4.5" />
-          </svg>
-        )}
       </button>
     </div>
   );
@@ -2291,6 +2368,53 @@ export default function App() {
                     Use my fantasy team
                   </button>
                 )}
+                {/* Read the league again, now. The one thing this app cannot
+                    see is a move made on ESPN, and until this it took two
+                    navigations to tell it — see `refreshFantasyFromMenu` for
+                    why it is here as well as on the league page.
+
+                    Above League settings and below the toggle: it acts on what
+                    this menu is about without leaving it, where the entry under
+                    it is the menu's way *out*. The popover deliberately stays
+                    open across the press — this is the one entry whose result
+                    is a change in the page behind it, and closing on the press
+                    would take away the only thing saying the read happened. */}
+                <button
+                  type="button"
+                  className="help-btn fantasy-refresh"
+                  role="menuitem"
+                  onClick={refreshFantasyFromMenu}
+                  disabled={fantasyRefreshing}
+                  aria-busy={fantasyRefreshing}
+                  title="Read your league from ESPN again — for a lineup or roster move you have just made there"
+                >
+                  {/* The header refresh's arrow at the menu's 15px, swapped for
+                      the app's own spinner in flight — the same pair, so the
+                      two controls that re-read ESPN read as one idea. */}
+                  {fantasyRefreshing ? (
+                    <span className="spinner" aria-hidden="true" />
+                  ) : (
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="15"
+                      height="15"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.1"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M20 12a8 8 0 1 1-2.34-5.66" />
+                      <path d="M20 4.2V9h-4.8" />
+                    </svg>
+                  )}
+                  {fantasyRefreshing
+                    ? 'Reading…'
+                    : fantasyRefreshed
+                      ? 'Up to date ✓'
+                      : 'Refresh from ESPN'}
+                </button>
                 {/* Below the toggle, as the how-to button sits below the gear's:
                     it opens a page rather than flipping a setting, so it reads
                     as the menu's way *out* of it. */}
@@ -2310,6 +2434,11 @@ export default function App() {
               </div>
             )}
           </div>
+          {/* Last of the three squares, after the two that open something. It
+              is the only one that *does* something on the press, so it reads
+              last — and being outside `.fantasy-menu` it can't be caught by
+              that popover's outside-click dismissal. See `refreshButton`. */}
+          {refreshButton}
         </div>
         {/* The icon cluster, in the header rather than over the list: these
             belong to the watchlist itself, not to whichever view is reading it,

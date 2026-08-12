@@ -33,7 +33,7 @@
 import { toSavantName } from './names.js';
 import type { PlayerKind, WatchPlayer } from './types.js';
 import { readBlob, writeBlob } from './storage.js';
-import { baseballToday } from './etDate.js';
+import { baseballToday, daysBetween } from './etDate.js';
 
 // Keep in sync with hfSea in savant.ts, CURRENT_SEASON in percentiles.ts, and
 // SEASON in xwoba.ts / pitcherArsenal.ts / teamStats.ts / expectedStats.ts /
@@ -463,10 +463,18 @@ interface EspnRosterResponse {
   }[];
 }
 
-async function leagueGet(creds: EspnCreds, views: string[]): Promise<EspnRosterResponse> {
+async function leagueGet(
+  creds: EspnCreds,
+  views: string[],
+  scoringPeriodId?: number | null,
+): Promise<EspnRosterResponse> {
   const url =
     `${FANTASY_BASE}/${SEASON}/segments/0/leagues/${creds.leagueId}` +
-    `?${views.map((v) => `view=${v}`).join('&')}`;
+    `?${views.map((v) => `view=${v}`).join('&')}` +
+    // Omitted rather than sent as ESPN's own current value when there is
+    // nothing to say: an absent `scoringPeriodId` is exactly "whichever day the
+    // league is on", which is the answer for every request but a future one.
+    (scoringPeriodId == null ? '' : `&scoringPeriodId=${scoringPeriodId}`);
   // Omitted entirely rather than sent empty when there is nothing to send: a
   // public league is read anonymously, and `Cookie: SWID=; espn_s2=` is not the
   // same request as no cookie header at all.
@@ -502,6 +510,110 @@ async function leagueGet(creds: EspnCreds, views: string[]): Promise<EspnRosterR
   // The `leagueHistory` shape returns an array of one; the current-season
   // endpoint returns the object. Both are worth surviving.
   return Array.isArray(body) ? body[0] : body;
+}
+
+// ---- Which day's lineup ---------------------------------------------------
+//
+// **A lineup is a fact about a day, and `mRoster` answers for one day only.**
+// Asked without a `scoringPeriodId` it returns the lineup for whichever period
+// ESPN is currently on, which is why a lineup set for tomorrow was invisible
+// here: the manager moves a starter off the bench for tomorrow's games, ESPN
+// files that under tomorrow's period, and the app went on reading today's.
+// Checked against a live league on 2026-08-11 (period 140): Gilbert `BE` and
+// Webb `SP` at 140, and the reverse — the change that had just been made — at
+// 141. The default answered 140.
+//
+// **The app therefore names the period rather than inheriting ESPN's clock.**
+// Which period follows from the day the roster views are reporting on, and the
+// rule has two halves that are worth stating separately because only one of
+// them is symmetric:
+//
+//  - **The future is read at its own period.** The `Tomorrow` preset exists to
+//    surface a watched player's scheduled games before they are played, and the
+//    lineup he is scheduled to play *in* is the same kind of fact. So the slot
+//    chip on that preset is the lineup set for that day.
+//  - **The past is not.** ESPN answers a past period with the roster **as it
+//    was then**, players and all — checked, period 100 carries five players
+//    since dropped and is missing four since added — so reading it would have
+//    the roster views reporting on a team the manager no longer has. What he
+//    wants over "Last 15 days" is *his* team's last fifteen days. Anything at
+//    or before today therefore reads ESPN's current period, which is exactly
+//    what the app did before and is why the common case is untouched.
+//
+// The asymmetry costs nothing in the other direction: a future period returns
+// the **current** roster with the lineup as it stands (checked: periods 141
+// through 200 carry the same 28 players as today, and 200 is past the season's
+// last period without erroring), so naming one can't invent or lose a player.
+
+/**
+ * ESPN's scoring periods are numbered **one per calendar day of the season**,
+ * the All-Star break included: 2026 allocates ids 111–113 to three days with no
+ * game in them. So a day ahead is exactly a period ahead, and the offset needs
+ * no season-start constant and no schedule download to compute. Checked against
+ * ESPN's own `proTeamSchedules_wl` for all 184 game days of the season: period
+ * number and calendar day advance together, with zero exceptions.
+ */
+function periodOffsetFor(date: string | null | undefined): number {
+  if (!date) return 0;
+  // Shape is not enough: `2026-99-99` matches every YYYY-MM-DD test in the
+  // codebase and `Date.UTC` rolls it over into 2034, which would ask ESPN for a
+  // scoring period some 3,000 past the season. A day that doesn't exist means
+  // nothing, and nothing here is today.
+  const [y, m, d] = date.split('-').map(Number);
+  const at = new Date(Date.UTC(y, m - 1, d));
+  if (at.getUTCFullYear() !== y || at.getUTCMonth() !== m - 1 || at.getUTCDate() !== d) return 0;
+  // Clamped at zero rather than allowed negative — see the note above on why
+  // the past is deliberately not read at its own period.
+  return Math.max(0, daysBetween(baseballToday(), date));
+}
+
+/**
+ * ESPN's own current scoring period for a league.
+ *
+ * A probe of its own rather than a field lifted off the roster response,
+ * because the number has to be **in hand before** the request that uses it: to
+ * ask for tomorrow's lineup you must name the period in the query string. It is
+ * cheap enough to be worth a round trip — a bare league read is **3KB** against
+ * `mRoster`'s 2.2MB — and it is only ever fetched when a future day is actually
+ * asked for, which is the `Tomorrow` preset and nothing else.
+ *
+ * Deliberately *learned* rather than derived from the date. The season's first
+ * period is a constant this file would then have to carry and keep in step with
+ * `SEASON`, and getting it wrong would silently shift every lineup by a day —
+ * where an anchor read from ESPN cannot disagree with ESPN.
+ */
+const periodCache = new Map<number, { period: number; fetchedAt: number }>();
+
+async function currentScoringPeriod(creds: EspnCreds): Promise<number | null> {
+  const hit = periodCache.get(creds.leagueId);
+  // The same ten minutes the rosters take. A period turns once a day, so this
+  // is generous; sharing the window keeps one answer about how fresh "now" is.
+  if (hit && Date.now() - hit.fetchedAt < OWNERSHIP_TTL_MS) return hit.period;
+  const data = await leagueGet(creds, []);
+  const period = data.scoringPeriodId;
+  if (typeof period !== 'number') return null;
+  periodCache.set(creds.leagueId, { period, fetchedAt: Date.now() });
+  return period;
+}
+
+/**
+ * The period holding the lineup for `date`, or null to let ESPN answer for its
+ * own current day — which is both the answer for today and the fallback if the
+ * probe can't tell us where "now" is. A missing anchor costs the future lineup
+ * and leaves everything else standing, which is the right direction to fail in:
+ * the alternative is guessing an absolute period and showing the wrong day's.
+ */
+async function scoringPeriodFor(
+  creds: EspnCreds,
+  date: string | null | undefined,
+): Promise<number | null> {
+  const offset = periodOffsetFor(date);
+  if (offset === 0) return null;
+  const base = await currentScoringPeriod(creds).catch((err: Error) => {
+    console.error('ESPN scoring period unavailable:', err.message);
+    return null;
+  });
+  return base === null ? null : base + offset;
 }
 
 /** One fantasy team, as the client shows it. */
@@ -576,10 +688,12 @@ export interface EspnRosterPlayer {
   savantName: string | null;
   /** Usually one; two for a two-way player, who is two watchlist entries. */
   kinds: PlayerKind[];
-  /** The fantasy slot he is in *today* — 'SS', 'UTIL', 'SP', 'BE', 'IL'. */
+  /** The fantasy slot he is in on the day this was read for — 'SS', 'UTIL',
+   *  'SP', 'BE', 'IL'. Today's, unless the caller asked for a future one; see
+   *  **Which day's lineup** above. */
   slot: string;
   slotId: number;
-  /** In today's lineup, i.e. not benched and not on the IL. */
+  /** In that day's lineup, i.e. not benched and not on the IL. */
   starting: boolean;
   /** ESPN's own injury flag, which is about the real player rather than the
    *  fantasy slot — a manager can leave an injured player in a lineup spot. */
@@ -631,13 +745,48 @@ export interface EspnOwnership extends EspnLeagueInfo {
   fetchedAt: number;
 }
 
-const ownershipCache = new Map<number, EspnOwnership>();
+/**
+ * Keyed by league **and scoring period**, not by league alone: a lineup is a
+ * fact about a day, so two days are two answers. The key for today is the
+ * league's own id with no period on it, which is what keeps the blob every user
+ * of a league shares — the free-agent set, the roster %, the trend — one entry
+ * rather than one per person's date range.
+ */
+const cacheKey = (leagueId: number, period: number | null) =>
+  period === null ? `${leagueId}` : `${leagueId}:${period}`;
+
+const ownershipCache = new Map<string, EspnOwnership>();
 /** A cold Lambda serving three tabs at once should send one upstream request,
  *  not three — the same rule the research board's own fetches follow. */
-const inFlight = new Map<number, Promise<EspnOwnership>>();
+const inFlight = new Map<string, Promise<EspnOwnership>>();
 
-export async function getOwnership(creds: EspnCreds, force = false): Promise<EspnOwnership> {
-  const key = creds.leagueId;
+/**
+ * `date` is the day the caller wants the **lineup** for — the last day of the
+ * range the roster views are reporting on. Today and anything before it read
+ * ESPN's current period, so the default is the behaviour this has always had;
+ * see the note above `periodOffsetFor` for why only the future is named.
+ *
+ * `force` drops **every** period of the league, not just the one being asked
+ * for. "Read my league again" is a statement about the league rather than about
+ * a day, and the header's refresh leans on it: it forces the ownership read and
+ * then lets the roster and the report come back through the cache it filled. If
+ * those two want a different day — which on the `Tomorrow` preset they do — a
+ * per-period force would have left them serving a nine-minute-old lineup, which
+ * is precisely the staleness the button exists to clear.
+ */
+export async function getOwnership(
+  creds: EspnCreds,
+  force = false,
+  date?: string | null,
+): Promise<EspnOwnership> {
+  const period = await scoringPeriodFor(creds, date);
+  const key = cacheKey(creds.leagueId, period);
+  if (force) {
+    const prefix = `${creds.leagueId}`;
+    for (const k of ownershipCache.keys()) {
+      if (k === prefix || k.startsWith(`${prefix}:`)) ownershipCache.delete(k);
+    }
+  }
   const cached = ownershipCache.get(key);
   if (!force && cached && Date.now() - cached.fetchedAt < OWNERSHIP_TTL_MS) return cached;
 
@@ -646,7 +795,7 @@ export async function getOwnership(creds: EspnCreds, force = false): Promise<Esp
 
   const job = (async () => {
     const [data, index, rosterPct, trend] = await Promise.all([
-      leagueGet(creds, ['mRoster', 'mTeam', 'mSettings']),
+      leagueGet(creds, ['mRoster', 'mTeam', 'mSettings'], period),
       getMlbIndex(),
       // A failed read here costs one column, not the whole connection: the
       // free-agent filter and the fantasy roster don't depend on it.
