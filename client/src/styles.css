@@ -28,8 +28,18 @@
   --ball: #475569;
 
   /* Breathing room left above anything scrolled to the top of the viewport
-     (player cards, at-bats, the feed's rows) — read via scroll-margin-top. */
-  --scroll-offset: 12px;
+     (player cards, at-bats, the feed's rows) — read via scroll-margin-top.
+
+     It has to clear the pinned chrome as well as leave a gap: `.app-chrome` is
+     held at the top of the window, so the top of the viewport is *behind* it
+     and a card scrolled there would sit under the bar rather than below it.
+     `--chrome-h` is that bar's current height, published by
+     `hooks.ts::useStickyChromeOffset` — measured because the bar wraps to two
+     and three rows as the window narrows, and zero whenever it isn't actually
+     pinned (the summary and research views, and a short window), which is what
+     makes the fallback here the right one for a page with no chrome at all. */
+  --chrome-h: 0px;
+  --scroll-offset: calc(var(--chrome-h) + 12px);
 
   /* The bar controls — roster search, view/kind tabs, the Edit toggle — share
      one height so a row of them reads as one set, whatever their own text size.

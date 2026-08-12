@@ -35,12 +35,19 @@ import type { ResearchPos, ResearchScope } from './components/ResearchTable';
 import { simulateLiveDay } from './simulate';
 import { PlayerDetails } from './components/PlayerDetails';
 import { DateRangePicker, numericRange } from './components/DateRangePicker';
-import { FantasyRosterContext, MutedContext, useDismissable } from './hooks';
+import {
+  FantasyRosterContext,
+  MutedContext,
+  useDismissable,
+  useStickyChromeOffset,
+} from './hooks';
 import type { FantasySlot } from './hooks';
 import { Tutorial } from './components/Tutorial';
 import { EspnSettings } from './components/EspnSettings';
 
-// Breathing room above a card scrolled to the top of the viewport.
+// Breathing room above a card scrolled to the top of the viewport — the bare
+// gap, matching `--scroll-offset`'s own; the pinned chrome's height is added to
+// it at the call site.
 const SCROLL_GAP = 12;
 
 /** The three ways of reading one set of players over one span of days. They are
@@ -758,7 +765,14 @@ export default function App() {
     setSearchOpen(true);
   }, []);
 
-  // Scroll a player's card to the top of the viewport.
+  // The pinned chrome, measured — it publishes `--chrome-h` for every
+  // `scroll-margin-top` in the stylesheet, and hands its height back here for
+  // the one scroll the app computes itself (below).
+  const [chromeRef, chromeH] = useStickyChromeOffset<HTMLDivElement>();
+
+  // Scroll a player's card to the top of the viewport — below the pinned
+  // chrome, which is what `scroll-margin-top` does for every collapsible that
+  // scrolls itself; this one does the arithmetic, so it subtracts the bar too.
   //
   // Deferred a frame because callers expand the card first: expanding grows the
   // document, and only then is there room to scroll a bottom-of-page card's top
@@ -768,10 +782,11 @@ export default function App() {
     requestAnimationFrame(() => {
       const el = document.getElementById(`player-${key}`);
       if (!el) return;
-      const top = el.getBoundingClientRect().top + window.scrollY - SCROLL_GAP;
+      const top =
+        el.getBoundingClientRect().top + window.scrollY - SCROLL_GAP - chromeH.current;
       window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
     });
-  }, []);
+  }, [chromeH]);
   // Always-current reports, so the drag-end handler reads the latest order
   // without being recreated (and re-bound) on every reorder.
   const reportsRef = useRef(reports);
@@ -1537,7 +1552,7 @@ export default function App() {
           Staying put is also why it carries a tone of its own rather than the
           page's — see `.app-chrome`. A bar that is always there has to say it
           is a bar. */}
-      <div className="app-chrome">
+      <div className="app-chrome" ref={chromeRef}>
       <header className="app-header">
         <div className="brand">
           <div className="brand-mark" aria-hidden="true">
