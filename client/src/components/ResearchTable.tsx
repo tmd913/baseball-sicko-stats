@@ -549,10 +549,15 @@ const posTypeLabel = (t: string) => POSITION_TYPE_LABELS[t] ?? t;
  * Orthogonal to the position pills, exactly as scope was: position narrows who
  * is eligible, this names which rosters they may be on.
  *
- * Note what is deliberately *not* a fourth button here: the **watchlist**. That
- * is a filter over whatever these three let through — you can follow a free
- * agent and a leaguemate's shortstop at once — so it is a toggle beside Search
- * and Qualified rather than a fourth set to union in.
+ * Note what these three are a partition *of*: **ownership**. That is the whole
+ * of the question they answer, and it is why the **watchlist** is not a fourth
+ * key here — not because it doesn't belong on the board beside them, but
+ * because it is an answer to a different question. A watched player is on your
+ * roster, on a leaguemate's or free; the star says nothing about which. So it
+ * is a second axis, unioned on top of whatever these three let through
+ * (`includeWatchlist` below), and keeping it out of this record is what keeps
+ * the record a partition — which is what `inc=none`, `isDefaultInclude` and the
+ * disjointness of `boardRows` all lean on.
  */
 export type ResearchInclude = Record<ResearchIncludeKey, boolean>;
 
@@ -708,11 +713,13 @@ interface Props {
    *  presentation of it. */
   include: ResearchInclude;
   onIncludeChange: (i: ResearchInclude) => void;
-  /** Narrow all of that to the watchlist. A *filter* rather than a fourth
-   *  include, since a watched player can be on any of the three sets — see
-   *  `ResearchInclude`. Lifted and persisted alongside it. */
-  watchlistOnly: boolean;
-  onWatchlistOnlyChange: (on: boolean) => void;
+  /** Put the watchlist on the board **as well as** whatever the three above let
+   *  through — a union, not an intersection. A watched player can be on any of
+   *  the three ownership sets, so narrowing by him was the surprising operation
+   *  and unioning him in is the useful one; see `ResearchInclude`. Lifted and
+   *  persisted alongside it, the two being one control set. */
+  includeWatchlist: boolean;
+  onIncludeWatchlistChange: (on: boolean) => void;
   /** Whether a fantasy league is connected, and so whether the board carries a
    *  roster-% column at all. The figure is ESPN's own and needs no credentials,
    *  so this gate is about relevance rather than access: to someone with no
@@ -939,8 +946,8 @@ export function ResearchTable({
   onWindowChange,
   include,
   onIncludeChange,
-  watchlistOnly,
-  onWatchlistOnlyChange,
+  includeWatchlist,
+  onIncludeWatchlistChange,
   hasRosterPct,
   trendDays,
   ownedIds,
@@ -1072,38 +1079,46 @@ export function ResearchTable({
   // both are dropped here rather than per pill, which is what makes the count
   // line's "of N" a number some pill can actually reach.
   /**
-   * Trade first, then which rosters, then the watchlist. All three narrow the
-   * *population* the count line is measured against, so that "12 of 12" on your
-   * own roster is honest about the board it describes rather than quoting the
-   * league's 624.
+   * Trade first, then who is on the board. What survives is the *population*
+   * the count line is measured against, so that "12 of 12" on your own roster
+   * is honest about the board it describes rather than quoting the league's 624.
    *
-   * The three include sets are read as a **partition**, in one pass, and the
-   * order of the tests is what makes them disjoint: your roster wins first, so
-   * a player you hold who ESPN says is on a leaguemate's team (possible in
-   * saved-roster mode, where the two lists are unrelated) is counted once, as
-   * yours. Free agency is then the complement of ownership — a player nobody in
-   * the league holds is one you could add — and with **no** league connected
-   * there is no ownership to read, so the third set quietly becomes "everyone
-   * off your roster", which is what its own label says there.
+   * **Two axes, and they compose in opposite directions.** The three include
+   * sets partition *ownership* — read in one pass, and the order of the tests
+   * is what makes them disjoint: your roster wins first, so a player you hold
+   * who ESPN says is on a leaguemate's team (possible in saved-roster mode,
+   * where the two lists are unrelated) is counted once, as yours. Free agency
+   * is then the complement of ownership — a player nobody in the league holds
+   * is one you could add — and with **no** league connected there is no
+   * ownership to read, so the third set quietly becomes "everyone off your
+   * roster", which is what its own label says there.
+   *
+   * The **watchlist is unioned on top of all of that**, and is tested first
+   * because a union short-circuits: a watched player is on the board whoever
+   * owns him. That is the useful operation and the intersection was the
+   * surprising one — the star is a fact about *you*, not about ownership, so
+   * "my roster and the men I'm watching" is a question someone actually asks
+   * and "watched free agents only" is a slice nobody wants. It costs the count
+   * line nothing: this is still one `filter` over one array, so a player who is
+   * both watched and free appears once and is counted once.
    *
    * With a league connected but the read still in flight, everything but your
-   * own roster falls out rather than falling *in*: an empty table under
-   * "Reading your league…" is honest, where the whole league labelled free
-   * agents is not.
+   * own roster and your watchlist falls out rather than falling *in*: an empty
+   * table under "Reading your league…" is honest, where the whole league
+   * labelled free agents is not. The watchlist is exempt from that wait for the
+   * same reason it is unioned — it needs no ownership to be known.
    */
   const boardRows = useMemo(() => {
     const byTrade = rows.filter(kind === 'pitcher' ? isPitcherByTrade : isBatterByTrade);
-    const picked = byTrade.filter((r) => {
+    return byTrade.filter((r) => {
       const key = `${r.kind}-${r.id}`;
+      if (includeWatchlist && watchlistKeys.has(key)) return true;
       if (rosterKeys.has(key)) return include.mine;
       if (!espnConnected) return include.fa;
       if (!ownedIds) return false;
       return ownedIds.has(r.id) ? include.others : include.fa;
     });
-    return watchlistOnly
-      ? picked.filter((r) => watchlistKeys.has(`${r.kind}-${r.id}`))
-      : picked;
-  }, [rows, kind, include, watchlistOnly, rosterKeys, watchlistKeys, ownedIds, espnConnected]);
+  }, [rows, kind, include, includeWatchlist, rosterKeys, watchlistKeys, ownedIds, espnConnected]);
 
   /** How many of the watchlist are on *this* board — the count on the Watchlist
    *  button, and what its empty state tests. A key carries its own kind, so
@@ -1112,7 +1127,17 @@ export function ResearchTable({
     () => [...watchlistKeys].filter((k) => k.startsWith(`${kind}-`)).length,
     [watchlistKeys, kind],
   );
-  const nothingIncluded = !include.mine && !include.others && !include.fa;
+  /** No ownership set is on. On its own that is no longer an empty board — the
+   *  watchlist can carry one by itself, which is a state someone genuinely
+   *  wants ("just the men I'm following") and the reason the two flags below
+   *  are separate. */
+  const noOwnershipSets = !include.mine && !include.others && !include.fa;
+  /** Nothing on either axis: the one combination that can put nobody on the
+   *  board however the league read goes. */
+  const nothingIncluded = noOwnershipSets && !includeWatchlist;
+  /** The board is the watchlist and nothing else — the state whose empty case
+   *  is about the star rather than about any of the three buttons. */
+  const watchlistAlone = noOwnershipSets && includeWatchlist;
 
   // Hiding the column you were sorting on leaves the table ordered by something
   // you can neither see nor reverse — there is no header left to click. So the
@@ -1257,7 +1282,7 @@ export function ResearchTable({
     pos,
     statWindow,
     includeKeys(include).join('+'),
-    watchlistOnly,
+    includeWatchlist,
     qualifiedOnly,
     search.trim().toLowerCase(),
     filters.map((f) => `${f.column}${f.op}${f.value}`).join(','),
@@ -1381,23 +1406,34 @@ export function ResearchTable({
 
   /** Only your own roster is on the board, so every row would carry the
    *  baseball and it would mark nothing — the rule the old `My Players` scope
-   *  followed. */
-  const onlyMine = include.mine && !include.others && !include.fa;
+   *  followed. **The watchlist has to be in that test**: unioned in, it can put
+   *  a free agent on a board that is otherwise your roster, and then the mark
+   *  distinguishes the two again rather than marking everything. */
+  const onlyMine = include.mine && !include.others && !include.fa && !includeWatchlist;
 
   /**
    * Why the board is empty, and the way out.
    *
-   * Three include buttons and a watchlist filter make sixteen states, and
-   * several of them are legitimately empty — nothing included at all, a
-   * watchlist with nobody on it, a league that hasn't been read yet. **Every
-   * one of them has to name its own cause**, which is the standard the old
-   * three-state free-agent message set; a generic "nothing found" would leave a
-   * user staring at a table with no idea which of four controls emptied it.
+   * Three ownership buttons and a watchlist make sixteen states, and several of
+   * them are legitimately empty — nothing included at all, a watchlist with
+   * nobody on it, a league that hasn't been read yet. **Every one of them has to
+   * name its own cause**, which is the standard the old three-state free-agent
+   * message set; a generic "nothing found" would leave a user staring at a
+   * table with no idea which of four controls emptied it.
    *
-   * Tested in the order the causes *govern*: nothing included beats everything
-   * else (no set can be empty if no set was asked for), then the watchlist
-   * filter, then the league read the last two buttons depend on, and last the
-   * ordinary case of a set that genuinely holds nobody.
+   * Tested in the order the causes *govern*: nothing included at all beats
+   * everything else (no set can be empty if no set was asked for), then the
+   * board that is the **watchlist alone**, then the league read the last two
+   * buttons depend on, and last the ordinary case of a set that genuinely holds
+   * nobody.
+   *
+   * **The union changed two of these and it is worth saying which.** The
+   * watchlist no longer narrows, so its empty state is only reachable when it is
+   * the *only* thing on — with an ownership set beside it the board is that set,
+   * and an empty one is that set's story rather than the star's. And the way out
+   * it offers had to change with it: "show everyone" used to mean turning the
+   * filter off, which now leaves a board with nothing included at all, so the
+   * link turns an ownership set **on** instead.
    */
   function emptyBoard() {
     const noun = kind === 'pitcher' ? 'pitchers' : 'batters';
@@ -1421,21 +1457,22 @@ export function ResearchTable({
         </div>
       );
     }
-    if (watchlistOnly && watchlistCount === 0) {
+    if (watchlistAlone && watchlistCount === 0) {
       return (
         <div className="empty-state">
           <p className="empty-title">No {noun} on your watchlist</p>
           <p>
             The star beside a player's name adds him to it — it is a list of who
-            you are keeping an eye on, and nothing to do with your roster. Or{' '}
+            you are keeping an eye on, and nothing to do with your roster. Turn
+            on{' '}
             <button
               type="button"
               className="empty-inline-link"
-              onClick={() => onWatchlistOnlyChange(false)}
+              onClick={() => onIncludeChange({ ...include, fa: true })}
             >
-              show everyone
-            </button>
-            .
+              {faLabel}
+            </button>{' '}
+            to read the league and find somebody to star.
           </p>
         </div>
       );
@@ -1498,15 +1535,24 @@ export function ResearchTable({
         </div>
       );
     }
+    /* The closing case names every set that *is* on, the watchlist among them
+       now that it is one of them. It has to be in the list rather than left to
+       the branch above: the watchlist's own empty state only fires when the
+       board is the watchlist alone and the list is empty, and there is a second
+       way to an empty watchlist-only board — a starred player who is on neither
+       leaderboard (a two-way man watched as a pitcher, with the batting board
+       on) — which would otherwise have reached a sentence naming nothing at
+       all. */
+    const onLabels = [
+      ...includeKeys(include).map((k) => includeMeta(k, espnConnected).full.toLowerCase()),
+      ...(includeWatchlist ? ['on your watchlist'] : []),
+    ];
     return (
       <div className="empty-state">
         <p className="empty-title">No {noun} to show</p>
         <p>
-          Nobody on this board is{' '}
-          {includeKeys(include)
-            .map((k) => includeMeta(k, espnConnected).full.toLowerCase())
-            .join(' or ')}
-          . Turn on another of the buttons up top, or pick a different position.
+          Nobody on this board is {onLabels.join(' or ')}. Turn on another of the
+          buttons up top, or pick a different position.
         </p>
       </div>
     );
@@ -1528,9 +1574,11 @@ export function ResearchTable({
       {isFull && (
         <div className="expanded-chrome research-badges">
           <span className="research-badge">{POSITION_BY_KEY.get(pos)?.label ?? pos}</span>
-          {/* One badge per set the board is including — or one saying it is
-              including none, which is a state the buttons can reach and a
-              blank row would leave unexplained. */}
+          {/* One badge per set the board is including — the watchlist among
+              them, since it is one of the sets the board is a union of rather
+              than a filter over them — or one saying it is including none,
+              which is a state the buttons can reach and a blank row would leave
+              unexplained. */}
           {nothingIncluded ? (
             <span className="research-badge">Nobody included</span>
           ) : (
@@ -1540,7 +1588,7 @@ export function ResearchTable({
               </span>
             ))
           )}
-          {watchlistOnly && <span className="research-badge">Watchlist</span>}
+          {includeWatchlist && <span className="research-badge">Watchlist</span>}
           <span className="research-badge">{windowLabel(statWindow)}</span>
           {qualifiedOnly && <span className="research-badge">Qualified</span>}
           {search.trim() && <span className="research-badge">“{search.trim()}”</span>}
@@ -1706,7 +1754,50 @@ export function ResearchTable({
                 belong together — they name which slice of the league the table
                 is, where the buttons open panels. */}
             <div className="research-tools">
-            {/* Search and Filters first — the two disclosures you come to the board
+            {/**
+             * **Watchlist leads the run, and it is the one control here that
+             * adds players rather than taking them away.** It stays in this
+             * group rather than joining the three include buttons it now
+             * composes with, and the reason is measured: moved into
+             * `.research-include` it takes that group from 170px to 240 at
+             * 390px wide, where the first row has 346 to spend and the
+             * `Roster · Research` pills already have 171 of it — so the group
+             * drops to a line of its own and the bar goes **three rows to four,
+             * 207px of chrome to 255**, on the one page where every pixel of
+             * height is a row of the table. At 640, 900, 1200 and 1920 the move
+             * costs and buys nothing at all (2 / 3 / 2 / 2 rows either way), so
+             * it would be tidiness bought only where there is room to spare and
+             * paid for only where there isn't. Keeping the icon-only phone form
+             * doesn't save it either — 240px is the group *with* the label
+             * hidden.
+             *
+             * It reads first in the run instead, which is the honest ordering
+             * once it widens the board: **add who, then narrow who** (Search,
+             * Filters, Qualified), then change what is shown about them
+             * (Columns). It also puts it as close to the include group as a bar
+             * that wraps between groups allows.
+             *
+             * Panel-less like Qualified, so it takes `.on` and never `.active`,
+             * and it carries the count for the same reason the Filters button
+             * does — a control that holds something has to say so with its panel
+             * shut, and this one has no panel at all.
+             */}
+            <button
+              type="button"
+              className={`research-toggle${includeWatchlist ? ' on' : ''}`}
+              aria-pressed={includeWatchlist}
+              onClick={() => onIncludeWatchlistChange(!includeWatchlist)}
+              title="Also show the players on your watchlist, whoever owns them — the star on each row is what puts them there"
+            >
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
+                <path d="m12 3.6 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9Z" />
+              </svg>
+              <span className="research-toggle-label">Watchlist</span>
+              {watchlistCount > 0 && (
+                <span className="research-toggle-count">{watchlistCount}</span>
+              )}
+            </button>
+            {/* Search and Filters next — the two disclosures you come to the board
                 with a question in. Each carries an `on` state whenever its panel
                 holds something, open or shut: a collapsed control must never be the
                 only place a filter lives. */}
@@ -1742,29 +1833,6 @@ export function ResearchTable({
               </svg>
               <span className="research-toggle-label">Filters</span>
               {filters.length > 0 && <span className="research-toggle-count">{filters.length}</span>}
-            </button>
-            {/* The watchlist as a *filter*, not a fourth include button: a
-                watched player can be on your roster, on a leaguemate's or free,
-                so this narrows whatever the three buttons let through rather
-                than naming a set beside them. Panel-less like Qualified below
-                it, so it takes `.on` and never `.active`, and it carries the
-                count for the same reason the Filters button does — a control
-                that holds something has to say so with its panel shut, and this
-                one has no panel at all. */}
-            <button
-              type="button"
-              className={`research-toggle${watchlistOnly ? ' on' : ''}`}
-              aria-pressed={watchlistOnly}
-              onClick={() => onWatchlistOnlyChange(!watchlistOnly)}
-              title="Only the players on your watchlist — the star on each row is what puts them there"
-            >
-              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
-                <path d="m12 3.6 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9Z" />
-              </svg>
-              <span className="research-toggle-label">Watchlist</span>
-              {watchlistCount > 0 && (
-                <span className="research-toggle-count">{watchlistCount}</span>
-              )}
             </button>
             {/* Not a disclosure like the three beside it — it has no panel, so it
                 takes `.on` and never `.active`. It sits after the two panels
@@ -1877,22 +1945,20 @@ export function ResearchTable({
               table is currently showing, so they stay whether the Filters panel is
               open or shut. Qualified is one of them — it narrows the table exactly
               as a threshold does, and it is the only one that used to leave no
-              trace here, so the row read as the whole story when it wasn't. */}
-          {(filters.length > 0 || qualifiedOnly || watchlistOnly) && (
+              trace here, so the row read as the whole story when it wasn't.
+
+              **The watchlist had a chip here and has lost it**, which is the one
+              piece of the old design the union genuinely retires. Every member
+              of this row *takes rows out* of the table, and `Clear all` is the
+              button that puts them back; a control that puts rows in has no
+              business in a row whose one action would then shrink the board —
+              and with the three ownership buttons off, `Clear all` would have
+              emptied it outright. Nothing is hidden by the loss: the three
+              include buttons keep no chips either, for the same reason this one
+              no longer needs one — it is always on screen in the bar above,
+              lit, with its count beside it. */}
+          {(filters.length > 0 || qualifiedOnly) && (
             <div className="research-chips">
-              {watchlistOnly && (
-                <button
-                  type="button"
-                  className="research-chip"
-                  onClick={() => onWatchlistOnlyChange(false)}
-                  title="Show everyone, watchlisted or not"
-                >
-                  Watchlist
-                  <span className="research-chip-x" aria-hidden="true">
-                    ×
-                  </span>
-                </button>
-              )}
               {qualifiedOnly && (
                 <button
                   type="button"
@@ -1920,15 +1986,18 @@ export function ResearchTable({
                   </span>
                 </button>
               ))}
-              {/* Clears what the row shows, which now includes Qualified —
-                  otherwise "Clear all" leaves a chip standing. */}
+              {/* Clears exactly what the row shows — the thresholds and
+                  Qualified — and nothing else. It used to clear the watchlist
+                  too, which was right while that narrowed the table and is
+                  wrong now that it widens it: a button for undoing filters must
+                  not be able to take players *off* the board, still less empty
+                  it outright with the three ownership buttons off. */}
               <button
                 type="button"
                 className="research-clear"
                 onClick={() => {
                   setFilters([]);
                   onQualifiedChange(false);
-                  onWatchlistOnlyChange(false);
                 }}
               >
                 Clear all

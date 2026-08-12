@@ -529,6 +529,10 @@ export function playerKey(p: { id: number; kind: PlayerKind }): string {
  *
  * The three are disjoint by construction, `mine` winning where it and ESPN
  * disagree, so all three on is the whole board and none on is an empty one.
+ * They partition **ownership** and nothing else, which is why the watchlist is
+ * not a fourth key: it is a fact about the user rather than about who holds a
+ * player, so it rides beside this as its own stored flag
+ * (`UserPrefs.researchWatchlist`) and the board unions it on top.
  */
 export type ResearchIncludeKey = 'mine' | 'others' | 'fa';
 
