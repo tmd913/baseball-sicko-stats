@@ -60,10 +60,16 @@
   --radius: 14px;
   /* The width a column of cards stops growing at. The app itself is uncapped —
      see `.app` — and the three wide tables take the whole window, which is where
-     the room was wanted; a card does not need it. The two views that are a
-     single column of cards (the games list and the feed) stop here, which fills
-     a 1440 laptop and most of a 1920 one. */
-  --card-column: 1600px;
+     the room was wanted; a card does not need it.
+
+     1136px is not a new number: it is exactly what `.app`'s old 1180px cap left
+     inside its 44px of gutters, so the games list and the feed are the width
+     they have always been and only the tables gained. It was 1600 for an hour
+     and that was no cap at all on the machine anyone uses — a laptop is 1440 or
+     1512 wide, under it either way, so the cards went on filling the window and
+     the token read as if it were doing something. A cap has to be narrower than
+     the screen it is meant to hold. */
+  --card-column: 1136px;
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
   font-synthesis: none;
 }
@@ -918,11 +924,12 @@ body {
 
 /* ---- Player list ---- */
 /* One cap, and it is not the app's: a list of cards is read down rather than
-   across, and uncapped on a wide monitor it is a single 2500px-wide box holding
-   a pitch table with an inch between its columns. `--card-column` is where a
-   card stops reading as a card — it fills a 1440 and most of a 1920 laptop, and
-   the window the tables wanted goes to the tables. The feed takes the same
-   number for the same reason: its items are these cards. */
+   across, and uncapped it is a single window-wide box holding a pitch table with
+   an inch between its columns. `--card-column` keeps these two views at the
+   width they had under the old app-wide cap, so what the width change did was
+   give the room to the three wide tables rather than take a column of cards and
+   stretch it. The feed takes the same number for the same reason: its items are
+   these cards. */
 .player-list {
   flex: 1 1 auto;
   min-width: 0;
