@@ -4,7 +4,7 @@ import { getPercentiles } from './percentiles.js';
 import { getPitcherStats, getPlayerStats, getSeasonPlayers } from './mlbStats.js';
 import { getResearch } from './research.js';
 import { RESEARCH_WINDOWS } from './types.js';
-import { getAllWatchedPlayers } from './store.js';
+import { getAllRosterPlayers } from './store.js';
 import { mapLimit } from './limit.js';
 import { baseballToday } from './etDate.js';
 import { getRosterTrend } from './espn.js';
@@ -59,7 +59,7 @@ async function warmDays(dates: string[]): Promise<void> {
  * that needs them.
  */
 async function warmPlayers(): Promise<void> {
-  const players = await getAllWatchedPlayers();
+  const players = await getAllRosterPlayers();
   if (players.length === 0) {
     console.log('no watched players to warm');
     return;

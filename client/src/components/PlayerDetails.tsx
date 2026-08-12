@@ -503,7 +503,9 @@ export function PlayerDetails({
   name,
   position,
   isPitcher = false,
-  isWatched,
+  isOnRoster,
+  isWatchlisted,
+  onWatchlistToggle,
   rosterPct,
   rosterTrend,
   onAdd,
@@ -514,7 +516,14 @@ export function PlayerDetails({
   name: string;
   position?: string;
   isPitcher?: boolean;
-  isWatched: boolean;
+  /** Whether he is on the user's **roster** — the saved list the Summary, Games
+   *  and Feed views report on, which `onAdd`/`onRemove` edit. */
+  isOnRoster: boolean;
+  /** Whether he is on the user's **watchlist** — the research board's list,
+   *  which is a different thing entirely: you watch a player you are thinking
+   *  about, and roster the ones you are actually reading every day. */
+  isWatchlisted: boolean;
+  onWatchlistToggle: (on: boolean) => void;
   /** ESPN's global rostered percentage. `undefined` with no fantasy league
    *  connected, which is what hides the line; `null` when there is one but
    *  ESPN has no figure for this player. */
@@ -836,8 +845,40 @@ export function PlayerDetails({
             </a>
           </div>
         </div>
-        {isWatched ? (
-          <div className="details-watch-actions">
+        {/* Two controls over two different lists, and the header is where the
+            app has to make that distinction plainest — this page opens on
+            anybody, and "am I following this man, and in which sense" is the
+            question it exists to settle. The **star** is the watchlist and is
+            always there, on or off; the **roster** control beside it is either
+            an add button or the "On roster" mark with its remove beside it. */}
+        <div className="details-watch-actions">
+          <button
+            type="button"
+            className={`details-watch-star${isWatchlisted ? ' on' : ''}`}
+            aria-pressed={isWatchlisted}
+            onClick={() => onWatchlistToggle(!isWatchlisted)}
+            title={
+              isWatchlisted
+                ? `Remove ${name} from your watchlist`
+                : `Add ${name} to your watchlist — the research board can be narrowed to it`
+            }
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="15"
+              height="15"
+              fill={isWatchlisted ? 'currentColor' : 'none'}
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="m12 3.6 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9Z" />
+            </svg>
+            {isWatchlisted ? 'Watching' : 'Watch'}
+          </button>
+        {isOnRoster ? (
+          <>
             {/* The app's baseball, the same mark the research board's watched
                 rows carry — a tick is what a form says when it accepts a value,
                 where this is a state the player is in. */}
@@ -854,20 +895,21 @@ export function PlayerDetails({
               onArm={() => setArmedRemove(true)}
               onRemove={onRemove}
             />
-          </div>
+          </>
         ) : (
           <button
             type="button"
             className="details-add"
             onClick={onAdd}
-            title={`Add ${name} to your watchlist`}
+            title={`Add ${name} to your roster — the Summary, Games and Feed views then report on him`}
           >
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M12 5v14M5 12h14" />
             </svg>
-            Add to watchlist
+            Add to roster
           </button>
         )}
+        </div>
       </div>
 
       <div className="details-tabs" role="tablist" ref={tabsRef}>

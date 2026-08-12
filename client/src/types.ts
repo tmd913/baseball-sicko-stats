@@ -413,10 +413,17 @@ export interface PlayerGame {
   pitching: PitcherGame | null;
 }
 
-/** Batter or pitcher. A two-way player can be watched as both, so this is half
- * of a watchlist entry's identity — the MLB id alone isn't unique. */
+/** Batter or pitcher. A two-way player can be on the roster as both, so this is
+ * half of an entry's identity — the MLB id alone isn't unique. */
 export type PlayerKind = 'batter' | 'pitcher';
 
+/**
+ * One entry on the user's **roster** — the saved list the Summary, Games and
+ * Feed views report on. The name predates the split between *roster* and
+ * *watchlist* and is deliberately left alone: every report and card in both
+ * workspaces is built on it. The **watchlist** — the players followed on the
+ * research board — is a set of `playerKey` strings and has no entry type.
+ */
 export interface WatchPlayer {
   id: number;
   savantName: string;
@@ -424,7 +431,8 @@ export interface WatchPlayer {
   kind: PlayerKind;
 }
 
-/** The identity of a watchlist entry / report / card: "batter-660271". */
+/** The identity of a roster entry / watchlist entry / report / card:
+ *  "batter-660271". */
 export function playerKey(p: { id: number; kind: PlayerKind }): string {
   return `${p.kind}-${p.id}`;
 }
@@ -754,13 +762,39 @@ export interface UserPrefs {
   hideInjured?: boolean;
   /** Play every video clip with the sound off. Absent means off. */
   muteAudio?: boolean;
-  /** Read the watchlist views off the ESPN fantasy roster rather than the
-   *  saved list. Absent means the saved list, which is the default. */
+  /** Read the roster views off the ESPN fantasy team rather than the saved
+   *  list. Absent means the saved list, which is the default. */
   rosterSource?: 'fantasy';
+  /** Which sets of players the research board includes. Absent means the
+   *  default (free agents alone); `[]` is the real state of a user who has
+   *  turned all three off. */
+  researchInclude?: ResearchIncludeKey[];
+  /** Narrow the research board to the watchlist. Absent means off. */
+  researchWatchlistOnly?: boolean;
 }
 
-/** Which set of players the four watchlist views describe. */
-export type RosterSource = 'watchlist' | 'fantasy';
+/**
+ * Which sets of players the research board includes — three independent
+ * switches that compose, so "my roster and the free agents" is expressible
+ * where a single-select could only ever say one of them.
+ *
+ * - `mine` — everyone on the user's roster (the saved list, or the ESPN team
+ *   when the views are reading that).
+ * - `others` — everyone on somebody *else's* roster in the connected league.
+ * - `fa` — the rest. With a league connected that is the free agents; without
+ *   one ownership is unknowable and it is simply everyone off your roster.
+ *
+ * Disjoint by construction, `mine` winning where it and ESPN disagree — so all
+ * three on is the whole board and none on is an empty one.
+ */
+export type ResearchIncludeKey = 'mine' | 'others' | 'fa';
+
+export const RESEARCH_INCLUDE_KEYS: ResearchIncludeKey[] = ['mine', 'others', 'fa'];
+
+/** Which set of players the three roster views describe. `'saved'` is the list
+ *  built here; the wire still calls it `watchlist` on `/api/report?source=`,
+ *  which the server accepts as a synonym. */
+export type RosterSource = 'saved' | 'fantasy';
 
 // ---- ESPN fantasy league ---------------------------------------------------
 

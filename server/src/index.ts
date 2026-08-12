@@ -13,28 +13,31 @@ import { getPitcherXera } from './expectedStats.js';
 import { getResearch } from './research.js';
 import type { Arsenal } from './pitcherArsenal.js';
 import { getLeaguePitchAverage } from './pitchLeague.js';
-import { RESEARCH_WINDOWS } from './types.js';
-import type { ResearchWindow, SeasonArsenalPitch } from './types.js';
+import { RESEARCH_INCLUDE_KEYS, RESEARCH_WINDOWS } from './types.js';
+import type { ResearchIncludeKey, ResearchWindow, SeasonArsenalPitch } from './types.js';
 import { getPitcherStats, getPlayerStats, getSeasonPlayers, resolveVideoUrl } from './mlbStats.js';
 import {
-  addPlayer,
+  addRosterPlayer,
   attachEspnLeague,
   getEspnCreds,
   getEspnLeague,
   getLeague,
   getPrefs,
+  getRoster,
   joinLeague,
   leagueForInvite,
   getWatchlist,
-  removePlayer,
-  reorderPlayers,
+  removeRosterPlayer,
+  reorderRoster,
   setEspnLeague,
   setEspnTeam,
   setHideInjured,
   setMuteAudio,
   setLeagueSharing,
   setResearchColumns,
+  setResearchInclude,
   setRosterSource,
+  setWatchlisted,
   upsertLeague,
 } from './store.js';
 import type { EspnLeague, LeagueRecord } from './store.js';
@@ -134,12 +137,16 @@ app.get(
   }),
 );
 
-// The user's saved watchlist.
+// The user's saved **roster** — the list the Summary, Games and Feed views
+// report on. The path still says `watchlist` and deliberately stays that way:
+// renaming a route breaks every browser tab open at the moment of a deploy,
+// and buys nothing this comment doesn't. The app's *watchlist* — who you are
+// following on the research board — is `/api/watch` further down.
 app.get(
   '/api/watchlist',
   requireUser,
   asyncRoute(async (req, res) => {
-    res.json({ players: await getWatchlist(userId(req)) });
+    res.json({ players: await getRoster(userId(req)) });
   }),
 );
 
@@ -152,7 +159,7 @@ app.post(
       res.status(400).json({ error: 'id (number), savantName, name required' });
       return;
     }
-    const players = await addPlayer(userId(req), {
+    const players = await addRosterPlayer(userId(req), {
       id,
       savantName,
       name,
@@ -162,7 +169,7 @@ app.post(
   }),
 );
 
-// Persist a new watchlist order (drag-to-reorder in the nav's edit mode).
+// Persist a new roster order (drag-to-reorder in the nav's edit mode).
 app.put(
   '/api/watchlist/order',
   requireUser,
@@ -174,7 +181,7 @@ app.put(
       res.status(400).json({ error: 'keys (string[]) required' });
       return;
     }
-    const players = await reorderPlayers(userId(req), keys);
+    const players = await reorderRoster(userId(req), keys);
     res.json({ players });
   }),
 );
@@ -187,7 +194,7 @@ app.delete(
     // `kind` narrows the removal to one half of a two-way player; without it
     // every entry for the id goes.
     const kind = req.query.kind;
-    const players = await removePlayer(
+    const players = await removeRosterPlayer(
       userId(req),
       id,
       kind === 'pitcher' || kind === 'batter' ? kind : undefined,
@@ -196,7 +203,42 @@ app.delete(
   }),
 );
 
-// The main report: every watchlisted player's events across a date range
+/**
+ * The **watchlist** — who the user is following on the research board.
+ *
+ * A different list from the roster above, and a different currency: player
+ * *keys*, since membership is the whole of what this list is and the board
+ * already holds every row it could mark. One PUT toggles one key in either
+ * direction, which is what the row's star and the player page's do.
+ */
+const WATCH_KEY_RE = /^(batter|pitcher)-\d{1,9}$/;
+
+app.get(
+  '/api/watch',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    res.json({ keys: await getWatchlist(userId(req)) });
+  }),
+);
+
+app.put(
+  '/api/watch',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const { key, on } = (req.body ?? {}) as { key?: unknown; on?: unknown };
+    if (typeof key !== 'string' || !WATCH_KEY_RE.test(key)) {
+      res.status(400).json({ error: "key must be a player key, e.g. 'batter-660271'" });
+      return;
+    }
+    if (typeof on !== 'boolean') {
+      res.status(400).json({ error: 'on must be a boolean' });
+      return;
+    }
+    res.json({ keys: await setWatchlisted(userId(req), key, on) });
+  }),
+);
+
+// The main report: every rostered player's events across a date range
 // (a single day is just start === end).
 app.get(
   '/api/report',
@@ -232,9 +274,11 @@ app.get(
         throw err;
       }
     } else {
-      watched = await getWatchlist(userId(req));
+      watched = await getRoster(userId(req));
     }
     const players = await getReport(start, end, watched);
+    // `'watchlist'` is what the source has always been called on the wire and
+    // stays so for an old tab's sake; it means the saved roster.
     res.json({ start, end, players, source: fantasy ? 'fantasy' : 'watchlist', teamName });
   }),
 );
@@ -311,6 +355,47 @@ app.put(
       return;
     }
     res.json(await setMuteAudio(userId(req), mute));
+  }),
+);
+
+/**
+ * Which sets of players the research board includes, and whether it is narrowed
+ * to the watchlist. **One route for two fields**, where the three above are one
+ * each: those are independent settings that happen to live on one item, while
+ * these are one control set — the client reads them together to decide who is
+ * on the board and holds both whenever either moves.
+ *
+ * `include: null` is "back to the default"; `[]` is the real state of a user
+ * who has turned all three off, and is stored.
+ */
+app.put(
+  '/api/prefs/research-include',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const { include, watchlist } = (req.body ?? {}) as {
+      include?: unknown;
+      watchlist?: unknown;
+    };
+    const valid =
+      include === null ||
+      (Array.isArray(include) &&
+        include.length <= RESEARCH_INCLUDE_KEYS.length &&
+        include.every((k) => RESEARCH_INCLUDE_KEYS.includes(k as ResearchIncludeKey)));
+    if (!valid) {
+      res.status(400).json({ error: `include must be null or keys from ${RESEARCH_INCLUDE_KEYS.join('/')}` });
+      return;
+    }
+    if (typeof watchlist !== 'boolean') {
+      res.status(400).json({ error: 'watchlist must be a boolean' });
+      return;
+    }
+    res.json(
+      await setResearchInclude(
+        userId(req),
+        include === null ? null : ([...new Set(include)] as ResearchIncludeKey[]),
+        watchlist,
+      ),
+    );
   }),
 );
 
@@ -645,23 +730,26 @@ app.get(
   }),
 );
 
-// Which list the watchlist views read from. A route of its own like the three
-// above; 'watchlist' is stored as the absence of an entry.
+// Which list the roster views read from. A route of its own like the three
+// above; the saved roster is stored as the absence of an entry. **`'watchlist'`
+// is accepted as a synonym for `'saved'`** — it is what the client called this
+// before the two lists were told apart, and a tab open across a deploy is still
+// sending it.
 app.put(
   '/api/prefs/roster-source',
   requireUser,
   asyncRoute(async (req, res) => {
     const { source } = (req.body ?? {}) as { source?: unknown };
-    if (source !== 'watchlist' && source !== 'fantasy') {
-      res.status(400).json({ error: "source must be 'watchlist' or 'fantasy'" });
+    if (source !== 'saved' && source !== 'watchlist' && source !== 'fantasy') {
+      res.status(400).json({ error: "source must be 'saved' or 'fantasy'" });
       return;
     }
-    res.json(await setRosterSource(userId(req), source));
+    res.json(await setRosterSource(userId(req), source === 'fantasy' ? 'fantasy' : 'saved'));
   }),
 );
 
 // Every player in the league on one board, season to date — the research
-// table. Unlike /api/report this is watchlist-independent and season-wide: it
+// table. Unlike /api/report this is roster-independent and season-wide: it
 // is a league leaderboard to sort and filter, not a read on the range in view.
 app.get(
   '/api/research',

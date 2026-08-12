@@ -222,7 +222,7 @@ export function EspnSettings({
    * Read the league again, now, rather than on whatever the ten-minute cache
    * decides. The button exists because the one thing this app cannot see is a
    * move made on ESPN — a lineup swapped at 6.55 is a change in the roster
-   * every watchlist view is reporting on, and until now the only way to make it
+   * every roster view is reporting on, and until now the only way to make it
    * land was to reload the page.
    *
    * The team list is re-read after, not alongside: `onRefresh` has just made
@@ -361,7 +361,8 @@ export function EspnSettings({
             Connect your ESPN fantasy baseball league and the app can do two more
             things: the research board gains a <strong>Free Agents</strong> filter
             — every player in the majors who isn't on a roster in your league —
-            and the watchlist views can read <strong>your own team</strong>{' '}
+            and the Summary, Games and Feed views can read{' '}
+            <strong>your own team</strong>{' '}
             instead of the list you built here, each player marked with the slot
             he's in today.
           </p>
@@ -447,10 +448,10 @@ export function EspnSettings({
             <p className="espn-note">
               With one chosen, the fantasy button in the header offers{' '}
               <strong>Use my fantasy team</strong>: the Summary, Games and Feed
-              views then report on your roster instead of the watchlist you built
+              views then report on your fantasy team instead of the roster you built
               here, and each player carries the slot he's in today — his position
               if he's in the lineup, <code>BE</code> or <code>IL</code> if he
-              isn't. Your own watchlist is untouched and comes back the moment
+              isn't. The roster you built here is untouched and comes back the moment
               you switch off.
             </p>
           </section>

@@ -1,5 +1,5 @@
 /**
- * The ✕ that takes a player off the watchlist — shared by the reorder screen
+ * The ✕ that takes a player off the roster — shared by the reorder screen
  * and the details view, so the one destructive control in the app looks and
  * behaves the same wherever it turns up.
  *
@@ -29,11 +29,11 @@ export function RemoveButton({
       // own pointerdown would otherwise preventDefault the click away.
       onPointerDown={(e) => e.stopPropagation()}
       onClick={() => (armed ? onRemove() : onArm())}
-      title={`Remove ${name} from your watchlist`}
+      title={`Remove ${name} from your roster`}
       aria-label={
         armed
-          ? `Confirm removing ${name} from your watchlist`
-          : `Remove ${name} from your watchlist`
+          ? `Confirm removing ${name} from your roster`
+          : `Remove ${name} from your roster`
       }
     >
       {armed ? (
