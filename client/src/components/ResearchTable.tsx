@@ -539,41 +539,92 @@ const MLB_TO_ELIGIBLE: Record<string, string> = {
   DH: 'DH',
 };
 
-/** The half of ESPN's vocabulary a batting board can act on. `SP`/`RP` ride on
- *  the same map — the player page prints them — but no pill here reads them. */
-const BATTING_ELIGIBLE = new Set(['C', '1B', '2B', '3B', 'SS', 'OF', 'DH']);
+/**
+ * ESPN's vocabulary, cut by the board that reads it.
+ *
+ * A row is filtered by the half its **own** board speaks, and the cut is doing
+ * real work in both directions. The batting pills can act on nothing in
+ * `SP`/`RP`, and — the case that would otherwise be a silent wrong answer — a
+ * pitcher the name-and-club join placed on the wrong man of a duplicate name
+ * comes back carrying somebody else's positions: ESPN has the Yankees' Fernando
+ * Cruz eligible at `2B` and `SS`. Filtered per board that leaves him with an
+ * empty list, which is the same thing as no list at all and sends him to the
+ * fallback, rather than putting a second baseman on the pitching board.
+ */
+const ELIGIBLE_BY_KIND: Record<PlayerKind, ReadonlySet<string>> = {
+  batter: new Set(['C', '1B', '2B', '3B', 'SS', 'OF', 'DH']),
+  pitcher: new Set(['SP', 'RP']),
+};
 
 /**
  * The positions a row counts as, in the board's own vocabulary.
  *
- * **The pitching board is deliberately not part of this**, and the reasoning is
- * worth keeping. ESPN grants SP and RP the same way it grants 2B — off games
- * started — so it is the same *kind* of fact, but three things say the board
- * should keep `ResearchRow.starter`. It **partitions**: 143 of the 749 pitchers
- * on a checked board are eligible at both, so the two pills would overlap and
- * stop adding up to the board. It is **the window's answer rather than the
- * season's**: `starter` is recomputed for 7d/15d/30d/60d, where an eligibility
- * is a season-long qualification that a 7-day board would contradict. And it is
- * **what the qualifier reads** — the whole reason `starter` is computed
- * server-side is that the SP/RP pills and the innings-versus-appearances rule
- * must not disagree about who is a starter, and pointing the pills at a second
- * definition would put that back. Where the two can be compared they mostly
- * agree anyway: of the 601 with a single ESPN answer, 561 match, and the 40 that
- * don't are almost all organisational starters who have so far only relieved in
- * the majors (Ty Blach, 1 G, 0 GS, ESPN `SP`) — which is ESPN describing a role
- * where this board describes a season.
+ * **The pitching board reads eligibility too, and used not to.** ESPN grants SP
+ * and RP the way it grants 2B, so it was always the same *kind* of fact; what
+ * kept the pills on `ResearchRow.starter` was three objections, and they are
+ * worth stating because two of them are still true and the board now pays them
+ * rather than avoiding them.
+ *
+ * The pills **stop partitioning**: 143 of the 749 pitchers on a checked board
+ * are eligible at both, so a fifth of the board is under SP *and* RP. That is a
+ * cost and not an error — the batting pills already overlap by design (`IF` is
+ * the whole infield, not "some other infielder", and a utility man is under 2B
+ * and SS and OF at once), and a swingman genuinely is both. It costs the pill
+ * counts their sum, which the count line never reported anyway: it has always
+ * said "N of M" against the whole board, and M is unchanged.
+ *
+ * Eligibility is **season-long where `starter` follows the window**, which was
+ * the sharpest of the three and turns out to argue the other way once it is
+ * followed through. The window says which games the numbers are drawn from; it
+ * has never said who the player *is*, and every batting pill beside these two
+ * has been a season-long fact on a 7-day board since eligibility landed. Under
+ * `starter` these were the one control in the row whose meaning changed with
+ * the span — and changed into the wrong answer for the question a fantasy
+ * manager is asking it. On the 7-day board **2 pitchers had started a majority
+ * of their week and are RP-eligible only** (Erik Miller, Daniel Lynch IV), so
+ * filtering to SP offered a man the league will not let you start there, which
+ * is exactly the Curtis Mead correction the batting side already made; **6 more
+ * had only relieved that week and are SP-eligible only** (Slade Cecconi, Jordan
+ * Montgomery — a rehab or spot outing), so RP offered men who cannot fill it.
+ * The window still decides the fallback below, where it is the only answer
+ * there is and is honestly a description of that span.
+ *
+ * `starter` is **what the qualifier reads**, and that is why it stays on the
+ * row and is computed server-side: the innings-versus-appearances rule needs
+ * it, and one definition of a starter is enough. What has changed is that the
+ * pills are no longer that definition's second reader — they are ESPN's answer
+ * to a different question ("where may I start him") — so the two can differ,
+ * and where they can be compared they mostly don't: of the 601 pitchers with a
+ * single ESPN answer, 561 match.
  */
 function espnPositions(r: ResearchRow): string[] | null {
-  if (r.kind === 'pitcher' || !r.eligible) return null;
-  const list = r.eligible.filter((p) => BATTING_ELIGIBLE.has(p));
-  // An empty list after the filter is the same as no list at all: it means ESPN
-  // has nothing to say about him as a batter, which is what the fallback is for.
+  if (!r.eligible) return null;
+  const list = r.eligible.filter((p) => ELIGIBLE_BY_KIND[r.kind].has(p));
+  // An empty list after the filter is the same as no list at all: ESPN has
+  // nothing to say about him in this board's vocabulary, which is what the
+  // fallback is for.
   return list.length > 0 ? list : null;
 }
 
+/**
+ * ESPN's answer where there is one, and the app's own where there isn't — per
+ * row, never per page, so a player the join can't place is filtered by what the
+ * app does know about him rather than dropped out of every pill. With no league
+ * connected that is every row, which is why nothing changes for a user without
+ * one.
+ *
+ * The two boards fall back to different things because they have different
+ * things to fall back *to*. A batter has MLB's single listed position, which is
+ * what the board read before any of this. A pitcher's MLB position is `P`, which
+ * no pill has ever been able to use — so his fallback is `starter`, the exact
+ * behaviour the whole pitching board had until now, window and all. It is
+ * narrow: on a checked board **5 of 749 pitchers** take it (4 ESPN has no list
+ * for at all, and the mis-joined Fernando Cruz above).
+ */
 function eligibleFor(r: ResearchRow): string[] {
   const espn = espnPositions(r);
   if (espn) return espn;
+  if (r.kind === 'pitcher') return [r.starter ? 'SP' : 'RP'];
   const one = MLB_TO_ELIGIBLE[r.position];
   return one ? [one] : [];
 }
@@ -613,10 +664,12 @@ function posCellText(
   leadCodes: string[] | undefined,
 ): { text: string; title: string } {
   const all = eligibleFor(r);
-  // Nothing in the board's vocabulary: a pitcher (`P`), a two-way player
-  // (`TWP`), or a position MLB has no record of. The cell prints MLB's own
-  // spelling and its old tooltip, which is exactly what it did before any of
-  // this — the pitching board in particular is untouched by eligibility.
+  // Nothing in the board's vocabulary at all, which on the batting board is a
+  // two-way player (`TWP`) or a position MLB has no record of. The cell prints
+  // MLB's own spelling and its old tooltip, which is exactly what it did before
+  // any of this. A pitching row can no longer reach this: `eligibleFor` always
+  // has `starter` to fall back on, which is the point of the change — the cell
+  // used to print `P` here beside a pill that had already split P in two.
   if (all.length === 0) {
     return {
       text: r.position || '—',
@@ -630,9 +683,14 @@ function posCellText(
     : trimmed;
   const shown = ordered.slice(0, POS_CELL_MAX);
   const extra = ordered.length - shown.length;
+  // The tooltip names the source, `SS` (or `SP`) alone being unable to say
+  // whether it is ESPN's answer or the fallback — and the two boards fall back
+  // to different things, so they say different things.
   const source = espnPositions(r)
     ? `Eligible in ESPN at ${ordered.join(', ')}`
-    : `${ordered.join(', ')} — MLB's listed position; ESPN has no eligibility for him`;
+    : r.kind === 'pitcher'
+      ? `${ordered[0]} — off his own appearances over the window; ESPN has no eligibility for him`
+      : `${ordered.join(', ')} — MLB's listed position; ESPN has no eligibility for him`;
   return { text: shown.join('/') + (extra > 0 ? `+${extra}` : ''), title: source };
 }
 
@@ -647,26 +705,21 @@ interface PositionOption {
   espnTitle?: string;
   kind: PlayerKind;
   /** The eligibility codes this pill selects on — one for a single position,
-   *  four for `IF`. Absent on the whole-board entries and on SP/RP, which read
-   *  `match` instead. */
+   *  four for `IF`, one each for the two pitching roles. Absent only on the two
+   *  whole-board entries, which filter nothing. SP and RP carried a predicate
+   *  of their own until they read eligibility like everything else; every pill
+   *  in the row is now one test over one vocabulary. */
   codes?: string[];
-  /** Absent on the two whole-board entries, which filter nothing, and on every
-   *  batting pill, which is `codes`. */
-  match?: (r: ResearchRow) => boolean;
 }
 
 /** A pill that filters at all — anything but the two whole-board entries. */
-const filtersRows = (p: PositionOption) => Boolean(p.codes || p.match);
+const filtersRows = (p: PositionOption) => Boolean(p.codes);
 
-/** One pill's test, whichever half of `PositionOption` carries it. */
+/** One pill's test. */
 function positionMatcher(pos: ResearchPos): ((r: ResearchRow) => boolean) | undefined {
-  const option = POSITION_BY_KEY.get(pos);
-  if (!option) return undefined;
-  if (option.codes) {
-    const codes = option.codes;
-    return (r) => eligibleFor(r).some((p) => codes.includes(p));
-  }
-  return option.match;
+  const codes = POSITION_BY_KEY.get(pos)?.codes;
+  if (!codes) return undefined;
+  return (r) => eligibleFor(r).some((p) => codes.includes(p));
 }
 
 /**
@@ -680,8 +733,9 @@ function positionMatcher(pos: ResearchPos): ((r: ResearchRow) => boolean) | unde
  * of LF/CF/RF), so those two overlap the individual pills by design — IF is the
  * whole infield, not "some other infielder". **A multi-position player is now on
  * more than one pill**, which is the point of reading eligibility: the pills
- * were a partition of the batting board and are a cover of it. SP and RP still
- * do partition Pitchers — see `espnPositions` for why they keep `starter`.
+ * were a partition of each board and are a cover of it. That is true of SP and
+ * RP as well now — a swingman is under both, 143 of 749 pitchers being eligible
+ * at both — see `espnPositions` for what that costs and what it buys.
  */
 const POSITIONS: PositionOption[] = [
   { key: 'batters', label: 'Batters', title: 'Every batter', kind: 'batter' },
@@ -693,10 +747,11 @@ const POSITIONS: PositionOption[] = [
   { key: 'SS', label: 'SS', title: 'Shortstops', espnTitle: 'Eligible at shortstop in ESPN', kind: 'batter', codes: ['SS'] },
   { key: 'IF', label: 'IF', title: 'Infielders — 1B, 2B, 3B and SS', espnTitle: 'Eligible somewhere in the infield in ESPN — 1B, 2B, 3B or SS', kind: 'batter', codes: ['1B', '2B', '3B', 'SS'] },
   { key: 'OF', label: 'OF', title: 'Outfielders — LF, CF and RF', espnTitle: 'Eligible in the outfield in ESPN', kind: 'batter', codes: ['OF'] },
-  // `starter` comes off the row rather than being re-derived here, so these
-  // pills and the qualifier the server applies can't disagree about who is one.
-  { key: 'SP', label: 'SP', title: 'Starting pitchers — a majority of his appearances are starts', kind: 'pitcher', match: (r) => r.starter },
-  { key: 'RP', label: 'RP', title: 'Relief pitchers', kind: 'pitcher', match: (r) => !r.starter },
+  // These read ESPN's eligibility like the eight above, falling back to
+  // `ResearchRow.starter` — which is what they used to read outright — for a
+  // pitcher ESPN can't be joined to and for every user with no league.
+  { key: 'SP', label: 'SP', title: 'Starting pitchers — a majority of his appearances are starts', espnTitle: 'Eligible at starting pitcher in ESPN', kind: 'pitcher', codes: ['SP'] },
+  { key: 'RP', label: 'RP', title: 'Relief pitchers', espnTitle: 'Eligible at relief pitcher in ESPN', kind: 'pitcher', codes: ['RP'] },
 ];
 
 const POSITION_BY_KEY = new Map(POSITIONS.map((p) => [p.key, p]));
@@ -1376,7 +1431,7 @@ export function ResearchTable({
   // `visible` memo below, which lists this among its dependencies.
   const posMatch = useMemo(() => positionMatcher(pos), [pos]);
   /** The codes the active pill selects on, so the Pos cell can lead with them —
-   *  see `posCellText`. Undefined on the whole-board pills and on SP/RP. */
+   *  see `posCellText`. Undefined on the two whole-board pills alone. */
   const posCodes = POSITION_BY_KEY.get(pos)?.codes;
 
   // Keep the selected pill on screen. The row scrolls sideways and holds eleven
