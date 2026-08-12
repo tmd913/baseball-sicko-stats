@@ -508,6 +508,7 @@ export function PlayerDetails({
   onWatchlistToggle,
   rosterPct,
   rosterTrend,
+  eligible,
   onAdd,
   onRemove,
   onClose,
@@ -531,6 +532,13 @@ export function PlayerDetails({
   /** How that figure has moved, and over how long. Absent with no league or no
    *  baseline; a `change` of 0 is a real answer and renders as "flat". */
   rosterTrend?: { change: number; days: number };
+  /** Every position ESPN has him eligible at — `['2B', 'SS', 'OF']`, and here
+   *  including `SP`/`RP`, which the research board's pills deliberately don't
+   *  read (see `espnPositions` there). `undefined` with no league; `null` when
+   *  there is one and ESPN can't be joined to him, in which case the chip stays
+   *  MLB's listed position. This page has the room the board's cell hasn't, so
+   *  the list is printed whole. */
+  eligible?: string[] | null;
   onAdd: () => void;
   onRemove: () => void;
   onClose: () => void;
@@ -798,7 +806,21 @@ export function PlayerDetails({
           <div>
             <h1 className="details-name">
               {name}
-              {position && <span className="player-pos">{position}</span>}
+              {/* The chip is **what he can be played at** wherever ESPN can
+                  say so, and MLB's single listed position otherwise. It is the
+                  one place in the app with room for the whole list, which is
+                  why the research board's cell may truncate to two and this
+                  never does — the two read the same fact at two widths. */}
+              {eligible && eligible.length > 0 ? (
+                <span
+                  className="player-pos"
+                  title={`Eligible in ESPN at ${eligible.join(', ')}`}
+                >
+                  {eligible.join('/')}
+                </span>
+              ) : (
+                position && <span className="player-pos">{position}</span>
+              )}
             </h1>
             {/* Under the name rather than out beside the watchlist button: it
                 is a fact *about the player*, like the position chip above it,
