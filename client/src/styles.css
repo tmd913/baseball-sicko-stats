@@ -2122,9 +2122,10 @@ body {
    batters around it, and only its left accent differs: the same four tones the
    feed's rail uses, so one event reads the same colour on the card as it does
    in the stream. It carries a quieter ground than a batter's row, being
-   background to the at-bat it happened inside rather than a result of its own —
-   and it never becomes a `.faced-card`, since there is no pitch sequence under
-   it to open. */
+   background to the at-bat it happened inside rather than a result of its own.
+   The class rides on whichever of the two shapes the event takes — the static
+   row, or the `.faced-card` it becomes once there is a description or a clip to
+   open onto — so the tone and the ground are stated once for both. */
 .faced-event {
   background: var(--bg-2);
 }

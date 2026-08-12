@@ -281,11 +281,6 @@ export function baseEventLabel(ev: BaseEvent): string {
   }
 }
 
-/** A base as MLB's `movement` spells it ("2B") in the form the app prints. */
-export function baseName(base: string): string {
-  return base === '1B' ? '1st' : base === '2B' ? '2nd' : base === '3B' ? '3rd' : base;
-}
-
 /**
  * The score a play or an event left behind, in the game badge's own away–home
  * form. One helper because a feed item states it in one place whichever kind of
