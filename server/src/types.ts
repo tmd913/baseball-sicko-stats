@@ -56,6 +56,10 @@ export interface PlateAppearance {
   description: string; // human-readable play description (des)
   rbi: number; // runs batted in on this PA (official scoring)
   playId: string | null; // Statcast video id (present when ball in play)
+  // The score the play left behind (away, home) — the same pair a `BaseEvent`
+  // carries, so the feed's two item shapes can state it in the same place.
+  awayScore: number | null;
+  homeScore: number | null;
   // Final batted-ball summary (when contact was made)
   launchSpeed: number | null;
   launchAngle: number | null;
@@ -128,28 +132,70 @@ export interface ProbablePitcher {
 }
 
 /**
- * A base-running event (stolen base or run scored) for the feed's stream.
+ * What a base-running event was. The vocabulary is MLB's own runner
+ * `details.eventType` collapsed to the distinctions worth a badge — measured
+ * against 111 games, which is also what settled what is *not* here (see
+ * `baseEventKind` in mlbStats.ts).
  *
- * It carries the same two things a plate appearance does — a description of what
- * happened and a `playId` to play it back — because in the feed it is the same
- * kind of item: something the watched player did, with a clip of him doing it.
- * The clip is the steal's own action clip, or, for a run, the play that drove
- * him in.
+ * - `sb`   stolen base            - `cs`   caught stealing
+ * - `po`   picked off             - `pocs` picked off and caught stealing
+ * - `poe`  advanced on a pickoff throwing error
+ * - `balk` balk (a disengagement violation awards the base the same way, so it
+ *          takes the same kind; the description says which it was)
+ * - `wp`   wild pitch             - `pb`   passed ball
+ * - `di`   defensive indifference - `run`  he scored
+ */
+export type BaseEventKind =
+  | 'sb'
+  | 'cs'
+  | 'po'
+  | 'pocs'
+  | 'poe'
+  | 'balk'
+  | 'wp'
+  | 'pb'
+  | 'di'
+  | 'run';
+
+/**
+ * A base-running event — everything that happens to a runner off a plate
+ * appearance — for the feed's stream.
+ *
+ * It carries the same things a plate appearance does: a description of what
+ * happened, a `playId` to play it back, and the situation it happened in
+ * (bases + outs, which the feed draws with the same `BaseDiamond` an at-bat
+ * card uses). In the feed it is the same kind of item — something that happened
+ * to a watched player, with a clip of it.
+ *
+ * The same event reaches **two** players' games: the runner's, and — for the
+ * ones the pitcher is a party to — the pitcher's (see `PITCHER_BASE_EVENTS`).
  */
 export interface BaseEvent {
-  kind: 'sb' | 'run';
+  kind: BaseEventKind;
   inning: number;
   half: string; // "Top" | "Bot"
   timestamp: string | null;
-  base: string | null; // stolen-base target ("2nd"/"3rd"/"home"); null for a run
+  // The at-bat the event happened during (1-based, as `PlateAppearance`
+  // numbers them) — what lets a pitcher's inning block put a balk in the
+  // middle of the batters he faced rather than at the end of them.
+  atBatNumber: number;
+  // The base the event names: the bag taken or lost for `sb`/`cs`/`po`/`pocs`,
+  // and the base he ended up on for the kinds that are pure advances
+  // (`balk`/`wp`/`pb`/`di`/`poe`). Null for a run and when MLB says neither.
+  base: string | null;
   playId: string | null; // the clip, resolved through /api/video like any play
   description: string; // MLB's own line for the event ('' when it has none)
+  runnerName: string | null; // whose event it was — the pitcher's card needs it
   batterName: string | null; // at the plate: stolen on, or drove the run in
   pitcherName: string | null;
   balls: number | null;
   strikes: number | null;
   outs: number | null;
-  fromBase: string | null; // run only: the base he scored from ("1B"/"2B"/"3B")
+  // The bases as they stood when it happened — the play's own start state with
+  // every movement recorded before this one applied, so a steal shows the man
+  // on first rather than the man on second he became.
+  onBase: BaseState;
+  fromBase: string | null; // the base he came from ("1B"/"2B"/"3B")
   awayScore: number | null; // the score the event left behind
   homeScore: number | null;
 }
@@ -162,6 +208,10 @@ export interface FacedBatter {
   batterId: number;
   batterName: string;
   stand: string | null; // batter handedness L/R
+  // Which at-bat of the game this was (1-based, as `PlateAppearance` numbers
+  // them) — the key an inning block merges the game's base events against, so a
+  // wild pitch lands between the two batters it happened between.
+  atBatNumber: number;
   inning: number;
   half: string; // "Top" | "Bot"
   outsWhenUp: number | null;
@@ -433,8 +483,11 @@ export interface PlayerGame {
   // finished day's cached snapshot never depends on this field.
   teamProbablePitcher: ProbablePitcher | null;
   plateAppearances: PlateAppearance[];
-  // Stolen bases + runs scored by this player in the game, in play order — the
-  // feed interleaves them chronologically with at-bats.
+  // What happened to this player off a plate appearance, in play order — the
+  // feed interleaves them chronologically with at-bats. On a **batter's** game
+  // that is his own baserunning (steals, pickoffs, the free bases he was given,
+  // the runs he scored); on a **pitcher's** it is the ones he was a party to,
+  // his balk and his wild pitch among them. Same list, same feed item.
   baseEvents: BaseEvent[];
   line: BattingLine;
   // For a watched pitcher, the pitcher's-eye view of this game; null for batters.

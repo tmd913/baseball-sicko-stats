@@ -35,3 +35,48 @@ export function BaseDiamond({
     </svg>
   );
 }
+
+/**
+ * The half-inning marker an at-bat card leads with: the top/bottom triangle and
+ * the inning number. A label rather than a toggle — the only triangle allowed
+ * anywhere near an inning in this app (see the no-carets note in styles.css).
+ */
+export function HalfInning({ inning, half }: { inning: number; half: string }) {
+  const isTop = half === 'Top';
+  return (
+    <span className="pa-inning">
+      <svg className="pa-inning-arrow" viewBox="0 0 12 10" aria-hidden="true" fill="currentColor">
+        <path d={isTop ? 'M6 0 12 10 0 10Z' : 'M0 0 12 0 6 10Z'} />
+      </svg>
+      {inning}
+      <span className="sr-only">{isTop ? 'Top' : 'Bottom'} of inning</span>
+    </span>
+  );
+}
+
+/**
+ * When it happened and what the situation was — the half-inning, then the
+ * runners and outs. Extracted from `PlateAppearanceCard`'s summary row so a
+ * base-running feed item can say it the same way: a steal and the at-bat above
+ * it in the same stream are both something that happened in a particular
+ * situation, and a bespoke "Bot 5 · 2 outs" text line beside a card drawing the
+ * same facts as a diamond made them read as two different kinds of entry.
+ */
+export function PlaySituation({
+  inning,
+  half,
+  bases,
+  outs,
+}: {
+  inning: number;
+  half: string;
+  bases: BaseState;
+  outs: number;
+}) {
+  return (
+    <>
+      <HalfInning inning={inning} half={half} />
+      <BaseDiamond bases={bases} outs={outs} className="pa-bases" />
+    </>
+  );
+}
