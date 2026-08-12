@@ -114,6 +114,10 @@ export interface GameStatus {
   onDeckId: number | null;
   onBaseIds: number[]; // player ids currently on base
   pitchingId: number | null; // the pitcher currently on the mound (live only)
+  // The pitcher each side still has in the game — one per team, live only, and a
+  // different question from `pitchingId`, which names only the half's mound. A
+  // starter resting while his own team bats is in here and not in that.
+  inGamePitcherIds: number[];
 }
 
 /** A game's announced/probable starting pitcher (used before first pitch). */

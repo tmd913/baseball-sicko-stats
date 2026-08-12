@@ -651,8 +651,16 @@ export function liveRoleLabel(role: LiveRole): string {
 
 /**
  * The player's current live role together with the live game it's happening in.
- * A pitcher is 'pitching' when they're the game's current pitcher; a batter is
- * at bat → on deck → on base. Used by the live feed's "Live" section.
+ * A pitcher is 'pitching' while he is still **in** the game; a batter is at bat
+ * → on deck → on base. Used by the live feed's "Live" section.
+ *
+ * `inGamePitcherIds` rather than `pitchingId` is what "still pitching" means
+ * here. `pitchingId` is the man on the mound in *this* half, which is nobody on
+ * the resting side — so a starter dropped out of the Live section the moment his
+ * own team came up to bat, and climbed back in an inning later, all game. He is
+ * pitching until he is taken out, and the section should say so without
+ * flickering; a pitcher who *has* been replaced falls out of it for good, which
+ * is the half of the old behaviour that was right.
  */
 export function liveRoleGame(
   report: PlayerReport,
@@ -660,7 +668,7 @@ export function liveRoleGame(
   for (const g of report.games) {
     if (g.status.state !== 'live') continue;
     if (report.kind === 'pitcher') {
-      if (g.status.pitchingId === report.id) return { role: 'pitching', game: g };
+      if (g.status.inGamePitcherIds.includes(report.id)) return { role: 'pitching', game: g };
       continue;
     }
     if (g.status.atBatId === report.id) return { role: 'at-bat', game: g };

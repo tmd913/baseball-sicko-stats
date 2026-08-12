@@ -70,6 +70,7 @@ function liveStatus(
     onDeckId: null,
     onBaseIds: [],
     pitchingId: null,
+    inGamePitcherIds: [],
   };
 }
 
@@ -109,8 +110,9 @@ function toLiveBatterGame(game: PlayerGame, playerId: number, role: LiveRole): P
 }
 
 /**
- * The same for a pitcher's game: he takes the mound (`pitchingId`), which is
- * what the feed's Live section and the card's live-inning accent read. The
+ * The same for a pitcher's game: he takes the mound (`pitchingId`) and is one of
+ * the two pitchers in the game (`inGamePitcherIds`) — the card's live-inning
+ * accent reads the first, the feed's Live section the second. The
  * inning is the last one he actually worked, so the accent lands on a half that
  * exists — and his half is the one the *opponent* bats in, the mirror of the
  * batter case. With no outing under him yet the item is just his header, the
@@ -124,6 +126,7 @@ function toLivePitcherGame(game: PlayerGame, playerId: number): PlayerGame {
   const status: GameStatus = {
     ...liveStatus(game, playerId, inning, isTop, basesFor(playerId, false)),
     pitchingId: playerId,
+    inGamePitcherIds: [playerId],
   };
   return { ...game, status };
 }
