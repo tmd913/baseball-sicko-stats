@@ -516,7 +516,12 @@ export interface BatterGameLog extends GameLogEntry {
   // Where he hit in the posted order, 1-9. Null when he wasn't in it — he came
   // on off the bench, and the posted lineup doesn't say whose spot he took.
   lineupSpot: number | null;
+  // The denominator of the log's `H/PA` cell — it counts the walk and the
+  // sacrifice that AB throws away, which is the whole reason it is the one
+  // shown.
   pa: number;
+  // Not a column any more, and still needed: the season row's AVG and SLG are
+  // over at-bats whatever the cell above them counts.
   ab: number;
   runs: number;
   hits: number;
