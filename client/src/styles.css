@@ -2297,16 +2297,19 @@ body {
 /* ClipVideo's own wrapper — every clip in the app is one of these, whichever
    player it belongs to. A plain block, so the three players keep the widths
    their own classes give them; it exists only to be the positioning context for
-   the audio button. */
+   the buttons over the frame — the mute, and the pair of skips. */
 .clip {
   position: relative;
 }
-/* Per-clip mute, over the top-left of the frame. Left rather than right because
-   that is the edge all three players share: two fill their column and the
-   games-view one sizes to the clip itself, so a right-anchored button would
-   sometimes land beside the picture rather than on it. Top because the
+/* The chip every control on a frame is cut from — the per-clip mute and the two
+   skips share it rather than resembling each other. The mute is at the top
+   left: left because that is the edge all three players share (two fill their
+   column and the games-view one sizes to the clip itself, so a right-anchored
+   button would sometimes land beside the picture rather than on it — which is
+   what `--clip-w` below exists to solve for the skips), top because the
    browser's own control bar runs along the bottom. */
-.clip-audio {
+.clip-audio,
+.clip-seek {
   position: absolute;
   top: 8px;
   left: 8px;
@@ -2327,20 +2330,76 @@ body {
   opacity: 0.78;
   transition: opacity 0.14s ease, background 0.14s ease;
 }
-.clip-audio:hover {
+.clip-audio:hover,
+.clip-seek:hover {
   opacity: 1;
   background: rgba(6, 12, 22, 0.85);
 }
-.clip-audio:focus-visible {
+.clip-audio:focus-visible,
+.clip-seek:focus-visible {
   opacity: 1;
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-/* No hover to reveal it on a phone, and it is the only way to the audio there
-   while a clip plays — so it does not lean on hover to be findable. */
+/* Skip back / forward, at the top right. The pair reads as one group — same
+   chip as the mute, 4px apart — and hangs off the *video's* right edge rather
+   than the wrapper's: `--clip-w` is the video's measured width, published by
+   ClipVideo (see there for why it can't be declared), and the layer is that
+   wide so the buttons end 8px inside the picture in every player. The layer
+   itself answers no presses, or it would swallow the tap-to-pause across the
+   whole top of the frame. */
+.clip-seeks {
+  position: absolute;
+  top: 8px;
+  left: 0;
+  z-index: 1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  width: var(--clip-w, 100%);
+  padding-right: 8px;
+  pointer-events: none;
+}
+.clip-seeks > * {
+  pointer-events: auto;
+}
+/* Each carries its 5 as well as its arrows — a rewind glyph alone at 13px says
+   nothing about how far it goes — so the chip is as wide as it needs to be
+   rather than square, and the arrows sit on the outer edges of the pair,
+   pointing the way each button travels. `position: static` puts back what the
+   shared chip assumes: the mute places itself, where these are laid out by the
+   group above. */
+.clip-seek {
+  position: static;
+  width: auto;
+  min-width: 30px;
+  padding: 0 6px;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.clip-seek-fwd svg {
+  transform: scaleX(-1);
+}
+/* No hover to reveal them on a phone, and on a phone they are the only controls
+   a playing clip has — so they don't lean on hover to be findable, and they
+   grow to the app's own control height (36px, `--control-h`) to be worth
+   aiming a thumb at. Measured at 390px wide: the feed's frame is 332px and the
+   skip pair with its gap costs 84 of them, in a corner. */
 @media (hover: none) {
-  .clip-audio {
+  .clip-audio,
+  .clip-seek {
     opacity: 0.9;
+    height: var(--control-h);
+  }
+  .clip-audio {
+    width: var(--control-h);
+  }
+  .clip-seek {
+    min-width: var(--control-h);
+    padding: 0 8px;
   }
 }
 .pa-video {
