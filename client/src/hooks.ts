@@ -165,6 +165,62 @@ export function useStickyChromeOffset<T extends HTMLElement>(): [RefObject<T | n
 }
 
 /**
+ * The same measurement one level down, for an overlay that pins a bar of its
+ * own: measures `.details-chrome` and writes its height onto the overlay
+ * element as `--details-chrome-h`, where the stylesheet turns it into that
+ * subtree's own `--scroll-offset`.
+ *
+ * It cannot share the page's `--chrome-h`, and not because the number differs:
+ * the two describe *different bars*. `--chrome-h` is the app's own pinned
+ * chrome, which the overlay covers outright (41 against 50), so a box inside
+ * here scrolled to the top of its scroller was clearing 115px of a bar nobody
+ * can see while landing behind the one they can. Publishing it on the overlay
+ * rather than on the document root is what keeps the two answers apart — a
+ * custom property inherits, so the override reaches every descendant and stops
+ * at the edge of the view.
+ *
+ * Measured rather than declared for the reason the page's is: the head is 139px
+ * on a desktop and 193px on a phone, where it stacks into two rows, and neither
+ * is a number a stylesheet can know — a two-line name, a present-or-absent
+ * Rostered line and the width all move it. Zero whenever it isn't pinned, read
+ * off the computed `position`, which is the same answer the CSS gives rather
+ * than a second copy of the two rules that decide it (the Game Log's fixed
+ * column, and a short window).
+ *
+ * The three triggers are that hook's three, for its three reasons: a
+ * `ResizeObserver` for the head changing shape, a layout effect on every render
+ * for the tab swap that makes it static, and a `resize` listener for a shorter
+ * window unpinning it without changing its height by a pixel.
+ */
+export function useOverlayChromeOffset<T extends HTMLElement>(
+  host: RefObject<HTMLElement | null>,
+): RefObject<T | null> {
+  const ref = useRef<T>(null);
+  const height = useRef(0);
+  const sync = useCallback(() => {
+    const el = ref.current;
+    const pinned = el && getComputedStyle(el).position === 'sticky';
+    const h = pinned ? Math.round(el.getBoundingClientRect().height) : 0;
+    if (h === height.current) return;
+    height.current = h;
+    host.current?.style.setProperty('--details-chrome-h', `${h}px`);
+  }, [host]);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(sync);
+    ro.observe(el);
+    window.addEventListener('resize', sync);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', sync);
+    };
+  }, [sync]);
+  useLayoutEffect(sync);
+  return ref;
+}
+
+/**
  * Freezes the page behind a full-screen overlay for as long as the caller is
  * mounted, then puts it back exactly where it was.
  *

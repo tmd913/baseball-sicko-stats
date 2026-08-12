@@ -19,7 +19,7 @@ import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
 import { BaseballMark } from './BaseballMark';
 import { RollingXwoba } from './RollingXwoba';
 import { GameLog } from './GameLog';
-import { useLockBodyScroll, usePlayerStatus } from '../hooks';
+import { useLockBodyScroll, useOverlayChromeOffset, usePlayerStatus } from '../hooks';
 
 /**
  * Savant's diverging percentile scale: deep blue (poor, 0) → neutral grey
@@ -571,9 +571,22 @@ export function PlayerDetails({
   // hand rather than with `scrollIntoView`, which walks up every scrollable
   // ancestor and would drag the overlay's own scroller with it.
   const tabsRef = useRef<HTMLDivElement | null>(null);
-  // The overlay itself, read only to ask whether something inside it has taken
-  // the page — see the Escape handler below.
+  // The overlay itself: read to ask whether something inside it has taken the
+  // page (see the Escape handler below), scrolled back to the top on a tab
+  // change (below that), and written to by the offset hook, which publishes the
+  // pinned head's height on it for everything inside to clear.
   const viewRef = useRef<HTMLDivElement | null>(null);
+  const chromeRef = useOverlayChromeOffset<HTMLDivElement>(viewRef);
+  // Switching tab puts the view back at the top. That is new with the pinned
+  // head and is the same rule the research board's own reset follows: the tabs
+  // were at the top of the page, so getting to one meant scrolling back up
+  // first and a reset came free with having to go there. Reachable from
+  // anywhere, they can now be pressed from 1,700px down a percentile card — and
+  // what the next tab has at that offset is somebody else's rows, or nothing at
+  // all. A tab is a different reading of the player, not a place in one.
+  useLayoutEffect(() => {
+    if (viewRef.current) viewRef.current.scrollTop = 0;
+  }, [tab]);
   useLayoutEffect(() => {
     const row = tabsRef.current;
     const el = row?.querySelector<HTMLElement>('.details-tab.is-active');
@@ -810,222 +823,229 @@ export function PlayerDetails({
     // scrolls — see `.details-view.gamelog-mode`, which is the only way its
     // header row can stick over a season's worth of rows.
     <div ref={viewRef} className={`details-view${tab === 'gamelog' ? ' gamelog-mode' : ''}`}>
-      <div className="details-head">
-        <button type="button" className="details-back" onClick={onClose}>
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-          Back
-        </button>
-        <div className="details-id">
-          <DetailsPhoto playerId={playerId} name={name} kind={kind} />
-          <div>
-            <h1 className="details-name">
-              {name}
-              {/* The chip is **what he can be played at** wherever ESPN can
-                  say so, and MLB's single listed position otherwise. It is the
-                  one place in the app with room for the whole list, which is
-                  why the research board's cell may truncate to two and this
-                  never does — the two read the same fact at two widths. */}
-              {eligible && eligible.length > 0 ? (
-                <span
-                  className="player-pos"
-                  title={`Eligible in ESPN at ${eligible.join(', ')}`}
-                >
-                  {eligible.join('/')}
-                </span>
-              ) : (
-                position && <span className="player-pos">{position}</span>
-              )}
-            </h1>
-            {/* Under the name rather than out beside the watchlist button: it
-                is a fact *about the player*, like the position chip above it,
-                where the buttons on the right are things you do to him. Absent
-                entirely without a fantasy league — and dashed rather than
-                hidden when there is one but ESPN has no figure for him, since
-                on a connected account a missing number is information. */}
-            {rosterPct !== undefined && (
-              <p
-                className="details-rostered"
-                title="Rostered in this share of all ESPN leagues — ESPN's own figure, not your league's"
-              >
-                Rostered{' '}
-                <strong>{rosterPct === null ? '—' : `${rosterPct.toFixed(1)}%`}</strong>
-                {/* One span per column the board can draw, in the same order,
-                    so the page and the table agree about what is available.
-                    Each states its own span rather than the sentence a single
-                    trend used to read ("▲ 1.2 in 7d"): five of those is a
-                    paragraph, where the span up front and the move behind it
-                    is a row that can be scanned across. A flat window keeps
-                    its 0.0 in the muted colour — the server drops zeroes from
-                    the wire and the client fills them back, so flat is a real
-                    answer here and not an absence. */}
-                {rosterPct !== null && rosterTrends && rosterTrends.length > 0 && (
-                  <span className="details-trends">
-                    {rosterTrends.map((t) => (
-                      <span
-                        key={t.window}
-                        className={`details-trend${
-                          t.change > 0 ? ' up' : t.change < 0 ? ' down' : ''
-                        }`}
-                        title={`Change over the last ${t.days} day${t.days === 1 ? '' : 's'}`}
-                      >
-                        <span className="details-trend-span">{t.days}d</span>
-                        {t.change === 0
-                          ? '0.0'
-                          : `${t.change > 0 ? '▲' : '▼'}${Math.abs(t.change).toFixed(1)}`}
-                      </span>
-                    ))}
-                  </span>
-                )}
-              </p>
-            )}
-            <a
-              className="details-savant-link"
-              href={savantPlayerUrl(name, playerId)}
-              target="_blank"
-              rel="noreferrer"
-            >
-              View on Baseball Savant ↗
-            </a>
-          </div>
-        </div>
-        {/* Two controls over two different lists, and the header is where the
-            app has to make that distinction plainest — this page opens on
-            anybody, and "am I following this man, and in which sense" is the
-            question it exists to settle. The **star** is the watchlist and is
-            always there, on or off, in every mode: that list is the user's own
-            and has nothing to do with where the roster comes from. The
-            **roster** control beside it is either an add button or the "On
-            roster" mark with its remove beside it — and in fantasy mode it is
-            neither, ESPN owning the list; see the badge below. */}
-        <div className="details-watch-actions">
-          <button
-            type="button"
-            className={`details-watch-star${isWatchlisted ? ' on' : ''}`}
-            aria-pressed={isWatchlisted}
-            onClick={() => onWatchlistToggle(!isWatchlisted)}
-            title={
-              isWatchlisted
-                ? `Remove ${name} from your watchlist`
-                : `Add ${name} to your watchlist — the research board can be narrowed to it`
-            }
-          >
-            <svg
-              viewBox="0 0 24 24"
-              width="15"
-              height="15"
-              fill={isWatchlisted ? 'currentColor' : 'none'}
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="m12 3.6 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9Z" />
+      {/* The head and the tabs are one pinned box, held at the top of this
+          overlay's own scroller — see `.details-chrome`. They are one statement
+          of who is being read and which reading of him, which is the argument
+          `.app-chrome` makes a level up for the header, the search and the view
+          bar. */}
+      <div className="details-chrome" ref={chromeRef}>
+        <div className="details-head">
+          <button type="button" className="details-back" onClick={onClose}>
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M15 18l-6-6 6-6" />
             </svg>
-            {isWatchlisted ? 'Watching' : 'Watch'}
+            Back
           </button>
-        {isOnRoster ? (
-          <>
-            {/* The app's baseball, the same mark the research board's watched
-                rows carry — a tick is what a form says when it accepts a value,
-                where this is a state the player is in. It survives into fantasy
-                mode because it is *true there*: the roster on screen is the
-                ESPN team, and this man is on it. The wording is the same in
-                both modes on purpose — the board's button is still `My Roster`
-                and its baseball still marks these same keys, so a second name
-                for one fact would only invite the reader to look for a
-                difference that isn't there. Which list it is, is the title's
-                business. */}
-            <span
-              className="details-watch-badge"
+          <div className="details-id">
+            <DetailsPhoto playerId={playerId} name={name} kind={kind} />
+            <div>
+              <h1 className="details-name">
+                {name}
+                {/* The chip is **what he can be played at** wherever ESPN can
+                    say so, and MLB's single listed position otherwise. It is the
+                    one place in the app with room for the whole list, which is
+                    why the research board's cell may truncate to two and this
+                    never does — the two read the same fact at two widths. */}
+                {eligible && eligible.length > 0 ? (
+                  <span
+                    className="player-pos"
+                    title={`Eligible in ESPN at ${eligible.join(', ')}`}
+                  >
+                    {eligible.join('/')}
+                  </span>
+                ) : (
+                  position && <span className="player-pos">{position}</span>
+                )}
+              </h1>
+              {/* Under the name rather than out beside the watchlist button: it
+                  is a fact *about the player*, like the position chip above it,
+                  where the buttons on the right are things you do to him. Absent
+                  entirely without a fantasy league — and dashed rather than
+                  hidden when there is one but ESPN has no figure for him, since
+                  on a connected account a missing number is information. */}
+              {rosterPct !== undefined && (
+                <p
+                  className="details-rostered"
+                  title="Rostered in this share of all ESPN leagues — ESPN's own figure, not your league's"
+                >
+                  Rostered{' '}
+                  <strong>{rosterPct === null ? '—' : `${rosterPct.toFixed(1)}%`}</strong>
+                  {/* One span per column the board can draw, in the same order,
+                      so the page and the table agree about what is available.
+                      Each states its own span rather than the sentence a single
+                      trend used to read ("▲ 1.2 in 7d"): five of those is a
+                      paragraph, where the span up front and the move behind it
+                      is a row that can be scanned across. A flat window keeps
+                      its 0.0 in the muted colour — the server drops zeroes from
+                      the wire and the client fills them back, so flat is a real
+                      answer here and not an absence. */}
+                  {rosterPct !== null && rosterTrends && rosterTrends.length > 0 && (
+                    <span className="details-trends">
+                      {rosterTrends.map((t) => (
+                        <span
+                          key={t.window}
+                          className={`details-trend${
+                            t.change > 0 ? ' up' : t.change < 0 ? ' down' : ''
+                          }`}
+                          title={`Change over the last ${t.days} day${t.days === 1 ? '' : 's'}`}
+                        >
+                          <span className="details-trend-span">{t.days}d</span>
+                          {t.change === 0
+                            ? '0.0'
+                            : `${t.change > 0 ? '▲' : '▼'}${Math.abs(t.change).toFixed(1)}`}
+                        </span>
+                      ))}
+                    </span>
+                  )}
+                </p>
+              )}
+              <a
+                className="details-savant-link"
+                href={savantPlayerUrl(name, playerId)}
+                target="_blank"
+                rel="noreferrer"
+              >
+                View on Baseball Savant ↗
+              </a>
+            </div>
+          </div>
+          {/* Two controls over two different lists, and the header is where the
+              app has to make that distinction plainest — this page opens on
+              anybody, and "am I following this man, and in which sense" is the
+              question it exists to settle. The **star** is the watchlist and is
+              always there, on or off, in every mode: that list is the user's own
+              and has nothing to do with where the roster comes from. The
+              **roster** control beside it is either an add button or the "On
+              roster" mark with its remove beside it — and in fantasy mode it is
+              neither, ESPN owning the list; see the badge below. */}
+          <div className="details-watch-actions">
+            <button
+              type="button"
+              className={`details-watch-star${isWatchlisted ? ' on' : ''}`}
+              aria-pressed={isWatchlisted}
+              onClick={() => onWatchlistToggle(!isWatchlisted)}
               title={
-                rosterEditable
-                  ? `${name} is on your roster`
-                  : `${name} is on your fantasy team — the roster the Summary, Games and Feed views are reading`
+                isWatchlisted
+                  ? `Remove ${name} from your watchlist`
+                  : `Add ${name} to your watchlist — the research board can be narrowed to it`
               }
             >
-              <BaseballMark size={12} width={2} />
-              On roster
-            </span>
-            {/* But the Remove goes with the mode: ESPN's list is not ours to
-                take a player off, and a ✕ that either did nothing or quietly
-                edited the *saved* list — the one nothing on screen is showing —
-                is the plainest version of a control offering what it can't do.
-                Dropping him is a move made on ESPN. */}
-            {rosterEditable && (
-              <RemoveButton
-                name={name}
-                armed={armedRemove}
-                onArm={() => setArmedRemove(true)}
-                onRemove={onRemove}
-              />
-            )}
-          </>
-        ) : rosterEditable ? (
-          <button
-            type="button"
-            className="details-add"
-            onClick={onAdd}
-            title={`Add ${name} to your roster — the Summary, Games and Feed views then report on him`}
-          >
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            Add to roster
-          </button>
-        ) : null}
+              <svg
+                viewBox="0 0 24 24"
+                width="15"
+                height="15"
+                fill={isWatchlisted ? 'currentColor' : 'none'}
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m12 3.6 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9Z" />
+              </svg>
+              {isWatchlisted ? 'Watching' : 'Watch'}
+            </button>
+          {isOnRoster ? (
+            <>
+              {/* The app's baseball, the same mark the research board's watched
+                  rows carry — a tick is what a form says when it accepts a value,
+                  where this is a state the player is in. It survives into fantasy
+                  mode because it is *true there*: the roster on screen is the
+                  ESPN team, and this man is on it. The wording is the same in
+                  both modes on purpose — the board's button is still `My Roster`
+                  and its baseball still marks these same keys, so a second name
+                  for one fact would only invite the reader to look for a
+                  difference that isn't there. Which list it is, is the title's
+                  business. */}
+              <span
+                className="details-watch-badge"
+                title={
+                  rosterEditable
+                    ? `${name} is on your roster`
+                    : `${name} is on your fantasy team — the roster the Summary, Games and Feed views are reading`
+                }
+              >
+                <BaseballMark size={12} width={2} />
+                On roster
+              </span>
+              {/* But the Remove goes with the mode: ESPN's list is not ours to
+                  take a player off, and a ✕ that either did nothing or quietly
+                  edited the *saved* list — the one nothing on screen is showing —
+                  is the plainest version of a control offering what it can't do.
+                  Dropping him is a move made on ESPN. */}
+              {rosterEditable && (
+                <RemoveButton
+                  name={name}
+                  armed={armedRemove}
+                  onArm={() => setArmedRemove(true)}
+                  onRemove={onRemove}
+                />
+              )}
+            </>
+          ) : rosterEditable ? (
+            <button
+              type="button"
+              className="details-add"
+              onClick={onAdd}
+              title={`Add ${name} to your roster — the Summary, Games and Feed views then report on him`}
+            >
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              Add to roster
+            </button>
+          ) : null}
+          </div>
         </div>
-      </div>
 
-      <div className="details-tabs" role="tablist" ref={tabsRef}>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'percentiles'}
-          className={`details-tab${tab === 'percentiles' ? ' is-active' : ''}`}
-          onClick={() => setTab('percentiles')}
-        >
-          Percentile Rankings
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'splits'}
-          className={`details-tab${tab === 'splits' ? ' is-active' : ''}`}
-          onClick={() => setTab('splits')}
-        >
-          Season
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'gamelog'}
-          className={`details-tab${tab === 'gamelog' ? ' is-active' : ''}`}
-          onClick={() => setTab('gamelog')}
-        >
-          Game Log
-        </button>
-        {isPitcher && (
+        <div className="details-tabs" role="tablist" ref={tabsRef}>
           <button
             type="button"
             role="tab"
-            aria-selected={tab === 'arsenal'}
-            className={`details-tab${tab === 'arsenal' ? ' is-active' : ''}`}
-            onClick={() => setTab('arsenal')}
+            aria-selected={tab === 'percentiles'}
+            className={`details-tab${tab === 'percentiles' ? ' is-active' : ''}`}
+            onClick={() => setTab('percentiles')}
           >
-            Arsenal
+            Percentile Rankings
           </button>
-        )}
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'rolling'}
-          className={`details-tab${tab === 'rolling' ? ' is-active' : ''}`}
-          onClick={() => setTab('rolling')}
-        >
-          Rolling xwOBA
-        </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'splits'}
+            className={`details-tab${tab === 'splits' ? ' is-active' : ''}`}
+            onClick={() => setTab('splits')}
+          >
+            Season
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'gamelog'}
+            className={`details-tab${tab === 'gamelog' ? ' is-active' : ''}`}
+            onClick={() => setTab('gamelog')}
+          >
+            Game Log
+          </button>
+          {isPitcher && (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'arsenal'}
+              className={`details-tab${tab === 'arsenal' ? ' is-active' : ''}`}
+              onClick={() => setTab('arsenal')}
+            >
+              Arsenal
+            </button>
+          )}
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'rolling'}
+            className={`details-tab${tab === 'rolling' ? ' is-active' : ''}`}
+            onClick={() => setTab('rolling')}
+          >
+            Rolling xwOBA
+          </button>
+        </div>
       </div>
 
       {tab === 'arsenal' && arsenalLoading && (
