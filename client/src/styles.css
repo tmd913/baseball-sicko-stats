@@ -58,6 +58,11 @@
   --stack-gap: 12px;
 
   --radius: 14px;
+  /* The width a column of cards stops growing at. The app itself is uncapped —
+     see `.app` — and the wide tables take the whole window; this is for the two
+     views that are a single column of cards (the games list and the feed),
+     where the page can be wider than a card usefully is. */
+  --card-column: 1600px;
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
   font-synthesis: none;
 }
@@ -79,9 +84,21 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* No width cap. The app used to be a 1180px column centred in the window, which
+   on anything wider than a laptop spent the difference on two empty margins —
+   and the things that suffer for it are exactly the things this app is for: the
+   three wide stat tables, which are what the room would have gone to. So the
+   app spans the window and keeps only its gutters, which is what a phone has
+   always done. What was measured against the old 1136px content width — the
+   header's 418px search field against 576px of date controls — is unaffected:
+   those two were fighting for a *narrow* line, and every width from 950px up
+   was already enough for them.
+
+   Two things keep a cap of their own, and each says why where it is written:
+   the reading columns (the tutorial's prose, the order editor, the auth card,
+   the popovers and the results menu), and the two columns of cards — the games
+   list and the feed — which are read down rather than across. */
 .app {
-  max-width: 1180px;
-  margin: 0 auto;
   padding: 14px 22px 80px;
 }
 
@@ -899,9 +916,19 @@ body {
 }
 
 /* ---- Player list ---- */
+/* One cap, and it is not the app's: with `.app` uncapped a card list on a
+   2560px monitor would be a single 2500px-wide box holding a pitch table with
+   an inch between its columns. 1600px is where a card still reads as a card —
+   it fills a 1440 and most of a 1920 laptop, which is what "full width" was
+   asked for, and stops short of the widths where the eye has to travel from a
+   headshot on one side of the room to an exit velocity on the other. The feed
+   takes the same number for the same reason: its items are these cards. */
 .player-list {
   flex: 1 1 auto;
   min-width: 0;
+  width: 100%;
+  max-width: var(--card-column);
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -2498,12 +2525,19 @@ body {
 }
 /* The feed's directly-shown player: preload="none" means no intrinsic size to
    grow into, so give it a stable 16:9 frame (the clip fits inside via
-   object-fit) — the box looks right before playback and doesn't jump. */
+   object-fit) — the box looks right before playback and doesn't jump.
+   The width cap is that height cap read back through the ratio (360 × 16/9):
+   with the app uncapped the feed's column reaches 1600px, and `width: 100%`
+   alone made the frame 1600 wide and still 360 tall — a black letterbox band
+   the width of the page with a postage stamp of baseball in the middle of it.
+   Capped, the frame is the size the clip actually plays at and sits at the
+   left edge of the item like everything else in it. */
 .pa-video-inline {
   width: 100%;
   height: auto;
   aspect-ratio: 16 / 9;
   max-height: 360px;
+  max-width: 640px;
   object-fit: contain;
 }
 
@@ -2983,12 +3017,22 @@ body {
 .details-gamelog {
   /* Wider than the other tabs' 860px reading column: this one has fourteen
      columns, and at 860 the last of them fell off the right of a laptop the
-     moment the gutters got any room. */
-  max-width: 1000px;
+     moment the gutters got any room. 1400 rather than 1000 since the app
+     stopped capping itself — this is one of the three wide tables, and on a
+     wide monitor the fourteen columns fit without a sideways scroll at all. The
+     other tabs keep theirs: a percentile plot is a label, a bar and a number,
+     and spreading those over 1900px puts the label at one end of the room and
+     the number at the other. */
+  max-width: 1400px;
   margin: 0 auto;
 }
 .glog-scroll {
   overflow-x: auto;
+  /* Both axes: this pane scrolls sideways always and vertically in
+     `.details-view.gamelog-mode`, and what sits behind it there is the player
+     page's own scroller — so an unbounded flick down the log carried straight
+     on into the overlay behind it. */
+  overscroll-behavior: contain;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg);
@@ -3202,8 +3246,11 @@ body {
   display: flex;
   flex-direction: column;
 }
+/* As tall as its rows and no taller — the same `flex: 0 1 auto` the research
+   board and the expanded mode use. A twelve-game log left the Load more button
+   pinned to the bottom of the window with a screen of empty box above it. */
 .details-view.gamelog-mode .glog-scroll {
-  flex: 1;
+  flex: 0 1 auto;
   min-height: 0;
   overflow: auto;
 }
@@ -4114,6 +4161,13 @@ body {
   /* Grow to content, but cap at the available height and scroll past that. */
   max-height: 100%;
   overflow: auto;
+  /* The table ends where its content does, on both axes: reaching the last row
+     or the last column must not hand the scroll on to whatever is behind it —
+     the page in the ordinary view, and on a phone the browser's own rubber-band
+     and pull-to-refresh. Both axes here, unlike the tab strips below, because
+     this box genuinely scrolls in both and `contain` on an axis that can't
+     scroll would swallow the gesture rather than pass it on. */
+  overscroll-behavior: contain;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--bg);
@@ -4566,12 +4620,21 @@ body {
   gap: 10px;
 }
 /* Grows to its content but never past the height left below the controls, and
-   scrolls in both axes past that — the column count always overflows a phone. */
+   scrolls in both axes past that — the column count always overflows a phone.
+   `flex: 0 1 auto` is what makes the first half of that true: with `flex: 1`
+   the box took the whole column whatever was in it, so a dozen rows sat in a
+   bordered expanse of nothing reaching to the bottom of the window, which reads
+   as a table that has stopped scrolling. Auto basis takes the rows' own height,
+   shrink (with `min-height: 0` under it) gives it back when there are more rows
+   than screen. It is the same pair the expanded mode already used, which is
+   what the two cases now agree on. */
 .research-scroll {
-  flex: 1;
+  flex: 0 1 auto;
   min-height: 0;
   max-height: 100%;
   overflow: auto;
+  /* Both axes, for the reason `.summary-scroll` gives. */
+  overscroll-behavior: contain;
   border: 1px solid var(--border);
   border-radius: var(--control-radius);
   background: var(--bg);
@@ -4612,6 +4675,8 @@ body {
   min-height: var(--control-h);
   padding: 3px;
   overflow-x: auto;
+  /* Sideways only: a finger dragged down this row has to scroll the page under
+     it, and containing an axis that cannot scroll would eat the gesture. */
   overscroll-behavior-x: contain;
   scrollbar-width: none;
   background: var(--panel);
@@ -4956,6 +5021,10 @@ body {
   flex: none;
   max-width: max-content;
   overflow-x: auto;
+  /* The inline axis alone, as on every strip that scrolls sideways: a vertical
+     swipe landing on it has to reach the page, and `contain` on an axis with
+     nothing to scroll blocks the chain rather than passing it on. */
+  overscroll-behavior-x: contain;
   scrollbar-width: none;
 }
 .research-window-row::-webkit-scrollbar {
@@ -5247,8 +5316,13 @@ body {
 }
 
 /* ---- Live feed (per-at-bat stream) ---- */
+/* The same column the games view's cards take (`--card-column`), where this was
+   860px: a stream of at-bats is read down rather than across, but so is that
+   list, and the two are made of the same cards — a feed narrower than the view
+   beside it reads as a different page rather than another way of reading the
+   same days. */
 .live-feed {
-  max-width: 860px;
+  max-width: var(--card-column);
   width: 100%;
   /* Extra top margin so the feed sits clear of the view tabs above it. */
   margin: 16px auto 0;
@@ -6507,6 +6581,8 @@ body {
   border-radius: var(--control-radius);
   padding: 11px 13px;
   overflow-x: auto;
+  /* Inline axis only — the overlay behind it owns the vertical. */
+  overscroll-behavior-x: contain;
   color: var(--muted);
 }
 .espn-code b {
