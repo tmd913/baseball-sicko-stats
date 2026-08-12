@@ -2069,25 +2069,36 @@ export default function App() {
               {dateToggle}
               </>
             )}
+            {/* The research board's own controls, in the tab row itself. They
+                are the same kind of statement as the pills beside them — which
+                page, then which players, which span, which position, which
+                columns — and they sat below the chrome as a band of their own
+                until now, so the page opened on two stacked control areas with
+                nothing on screen to say why they were two.
+
+                In the row rather than merely in the box, because this row is
+                already the app's answer to "too many groups for one line": each
+                group is atomic and the wrap fits as many whole ones per line as
+                the width allows. So on a wide screen the whole control set
+                finishes the tab row, and as the window narrows the last group
+                drops to a line of its own — the same behaviour the kind tabs and
+                the date button have always had here, and nothing pins which
+                group lands where. `.research-chrome` and `.research-bar` are
+                `display: contents` for exactly that reason: the groups have to
+                be items of *this* flex container to take part in its wrap, and a
+                box of their own would move as one block or not at all.
+
+                The box is empty here and filled by `ResearchTable`, which
+                portals its bar into it: the controls are inseparable from the
+                board's column vocabulary and belong in the file that owns it
+                (see the portal there). Rendered only on the research view, so no
+                other page carries an empty row of chrome. */}
+            {view === 'research' && <div className="research-chrome" ref={setResearchChrome} />}
           </div>
           {/* The disclosure's own row, under the tabs — see `dateControl`. */}
           {view !== 'research' && dateControl}
         </div>
       )}
-
-      {/* The research board's own controls, inside the chrome with the rest of
-          it. They are the same kind of statement as the tabs above them — which
-          players, which span, which position, which columns — and they used to
-          sit below the box as a band of their own, so the page opened on two
-          stacked control areas separated by a hairline. One top section now,
-          sharing the chrome's ombré, its edge and its gutters.
-
-          The box is empty here and filled by `ResearchTable`, which portals its
-          bar into it: the controls are inseparable from the board's column
-          vocabulary and belong in the file that owns it (see the portal there).
-          Rendered only on the research view, so no other page carries an empty
-          row of chrome. */}
-      {view === 'research' && <div className="research-chrome" ref={setResearchChrome} />}
       </div>
 
       {/* Outside the pinned box on purpose: a failed report is news about the
