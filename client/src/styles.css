@@ -2854,6 +2854,17 @@ body {
     gap: 8px;
   }
 }
+/* The portrait carries the same two marks the tables put on a headshot — the
+   lineup pip on the corner, the status code on the bottom edge — so the wrapper
+   is what they hang off. Its own box is the image's: `line-height: 0` keeps the
+   inline image from adding a descender's worth of height under the circle,
+   which would push the marks off the rim they are pinned to. */
+.details-photo-wrap {
+  position: relative;
+  display: inline-flex;
+  line-height: 0;
+  flex-shrink: 0;
+}
 .details-photo {
   width: 64px;
   height: 64px;
@@ -2861,6 +2872,58 @@ body {
   object-fit: cover;
   background: var(--panel-2);
   border: 1px solid var(--border);
+}
+/* Both marks are the row circle's, scaled to a 64px portrait from a 37px one —
+   the same proportions rather than the same pixels, since the point of the
+   bigger photo is that everything on it can be read at a glance. */
+.details-photo-spot {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 24px;
+  height: 24px;
+  font-size: 14px;
+}
+.details-photo-spot.spot-start,
+.details-photo-spot.spot-relief {
+  min-width: 24px;
+  font-size: 12px;
+}
+/* Solid ground, tone in the text and the border — the reasoning
+   `.sum-photo-status` sets out: this sits on a photograph, and a tinted wash
+   that reads over one player is invisible over the next. */
+.details-photo-status {
+  position: absolute;
+  bottom: -7px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 7px;
+  border: 1px solid;
+  background: #0a1120;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  white-space: nowrap;
+  font-family: inherit;
+}
+.details-photo-status.status-il {
+  color: var(--strikeout);
+  border-color: rgba(248, 113, 113, 0.55);
+}
+.details-photo-status.status-dtd,
+.details-photo-status.status-susp {
+  color: var(--hr);
+  border-color: rgba(251, 191, 36, 0.55);
+}
+.details-photo-status.status-minors,
+.details-photo-status.status-other {
+  color: var(--muted);
+  border-color: var(--border);
 }
 .details-name {
   margin: 0;

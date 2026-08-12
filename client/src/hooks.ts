@@ -8,6 +8,7 @@ import {
   useState,
 } from 'react';
 import type { RefObject } from 'react';
+import type { PlayerStatus } from './types';
 
 /**
  * Whether clips play with the sound off — the settings menu's "Mute clip
@@ -56,6 +57,24 @@ export const FantasyRosterContext = createContext<Map<string, FantasySlot> | nul
 
 export function useFantasySlot(key: string): FantasySlot | null {
   return useContext(FantasyRosterContext)?.get(key) ?? null;
+}
+
+/**
+ * What the league has to say about each player **today** — his roster status
+ * and where his club's game has him — by MLB player id, or null before the one
+ * request that fills it has landed.
+ *
+ * A context for the reason the two above are: the research board's rows and the
+ * details view's header are leaves, and what they want is one league-wide map
+ * that neither of them should be fetching for itself. Keyed by id rather than
+ * by the app's `${kind}-${id}` player key because it is the league's answer
+ * about a *person*: a two-way player is batting third and starting on the mound
+ * as one man, and the caller says which half it is drawing.
+ */
+export const PlayerStatusContext = createContext<Map<number, PlayerStatus> | null>(null);
+
+export function usePlayerStatus(id: number): PlayerStatus | null {
+  return useContext(PlayerStatusContext)?.get(id) ?? null;
 }
 
 /**

@@ -101,15 +101,26 @@ interface TeamsResponse {
   teams?: { id: number; name: string }[];
 }
 
+/** The 30 clubs change once a decade; this is cached so the callers that want
+ *  only the *ids* (`getAllRosterStatuses`, once a minute) don't re-download the
+ *  list to learn what they already knew. */
+const TEAMS_TTL = 60 * 60 * 1000;
+let teamNamesCache: { teams: Map<number, string>; fetchedAt: number } | null = null;
+
 /** MLB Stats API's player payload only carries currentTeam.id, not its name. */
 async function getTeamNamesById(): Promise<Map<number, string>> {
+  if (teamNamesCache && Date.now() - teamNamesCache.fetchedAt < TEAMS_TTL) {
+    return teamNamesCache.teams;
+  }
   const url = 'https://statsapi.mlb.com/api/v1/teams?sportId=1&fields=teams,id,name';
   const res = await fetch(url, { headers: UA });
   if (!res.ok) {
     throw new Error(`MLB Stats API teams returned ${res.status}`);
   }
   const data = (await res.json()) as TeamsResponse;
-  return new Map((data.teams ?? []).map((t) => [t.id, t.name]));
+  const teams = new Map((data.teams ?? []).map((t) => [t.id, t.name] as const));
+  teamNamesCache = { teams, fetchedAt: Date.now() };
+  return teams;
 }
 
 /** How long a season's player list stays fresh before we re-download (ms). */
@@ -505,6 +516,31 @@ async function getTeamRosterStatus(teamId: number): Promise<Map<number, RosterSt
   }
 
   teamRosterCache.set(teamId, { byPlayer, fetchedAt: Date.now() });
+  return byPlayer;
+}
+
+/**
+ * Every 40-man player in the league, by id, with his roster status.
+ *
+ * `getRosterInfo` answers the same question for a named handful of players and
+ * is the right call for a watchlist; this is for the two views that have no
+ * handful to name — the research board is the whole league, and the details
+ * view opens on whoever the board was pointing at. It is the same 30 team
+ * rosters either way (`getRosterInfo` fetches a team whole to answer for one
+ * player on it), so asking for all of them costs nothing the watchlist wasn't
+ * already paying, and shares the same 30-minute per-team cache.
+ *
+ * A team whose roster fails to fetch is simply absent from the map:
+ * `getTeamRosterStatus` swallows its own error, which leaves those players with
+ * no status rather than leaving the caller with no map.
+ */
+export async function getAllRosterStatuses(): Promise<Map<number, RosterStatus>> {
+  const teamIds = [...(await getTeamNamesById()).keys()];
+  const rosters = await Promise.all(teamIds.map((id) => getTeamRosterStatus(id)));
+  const byPlayer = new Map<number, RosterStatus>();
+  for (const roster of rosters) {
+    for (const [id, status] of roster) byPlayer.set(id, status);
+  }
   return byPlayer;
 }
 

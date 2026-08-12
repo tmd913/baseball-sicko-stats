@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { requireUser, userId } from './auth.js';
 import { addDays, baseballToday } from './etDate.js';
-import { getReport, withEstimators } from './savant.js';
+import { getPlayerStatuses, getReport, withEstimators } from './savant.js';
 import { getPercentiles } from './percentiles.js';
 import { getXwobaSeries } from './xwoba.js';
 import { getBatterGameLog, getPitcherGameLog } from './gameLog.js';
@@ -677,6 +677,21 @@ app.get(
       : 'season';
     const { season, rows } = await getResearch(kind, window);
     res.json({ season, kind, window, rows });
+  }),
+);
+
+// What is true of a player *today* — his roster status, and where his club's
+// game has him — for every player the league has something to say about. The
+// research board and the details view both open on players who are not on the
+// watchlist and so have no report to read this off; this is that handful of
+// facts without the report. Keyed by player id, and only the players with a
+// status worth drawing are in it (see `getPlayerStatuses`).
+app.get(
+  '/api/statuses',
+  requireUser,
+  asyncRoute(async (_req, res) => {
+    const statuses = await getPlayerStatuses();
+    res.json({ players: Object.fromEntries(statuses) });
   }),
 );
 

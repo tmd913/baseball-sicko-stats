@@ -5,6 +5,7 @@ import { baseballToday } from './etDate.js';
 import { getTeamHitting } from './teamStats.js';
 import { fipLike, ipToOuts, LEAGUE_HR_PER_FB } from './leagueRates.js';
 import {
+  getAllRosterStatuses,
   getGamesForDate,
   getPitcherStats,
   getPlayerStats,
@@ -24,6 +25,8 @@ import { getLeaguePitchAverage } from './pitchLeague.js';
 import { toSavantName } from './names.js';
 import type {
   FacedBatter,
+  PlayerStatus,
+  RosterStatus,
   Pitch,
   PitchMix,
   PitcherGame,
@@ -1429,4 +1432,166 @@ export async function getReport(
       throws,
     };
   });
+}
+
+// ---- Today's player statuses ----------------------------------------------
+
+/**
+ * MLB's word for a player who is simply on his club's active roster — the one
+ * status that says nothing about him and so is never shipped. Kept here rather
+ * than inferred from the client's `rosterStatusBadge` (which lives on the other
+ * side of the wire) so the two can't disagree about what "active" means: `A` is
+ * the code, `RM0` is what a few clubs send instead, and the description is the
+ * belt to those braces.
+ */
+function isPlainlyActive(status: RosterStatus): boolean {
+  return status.code === 'A' || status.code === 'RM0' || status.description === 'Active';
+}
+
+/** An empty status, so a player known from one source can be filled in by another. */
+function blankStatus(rosterStatus: RosterStatus | null): PlayerStatus {
+  return {
+    rosterStatus,
+    lineupStatus: null,
+    lineupSpot: null,
+    pitchingRole: null,
+    entryInning: null,
+    gameState: null,
+  };
+}
+
+/**
+ * Whether a status is worth sending at all. Most of a day's boxscore rosters
+ * are active players with no lineup posted yet — 26 men a side who would each
+ * cost a row to say nothing. A postponement is the exception that keeps
+ * `gameState` in this test: it is the one game state that is itself a fact
+ * about the player's day.
+ */
+function saysSomething(s: PlayerStatus): boolean {
+  return (
+    s.rosterStatus !== null ||
+    s.lineupStatus !== null ||
+    s.pitchingRole !== null ||
+    s.gameState === 'postponed'
+  );
+}
+
+/**
+ * The one game of a set to speak for the player — the live one, else the next
+ * scheduled one, else the last he played. The same priority the cards and the
+ * summary table's opponent column use, so a doubleheader reads the same way
+ * wherever the app draws it.
+ */
+function currentOf<T>(games: T[], stateOf: (g: T) => GameStatus['state']): T | null {
+  if (games.length === 0) return null;
+  return (
+    games.find((g) => stateOf(g) === 'live') ??
+    games.find((g) => stateOf(g) === 'scheduled') ??
+    games[games.length - 1]
+  );
+}
+
+/**
+ * Every player the league has something to say about today: his roster status,
+ * and where his club's game has him.
+ *
+ * This is `getReport`'s handful of facts for everybody, and it is deliberately
+ * *not* a report — the research board is the whole league and the details view
+ * opens on any player in it, so neither can pull a report per player to learn
+ * that a man is batting third or on the 10-day IL. It costs nothing either view
+ * wasn't already paying: the day is the same parse the watchlist reads (cached
+ * ten minutes, fifteen seconds while a game is live) and the statuses are the
+ * same 30 team rosters `getRosterInfo` fetches whole to answer for one player
+ * on them, cached half an hour.
+ *
+ * A player is included only if something is true of him — see `saysSomething`.
+ * The bench of every club before its lineup posts is most of a day's boxscore
+ * rosters and none of the point.
+ */
+export async function getPlayerStatuses(
+  date: string = baseballToday(),
+): Promise<Map<number, PlayerStatus>> {
+  const [day, rosterStatuses] = await Promise.all([
+    getDay(date),
+    // A failed roster read costs the IL badges and leaves the lineup pips,
+    // which is the right direction to fail in: the day is the harder half to
+    // rebuild and the half that changes by the minute.
+    getAllRosterStatuses().catch((err) => {
+      console.error('league roster statuses unavailable:', err);
+      return new Map<number, RosterStatus>();
+    }),
+  ]);
+
+  // Which of the day's games each player is on the roster for, and on which
+  // side — the side is what says whose lineup and whose probable he is.
+  const appearances = new Map<number, { game: DayGame; isHome: boolean }[]>();
+  const note = (id: number, game: DayGame, isHome: boolean) => {
+    const list = appearances.get(id);
+    if (!list) {
+      appearances.set(id, [{ game, isHome }]);
+    } else if (!list.some((e) => e.game.gamePk === game.gamePk)) {
+      list.push({ game, isHome });
+    }
+  };
+  for (const game of day.games) {
+    for (const id of game.homePlayerIds) note(id, game, true);
+    for (const id of game.awayPlayerIds) note(id, game, false);
+    // An announced probable who isn't on the boxscore yet is still today's
+    // starter, and before first pitch he is the only one there is.
+    if (game.homeProbablePitcher) note(game.homeProbablePitcher.id, game, true);
+    if (game.awayProbablePitcher) note(game.awayProbablePitcher.id, game, false);
+  }
+
+  const statuses = new Map<number, PlayerStatus>();
+  for (const [id, entries] of appearances) {
+    // `day.games` arrives in schedule order, so the last entry is the later
+    // game of a doubleheader.
+    const pick = currentOf(entries, (e) => e.game.status.state);
+    if (!pick) continue;
+    const { game, isHome } = pick;
+    const ownProbable = isHome ? game.homeProbablePitcher : game.awayProbablePitcher;
+    // The same test `rosterGame` applies, and for the same reason: the boxscore
+    // names the starter from first pitch on, and until then the probable stands
+    // in — but not after, since a probable absent from the boxscore was
+    // scratched.
+    const announced =
+      game.pitchingStarterIds.includes(id) ||
+      (game.status.state === 'scheduled' && ownProbable?.id === id);
+    statuses.set(id, {
+      rosterStatus: rosterStatuses.get(id) ?? null,
+      ...lineupStatusFor(id, isHome ? game.homeStarters : game.awayStarters),
+      ...pitchingRoleFor(announced, null),
+      gameState: game.status.state,
+    });
+  }
+
+  // What the parse itself knows beats what the schedule implies — above all a
+  // reliever's entry inning, which exists nowhere but in the game he pitched.
+  // Merged per kind so a two-way player's bat can't overwrite his arm.
+  for (const rep of day.reports.values()) {
+    const game = currentOf(rep.games, (g) => g.status.state);
+    if (!game) continue;
+    const prev = statuses.get(rep.id) ?? blankStatus(rosterStatuses.get(rep.id) ?? null);
+    statuses.set(rep.id, {
+      ...prev,
+      gameState: game.status.state,
+      ...(rep.kind === 'pitcher'
+        ? { pitchingRole: game.pitchingRole, entryInning: game.entryInning }
+        : { lineupStatus: game.lineupStatus, lineupSpot: game.lineupSpot }),
+    });
+  }
+
+  // …and everyone with no game at all today, who is precisely the player this
+  // is most worth saying something about: off the active roster is *why* he has
+  // no game.
+  for (const [id, status] of rosterStatuses) {
+    if (statuses.has(id) || isPlainlyActive(status)) continue;
+    statuses.set(id, blankStatus(status));
+  }
+
+  for (const [id, status] of statuses) {
+    if (status.rosterStatus && isPlainlyActive(status.rosterStatus)) status.rosterStatus = null;
+    if (!saysSomething(status)) statuses.delete(id);
+  }
+  return statuses;
 }

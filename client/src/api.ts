@@ -9,6 +9,7 @@ import type {
   PitcherSeasonStats,
   PlayerPercentiles,
   PlayerReport,
+  PlayerStatus,
   ResearchRow,
   RosterSource,
   SeasonPlayer,
@@ -255,6 +256,20 @@ export const api = {
   }> {
     const w = window === 'season' ? '' : `&window=${window}`;
     return request(`/api/research?type=${kind}${w}`);
+  },
+  /**
+   * Every player the league has something to say about today — his roster
+   * status and where his club's game has him — keyed by MLB player id.
+   *
+   * One call for the whole league rather than a lookup per player: the
+   * research board asks about several hundred rows at once, and the answer is
+   * the same for every user, so it is built once server-side and shared. Only
+   * the players with a status worth drawing are in it, so an id that is absent
+   * means "active, and nothing posted yet".
+   */
+  async statuses(): Promise<Record<string, PlayerStatus>> {
+    const { players } = await request<{ players: Record<string, PlayerStatus> }>('/api/statuses');
+    return players;
   },
   async percentiles(
     playerId: number,
