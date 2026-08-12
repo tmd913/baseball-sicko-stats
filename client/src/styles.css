@@ -28,8 +28,18 @@
   --ball: #475569;
 
   /* Breathing room left above anything scrolled to the top of the viewport
-     (player cards, at-bats, the feed's rows) — read via scroll-margin-top. */
-  --scroll-offset: 12px;
+     (player cards, at-bats, the feed's rows) — read via scroll-margin-top.
+
+     It has to clear the pinned chrome as well as leave a gap: `.app-chrome` is
+     held at the top of the window, so the top of the viewport is *behind* it
+     and a card scrolled there would sit under the bar rather than below it.
+     `--chrome-h` is that bar's current height, published by
+     `hooks.ts::useStickyChromeOffset` — measured because the bar wraps to two
+     and three rows as the window narrows, and zero whenever it isn't actually
+     pinned (the summary and research views, and a short window), which is what
+     makes the fallback here the right one for a page with no chrome at all. */
+  --chrome-h: 0px;
+  --scroll-offset: calc(var(--chrome-h) + 12px);
 
   /* The bar controls — roster search, view/kind tabs, the Edit toggle — share
      one height so a row of them reads as one set, whatever their own text size.
@@ -73,6 +83,82 @@ body {
   max-width: 1180px;
   margin: 0 auto;
   padding: 14px 22px 80px;
+}
+
+/* ---- The pinned chrome ----------------------------------------------------
+   The header, the search bar and the view bar in one box, held against the top
+   of the window. They are one thing — each says *where you are and what you
+   are looking at* — and that is the last thing that should scroll away under a
+   page being read: which kind, which days and which view are what the numbers
+   below *are*, and on the feed, whose season is 400 rows long, they were an
+   inch of page you had to go back up for.
+
+   It carries **a tone of its own**, a shade off the page rather than a copy of
+   it. The first version painted the body's exact gradient, pinned the same way
+   (`background-attachment: fixed`), so the box lined up with the pixel behind
+   it and was invisible until something scrolled under. That was the wrong
+   instinct for a bar that is *always there*: a strip which only appears once
+   you have scrolled reads as a rendering artefact of scrolling, where this is
+   a permanent part of the app and should say so at rest.
+
+   So: a vertical ombré from `--panel` down to `--bg-2` — the same two steps the
+   cards are built from, which is what keeps it in the family — under a soft
+   accent glow at the top right, the echo of the one the page itself carries.
+   Both are the element's own, not the viewport's, so the ombré runs across the
+   bar's own height and reads the same whether it is 65px or 300px of wrapped
+   tabs. Deliberately shallow: at #16213a → #111a2e against a #0b1220 page it is
+   about two steps of the app's own palette, which is enough to separate it from
+   the page and not enough to read as a panel sitting on top of one — helped by
+   the hairline below and a shadow soft enough to be felt rather than seen.
+
+   The negative top margin and matching padding are what stop a sliver of page
+   showing above it: `.app` opens with 14px of padding, and a box pinned at
+   `top: 0` would otherwise let rows slide through that gap.
+
+   In `.app.summary-mode` / `.research-mode` the app is already a viewport-tall
+   flex column that doesn't scroll, so it opts out and says so rather than
+   relying on sticky being a no-op — which it isn't, quite. `overflow: hidden`
+   makes that column a scrollport of its own, and a sticky box in one is held
+   against its **padding** box, undoing the negative margin above and leaving a
+   14px strip of page over the bar that no other view shows. Static there puts
+   it back in normal flow, where the margin does what it was written to do. The
+   feed, the games view and the edit screen are what the pinning is for. */
+.app-chrome {
+  position: sticky;
+  top: 0;
+  /* Above everything in the page's own flow — the float button (20), the date
+     popover (30) — and below the overlays (the player page at 50, the how-to
+     and league pages at 60), which cover the chrome as they cover the rest.
+     Its own children keep their z-indexes inside the stacking context this
+     opens, so the settings popover and the search results (both 40) still hang
+     over the page below. */
+  z-index: 41;
+  margin: -14px -22px 14px;
+  padding: 14px 22px 0;
+  background:
+    radial-gradient(760px 260px at 82% -40%, rgba(56, 189, 248, 0.09), transparent 70%),
+    linear-gradient(180deg, var(--panel) 0%, var(--bg-2) 100%);
+  /* The edge of the bar, twice over: a hairline for the eye and a shadow for
+     the depth, the second being what says the page passes *under* this rather
+     than stopping at it. Much softer than `--shadow` (the cards' 30px lift) —
+     this sits flat against the page, it does not float over it. */
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.22);
+}
+/* A short window gets the old behaviour back. Pinned chrome is a bargain — a
+   fixed cost at the top in exchange for never having to scroll up for it — and
+   the bargain stops being worth it when the cost is most of the screen: a phone
+   held sideways is about 390px tall, against a chrome that reaches 303px at its
+   widest wrap. Below 560px of viewport it scrolls away as it always did.
+   Height rather than width, because it is the height that is scarce. */
+@media (max-height: 560px) {
+  .app-chrome {
+    position: static;
+  }
+}
+.app.summary-mode .app-chrome,
+.app.research-mode .app-chrome {
+  position: static;
 }
 
 /* ---- Header ---- */

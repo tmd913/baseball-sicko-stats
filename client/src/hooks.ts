@@ -1,4 +1,12 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import type { RefObject } from 'react';
 import type { PlayerStatus } from './types';
 
@@ -91,6 +99,69 @@ export function useScrollIntoViewOnExpand<T extends HTMLElement>(expanded: boole
     wasExpanded.current = expanded;
   }, [expanded]);
   return ref;
+}
+
+/**
+ * Measures the pinned chrome and publishes its height as `--chrome-h` on the
+ * document root, which `--scroll-offset` adds to its own breathing room.
+ *
+ * Everything in the app that scrolls something to the top of the viewport —
+ * every collapsible via `useScrollIntoViewOnExpand`, a clip when it plays, a
+ * player card jumped to from the summary table — lands it at `scroll-margin-top`
+ * from the top of the *window*. That was the top of the page too until the
+ * header, the search bar and the view bar were pinned there: now the top of the
+ * window is behind the bar, so every one of those scrolls parks what it was
+ * aiming at underneath it. The offset has to clear the bar as well.
+ *
+ * It is measured rather than declared because there is no one number to
+ * declare: the bar wraps to two and three rows as the window narrows (115px on
+ * a desktop, 303px at 320px wide), and it stands down altogether on the summary
+ * and research views and under `max-height: 560px`, where the offset must go
+ * back to the bare gap. So the height is whatever the element currently is, and
+ * zero whenever it isn't actually pinned — read off the computed `position`,
+ * which is the same answer the CSS gives rather than a second copy of the rules
+ * that decide it.
+ *
+ * A `ResizeObserver` catches the wraps; the per-render pass catches everything a
+ * resize can't see (a view swap that makes the bar static, an error banner
+ * appearing above the fold). Both are layout effects, so the property is set
+ * before the browser paints — and before any scroll a click has just triggered
+ * reads it.
+ *
+ * Returns the same height as a ref, for the one scroll the app does by hand
+ * (`scrollToPlayer`) rather than through `scroll-margin-top`.
+ */
+export function useStickyChromeOffset<T extends HTMLElement>(): [RefObject<T | null>, RefObject<number>] {
+  const ref = useRef<T>(null);
+  const height = useRef(0);
+  const sync = useCallback(() => {
+    const el = ref.current;
+    const pinned = el && getComputedStyle(el).position === 'sticky';
+    const h = pinned ? Math.round(el.getBoundingClientRect().height) : 0;
+    if (h === height.current) return;
+    height.current = h;
+    document.documentElement.style.setProperty('--chrome-h', `${h}px`);
+  }, []);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(sync);
+    ro.observe(el);
+    // The window listener is not the observer's understudy — it catches the one
+    // case the observer cannot see at all: a *shorter* window unpins the bar
+    // (`max-height: 560px`) without changing its height by a pixel, so nothing
+    // resizes and React never re-renders. A phone turned sideways would
+    // otherwise keep clearing 159px of bar that is no longer there.
+    window.addEventListener('resize', sync);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', sync);
+    };
+  }, [sync]);
+  // No dependency list on purpose: the bar's height changes with things no
+  // observer reports, and re-measuring is a rect read against one comparison.
+  useLayoutEffect(sync);
+  return [ref, height];
 }
 
 /**
