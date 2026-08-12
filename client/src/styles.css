@@ -83,22 +83,36 @@ body {
    below *are*, and on the feed, whose season is 400 rows long, they were an
    inch of page you had to go back up for.
 
-   It carries the **page's own background**, not a panel's: the same fixed
-   radial gradient `body` paints, which — being `background-attachment: fixed`
-   on both — lines up with the pixel behind it exactly. So the box is invisible
-   at the top of the page and opaque once anything scrolls under it, without a
-   scroll listener, a sentinel or a "stuck" class to keep in step. The hairline
-   below it is the only mark it makes, and it earns its keep the moment there
-   is content to separate.
+   It carries **a tone of its own**, a shade off the page rather than a copy of
+   it. The first version painted the body's exact gradient, pinned the same way
+   (`background-attachment: fixed`), so the box lined up with the pixel behind
+   it and was invisible until something scrolled under. That was the wrong
+   instinct for a bar that is *always there*: a strip which only appears once
+   you have scrolled reads as a rendering artefact of scrolling, where this is
+   a permanent part of the app and should say so at rest.
+
+   So: a vertical ombré from `--panel` down to `--bg-2` — the same two steps the
+   cards are built from, which is what keeps it in the family — under a soft
+   accent glow at the top right, the echo of the one the page itself carries.
+   Both are the element's own, not the viewport's, so the ombré runs across the
+   bar's own height and reads the same whether it is 65px or 300px of wrapped
+   tabs. Deliberately shallow: at #16213a → #111a2e against a #0b1220 page it is
+   about two steps of the app's own palette, which is enough to separate it from
+   the page and not enough to read as a panel sitting on top of one — helped by
+   the hairline below and a shadow soft enough to be felt rather than seen.
 
    The negative top margin and matching padding are what stop a sliver of page
    showing above it: `.app` opens with 14px of padding, and a box pinned at
    `top: 0` would otherwise let rows slide through that gap.
 
    In `.app.summary-mode` / `.research-mode` the app is already a viewport-tall
-   flex column that doesn't scroll, so sticky is a no-op there and the two
-   mechanisms don't fight; the feed, the games view and the edit screen are
-   what this is for. */
+   flex column that doesn't scroll, so it opts out and says so rather than
+   relying on sticky being a no-op — which it isn't, quite. `overflow: hidden`
+   makes that column a scrollport of its own, and a sticky box in one is held
+   against its **padding** box, undoing the negative margin above and leaving a
+   14px strip of page over the bar that no other view shows. Static there puts
+   it back in normal flow, where the margin does what it was written to do. The
+   feed, the games view and the edit screen are what the pinning is for. */
 .app-chrome {
   position: sticky;
   top: 0;
@@ -109,52 +123,33 @@ body {
      opens, so the settings popover and the search results (both 40) still hang
      over the page below. */
   z-index: 41;
-  margin: -14px -22px 0;
+  margin: -14px -22px 14px;
   padding: 14px 22px 0;
-  background: radial-gradient(1200px 700px at 80% -10%, #16233f 0%, var(--bg) 55%);
-  background-attachment: fixed;
-  /* The one piece of furniture the box adds to a page that otherwise has none.
-     On the chrome rather than the view bar so it holds its place whether the
-     section is open or closed. */
+  background:
+    radial-gradient(760px 260px at 82% -40%, rgba(56, 189, 248, 0.09), transparent 70%),
+    linear-gradient(180deg, var(--panel) 0%, var(--bg-2) 100%);
+  /* The edge of the bar, twice over: a hairline for the eye and a shadow for
+     the depth, the second being what says the page passes *under* this rather
+     than stopping at it. Much softer than `--shadow` (the cards' 30px lift) —
+     this sits flat against the page, it does not float over it. */
   border-bottom: 1px solid var(--border);
-  margin-bottom: 14px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.22);
 }
 /* A short window gets the old behaviour back. Pinned chrome is a bargain — a
    fixed cost at the top in exchange for never having to scroll up for it — and
    the bargain stops being worth it when the cost is most of the screen: a phone
    held sideways is about 390px tall, against a chrome that reaches 303px at its
-   widest wrap. Below 560px of viewport it scrolls away as it always did, and
-   the menu button still folds it. Height rather than width, because it is the
-   height that is scarce. */
+   widest wrap. Below 560px of viewport it scrolls away as it always did.
+   Height rather than width, because it is the height that is scarce. */
 @media (max-height: 560px) {
   .app-chrome {
     position: static;
   }
 }
-
-/* Closed: the top section folds away to the brand and the button that brings it
-   back. Everything else in the box goes — the gear, the fantasy button, the
-   search (either form of it), the pencil, the search bar and the whole view bar
-   — because the point of the mode is the page below, and a "menu" that keeps
-   half its contents has only moved the problem.
-
-   Hidden in CSS rather than dropped from the JSX for the reason `.app.edit-mode`
-   is: this is one statement of one idea where the equivalent is a conditional
-   around each of six children. The button itself is not in the list, which is
-   what keeps the mode leavable. */
-.app.nav-closed .settings-menu,
-.app.nav-closed .fantasy-menu,
-.app.nav-closed .header-search,
-.app.nav-closed .search-toggle,
-.app.nav-closed .edit-order-btn,
-.app.nav-closed .search-bar,
-.app.nav-closed .view-bar,
-.app.nav-closed .refreshing {
-  display: none;
+.app.summary-mode .app-chrome,
+.app.research-mode .app-chrome {
+  position: static;
 }
-/* Closed, the header is the whole box. Its own 14px bottom margin is the gap
-   above the hairline that the view bar's normally provides, so the strip keeps
-   the same breathing room either way rather than tightening as it folds. */
 
 /* ---- Header ---- */
 .app-header {
@@ -3596,7 +3591,6 @@ body {
 .fantasy-btn,
 .edit-order-btn,
 .search-toggle,
-.nav-toggle,
 .date-toggle,
 .search-bar-close {
   flex: none;
@@ -3620,7 +3614,6 @@ body {
 .fantasy-btn:hover,
 .edit-order-btn:hover,
 .search-toggle:hover,
-.nav-toggle:hover,
 .date-toggle:hover,
 .search-bar-close:hover {
   color: var(--text);
@@ -3630,7 +3623,6 @@ body {
 .fantasy-btn:focus-visible,
 .edit-order-btn:focus-visible,
 .search-toggle:focus-visible,
-.nav-toggle:focus-visible,
 .date-toggle:focus-visible,
 .search-bar-close:focus-visible {
   outline: 2px solid var(--accent);
@@ -3668,25 +3660,6 @@ body {
   color: var(--bg);
 }
 .fantasy-btn.on:hover {
-  color: var(--bg);
-  border-color: var(--accent);
-}
-/* The menu button fills when the section is **closed** — the opposite way round
-   from every other toggle on this row, and deliberately.
-
-   Those four control things that are invisible when off and on screen when on,
-   so the fill is what tells you which. This one is the exception because its
-   default is on: a lit button while the tabs are sitting right there says
-   nothing you can't already see, and it would put the loudest mark in the
-   header on the state the app spends all its time in. Closed is the state worth
-   marking — the button is then the only trace of a whole section that has gone,
-   and the fill is what says there is something behind it. */
-.nav-toggle.folded {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--bg);
-}
-.nav-toggle.folded:hover {
   color: var(--bg);
   border-color: var(--accent);
 }
@@ -3835,19 +3808,11 @@ body {
    date row it opens are not named: they are inside .view-bar now, and hiding
    their container hides them.
 
-   The menu button is in the list because Done is the one control this mode
-   cannot lose, and Done is the pencil — folding the chrome away would hide it
-   and leave a screen with no way off it. There is nothing here left to fold
-   anyway: the mode has already hidden everything the button acts on. (You
-   cannot arrive folded either, since the pencil that gets you in is itself part
-   of what a fold hides.)
-
    The error banner is deliberately *not* in this list: a mode is no reason to
    stop telling someone the report failed. */
 .app.edit-mode .settings-menu,
 .app.edit-mode .view-bar,
 .app.edit-mode .search-toggle,
-.app.edit-mode .nav-toggle,
 .app.edit-mode .refreshing {
   display: none;
 }
