@@ -566,6 +566,28 @@ export function PlayerDetails({
   const kind = isPitcher ? 'pitcher' : 'batter';
   const [tab, setTab] = useState<DetailsTab>('percentiles');
 
+  /**
+   * The position chip, in the one vocabulary this page speaks: **what he can
+   * be played at** wherever ESPN can say so, and MLB's single listed position
+   * otherwise. This is the one place in the app with room for the whole list,
+   * which is why the research board's cell may truncate to two codes and this
+   * never does — the two read the same fact at two widths.
+   *
+   * Built once because it is drawn twice: under his name, and again in the game
+   * log's own head when that table takes the page and covers this one. A second
+   * copy of the rule down there was MLB's position alone, so the same player
+   * read `CF` in one head and `OF/DH` in the other depending on which was on
+   * screen.
+   */
+  const posChip =
+    eligible && eligible.length > 0 ? (
+      <span className="player-pos" title={`Eligible in ESPN at ${eligible.join(', ')}`}>
+        {eligible.join('/')}
+      </span>
+    ) : position ? (
+      <span className="player-pos">{position}</span>
+    ) : null;
+
   // Five tabs overflow a phone, so the selected one can sit off the end of the
   // strip — cut in half, or out of sight entirely on a pitcher. Scrolled by
   // hand rather than with `scrollIntoView`, which walks up every scrollable
@@ -841,21 +863,9 @@ export function PlayerDetails({
             <div>
               <h1 className="details-name">
                 {name}
-                {/* The chip is **what he can be played at** wherever ESPN can
-                    say so, and MLB's single listed position otherwise. It is the
-                    one place in the app with room for the whole list, which is
-                    why the research board's cell may truncate to two and this
-                    never does — the two read the same fact at two widths. */}
-                {eligible && eligible.length > 0 ? (
-                  <span
-                    className="player-pos"
-                    title={`Eligible in ESPN at ${eligible.join(', ')}`}
-                  >
-                    {eligible.join('/')}
-                  </span>
-                ) : (
-                  position && <span className="player-pos">{position}</span>
-                )}
+                {/* ESPN's eligibility where there is a league to read it from,
+                    MLB's listed position otherwise — see `posChip`. */}
+                {posChip}
               </h1>
               {/* Under the name rather than out beside the watchlist button: it
                   is a fact *about the player*, like the position chip above it,
@@ -1076,7 +1086,7 @@ export function PlayerDetails({
             <span className="glog-id">
               <img className="glog-id-photo" src={headshotUrl(playerId)} alt="" />
               {name}
-              {position && <span className="player-pos">{position}</span>}
+              {posChip}
             </span>
           }
         />
