@@ -691,7 +691,12 @@ export function statusCorner(status: PlayerStatus, kind: PlayerKind): Corner {
  * Is this player starting on `date` — in the posted lineup if he's a hitter,
  * the announced (or actual) starting pitcher if he isn't.
  *
- * The summary table's one filter reads this. It is deliberately drawn from the
+ * The summary table's one filter reads this — on the saved roster, where the
+ * question it asks is about tonight's lineup card. Reading a fantasy team it
+ * asks a different question and reads the fantasy lineup instead, which is
+ * argued where the filtering happens (`App.tsx::summaryReports`).
+ *
+ * It is deliberately drawn from the
  * player's own `PlayerGame` rather than from the league-wide `/api/statuses`
  * map: the summary is a read on the watchlist, so every row already carries the
  * report the pip on its headshot is drawn from, and a row marked "2" is exactly
