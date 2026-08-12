@@ -865,9 +865,6 @@ async function buildStatsApiDay(date: string): Promise<{
         opponentHitting: null,
         // The batter faces the opposing team's starter.
         probablePitcher: bg.isHome ? g.awayProbablePitcher : g.homeProbablePitcher,
-        // A game with plate appearances in it has started, so nobody is still
-        // "probable" for this side — see the field's note.
-        teamProbablePitcher: null,
         plateAppearances,
         baseEvents: (g.baseEvents.get(bg.batterId) ?? []).map((e) => ({ ...e })),
         // line is finalized after CSV enrichment is merged in (below), since
@@ -923,8 +920,6 @@ async function buildStatsApiDay(date: string): Promise<{
         // pitcher side of the card reads it (the lineup he faces is the useful
         // half), but the summary table's opponent column shows the matchup.
         probablePitcher: pg.isHome ? g.awayProbablePitcher : g.homeProbablePitcher,
-        // As above: he has thrown a pitch, so his side's starter is settled.
-        teamProbablePitcher: null,
         plateAppearances: [],
         // The half of the day's base events he was a party to — his balk, his
         // wild pitch, the bag taken off him, the man he picked off. Same shape
@@ -1294,9 +1289,6 @@ function rosterGame(dg: DayGame, isHome: boolean, playerId: number): PlayerGame 
     opponentId: isHome ? dg.awayTeamId : dg.homeTeamId,
     opponentHitting: null,
     probablePitcher: isHome ? dg.awayProbablePitcher : dg.homeProbablePitcher,
-    // Who his own side has announced, before first pitch — the feed reads it to
-    // tell a starter whose turn it is from one whose team simply has a game on.
-    teamProbablePitcher: dg.status.state === 'scheduled' ? ownProbable : null,
     plateAppearances: [],
     baseEvents: [],
     line: buildLine([]),

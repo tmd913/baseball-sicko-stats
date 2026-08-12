@@ -436,13 +436,6 @@ export interface PlayerGame {
   opponentId: number | null;
   opponentHitting: TeamHitting | null;
   probablePitcher: ProbablePitcher | null;
-  // The probable starter announced for this player's *own* side — the opposite
-  // half of `probablePitcher`, and what says whether a watched starting pitcher
-  // is the one taking the ball today (his rotation mates' games are not his).
-  // Set only while the game is still scheduled: from first pitch on the
-  // boxscore names the real starter and `pitchingRole` carries it, so a
-  // finished day's cached snapshot never depends on this field.
-  teamProbablePitcher: ProbablePitcher | null;
   plateAppearances: PlateAppearance[];
   // What happened to this player off a plate appearance, in play order. On a
   // **batter's** game that is his own baserunning; on a **pitcher's** it is the

@@ -40,6 +40,18 @@ export function numericRange(start: string, end: string): string {
   return start === end ? numericShort(start) : `${numericShort(start)} – ${numericShort(end)}`;
 }
 
+/** The same dates with the spaces squeezed out — "8/12", or "8/9–8/10". This is
+ *  what the calendar's bubble says on a phone, where the button is an icon and
+ *  the bubble is the only thing left saying which days the page is drawn from.
+ *  It is a *bubble on a 36px square* rather than a label beside one, so the two
+ *  spaces `numericRange` spends on the dash are worth about a character each of
+ *  a badge that has none to give — and unlike the button's label it never falls
+ *  back to the preset's word, "Today" being what the bubble would then have to
+ *  fit and the date being what it is there to say. */
+export function tightRange(start: string, end: string): string {
+  return start === end ? numericShort(start) : `${numericShort(start)}–${numericShort(end)}`;
+}
+
 function prettyRange(start: string, end: string): string {
   return start === end
     ? prettyLong(start)

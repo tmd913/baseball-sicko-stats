@@ -39,7 +39,7 @@ import {
 import type { ResearchInclude, ResearchPos, ResearchUi } from './components/ResearchTable';
 import { simulateLiveDay } from './simulate';
 import { PlayerDetails } from './components/PlayerDetails';
-import { DateRangePicker, numericRange } from './components/DateRangePicker';
+import { DateRangePicker, numericRange, tightRange } from './components/DateRangePicker';
 import {
   FantasyRosterContext,
   MutedContext,
@@ -1967,17 +1967,35 @@ export default function App() {
             : "Only the players starting today — hitters in a posted lineup, pitchers named as today's starter"
         }
       >
+        {/* A lineup card, which is what the filter is: the men written on
+            tonight's. It was three shortening rules — a "list" glyph, and a
+            fair drawing of a filtered list, but on a phone this button is the
+            icon and nothing else, and that one was *optically* tiny rather than
+            small: its strokes span 10 of the viewBox's 24 units, so at 15px they
+            came to about 6px of ink adrift in the middle of a 36px square.
+
+            Which is also why the first clipboard drawn here still read small at
+            17px and then at 20: it was 16 units wide against the calendar's 18,
+            and a tall narrow outline carries less weight than a wide one
+            whatever its box says. This one spans **3–21 across and 2–22 down**,
+            so the glyph is the size the number claims. 20px in a 36px square,
+            with the calendar beside it raised to the 17 every other icon button
+            in the app uses — the pair has to read as a pair, and this one leads
+            it. */}
         <svg
           viewBox="0 0 24 24"
-          width="15"
-          height="15"
+          width="20"
+          height="20"
           fill="none"
           stroke="currentColor"
-          strokeWidth="2.2"
+          strokeWidth="2"
           strokeLinecap="round"
+          strokeLinejoin="round"
           aria-hidden="true"
         >
-          <path d="M4 7h16M4 12h10M4 17h7" />
+          <rect x="8" y="2" width="8" height="4" rx="1" />
+          <path d="M16 5h3a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h3" />
+          <path d="M7 12.5h10M7 17h6" />
         </svg>
         <span className="starters-toggle-label">Starters</span>
       </button>
@@ -2010,10 +2028,13 @@ export default function App() {
       aria-label={dateOpen ? 'Close date controls' : 'Change dates'}
       title={dateOpen ? 'Close dates' : 'Change dates'}
     >
+      {/* 17px, the size every other icon button in the app draws at — it was
+          15, which was fine beside a label and small once a phone made this
+          button the glyph alone beside a 20px clipboard. */}
       <svg
         viewBox="0 0 24 24"
-        width="15"
-        height="15"
+        width="17"
+        height="17"
         fill="none"
         stroke="currentColor"
         strokeWidth="2"
@@ -2028,6 +2049,19 @@ export default function App() {
           than today's date — that is what was picked, and it survives the date
           rolling over. A hand-picked range has no name and shows its numbers. */}
       <span className="date-toggle-label">{activePreset ?? numericRange(start, end)}</span>
+      {/* What the label says once there is no room for a label. On a phone this
+          button and the starters toggle beside it go to their icons — two
+          squares where two words wouldn't fit — and this is the one of the pair
+          that cannot simply lose its wording: the icon says "dates" and the page
+          would then say nowhere at all *which* dates every number on it is drawn
+          from. So the range rides on the corner of the glyph as a bubble.
+
+          Numbers rather than the preset's word, always: "Today" is a label's
+          worth of text and this is a badge on a 36px square, where 8/12 says the
+          same thing in half the width and says it exactly. Rendered at every
+          width and hidden by the stylesheet above 640, the way the date presets
+          and their dropdown are already done. */}
+      <span className="date-toggle-bubble">{tightRange(start, end)}</span>
     </button>
   );
 
