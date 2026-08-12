@@ -53,45 +53,54 @@ function Count({ n }: { n: number }) {
 /* Batting is where he hit in the order — game context like the opponent beside
    it, so it leads rather than sitting among the counting stats. The last two are
    prefixed Szn because they're his line *through* that game rather than the
-   game's own — see the field comments on BatterGameLog. H/PA is where AB and H
-   used to be two columns; see `HitsPerPa` for why one cell, and why over PA. */
+   game's own — see the field comments on BatterGameLog. H/AB is where AB and H
+   used to be two columns; see `HitsPerAb` for why one cell. */
 const BATTER_COLUMNS = [
-  'Batting', 'H/PA', 'R', '2B', '3B', 'HR', 'RBI', 'BB', 'K', 'SB', 'Szn AVG', 'Szn OPS',
+  'Batting', 'H/AB', 'R', '2B', '3B', 'HR', 'RBI', 'BB', 'K', 'SB', 'Szn AVG', 'Szn OPS',
 ];
 
 /**
- * What he did with his turns at the plate, as one cell — the shape the summary
- * table's `H/AB` already uses, and for the same reason: hits and their
+ * What he did with his official turns at bat, as one cell — the shape the
+ * summary table's `H/AB` already uses, and for the same reason: hits and their
  * denominator are one reading, and split into two columns the eye has to carry
  * a number three cells to the right to make it.
  *
- * **The denominator is plate appearances, not at-bats**, which is the whole of
- * what this cell says that `H/AB` doesn't. AB throws away the walk, the
- * sacrifice and the hit batsman, so a 2-for-4 night with a walk read `AB 4` on a
- * row whose own BB column said he came up five times — the table contradicting
- * itself two columns apart. `2/5` counts every trip. The Szn AVG beside it is
- * still over at-bats, as a batting average is: this cell is the night, that
- * column is the line the night moved, and they are allowed different
- * denominators because they are different claims.
+ * **The denominator is at-bats**, which is what the two numbers beside it are
+ * measured against: the `Szn AVG` in the same row is hits over at-bats, and so
+ * is the season row's own AVG at the foot of the column, so anything else here
+ * would be a cell whose denominator no other number on the line shares. It went
+ * over plate appearances for a while, on the argument that AB throws away the
+ * walk and the sacrifice; what that traded away was the agreement between this
+ * cell and the average it feeds, which is the more useful of the two — and the
+ * walk it was defending is not lost at all, being the BB column four cells
+ * along. `2/4` with a `1` under BB is a five-trip night stated in the two places
+ * that own the two facts.
  *
- * AB leaves the columns and not the row — it is what the season row still
- * divides by for AVG and SLG, and it rides this cell's tooltip, since the reader
- * who wants it is the one asking what the Szn AVG is drawn from.
+ * PA leaves the columns and not the row — it rides this cell's tooltip, which is
+ * where the reader who wants "and how many times did he come up" can have it.
  *
- * A game he appeared in without batting — a pinch-runner, a defensive
- * replacement — dims **whole** rather than by its numerator: `0/4` is a hitless
- * night, where `0/0` is nothing at all, which is exactly what a dimmed zero
- * means everywhere else in this table.
+ * **What dims is `pa === 0`, not `hits === 0`.** A man who appeared without ever
+ * coming to the plate — a pinch-runner, a defensive replacement — has nothing to
+ * read here and dims whole, the way every other zero in this table does. Over
+ * at-bats a walk-only night is *also* `0/0`, and it deliberately stays plain:
+ * he did come up and he did something, and the cell can no longer tell the two
+ * apart where the row still can. Measured over 120 batters and 9,023 game-log
+ * rows: 309 rows are a genuine 0 PA and 97 are `0/0` off a walk or a sacrifice,
+ * so dimming on at-bats would have quietly filed those 97 as "not in the game".
  */
-function HitsPerPa({ g }: { g: BatterGameLog }) {
-  const cell = `${g.hits}/${g.pa}`;
+function HitsPerAb({ g }: { g: BatterGameLog }) {
+  const cell = `${g.hits}/${g.ab}`;
+  const trips = `${g.pa} PA`;
   const title =
     g.pa === 0
       ? 'In the game, but never came to the plate'
-      : `${g.hits} ${g.hits === 1 ? 'hit' : 'hits'} in ${g.pa} plate ` +
-        `${g.pa === 1 ? 'appearance' : 'appearances'} · ${g.ab} AB`;
+      : g.ab === 0
+        ? `${trips}, no official at-bat — a walk, a sacrifice or a hit by pitch`
+        : `${g.hits} ${g.hits === 1 ? 'hit' : 'hits'} in ${g.ab} at-${
+            g.ab === 1 ? 'bat' : 'bats'
+          } · ${trips}`;
   return (
-    <td className="glog-num glog-hpa" title={title}>
+    <td className="glog-num glog-hab" title={title}>
       {g.pa === 0 ? <span className="glog-zero">{cell}</span> : cell}
     </td>
   );
@@ -112,7 +121,7 @@ function BatterRows({ games }: { games: BatterGameLog[] }) {
           <td className="glog-num glog-spot" title={g.lineupSpot !== null ? `Batted ${ordinal(g.lineupSpot)}` : 'Not in the posted lineup'}>
             {g.lineupSpot !== null ? ordinal(g.lineupSpot) : <span className="glog-zero">—</span>}
           </td>
-          <HitsPerPa g={g} />
+          <HitsPerAb g={g} />
           <Count n={g.runs} />
           <Count n={g.doubles} />
           <Count n={g.triples} />
@@ -137,9 +146,9 @@ function BatterRows({ games }: { games: BatterGameLog[] }) {
  */
 function BatterTotals({ games }: { games: BatterGameLog[] }) {
   const sum = (f: (g: BatterGameLog) => number) => games.reduce((s, g) => s + f(g), 0);
-  // AB is no longer a column and is still the denominator of two of these: a
-  // batting average is hits over at-bats and slugging is bases over them, and
-  // neither becomes something else because the column above went away.
+  // One denominator for the whole row: the cell above, the AVG at the end of it
+  // and the SLG inside its OPS are all over at-bats, which is what a batting
+  // average and a slugging percentage are.
   const ab = sum((g) => g.ab);
   const hits = sum((g) => g.hits);
   const pa = sum((g) => g.pa);
@@ -156,10 +165,11 @@ function BatterTotals({ games }: { games: BatterGameLog[] }) {
       <th className="glog-date glog-total-label" scope="row" colSpan={3}>
         Season · {games.length} G
       </th>
-      {/* Season hits over season plate appearances — the sum of the column
-          above it, not a rate averaged out of 150 of them. */}
-      <td className="glog-num glog-hpa" title={`${hits} hits in ${pa} plate appearances · ${ab} AB`}>
-        {hits}/{pa}
+      {/* Season hits over season at-bats — the sum of the column above it, not
+          a rate averaged out of 150 of them, and the very pair the AVG at the
+          end of this row divides. */}
+      <td className="glog-num glog-hab" title={`${hits} hits in ${ab} at-bats · ${pa} PA`}>
+        {hits}/{ab}
       </td>
       <td className="glog-num">{sum((g) => g.runs)}</td>
       <td className="glog-num">{sum((g) => g.doubles)}</td>
