@@ -4114,14 +4114,17 @@ body {
 .date-toggle-bubble {
   display: none;
   position: absolute;
-  /* Anchored to the corner and hanging off it, the way a notification badge
-     does. `right` rather than a transform: the bubble's width is its text's,
-     and a range is twice a single date, so it has to grow leftwards across its
-     own button rather than rightwards off the end of the row. The 10px of
-     overhang is paid back as margin below, so the widest bubble the app can
-     print still can't push the page sideways. */
+  /* **Centred on the button, not hung off its corner.** A single date is
+     narrower than the 36px square and a range is nearly twice as wide, so the
+     bubble's width is its text's and the anchor decides which way that growth
+     goes. Anchored right it grew leftwards across its own button and straight
+     into the starters toggle beside it — 3px of clearance on a fortnight's
+     range, and none at all on the widest dates the season can print. Centred,
+     it grows both ways at half the rate, which is what the margins below are
+     sized against. */
   top: -8px;
-  right: -10px;
+  left: 50%;
+  transform: translateX(-50%);
   padding: 1px 5px;
   border-radius: 999px;
   background: var(--accent);
@@ -4170,10 +4173,26 @@ body {
   .date-toggle-bubble {
     display: block;
   }
-  /* The overhang, given back to the row: the calendar is the last group in it,
-     so without this the widest bubble is 10px of page nobody can scroll to. */
+  /* **The left overhang is the only one that has to be paid for.** Centred, a
+     bubble reaches half its excess past each edge of the button. To the right
+     that lands in the app's own 22px gutter, the calendar being the last group
+     in the row — the widest the app can print is `10/29–10/31` at 65px, i.e.
+     14.5px over, which the gutter swallows whole. To the left it is the starters
+     toggle, and the row's 12px gap leaves 3px on a fortnight's range, which is
+     the collision.
+
+     10px, and the number is the row's slack rather than a preference: at 390
+     the roster tabs and the two squares come to 315px of the 346 the gutters
+     leave, so 31px are available before the calendar is pushed back onto a line
+     of its own — which is the whole thing this swap bought. 16 each side was
+     tried and cost exactly that row at both 375 and 390; 10 on the left alone
+     clears the starters button by 13px on a fortnight and by 10 on the widest
+     range that can appear beside it at all (that button is only drawn over a
+     range holding today, and two two-digit months cannot both fall inside one,
+     the season ending in October — so ten characters and 59px is the ceiling
+     there rather than 65). */
   .date-toggle {
-    margin-right: 10px;
+    margin-left: 10px;
   }
 }
 
