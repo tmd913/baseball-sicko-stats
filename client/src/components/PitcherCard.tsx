@@ -19,10 +19,10 @@ import {
   liveRole,
   mostRecentGameFirst,
   ordinal,
-  pitcherSeasonSummary,
   pitchingBadge,
   pitchingCorner,
   prettyGameDate,
+  rangePitchingSummary,
   whipOf,
 } from '../lib';
 import {
@@ -35,7 +35,14 @@ import {
 } from './Arsenal';
 import type { SplitKey } from './Arsenal';
 import { InningsList } from './Innings';
-import { GameStatusBadge, Headshot, LiveRoleTag, PlayerName } from './PlayerCard';
+import {
+  GameStatusBadge,
+  Headshot,
+  LiveRoleTag,
+  matchupLine,
+  PlayerName,
+  ProbablePitcher,
+} from './PlayerCard';
 
 /**
  * How the pitcher came into this game — "SP" for the starter (announced before
@@ -525,7 +532,17 @@ export function PitcherCard({
   // No outing in range — a header-only card with the game status (scheduled /
   // "did not pitch").
   if (pitched.length === 0) {
-    const meta = report.pitcherSeasonStats ? pitcherSeasonSummary(report.pitcherSeasonStats) : null;
+    // Nothing has happened in the range, so there is no line to add up and the
+    // header says which game hasn't happened yet instead of printing one of
+    // dashes — the matchup where there is a single game to name, the count where
+    // there are several. It takes the slot the season line used to hold, which
+    // is where the space for it was.
+    const meta =
+      games.length === 1
+        ? matchupLine(games[0])
+        : games.length > 1
+          ? `${games[0].batterTeam} · ${games.length} games`
+          : null;
     // He hasn't thrown a pitch, so the only thing this card can say beyond the
     // start time is who's waiting for him — which is when that reads best. A
     // game he sat out isn't offered: the lineup he didn't face is nothing.
@@ -546,7 +563,7 @@ export function PitcherCard({
           id={report.id}
           name={report.name}
           onOpen={() => onOpenDetails(playerKey(report))}
-          corner={singleDay && games.length === 1 ? pitchingCorner(games[0]) : null}
+          corner={games.length === 1 ? pitchingCorner(games[0]) : null}
           role={role}
         />
         <div className="player-id">
@@ -558,14 +575,20 @@ export function PitcherCard({
           {meta && <span className="player-meta">{meta}</span>}
         </div>
         <div className="player-summary">
+          {/* His counterpart tonight — the other half of what a card with no
+              outing is about, the lineup below it being the first. Only for a
+              lone game, like the pip: over a range there is no one starter to
+              name. The SP chip is deliberately absent — the pip on the headshot
+              already says it, under exactly this condition. */}
+          {games.length === 1 && <ProbablePitcher game={games[0]} opposing />}
           {/* One badge per game only while the range is a day. Over a week these
               are his team's games, not his — he's in none of them — and a row of
-              seven scores ran off the right of the card to say so. */}
-          {singleDay ? (
-            games.map((g) => <GameStatusBadge key={g.gamePk} game={g} withMatchup />)
-          ) : (
-            <span className="summary-line">{gameCount(games.length)}</span>
-          )}
+              seven scores ran off the right of the card to say so. The count
+              they used to collapse to now leads the header line above. */}
+          {singleDay &&
+            games.map((g) => (
+              <GameStatusBadge key={g.gamePk} game={g} withMatchup={games.length > 1} />
+            ))}
           {games.length > 0 && games.every((g) => g.status.state === 'final') && (
             <span className="dnp-badge">Did not pitch</span>
           )}
@@ -642,10 +665,14 @@ export function PitcherCard({
           position={position ?? 'P'}
           status={report.rosterStatus}
         />
+        {/* A read on the range in view rather than on the season, which every
+            section under this header already is. One outing on one day is a game
+            the line can name — and worth naming, since a final's status badge
+            carries the score and not the teams — so the aggregate takes over
+            exactly where `onePitchedGame` stops. The season reads whole on the
+            details view's Season tab, a tap away. */}
         <span className="player-meta">
-          {report.pitcherSeasonStats
-            ? pitcherSeasonSummary(report.pitcherSeasonStats)
-            : `${primary.batterTeam} ${primary.isHome ? 'vs' : '@'} ${primary.opponent}`}
+          {onePitchedGame ? matchupLine(primary) : rangePitchingSummary(combined)}
         </span>
       </div>
       <div className="player-summary">
@@ -669,7 +696,9 @@ export function PitcherCard({
           {!onePitchedGame && `${gameCount(pitched.length)} · `}
           {lineSummary(combined)}
         </span>
-        {onePitchedGame && <GameStatusBadge game={primary} withMatchup />}
+        {/* No `withMatchup`: the header line beside it names this game, and the
+            badge's own copy of the teams would be the same fact twice. */}
+        {onePitchedGame && <GameStatusBadge game={primary} />}
       </div>
     </>
   );

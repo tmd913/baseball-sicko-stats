@@ -17,13 +17,22 @@ import {
   liveRoleLabel,
   mostRecentGameFirst,
   prettyGameDate,
+  rangeBattingSummary,
   rosterStatusBadge,
-  seasonStatsSummary,
 } from '../lib';
 import type { Corner, LiveRole } from '../lib';
 import { BaseDiamond } from './BaseDiamond';
 import { PlateAppearanceCard } from './PlateAppearanceCard';
 import { GameReel } from './GameReel';
+
+/**
+ * "MIL @ CHC" — the one game a card header names when there is a single one to
+ * name. Exported because the pitcher card's header line falls back to exactly
+ * the same string.
+ */
+export function matchupLine(game: PlayerGame): string {
+  return `${game.batterTeam} ${game.isHome ? 'vs' : '@'} ${game.opponent}`;
+}
 
 export function StatPill({ label, value }: { label: string; value: string }) {
   return (
@@ -77,12 +86,19 @@ function LineupTag({ game, played }: { game: PlayerGame; played?: boolean }) {
   );
 }
 
-/** The opposing probable starter for a not-yet-started game. */
-export function ProbablePitcher({ game }: { game: PlayerGame }) {
+/** The announced starter on the other side of a not-yet-started game. With
+ *  `opposing` — the pitcher card, where the man across from him is his
+ *  counterpart rather than someone he faces — only the tooltip changes, the
+ *  wording on the line being right either way (the feed's Upcoming row splits
+ *  the same title the same way). */
+export function ProbablePitcher({ game, opposing }: { game: PlayerGame; opposing?: boolean }) {
   const p = game.probablePitcher;
   if (game.status.state !== 'scheduled' || !p) return null;
   return (
-    <span className="game-prob-pitcher" title="Probable starting pitcher">
+    <span
+      className="game-prob-pitcher"
+      title={`${opposing ? 'Opposing' : 'Probable'} starting pitcher`}
+    >
       vs {handThrows(p.hand)} {p.name}
     </span>
   );
@@ -178,9 +194,7 @@ function GameBlock({
   // (line + game-status badge) on the right.
   const gameId = (
     <div className="game-sub-id">
-      <span className="game-sub-title">
-        {game.batterTeam} {game.isHome ? 'vs' : '@'} {game.opponent}
-      </span>
+      <span className="game-sub-title">{matchupLine(game)}</span>
       {spansMultipleDays && (
         <span className="game-sub-meta">{prettyGameDate(game.date)}</span>
       )}
@@ -434,10 +448,19 @@ export function PlayerCard({
   onOpenDetails: (key: string) => void;
 }) {
   if (didNotAppear(report)) {
-    const meta = report.seasonStats ? seasonStatsSummary(report.seasonStats) : null;
     // Any games here are ones the player was rostered for but didn't bat in —
     // show their final score(s) so the card still carries the game info.
     const dnpGames = [...report.games].sort(mostRecentGameFirst);
+    // Nothing happened in the range, so the header line names the game that
+    // didn't happen rather than printing a batting line of nothing. That is the
+    // whole of what this card has to say, and it now says it in the slot the
+    // season line used to hold — which is where the space was.
+    const meta =
+      dnpGames.length === 1
+        ? matchupLine(dnpGames[0])
+        : dnpGames.length > 1
+          ? `${dnpGames[0].batterTeam} · ${dnpGames.length} games`
+          : null;
     return (
       <div className="player-card empty" id={`player-${playerKey(report)}`}>
         <div className="player-head">
@@ -453,7 +476,7 @@ export function PlayerCard({
           <div className="player-summary">
             {singleDay && <DoubleheaderTag games={report.games} />}
             {dnpGames.map((g) => (
-              <GameStatusBadge key={g.gamePk} game={g} withMatchup />
+              <GameStatusBadge key={g.gamePk} game={g} withMatchup={dnpGames.length > 1} />
             ))}
             <span className="dnp-badge">{absenceLabel(report)}</span>
           </div>
@@ -468,13 +491,32 @@ export function PlayerCard({
 
   const primary = games[0];
   const summary = lineSummary(combined);
+  // The games he actually batted in — what the combined line above is added up
+  // from, and so what the header line counts.
+  const played = games.filter((g) => g.plateAppearances.length > 0);
+  /**
+   * Whether the header can speak for a single game. This is the **range** in
+   * view rather than how many times he happened to play in it — the same test
+   * the pitcher card's `onePitchedGame` makes, and for the same reason: over a
+   * week a card should read as a week whether he played once or six times.
+   * Within one day it can name the matchup, which is worth doing because a
+   * final game's status badge carries the score and not the teams.
+   */
+  const oneGame = singleDay && played.length <= 1;
+  // With no single game to name and several in view, the count is what the line
+  // can say — the shape the header has always fallen back to.
+  const named = played.length === 1 ? played[0] : games.length === 1 ? primary : null;
+  // The game the header line names, if it names one. It is also what tells the
+  // status badge to drop its own matchup: the badge carries the teams precisely
+  // because a score reveals none, and here the line above it has just said them.
+  const metaGame = played.length > 0 && !oneGame ? null : named;
   // Live at-bat/on-deck/on-base state (across the player's live games), shown as
   // a ring on the headshot and a tag in the header.
   const role = liveRole(report);
   const spansMultipleDays = new Set(games.map((g) => g.date)).size > 1;
   // A player may be in view only for an upcoming/just-started game with no plate
   // appearances yet — then the batting line is all zeros and not worth showing.
-  const hasAnyPa = games.some((g) => g.plateAppearances.length > 0);
+  const hasAnyPa = played.length > 0;
   // Whether expanding actually reveals anything: a game the player batted in, a
   // doubleheader's per-game blocks, or a lone scheduled game's platoon split vs
   // the probable starter. A started game the player hasn't batted in yet has
@@ -484,6 +526,13 @@ export function PlayerCard({
     primary.status.state === 'scheduled' &&
     (primary.probablePitcher?.hand === 'R' || primary.probablePitcher?.hand === 'L');
   const expandable = games.length > 1 || hasAnyPa || hasScheduledSplit;
+  // The dashed border claims nothing is coming, which is the pitcher card's rule
+  // read back onto this one: it belongs only on a batter who can't still come to
+  // the plate. Reachable here for a postponement alone — a range of finals with
+  // no plate appearance in it is `didNotAppear`'s card, dashed above.
+  const mayStillBat = games.some(
+    (g) => g.status.state === 'scheduled' || g.status.state === 'live',
+  );
 
   const head = (
     <>
@@ -504,12 +553,16 @@ export function PlayerCard({
               position={position}
               status={report.rosterStatus}
             />
+        {/* A read on the range in view, not on the season — everything under
+            this header is about these days, and the season now reads whole on
+            the details view's Season tab. With nothing yet to add up, the game
+            info takes the slot instead of a line of dashes. */}
         <span className="player-meta">
-          {report.seasonStats
-            ? seasonStatsSummary(report.seasonStats)
-            : games.length > 1
-              ? `${primary.batterTeam} · ${games.length} games`
-              : `${primary.batterTeam} ${primary.isHome ? 'vs' : '@'} ${primary.opponent}`}
+          {metaGame
+            ? matchupLine(metaGame)
+            : played.length > 0
+              ? rangeBattingSummary(combined, played.length)
+              : `${primary.batterTeam} · ${games.length} games`}
         </span>
       </div>
       <div className="player-summary">
@@ -521,16 +574,22 @@ export function PlayerCard({
         {(!collapsed || singleDay) && <DoubleheaderTag games={games} />}
         {hasAnyPa && <span className="summary-line">{summary}</span>}
         {games.length === 1 && <ProbablePitcher game={primary} />}
-        {/* A not-yet-started game has no score badge to reveal the teams, so
-            the badge also carries the opponent and home/away (withMatchup). */}
-        {games.length === 1 && <GameStatusBadge game={primary} withMatchup />}
+        {/* A not-yet-started game has no score badge to reveal the teams, so the
+            badge carries the opponent and home/away — except when the header
+            line above has already named the matchup, which would be it twice on
+            one row. */}
+        {games.length === 1 && (
+          <GameStatusBadge game={primary} withMatchup={metaGame !== primary} />
+        )}
       </div>
     </>
   );
 
   return (
     <div
-      className={`player-card${expandable && collapsed ? ' collapsed' : ''}`}
+      className={`player-card${hasAnyPa || mayStillBat ? '' : ' empty'}${
+        expandable && collapsed ? ' collapsed' : ''
+      }`}
       id={`player-${playerKey(report)}`}
     >
       {expandable ? (
