@@ -4284,8 +4284,14 @@ body {
 /* One setting, stated. Round because it is a label — the shape this app
    reserves for things you read — which is also what keeps a row of them from
    reading as the control set they stand in for. The way to change any of them
-   is the button that expanded the table. */
-.research-badge {
+   is the button that expanded the table.
+
+   `.filter-badge` — what the roster row's phone Filters button is holding — is
+   folded in rather than restyled to resemble it: same statement, same shape,
+   and the same rule that the control which folded a setting away is the one
+   that brings it back. */
+.research-badge,
+.filter-badge {
   display: inline-flex;
   align-items: center;
   padding: 4px 11px;
@@ -5100,9 +5106,12 @@ body {
    restyled to resemble them. It is the same object as Qualified two views over:
    a plain toggle with no panel, narrowing who is in a table, which is why it
    takes `.on` and never `.active` and why it reads identically by
-   construction. */
+   construction. `.filters-toggle` — the phone's one button where the roster row
+   has two — is folded in for the same reason: it is a disclosure over a panel,
+   which is what `.research-toggle` already is. */
 .research-toggle,
-.starters-toggle {
+.starters-toggle,
+.filters-toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -5118,13 +5127,15 @@ body {
   cursor: pointer;
 }
 .research-toggle:hover,
-.starters-toggle:hover {
+.starters-toggle:hover,
+.filters-toggle:hover {
   color: var(--text);
 }
 /* `.active` is "the panel is open"; `.on` is "the panel holds something",
    which has to read whether it's open or not — a collapsed control must never
    be the only place a filter lives. */
-.research-toggle.active {
+.research-toggle.active,
+.filters-toggle.active {
   color: var(--text);
   border-color: var(--accent);
 }
@@ -5136,21 +5147,78 @@ body {
    phone, which is right for four icons in a known run and wrong for a lone
    button on a row of tabs, where nothing beside it would say what the glyph
    meant. */
-.starters-toggle {
+.starters-toggle,
+.filters-toggle {
   flex: none;
   white-space: nowrap;
 }
 .research-toggle.on,
-.starters-toggle.on {
+.starters-toggle.on,
+.filters-toggle.on {
   color: var(--accent);
   border-color: rgba(56, 189, 248, 0.5);
   background: rgba(56, 189, 248, 0.12);
 }
 .research-toggle:focus-visible,
-.starters-toggle:focus-visible {
+.starters-toggle:focus-visible,
+.filters-toggle:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
+/* ---- The roster row's phone swap ------------------------------------------
+   From 641px up the summary view carries two buttons — Starters and the
+   calendar — and on a 390px phone they are 82 and 92 pixels of a row that
+   already holds three tab groups, which is exactly the width that pushed the
+   calendar onto a line of its own. Under 640 they fold behind one Filters
+   button and what they are set to is stated as badges underneath.
+
+   Everything is mounted at both widths and the swap is a `display` pair, the
+   way the date presets and their dropdown are already done: one breakpoint in
+   this file rather than one in App.tsx that has to agree with it. Which copy of
+   the starters toggle is on screen is the class it was rendered with
+   (`.starters-row` / `.starters-panel`); the calendar carries `.foldable` only
+   where there is a second button to fold with it, that being a question about
+   the view rather than the width. */
+.filters-toggle,
+.date-filters,
+.filter-badges {
+  display: none;
+}
+/* Its own row above the dates inside the panel: the presets become a full-width
+   dropdown down there, and a button on that line would read as one control with
+   it. `flex-start` so the button keeps its own width in a column the phone
+   stretches. */
+.date-filters {
+  justify-content: flex-start;
+}
+/* One more group in the wrapping tab row, directly after the button it reports
+   on — `flex: none` like every other group there, so it breaks to the next line
+   whole and only when the line is genuinely full. Deliberately *not* a row of
+   its own (`flex: 1 1 100%`, the way the panel below it opens): a fixed break
+   is the thing that row's layout rule argues against, and measured here it cost
+   37px at 540px to say what fits beside the button at that width. */
+.filter-badges {
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+@media (max-width: 640px) {
+  .starters-row,
+  .date-toggle.foldable {
+    display: none;
+  }
+  .filters-toggle {
+    display: inline-flex;
+  }
+  .date-filters,
+  .filter-badges {
+    display: flex;
+  }
+}
+/* Above 640 the panel copy is the one that stands down; it is inside
+   `.date-filters`, which is already hidden there, so nothing else is needed. */
+
 .research-toggle-count {
   min-width: 17px;
   padding: 1px 4px;

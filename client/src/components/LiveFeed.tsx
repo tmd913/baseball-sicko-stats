@@ -650,14 +650,22 @@ function byStartTime(
  * Two ways that happens. A player off the active roster — hurt, suspended,
  * optioned — is on none of his team's games, however many of them are on the
  * schedule. And a starting pitcher is in one game in five: he belongs here only
- * when his side has announced him, which `pitchingRole` already reports. A side
- * that has announced nobody yet (a TBD probable) hides no one, and a reliever is
- * never filtered — any of his team's games could be his.
+ * when his side has *announced* him, which `pitchingRole` already reports. A
+ * reliever is never filtered — any of his team's games could be his.
+ *
+ * A side that has announced nobody yet (a TBD probable) used to hide no one, on
+ * the reasoning that an unannounced game might still be his. It is the wrong way
+ * round: four starters in five are not pitching, so a TBD put the whole rotation
+ * on the page and was right about one of them — Logan Webb sat in Upcoming every
+ * morning San Francisco had yet to name anybody. An announcement is the only
+ * thing that makes a start a fact, so it is what this waits for; the cost is
+ * that a genuinely undeclared starter shows up when his club names him rather
+ * than before, which is also the moment anyone could have known.
  */
 function isUpcomingFor(report: PlayerReport, game: PlayerGame): boolean {
   if (!isOnActiveRoster(report.rosterStatus)) return false;
   if (report.kind !== 'pitcher' || !isRotationStarter(report)) return true;
-  return game.pitchingRole === 'starting' || game.teamProbablePitcher === null;
+  return game.pitchingRole === 'starting';
 }
 
 /**

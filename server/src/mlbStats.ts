@@ -1308,8 +1308,8 @@ export interface StatsApiPlateAppearance {
   // feed is the one place they are read, and confining them there is what keeps
   // them out of every stored blob: a day snapshot is written once every game is
   // final, so no at-bat in one can be in progress and no stored day can be
-  // stale for want of a field it could never have held. (The same argument
-  // `teamProbablePitcher` makes.) A completed at-bat carries an empty list.
+  // stale for want of a field it could never have held. A completed at-bat
+  // carries an empty list.
   actions: PlayAction[];
 }
 

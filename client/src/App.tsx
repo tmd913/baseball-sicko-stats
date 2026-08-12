@@ -1950,12 +1950,21 @@ export default function App() {
      narrows who is in a table, stated on the control that opens it. It keeps
      its word at every width, where the board's four drop theirs on a phone:
      those four are a known run of icons and this is one button on a row of
-     tabs, with nothing beside it to say what the icon would mean. */
-  const startersToggle =
+     tabs, with nothing beside it to say what the icon would mean.
+
+     **It renders in two places and only ever shows in one** — in the tab row
+     from 641px up, and inside the filters panel below that, where it and the
+     dates fold behind one button (see `filtersToggle`). Rendered twice and
+     swapped by the stylesheet rather than chosen in JS, which is how the date
+     presets and their phone dropdown already do it: one breakpoint in the CSS
+     instead of one in each place that has to agree with it. Hence a function of
+     where it is going rather than a constant — the two copies differ by the
+     class that decides which width shows them, and nothing else. */
+  const startersToggleFor = (place: 'row' | 'panel') =>
     rosterTab === 'summary' && rangeHasToday ? (
       <button
         type="button"
-        className={`starters-toggle${startersOnly ? ' on' : ''}`}
+        className={`starters-toggle starters-${place}${startersOnly ? ' on' : ''}`}
         aria-pressed={startersOnly}
         onClick={() => setStartersOnly((v) => !v)}
         /* The word means one thing on your own roster and another on your
@@ -1983,6 +1992,17 @@ export default function App() {
       </button>
     ) : null;
 
+  /* The copy that sits in the tab row, and the flag saying whether the phone
+     swap is on at all. It is only worth folding two buttons behind a third:
+     on Games and Feed, and over a range with no today in it, the calendar is
+     alone on the row and has nothing to share a line with — so it keeps its
+     place at every width there, label and all, and no filter button appears.
+     That is also why `.date-toggle` takes its `foldable` class from here rather
+     than the stylesheet: whether the pair exists is a question about the view,
+     which CSS can't ask. */
+  const startersToggle = startersToggleFor('row');
+  const foldFilters = startersToggle !== null;
+
   /* The calendar, which is both the disclosure for the date controls and the
      one thing on the page saying which days every number on it is drawn from.
      Those were two controls until now — a square icon up in the header and a
@@ -2001,7 +2021,7 @@ export default function App() {
   const dateToggle = (
     <button
       type="button"
-      className={`date-toggle${dateOpen ? ' active' : ''}`}
+      className={`date-toggle${dateOpen ? ' active' : ''}${foldFilters ? ' foldable' : ''}`}
       onClick={() => {
         setSearchOpen(false);
         setDateOpen((v) => !v);
@@ -2031,6 +2051,79 @@ export default function App() {
     </button>
   );
 
+  /* The phone's one control where the desktop has two. Starters and the
+     calendar are both about which rows the summary table is showing, and at
+     390px they are 82px and 92px of a row that already carries three tab groups
+     — enough to push the calendar onto a line of its own, so the page opened on
+     three rows of chrome before the first name. One button holds both, and what
+     it holds is stated underneath (see `filterBadges`) rather than inside it:
+     the rule the research board's chips row follows, that a collapsed panel must
+     never be the only place a filter lives.
+
+     It is the same disclosure the calendar already was, so it shares its state
+     (`dateOpen`) and opens the same full-width row — the starters toggle simply
+     comes with it down there. `.active` while the panel is open, `.on` while the
+     filter it holds is narrowing something: the two-class grammar every
+     disclosure in this app uses. The dates are not part of `.on` — a range is
+     always set, so a light that is always lit says nothing.
+
+     Shown only under 640px, and only when there are two buttons to fold. */
+  const filtersToggle = foldFilters ? (
+    <button
+      type="button"
+      className={`filters-toggle${dateOpen ? ' active' : ''}${startersActive ? ' on' : ''}`}
+      onClick={() => {
+        setSearchOpen(false);
+        setDateOpen((v) => !v);
+      }}
+      aria-expanded={dateOpen}
+      title={dateOpen ? 'Close filters' : 'Dates and filters'}
+    >
+      <svg
+        viewBox="0 0 24 24"
+        width="15"
+        height="15"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M3.5 5h17l-6.5 7.6V19l-4 2v-8.4z" />
+      </svg>
+      <span className="filters-toggle-label">Filters</span>
+    </button>
+  ) : null;
+
+  /* What the button above is holding, said in the open. Round pills because
+     they are labels — the shape this app reserves for things you read — and the
+     way to change either is the button that folded them away, exactly as on the
+     expanded research board. They sit outside the panel, so shutting it doesn't
+     take the record of what the table is showing with it.
+
+     The range is always one of them: it is the one thing on the page saying
+     which days every number on it is drawn from, which is the job the calendar's
+     own label used to do and the only reason that button was never allowed to
+     shrink to a square. Starters joins it while it is narrowing something.
+
+     **They ride in the tab row as one more atomic group**, directly after the
+     button they describe, rather than on a line reserved for them. That is the
+     row's own rule — every group is `flex: none` and the window decides where
+     the line falls — and here it is the difference between a fold that pays and
+     one that doesn't: measured on the summary view with both filters set, a
+     forced badge line cost 37px at 540px, where the pair it replaces fits the
+     tab row with room to spare. Flowing, they cost a line only where there is
+     genuinely no room for them, which on this page is 430px and below.
+
+     Rendered on the same terms as the button, and shown at the same width. */
+  const filterBadges = foldFilters ? (
+    <div className="filter-badges">
+      <span className="filter-badge">{activePreset ?? numericRange(start, end)}</span>
+      {startersActive && <span className="filter-badge">Starters</span>}
+    </div>
+  ) : null;
+
   /* The presets and the range picker themselves. They open as a full-width row
      of the view bar, directly under the button that opened them — they used to
      hang off the header, which is where the calendar used to be; a disclosure
@@ -2040,6 +2133,13 @@ export default function App() {
      `.app.date-open .date-control` is all "its own row" takes. */
   const dateControl = (
     <div className="date-control">
+      {/* The phone's copy of the starters toggle — see `startersToggleFor`. Its
+          own row above the dates rather than inline with them: the presets
+          become a full-width dropdown down here, and a button sharing that line
+          would be reading as one control with it. Rendered only when there is a
+          filter to hold, and hidden by the stylesheet from 641px up, where the
+          copy in the tab row is the one on screen. */}
+      {foldFilters && <div className="date-filters">{startersToggleFor('panel')}</div>}
       <div className="date-row">
         {/* Desktop: a row of preset pills. On phones this row is hidden and
             the equivalent <select> below takes over (see styles.css). */}
@@ -2611,9 +2711,13 @@ export default function App() {
                 </button>
               </div>
               {/* Only on Summary, and only over a range that contains today —
-                  see `startersToggle`. */}
+                  see `startersToggle`. On a phone these two fold behind the
+                  button after them; all three are mounted and the stylesheet
+                  decides which pair is on screen. */}
               {startersToggle}
               {dateToggle}
+              {filtersToggle}
+              {filterBadges}
               </>
             )}
             {/* The research board's own controls, in the tab row itself. They
@@ -2824,6 +2928,8 @@ export default function App() {
                     out without leaving the page. */}
                 {startersToggle}
                 {dateToggle}
+                {filtersToggle}
+                {filterBadges}
                 {dateControl}
               </>
             }
