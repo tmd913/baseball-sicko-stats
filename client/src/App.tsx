@@ -45,6 +45,16 @@ import type { FantasySlot } from './hooks';
 import { Tutorial } from './components/Tutorial';
 import { EspnSettings } from './components/EspnSettings';
 
+// A page's remembered scroll offset is re-applied every frame until the page
+// has been the same height for PAGE_SCROLL_QUIET — long enough to outlast the
+// gaps between bursts of content arriving — and abandoned after
+// PAGE_SCROLL_SETTLE whatever happens, so a page that really is shorter now
+// settles rather than being held against an offset it can never reach.
+const PAGE_SCROLL_QUIET = 250;
+const PAGE_SCROLL_SETTLE = 900;
+// Anything that means the reader has taken the scroll back.
+const USER_SCROLLS = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const;
+
 // Breathing room above a card scrolled to the top of the viewport — the bare
 // gap, matching `--scroll-offset`'s own; the pinned chrome's height is added to
 // it at the call site.
@@ -1098,32 +1108,19 @@ export default function App() {
   };
   // A link (from the summary/feed) jumped to the players page — remember which
   // view we came from so a back button can return there. Cleared once we're back,
-  // or when the user navigates explicitly via the tabs. backScroll remembers that
-  // view's scroll offset so going back restores where the user left off — the
-  // summary view scrolls its inner table, the feed scrolls the window.
+  // or when the user navigates explicitly via the tabs. Where in that view the
+  // reader was is the page memory's business, not this one's.
   const [backView, setBackView] = useState<'summary' | 'feed' | null>(null);
-  const backScroll = useRef(0);
-  // Set by the two paths that place the scroll themselves — the jump to a
-  // player's day and the back button that undoes it — so the view swap they
-  // each perform doesn't get reset to the top from under them (see the effect
-  // below the kind tabs).
+  // Set by the one path that places the scroll itself — the jump to a player's
+  // day, which scrolls to his card — so the page memory below doesn't restore
+  // the Games view's own offset out from under it. The back button needs no
+  // such flag: putting the reader back where they were on the view they came
+  // from is exactly what the memory does anyway.
   const scrollPlaced = useRef(false);
   const goBack = () => {
     if (!backView) return;
-    const dest = backView;
-    const top = backScroll.current;
-    scrollPlaced.current = true;
     setBackView(null);
-    setView(dest);
-    // Restore the previous scroll once the destination view has re-mounted.
-    requestAnimationFrame(() => {
-      if (dest === 'summary') {
-        const el = document.querySelector('.summary-scroll');
-        if (el) el.scrollTop = top;
-      } else {
-        window.scrollTo(0, top);
-      }
-    });
+    setView(backView);
   };
   // From the feed/summary: jump to a player's full day on the players view —
   // switch views, expand their card, and scroll it to the top. Record the origin
@@ -1131,11 +1128,6 @@ export default function App() {
   const openPlayerDay = useCallback(
     (key: string) => {
       const from = view === 'summary' || view === 'feed' ? view : null;
-      if (from === 'summary') {
-        backScroll.current = document.querySelector('.summary-scroll')?.scrollTop ?? 0;
-      } else if (from === 'feed') {
-        backScroll.current = window.scrollY;
-      }
       scrollPlaced.current = true;
       setBackView(from);
       setEditMode(false);
@@ -1219,32 +1211,130 @@ export default function App() {
         ? 'pitcher'
         : playerKind;
   const kindCards = shownKind === 'pitcher' ? cardPitchers : cardBatters;
-  // A swap of what the page is showing starts that page at the top.
+  // Each page keeps its own place, and going back to it lands where you left.
   //
-  // Games and Feed are two readings of the same days and they share the
-  // window's scroller, so the offset carried straight across: leaving Games
+  // Games and Feed are two readings of the same days over one window scroller,
+  // so the offset used to carry straight across a tab switch: leaving Games
   // 800px down opened the Feed 800px into a stream of somebody else's at-bats,
-  // and coming back clamped to wherever the shorter page ended. The same is
-  // true of the kind tabs, which swap the whole list for a different set of
-  // players. It only became reachable when the chrome was pinned: the tabs
-  // used to be at the top of the page, so getting to one meant scrolling back
-  // up first, and the reset was a side effect of having to go there. Now they
-  // are always under the thumb and nothing puts the page back.
+  // and coming back clamped to wherever the shorter page ended. That only
+  // became reachable when the chrome was pinned — the tabs used to be at the
+  // top of the page, so getting to one meant scrolling back up first and the
+  // reset came free with having to go there.
   //
-  // Not on the date range, which is a change to the numbers in the rows rather
-  // than to which rows they are — the row you were reading is still there.
-  const firstView = useRef(true);
+  // Keyed by view **and kind**, since the kind tabs swap the whole list for a
+  // different set of players: Feed/Batters and Feed/Pitchers are two pages by
+  // the same test that makes Games and Feed two. Not keyed on the date range,
+  // which changes the numbers in the rows rather than which rows they are —
+  // the row being read is still on screen. A page not yet visited opens at the
+  // top, which is what the old reset did for every page.
+  const scrollKey = view === 'research' ? 'research' : `${view}:${shownKind}`;
+  // Read by the scroll listener, which is bound once and would otherwise close
+  // over the key from the render that bound it.
+  const scrollKeyRef = useRef(scrollKey);
+  scrollKeyRef.current = scrollKey;
+  const pageScroll = useRef(new Map<string, number>());
+  // High while a restore is in flight, so the listener doesn't record the
+  // half-way positions the restore itself passes through as the reader's.
+  const restoring = useRef(false);
+  const restoreRaf = useRef(0);
+
+  // Two of the four views don't scroll the window at all: the summary and
+  // research boards are fixed-height columns whose table scrolls inside them,
+  // which is why the memory is written and read through this rather than
+  // through `window` directly.
+  const pageScroller = () =>
+    document.querySelector<HTMLElement>('.summary-scroll, .research-scroll');
+
+  useEffect(() => {
+    const onScroll = (e: Event) => {
+      if (restoring.current) return;
+      const el = pageScroller();
+      const target = e.target;
+      // A scroll inside an overlay (the player page, the how-to) is not the
+      // page's, and nor is a table's own horizontal scroller.
+      if (el) {
+        if (target === el) pageScroll.current.set(scrollKeyRef.current, el.scrollTop);
+      } else if (target === document || target === document.documentElement) {
+        pageScroll.current.set(scrollKeyRef.current, window.scrollY);
+      }
+    };
+    // Capture, because a scroll event doesn't bubble: the inner scrollers'
+    // events reach a document listener on the way down or not at all.
+    document.addEventListener('scroll', onScroll, true);
+    return () => document.removeEventListener('scroll', onScroll, true);
+  }, []);
+
+  const firstPage = useRef(true);
   useLayoutEffect(() => {
-    // A jump to a player's day and the back button out of it both place the
-    // scroll themselves; the browser's own restore on a reload owns the first
-    // pass.
-    if (firstView.current || scrollPlaced.current) {
-      firstView.current = false;
+    // The jump to a player's day places the scroll itself, and the browser's
+    // own restore on a reload owns the first pass.
+    if (firstPage.current || scrollPlaced.current) {
+      firstPage.current = false;
       scrollPlaced.current = false;
       return;
     }
-    window.scrollTo(0, 0);
-  }, [view, shownKind]);
+    const top = pageScroll.current.get(scrollKey) ?? 0;
+    const inner = pageScroller();
+    if (inner) {
+      inner.scrollTop = top;
+      return;
+    }
+    if (top <= 0) {
+      window.scrollTo(0, 0);
+      return;
+    }
+    // A page re-mounts shorter than it will be — the feed's clips and images
+    // size themselves as they load, 3158px growing to 5426px on a measured
+    // watchlist — so a single `scrollTo` lands wherever the page currently
+    // ends. Worse, it can't simply be repeated until the offset is *reachable*
+    // and then left alone: content arriving **above** the viewport pushes
+    // everything down, and the browser's scroll anchoring follows it to keep
+    // the visible rows still, which took a restored 1800 to 2934 a frame after
+    // it landed. So the offset is held until the page has **stopped growing**,
+    // with anchoring switched off underneath it — the saved number was
+    // measured against the finished page, and it is the finished page it has
+    // to be applied to. `PAGE_SCROLL_SETTLE` ends it either way: a page that
+    // really is shorter now (a live update dropped an item) must not be held
+    // against an offset it can never reach.
+    restoring.current = true;
+    const root = document.documentElement;
+    const anchor = root.style.overflowAnchor;
+    root.style.overflowAnchor = 'none';
+    const started = performance.now();
+    let lastHeight = -1;
+    let steadySince = started;
+    const stop = () => {
+      cancelAnimationFrame(restoreRaf.current);
+      root.style.overflowAnchor = anchor;
+      restoring.current = false;
+    };
+    const step = () => {
+      window.scrollTo(0, top);
+      const now = performance.now();
+      const height = root.scrollHeight;
+      if (height !== lastHeight) {
+        lastHeight = height;
+        steadySince = now;
+      }
+      // Two frames of the same height is not settled — the content arrives in
+      // bursts, and letting go on the first pause put the feed back at 1800
+      // and watched it drift to 2934 when the next burst landed 36ms later.
+      const held = Math.abs(window.scrollY - top) < 1 && now - steadySince > PAGE_SCROLL_QUIET;
+      if (held || now - started > PAGE_SCROLL_SETTLE) {
+        stop();
+        return;
+      }
+      restoreRaf.current = requestAnimationFrame(step);
+    };
+    // The reader wins: a scroll of their own during that window ends it, or
+    // the retry would drag the page back under their finger.
+    for (const ev of USER_SCROLLS) window.addEventListener(ev, stop, { once: true, passive: true });
+    step();
+    return () => {
+      stop();
+      for (const ev of USER_SCROLLS) window.removeEventListener(ev, stop);
+    };
+  }, [scrollKey]);
   // The second tier of tabs, in the view bar beside the view switch: every view
   // below shows a single kind at a time, so the pair reads as one control.
   const kindTabs = showKindTabs ? (
