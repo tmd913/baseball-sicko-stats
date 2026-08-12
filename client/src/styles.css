@@ -4210,17 +4210,20 @@ body {
 .date-toggle-bubble {
   display: none;
   position: absolute;
-  /* **Centred on the button, not hung off its corner.** A single date is
-     narrower than the 36px square and a range is nearly twice as wide, so the
-     bubble's width is its text's and the anchor decides which way that growth
-     goes. Anchored right it grew leftwards across its own button and straight
-     into the starters toggle beside it — 3px of clearance on a fortnight's
-     range, and none at all on the widest dates the season can print. Centred,
-     it grows both ways at half the rate, which is what the margins below are
-     sized against. */
+  /* **Anchored to the button's left edge, so a long range grows rightwards.**
+     A single date is narrower than the 36px square and a range is nearly twice
+     as wide, so the bubble's width is its text's and the anchor decides which
+     way that growth goes. Anchored *right* it grew leftwards across its own
+     button and straight into the starters toggle beside it, which is what this
+     was centred to avoid — but centring only halves that problem and pays for
+     the other half in a margin, holding the calendar 10px further from the
+     button it belongs beside at every width and on every range for the sake of
+     the widest one. Anchored left it grows in the one direction that is free:
+     the calendar is the last group in the row, so the overhang lands in the
+     row's own slack and then in the app's 22px gutter, and the button itself
+     can sit at the row's ordinary 12px gap from Starters. */
   top: -8px;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
   padding: 1px 5px;
   border-radius: 999px;
   background: var(--accent);
@@ -5635,27 +5638,13 @@ body {
   .date-toggle-bubble {
     display: block;
   }
-  /* **The left overhang is the only one that has to be paid for.** Centred, a
-     bubble reaches half its excess past each edge of the button. To the right
-     that lands in the app's own 22px gutter, the calendar being the last group
-     in the row — the widest the app can print is `10/29–10/31` at 65px, i.e.
-     14.5px over, which the gutter swallows whole. To the left it is the starters
-     toggle, and the row's 12px gap leaves 3px on a fortnight's range, which is
-     the collision.
-
-     10px, and the number is the row's slack rather than a preference: at 390
-     the roster tabs and the two squares come to 315px of the 346 the gutters
-     leave, so 31px are available before the calendar is pushed back onto a line
-     of its own — which is the whole thing this swap bought. 16 each side was
-     tried and cost exactly that row at both 375 and 390; 10 on the left alone
-     clears the starters button by 13px on a fortnight and by 10 on the widest
-     range that can appear beside it at all (that button is only drawn over a
-     range holding today, and two two-digit months cannot both fall inside one,
-     the season ending in October — so ten characters and 59px is the ceiling
-     there rather than 65). */
-  .date-toggle {
-    margin-left: 10px;
-  }
+  /* **No margin of its own**, where a centred bubble needed 10px of one to
+     clear the starters toggle. Left-anchored, the whole overhang is on the
+     right — the widest the app can print is `10/29–10/31` at 65px, i.e. 29px
+     past a 36px square — and to the right of this button there is nothing but
+     the row's own slack and then the app's 22px gutter, the calendar being the
+     last group in the row. So the two filters sit at the row's ordinary 12px
+     gap and the bubble reaches into space nothing else wants. */
 }
 
 /* On a phone all three of the bar's tab groups give way to dropdowns (styled

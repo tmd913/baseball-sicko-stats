@@ -1665,21 +1665,33 @@ export default function App() {
         : playerKind;
   const kindCards = shownKind === 'pitcher' ? cardPitchers : cardBatters;
   /**
-   * The summary table's rows, which are the only ones the starters filter
-   * touches.
+   * The rows the roster views show — Summary, Games and Feed alike.
+   *
+   * The filter reached the summary table alone for a while, on the reasoning
+   * that "starting today" is a statement about one afternoon where the games
+   * list is a record of a range and the feed a chronological one, so neither
+   * had any business losing a player because tonight's lineup left him out.
+   * What that missed is that the question is the same on all three: on a game
+   * day you open whichever of them you read the roster in to see who is
+   * actually in tonight, and picking those men out by the pips down a column of
+   * thirty is exactly the work this button exists to save. A record of the
+   * range is what the *dates* decide; who is on the page is what this decides,
+   * and the two compose — a week's games for the nine men starting tonight is a
+   * perfectly ordinary thing to ask for.
+   *
+   * So the toggle belongs to the roster row rather than to one of its tabs, and
+   * it narrows whatever that row is showing. What it still does not touch is
+   * the edit screen, which reads `editPlayers` off the raw reports: dropping a
+   * player from the roster is what that screen is for.
    *
    * Filtered *here* rather than up in `shownReports`, where hide-injured is,
-   * because the two answer different questions. An injured player is absent
-   * from every view for weeks, so dropping him ahead of the kind split keeps
-   * the tab counts equal to the lists under them. "Starting today" is a
-   * statement about one afternoon and belongs to the one view that is read as a
-   * roster: the games list is a record of what happened over the range, and the
-   * feed is a chronological one, and neither has any business losing a player
-   * because tonight's lineup left him out. Filtering below the kind split also
-   * leaves the Batters/Pitchers tabs alone, which is right — they say what is
-   * watched, not what tonight's lineups came to.
+   * because the two are still different questions. An injured player is absent
+   * for weeks, so dropping him ahead of the kind split keeps the tab counts
+   * equal to the lists under them; filtering below it leaves the
+   * Batters/Pitchers tabs alone, which is right — they say what is watched, not
+   * what tonight's lineups came to.
    */
-  const summaryReports = useMemo(() => {
+  const filteredCards = useMemo(() => {
     if (!startersActive) return kindCards;
     // Reading the fantasy team, the button answers a different question, so it
     // reads a different fact: not "is he in tonight's lineup" but "am I
@@ -1712,7 +1724,7 @@ export default function App() {
     return kindCards.filter((r) => isStartingOn(r, today));
   }, [kindCards, startersActive, fantasySlots]);
   /**
-   * Which of the two rules the toggle applies — see `summaryReports`. The
+   * Which of the two rules the toggle applies — see `filteredCards`. The
    * button's tooltip and the empty state under it both have to say which set
    * they are talking about, and neither should hold a second copy of the test:
    * the map being there is what makes the filter read the fantasy lineup, so
@@ -1982,17 +1994,25 @@ export default function App() {
     </div>
   );
 
-  /* The summary table's one filter: only the players who are actually starting
+  /* The roster row's one filter: only the players who are actually starting
      today — a hitter in the posted lineup, a pitcher named as today's starter.
 
      **On the roster row, not in the settings menu.** The gear is app chrome and
      everything in it reads as app-wide (hide-injured decides the summary *and*
-     the games list, muting decides every clip in the app); this qualifies one
-     view, and a menu entry that quietly did nothing on the two tabs beside it
-     would be a setting lying about its own reach. The roster row is where the
-     app already says which slice of the watchlist is on screen, so the filter
-     goes beside the tabs that select it — and disappears with them on Games and
-     Feed, which is the honest version of "it doesn't apply here".
+     the games list, muting decides every clip in the app); this qualifies the
+     three roster views and nothing on the research board, and a menu entry that
+     quietly did nothing over there would be a setting lying about its own
+     reach. The roster row is where the app already says which slice of the
+     roster is on screen, so the filter goes beside the tabs that select it —
+     and goes with them on Research, which is the honest version of "it doesn't
+     apply here".
+
+     **It stays put across the three tabs**, where it used to be the summary's
+     alone: Summary, Games and Feed are three readings of the same players over
+     the same days, so a control that says *which players* has the same meaning
+     in all three, and a button that vanished when you crossed to Games read as
+     the filter being switched off rather than as it not applying. See
+     `filteredCards` for what it narrows.
 
      **Between the reading and the days**, which is the research board's order
      rather than an exception to this row's: the scope pills there name *which
@@ -2003,12 +2023,11 @@ export default function App() {
      and it is folded into `.research-toggle`'s selector lists rather than
      restyled to resemble the board's own panel-less toggle, the Watchlist
      button it is the twin of — a plain switch that decides who is in a table,
-     stated on the control that opens it. It keeps its word at every width,
-     where the board's four drop theirs on a phone: those four are a known run
-     of icons and this is one button on a row of tabs, with nothing beside it to
-     say what the icon would mean. */
-  const startersToggle =
-    rosterTab === 'summary' && rangeHasToday ? (
+     stated on the control that opens it. Under 640px it goes to its glyph
+     alongside the calendar beside it — the pair is a run of two icons where a
+     lone one on a row of tabs would have nothing beside it to say what it
+     meant, and the two labels were 174px of a line a phone hasn't got. */
+  const startersToggle = rangeHasToday ? (
       <button
         type="button"
         className={`starters-toggle${startersOnly ? ' on' : ''}`}
@@ -2836,14 +2855,15 @@ export default function App() {
         </div>
       )}
 
-      {/* The other thing that can empty this view, and the reason it needs its
-          own wording: the message above names the toggle that did it, and the
-          gear is the wrong place to send someone whose table was narrowed by a
-          button on the tab row. Only on the summary, which is the only view the
-          filter reaches. */}
-      {view === 'summary' &&
+      {/* The other thing that can empty a roster view, and the reason it needs
+          its own wording: the message above names the toggle that did it, and
+          the gear is the wrong place to send someone whose page was narrowed by
+          a button on the tab row. On all three now, the filter having stopped
+          being the summary's alone — and off the edit screen, which the filter
+          never touches. */}
+      {view !== 'research' &&
         kindCards.length > 0 &&
-        summaryReports.length === 0 &&
+        filteredCards.length === 0 &&
         !editMode && (
           <div className="empty-state">
             <p className="empty-title">
@@ -2866,7 +2886,7 @@ export default function App() {
             ) : (
               <p>
                 Turn off “Starters” in the row above to see everyone. Lineups post a couple of
-                hours before first pitch, so an empty table in the morning may only mean they
+                hours before first pitch, so an empty page in the morning may only mean they
                 aren’t out yet.
               </p>
             )}
@@ -2917,9 +2937,9 @@ export default function App() {
           controlsHost={researchChrome}
         />
       ) : view === 'summary' ? (
-        summaryReports.length > 0 && (
+        filteredCards.length > 0 && (
           <SummaryTable
-            reports={summaryReports}
+            reports={filteredCards}
             onOpenDetails={setDetailsKey}
             onOpenPlayerDay={openPlayerDay}
             /* Kept when the table takes the page. The same nodes render in the
@@ -2947,12 +2967,15 @@ export default function App() {
           />
         )
       ) : view === 'feed' ? (
-        kindCards.length > 0 && (
+        filteredCards.length > 0 && (
           /* Keyed so switching kind or date range starts the stream back at its
-             first page; a live poll (data only) leaves it alone. */
+             first page; a live poll (data only) leaves it alone. The starters
+             filter deliberately isn't in that key: it changes which players the
+             stream is about, and re-reading it from the top is what the reader
+             wants when the list has become a different one. */
           <LiveFeed
             key={`${shownKind}-${start}-${end}`}
-            reports={kindCards}
+            reports={filteredCards}
             kind={shownKind}
             onOpenDetails={setDetailsKey}
             onOpenPlayerDay={openPlayerDay}
@@ -3022,7 +3045,7 @@ export default function App() {
           </div>
         ) : (
         <main className="player-list">
-          {kindCards.map(renderCard)}
+          {filteredCards.map(renderCard)}
         </main>
         )}
       </div>
