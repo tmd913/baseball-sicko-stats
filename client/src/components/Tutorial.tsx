@@ -428,7 +428,7 @@ const CHAPTERS: Chapter[] = [
             history behind it yet isn't offered at all.
           </li>
         </ul>
-        <h3 className="tut-sub">The five buttons</h3>
+        <h3 className="tut-sub">The four buttons</h3>
         <dl className="tut-defs">
           <dt>Search</dt>
           <dd>Find one player by name, anywhere in the league.</dd>
@@ -444,12 +444,6 @@ const CHAPTERS: Chapter[] = [
             Narrows the board to the players you've starred. The number on the button
             is how many of them are on this board — batters or pitchers, whichever
             you're looking at.
-          </dd>
-          <dt>Qualified</dt>
-          <dd>
-            Drops everyone short of a full season's worth of playing time: 3.1 plate
-            appearances per game his team has played for a batter, an inning per team
-            game for a starter, an appearance every third game for a reliever.
           </dd>
           <dt>Columns</dt>
           <dd>
