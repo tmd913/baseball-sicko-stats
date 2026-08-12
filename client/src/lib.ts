@@ -691,6 +691,36 @@ export function statusCorner(status: PlayerStatus, kind: PlayerKind): Corner {
 }
 
 /**
+ * Is this player starting on `date` — in the posted lineup if he's a hitter,
+ * the announced (or actual) starting pitcher if he isn't.
+ *
+ * The summary table's one filter reads this. It is deliberately drawn from the
+ * player's own `PlayerGame` rather than from the league-wide `/api/statuses`
+ * map: the summary is a read on the watchlist, so every row already carries the
+ * report the pip on its headshot is drawn from, and a row marked "2" is exactly
+ * a row this keeps. The board and the details view fetch that map because they
+ * have *no* report — asking a hundred kilobytes of the whole league for the
+ * twenty players already in hand would be a second source that could disagree
+ * with the pip beside it.
+ *
+ * Reading a game rather than a report is what makes the date explicit, and it
+ * has to be: a report spans the range in view, and "starting" said of a game
+ * four days ago is a fact about a night that has already happened. A
+ * doubleheader passes on either game — `some`, not the first one found.
+ *
+ * A postponed game is not a start. The lineup for one is posted and then means
+ * nothing, which is exactly what the "!" pip on the headshot says.
+ */
+export function isStartingOn(report: PlayerReport, date: string): boolean {
+  return report.games.some((g) => {
+    if (g.date !== date || g.status.state === 'postponed') return false;
+    return report.kind === 'pitcher'
+      ? g.pitchingRole === 'starting'
+      : g.lineupStatus === 'starting';
+  });
+}
+
+/**
  * Label for a player with no batting to show. "No game" when their team wasn't
  * scheduled that day (no game to tie them to at all — getReport gives a rostered
  * player a placeholder for any game their team plays, so zero games means none

@@ -15,7 +15,7 @@ import type {
   SeasonPlayer,
   WatchPlayer,
 } from './types';
-import { isInjured } from './lib';
+import { isInjured, isStartingOn } from './lib';
 import { BaseballMark } from './components/BaseballMark';
 import { PlayerAdder } from './components/PlayerAdder';
 import { PlayerOrderEditor } from './components/PlayerOrderEditor';
@@ -302,6 +302,38 @@ export default function App() {
       .saveHideInjured(hide)
       .catch((e: Error) => console.error('saving hide-injured failed:', e.message));
   }, []);
+  /**
+   * Narrow the summary table to the players who are actually starting today —
+   * a hitter in the posted lineup, a pitcher named as today's starter.
+   *
+   * **In the URL** (`starters=1`), by the same rule `hideil=1` follows: it
+   * changes *which players a view is reporting on*, so a link that carries it
+   * is saying something about the data rather than about how it is drawn.
+   *
+   * **Not saved as a preference**, which is where it parts from hide-injured.
+   * An IL stint is a standing fact about a player and is as true next Tuesday
+   * as it is today, so a saved "hide them" is a setting. Who is starting is
+   * true for an afternoon and false by the next morning, and a saved copy would
+   * mean a filter switched on for one night's lineups silently narrowing a
+   * table read a week later — a stored answer to a question that has since
+   * changed. So there is no `UserPrefs` key, no route, and none of the
+   * already-touched dance the other two need.
+   */
+  const [startersOnly, setStartersOnly] = useState<boolean>(
+    () => initialParams.get('starters') === '1',
+  );
+  // The filter is about *today*, so it can only act on a range that contains
+  // today. Over "Yesterday" or a custom week in July there is nobody it could
+  // keep, and a control that empties a table with no way to read why is a trap
+  // — the same reasoning that hides the date row on the research board, which
+  // has nothing dated to act on. The state survives the excursion (going back
+  // to Today finds the toggle as it was left) and only its *effect* is gated,
+  // which is also what keeps `starters=1` out of a URL where it does nothing.
+  const rangeHasToday = useMemo(() => {
+    const today = baseballToday();
+    return start <= today && today <= end;
+  }, [start, end]);
+  const startersActive = startersOnly && rangeHasToday;
   // Play every clip with the sound off. Saved per user like the toggle above,
   // but deliberately **not** in the URL: hide-injured is there because it
   // changes which players a view is reporting on, and a link that says so is
@@ -914,6 +946,8 @@ export default function App() {
     }
     if (simulate) p.set('sim', '1');
     if (hideInjured) p.set('hideil', '1');
+    // Only while it is actually narrowing something — see `startersActive`.
+    if (startersActive) p.set('starters', '1');
     if (rosterSource === 'fantasy') p.set('roster', 'fantasy');
     if (helpOpen) p.set('help', '1');
     window.history.replaceState(null, '', `?${p.toString()}`);
@@ -932,6 +966,7 @@ export default function App() {
     researchKind,
     simulate,
     hideInjured,
+    startersActive,
     rosterSource,
     helpOpen,
   ]);
@@ -1368,6 +1403,26 @@ export default function App() {
         ? 'pitcher'
         : playerKind;
   const kindCards = shownKind === 'pitcher' ? cardPitchers : cardBatters;
+  /**
+   * The summary table's rows, which are the only ones the starters filter
+   * touches.
+   *
+   * Filtered *here* rather than up in `shownReports`, where hide-injured is,
+   * because the two answer different questions. An injured player is absent
+   * from every view for weeks, so dropping him ahead of the kind split keeps
+   * the tab counts equal to the lists under them. "Starting today" is a
+   * statement about one afternoon and belongs to the one view that is read as a
+   * roster: the games list is a record of what happened over the range, and the
+   * feed is a chronological one, and neither has any business losing a player
+   * because tonight's lineup left him out. Filtering below the kind split also
+   * leaves the Batters/Pitchers tabs alone, which is right — they say what is
+   * watched, not what tonight's lineups came to.
+   */
+  const summaryReports = useMemo(() => {
+    if (!startersActive) return kindCards;
+    const today = baseballToday();
+    return kindCards.filter((r) => isStartingOn(r, today));
+  }, [kindCards, startersActive]);
   // Each page keeps its own place, and going back to it lands where you left.
   //
   // Games and Feed are two readings of the same days over one window scroller,
@@ -1616,6 +1671,55 @@ export default function App() {
       </button>
     </div>
   );
+
+  /* The summary table's one filter: only the players who are actually starting
+     today — a hitter in the posted lineup, a pitcher named as today's starter.
+
+     **On the roster row, not in the settings menu.** The gear is app chrome and
+     everything in it reads as app-wide (hide-injured decides the summary *and*
+     the games list, muting decides every clip in the app); this qualifies one
+     view, and a menu entry that quietly did nothing on the two tabs beside it
+     would be a setting lying about its own reach. The roster row is where the
+     app already says which slice of the watchlist is on screen, so the filter
+     goes beside the tabs that select it — and disappears with them on Games and
+     Feed, which is the honest version of "it doesn't apply here".
+
+     **Between the reading and the days**, which is the research board's order
+     rather than an exception to this row's: the scope pills there name *which
+     players* and sit ahead of the window that names which span. Same question,
+     same place in the run.
+
+     It is a plain toggle with no panel, so it takes `.on` and never `.active`,
+     and it is folded into `.research-toggle`'s selector lists rather than
+     restyled to resemble the Qualified button it is the twin of — a filter that
+     narrows who is in a table, stated on the control that opens it. It keeps
+     its word at every width, where the board's four drop theirs on a phone:
+     those four are a known run of icons and this is one button on a row of
+     tabs, with nothing beside it to say what the icon would mean. */
+  const startersToggle =
+    rosterTab === 'summary' && rangeHasToday ? (
+      <button
+        type="button"
+        className={`starters-toggle${startersOnly ? ' on' : ''}`}
+        aria-pressed={startersOnly}
+        onClick={() => setStartersOnly((v) => !v)}
+        title="Only the players starting today — hitters in a posted lineup, pitchers named as today's starter"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          width="15"
+          height="15"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          aria-hidden="true"
+        >
+          <path d="M4 7h16M4 12h10M4 17h7" />
+        </svg>
+        <span className="starters-toggle-label">Starters</span>
+      </button>
+    ) : null;
 
   /* The calendar, which is both the disclosure for the date controls and the
      one thing on the page saying which days every number on it is drawn from.
@@ -2192,6 +2296,9 @@ export default function App() {
                   Feed
                 </button>
               </div>
+              {/* Only on Summary, and only over a range that contains today —
+                  see `startersToggle`. */}
+              {startersToggle}
               {dateToggle}
               </>
             )}
@@ -2297,6 +2404,25 @@ export default function App() {
         </div>
       )}
 
+      {/* The other thing that can empty this view, and the reason it needs its
+          own wording: the message above names the toggle that did it, and the
+          gear is the wrong place to send someone whose table was narrowed by a
+          button on the tab row. Only on the summary, which is the only view the
+          filter reaches. */}
+      {view === 'summary' &&
+        kindCards.length > 0 &&
+        summaryReports.length === 0 &&
+        !editMode && (
+          <div className="empty-state">
+            <p className="empty-title">Nothing to show — nobody here is starting today</p>
+            <p>
+              Turn off “Starters” in the row above to see everyone. Lineups post a couple of
+              hours before first pitch, so an empty table in the morning may only mean they
+              aren’t out yet.
+            </p>
+          </div>
+        )}
+
       {view === 'research' ? (
         <ResearchTable
           /* Deliberately **not** keyed on the board. It was, so that crossing
@@ -2339,9 +2465,9 @@ export default function App() {
           controlsHost={researchChrome}
         />
       ) : view === 'summary' ? (
-        kindCards.length > 0 && (
+        summaryReports.length > 0 && (
           <SummaryTable
-            reports={kindCards}
+            reports={summaryReports}
             onOpenDetails={setDetailsKey}
             onOpenPlayerDay={openPlayerDay}
             /* Kept when the table takes the page. The same nodes render in the
@@ -2353,6 +2479,15 @@ export default function App() {
             chrome={
               <>
                 {kindTabs}
+                {/* Expanded, the research board reduces its control set to a
+                    row of read-only badges; this view keeps its controls
+                    instead, and the filter comes with them for the same reason
+                    the kind tabs and the dates do — it is what the rows *are*,
+                    and a table narrowed to nine names with nothing on screen
+                    saying why is the one state this must never be in. Being the
+                    live control rather than a badge, it is also the way back
+                    out without leaving the page. */}
+                {startersToggle}
                 {dateToggle}
                 {dateControl}
               </>
