@@ -702,14 +702,16 @@ export interface ResearchRow {
    *  in. A window that is **missing** from the object had no baseline, and its
    *  column is not on the board to ask about it. */
   rosterTrends?: Partial<Record<TrendWindow, number | null>>;
-  /** The positions ESPN has him eligible at — `['2B', 'SS', 'OF']` — in the
-   *  board's own vocabulary and its own order.
+  /** The positions ESPN has him eligible at — `['2B', 'SS', 'OF']`, or `['SP',
+   *  'RP']` for a swingman — in the board's own vocabulary and its own order.
+   *  Each board reads its own half of it.
    *
    *  **Merged in by the client** like the two above, and for the same reason:
    *  the research blob is cached per kind and window and served to everyone,
    *  where this is a fantasy fact shown only to a user with a league connected.
    *  Absent means no league, or a player ESPN can't be joined to, and the
-   *  position pills fall back to MLB's single listed one for him. */
+   *  position pills fall back to what the app knows on its own — MLB's single
+   *  listed position for a batter, `starter` for a pitcher. */
   eligible?: string[] | null;
   savantName: string;
   kind: PlayerKind;
@@ -720,9 +722,12 @@ export interface ResearchRow {
   positionType: string;
   games: number;
   /** A majority of his appearances are starts — the same test `isRotationStarter`
-   *  applies to a watched pitcher. Computed server-side so the SP/RP pills and
-   *  the qualifier below can't drift apart on what a starter is. Always false
-   *  on a batter row. */
+   *  applies to a watched pitcher, recomputed for whichever window the board is
+   *  on. Computed server-side because the qualifier below is measured against
+   *  it: a starter qualifies on innings and a reliever on appearances. The
+   *  SP/RP pills read ESPN's season-long eligibility where there is one and
+   *  fall back to this where there isn't, so the two answers may differ — see
+   *  `espnPositions` in ResearchTable.tsx. Always false on a batter row. */
   starter: boolean;
   /** The rate-stat qualifier, measured against games **his team** has played
    *  rather than games he has played, which is the whole point of it. Three
