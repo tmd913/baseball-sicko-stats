@@ -27,42 +27,11 @@
   --live-purple: #c084fc;
   --ball: #475569;
 
-  /* ---- The wide tables' row highlight ----
-     The row under the pointer, on the summary table and the research board.
-
-     It has to be an **accent tint rather than another step up the neutral
-     ladder**, and that is a fact about this palette rather than a preference.
-     The greys these tables are built from live within about fifteen points of
-     each other — `--bg` #0b1220, `--panel` #16213a (the zebra stripe),
-     `--panel-2` #1b2949 — so the old hover, which was `--panel-2`, sat
-     **1.12:1 against the stripe it had to beat**: measured on a real board, a
-     hovered even row and its unhovered neighbour were the same colour to the
-     eye, which is the whole of "too faint to track a row". Nothing further up
-     that ladder helps; the next neutral in the palette (`--border`) only takes
-     it to 1.27. Mixing the accent in moves both lightness *and* hue at once,
-     which is what makes it read at a glance: 1.61:1 against the stripe and
-     1.85:1 against a plain row. It is also no longer `--panel-2`, which is what
-     the header and total rows are painted in — a hovered row used to be the
-     same shade as the header, so it read as chrome rather than as a highlight.
-
-     Mixed into `--panel-2` rather than `--bg` so the zebra's two grounds land
-     on one hovered colour: the highlight must say "this row" and not "this row,
-     and by the way it was an odd one". */
-  --row-hover: color-mix(in srgb, var(--accent) 18%, var(--panel-2));
-  /* The accent rail down the left of the hovered row. Tone alone is a claim
-     about a colour the reader has to compare against the row above; a rail is a
-     mark they only have to find. It goes on the row's **sticky first cell**, so
-     on a board scrolled out to Chase% it is still on screen — which is the case
-     the whole complaint is about. Inset, so it costs no layout: a real
-     `border-left` would widen the column and shift every name in it. */
-  --row-mark: inset 3px 0 0 var(--accent);
   /* The soft edge that marks where a horizontally-pinned column ends and the
      scrolled ones pass underneath. One definition because four rules draw it —
-     the summary table's headshot column, the research board's name column, and
-     both sides of its sorted column — and because `--row-mark` has to be
-     layered *with* it rather than over it: a `box-shadow` list replaces
-     wholesale, so the hover rules restate the edge, and restating a constant is
-     how two of the four quietly drift apart. */
+     the summary table's headshot column, the research board's name column, both
+     sides of its sorted column, and the game log's date column — and restating
+     a constant in four places is how two of them quietly drift apart. */
   --pin-edge: 6px 0 8px -6px rgba(0, 0, 0, 0.5);
   --pin-edge-left: -6px 0 8px -6px rgba(0, 0, 0, 0.5);
 
@@ -122,6 +91,10 @@
      and 700, so an expanded card keeps its full pitch table and strike-zone
      plot. */
   --card-column: 800px;
+  /* The app's side gutters, and one definition because four things read them:
+     `.app`'s own padding, the pinned chrome's negative bleed back out through
+     it, and the three wide tables', which do the same. */
+  --app-gutter: 22px;
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
   font-synthesis: none;
 }
@@ -158,7 +131,13 @@ body {
    the popovers and the results menu), and the two columns of cards — the games
    list and the feed — which are read down rather than across. */
 .app {
-  padding: 14px 22px 80px;
+  padding: 14px var(--app-gutter) 80px;
+  /* How far a wide table inside this box may bleed back out through those
+     gutters — see `.summary-scroll, .research-scroll, .glog-scroll` below. It is
+     declared by the *container* rather than by the table because the answer is
+     the container's own padding, and the game log's container is the player-page
+     overlay (16px) while an expanded table's is the full-page box (12px). */
+  --table-bleed: var(--app-gutter);
 }
 
 /* ---- The pinned chrome ----------------------------------------------------
@@ -210,8 +189,8 @@ body {
      opens, so the settings popover and the search results (both 40) still hang
      over the page below. */
   z-index: 41;
-  margin: -14px -22px 14px;
-  padding: 14px 22px 0;
+  margin: -14px calc(-1 * var(--app-gutter)) 14px;
+  padding: 14px var(--app-gutter) 0;
   background:
     radial-gradient(760px 260px at 82% -40%, rgba(56, 189, 248, 0.09), transparent 70%),
     linear-gradient(180deg, var(--panel) 0%, var(--bg-2) 100%);
@@ -917,9 +896,6 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  /* Nudge the top-heavy glyph down off the font baseline so it reads optically
-     centered; em-based so it scales with the pip's font-size. */
-  padding-bottom: 0.05em;
   border-radius: 50%;
   font-weight: 700;
   line-height: 1;
@@ -954,6 +930,10 @@ body {
 .lineup-spot.spot-relief {
   background: var(--hr);
 }
+/* How the text inside a pip is centred is shared with the status code and so
+   lives with it, below `.sum-photo-status` — it has to come after every rule it
+   overrides, a `@supports` block adding no specificity. */
+
 /* On the card headshot's corner — larger photo, so a larger pip. Pushed out
    toward the corner so it clears the player's face rather than sitting on it. */
 .player-photo-spot {
@@ -1119,10 +1099,15 @@ body {
   line-height: 0;
   border-radius: 50%;
   cursor: pointer;
-  /* Reset UA button chrome — this is a <button> styled as a bare headshot. */
+  /* Reset UA button chrome — this is a <button> styled as a bare headshot.
+     `font-family` is part of that chrome and was the half nobody reset: a
+     <button> defaults to the UA's own face (Arial here), and the pip inside
+     inherits it, so the same mark rendered in two different typefaces
+     depending on whether its wrapper happened to be a button. */
   padding: 0;
   border: none;
   background: none;
+  font-family: inherit;
   -webkit-appearance: none;
   appearance: none;
 }
@@ -2943,6 +2928,10 @@ body {
   scrollbar-gutter: stable;
   background: var(--bg);
   padding: 20px 16px 64px;
+  /* The game log is one of the three wide tables and takes the window inside
+     this overlay exactly as the other two take it inside `.app`; 16px is this
+     box's own side padding, which is what it has to give back. */
+  --table-bleed: 16px;
 }
 .details-head {
   display: flex;
@@ -4327,6 +4316,9 @@ body {
   align-items: stretch;
   background: var(--bg);
   padding: 10px 12px;
+  /* …which the table inside then takes straight back, so a full-page table
+     really is the full page while the chrome row above it keeps its gutter. */
+  --table-bleed: 12px;
   /* Belt and braces on the width: the game log no longer carries a reading
      column to undo, but a fixed box that takes the page must not inherit one if
      either view is ever given one back. */
@@ -4654,26 +4646,10 @@ body {
 .summary-table tfoot .sum-img-col {
   z-index: 3;
 }
-/* The row under the pointer — see `--row-hover` for why it is an accent tint
-   and not one more step of grey. The sticky cells are named alongside the
-   ordinary ones for the reason the zebra rule names them: a sticky cell with no
-   background of its own lets the scrolled columns show through it. */
-.summary-table tbody tr:hover td,
-.summary-table tbody tr:hover .sum-img-col,
-.summary-table tbody tr:hover .sum-name-col {
-  background: var(--row-hover);
-}
-/* …and the rail on the row's first cell, which is the half of the highlight
-   that survives being scrolled away from. It has to restate the pinned edge it
-   is layered over, `box-shadow` being a list that replaces wholesale — hence
-   `--pin-edge` existing at all. */
-.summary-table tbody tr:hover .sum-img-col {
-  box-shadow: var(--row-mark), var(--pin-edge);
-}
 /* A live player's whole row is tinted by their role (at bat / on deck / on
    base) — the same colours as the headshot ring, blended into an opaque shade
    so it also backs the sticky cells and overrides the zebra stripe. Defined
-   after the stripe/hover rules so it wins the same-specificity tie. */
+   after the stripe rules so it wins the same-specificity tie. */
 .summary-table tbody tr.role-at-bat td,
 .summary-table tbody tr.role-at-bat .sum-img-col,
 .summary-table tbody tr.role-at-bat .sum-name-col {
@@ -4689,31 +4665,6 @@ body {
 .summary-table tbody tr.role-on-base .sum-name-col {
   background: color-mix(in srgb, var(--live-purple) 20%, var(--bg));
 }
-/* Hovering a tinted row **deepens its own colour** rather than replacing it
-   with the accent one. Those rules win the tie against the plain hover above
-   by coming later, which is right — the role is the more important fact — but
-   it left the three live rows as the only ones in the table that answered the
-   pointer with nothing at all, and they are the rows most likely to be the one
-   being followed. Deepening keeps both statements: the hue still says at bat /
-   on deck / on base, the step says the pointer is here. Roughly the same
-   distance the plain hover travels, which is what keeps a lit tinted row from
-   reading as a fourth role. The rail is the accent's on every row, tinted or
-   not — it is the pointer's mark and belongs to the pointer. */
-.summary-table tbody tr.role-at-bat:hover td,
-.summary-table tbody tr.role-at-bat:hover .sum-img-col,
-.summary-table tbody tr.role-at-bat:hover .sum-name-col {
-  background: color-mix(in srgb, var(--strikeout) 36%, var(--bg));
-}
-.summary-table tbody tr.role-on-deck:hover td,
-.summary-table tbody tr.role-on-deck:hover .sum-img-col,
-.summary-table tbody tr.role-on-deck:hover .sum-name-col {
-  background: color-mix(in srgb, var(--hr) 34%, var(--bg));
-}
-.summary-table tbody tr.role-on-base:hover td,
-.summary-table tbody tr.role-on-base:hover .sum-img-col,
-.summary-table tbody tr.role-on-base:hover .sum-name-col {
-  background: color-mix(in srgb, var(--live-purple) 34%, var(--bg));
-}
 .sum-photo-wrap {
   position: relative;
   display: inline-flex;
@@ -4721,6 +4672,13 @@ body {
   padding: 0;
   border: none;
   background: none;
+  /* The same reset `.player-photo-link` makes, and for the badges' sake: this
+     is a <button>, so without it the pip and the status code on every row of
+     the summary table and the research board render in the UA's Arial while
+     the identical marks on the details portrait — whose wrapper is a <span> —
+     render in the app's own face. One mark, two typefaces, two sets of font
+     metrics for the centring rule above to answer for. */
+  font-family: inherit;
   cursor: pointer;
   -webkit-appearance: none;
   appearance: none;
@@ -4824,6 +4782,65 @@ body {
 .sum-photo-status.status-other {
   color: var(--muted);
   border-color: var(--border);
+}
+
+/* ---- Centring the marks on a headshot -------------------------------------
+   Every badge the app draws on a photograph — the lineup pip and the status
+   code, at the tables' 37px circle and at the details view's 64px portrait —
+   centres its text here, in one place, because all four of them had it wrong
+   and each was wrong by a different amount.
+
+   **`align-items: center` centres the line box, and the ink is not centred in
+   the line box.** A line box is the font's ascent plus its descent; every code
+   this app can print (`IL10` `IL60` `RA` `DTD` `OUT` `DFA` `MIN` `SUS`, the
+   batting numbers, `!`, `SP` and a reliever's entry inning) is caps and digits
+   with **no descender at all**, so its ink runs from cap height down to the
+   baseline and sits above the middle of the box it is centred in by
+   `(ascent − descent − capHeight) / 2` — a number that belongs to the font,
+   not to the design. Measured with a canvas against the rendered baseline, the
+   digit pip in the summary table had 3.31px of air above it and 5.22px below
+   inside a 15px circle (**0.95px high**), `SP` 3.47/5.60 (**1.06px**), and the
+   status code 1.75/3.40 in an 11px pill (**0.83px**).
+
+   The direction was not even consistent, which is what "not *always* centred"
+   was: on the details portrait, in the app's own font rather than the tables'
+   (see `.sum-photo-wrap` above), the pips read 0.18–0.53px **high** while the
+   status pill read 4.55/3.30 — 0.63px **low** — so no single nudge could have
+   fixed both. `padding-bottom: 0.05em` on `.lineup-spot` was that nudge: it
+   moves the text up by half its own value, which took the app font's pip from
+   +0.33 to +0.11 and the tables' Arial one from −0.68 to −0.90. It is gone.
+
+   **`text-box: trim-both cap alphabetic` trims the box to the ink instead**, so
+   what gets centred is the cap-height box and the font's metrics stop mattering.
+   It has to be set on the block container that holds the line, and an anonymous
+   flex item does not inherit it — measured, a flex or grid container with the
+   property set is byte-for-byte the unfixed layout — so the badge becomes a
+   plain block and `align-content: center` does the centring. Measured after:
+   every code, at both sizes, lands within **0.015px** of dead centre, and `!` —
+   fractionally taller than cap height in this face — within 0.09.
+
+   Behind `@supports` because the two features it needs shipped together-ish and
+   `align-content` on a block container alone would drop the text to the top of
+   the pill where the trim isn't understood. Without it the badges centre their
+   line box exactly as they did before, which is a fraction of a pixel and not a
+   regression. `width` stays `auto` on the widened pills: each of these is
+   absolutely positioned, so a block shrink-to-fits rather than filling a row.
+
+   It sits **here**, past the last of the three families it names, rather than
+   beside `.lineup-spot` where it was written: `@supports` adds no specificity,
+   so up there it lost `display` to `.sum-photo-status`'s and
+   `.details-photo-status`'s own `inline-flex` and centred the pip alone —
+   measured, the two status pills came back at their old offsets while the pips
+   were fixed. Same trap as the narrow-screen block at the end of the file. */
+@supports (text-box: trim-both cap alphabetic) {
+  .lineup-spot,
+  .sum-photo-status,
+  .details-photo-status {
+    display: block;
+    align-content: center;
+    text-align: center;
+    text-box: trim-both cap alphabetic;
+  }
 }
 .sum-photo-empty {
   display: inline-block;
@@ -5089,6 +5106,39 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--control-radius);
   background: var(--bg);
+}
+
+/* ---- The three wide tables take the window ---------------------------------
+   Dropping `.app`'s 1180px cap gave these three the room a monitor has, but
+   left them inside its **gutters** — 44px of page they have no use for, which
+   on the widest table in the app is a stat column pushed off the right edge and
+   on a phone is 44 of the 390 it has. The chrome already solved this for
+   itself: a negative side margin exactly the size of the padding it sits in.
+   These do the same, so the rest of the page — the cards, the reading columns,
+   the empty states, the count line and the badge rows — keeps its gutters and
+   only the tables give them back.
+
+   `--table-bleed` is declared by whichever box holds the table, because the
+   number is that box's own side padding and there are three of them: `.app`
+   (22px), the player-page overlay the game log lives in (16px) and the
+   full-page box all three can take (12px). Written as one rule with a variable
+   rather than three rules with three numbers, so a table can never bleed by
+   more or less than the box it is in has to give.
+
+   The sides of the box go with it. A rounded corner and a hairline sitting on
+   the very edge of the screen read as a card that has been clipped rather than
+   as a table that spans; without them it reads as the band it now is, with the
+   top and bottom rules still closing it. Nothing about the sticky columns
+   moves: `left: 0` and `left: 63px` are measured from the scrollport's own
+   padding edge, and the scrollport and its contents shift together. */
+.summary-scroll,
+.research-scroll,
+.glog-scroll {
+  margin-left: calc(-1 * var(--table-bleed, 0px));
+  margin-right: calc(-1 * var(--table-bleed, 0px));
+  border-left: none;
+  border-right: none;
+  border-radius: 0;
 }
 
 /* ---- Position row ---- */
@@ -5802,14 +5852,6 @@ body {
   .research-table .sum-name-col {
     box-shadow: var(--pin-edge);
   }
-  /* The hover rail therefore has nothing to layer over here — the edge has
-     moved to the name — so the headshot cell carries the mark alone. Without
-     this it would inherit the summary table's version and hand the headshot
-     column back the very seam the rule above took off it, drawn through the
-     middle of a pinned pair that scrolls as one. */
-  .research-table tbody tr:hover .sum-img-col {
-    box-shadow: var(--row-mark);
-  }
 }
 
 /* The column being sorted on is tinted down its whole length — on a table this
@@ -5832,8 +5874,8 @@ body {
    underneath the name rather than alongside it.
 
    The cells are opaque by construction — every th and td in this table carries a
-   background, and the zebra and hover rules keep the sticky one matching its row
-   — so columns pass cleanly underneath rather than showing through.
+   background, and the zebra rule keeps the sticky one matching its row — so
+   columns pass cleanly underneath rather than showing through.
 
    The soft edge goes on **both** sides, which is the one place this differs from
    the pinned name column's single right-hand shadow. Which edge is doing the
@@ -5863,9 +5905,9 @@ body {
 /* The Statcast half of the row is a different kind of number from the counting
    stats beside it — what the contact was worth, not what it went for — so the
    seam between them is drawn, and the group named in the header's own colour.
-   Deliberately *not* a wash behind the cells: the zebra stripe and the row
-   hover are both defined later in the file and would win on half the rows,
-   leaving a tint that flickers down the table rather than marking a group. */
+   Deliberately *not* a wash behind the cells: the zebra stripe is defined later
+   in the file and would win on half the rows, leaving a tint that flickers down
+   the table rather than marking a group. */
 .research-table .research-statcast-start {
   border-left: 1px solid var(--border);
 }
