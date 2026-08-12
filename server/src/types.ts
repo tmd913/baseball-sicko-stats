@@ -529,6 +529,10 @@ export function playerKey(p: { id: number; kind: PlayerKind }): string {
  *
  * The three are disjoint by construction, `mine` winning where it and ESPN
  * disagree, so all three on is the whole board and none on is an empty one.
+ * They partition **ownership** and nothing else, which is why the watchlist is
+ * not a fourth key: it is a fact about the user rather than about who holds a
+ * player, so it rides beside this as its own stored flag
+ * (`UserPrefs.researchWatchlist`) and the board unions it on top.
  */
 export type ResearchIncludeKey = 'mine' | 'others' | 'fa';
 
@@ -702,9 +706,11 @@ export interface PercentileMetric {
   label: string;
   percentile: number | null; // 0-100 league rank; null when the player has no data
   value: string | null; // the raw stat, pre-formatted for display (".415", "94.1")
-  // True when the percentile was estimated from the league mean/stddev (Savant
-  // has no exact rank for this player, e.g. a part-season bat-tracking metric)
-  // rather than read from a `percent_rank_` field. Approximate to a few points.
+  // True when the rank is ours rather than Savant's — it had no exact rank for
+  // this player (a part-season metric, most often), so it was estimated from the
+  // league mean/stddev it publishes, or, where it publishes neither, computed
+  // against the leaderboard carrying that column league-wide. Approximate to a
+  // few points either way; the card draws it with a dotted bubble.
   estimated?: boolean;
 }
 

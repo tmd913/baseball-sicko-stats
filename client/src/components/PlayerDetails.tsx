@@ -46,10 +46,17 @@ function MetricRow({ metric }: { metric: PercentileMetric }) {
   const { label, percentile, value, estimated } = metric;
   const has = percentile !== null;
   const color = has ? pctColor(percentile) : undefined;
+  // A row with a value but no percentile is not the same as a row with nothing:
+  // it is a stat Savant measures and publishes no league distribution for, so
+  // there is no honest bar to draw (the two baserunning splits — see the note on
+  // them in `percentiles.ts`). Saying "no data" over a printed number read as a
+  // bug in the number rather than an absence of the rank beside it.
   const title = has
     ? `${label} — ${percentile}th percentile${value ? ` (${value})` : ''}` +
       (estimated ? ' · estimated from league avg (no exact Savant rank)' : '')
-    : `${label} — no data`;
+    : value
+      ? `${label} — ${value} · no league rank published for this stat`
+      : `${label} — no data`;
   return (
     <div className="pct-row" title={title}>
       <span className="pct-label">{label}</span>
@@ -504,10 +511,12 @@ export function PlayerDetails({
   position,
   isPitcher = false,
   isOnRoster,
+  rosterEditable = true,
   isWatchlisted,
   onWatchlistToggle,
   rosterPct,
-  rosterTrend,
+  rosterTrends,
+  eligible,
   onAdd,
   onRemove,
   onClose,
@@ -516,9 +525,15 @@ export function PlayerDetails({
   name: string;
   position?: string;
   isPitcher?: boolean;
-  /** Whether he is on the user's **roster** — the saved list the Summary, Games
-   *  and Feed views report on, which `onAdd`/`onRemove` edit. */
+  /** Whether he is on the **roster the app is reporting on** — the saved list,
+   *  or the user's ESPN team while `rosterSource` says so. The same key set the
+   *  research board's `My Roster` button selects on, so the baseball beside a
+   *  row there and the one in this header always mean the same thing. */
   isOnRoster: boolean;
+  /** Whether that roster is the app's own to change. False in fantasy mode,
+   *  where ESPN owns the list: the add button and the Remove beside the badge
+   *  both go, and the badge stays as the plain statement it is. */
+  rosterEditable?: boolean;
   /** Whether he is on the user's **watchlist** — the research board's list,
    *  which is a different thing entirely: you watch a player you are thinking
    *  about, and roster the ones you are actually reading every day. */
@@ -528,9 +543,18 @@ export function PlayerDetails({
    *  connected, which is what hides the line; `null` when there is one but
    *  ESPN has no figure for this player. */
   rosterPct?: number | null;
-  /** How that figure has moved, and over how long. Absent with no league or no
-   *  baseline; a `change` of 0 is a real answer and renders as "flat". */
-  rosterTrend?: { change: number; days: number };
+  /** How that figure has moved, over every span the server had a baseline for —
+   *  the same set the research board draws columns from, and in the same
+   *  ascending order. Absent with no league or no history at all; a `change` of
+   *  0 is a real answer and is drawn as a flat 0.0 rather than dropped. */
+  rosterTrends?: { window: number; days: number; change: number }[];
+  /** Every position ESPN has him eligible at — `['2B', 'SS', 'OF']`, and here
+   *  including `SP`/`RP`, which the research board's pills deliberately don't
+   *  read (see `espnPositions` there). `undefined` with no league; `null` when
+   *  there is one and ESPN can't be joined to him, in which case the chip stays
+   *  MLB's listed position. This page has the room the board's cell hasn't, so
+   *  the list is printed whole. */
+  eligible?: string[] | null;
   onAdd: () => void;
   onRemove: () => void;
   onClose: () => void;
@@ -798,7 +822,21 @@ export function PlayerDetails({
           <div>
             <h1 className="details-name">
               {name}
-              {position && <span className="player-pos">{position}</span>}
+              {/* The chip is **what he can be played at** wherever ESPN can
+                  say so, and MLB's single listed position otherwise. It is the
+                  one place in the app with room for the whole list, which is
+                  why the research board's cell may truncate to two and this
+                  never does — the two read the same fact at two widths. */}
+              {eligible && eligible.length > 0 ? (
+                <span
+                  className="player-pos"
+                  title={`Eligible in ESPN at ${eligible.join(', ')}`}
+                >
+                  {eligible.join('/')}
+                </span>
+              ) : (
+                position && <span className="player-pos">{position}</span>
+              )}
             </h1>
             {/* Under the name rather than out beside the watchlist button: it
                 is a fact *about the player*, like the position chip above it,
@@ -813,24 +851,31 @@ export function PlayerDetails({
               >
                 Rostered{' '}
                 <strong>{rosterPct === null ? '—' : `${rosterPct.toFixed(1)}%`}</strong>
-                {rosterPct !== null && rosterTrend && (
-                  <span
-                    className={`details-trend${
-                      rosterTrend.change > 0
-                        ? ' up'
-                        : rosterTrend.change < 0
-                          ? ' down'
-                          : ''
-                    }`}
-                    title={`Change over the last ${rosterTrend.days} day${
-                      rosterTrend.days === 1 ? '' : 's'
-                    }`}
-                  >
-                    {rosterTrend.change === 0
-                      ? `flat over ${rosterTrend.days}d`
-                      : `${rosterTrend.change > 0 ? '▲' : '▼'} ${Math.abs(
-                          rosterTrend.change,
-                        ).toFixed(1)} in ${rosterTrend.days}d`}
+                {/* One span per column the board can draw, in the same order,
+                    so the page and the table agree about what is available.
+                    Each states its own span rather than the sentence a single
+                    trend used to read ("▲ 1.2 in 7d"): five of those is a
+                    paragraph, where the span up front and the move behind it
+                    is a row that can be scanned across. A flat window keeps
+                    its 0.0 in the muted colour — the server drops zeroes from
+                    the wire and the client fills them back, so flat is a real
+                    answer here and not an absence. */}
+                {rosterPct !== null && rosterTrends && rosterTrends.length > 0 && (
+                  <span className="details-trends">
+                    {rosterTrends.map((t) => (
+                      <span
+                        key={t.window}
+                        className={`details-trend${
+                          t.change > 0 ? ' up' : t.change < 0 ? ' down' : ''
+                        }`}
+                        title={`Change over the last ${t.days} day${t.days === 1 ? '' : 's'}`}
+                      >
+                        <span className="details-trend-span">{t.days}d</span>
+                        {t.change === 0
+                          ? '0.0'
+                          : `${t.change > 0 ? '▲' : '▼'}${Math.abs(t.change).toFixed(1)}`}
+                      </span>
+                    ))}
                   </span>
                 )}
               </p>
@@ -849,8 +894,11 @@ export function PlayerDetails({
             app has to make that distinction plainest — this page opens on
             anybody, and "am I following this man, and in which sense" is the
             question it exists to settle. The **star** is the watchlist and is
-            always there, on or off; the **roster** control beside it is either
-            an add button or the "On roster" mark with its remove beside it. */}
+            always there, on or off, in every mode: that list is the user's own
+            and has nothing to do with where the roster comes from. The
+            **roster** control beside it is either an add button or the "On
+            roster" mark with its remove beside it — and in fantasy mode it is
+            neither, ESPN owning the list; see the badge below. */}
         <div className="details-watch-actions">
           <button
             type="button"
@@ -881,22 +929,40 @@ export function PlayerDetails({
           <>
             {/* The app's baseball, the same mark the research board's watched
                 rows carry — a tick is what a form says when it accepts a value,
-                where this is a state the player is in. */}
+                where this is a state the player is in. It survives into fantasy
+                mode because it is *true there*: the roster on screen is the
+                ESPN team, and this man is on it. The wording is the same in
+                both modes on purpose — the board's button is still `My Roster`
+                and its baseball still marks these same keys, so a second name
+                for one fact would only invite the reader to look for a
+                difference that isn't there. Which list it is, is the title's
+                business. */}
             <span
               className="details-watch-badge"
-              title={`${name} is on your roster`}
+              title={
+                rosterEditable
+                  ? `${name} is on your roster`
+                  : `${name} is on your fantasy team — the roster the Summary, Games and Feed views are reading`
+              }
             >
               <BaseballMark size={12} width={2} />
               On roster
             </span>
-            <RemoveButton
-              name={name}
-              armed={armedRemove}
-              onArm={() => setArmedRemove(true)}
-              onRemove={onRemove}
-            />
+            {/* But the Remove goes with the mode: ESPN's list is not ours to
+                take a player off, and a ✕ that either did nothing or quietly
+                edited the *saved* list — the one nothing on screen is showing —
+                is the plainest version of a control offering what it can't do.
+                Dropping him is a move made on ESPN. */}
+            {rosterEditable && (
+              <RemoveButton
+                name={name}
+                armed={armedRemove}
+                onArm={() => setArmedRemove(true)}
+                onRemove={onRemove}
+              />
+            )}
           </>
-        ) : (
+        ) : rosterEditable ? (
           <button
             type="button"
             className="details-add"
@@ -908,7 +974,7 @@ export function PlayerDetails({
             </svg>
             Add to roster
           </button>
-        )}
+        ) : null}
         </div>
       </div>
 

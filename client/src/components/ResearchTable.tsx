@@ -4,8 +4,14 @@ import { BaseballMark } from './BaseballMark';
 import { ExpandButton } from './ExpandButton';
 import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
 import { useFullPage, usePlayerStatus } from '../hooks';
-import { RESEARCH_INCLUDE_KEYS, RESEARCH_WINDOWS } from '../types';
-import type { PlayerKind, ResearchIncludeKey, ResearchRow, ResearchWindow } from '../types';
+import { RESEARCH_INCLUDE_KEYS, RESEARCH_WINDOWS, TREND_WINDOWS } from '../types';
+import type {
+  PlayerKind,
+  ResearchIncludeKey,
+  ResearchRow,
+  ResearchWindow,
+  TrendWindow,
+} from '../types';
 import { headshotUrl, statusCorner } from '../lib';
 
 /**
@@ -227,34 +233,55 @@ function inningsToOuts(ip: number): number {
 // them, then the Statcast group behind its divider.
 
 /**
- * Which way a roster % has moved lately.
+ * Which way a roster % has moved, one column per span.
  *
- * The label carries the span (`\u03947d`) because the span is not fixed: it is
- * seven days once a week of history exists and whatever is available before
- * then, and a header saying "7d" when it means three would be a lie the reader
- * has no way to catch. `ResearchTable` rewrites the label from the value the
- * server reports.
+ * Five of them because a move over a night and a move over a month are
+ * different facts about a player and regularly point opposite ways — the man
+ * everyone dropped in April and has been picked back up all week is falling on
+ * 30D and rising on 1D, and a single column has to pick one of those to say.
  *
- * Sorts descending first, like every other counting column — the question
+ * **The key is the window, the label is the measurement.** `rosterTrend` stays
+ * the seven-day column's key rather than becoming `rosterTrend7`, because saved
+ * column sets and every `cols=` link in the wild name it, and renaming it would
+ * silently drop the one trend column anybody has today. The label is written
+ * from what the server actually measured (`\u03946d` if the seventh day back is
+ * missing and the sixth is not), since a header saying "7d" when it means six
+ * would be a lie the reader has no way to catch — see `TREND_DRIFT` on the
+ * server for why no two of these can ever land on the same span.
+ *
+ * Each sorts descending first, like every other counting column: the question
  * people bring to a trend column is "who is being added", and one tap answers
- * it. One more tap gives the drops.
+ * it. One more gives the drops.
  */
-const TREND_COLUMN: Column = {
-  key: 'rosterTrend',
-  label: '\u0394 Ros%',
-  title: 'Change in roster % over the last week',
-  format: (r) =>
-    r.rosterTrend == null
-      ? '\u2014'
-      : `${r.rosterTrend > 0 ? '+' : '\u2212'}${Math.abs(r.rosterTrend).toFixed(1)}`,
-  value: (r) => r.rosterTrend ?? null,
-  cellClass: (r) =>
-    r.rosterTrend == null || r.rosterTrend === 0
-      ? undefined
-      : r.rosterTrend > 0
-        ? 'research-trend-up'
-        : 'research-trend-down',
-};
+const trendKey = (w: TrendWindow): string => (w === 7 ? 'rosterTrend' : `rosterTrend${w}`);
+
+const trendOf = (r: ResearchRow, w: TrendWindow): number | null => r.rosterTrends?.[w] ?? null;
+
+const trendColumn = (w: TrendWindow): Column => ({
+  key: trendKey(w),
+  label: `\u0394${w}d`,
+  title: `Change in roster % over the last ${w === 1 ? 'day' : `${w} days`}`,
+  format: (r) => {
+    const v = trendOf(r, w);
+    // Zero takes no sign at all. It used to come out as "\u22120.0", the sign
+    // being chosen on `> 0` — which reads as a fall of nothing, and there are a
+    // great many flat players on a board that drops zeroes from the wire.
+    if (v === null) return '\u2014';
+    if (v === 0) return '0.0';
+    return `${v > 0 ? '+' : '\u2212'}${Math.abs(v).toFixed(1)}`;
+  },
+  value: (r) => trendOf(r, w),
+  cellClass: (r) => {
+    const v = trendOf(r, w);
+    return v === null || v === 0 ? undefined : v > 0 ? 'research-trend-up' : 'research-trend-down';
+  },
+});
+
+const TREND_COLUMNS: Column[] = TREND_WINDOWS.map(trendColumn);
+
+/** Which window a column key belongs to, for the two places that have to tell a
+ *  trend column from an ordinary one without re-deriving the names. */
+const TREND_BY_KEY = new Map<string, TrendWindow>(TREND_WINDOWS.map((w) => [trendKey(w), w]));
 
 const ROSTER_PCT_COLUMN: Column = {
   key: 'rosterPct',
@@ -274,7 +301,7 @@ const ROSTER_PCT_COLUMN: Column = {
 
 const BATTER_COLUMNS: Column[] = [
   ROSTER_PCT_COLUMN,
-  TREND_COLUMN,
+  ...TREND_COLUMNS,
   { key: 'games', label: 'G', group: 'Counting', title: 'Games played', format: (r) => count(r.games), value: (r) => r.games },
   { key: 'pa', label: 'PA', title: 'Plate appearances', format: (r) => count(r.pa), value: (r) => r.pa },
   { key: 'ab', label: 'AB', title: 'At bats', format: (r) => count(r.ab), value: (r) => r.ab },
@@ -307,7 +334,7 @@ const BATTER_COLUMNS: Column[] = [
 
 const PITCHER_COLUMNS: Column[] = [
   ROSTER_PCT_COLUMN,
-  TREND_COLUMN,
+  ...TREND_COLUMNS,
   { key: 'games', label: 'G', group: 'Counting', title: 'Games pitched', format: (r) => count(r.games), value: (r) => r.games },
   { key: 'gamesStarted', label: 'GS', title: 'Games started', format: (r) => count(r.gamesStarted), value: (r) => r.gamesStarted },
   // Shown as thirds ("158.1") and ordered on the out count behind it — 6.2 is
@@ -367,13 +394,24 @@ const PITCHER_COLUMNS: Column[] = [
 // Expressed as what's *off* rather than what's on, so a column added later
 // shows up by default instead of being invisible until someone remembers to
 // list it — the safe direction for this to fail in.
+//
+// The four new trend windows are the case that tests that rule and are listed
+// off deliberately. They are not a *new* stat, which is what the rule protects:
+// they are four more resolutions of one already on the board, and left on they
+// would put five near-identical signed columns at the very front of the table
+// for every connected user — before games played. So the one that has always
+// been there (7d, the fantasy convention) stays on and the rest are a tick
+// away in the Columns panel, next to it, under the same Fantasy heading where
+// nobody has to know they exist to find them.
 const DEFAULT_OFF: Record<PlayerKind, ReadonlySet<string>> = {
   batter: new Set([
+    'rosterTrend1', 'rosterTrend3', 'rosterTrend15', 'rosterTrend30',
     'ab', 'cs', 'iso', 'babip', 'bbPerK', 'paPerHr', 'sbRate',
     'launchAngle', 'sweetSpotRate', 'gbRate', 'ldRate', 'fbRate',
     'whiffRate', 'chaseRate', 'firstPitchStrikeRate', 'sprintSpeed',
   ]),
   pitcher: new Set([
+    'rosterTrend1', 'rosterTrend3', 'rosterTrend15', 'rosterTrend30',
     // SV and HLD are off because SVHD is on — the sum is the read, and the
     // split between them is the follow-up question rather than the first one.
     'battersFaced', 'saves', 'holds', 'runs', 'hitBatsmen', 'avgAgainst',
@@ -469,13 +507,166 @@ function isBatterByTrade(r: ResearchRow): boolean {
   return r.positionType !== 'Pitcher';
 }
 
+/**
+ * **What a position pill matches, and why it is two different facts.**
+ *
+ * With a fantasy league connected the batting pills read **ESPN's eligibility**
+ * (`ResearchRow.eligible`), which is multi-valued: Willi Castro is eligible at
+ * 1B, 2B, 3B, SS and OF at once, and a manager filtering to SS wants him. MLB's
+ * single listed position cannot express that — 301 of the 628 batters ESPN
+ * could be joined to carry more than one, 95 carry three or more — and it is
+ * not merely narrower but sometimes *wrong* for the purpose: on a checked board
+ * 21 batters have an MLB primary ESPN doesn't grant at all (Scott Kingery lists
+ * SS and is eligible at 2B and OF), so a fantasy manager was being shown a
+ * position his league would not let him use.
+ *
+ * Without a league — or for a player the name-and-club join can't place — it
+ * falls back to MLB's listed position, which is exactly what the board did
+ * before and reads identically: `Infielder`/`Outfielder` are precisely the four
+ * infield and three outfield abbreviations, so IF and OF answer the same as the
+ * `positionType` tests they replace.
+ */
+const MLB_TO_ELIGIBLE: Record<string, string> = {
+  C: 'C',
+  '1B': '1B',
+  '2B': '2B',
+  '3B': '3B',
+  SS: 'SS',
+  LF: 'OF',
+  CF: 'OF',
+  RF: 'OF',
+  OF: 'OF',
+  DH: 'DH',
+};
+
+/** The half of ESPN's vocabulary a batting board can act on. `SP`/`RP` ride on
+ *  the same map — the player page prints them — but no pill here reads them. */
+const BATTING_ELIGIBLE = new Set(['C', '1B', '2B', '3B', 'SS', 'OF', 'DH']);
+
+/**
+ * The positions a row counts as, in the board's own vocabulary.
+ *
+ * **The pitching board is deliberately not part of this**, and the reasoning is
+ * worth keeping. ESPN grants SP and RP the same way it grants 2B — off games
+ * started — so it is the same *kind* of fact, but three things say the board
+ * should keep `ResearchRow.starter`. It **partitions**: 143 of the 749 pitchers
+ * on a checked board are eligible at both, so the two pills would overlap and
+ * stop adding up to the board. It is **the window's answer rather than the
+ * season's**: `starter` is recomputed for 7d/15d/30d/60d, where an eligibility
+ * is a season-long qualification that a 7-day board would contradict. And it is
+ * **what the qualifier reads** — the whole reason `starter` is computed
+ * server-side is that the SP/RP pills and the innings-versus-appearances rule
+ * must not disagree about who is a starter, and pointing the pills at a second
+ * definition would put that back. Where the two can be compared they mostly
+ * agree anyway: of the 601 with a single ESPN answer, 561 match, and the 40 that
+ * don't are almost all organisational starters who have so far only relieved in
+ * the majors (Ty Blach, 1 G, 0 GS, ESPN `SP`) — which is ESPN describing a role
+ * where this board describes a season.
+ */
+function espnPositions(r: ResearchRow): string[] | null {
+  if (r.kind === 'pitcher' || !r.eligible) return null;
+  const list = r.eligible.filter((p) => BATTING_ELIGIBLE.has(p));
+  // An empty list after the filter is the same as no list at all: it means ESPN
+  // has nothing to say about him as a batter, which is what the fallback is for.
+  return list.length > 0 ? list : null;
+}
+
+function eligibleFor(r: ResearchRow): string[] {
+  const espn = espnPositions(r);
+  if (espn) return espn;
+  const one = MLB_TO_ELIGIBLE[r.position];
+  return one ? [one] : [];
+}
+
+/**
+ * **How many codes the Pos cell prints before it starts counting.**
+ *
+ * Two, and the number is the table's width rather than a preference. This
+ * column held two characters and hugs its content (`width: 1%`), so an uncapped
+ * list takes the widest row in the league — `1B/2B/3B/SS/OF`, fourteen
+ * characters — and spends the difference on the app's widest table, which on a
+ * phone is a stat column off the right edge. Measured at 390px by rewriting the
+ * rendered cells three ways: **39px** of column for the single code (1522px
+ * table), **108px** uncapped (1591), **65px** at this cap (1548). Two plus a
+ * count is bounded at seven characters (`2B/SS+3`) and is complete on its own
+ * for **533 of the 628** matched batters, which is also the form a fantasy site
+ * prints in a roster row. The three that would be lost never are: see the hoist
+ * below.
+ */
+const POS_CELL_MAX = 2;
+
+/**
+ * The Pos cell's text and its tooltip.
+ *
+ * Two rules beyond the cap. **DH reads only when it is all he has**: no pill
+ * selects it, ESPN grants it to a third of batters who are eligible somewhere
+ * else as well, and `C/DH` spends half the cell saying nothing the reader can
+ * act on — but for the ~33 players it is the whole of (a Luken Baker, an
+ * Ohtani's bat) it is the only true answer there is. And **the active pill's
+ * codes are hoisted to the front**, so a reader who has filtered to SS and sees
+ * a utility man on row four reads `SS/2B+2` rather than a truncation that has
+ * quietly dropped the one position that put him there. That is what makes a cap
+ * safe at all: the cell can never hide the reason the row is on screen.
+ */
+function posCellText(
+  r: ResearchRow,
+  leadCodes: string[] | undefined,
+): { text: string; title: string } {
+  const all = eligibleFor(r);
+  // Nothing in the board's vocabulary: a pitcher (`P`), a two-way player
+  // (`TWP`), or a position MLB has no record of. The cell prints MLB's own
+  // spelling and its old tooltip, which is exactly what it did before any of
+  // this — the pitching board in particular is untouched by eligibility.
+  if (all.length === 0) {
+    return {
+      text: r.position || '—',
+      title: r.position ? posTypeLabel(r.positionType) : 'No position listed',
+    };
+  }
+  const trimmed = all.length > 1 ? all.filter((p) => p !== 'DH') : all;
+  const lead = leadCodes ? trimmed.filter((p) => leadCodes.includes(p)) : [];
+  const ordered = lead.length
+    ? [...lead, ...trimmed.filter((p) => !lead.includes(p))]
+    : trimmed;
+  const shown = ordered.slice(0, POS_CELL_MAX);
+  const extra = ordered.length - shown.length;
+  const source = espnPositions(r)
+    ? `Eligible in ESPN at ${ordered.join(', ')}`
+    : `${ordered.join(', ')} — MLB's listed position; ESPN has no eligibility for him`;
+  return { text: shown.join('/') + (extra > 0 ? `+${extra}` : ''), title: source };
+}
+
 interface PositionOption {
   key: ResearchPos;
   label: string;
   title: string;
+  /** What the title becomes once ESPN eligibility is what the pill reads. The
+   *  two are genuinely different claims — "shortstops" against "anyone your
+   *  league will let you start at short" — and a pill that said the first while
+   *  doing the second would be the label lying about the filter. */
+  espnTitle?: string;
   kind: PlayerKind;
-  /** Absent on the two whole-board entries, which filter nothing. */
+  /** The eligibility codes this pill selects on — one for a single position,
+   *  four for `IF`. Absent on the whole-board entries and on SP/RP, which read
+   *  `match` instead. */
+  codes?: string[];
+  /** Absent on the two whole-board entries, which filter nothing, and on every
+   *  batting pill, which is `codes`. */
   match?: (r: ResearchRow) => boolean;
+}
+
+/** A pill that filters at all — anything but the two whole-board entries. */
+const filtersRows = (p: PositionOption) => Boolean(p.codes || p.match);
+
+/** One pill's test, whichever half of `PositionOption` carries it. */
+function positionMatcher(pos: ResearchPos): ((r: ResearchRow) => boolean) | undefined {
+  const option = POSITION_BY_KEY.get(pos);
+  if (!option) return undefined;
+  if (option.codes) {
+    const codes = option.codes;
+    return (r) => eligibleFor(r).some((p) => codes.includes(p));
+  }
+  return option.match;
 }
 
 /**
@@ -483,22 +674,25 @@ interface PositionOption {
  * from the plate outwards, then the two pitching roles.
  *
  * Note there is no DH pill — a player whose listed position is DH is on the
- * Batters board and nowhere else. C/1B/2B/3B/SS match his listed position;
- * IF and OF are the group he belongs to (an infielder is any of the four, an
- * outfielder any of LF/CF/RF), so those two overlap the individual pills by
- * design — IF is the whole infield, not "some other infielder". SP and RP do
- * partition Pitchers, the board they slice being pitchers already.
+ * Batters board and nowhere else. C/1B/2B/3B/SS match a position he is eligible
+ * at (ESPN's list with a league connected, MLB's single listed one without);
+ * IF and OF are the group (an infielder is any of the four, an outfielder any
+ * of LF/CF/RF), so those two overlap the individual pills by design — IF is the
+ * whole infield, not "some other infielder". **A multi-position player is now on
+ * more than one pill**, which is the point of reading eligibility: the pills
+ * were a partition of the batting board and are a cover of it. SP and RP still
+ * do partition Pitchers — see `espnPositions` for why they keep `starter`.
  */
 const POSITIONS: PositionOption[] = [
   { key: 'batters', label: 'Batters', title: 'Every batter', kind: 'batter' },
   { key: 'pitchers', label: 'Pitchers', title: 'Every pitcher', kind: 'pitcher' },
-  { key: 'C', label: 'C', title: 'Catchers', kind: 'batter', match: (r) => r.position === 'C' },
-  { key: '1B', label: '1B', title: 'First basemen', kind: 'batter', match: (r) => r.position === '1B' },
-  { key: '2B', label: '2B', title: 'Second basemen', kind: 'batter', match: (r) => r.position === '2B' },
-  { key: '3B', label: '3B', title: 'Third basemen', kind: 'batter', match: (r) => r.position === '3B' },
-  { key: 'SS', label: 'SS', title: 'Shortstops', kind: 'batter', match: (r) => r.position === 'SS' },
-  { key: 'IF', label: 'IF', title: 'Infielders — 1B, 2B, 3B and SS', kind: 'batter', match: (r) => r.positionType === 'Infielder' },
-  { key: 'OF', label: 'OF', title: 'Outfielders — LF, CF and RF', kind: 'batter', match: (r) => r.positionType === 'Outfielder' },
+  { key: 'C', label: 'C', title: 'Catchers', espnTitle: 'Eligible at catcher in ESPN', kind: 'batter', codes: ['C'] },
+  { key: '1B', label: '1B', title: 'First basemen', espnTitle: 'Eligible at first base in ESPN', kind: 'batter', codes: ['1B'] },
+  { key: '2B', label: '2B', title: 'Second basemen', espnTitle: 'Eligible at second base in ESPN', kind: 'batter', codes: ['2B'] },
+  { key: '3B', label: '3B', title: 'Third basemen', espnTitle: 'Eligible at third base in ESPN', kind: 'batter', codes: ['3B'] },
+  { key: 'SS', label: 'SS', title: 'Shortstops', espnTitle: 'Eligible at shortstop in ESPN', kind: 'batter', codes: ['SS'] },
+  { key: 'IF', label: 'IF', title: 'Infielders — 1B, 2B, 3B and SS', espnTitle: 'Eligible somewhere in the infield in ESPN — 1B, 2B, 3B or SS', kind: 'batter', codes: ['1B', '2B', '3B', 'SS'] },
+  { key: 'OF', label: 'OF', title: 'Outfielders — LF, CF and RF', espnTitle: 'Eligible in the outfield in ESPN', kind: 'batter', codes: ['OF'] },
   // `starter` comes off the row rather than being re-derived here, so these
   // pills and the qualifier the server applies can't disagree about who is one.
   { key: 'SP', label: 'SP', title: 'Starting pitchers — a majority of his appearances are starts', kind: 'pitcher', match: (r) => r.starter },
@@ -513,9 +707,9 @@ const POSITION_BY_KEY = new Map(POSITIONS.map((p) => [p.key, p]));
  * at once and needs no headings, where a closed select shows one.
  */
 const POSITION_GROUPS: { label: string; positions: PositionOption[] }[] = [
-  { label: 'Board', positions: POSITIONS.filter((p) => !p.match) },
-  { label: 'Batting', positions: POSITIONS.filter((p) => p.match && p.kind === 'batter') },
-  { label: 'Pitching', positions: POSITIONS.filter((p) => p.match && p.kind === 'pitcher') },
+  { label: 'Board', positions: POSITIONS.filter((p) => !filtersRows(p)) },
+  { label: 'Batting', positions: POSITIONS.filter((p) => filtersRows(p) && p.kind === 'batter') },
+  { label: 'Pitching', positions: POSITIONS.filter((p) => filtersRows(p) && p.kind === 'pitcher') },
 ];
 
 /** The group a row's position belongs to, for the Pos cell's tooltip — the
@@ -549,10 +743,15 @@ const posTypeLabel = (t: string) => POSITION_TYPE_LABELS[t] ?? t;
  * Orthogonal to the position pills, exactly as scope was: position narrows who
  * is eligible, this names which rosters they may be on.
  *
- * Note what is deliberately *not* a fourth button here: the **watchlist**. That
- * is a filter over whatever these three let through — you can follow a free
- * agent and a leaguemate's shortstop at once — so it is a toggle beside Search
- * and Qualified rather than a fourth set to union in.
+ * Note what these three are a partition *of*: **ownership**. That is the whole
+ * of the question they answer, and it is why the **watchlist** is not a fourth
+ * key here — not because it doesn't belong on the board beside them, but
+ * because it is an answer to a different question. A watched player is on your
+ * roster, on a leaguemate's or free; the star says nothing about which. So it
+ * is a second axis, unioned on top of whatever these three let through
+ * (`includeWatchlist` below), and keeping it out of this record is what keeps
+ * the record a partition — which is what `inc=none`, `isDefaultInclude` and the
+ * disjointness of `boardRows` all lean on.
  */
 export type ResearchInclude = Record<ResearchIncludeKey, boolean>;
 
@@ -708,19 +907,29 @@ interface Props {
    *  presentation of it. */
   include: ResearchInclude;
   onIncludeChange: (i: ResearchInclude) => void;
-  /** Narrow all of that to the watchlist. A *filter* rather than a fourth
-   *  include, since a watched player can be on any of the three sets — see
-   *  `ResearchInclude`. Lifted and persisted alongside it. */
-  watchlistOnly: boolean;
-  onWatchlistOnlyChange: (on: boolean) => void;
+  /** Put the watchlist on the board **as well as** whatever the three above let
+   *  through — a union, not an intersection. A watched player can be on any of
+   *  the three ownership sets, so narrowing by him was the surprising operation
+   *  and unioning him in is the useful one; see `ResearchInclude`. Lifted and
+   *  persisted alongside it, the two being one control set. */
+  includeWatchlist: boolean;
+  onIncludeWatchlistChange: (on: boolean) => void;
   /** Whether a fantasy league is connected, and so whether the board carries a
    *  roster-% column at all. The figure is ESPN's own and needs no credentials,
    *  so this gate is about relevance rather than access: to someone with no
    *  fantasy league it is a column of noise. */
   hasRosterPct: boolean;
-  /** The span the trend column measures, or null when there isn't enough
-   *  history yet — which is what removes the column entirely. */
-  trendDays: number | null;
+  /** Whether ESPN's eligibility map has landed, and so whether the position
+   *  pills read it rather than MLB's single listed position. It decides only
+   *  the *wording* — the pill titles and the Pos cell's tooltip; which rows
+   *  match is decided per row off `ResearchRow.eligible`, so a player ESPN
+   *  can't place falls back on his own rather than by a page-wide flag. */
+  hasEligibility: boolean;
+  /** The spans the trend columns measure — one entry per window the server
+   *  found a baseline for, carrying both the window (the column's identity) and
+   *  the days actually measured (its label). Null, or simply missing an entry,
+   *  is what removes a column entirely. */
+  trendWindows: readonly { window: TrendWindow; days: number }[] | null;
   /** MLB ids of every player rostered in the connected fantasy league, or null
    *  while there is no league connected and nothing has been read. The free
    *  agents are the complement of this within the board — see `boardRows`. */
@@ -939,10 +1148,11 @@ export function ResearchTable({
   onWindowChange,
   include,
   onIncludeChange,
-  watchlistOnly,
-  onWatchlistOnlyChange,
+  includeWatchlist,
+  onIncludeWatchlistChange,
   hasRosterPct,
-  trendDays,
+  hasEligibility,
+  trendWindows,
   ownedIds,
   espnConnected,
   espnError,
@@ -960,24 +1170,29 @@ export function ResearchTable({
   // Roster % drops out of the vocabulary entirely without a league, rather than
   // showing as a column of dashes: a column you cannot fill is worse than one
   // that isn't offered, and it would otherwise sit at the very front.
+  const measured = useMemo(
+    () => new Map((trendWindows ?? []).map((t) => [trendKey(t.window), t.days])),
+    [trendWindows],
+  );
   const allColumns = useMemo(() => {
     const base = kind === 'pitcher' ? PITCHER_COLUMNS : BATTER_COLUMNS;
     return base
       .filter((c) => (c.key === 'rosterPct' ? hasRosterPct : true))
-      // Dropped rather than dashed until there is a second day of history to
-      // measure against: a column of zeroes would read as "nobody is moving",
-      // which is a claim where the truth is an absence.
-      .filter((c) => (c.key === 'rosterTrend' ? trendDays !== null : true))
-      .map((c) =>
-        c.key === 'rosterTrend' && trendDays !== null
-          ? {
+      // A window with no baseline is dropped rather than dashed, and so is
+      // every one of them on a cold install: a column of zeroes would read as
+      // "nobody is moving", which is a claim where the truth is an absence.
+      .filter((c) => (TREND_BY_KEY.has(c.key) ? measured.has(c.key) : true))
+      .map((c) => {
+        const days = measured.get(c.key);
+        return days === undefined
+          ? c
+          : {
               ...c,
-              label: `\u0394${trendDays}d`,
-              title: `Change in roster % over the last ${trendDays} day${trendDays === 1 ? '' : 's'}`,
-            }
-          : c,
-      );
-  }, [kind, hasRosterPct, trendDays]);
+              label: `\u0394${days}d`,
+              title: `Change in roster % over the last ${days} day${days === 1 ? '' : 's'}`,
+            };
+      });
+  }, [kind, hasRosterPct, measured]);
   const columnsByKey = useMemo(
     () => new Map(allColumns.map((c) => [c.key, c])),
     [allColumns],
@@ -1072,38 +1287,46 @@ export function ResearchTable({
   // both are dropped here rather than per pill, which is what makes the count
   // line's "of N" a number some pill can actually reach.
   /**
-   * Trade first, then which rosters, then the watchlist. All three narrow the
-   * *population* the count line is measured against, so that "12 of 12" on your
-   * own roster is honest about the board it describes rather than quoting the
-   * league's 624.
+   * Trade first, then who is on the board. What survives is the *population*
+   * the count line is measured against, so that "12 of 12" on your own roster
+   * is honest about the board it describes rather than quoting the league's 624.
    *
-   * The three include sets are read as a **partition**, in one pass, and the
-   * order of the tests is what makes them disjoint: your roster wins first, so
-   * a player you hold who ESPN says is on a leaguemate's team (possible in
-   * saved-roster mode, where the two lists are unrelated) is counted once, as
-   * yours. Free agency is then the complement of ownership — a player nobody in
-   * the league holds is one you could add — and with **no** league connected
-   * there is no ownership to read, so the third set quietly becomes "everyone
-   * off your roster", which is what its own label says there.
+   * **Two axes, and they compose in opposite directions.** The three include
+   * sets partition *ownership* — read in one pass, and the order of the tests
+   * is what makes them disjoint: your roster wins first, so a player you hold
+   * who ESPN says is on a leaguemate's team (possible in saved-roster mode,
+   * where the two lists are unrelated) is counted once, as yours. Free agency
+   * is then the complement of ownership — a player nobody in the league holds
+   * is one you could add — and with **no** league connected there is no
+   * ownership to read, so the third set quietly becomes "everyone off your
+   * roster", which is what its own label says there.
+   *
+   * The **watchlist is unioned on top of all of that**, and is tested first
+   * because a union short-circuits: a watched player is on the board whoever
+   * owns him. That is the useful operation and the intersection was the
+   * surprising one — the star is a fact about *you*, not about ownership, so
+   * "my roster and the men I'm watching" is a question someone actually asks
+   * and "watched free agents only" is a slice nobody wants. It costs the count
+   * line nothing: this is still one `filter` over one array, so a player who is
+   * both watched and free appears once and is counted once.
    *
    * With a league connected but the read still in flight, everything but your
-   * own roster falls out rather than falling *in*: an empty table under
-   * "Reading your league…" is honest, where the whole league labelled free
-   * agents is not.
+   * own roster and your watchlist falls out rather than falling *in*: an empty
+   * table under "Reading your league…" is honest, where the whole league
+   * labelled free agents is not. The watchlist is exempt from that wait for the
+   * same reason it is unioned — it needs no ownership to be known.
    */
   const boardRows = useMemo(() => {
     const byTrade = rows.filter(kind === 'pitcher' ? isPitcherByTrade : isBatterByTrade);
-    const picked = byTrade.filter((r) => {
+    return byTrade.filter((r) => {
       const key = `${r.kind}-${r.id}`;
+      if (includeWatchlist && watchlistKeys.has(key)) return true;
       if (rosterKeys.has(key)) return include.mine;
       if (!espnConnected) return include.fa;
       if (!ownedIds) return false;
       return ownedIds.has(r.id) ? include.others : include.fa;
     });
-    return watchlistOnly
-      ? picked.filter((r) => watchlistKeys.has(`${r.kind}-${r.id}`))
-      : picked;
-  }, [rows, kind, include, watchlistOnly, rosterKeys, watchlistKeys, ownedIds, espnConnected]);
+  }, [rows, kind, include, includeWatchlist, rosterKeys, watchlistKeys, ownedIds, espnConnected]);
 
   /** How many of the watchlist are on *this* board — the count on the Watchlist
    *  button, and what its empty state tests. A key carries its own kind, so
@@ -1112,7 +1335,17 @@ export function ResearchTable({
     () => [...watchlistKeys].filter((k) => k.startsWith(`${kind}-`)).length,
     [watchlistKeys, kind],
   );
-  const nothingIncluded = !include.mine && !include.others && !include.fa;
+  /** No ownership set is on. On its own that is no longer an empty board — the
+   *  watchlist can carry one by itself, which is a state someone genuinely
+   *  wants ("just the men I'm following") and the reason the two flags below
+   *  are separate. */
+  const noOwnershipSets = !include.mine && !include.others && !include.fa;
+  /** Nothing on either axis: the one combination that can put nobody on the
+   *  board however the league read goes. */
+  const nothingIncluded = noOwnershipSets && !includeWatchlist;
+  /** The board is the watchlist and nothing else — the state whose empty case
+   *  is about the star rather than about any of the three buttons. */
+  const watchlistAlone = noOwnershipSets && includeWatchlist;
 
   // Hiding the column you were sorting on leaves the table ordered by something
   // you can neither see nor reverse — there is no header left to click. So the
@@ -1139,7 +1372,12 @@ export function ResearchTable({
   const activeSortKey =
     sortKey && visibleKeys.has(sortKey) ? sortKey : defaultSortKey;
 
-  const posMatch = POSITION_BY_KEY.get(pos)?.match;
+  // Memoised on the pill alone: a fresh closure every render would break the
+  // `visible` memo below, which lists this among its dependencies.
+  const posMatch = useMemo(() => positionMatcher(pos), [pos]);
+  /** The codes the active pill selects on, so the Pos cell can lead with them —
+   *  see `posCellText`. Undefined on the whole-board pills and on SP/RP. */
+  const posCodes = POSITION_BY_KEY.get(pos)?.codes;
 
   // Keep the selected pill on screen. The row scrolls sideways and holds eleven
   // of them, so on a phone the one you're on is often past the right edge —
@@ -1257,7 +1495,7 @@ export function ResearchTable({
     pos,
     statWindow,
     includeKeys(include).join('+'),
-    watchlistOnly,
+    includeWatchlist,
     qualifiedOnly,
     search.trim().toLowerCase(),
     filters.map((f) => `${f.column}${f.op}${f.value}`).join(','),
@@ -1381,23 +1619,34 @@ export function ResearchTable({
 
   /** Only your own roster is on the board, so every row would carry the
    *  baseball and it would mark nothing — the rule the old `My Players` scope
-   *  followed. */
-  const onlyMine = include.mine && !include.others && !include.fa;
+   *  followed. **The watchlist has to be in that test**: unioned in, it can put
+   *  a free agent on a board that is otherwise your roster, and then the mark
+   *  distinguishes the two again rather than marking everything. */
+  const onlyMine = include.mine && !include.others && !include.fa && !includeWatchlist;
 
   /**
    * Why the board is empty, and the way out.
    *
-   * Three include buttons and a watchlist filter make sixteen states, and
-   * several of them are legitimately empty — nothing included at all, a
-   * watchlist with nobody on it, a league that hasn't been read yet. **Every
-   * one of them has to name its own cause**, which is the standard the old
-   * three-state free-agent message set; a generic "nothing found" would leave a
-   * user staring at a table with no idea which of four controls emptied it.
+   * Three ownership buttons and a watchlist make sixteen states, and several of
+   * them are legitimately empty — nothing included at all, a watchlist with
+   * nobody on it, a league that hasn't been read yet. **Every one of them has to
+   * name its own cause**, which is the standard the old three-state free-agent
+   * message set; a generic "nothing found" would leave a user staring at a
+   * table with no idea which of four controls emptied it.
    *
-   * Tested in the order the causes *govern*: nothing included beats everything
-   * else (no set can be empty if no set was asked for), then the watchlist
-   * filter, then the league read the last two buttons depend on, and last the
-   * ordinary case of a set that genuinely holds nobody.
+   * Tested in the order the causes *govern*: nothing included at all beats
+   * everything else (no set can be empty if no set was asked for), then the
+   * board that is the **watchlist alone**, then the league read the last two
+   * buttons depend on, and last the ordinary case of a set that genuinely holds
+   * nobody.
+   *
+   * **The union changed two of these and it is worth saying which.** The
+   * watchlist no longer narrows, so its empty state is only reachable when it is
+   * the *only* thing on — with an ownership set beside it the board is that set,
+   * and an empty one is that set's story rather than the star's. And the way out
+   * it offers had to change with it: "show everyone" used to mean turning the
+   * filter off, which now leaves a board with nothing included at all, so the
+   * link turns an ownership set **on** instead.
    */
   function emptyBoard() {
     const noun = kind === 'pitcher' ? 'pitchers' : 'batters';
@@ -1421,21 +1670,22 @@ export function ResearchTable({
         </div>
       );
     }
-    if (watchlistOnly && watchlistCount === 0) {
+    if (watchlistAlone && watchlistCount === 0) {
       return (
         <div className="empty-state">
           <p className="empty-title">No {noun} on your watchlist</p>
           <p>
             The star beside a player's name adds him to it — it is a list of who
-            you are keeping an eye on, and nothing to do with your roster. Or{' '}
+            you are keeping an eye on, and nothing to do with your roster. Turn
+            on{' '}
             <button
               type="button"
               className="empty-inline-link"
-              onClick={() => onWatchlistOnlyChange(false)}
+              onClick={() => onIncludeChange({ ...include, fa: true })}
             >
-              show everyone
-            </button>
-            .
+              {faLabel}
+            </button>{' '}
+            to read the league and find somebody to star.
           </p>
         </div>
       );
@@ -1498,15 +1748,24 @@ export function ResearchTable({
         </div>
       );
     }
+    /* The closing case names every set that *is* on, the watchlist among them
+       now that it is one of them. It has to be in the list rather than left to
+       the branch above: the watchlist's own empty state only fires when the
+       board is the watchlist alone and the list is empty, and there is a second
+       way to an empty watchlist-only board — a starred player who is on neither
+       leaderboard (a two-way man watched as a pitcher, with the batting board
+       on) — which would otherwise have reached a sentence naming nothing at
+       all. */
+    const onLabels = [
+      ...includeKeys(include).map((k) => includeMeta(k, espnConnected).full.toLowerCase()),
+      ...(includeWatchlist ? ['on your watchlist'] : []),
+    ];
     return (
       <div className="empty-state">
         <p className="empty-title">No {noun} to show</p>
         <p>
-          Nobody on this board is{' '}
-          {includeKeys(include)
-            .map((k) => includeMeta(k, espnConnected).full.toLowerCase())
-            .join(' or ')}
-          . Turn on another of the buttons up top, or pick a different position.
+          Nobody on this board is {onLabels.join(' or ')}. Turn on another of the
+          buttons up top, or pick a different position.
         </p>
       </div>
     );
@@ -1528,9 +1787,11 @@ export function ResearchTable({
       {isFull && (
         <div className="expanded-chrome research-badges">
           <span className="research-badge">{POSITION_BY_KEY.get(pos)?.label ?? pos}</span>
-          {/* One badge per set the board is including — or one saying it is
-              including none, which is a state the buttons can reach and a
-              blank row would leave unexplained. */}
+          {/* One badge per set the board is including — the watchlist among
+              them, since it is one of the sets the board is a union of rather
+              than a filter over them — or one saying it is including none,
+              which is a state the buttons can reach and a blank row would leave
+              unexplained. */}
           {nothingIncluded ? (
             <span className="research-badge">Nobody included</span>
           ) : (
@@ -1540,7 +1801,7 @@ export function ResearchTable({
               </span>
             ))
           )}
-          {watchlistOnly && <span className="research-badge">Watchlist</span>}
+          {includeWatchlist && <span className="research-badge">Watchlist</span>}
           <span className="research-badge">{windowLabel(statWindow)}</span>
           {qualifiedOnly && <span className="research-badge">Qualified</span>}
           {search.trim() && <span className="research-badge">“{search.trim()}”</span>}
@@ -1663,7 +1924,7 @@ export function ResearchTable({
                 role="tab"
                 aria-selected={pos === p.key}
                 className={`research-pos-tab${pos === p.key ? ' active' : ''}`}
-                title={p.title}
+                title={(hasEligibility && p.espnTitle) || p.title}
                 onClick={() => onPosChange(p.key)}
               >
                 {p.label}
@@ -1706,7 +1967,50 @@ export function ResearchTable({
                 belong together — they name which slice of the league the table
                 is, where the buttons open panels. */}
             <div className="research-tools">
-            {/* Search and Filters first — the two disclosures you come to the board
+            {/**
+             * **Watchlist leads the run, and it is the one control here that
+             * adds players rather than taking them away.** It stays in this
+             * group rather than joining the three include buttons it now
+             * composes with, and the reason is measured: moved into
+             * `.research-include` it takes that group from 170px to 240 at
+             * 390px wide, where the first row has 346 to spend and the
+             * `Roster · Research` pills already have 171 of it — so the group
+             * drops to a line of its own and the bar goes **three rows to four,
+             * 207px of chrome to 255**, on the one page where every pixel of
+             * height is a row of the table. At 640, 900, 1200 and 1920 the move
+             * costs and buys nothing at all (2 / 3 / 2 / 2 rows either way), so
+             * it would be tidiness bought only where there is room to spare and
+             * paid for only where there isn't. Keeping the icon-only phone form
+             * doesn't save it either — 240px is the group *with* the label
+             * hidden.
+             *
+             * It reads first in the run instead, which is the honest ordering
+             * once it widens the board: **add who, then narrow who** (Search,
+             * Filters, Qualified), then change what is shown about them
+             * (Columns). It also puts it as close to the include group as a bar
+             * that wraps between groups allows.
+             *
+             * Panel-less like Qualified, so it takes `.on` and never `.active`,
+             * and it carries the count for the same reason the Filters button
+             * does — a control that holds something has to say so with its panel
+             * shut, and this one has no panel at all.
+             */}
+            <button
+              type="button"
+              className={`research-toggle${includeWatchlist ? ' on' : ''}`}
+              aria-pressed={includeWatchlist}
+              onClick={() => onIncludeWatchlistChange(!includeWatchlist)}
+              title="Also show the players on your watchlist, whoever owns them — the star on each row is what puts them there"
+            >
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
+                <path d="m12 3.6 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9Z" />
+              </svg>
+              <span className="research-toggle-label">Watchlist</span>
+              {watchlistCount > 0 && (
+                <span className="research-toggle-count">{watchlistCount}</span>
+              )}
+            </button>
+            {/* Search and Filters next — the two disclosures you come to the board
                 with a question in. Each carries an `on` state whenever its panel
                 holds something, open or shut: a collapsed control must never be the
                 only place a filter lives. */}
@@ -1742,29 +2046,6 @@ export function ResearchTable({
               </svg>
               <span className="research-toggle-label">Filters</span>
               {filters.length > 0 && <span className="research-toggle-count">{filters.length}</span>}
-            </button>
-            {/* The watchlist as a *filter*, not a fourth include button: a
-                watched player can be on your roster, on a leaguemate's or free,
-                so this narrows whatever the three buttons let through rather
-                than naming a set beside them. Panel-less like Qualified below
-                it, so it takes `.on` and never `.active`, and it carries the
-                count for the same reason the Filters button does — a control
-                that holds something has to say so with its panel shut, and this
-                one has no panel at all. */}
-            <button
-              type="button"
-              className={`research-toggle${watchlistOnly ? ' on' : ''}`}
-              aria-pressed={watchlistOnly}
-              onClick={() => onWatchlistOnlyChange(!watchlistOnly)}
-              title="Only the players on your watchlist — the star on each row is what puts them there"
-            >
-              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
-                <path d="m12 3.6 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9Z" />
-              </svg>
-              <span className="research-toggle-label">Watchlist</span>
-              {watchlistCount > 0 && (
-                <span className="research-toggle-count">{watchlistCount}</span>
-              )}
             </button>
             {/* Not a disclosure like the three beside it — it has no panel, so it
                 takes `.on` and never `.active`. It sits after the two panels
@@ -1877,22 +2158,20 @@ export function ResearchTable({
               table is currently showing, so they stay whether the Filters panel is
               open or shut. Qualified is one of them — it narrows the table exactly
               as a threshold does, and it is the only one that used to leave no
-              trace here, so the row read as the whole story when it wasn't. */}
-          {(filters.length > 0 || qualifiedOnly || watchlistOnly) && (
+              trace here, so the row read as the whole story when it wasn't.
+
+              **The watchlist had a chip here and has lost it**, which is the one
+              piece of the old design the union genuinely retires. Every member
+              of this row *takes rows out* of the table, and `Clear all` is the
+              button that puts them back; a control that puts rows in has no
+              business in a row whose one action would then shrink the board —
+              and with the three ownership buttons off, `Clear all` would have
+              emptied it outright. Nothing is hidden by the loss: the three
+              include buttons keep no chips either, for the same reason this one
+              no longer needs one — it is always on screen in the bar above,
+              lit, with its count beside it. */}
+          {(filters.length > 0 || qualifiedOnly) && (
             <div className="research-chips">
-              {watchlistOnly && (
-                <button
-                  type="button"
-                  className="research-chip"
-                  onClick={() => onWatchlistOnlyChange(false)}
-                  title="Show everyone, watchlisted or not"
-                >
-                  Watchlist
-                  <span className="research-chip-x" aria-hidden="true">
-                    ×
-                  </span>
-                </button>
-              )}
               {qualifiedOnly && (
                 <button
                   type="button"
@@ -1920,15 +2199,18 @@ export function ResearchTable({
                   </span>
                 </button>
               ))}
-              {/* Clears what the row shows, which now includes Qualified —
-                  otherwise "Clear all" leaves a chip standing. */}
+              {/* Clears exactly what the row shows — the thresholds and
+                  Qualified — and nothing else. It used to clear the watchlist
+                  too, which was right while that narrowed the table and is
+                  wrong now that it widens it: a button for undoing filters must
+                  not be able to take players *off* the board, still less empty
+                  it outright with the three ownership buttons off. */}
               <button
                 type="button"
                 className="research-clear"
                 onClick={() => {
                   setFilters([]);
                   onQualifiedChange(false);
-                  onWatchlistOnlyChange(false);
                 }}
               >
                 Clear all
@@ -2065,6 +2347,7 @@ export function ResearchTable({
             <tbody>
               {visible.map((r) => {
                 const key = `${r.kind}-${r.id}`;
+                const posCell = posCellText(r, posCodes);
                 return (
                   <tr key={key}>
                     <td className="sum-img-col">
@@ -2103,8 +2386,13 @@ export function ResearchTable({
                       />
                     </td>
                     <td className="research-team-col">{r.team || '—'}</td>
-                    <td className="research-pos-col" title={posTypeLabel(r.positionType)}>
-                      {r.position || '—'}
+                    {/* The one cell that says *why* a filtered row is on the
+                        board — see `posCellText` for the cap, the hoist and
+                        what happens to DH. The tooltip names its source, since
+                        `SS` alone can't say whether it came from ESPN or is the
+                        fallback for a player the join couldn't place. */}
+                    <td className="research-pos-col" title={posCell.title}>
+                      {posCell.text}
                     </td>
                     {columns.map((c, i) => (
                       <td

@@ -409,14 +409,23 @@ const CHAPTERS: Chapter[] = [
             views over to it — same tables, your fantasy team instead of the roster
             you built here, each player carrying the slot he's in today (his position
             if he's in the lineup, <Ui>BE</Ui> or <Ui>IL</Ui> if he isn't). The roster
-            you built is untouched and comes back when you switch off. And you only
+            you built is untouched and comes back when you switch off — untouched
+            being the point, so while the fantasy team is in view nothing in the app
+            offers to edit it or the saved one: the reorder screen is away, the search
+            finds players but no longer adds them, and a player's page shows no add or
+            remove. And you only
             need one person in a league to do any of this: whoever connects first can
             turn on a share link, and everyone else joins by opening it — no cookies,
             no league ID. Connecting also adds a <Ui>Ros%</Ui> column to the board and
             a rostered figure to each player's page: the share of all ESPN leagues
             he's on a roster in, which sorts and filters like any other column — and a{' '}
             <Ui>Δ7d</Ui> beside it for which way that has been moving. Sort by it once
-            for the week's biggest adds, twice for the drops.
+            for the week's biggest adds, twice for the drops. Four more spans are a
+            tick away in <Ui>Columns</Ui> — <Ui>Δ1d</Ui>, <Ui>Δ3d</Ui>,{' '}
+            <Ui>Δ15d</Ui> and <Ui>Δ30d</Ui> — and they often disagree: the
+            man everyone dropped last month can be the one they're picking back up
+            today. Each label says the span it actually measured, and a span with no
+            history behind it yet isn't offered at all.
           </li>
         </ul>
         <h3 className="tut-sub">The five buttons</h3>
@@ -601,7 +610,10 @@ const CHAPTERS: Chapter[] = [
         <p>
           The header carries <Ui>Add to roster</Ui> when he isn't on it and a remove
           button when he is, a <Ui>Watch</Ui> star for the other list, and a link out
-          to his Baseball Savant page.
+          to his Baseball Savant page. While the views are reading your fantasy team
+          the first two step aside — ESPN owns that list, so the page says{' '}
+          <Ui>On roster</Ui> for a player who is on it and leaves the adding and
+          dropping to ESPN. The star stays either way; the watchlist is yours.
         </p>
       </>
     ),
