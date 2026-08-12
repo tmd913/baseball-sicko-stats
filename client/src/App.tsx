@@ -1616,9 +1616,18 @@ export default function App() {
       position: positionById.get(src.id),
     };
   }, [detailsKey, reports, seasonPlayers, positionById]);
-  const detailsWatched = useMemo(
-    () => (detailsKey ? roster.some((p) => playerKey(p) === detailsKey) : false),
-    [detailsKey, roster],
+  /**
+   * Whether the player whose page is open is on the roster **the views are
+   * reporting on** — which in fantasy mode is the ESPN team rather than the
+   * saved list. It reads `rosterKeys` for that reason, the same set the
+   * research board's `My Roster` button selects on and its baseball marks, so
+   * the mark on a board row and the badge on that player's page can never come
+   * to disagree about one man. In saved-roster mode the two are the same list
+   * and nothing changes.
+   */
+  const detailsRostered = useMemo(
+    () => (detailsKey ? rosterKeys.has(detailsKey) : false),
+    [detailsKey, rosterKeys],
   );
 
   // The player list is one kind at a time, picked by its own tab row (each half
@@ -1945,6 +1954,7 @@ export default function App() {
         <PlayerAdder
           players={seasonPlayers}
           watchlist={roster}
+          canAdd={!usingFantasy}
           onAdd={onAdd}
           onOpenDetails={setDetailsKey}
           loading={playersLoading}
@@ -2204,6 +2214,7 @@ export default function App() {
       <PlayerAdder
         players={seasonPlayers}
         watchlist={roster}
+        canAdd={!usingFantasy}
         onAdd={onAdd}
         onOpenDetails={setDetailsKey}
         loading={playersLoading}
@@ -2739,7 +2750,13 @@ export default function App() {
           menu button that has nothing to do with it. */}
       {error && <div className="error-banner">⚠ {error}</div>}
 
-      {rosterLoaded && roster.length === 0 && !error && view !== 'research' && (
+      {/* `!usingFantasy`, because this block is about the *saved* list and in
+          fantasy mode the views are not reading it: a user with an ESPN team
+          and nothing saved would otherwise get "Your roster is empty" sitting
+          on top of a full page of his fantasy team's cards, over a button that
+          opens a search which — ESPN owning the list — no longer adds to
+          anything. The mode's own empty case is the block below it. */}
+      {rosterLoaded && !usingFantasy && roster.length === 0 && !error && view !== 'research' && (
         <div className="empty-state">
           <p className="empty-title">Your roster is empty</p>
           <p>
@@ -2778,6 +2795,27 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* And the fantasy half of it, which names its own cause the way every
+          other emptied view in the app does. There is no search to offer here
+          — the way to put a player on this roster is to add him on ESPN — so
+          the two things it can say are the two ways out: go and make the move,
+          or read your own list instead. Held until the roster read has landed
+          (`fantasyRoster !== null`), or the message would flash over every
+          fantasy page for as long as ESPN takes to answer. */}
+      {usingFantasy &&
+        fantasyRoster !== null &&
+        rosterKeys.size === 0 &&
+        !error &&
+        view !== 'research' && (
+          <div className="empty-state">
+            <p className="empty-title">Your fantasy team is empty</p>
+            <p>
+              Add players to it on ESPN, then use Refresh from ESPN in the fantasy menu — or
+              turn off “Use my fantasy team” there to go back to your own roster.
+            </p>
+          </div>
+        )}
 
       {showLoading && reports.length === 0 && view !== 'research' && (
         <div className="loading">Loading events…</div>
@@ -3058,7 +3096,8 @@ export default function App() {
           name={detailsPlayer.name}
           position={detailsPlayer.position}
           isPitcher={detailsPlayer.kind === 'pitcher'}
-          isOnRoster={detailsWatched}
+          isOnRoster={detailsRostered}
+          rosterEditable={!usingFantasy}
           isWatchlisted={watchlistKeys.has(`${detailsPlayer.kind}-${detailsPlayer.id}`)}
           onWatchlistToggle={(on) =>
             toggleWatchlisted(`${detailsPlayer.kind}-${detailsPlayer.id}`, on)
