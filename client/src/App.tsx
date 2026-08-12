@@ -16,7 +16,7 @@ import type {
   TrendWindow,
   WatchPlayer,
 } from './types';
-import { isInjured, isStartingOn } from './lib';
+import { eligibleForKind, isInjured, isStartingOn, positionCodes } from './lib';
 import { BaseballMark } from './components/BaseballMark';
 import { PlayerAdder } from './components/PlayerAdder';
 import { PlayerOrderEditor } from './components/PlayerOrderEditor';
@@ -863,21 +863,30 @@ export default function App() {
   }, [espnConnected, ownership]);
 
   /**
-   * Read the ownership map for the two surfaces that want roster % — the
-   * research board and the player page — as well as the free-agent filter that
-   * already asked for it.
+   * Read the ownership map, which by now four surfaces want: the research
+   * board's roster %, trend and position pills, the player page's copy of the
+   * first two, the free-agent include buttons that asked for it first — and the
+   * **position chip on every card**, which is what took the last of the laziness
+   * out of this effect. It used to wait until the board was open or a player
+   * page was up; a chip on the games view is neither, and a card that showed
+   * MLB's position for a second and then swapped would be worse than one that
+   * simply took a moment to be right. So the only gate left is a connected
+   * league, which is what says the answer exists at all.
    *
-   * Unlike that one this fires **once**: roster % is ESPN's season-wide figure
-   * and moves by a fraction of a point a day, where a league's rosters change
-   * the moment anyone makes a move. Every guard here is a terminal state
-   * (loaded, failed, or in flight), so the effect cannot re-trigger on its own
-   * result.
+   * It is cheap enough to want on load: **27KB gzipped**, and the server holds
+   * the league it is built from for ten minutes, so this is one request per
+   * session against a page that is going to ask for it as soon as anyone opens
+   * a player.
+   *
+   * It fires **once**, unlike the statuses read below: roster % is ESPN's
+   * season-wide figure and moves by a fraction of a point a day, where lineups
+   * post by the hour. Every guard is a terminal state (loaded, failed, or in
+   * flight), so the effect cannot re-trigger on its own result.
    */
   useEffect(() => {
     if (!espnConnected || ownership || espnLoading || espnError) return;
-    if (view !== 'research' && detailsKey === null) return;
     loadOwnership();
-  }, [espnConnected, ownership, espnLoading, espnError, view, detailsKey, loadOwnership]);
+  }, [espnConnected, ownership, espnLoading, espnError, loadOwnership]);
 
   /**
    * What the league has to say about each player today — his roster status, and
@@ -1590,6 +1599,38 @@ export default function App() {
     () => new Map(seasonPlayers.map((p) => [p.id, p.position])),
     [seasonPlayers],
   );
+  /**
+   * The chip beside a card's name: **what your league will let you play him
+   * at** wherever ESPN can say so, and MLB's single listed position otherwise.
+   *
+   * The same swap the research board's pills already made, arriving on the
+   * cards for the same reason — a fantasy position is multi-valued and is
+   * sometimes flatly different from MLB's (Curtis Mead is listed at 2B and is
+   * eligible at 1B and 3B), so the one word MLB has for a man is the wrong
+   * answer to the question a card in this app is read with. It costs no fetch:
+   * the map rides on the `/api/espn/ownership` response the board and the
+   * player page already read, which is why the effect behind it now fires on
+   * any view rather than on those two.
+   *
+   * **Narrowed to the card's own kind** (`eligibleForKind`), exactly as each
+   * board is: a two-way player's bat reads `DH` where his arm reads `SP`, and a
+   * mis-joined pitcher reads his fallback rather than `2B/SS`. Whole lists are
+   * the player page's business, that being the one place with room for one.
+   */
+  const cardPosition = useCallback(
+    (id: number, kind: PlayerKind): { position?: string; positionTitle?: string } => {
+      const espn = eligibleForKind(eligibility?.get(id), kind);
+      if (!espn) return { position: positionById.get(id) };
+      // Two codes and a count, the form the board's Pos cell prints — a card's
+      // header is a name and this chip on one line, and the widest list in the
+      // league wraps 8 of 14 names at 390px against the 1 that wraps today.
+      // The tooltip carries the whole of it, and the player page prints it
+      // whole in the first place.
+      const { ordered, text } = positionCodes(espn);
+      return { position: text, positionTitle: `Eligible in ESPN at ${ordered.join(', ')}` };
+    },
+    [eligibility, positionById],
+  );
   // The player backing an open details view. Name comes from the report if the
   // player is watchlisted, otherwise from the season roster — so details can be
   // opened for any player, on the watchlist or not. Position always comes from
@@ -2249,7 +2290,7 @@ export default function App() {
       <PitcherCard
         key={key}
         report={r}
-        position={positionById.get(r.id)}
+        {...cardPosition(r.id, 'pitcher')}
         singleDay={start === end}
         collapsed={!expandedKeys.has(key)}
         onToggleCollapsed={() => toggleCollapsed(key)}
@@ -2259,7 +2300,7 @@ export default function App() {
       <PlayerCard
         key={key}
         report={r}
-        position={positionById.get(r.id)}
+        {...cardPosition(r.id, 'batter')}
         singleDay={start === end}
         collapsed={!expandedKeys.has(key)}
         onToggleCollapsed={() => toggleCollapsed(key)}

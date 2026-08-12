@@ -14,6 +14,86 @@ import type {
   RosterStatus,
 } from './types';
 
+/**
+ * ESPN's eligibility vocabulary, split by the kind of player it describes.
+ *
+ * The app reads a fantasy position in three places — the research board's pills
+ * and Pos cell, and the chip on a player card — and every one of them is about
+ * players of *one* kind at a time, so every one of them reads only its own half
+ * of the list. That is what makes a bad join harmless rather than absurd: ESPN
+ * has the Yankees' Fernando Cruz eligible at 2B and SS (the name-and-club join
+ * having found the wrong man of a duplicate name), and filtered to the pitching
+ * half that is an empty list — which is the fallback — instead of a second
+ * baseman with an ERA. It is also what gives a two-way player one answer per
+ * card: Ohtani comes back `DH, SP`, and his bat's card says DH where his arm's
+ * says SP.
+ *
+ * The player page is the deliberate exception and prints the list whole, being
+ * the one place in the app with room for it.
+ */
+export const ELIGIBLE_BY_KIND: Record<PlayerKind, ReadonlySet<string>> = {
+  batter: new Set(['C', '1B', '2B', '3B', 'SS', 'OF', 'DH']),
+  pitcher: new Set(['SP', 'RP']),
+};
+
+/**
+ * The half of an ESPN eligibility list that a view of this kind speaks, or null
+ * where that leaves nothing — an empty list after the filter being the same
+ * thing as no list at all, and what every caller's own fallback is for.
+ */
+export function eligibleForKind(
+  eligible: readonly string[] | null | undefined,
+  kind: PlayerKind,
+): string[] | null {
+  if (!eligible) return null;
+  const list = eligible.filter((p) => ELIGIBLE_BY_KIND[kind].has(p));
+  return list.length > 0 ? list : null;
+}
+
+/**
+ * **How many codes a position chip prints before it starts counting.**
+ *
+ * Two, and the number is a phone's line rather than a preference. The widest
+ * list in the league is `1B/2B/3B/SS/OF` — fourteen characters — and both the
+ * places that print one are tight: the research board's Pos cell hugs its
+ * content on the app's widest table, where the difference is a stat column off
+ * the right edge (measured at 390px: 39px of column for a single code, 108
+ * uncapped, 65 here), and a card's header is a name and this chip on one line,
+ * where the uncapped list wraps **8 of 14 names at 390 and 13 of 14 at 360**
+ * against the 1 and 2 that wrap today. Two plus a count is bounded at seven
+ * characters (`2B/SS+3`), which is the form a fantasy site prints in a roster
+ * row, and is the whole list for 533 of the 628 matched batters. The player
+ * page prints it whole; it is the one place with the room.
+ */
+const POS_CHIP_MAX = 2;
+
+/**
+ * A position chip's text, and the ordered list behind it for the tooltip.
+ *
+ * Two rules beyond the cap. **DH reads only when it is all he has**: ESPN
+ * grants it to a third of the batters who are eligible somewhere else as well,
+ * so `C/DH` spends half a chip on the half that says least — but for the ~33
+ * players it is the whole of (a Luken Baker, an Ohtani's bat) it is the only
+ * true answer there is. And **`lead` codes are hoisted to the front**, which is
+ * what makes a cap safe on the board: a reader who has filtered to SS and sees
+ * a utility man on row four reads `SS/2B+2` rather than a truncation that has
+ * quietly dropped the one position that put him there. A card has no filter to
+ * hoist for and passes none.
+ */
+export function positionCodes(
+  codes: string[],
+  lead?: string[],
+): { ordered: string[]; text: string } {
+  const trimmed = codes.length > 1 ? codes.filter((p) => p !== 'DH') : codes;
+  const hoisted = lead ? trimmed.filter((p) => lead.includes(p)) : [];
+  const ordered = hoisted.length
+    ? [...hoisted, ...trimmed.filter((p) => !hoisted.includes(p))]
+    : trimmed;
+  const shown = ordered.slice(0, POS_CHIP_MAX);
+  const extra = ordered.length - shown.length;
+  return { ordered, text: shown.join('/') + (extra > 0 ? `+${extra}` : '') };
+}
+
 /** Category used for color-coding an outcome. */
 export type OutcomeKind = 'hr' | 'hit' | 'walk' | 'out' | 'strikeout' | 'other';
 

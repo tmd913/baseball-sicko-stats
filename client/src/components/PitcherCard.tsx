@@ -500,6 +500,7 @@ function creditTally(games: PlayerGame[]): { credit: PitchingCredit; n: number }
 export function PitcherCard({
   report,
   position,
+  positionTitle,
   singleDay,
   collapsed,
   onToggleCollapsed,
@@ -507,6 +508,8 @@ export function PitcherCard({
 }: {
   report: PlayerReport;
   position?: string;
+  /** The whole eligibility list the chip is short for — see `PlayerName`. */
+  positionTitle?: string;
   singleDay: boolean;
   collapsed: boolean;
   onToggleCollapsed: () => void;
@@ -570,6 +573,7 @@ export function PitcherCard({
           <PlayerName
           name={report.name}
           position={position ?? 'P'}
+          positionTitle={positionTitle}
           status={report.rosterStatus}
         />
           {meta && <span className="player-meta">{meta}</span>}
@@ -663,6 +667,7 @@ export function PitcherCard({
         <PlayerName
           name={report.name}
           position={position ?? 'P'}
+          positionTitle={positionTitle}
           status={report.rosterStatus}
         />
         {/* A read on the range in view rather than on the season, which every

@@ -12,7 +12,7 @@ import type {
   ResearchWindow,
   TrendWindow,
 } from '../types';
-import { headshotUrl, statusCorner } from '../lib';
+import { eligibleForKind, headshotUrl, positionCodes, statusCorner } from '../lib';
 
 /**
  * A league-wide, season-to-date stat table: every player on one board, sortable
@@ -551,11 +551,6 @@ const MLB_TO_ELIGIBLE: Record<string, string> = {
  * empty list, which is the same thing as no list at all and sends him to the
  * fallback, rather than putting a second baseman on the pitching board.
  */
-const ELIGIBLE_BY_KIND: Record<PlayerKind, ReadonlySet<string>> = {
-  batter: new Set(['C', '1B', '2B', '3B', 'SS', 'OF', 'DH']),
-  pitcher: new Set(['SP', 'RP']),
-};
-
 /**
  * The positions a row counts as, in the board's own vocabulary.
  *
@@ -602,12 +597,9 @@ const ELIGIBLE_BY_KIND: Record<PlayerKind, ReadonlySet<string>> = {
  * single ESPN answer, 561 match.
  */
 function espnPositions(r: ResearchRow): string[] | null {
-  if (!r.eligible) return null;
-  const list = r.eligible.filter((p) => ELIGIBLE_BY_KIND[r.kind].has(p));
-  // An empty list after the filter is the same as no list at all: ESPN has
-  // nothing to say about him in this board's vocabulary, which is what the
-  // fallback is for.
-  return list.length > 0 ? list : null;
+  // `lib.ts`'s, because the card chip reads the same half of the same list for
+  // the same reason — see `eligibleForKind` there.
+  return eligibleForKind(r.eligible, r.kind);
 }
 
 /**
@@ -634,34 +626,12 @@ function eligibleFor(r: ResearchRow): string[] {
 }
 
 /**
- * **How many codes the Pos cell prints before it starts counting.**
- *
- * Two, and the number is the table's width rather than a preference. This
- * column held two characters and hugs its content (`width: 1%`), so an uncapped
- * list takes the widest row in the league — `1B/2B/3B/SS/OF`, fourteen
- * characters — and spends the difference on the app's widest table, which on a
- * phone is a stat column off the right edge. Measured at 390px by rewriting the
- * rendered cells three ways: **39px** of column for the single code (1522px
- * table), **108px** uncapped (1591), **65px** at this cap (1548). Two plus a
- * count is bounded at seven characters (`2B/SS+3`) and is complete on its own
- * for **533 of the 628** matched batters, which is also the form a fantasy site
- * prints in a roster row. The three that would be lost never are: see the hoist
- * below.
- */
-const POS_CELL_MAX = 2;
-
-/**
  * The Pos cell's text and its tooltip.
  *
- * Two rules beyond the cap. **DH reads only when it is all he has**: no pill
- * selects it, ESPN grants it to a third of batters who are eligible somewhere
- * else as well, and `C/DH` spends half the cell saying nothing the reader can
- * act on — but for the ~33 players it is the whole of (a Luken Baker, an
- * Ohtani's bat) it is the only true answer there is. And **the active pill's
- * codes are hoisted to the front**, so a reader who has filtered to SS and sees
- * a utility man on row four reads `SS/2B+2` rather than a truncation that has
- * quietly dropped the one position that put him there. That is what makes a cap
- * safe at all: the cell can never hide the reason the row is on screen.
+ * The cap, the DH rule and the hoist all live in `lib.ts::positionCodes`, the
+ * card chip printing the same list under the same constraints — see there for
+ * why two codes and why the active pill leads. What is this file's own is the
+ * fallback below and the tooltip that names which of the two sources answered.
  */
 function posCellText(
   r: ResearchRow,
@@ -680,13 +650,7 @@ function posCellText(
       title: r.position ? posTypeLabel(r.positionType) : 'No position listed',
     };
   }
-  const trimmed = all.length > 1 ? all.filter((p) => p !== 'DH') : all;
-  const lead = leadCodes ? trimmed.filter((p) => leadCodes.includes(p)) : [];
-  const ordered = lead.length
-    ? [...lead, ...trimmed.filter((p) => !lead.includes(p))]
-    : trimmed;
-  const shown = ordered.slice(0, POS_CELL_MAX);
-  const extra = ordered.length - shown.length;
+  const { ordered, text } = positionCodes(all, leadCodes);
   // The tooltip names the source, `SS` (or `SP`) alone being unable to say
   // whether it is ESPN's answer or the fallback — and the two boards fall back
   // to different things, so they say different things.
@@ -695,7 +659,7 @@ function posCellText(
     : r.kind === 'pitcher'
       ? `${ordered[0]} — off his own appearances over the window; ESPN has no eligibility for him`
       : `${ordered.join(', ')} — MLB's listed position; ESPN has no eligibility for him`;
-  return { text: shown.join('/') + (extra > 0 ? `+${extra}` : ''), title: source };
+  return { text, title: source };
 }
 
 interface PositionOption {

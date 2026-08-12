@@ -417,16 +417,25 @@ export function DoubleheaderTag({ games }: { games: PlayerGame[] }) {
 export function PlayerName({
   name,
   position,
+  positionTitle,
   status,
 }: {
   name: string;
   position?: string;
+  /** What the chip is short for — the whole eligibility list where ESPN
+   *  answered, since the chip prints two codes and a count (`2B/SS+3`). Absent
+   *  where the chip is already the whole answer. */
+  positionTitle?: string;
   status?: RosterStatus | null;
 }) {
   return (
     <span className="player-name">
       {name}
-      {position && <span className="player-pos">{position}</span>}
+      {position && (
+        <span className="player-pos" title={positionTitle}>
+          {position}
+        </span>
+      )}
       <RosterStatusTag status={status ?? null} />
     </span>
   );
@@ -435,6 +444,7 @@ export function PlayerName({
 export function PlayerCard({
   report,
   position,
+  positionTitle,
   singleDay,
   collapsed,
   onToggleCollapsed,
@@ -442,6 +452,8 @@ export function PlayerCard({
 }: {
   report: PlayerReport;
   position?: string;
+  /** The whole eligibility list the chip is short for — see `PlayerName`. */
+  positionTitle?: string;
   singleDay: boolean;
   collapsed: boolean;
   onToggleCollapsed: () => void;
@@ -469,6 +481,7 @@ export function PlayerCard({
             <PlayerName
               name={report.name}
               position={position}
+              positionTitle={positionTitle}
               status={report.rosterStatus}
             />
             {meta && <span className="player-meta">{meta}</span>}
@@ -551,6 +564,7 @@ export function PlayerCard({
         <PlayerName
               name={report.name}
               position={position}
+              positionTitle={positionTitle}
               status={report.rosterStatus}
             />
         {/* A read on the range in view, not on the season — everything under
