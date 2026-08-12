@@ -3337,11 +3337,11 @@ body {
 .glog-spot {
   color: var(--muted);
 }
-/* Hits over plate appearances — the row's anchor, and heavier than the counting
-   stats beside it for the reason `.sum-hab` is: it's the one cell you read every
-   row for, and the counts are what qualify it. Two classes deep because
+/* Hits over at-bats — the row's anchor, and heavier than the counting stats
+   beside it for the reason `.sum-hab` is: it's the one cell you read every row
+   for, and the counts are what qualify it. Two classes deep because
    `.glog-table .glog-num` sets the 600 it has to beat. */
-.glog-table .glog-hpa {
+.glog-table .glog-hab {
   font-weight: 700;
 }
 /* The margin a pitcher inherited. Up/down take the same green and red as the
