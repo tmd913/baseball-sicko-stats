@@ -1,4 +1,5 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { BaseballMark } from './BaseballMark';
 import { ExpandButton } from './ExpandButton';
 import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
@@ -593,7 +594,7 @@ type Op = 'gte' | 'lte';
  *  column because a research table has forty of them and two inputs each is a
  *  form, not a filter bar — you come here with a question ("300+ PA, .350+
  *  xwOBA"), and the builder is that question typed out. */
-interface StatFilter {
+export interface StatFilter {
   id: number;
   column: string;
   op: Op;
@@ -671,6 +672,17 @@ interface Props {
   /** Open the details overlay (percentiles, game log, season splits) for a row.
    *  Takes a player key, the same currency the rest of the app navigates in. */
   onOpenDetails: (key: string) => void;
+  /** The board's own settings, held by App so leaving the page doesn't throw
+   *  them away — see `ResearchUi`. The updater form only, since every change
+   *  here is a patch of one field of one board. */
+  ui: ResearchUi;
+  onUiChange: (update: (prev: ResearchUi) => ResearchUi) => void;
+  /** Where the control set renders: a box App keeps inside the pinned chrome,
+   *  so the research page has one top section rather than a band of controls
+   *  stacked under the app's own. Null on the first render — App has to have
+   *  committed the element before it can be handed over — and the bar simply
+   *  isn't drawn for that one frame, which happens before paint. */
+  controlsHost: HTMLElement | null;
 }
 
 /** An unrecognised `win=` is the season, matching `toResearchPos`'s rule and the
@@ -684,7 +696,7 @@ export function toResearchWindow(v: string | null): ResearchWindow {
 const windowLabel = (w: ResearchWindow) => (w === 'season' ? 'Season' : `${w}d`);
 
 /** What each board remembers while you are looking at the other one. */
-type BoardState = {
+export type BoardState = {
   search: string;
   /** Null until the reader sorts something — see `freshBoard`. */
   sortKey: string | null;
@@ -701,6 +713,44 @@ const freshBoard = (): BoardState => ({
   sortKey: null,
   sortAsc: false,
   filters: [],
+});
+
+/**
+ * Everything the board is set to that App didn't already own — the two boards'
+ * search, sort and filters, which of the three disclosures are open, and the
+ * half-built condition sitting in the filter builder.
+ *
+ * It is held in **App**, and the shape exists to make that one line rather than
+ * six. The reason is that this component is unmounted the moment you leave the
+ * page: state kept in it is state the Roster tab throws away, so a look at the
+ * summary cost you the four filters you had built and put the sort back to its
+ * default — precisely the loss `BoardState` was written to prevent between the
+ * two boards, happening one level up between the two views. App already holds
+ * the position, the window, the scope, the columns and the qualifier for that
+ * same reason; these are the rest of that set, and keeping half the board's
+ * settings in each place is why only half of them survived.
+ *
+ * The vocabulary stays here: App stores this object and hands it back, and
+ * every rule about what is in it — the per-kind slots, the sort's fallback, the
+ * draft's fallback — is still written in this file.
+ */
+export interface ResearchUi {
+  boards: Record<PlayerKind, BoardState>;
+  /** Which disclosures are open. An open panel is part of where you were:
+   *  coming back to find the Filters panel shut is the same surprise as coming
+   *  back to find it empty. */
+  panels: { search: boolean; filters: boolean; columns: boolean };
+  /** The condition being typed, deliberately *not* per board — it is a
+   *  keystroke rather than a setting. The column it names does belong to one
+   *  board, so `draftColumn` falls back when you cross to a board without it. */
+  draft: { column: string | null; op: Op; value: string };
+}
+
+/** The board as it opens — what App seeds its `useState` with. */
+export const freshResearchUi = (): ResearchUi => ({
+  boards: { batter: freshBoard(), pitcher: freshBoard() },
+  panels: { search: false, filters: false, columns: false },
+  draft: { column: null, op: 'gte', value: '' },
 });
 
 /**
@@ -771,6 +821,9 @@ export function ResearchTable({
   onConnectEspn,
   watchedKeys,
   onOpenDetails,
+  ui,
+  onUiChange,
+  controlsHost,
 }: Props) {
   // Every column this board *has* — what the picker lists, what a filter can be
   // built on, and the canonical order. `columns` below is the visible subset.
@@ -814,9 +867,13 @@ export function ResearchTable({
   // the page; on a phone a permanently-open control bar cost it four rows
   // before the first name. Neither can hide state, though — see the `on`
   // classes below and the chips, which stay put whether the panel is or not.
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [columnsOpen, setColumnsOpen] = useState(false);
+  //
+  // Which of them is open lives in App's `ResearchUi` with everything else the
+  // board is set to: a panel you left open is part of where you were, and this
+  // component is unmounted the moment you look at anything else.
+  const { search: searchOpen, filters: filtersOpen, columns: columnsOpen } = ui.panels;
+  const setPanel = (which: keyof ResearchUi['panels'], on: boolean) =>
+    onUiChange((u) => ({ ...u, panels: { ...u.panels, [which]: on } }));
 
   /**
    * The search, the sort and the filters, **kept per board**.
@@ -828,20 +885,22 @@ export function ResearchTable({
    * batters, which is exactly what it cost when App remounted this component on
    * every crossing (`key={researchKind}`) and the state went with it.
    *
-   * Both at once means one record with a slot per kind, held here rather than
-   * lifted to App: the shape is this component's own, where the column
-   * selection App keeps per board is a saved preference with a route behind it.
+   * Both at once means one record with a slot per kind. It is stored in App
+   * (`ResearchUi`) for the reason the whole of that object is: the crossing
+   * this record survives is only the one between the two boards, and the
+   * bigger one — to the Roster tab and back — unmounts the component holding
+   * it. Every rule about the record is still written here; App only keeps it.
    */
-  const [boards, setBoards] = useState<Record<PlayerKind, BoardState>>(() => ({
-    batter: freshBoard(),
-    pitcher: freshBoard(),
-  }));
+  const boards = ui.boards;
   const board = boards[kind];
   /** Change the board on screen, leaving the other one alone. */
   const patchBoard = (next: Partial<BoardState> | ((b: BoardState) => Partial<BoardState>)) =>
-    setBoards((prev) => ({
-      ...prev,
-      [kind]: { ...prev[kind], ...(typeof next === 'function' ? next(prev[kind]) : next) },
+    onUiChange((u) => ({
+      ...u,
+      boards: {
+        ...u.boards,
+        [kind]: { ...u.boards[kind], ...(typeof next === 'function' ? next(u.boards[kind]) : next) },
+      },
     }));
 
   const { search, sortKey, sortAsc, filters } = board;
@@ -866,14 +925,16 @@ export function ResearchTable({
   // league, and on `G` for anyone without. It also covers the other case for
   // free: a column the *other* board doesn't have is not a value this select
   // can show, so crossing falls back rather than leaving it on a dead option.
-  const [draftColumnRaw, setDraftColumn] = useState<string | null>(null);
+  const { column: draftColumnRaw, op: draftOp, value: draftValue } = ui.draft;
   const draftColumn =
     draftColumnRaw && allColumns.some((c) => c.key === draftColumnRaw)
       ? draftColumnRaw
       : allColumns[0].key;
-  const [draftOp, setDraftOp] = useState<Op>('gte');
-  const [draftValue, setDraftValue] = useState('');
-  const nextFilterId = useRef(1);
+  const patchDraft = (next: Partial<ResearchUi['draft']>) =>
+    onUiChange((u) => ({ ...u, draft: { ...u.draft, ...next } }));
+  const setDraftColumn = (v: string) => patchDraft({ column: v });
+  const setDraftOp = (v: Op) => patchDraft({ op: v });
+  const setDraftValue = (v: string) => patchDraft({ value: v });
 
   // Everyone this board can show, before any pill or filter. Each MLB
   // leaderboard arrives carrying the other trade's players — pitchers who took
@@ -1065,7 +1126,12 @@ export function ResearchTable({
     setFilters((fs) => [
       ...fs,
       {
-        id: nextFilterId.current++,
+        // One past the highest on this board, rather than a counter kept beside
+        // the list. The ids only have to be unique within the board that holds
+        // them (a React key, and what the chip removes by), and a counter is
+        // the one piece of this that a mount could reset while the filters it
+        // numbered survived in App — which is two chips answering to one id.
+        id: fs.reduce((m, f) => Math.max(m, f.id), 0) + 1,
         column: draftColumn,
         op: draftOp,
         value: col?.toValue ? col.toValue(v) : v,
@@ -1102,382 +1168,407 @@ export function ResearchTable({
           ))}
         </div>
       )}
-      {/* Positions, the two disclosure buttons and the count all share one
-          wrapping row: the pills are only as wide as their content, so on a
-          desktop the whole control set fits on a single line, and the row
-          breaks to two (or three) as the screen narrows. */}
-      <div className="research-bar">
-      {/* Ahead of the position pills, and a separate control from them: scope and
-          position both apply, so folding these two into that row would read as
-          one single-select where picking SS un-picks My Players. */}
-      <div className="research-scope" role="tablist" aria-label="Whose players">
-        {/* Free Agents only appears once a fantasy league is connected — an
-            unconnected user has no set for it to name. A `scope=fa` link still
-            selects it, and the board's empty state is then the way in. */}
-        {(['mine', 'all', ...(espnConnected || scope === 'fa' ? (['fa'] as const) : [])] as const).map(
-          (sc) => (
-            <button
-              key={sc}
-              type="button"
-              role="tab"
-              aria-selected={scope === sc}
-              className={`research-scope-tab${scope === sc ? ' active' : ''}`}
-              title={SCOPE_TITLES[sc]}
-              onClick={() => onScopeChange(sc)}
-            >
-              {SCOPE_LABELS[sc]}
-            </button>
-          ),
-        )}
-      </div>
-      {/* The same switch as a dropdown, for a phone — rendered alongside the
-          pills and swapped by a media query, the pattern the header's date
-          presets use. See `.research-window-select` for why the three of them
-          sit together down there. */}
-      <select
-        className="research-scope-select"
-        value={scope}
-        onChange={(e) => onScopeChange(e.target.value as ResearchScope)}
-        aria-label="Whose players"
-      >
-        {(['mine', 'all', ...(espnConnected || scope === 'fa' ? (['fa'] as const) : [])] as const).map(
-          (sc) => (
-            <option key={sc} value={sc}>
-              {SCOPE_LABELS[sc]}
-            </option>
-          ),
-        )}
-      </select>
-      {/* Out in the bar rather than inside the Filters panel: it decides which
-          games every number on the board is drawn from, which is too large a
-          thing to keep behind a disclosure — and being always visible, it needs
-          no chip to say what it is set to. */}
-      <div className="research-window-row" role="tablist" aria-label="Time span">
-        {RESEARCH_WINDOWS.map((w) => (
-          <button
-            key={String(w)}
-            type="button"
-            role="tab"
-            aria-selected={statWindow === w}
-            className={`research-window-tab${statWindow === w ? ' active' : ''}`}
-            onClick={() => onWindowChange(w)}
-            title={
-              w === 'season'
-                ? 'The whole season to date'
-                : `The last ${w} days of games, ending yesterday`
-            }
+      {/* **The control set renders in the app's pinned chrome, not here.**
+          `.app-chrome` is the header, the search bar and the view tabs in one
+          box — everything that says where you are and what you are looking at —
+          and this bar is the rest of that sentence on this page: which players,
+          which span, which position, which columns. Left below the box it read
+          as a second control area stacked under the first, two bands of chrome
+          with a hairline between them and nothing to say why.
+
+          A portal rather than a move, because the alternative is to lift the
+          bar into App and the bar is inseparable from the board's *vocabulary*
+          — the column list, the visible set, the filter builder, every one of
+          which the table beneath also reads. Portalling relocates the DOM and
+          leaves that where it belongs; lifting would split this file in two and
+          thread a dozen values back down. The one price is the host having to
+          exist first, which is the `controlsHost &&` below.
+
+          Positions, the scope and window switches and the four disclosure
+          buttons all share one wrapping row: the pills are only as wide as
+          their content, so on a desktop the whole control set fits on a single
+          line, and the row breaks to two (or three) as the screen narrows. */}
+      {controlsHost &&
+        createPortal(
+          <>
+          <div className="research-bar">
+          {/* Ahead of the position pills, and a separate control from them: scope and
+              position both apply, so folding these two into that row would read as
+              one single-select where picking SS un-picks My Players. */}
+          <div className="research-scope" role="tablist" aria-label="Whose players">
+            {/* Free Agents only appears once a fantasy league is connected — an
+                unconnected user has no set for it to name. A `scope=fa` link still
+                selects it, and the board's empty state is then the way in. */}
+            {(['mine', 'all', ...(espnConnected || scope === 'fa' ? (['fa'] as const) : [])] as const).map(
+              (sc) => (
+                <button
+                  key={sc}
+                  type="button"
+                  role="tab"
+                  aria-selected={scope === sc}
+                  className={`research-scope-tab${scope === sc ? ' active' : ''}`}
+                  title={SCOPE_TITLES[sc]}
+                  onClick={() => onScopeChange(sc)}
+                >
+                  {SCOPE_LABELS[sc]}
+                </button>
+              ),
+            )}
+          </div>
+          {/* The same switch as a dropdown, for a phone — rendered alongside the
+              pills and swapped by a media query, the pattern the header's date
+              presets use. See `.research-window-select` for why the three of them
+              sit together down there. */}
+          <select
+            className="research-scope-select"
+            value={scope}
+            onChange={(e) => onScopeChange(e.target.value as ResearchScope)}
+            aria-label="Whose players"
           >
-            {windowLabel(w)}
-          </button>
-        ))}
-      </div>
-      {/* The same tabs as a dropdown, for a phone. It keeps the tabs' short
-          labels: a native select is as wide as its widest option, and "Last 60
-          days" would cost back the width this is here to save. */}
-      <select
-        className="research-window-select"
-        value={String(statWindow)}
-        onChange={(e) => onWindowChange(toResearchWindow(e.target.value))}
-        aria-label="Time span"
-      >
-        {RESEARCH_WINDOWS.map((w) => (
-          <option key={String(w)} value={String(w)}>
-            {windowLabel(w)}
-          </option>
-        ))}
-      </select>
-      <div className="research-positions" role="tablist" aria-label="Position" ref={posRowRef}>
-        {POSITIONS.map((p) => (
-          <button
-            key={p.key}
-            type="button"
-            role="tab"
-            aria-selected={pos === p.key}
-            className={`research-pos-tab${pos === p.key ? ' active' : ''}`}
-            title={p.title}
-            onClick={() => onPosChange(p.key)}
+            {(['mine', 'all', ...(espnConnected || scope === 'fa' ? (['fa'] as const) : [])] as const).map(
+              (sc) => (
+                <option key={sc} value={sc}>
+                  {SCOPE_LABELS[sc]}
+                </option>
+              ),
+            )}
+          </select>
+          {/* Out in the bar rather than inside the Filters panel: it decides which
+              games every number on the board is drawn from, which is too large a
+              thing to keep behind a disclosure — and being always visible, it needs
+              no chip to say what it is set to. */}
+          <div className="research-window-row" role="tablist" aria-label="Time span">
+            {RESEARCH_WINDOWS.map((w) => (
+              <button
+                key={String(w)}
+                type="button"
+                role="tab"
+                aria-selected={statWindow === w}
+                className={`research-window-tab${statWindow === w ? ' active' : ''}`}
+                onClick={() => onWindowChange(w)}
+                title={
+                  w === 'season'
+                    ? 'The whole season to date'
+                    : `The last ${w} days of games, ending yesterday`
+                }
+              >
+                {windowLabel(w)}
+              </button>
+            ))}
+          </div>
+          {/* The same tabs as a dropdown, for a phone. It keeps the tabs' short
+              labels: a native select is as wide as its widest option, and "Last 60
+              days" would cost back the width this is here to save. */}
+          <select
+            className="research-window-select"
+            value={String(statWindow)}
+            onChange={(e) => onWindowChange(toResearchWindow(e.target.value))}
+            aria-label="Time span"
           >
-            {p.label}
-          </button>
-        ))}
-      </div>
-      {/* The eleven pills as one dropdown, for a phone. The pills' own labels,
-          which are two characters wide by design, are grouped under headings
-          here — a select shows one option at a time and "SS" alone in a closed
-          box says less than it does in a row with C and 1B beside it. Short
-          headings, because an optgroup label counts toward the width the same
-          way an option does. */}
-      <select
-        className="research-pos-select"
-        value={pos}
-        onChange={(e) => onPosChange(e.target.value as ResearchPos)}
-        aria-label="Position"
-      >
-        {POSITION_GROUPS.map((g) => (
-          <optgroup key={g.label} label={g.label}>
-            {g.positions.map((p) => (
-              <option key={p.key} value={p.key}>
+            {RESEARCH_WINDOWS.map((w) => (
+              <option key={String(w)} value={String(w)}>
+                {windowLabel(w)}
+              </option>
+            ))}
+          </select>
+          <div className="research-positions" role="tablist" aria-label="Position" ref={posRowRef}>
+            {POSITIONS.map((p) => (
+              <button
+                key={p.key}
+                type="button"
+                role="tab"
+                aria-selected={pos === p.key}
+                className={`research-pos-tab${pos === p.key ? ' active' : ''}`}
+                title={p.title}
+                onClick={() => onPosChange(p.key)}
+              >
                 {p.label}
-              </option>
+              </button>
             ))}
-          </optgroup>
-        ))}
-      </select>
-
-        {/* One group, so the four buttons never split across two lines of the
-            bar. As individual flex children they wrapped one at a time, and on
-            a wide screen that stranded whichever one happened to fit at the end
-            of the position row — a lone Search up there, its three companions
-            below. `flex: none` on the group is what makes the whole run move
-            down together instead.
-
-            The window dropdown used to sit at the head of it, to share the
-            buttons' line on a phone. It has moved back up beside its own pill
-            row now that the scope and position rows have dropdowns of their
-            own: three of them and four buttons were never going to be one
-            line, and the three belong together — they all name which slice of
-            the league the table is, where the buttons open panels. */}
-        <div className="research-tools">
-        {/* Search and Filters first — the two disclosures you come to the board
-            with a question in. Each carries an `on` state whenever its panel
-            holds something, open or shut: a collapsed control must never be the
-            only place a filter lives. */}
-        <button
-          type="button"
-          className={`research-toggle${searchOpen ? ' active' : ''}${
-            search.trim() ? ' on' : ''
-          }`}
-          aria-expanded={searchOpen}
-          onClick={() => setSearchOpen((v) => !v)}
-          title="Search the league by name"
-        >
-          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
-            <circle cx="11" cy="11" r="7" />
-            <path d="m20 20-3.5-3.5" />
-          </svg>
-          <span className="research-toggle-label">Search</span>
-        </button>
-        <button
-          type="button"
-          /* `.on` means the panel *holds* something, whether it is open or
-             shut. The window used to count here; it is out in the bar now and
-             speaks for itself. */
-          className={`research-toggle${filtersOpen ? ' active' : ''}${
-            filters.length ? ' on' : ''
-          }`}
-          aria-expanded={filtersOpen}
-          onClick={() => setFiltersOpen((v) => !v)}
-          title="Filter the board by a stat threshold"
-        >
-          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
-            <path d="M3 5h18l-7 8v6l-4 2v-8Z" />
-          </svg>
-          <span className="research-toggle-label">Filters</span>
-          {filters.length > 0 && <span className="research-toggle-count">{filters.length}</span>}
-        </button>
-        {/* Not a disclosure like the three beside it — it has no panel, so it
-            takes `.on` and never `.active`. It sits after the two panels
-            because it belongs with them: all three narrow *who* is in the
-            table, where Columns after it changes what is shown about them. */}
-        <button
-          type="button"
-          className={`research-toggle${qualifiedOnly ? ' on' : ''}`}
-          aria-pressed={qualifiedOnly}
-          onClick={() => onQualifiedChange(!qualifiedOnly)}
-          title={
-            kind === 'pitcher'
-              ? 'Only pitchers with enough of a season: starters at 1 inning per team game, relievers at 1 appearance per 3 team games'
-              : 'Only batters with 3.1 plate appearances per game their team has played'
-          }
-        >
-          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M20 6 9 17l-5-5" />
-          </svg>
-          <span className="research-toggle-label">Qualified</span>
-        </button>
-        <button
-          type="button"
-          className={`research-toggle${columnsOpen ? ' active' : ''}${
-            columnKeys ? ' on' : ''
-          }`}
-          aria-expanded={columnsOpen}
-          onClick={() => setColumnsOpen((v) => !v)}
-          title="Choose which columns to show"
-        >
-          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-            <rect x="3" y="4" width="18" height="16" rx="2" />
-            <path d="M9 4v16M15 4v16" />
-          </svg>
-          <span className="research-toggle-label">Columns</span>
-          <span className="research-toggle-count">{columns.length}</span>
-        </button>
-        </div>
-      </div>
-
-      {searchOpen && (
-        <div className="research-panel">
-          <input
-            className="research-search"
-            type="search"
-            placeholder="Search player or team…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            aria-label="Search by player or team"
-            autoFocus
-          />
-          {search && (
-            <button type="button" className="research-clear" onClick={() => setSearch('')}>
-              Clear
-            </button>
-          )}
-        </div>
-      )}
-
-      {filtersOpen && (
-        <div className="research-panel research-filter-add">
-          {/* Every column, not just the shown ones: a threshold on a stat you
-              have hidden is a legitimate thing to want ("300+ PA" without a PA
-              column), and the chip keeps saying so. */}
+          </div>
+          {/* The eleven pills as one dropdown, for a phone. The pills' own labels,
+              which are two characters wide by design, are grouped under headings
+              here — a select shows one option at a time and "SS" alone in a closed
+              box says less than it does in a row with C and 1B beside it. Short
+              headings, because an optgroup label counts toward the width the same
+              way an option does. */}
           <select
-            value={draftColumn}
-            onChange={(e) => setDraftColumn(e.target.value)}
-            aria-label="Stat to filter on"
+            className="research-pos-select"
+            value={pos}
+            onChange={(e) => onPosChange(e.target.value as ResearchPos)}
+            aria-label="Position"
           >
-            {allColumns.map((c) => (
-              <option key={c.key} value={c.key}>
-                {c.pick ?? c.title}
-              </option>
+            {POSITION_GROUPS.map((g) => (
+              <optgroup key={g.label} label={g.label}>
+                {g.positions.map((p) => (
+                  <option key={p.key} value={p.key}>
+                    {p.label}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
-          <select
-            className="research-op"
-            value={draftOp}
-            onChange={(e) => setDraftOp(e.target.value as Op)}
-            aria-label="Comparison"
-          >
-            <option value="gte">{OP_LABEL.gte}</option>
-            <option value="lte">{OP_LABEL.lte}</option>
-          </select>
-          <input
-            className="research-value"
-            type="number"
-            step="any"
-            inputMode="decimal"
-            placeholder="0"
-            value={draftValue}
-            onChange={(e) => setDraftValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') addFilter();
-            }}
-            aria-label="Threshold"
-          />
-          <button
-            type="button"
-            className="research-add"
-            onClick={addFilter}
-            disabled={draftValue.trim() === ''}
-          >
-            Add
-          </button>
-        </div>
-      )}
 
-      {/* Outside the panel on purpose: the chips are the record of what the
-          table is currently showing, so they stay whether the Filters panel is
-          open or shut. Qualified is one of them — it narrows the table exactly
-          as a threshold does, and it is the only one that used to leave no
-          trace here, so the row read as the whole story when it wasn't. */}
-      {(filters.length > 0 || qualifiedOnly) && (
-        <div className="research-chips">
-          {qualifiedOnly && (
+            {/* One group, so the four buttons never split across two lines of the
+                bar. As individual flex children they wrapped one at a time, and on
+                a wide screen that stranded whichever one happened to fit at the end
+                of the position row — a lone Search up there, its three companions
+                below. `flex: none` on the group is what makes the whole run move
+                down together instead.
+
+                The window dropdown used to sit at the head of it, to share the
+                buttons' line on a phone. It has moved back up beside its own pill
+                row now that the scope and position rows have dropdowns of their
+                own: three of them and four buttons were never going to be one
+                line, and the three belong together — they all name which slice of
+                the league the table is, where the buttons open panels. */}
+            <div className="research-tools">
+            {/* Search and Filters first — the two disclosures you come to the board
+                with a question in. Each carries an `on` state whenever its panel
+                holds something, open or shut: a collapsed control must never be the
+                only place a filter lives. */}
             <button
               type="button"
-              className="research-chip"
-              onClick={() => onQualifiedChange(false)}
-              title="Show every player, qualified or not"
+              className={`research-toggle${searchOpen ? ' active' : ''}${
+                search.trim() ? ' on' : ''
+              }`}
+              aria-expanded={searchOpen}
+              onClick={() => setPanel('search', !searchOpen)}
+              title="Search the league by name"
             >
-              Qualified
-              <span className="research-chip-x" aria-hidden="true">
-                ×
-              </span>
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="7" />
+                <path d="m20 20-3.5-3.5" />
+              </svg>
+              <span className="research-toggle-label">Search</span>
             </button>
+            <button
+              type="button"
+              /* `.on` means the panel *holds* something, whether it is open or
+                 shut. The window used to count here; it is out in the bar now and
+                 speaks for itself. */
+              className={`research-toggle${filtersOpen ? ' active' : ''}${
+                filters.length ? ' on' : ''
+              }`}
+              aria-expanded={filtersOpen}
+              onClick={() => setPanel('filters', !filtersOpen)}
+              title="Filter the board by a stat threshold"
+            >
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+                <path d="M3 5h18l-7 8v6l-4 2v-8Z" />
+              </svg>
+              <span className="research-toggle-label">Filters</span>
+              {filters.length > 0 && <span className="research-toggle-count">{filters.length}</span>}
+            </button>
+            {/* Not a disclosure like the three beside it — it has no panel, so it
+                takes `.on` and never `.active`. It sits after the two panels
+                because it belongs with them: all three narrow *who* is in the
+                table, where Columns after it changes what is shown about them. */}
+            <button
+              type="button"
+              className={`research-toggle${qualifiedOnly ? ' on' : ''}`}
+              aria-pressed={qualifiedOnly}
+              onClick={() => onQualifiedChange(!qualifiedOnly)}
+              title={
+                kind === 'pitcher'
+                  ? 'Only pitchers with enough of a season: starters at 1 inning per team game, relievers at 1 appearance per 3 team games'
+                  : 'Only batters with 3.1 plate appearances per game their team has played'
+              }
+            >
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M20 6 9 17l-5-5" />
+              </svg>
+              <span className="research-toggle-label">Qualified</span>
+            </button>
+            <button
+              type="button"
+              className={`research-toggle${columnsOpen ? ' active' : ''}${
+                columnKeys ? ' on' : ''
+              }`}
+              aria-expanded={columnsOpen}
+              onClick={() => setPanel('columns', !columnsOpen)}
+              title="Choose which columns to show"
+            >
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                <rect x="3" y="4" width="18" height="16" rx="2" />
+                <path d="M9 4v16M15 4v16" />
+              </svg>
+              <span className="research-toggle-label">Columns</span>
+              <span className="research-toggle-count">{columns.length}</span>
+            </button>
+            </div>
+          </div>
+
+          {searchOpen && (
+            <div className="research-panel">
+              <input
+                className="research-search"
+                type="search"
+                placeholder="Search player or team…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                aria-label="Search by player or team"
+                autoFocus
+              />
+              {search && (
+                <button type="button" className="research-clear" onClick={() => setSearch('')}>
+                  Clear
+                </button>
+              )}
+            </div>
           )}
-          {filters.map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              className="research-chip"
-              onClick={() => setFilters((fs) => fs.filter((x) => x.id !== f.id))}
-              title="Remove this filter"
-            >
-              {columnsByKey.get(f.column)?.label ?? f.column} {OP_LABEL[f.op]} {f.label}
-              <span className="research-chip-x" aria-hidden="true">
-                ×
-              </span>
-            </button>
-          ))}
-          {/* Clears what the row shows, which now includes Qualified —
-              otherwise "Clear all" leaves a chip standing. */}
-          <button
-            type="button"
-            className="research-clear"
-            onClick={() => {
-              setFilters([]);
-              onQualifiedChange(false);
-            }}
-          >
-            Clear all
-          </button>
-        </div>
-      )}
+
+          {filtersOpen && (
+            <div className="research-panel research-filter-add">
+              {/* Every column, not just the shown ones: a threshold on a stat you
+                  have hidden is a legitimate thing to want ("300+ PA" without a PA
+                  column), and the chip keeps saying so. */}
+              <select
+                value={draftColumn}
+                onChange={(e) => setDraftColumn(e.target.value)}
+                aria-label="Stat to filter on"
+              >
+                {allColumns.map((c) => (
+                  <option key={c.key} value={c.key}>
+                    {c.pick ?? c.title}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="research-op"
+                value={draftOp}
+                onChange={(e) => setDraftOp(e.target.value as Op)}
+                aria-label="Comparison"
+              >
+                <option value="gte">{OP_LABEL.gte}</option>
+                <option value="lte">{OP_LABEL.lte}</option>
+              </select>
+              <input
+                className="research-value"
+                type="number"
+                step="any"
+                inputMode="decimal"
+                placeholder="0"
+                value={draftValue}
+                onChange={(e) => setDraftValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') addFilter();
+                }}
+                aria-label="Threshold"
+              />
+              <button
+                type="button"
+                className="research-add"
+                onClick={addFilter}
+                disabled={draftValue.trim() === ''}
+              >
+                Add
+              </button>
+            </div>
+          )}
+
+          {/* Outside the panel on purpose: the chips are the record of what the
+              table is currently showing, so they stay whether the Filters panel is
+              open or shut. Qualified is one of them — it narrows the table exactly
+              as a threshold does, and it is the only one that used to leave no
+              trace here, so the row read as the whole story when it wasn't. */}
+          {(filters.length > 0 || qualifiedOnly) && (
+            <div className="research-chips">
+              {qualifiedOnly && (
+                <button
+                  type="button"
+                  className="research-chip"
+                  onClick={() => onQualifiedChange(false)}
+                  title="Show every player, qualified or not"
+                >
+                  Qualified
+                  <span className="research-chip-x" aria-hidden="true">
+                    ×
+                  </span>
+                </button>
+              )}
+              {filters.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  className="research-chip"
+                  onClick={() => setFilters((fs) => fs.filter((x) => x.id !== f.id))}
+                  title="Remove this filter"
+                >
+                  {columnsByKey.get(f.column)?.label ?? f.column} {OP_LABEL[f.op]} {f.label}
+                  <span className="research-chip-x" aria-hidden="true">
+                    ×
+                  </span>
+                </button>
+              ))}
+              {/* Clears what the row shows, which now includes Qualified —
+                  otherwise "Clear all" leaves a chip standing. */}
+              <button
+                type="button"
+                className="research-clear"
+                onClick={() => {
+                  setFilters([]);
+                  onQualifiedChange(false);
+                }}
+              >
+                Clear all
+              </button>
+            </div>
+          )}
+
+          {columnsOpen && (
+            <div className="research-panel research-columns">
+              {columnGroups(allColumns).map((g) => {
+                const allOn = g.columns.every((c) => visibleKeys.has(c.key));
+                return (
+                  <div key={g.title} className="research-colgroup">
+                    <div className="research-colgroup-head">
+                      <span>{g.title}</span>
+                      {/* One click for a whole run — checking off fifteen Statcast
+                          boxes by hand is the reason a picker gets abandoned. */}
+                      <button type="button" onClick={() => setGroup(g.columns, !allOn)}>
+                        {allOn ? 'None' : 'All'}
+                      </button>
+                    </div>
+                    <div className="research-colgroup-items">
+                      {g.columns.map((c) => (
+                        <label
+                          key={c.key}
+                          className={`research-col-chip${visibleKeys.has(c.key) ? ' on' : ''}`}
+                          title={c.title}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={visibleKeys.has(c.key)}
+                            onChange={(e) => setColumn(c.key, e.target.checked)}
+                          />
+                          {c.label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+              <button
+                type="button"
+                className="research-clear research-cols-reset"
+                onClick={() => onColumnsChange(null)}
+                disabled={!columnKeys}
+              >
+                Reset to defaults
+              </button>
+            </div>
+          )}
+          </>,
+          controlsHost,
+        )}
 
       {/* Suppressed behind a failed load, where "0 of 0 batters" would read as
-          a finding about the league rather than as nothing having arrived. */}
+          a finding about the league rather than as nothing having arrived. It
+          stays on the page rather than travelling up into the chrome with the
+          controls: a board that failed to load is news about the table, the
+          same argument that keeps App's own error banner outside the chrome. */}
       {error && <div className="error-banner">⚠ {error}</div>}
-
-      {columnsOpen && (
-        <div className="research-panel research-columns">
-          {columnGroups(allColumns).map((g) => {
-            const allOn = g.columns.every((c) => visibleKeys.has(c.key));
-            return (
-              <div key={g.title} className="research-colgroup">
-                <div className="research-colgroup-head">
-                  <span>{g.title}</span>
-                  {/* One click for a whole run — checking off fifteen Statcast
-                      boxes by hand is the reason a picker gets abandoned. */}
-                  <button type="button" onClick={() => setGroup(g.columns, !allOn)}>
-                    {allOn ? 'None' : 'All'}
-                  </button>
-                </div>
-                <div className="research-colgroup-items">
-                  {g.columns.map((c) => (
-                    <label
-                      key={c.key}
-                      className={`research-col-chip${visibleKeys.has(c.key) ? ' on' : ''}`}
-                      title={c.title}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={visibleKeys.has(c.key)}
-                        onChange={(e) => setColumn(c.key, e.target.checked)}
-                      />
-                      {c.label}
-                    </label>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-          <button
-            type="button"
-            className="research-clear research-cols-reset"
-            onClick={() => onColumnsChange(null)}
-            disabled={!columnKeys}
-          >
-            Reset to defaults
-          </button>
-        </div>
-      )}
 
       {/* Directly above the table, reading as its caption — how many rows the
           filters left, out of the board they were applied to. No season: the
