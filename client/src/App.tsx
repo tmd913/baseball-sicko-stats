@@ -15,7 +15,7 @@ import type {
   SeasonPlayer,
   WatchPlayer,
 } from './types';
-import { isInjured } from './lib';
+import { isInjured, isStartingOn } from './lib';
 import { BaseballMark } from './components/BaseballMark';
 import { PlayerAdder } from './components/PlayerAdder';
 import { PlayerOrderEditor } from './components/PlayerOrderEditor';
@@ -62,6 +62,11 @@ const USER_SCROLLS = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const;
 // gap, matching `--scroll-offset`'s own; the pinned chrome's height is added to
 // it at the call site.
 const SCROLL_GAP = 12;
+
+// How long the header's refresh keeps spinning at a minimum — see `refreshAll`.
+// A warm `/api/report` comes back in about 16ms, which is a spinner nobody
+// sees, and a button that answers a press with nothing at all reads as broken.
+const MIN_SPIN = 450;
 
 /** The three ways of reading one set of players over one span of days. They are
  *  tabs *within* Roster rather than siblings of Research — see `section`. */
@@ -297,6 +302,38 @@ export default function App() {
       .saveHideInjured(hide)
       .catch((e: Error) => console.error('saving hide-injured failed:', e.message));
   }, []);
+  /**
+   * Narrow the summary table to the players who are actually starting today —
+   * a hitter in the posted lineup, a pitcher named as today's starter.
+   *
+   * **In the URL** (`starters=1`), by the same rule `hideil=1` follows: it
+   * changes *which players a view is reporting on*, so a link that carries it
+   * is saying something about the data rather than about how it is drawn.
+   *
+   * **Not saved as a preference**, which is where it parts from hide-injured.
+   * An IL stint is a standing fact about a player and is as true next Tuesday
+   * as it is today, so a saved "hide them" is a setting. Who is starting is
+   * true for an afternoon and false by the next morning, and a saved copy would
+   * mean a filter switched on for one night's lineups silently narrowing a
+   * table read a week later — a stored answer to a question that has since
+   * changed. So there is no `UserPrefs` key, no route, and none of the
+   * already-touched dance the other two need.
+   */
+  const [startersOnly, setStartersOnly] = useState<boolean>(
+    () => initialParams.get('starters') === '1',
+  );
+  // The filter is about *today*, so it can only act on a range that contains
+  // today. Over "Yesterday" or a custom week in July there is nobody it could
+  // keep, and a control that empties a table with no way to read why is a trap
+  // — the same reasoning that hides the date row on the research board, which
+  // has nothing dated to act on. The state survives the excursion (going back
+  // to Today finds the toggle as it was left) and only its *effect* is gated,
+  // which is also what keeps `starters=1` out of a URL where it does nothing.
+  const rangeHasToday = useMemo(() => {
+    const today = baseballToday();
+    return start <= today && today <= end;
+  }, [start, end]);
+  const startersActive = startersOnly && rangeHasToday;
   // Play every clip with the sound off. Saved per user like the toggle above,
   // but deliberately **not** in the URL: hide-injured is there because it
   // changes which players a view is reporting on, and a link that says so is
@@ -737,9 +774,11 @@ export default function App() {
   const [playerStatuses, setPlayerStatuses] = useState<Map<number, PlayerStatus> | null>(null);
   const statusesInFlight = useRef(false);
   const loadStatuses = useCallback(() => {
-    if (statusesInFlight.current) return;
+    // Returns a promise so the header's refresh can wait on it — an in-flight
+    // read resolves immediately rather than sending a second copy of itself.
+    if (statusesInFlight.current) return Promise.resolve();
     statusesInFlight.current = true;
-    api
+    return api
       .statuses()
       .then((byId) =>
         setPlayerStatuses(new Map(Object.entries(byId).map(([id, st]) => [Number(id), st]))),
@@ -907,6 +946,8 @@ export default function App() {
     }
     if (simulate) p.set('sim', '1');
     if (hideInjured) p.set('hideil', '1');
+    // Only while it is actually narrowing something — see `startersActive`.
+    if (startersActive) p.set('starters', '1');
     if (rosterSource === 'fantasy') p.set('roster', 'fantasy');
     if (helpOpen) p.set('help', '1');
     window.history.replaceState(null, '', `?${p.toString()}`);
@@ -925,6 +966,7 @@ export default function App() {
     researchKind,
     simulate,
     hideInjured,
+    startersActive,
     rosterSource,
     helpOpen,
   ]);
@@ -1055,6 +1097,89 @@ export default function App() {
       loadReport();
     });
   }, [espnConnected, usingFantasy, loadOwnership, loadFantasyRoster, loadReport]);
+
+  /**
+   * Re-read the board on screen, past the copy this session is holding. The
+   * research blob is fetched once per kind and window and then kept for the
+   * life of the tab — which is the right default for a megabyte of league-wide
+   * season stats behind a six-hour server cache, and the one thing about it
+   * that goes stale on a tab left open all day.
+   *
+   * The rows already on screen are left standing until the new ones land:
+   * `research` is only written on success, and the table's `loading` prop is
+   * gated on the cache being *empty*, so nothing blanks while this is in
+   * flight.
+   */
+  const reloadResearch = useCallback(() => {
+    return api
+      .research(researchKind, researchWindow)
+      .then((r) => {
+        setResearchError(null);
+        setResearch((prev) => ({ ...prev, [`${r.kind}:${r.window}`]: r.rows }));
+      })
+      .catch((e: Error) => setResearchError(e.message));
+  }, [researchKind, researchWindow]);
+
+  /**
+   * The header's refresh: **re-read every source the page in front of you is
+   * drawn from**, and nothing else. That rule is what decides each of the four
+   * reads below — a button that re-fetched the whole app would spend a 2MB
+   * league read and a megabyte of leaderboard to update a summary table.
+   *
+   * - **ESPN first**, and only when a league is connected *and* something on
+   *   screen is drawn from it (the ownership map has been read, or the views
+   *   are reading the fantasy roster). It is the same sequential dance
+   *   `refreshFantasy` does and for the same reason: `?refresh=1` on the
+   *   ownership call is the only true cache bypass in the app, it bypasses the
+   *   server's in-flight guard as well, and the roster and the report read the
+   *   same league payload — so firing them together would send three copies of
+   *   one upstream read instead of one and two lookups.
+   * - **The report always.** It is what the three roster views are, and in
+   *   fantasy mode it is *about* the roster the call above just re-read.
+   * - **The statuses map** on the two views that draw it (the research board
+   *   and the details view) — lineups post and IL moves land through the day.
+   * - **The research blob** on the research view alone.
+   *
+   * Every one of those keeps what is on screen until its replacement arrives:
+   * the report goes through `loadReport`'s quiet path, so the page's own
+   * "Updating…" badge stays away and the button is the only thing that says a
+   * read is happening.
+   */
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshAll = useCallback(() => {
+    setRefreshing(true);
+    const espnFirst =
+      espnConnected && (ownership !== null || usingFantasy)
+        ? loadOwnership(true)
+        : Promise.resolve();
+    const work = espnFirst.then(() => {
+      const rest: Promise<unknown>[] = [loadReport(true)];
+      if (usingFantasy) rest.push(loadFantasyRoster());
+      if (view === 'research' || detailsKey !== null) rest.push(loadStatuses());
+      if (view === 'research') rest.push(reloadResearch());
+      return Promise.all(rest);
+    });
+    // Spin for at least `MIN_SPIN` however fast the answer comes. Measured: a
+    // warm server answers `/api/report` in **16ms**, which is one frame of
+    // spinner — a press that leaves no trace at all reads as a dead button, and
+    // the one thing this control has to say is "I heard you and I have gone and
+    // looked". Long enough to be seen, short enough that a genuinely quick read
+    // still feels quick.
+    return Promise.all([work, new Promise((r) => setTimeout(r, MIN_SPIN))]).finally(() =>
+      setRefreshing(false),
+    );
+  }, [
+    espnConnected,
+    ownership,
+    usingFantasy,
+    view,
+    detailsKey,
+    loadOwnership,
+    loadReport,
+    loadFantasyRoster,
+    loadStatuses,
+    reloadResearch,
+  ]);
 
   // The reports as rendered: the real ones, or a synthetic live-day overlay when
   // the demo toggle is on. Everything downstream (nav, cards, feed, the live
@@ -1278,6 +1403,26 @@ export default function App() {
         ? 'pitcher'
         : playerKind;
   const kindCards = shownKind === 'pitcher' ? cardPitchers : cardBatters;
+  /**
+   * The summary table's rows, which are the only ones the starters filter
+   * touches.
+   *
+   * Filtered *here* rather than up in `shownReports`, where hide-injured is,
+   * because the two answer different questions. An injured player is absent
+   * from every view for weeks, so dropping him ahead of the kind split keeps
+   * the tab counts equal to the lists under them. "Starting today" is a
+   * statement about one afternoon and belongs to the one view that is read as a
+   * roster: the games list is a record of what happened over the range, and the
+   * feed is a chronological one, and neither has any business losing a player
+   * because tonight's lineup left him out. Filtering below the kind split also
+   * leaves the Batters/Pitchers tabs alone, which is right — they say what is
+   * watched, not what tonight's lineups came to.
+   */
+  const summaryReports = useMemo(() => {
+    if (!startersActive) return kindCards;
+    const today = baseballToday();
+    return kindCards.filter((r) => isStartingOn(r, today));
+  }, [kindCards, startersActive]);
   // Each page keeps its own place, and going back to it lands where you left.
   //
   // Games and Feed are two readings of the same days over one window scroller,
@@ -1426,10 +1571,12 @@ export default function App() {
       </button>
     </div>
   ) : null;
-  // The header's cluster, at the top right: the roster search and the Edit
-  // (reorder) toggle. The calendar was the third of them and has moved down to
-  // the roster row (see `dateToggle`), which leaves the header holding only
-  // what belongs to the watchlist itself rather than to any one page of it.
+  // The header's cluster, at the top right: the roster search and the refresh
+  // button. The calendar was once the third of them and moved down to the
+  // roster row (see `dateToggle`); Edit was the third after that and is now an
+  // entry in the settings menu, which is what left room here for a control that
+  // acts on every view rather than on the watchlist alone.
+  //
   // Icons rather than labelled buttons because a full search field is the
   // widest thing in the row and is wanted for a few seconds at a time, so it
   // earns its space only while it is being used; pressing one opens its own bar
@@ -1479,69 +1626,100 @@ export default function App() {
           <path d="m15.4 15.4 4.1 4.1" />
         </svg>
       </button>
-      {/* Opens the reorder screen in place of the player list. Hidden until
-          there's more than one player to put in an order — and while the views
-          are reading the fantasy roster, where there is no order of ours to
-          edit and no player of ours to remove. ESPN owns that list; a screen
-          offering to rearrange it would be offering something it can't do. */}
-      {reports.length > 1 && !usingFantasy && (
-        <button
-          type="button"
-          className={`edit-order-btn${editMode ? ' active' : ''}`}
-          onClick={() => {
-            // The reorder screen only exists on the Games view, and from the
-            // header this button can be pressed from anywhere — so take the
-            // user there rather than flipping a mode with nothing on screen
-            // to show for it.
-            if (!editMode && view !== 'games') {
-              setBackView(null);
-              setView('games');
-            }
-            // The edit screen hides the rest of the chrome, the search bar
-            // included; closing it here stops it being restored on the way out
-            // of a mode it was never visible in.
-            setSearchOpen(false);
-            setEditMode((v) => !v);
-          }}
-          title={editMode ? 'Finish editing' : 'Reorder players'}
-          aria-label={editMode ? 'Finish editing' : 'Reorder players'}
-          aria-pressed={editMode}
-        >
-          <span className="edit-order-icon" aria-hidden="true">
-            {editMode ? (
-              <svg
-                viewBox="0 0 24 24"
-                width="17"
-                height="17"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M20 6 9 17l-5-5" />
-              </svg>
-            ) : (
-              <svg
-                viewBox="0 0 24 24"
-                width="17"
-                height="17"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M12 20h9" />
-                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-              </svg>
-            )}
-          </span>
-          <span className="edit-order-label">{editMode ? 'Done' : 'Edit'}</span>
-        </button>
-      )}
+      {/* Reload what is on screen. The app re-polls on its own only while a
+          real game is live, and even then only the report — so this is the one
+          control that says "read it all again now": the report, the statuses
+          map behind the headshot marks, the research blob, and the connected
+          league past its ten-minute cache. See `refreshAll` for the rule and
+          why the order matters.
+
+          It sits at the end of the cluster, in the slot Edit vacated when it
+          moved into the settings menu — the last thing in the header, since it
+          acts on everything below it rather than on any one part. Disabled
+          while a read is in flight, with the app's own `.spinner` in place of
+          the icon rather than a second spinner invented for the header. */}
+      <button
+        type="button"
+        className="refresh-btn"
+        onClick={refreshAll}
+        disabled={refreshing}
+        aria-label={refreshing ? 'Refreshing' : 'Refresh'}
+        aria-busy={refreshing}
+        title={refreshing ? 'Refreshing…' : 'Refresh what is on screen'}
+      >
+        {refreshing ? (
+          <span className="spinner" aria-hidden="true" />
+        ) : (
+          <svg
+            viewBox="0 0 24 24"
+            width="17"
+            height="17"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.1"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            {/* Three quarters of a circle with an arrowhead on the open end —
+                the same gesture at 17px as the 13px spinner that replaces it,
+                so the swap reads as the icon starting to turn. */}
+            <path d="M20 12a8 8 0 1 1-2.34-5.66" />
+            <path d="M20 4v4.5h-4.5" />
+          </svg>
+        )}
+      </button>
     </div>
   );
+
+  /* The summary table's one filter: only the players who are actually starting
+     today — a hitter in the posted lineup, a pitcher named as today's starter.
+
+     **On the roster row, not in the settings menu.** The gear is app chrome and
+     everything in it reads as app-wide (hide-injured decides the summary *and*
+     the games list, muting decides every clip in the app); this qualifies one
+     view, and a menu entry that quietly did nothing on the two tabs beside it
+     would be a setting lying about its own reach. The roster row is where the
+     app already says which slice of the watchlist is on screen, so the filter
+     goes beside the tabs that select it — and disappears with them on Games and
+     Feed, which is the honest version of "it doesn't apply here".
+
+     **Between the reading and the days**, which is the research board's order
+     rather than an exception to this row's: the scope pills there name *which
+     players* and sit ahead of the window that names which span. Same question,
+     same place in the run.
+
+     It is a plain toggle with no panel, so it takes `.on` and never `.active`,
+     and it is folded into `.research-toggle`'s selector lists rather than
+     restyled to resemble the Qualified button it is the twin of — a filter that
+     narrows who is in a table, stated on the control that opens it. It keeps
+     its word at every width, where the board's four drop theirs on a phone:
+     those four are a known run of icons and this is one button on a row of
+     tabs, with nothing beside it to say what the icon would mean. */
+  const startersToggle =
+    rosterTab === 'summary' && rangeHasToday ? (
+      <button
+        type="button"
+        className={`starters-toggle${startersOnly ? ' on' : ''}`}
+        aria-pressed={startersOnly}
+        onClick={() => setStartersOnly((v) => !v)}
+        title="Only the players starting today — hitters in a posted lineup, pitchers named as today's starter"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          width="15"
+          height="15"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          aria-hidden="true"
+        >
+          <path d="M4 7h16M4 12h10M4 17h7" />
+        </svg>
+        <span className="starters-toggle-label">Starters</span>
+      </button>
+    ) : null;
 
   /* The calendar, which is both the disclosure for the date controls and the
      one thing on the page saying which days every number on it is drawn from.
@@ -1825,6 +2003,58 @@ export default function App() {
                     toggle and the league page — and have moved out to their own
                     button beside the gear, where the state they control can be
                     read without opening anything. */}
+                {/* Edit players came the other way, out of the header cluster
+                    and into the menu. It takes `.help-btn` rather than
+                    `.settings-toggle` because it is that kind of entry: it
+                    opens a screen instead of flipping a setting, so it reads
+                    with "How to use" below it rather than with the two
+                    toggles above. Offered on the same terms it always was —
+                    something to put in an order, and a list of ours to put it
+                    in. */}
+                {reports.length > 1 && !usingFantasy && (
+                  <button
+                    type="button"
+                    className="help-btn"
+                    role="menuitem"
+                    onClick={() => {
+                      // The menu has to go with the press: edit mode hides the
+                      // whole chrome, gear included, so a popover left open
+                      // would be floating over a screen that has hidden
+                      // everything it belongs to.
+                      setSettingsOpen(false);
+                      // The reorder screen only exists on the Games view, and
+                      // this can be pressed from anywhere — so take the user
+                      // there rather than flipping a mode with nothing on
+                      // screen to show for it.
+                      if (view !== 'games') {
+                        setBackView(null);
+                        setView('games');
+                      }
+                      // The edit screen hides the search bar too; closing it
+                      // here stops it being restored on the way out of a mode
+                      // it was never visible in.
+                      setSearchOpen(false);
+                      setEditMode(true);
+                    }}
+                    title="Reorder your players, or remove one"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="15"
+                      height="15"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 20h9" />
+                      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                    </svg>
+                    Edit players
+                  </button>
+                )}
                 <button
                   type="button"
                   className="help-btn"
@@ -2066,6 +2296,9 @@ export default function App() {
                   Feed
                 </button>
               </div>
+              {/* Only on Summary, and only over a range that contains today —
+                  see `startersToggle`. */}
+              {startersToggle}
               {dateToggle}
               </>
             )}
@@ -2171,6 +2404,25 @@ export default function App() {
         </div>
       )}
 
+      {/* The other thing that can empty this view, and the reason it needs its
+          own wording: the message above names the toggle that did it, and the
+          gear is the wrong place to send someone whose table was narrowed by a
+          button on the tab row. Only on the summary, which is the only view the
+          filter reaches. */}
+      {view === 'summary' &&
+        kindCards.length > 0 &&
+        summaryReports.length === 0 &&
+        !editMode && (
+          <div className="empty-state">
+            <p className="empty-title">Nothing to show — nobody here is starting today</p>
+            <p>
+              Turn off “Starters” in the row above to see everyone. Lineups post a couple of
+              hours before first pitch, so an empty table in the morning may only mean they
+              aren’t out yet.
+            </p>
+          </div>
+        )}
+
       {view === 'research' ? (
         <ResearchTable
           /* Deliberately **not** keyed on the board. It was, so that crossing
@@ -2213,9 +2465,9 @@ export default function App() {
           controlsHost={researchChrome}
         />
       ) : view === 'summary' ? (
-        kindCards.length > 0 && (
+        summaryReports.length > 0 && (
           <SummaryTable
-            reports={kindCards}
+            reports={summaryReports}
             onOpenDetails={setDetailsKey}
             onOpenPlayerDay={openPlayerDay}
             /* Kept when the table takes the page. The same nodes render in the
@@ -2227,6 +2479,15 @@ export default function App() {
             chrome={
               <>
                 {kindTabs}
+                {/* Expanded, the research board reduces its control set to a
+                    row of read-only badges; this view keeps its controls
+                    instead, and the filter comes with them for the same reason
+                    the kind tabs and the dates do — it is what the rows *are*,
+                    and a table narrowed to nine names with nothing on screen
+                    saying why is the one state this must never be in. Being the
+                    live control rather than a badge, it is also the way back
+                    out without leaving the page. */}
+                {startersToggle}
                 {dateToggle}
                 {dateControl}
               </>
@@ -2252,10 +2513,20 @@ export default function App() {
         className={`content-layout${showLoading && reports.length > 0 ? ' is-loading' : ''}`}
       >
         {editMode ? (
-          /* The edit screen takes the page: the header keeps the title and the
-             Done button and nothing else, so this is the whole of what's on
-             screen and it carries its own heading rather than relying on the
-             chrome above to say where you are.
+          /* The edit screen takes the page: the chrome above is hidden
+             entirely, so this is the whole of what's on screen and it carries
+             its own heading rather than relying on a header to say where you
+             are.
+
+             **Done is on this row, not up in the header**, and it had to move
+             here when Edit went into the settings menu: the header button was
+             both the way in and the way out, and a menu entry can only be the
+             way in — the gear is hidden in this mode, so a Done left inside it
+             would be behind a button that isn't there. A mode with no visible
+             way out is a trap, which is the one rule this screen has always
+             had. It keeps `.edit-order-btn`, the very class the header button
+             wore, so the control that leaves the mode is the same control that
+             used to enter it.
 
              The kind switch comes with it. It is the header's own `kindTabs`,
              rendered here because the view bar is hidden in this mode and it is
@@ -2266,6 +2537,29 @@ export default function App() {
             <div className="edit-page-head">
               <h2 className="edit-page-title">Edit players</h2>
               {kindTabs}
+              <button
+                type="button"
+                className="edit-order-btn active"
+                onClick={() => setEditMode(false)}
+                title="Finish editing"
+                aria-label="Finish editing"
+              >
+                <span className="edit-order-icon" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="17"
+                    height="17"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                </span>
+                <span className="edit-order-label">Done</span>
+              </button>
             </div>
             <PlayerOrderEditor
               players={editPlayers}

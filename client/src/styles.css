@@ -2120,6 +2120,29 @@ body {
 .faced-card.kind-other {
   border-left-color: var(--faint);
 }
+/* A base-running event inside an inning block — the balk, the wild pitch, the
+   bag taken off him. It takes `.faced-row` outright so it lines up with the
+   batters around it, and only its left accent differs: the same four tones the
+   feed's rail uses, so one event reads the same colour on the card as it does
+   in the stream. It carries a quieter ground than a batter's row, being
+   background to the at-bat it happened inside rather than a result of its own —
+   and it never becomes a `.faced-card`, since there is no pitch sequence under
+   it to open. */
+.faced-event {
+  background: var(--bg-2);
+}
+.faced-event.tone-take {
+  border-left-color: var(--live-purple);
+}
+.faced-event.tone-free {
+  border-left-color: var(--walk);
+}
+.faced-event.tone-out {
+  border-left-color: var(--out);
+}
+.faced-event.tone-run {
+  border-left-color: var(--hit);
+}
 .pa-summary-row {
   display: flex;
   align-items: center;
@@ -2196,6 +2219,28 @@ body {
 .pa-badge.kind-other {
   background: rgba(92, 111, 151, 0.2);
   color: var(--muted);
+}
+/* The same badge for a base-running event, keyed by tone rather than outcome —
+   the four `baseEventTone` groups, at the tint the outcome badges use. `take`
+   and `free` have no outcome equivalent (nothing at the plate is a live purple
+   or a runner's free base), so they carry their own; `out` and `run` deliberately
+   match `kind-out` and `kind-hit`, an out on the bases and a run being the same
+   two things they are at the plate. */
+.pa-badge.tone-take {
+  background: rgba(192, 132, 252, 0.18);
+  color: var(--live-purple);
+}
+.pa-badge.tone-free {
+  background: rgba(96, 165, 250, 0.18);
+  color: var(--walk);
+}
+.pa-badge.tone-out {
+  background: rgba(100, 116, 139, 0.22);
+  color: #cbd5e1;
+}
+.pa-badge.tone-run {
+  background: rgba(52, 211, 153, 0.18);
+  color: var(--hit);
 }
 .pa-rbi {
   font-size: 11px;
@@ -3734,11 +3779,12 @@ body {
   flex: none;
 }
 
-/* The header's icon cluster — the roster search, Edit, and the calendar that
-   stands in for the date controls on a narrow screen. The first two were a full
-   search field plus a labelled button, which is the widest thing in the header
-   for a control wanted a few seconds at a time; each now opens its own bar and
-   the three cost one square apiece.
+/* The header's icon cluster — the roster search and the refresh button. Edit
+   was the third of them and is an entry in the settings menu now, which on a
+   desktop buys the header back the ~66px its labelled pill cost and on a phone
+   a whole square: the field is 418px measured, and this row is where the
+   header's line budget is spent, so a control read once a session is the wrong
+   thing to keep in it.
 
    It sits *before* .date-control in the source, which is what puts it to the
    left of the dates at every width. margin-left: auto then pushes the cluster
@@ -3783,13 +3829,16 @@ body {
   flex: 1;
   min-width: 0;
 }
-/* One square icon button, five uses — the settings gear included, which was a
-   32px circle of its own until it was folded in here. Folded into one selector
-   list rather than restyled to match, so every icon button in the header stays
-   identical by construction: square at --control-h and --control-radius, the
-   same height and corner as the date pills they share a line with. */
+/* One square icon button, six uses — the settings gear included, which was a
+   32px circle of its own until it was folded in here, and the refresh button,
+   which took the slot Edit left when it moved into the gear's menu. Folded into
+   one selector list rather than restyled to match, so every icon button in the
+   header stays identical by construction: square at --control-h and
+   --control-radius, the same height and corner as the date pills they share a
+   line with. */
 .settings-btn,
 .fantasy-btn,
+.refresh-btn,
 .edit-order-btn,
 .search-toggle,
 .date-toggle {
@@ -3812,6 +3861,7 @@ body {
 }
 .settings-btn:hover,
 .fantasy-btn:hover,
+.refresh-btn:hover,
 .edit-order-btn:hover,
 .search-toggle:hover,
 .date-toggle:hover {
@@ -3820,6 +3870,7 @@ body {
 }
 .settings-btn:focus-visible,
 .fantasy-btn:focus-visible,
+.refresh-btn:focus-visible,
 .edit-order-btn:focus-visible,
 .search-toggle:focus-visible,
 .date-toggle:focus-visible {
@@ -3831,6 +3882,7 @@ body {
    than a mode you are in; one look for the row beats that distinction. */
 .settings-btn.active,
 .fantasy-btn.active,
+.refresh-btn.active,
 .edit-order-btn.active,
 .search-toggle.active,
 .date-toggle.active {
@@ -3861,6 +3913,22 @@ body {
   color: var(--bg);
   border-color: var(--accent);
 }
+/* Refreshing: the button holds its place and its size — the 13px `.spinner`
+   swaps in for the 17px icon inside a square that doesn't move, so nothing in
+   the header shifts while a read is in flight. Disabled rather than merely
+   ignored, so a second press is refused by the browser and says so; the muted
+   fill is the only thing that changes, since a spinner turning is already the
+   loudest thing on the row. */
+.refresh-btn:disabled {
+  cursor: default;
+  border-color: var(--border);
+  color: var(--faint);
+}
+.refresh-btn .spinner {
+  /* Its own 13px is right beside a 17px icon: the disc reads as the same
+     weight as the arrow it replaces rather than as a smaller thing. */
+  flex: none;
+}
 .edit-order-icon {
   display: inline-flex;
 }
@@ -3887,10 +3955,14 @@ body {
   display: flex;
   flex: 1 1 100%;
 }
-/* Edit carries its label wherever there is room for it, so it overrides the
-   square the shared list gives it — everything else in that rule (the panel
-   fill, the border, the hover, the accent when active) is what it is there for.
-   Below 640px it goes back to the icon alone with the others. */
+/* Edit carries its label, so it overrides the square the shared list gives it —
+   everything else in that rule (the panel fill, the border, the hover, the
+   accent when active) is what it is there for. It renders in one place now, as
+   the edit screen's own Done button: the class stays in the header's selector
+   list because that is where it is *from*, and keeping it there is what makes
+   the control that leaves the mode look like the one that used to enter it. It
+   keeps the label at every width — there is no line budget to defend on a
+   screen whose whole content is a list of rows. */
 .edit-order-btn {
   width: auto;
   padding: 7px 14px;
@@ -3941,17 +4013,14 @@ body {
   .search-bar {
     display: flex;
   }
-  /* Icons only: the field goes behind the magnifier and Edit loses its word. */
+  /* Icons only: the field goes behind the magnifier, leaving the brand, the
+     magnifier and the refresh button on one line. Edit used to drop its word
+     here too and no longer has to — it is an entry in the settings menu now, so
+     the phone header is one square shorter than it was and `.edit-order-btn`
+     keeps its label wherever it renders (which is the edit screen's own head,
+     as Done). */
   .header-search {
     display: none;
-  }
-  .edit-order-label {
-    display: none;
-  }
-  .edit-order-btn {
-    width: var(--control-h);
-    padding: 0;
-    gap: 0;
   }
   .header-tools {
     flex: none;
@@ -4000,11 +4069,19 @@ body {
    date row it opens are not named: they are inside .view-bar now, and hiding
    their container hides them.
 
+   The whole of `.header-tools` goes now, where the list used to name the
+   magnifier inside it: the cluster held the Edit button, which had to survive
+   as Done, so its container could not be hidden wholesale. With Edit in the
+   gear's menu and Done on the edit screen's own head, nothing in the header is
+   wanted here — the fantasy button included, which was the one control left
+   standing in a mode where it could only swap the very list being edited.
+
    The error banner is deliberately *not* in this list: a mode is no reason to
    stop telling someone the report failed. */
 .app.edit-mode .settings-menu,
+.app.edit-mode .fantasy-menu,
 .app.edit-mode .view-bar,
-.app.edit-mode .search-toggle,
+.app.edit-mode .header-tools,
 .app.edit-mode .refreshing {
   display: none;
 }
@@ -4014,16 +4091,24 @@ body {
   gap: 14px;
 }
 /* The kind switch rides on this row — the view bar it normally lives in is
-   hidden here, and it is the only way to the other kind's order. */
+   hidden here, and it is the only way to the other kind's order — and so does
+   Done, which is the only way *out* now that Edit is a menu entry behind a gear
+   this mode hides. `margin-right: auto` on the title is what keeps those two
+   together at the right end: with three items, `space-between` alone would
+   strand the switch in the middle of the row. At 390px the row wraps and Done
+   takes a line of its own under the switch, still right-aligned — a full 36px
+   target rather than a squeezed one, which is the right way for this row to run
+   out of width. */
 .edit-page-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   flex-wrap: wrap;
   gap: 10px 12px;
 }
 .edit-page-title {
   margin: 0;
+  margin-right: auto;
   font-size: 17px;
   letter-spacing: -0.02em;
 }
@@ -4829,8 +4914,15 @@ body {
   outline-offset: -2px;
 }
 
-/* ---- Disclosure bar: Search and Filters, each behind its own button ---- */
-.research-toggle {
+/* ---- Disclosure bar: Search and Filters, each behind its own button ----
+   `.starters-toggle` — the summary table's "only today's starters" filter, up
+   in the roster row — is folded into every one of these lists rather than
+   restyled to resemble them. It is the same object as Qualified two views over:
+   a plain toggle with no panel, narrowing who is in a table, which is why it
+   takes `.on` and never `.active` and why it reads identically by
+   construction. */
+.research-toggle,
+.starters-toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -4845,7 +4937,8 @@ body {
   font-weight: 700;
   cursor: pointer;
 }
-.research-toggle:hover {
+.research-toggle:hover,
+.starters-toggle:hover {
   color: var(--text);
 }
 /* `.active` is "the panel is open"; `.on` is "the panel holds something",
@@ -4855,12 +4948,26 @@ body {
   color: var(--text);
   border-color: var(--accent);
 }
-.research-toggle.on {
+/* It sits in the wrapping tab row, where every group is atomic: no shrink, and
+   it breaks to the next line whole rather than folding in half — the same two
+   declarations `.date-toggle` carries for the same reason, it being the other
+   labelled button on that row. Its label has a class of its own rather than
+   `.research-toggle-label` deliberately: that one is visually hidden on a
+   phone, which is right for four icons in a known run and wrong for a lone
+   button on a row of tabs, where nothing beside it would say what the glyph
+   meant. */
+.starters-toggle {
+  flex: none;
+  white-space: nowrap;
+}
+.research-toggle.on,
+.starters-toggle.on {
   color: var(--accent);
   border-color: rgba(56, 189, 248, 0.5);
   background: rgba(56, 189, 248, 0.12);
 }
-.research-toggle:focus-visible {
+.research-toggle:focus-visible,
+.starters-toggle:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
@@ -5808,10 +5915,10 @@ body {
   font-weight: 600;
   color: var(--muted);
 }
-/* A base-running feed item (stolen base / run scored): the badge row, then what
-   happened and the situation it happened in. No pitch card — there is no
-   sequence to show — but the clip hangs below the box like an at-bat's. The left
-   accent mirrors the at-bat card's outcome stripe. */
+/* A base-running feed item — a steal, a caught stealing, a pickoff, a balk, a
+   wild pitch, a passed ball, an indifference, a run: the situation and the
+   badges, then what happened. No pitch card — there is no sequence to show —
+   but the clip hangs below like an at-bat's. */
 /* Who it was, what happened and the clip of it are one thing to read, so the
    rail runs down the whole item — header, detail and video together — the way
    `.live-entry`'s role rail does. It was a bordered box around the detail
@@ -5859,46 +5966,82 @@ body {
   border-left-width: 1px;
   border-left-color: var(--border);
 }
+/* The rail is one gradient at every width, and the two tone classes are what
+   fill it. A rail with one tone sets only `--rail-a`, and `--rail-b` resolves
+   through it, so the gradient paints one colour top to bottom and reads as a
+   solid edge; a play that was two things (a steal of home is a steal *and* a
+   run) adds `rail2-*` and the two halves show, in the badges' own order —
+   whatever moved him above, the run below.
+
+   It has to be a gradient rather than a border colour even in the one-tone
+   case: a border takes one colour and has no half to give a second, and
+   switching between the two mechanisms per item would mean every tone written
+   twice. `background-origin: border-box` starts the gradient *on* the rail
+   rather than inside it, the border itself going transparent to let it through.
+
+   Ten kinds are painted by four tones (see `baseEventTone`), which is what
+   keeps this at eight rules instead of a hundred. */
 .feed-base-item {
-  border-left: 3px solid var(--border);
+  --rail-a: var(--border);
+  --rail-b: var(--rail-a);
+  border-left: 3px solid transparent;
   border-radius: 3px;
   padding-left: 11px;
-}
-.feed-base-item.kind-sb {
-  border-left-color: var(--live-purple);
-}
-.feed-base-item.kind-run {
-  border-left-color: var(--hit);
-}
-/* Two events off one play are two kinds of thing — a steal of home is a steal
-   *and* a run — so the rail carries both, split at the middle in the badges'
-   own order. It has to be a gradient rather than a border: a border takes one
-   colour and there is no half of it to give the second. The border stays, at
-   the same 3px, and goes transparent so the gradient shows through it — which
-   is what `background-origin: border-box` is for, the default padding-box
-   starting the gradient inside the rail rather than on it. */
-.feed-base-item.kind-sb-run {
-  border-left-color: transparent;
-  background-image: linear-gradient(var(--live-purple) 0 50%, var(--hit) 50% 100%);
+  background-image: linear-gradient(var(--rail-a) 0 50%, var(--rail-b) 50% 100%);
   background-repeat: no-repeat;
   background-size: 3px 100%;
   background-origin: border-box;
+}
+.feed-base-item.rail-take {
+  --rail-a: var(--live-purple);
+}
+.feed-base-item.rail-free {
+  --rail-a: var(--walk);
+}
+.feed-base-item.rail-out {
+  --rail-a: var(--out);
+}
+.feed-base-item.rail-run {
+  --rail-a: var(--hit);
+}
+.feed-base-item.rail2-take {
+  --rail-b: var(--live-purple);
+}
+.feed-base-item.rail2-free {
+  --rail-b: var(--walk);
+}
+.feed-base-item.rail2-out {
+  --rail-b: var(--out);
+}
+.feed-base-item.rail2-run {
+  --rail-b: var(--hit);
+}
+/* A pitcher's outing takes the same rail, in `decisionColor`'s colour — set
+   inline, since that function is the app's one definition of what a W, an L, a
+   save and a hold look like and a second copy here would drift from the credit
+   chip sitting on the bar an inch away. On the mound he is a `.live-entry`
+   instead and the role rail wins; `.feed-outing` is only ever set when it
+   isn't, so the two never both apply. */
+.feed-outing {
+  border-left: 3px solid var(--muted);
+  border-radius: 3px;
+  padding-left: 11px;
 }
 .feed-base {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
+/* The situation glyph, then the badges. The row used to lead with a 42px
+   "Bot 5" text cell and close on the score; it now opens with the same
+   `PlaySituation` an at-bat card does — half-inning, runners, outs — so an
+   event and an at-bat in one stream state their situation identically instead
+   of one drawing a diamond and the other spelling it out. The score moved up
+   to the item's header, which is the row the two shapes share. */
 .feed-base-row {
   display: flex;
   align-items: center;
   gap: 12px;
-}
-.feed-base-inning {
-  min-width: 42px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--muted);
 }
 .feed-base-badge {
   font-size: 13px;
@@ -5906,20 +6049,29 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
-/* Keyed off the badge's own kind rather than the item's: a play can be both a
+/* Keyed off the badge's own tone rather than the item's: a play can be both a
    steal and the run it turned into, and then the two badges sit side by side
-   and have to keep their own colours. The item's rail can only pick one (the
-   run's — see LiveFeed). */
-.feed-base-badge.kind-sb {
+   and have to keep their own colours where the rail carries them in halves. */
+.feed-base-badge.tone-take {
   color: var(--live-purple);
 }
-.feed-base-badge.kind-run {
+.feed-base-badge.tone-free {
+  color: var(--walk);
+}
+.feed-base-badge.tone-out {
+  color: var(--out);
+}
+.feed-base-badge.tone-run {
   color: var(--hit);
 }
-/* The score the event left behind, in the game badge's own away–home form —
-   hugging the right end, the way a card's summary sits opposite its identity. */
-.feed-base-score {
+/* The score the item left behind, at the right end of its identity row —
+   `margin-left: auto`, the way a card's summary sits opposite its identity.
+   Both item shapes carry it there: an at-bat's card is shared with the players
+   view and a base event's detail is a badge row, so the header is the one row
+   the two genuinely have in common. */
+.feed-score {
   margin-left: auto;
+  flex: none;
   font-size: 12px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;

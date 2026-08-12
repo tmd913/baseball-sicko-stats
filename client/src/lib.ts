@@ -1,7 +1,8 @@
 import type {
+  BaseEvent,
+  BaseEventKind,
   BaseState,
   BattingLine,
-  PitcherSeasonStats,
   PitchingCredit,
   PitchingLine,
   PlateAppearance,
@@ -11,7 +12,6 @@ import type {
   PlayerReport,
   PlayerStatus,
   RosterStatus,
-  SeasonStats,
 } from './types';
 
 /** Category used for color-coding an outcome. */
@@ -185,27 +185,119 @@ export function whipOf(line: PitchingLine): string {
   return (((line.walks + line.hits) * 3) / line.outs).toFixed(2);
 }
 
-/** A compact pitcher season summary for the card header. */
-export function pitcherSeasonSummary(s: PitcherSeasonStats): string {
-  // No estimators here. xERA and xFIP used to ride along paired with the number
-  // each estimates ("3.20/3.74 ERA/xERA"), which doubled the width of the two
-  // leading items and made a line meant to be scanned into one to be read. The
-  // pairing itself is right — the comparison is the whole point of carrying them
-  // — so it survives where there's room to land: the Season tab, which shows
-  // each estimator immediately after the number it estimates.
-  const parts = [`${s.era} ERA`];
-  if (s.fip) parts.push(`${s.fip} FIP`);
-  parts.push(`${s.whip} WHIP`);
-  const per9 = (v: string, label: string) => {
-    if (v && v !== '—') parts.push(`${v} ${label}`);
+/**
+ * A pitcher's line over the range in view, as the rates the counting line
+ * beside it can't give: "2.45 ERA, 1.09 WHIP, 29% K, 7% BB". This is the card
+ * header's line now. The season one it replaced (ERA · FIP · WHIP · K/9 · BB/9
+ * · HR/9) stated a different span from everything under it — the card is a read
+ * on the days in view — and it isn't lost: the details view's Season tab shows
+ * it whole, a tap away, with the room to pair each estimator with the number it
+ * estimates.
+ *
+ * K and BB are shares of **batters faced** rather than the season line's per-9
+ * rates. A season has innings to spare where a range can be one appearance, and
+ * a single inning turns K/9 into 18.0 where a share of the batters he faced
+ * reads the same at any sample — and it is already the vocabulary of the card's
+ * own Rates strip below.
+ */
+export function rangePitchingSummary(line: PitchingLine): string {
+  const parts = [`${eraOf(line)} ERA`, `${whipOf(line)} WHIP`];
+  const share = (n: number, label: string) => {
+    if (line.battersFaced > 0)
+      parts.push(`${Math.round((n / line.battersFaced) * 100)}% ${label}`);
   };
-  per9(s.strikeoutsPer9, 'K/9');
-  per9(s.walksPer9, 'BB/9');
-  per9(s.homeRunsPer9, 'HR/9');
-  // Stops here on purpose: BAA and the rate splits are a tap away in the
-  // details view, and a collapsed card is meant to be scanned, not read.
-  // Comma-separated to match the batter card's season line (`seasonStatsSummary`).
+  share(line.strikeouts, 'K');
+  share(line.walks, 'BB');
+  // Comma-separated to match the batter card's line (`rangeBattingSummary`).
   return parts.join(', ');
+}
+
+/**
+ * What a base-running event did for the runner, which is what its colour says.
+ *
+ * Ten kinds is far too many colours, and the distinction the eye actually wants
+ * off a feed is not *which* rule sent him down the line but whether he gained,
+ * was given, lost or scored:
+ *
+ * - `take` he took the base himself (a steal) — the live purple the on-base
+ *   ring already uses;
+ * - `free` he was handed it (a balk, a wild pitch, a passed ball, a pickoff
+ *   throw into right field, the defence declining to contest) — `--walk`, the
+ *   colour of a free base at the plate, which is what this is on the paths;
+ * - `out` he was thrown out (caught stealing, picked off) — `--out`, the same
+ *   grey an at-bat's out takes;
+ * - `run` he scored — `--hit`.
+ */
+export type BaseEventTone = 'take' | 'free' | 'out' | 'run';
+
+const BASE_EVENT_TONES: Record<BaseEventKind, BaseEventTone> = {
+  sb: 'take',
+  cs: 'out',
+  po: 'out',
+  pocs: 'out',
+  poe: 'free',
+  balk: 'free',
+  wp: 'free',
+  pb: 'free',
+  di: 'free',
+  run: 'run',
+};
+
+export const baseEventTone = (kind: BaseEventKind): BaseEventTone => BASE_EVENT_TONES[kind];
+
+/**
+ * The badge on a base-running feed item, and on the row it takes in a pitcher's
+ * inning block.
+ *
+ * The base rides in the label only for the kinds the base *is* the event —
+ * stealing second, being caught at third. For a balk or a wild pitch the badge
+ * names the infraction and MLB's own line directly under it says who moved and
+ * where to, so carrying it here would be the same fact twice on two adjacent
+ * rows. `pocs` and `po` share their wording deliberately: "picked off" is what
+ * happened either way, and they name different bases (he is picked off *at*
+ * first, or caught out between first and second), so the two never read alike.
+ */
+export function baseEventLabel(ev: BaseEvent): string {
+  switch (ev.kind) {
+    case 'run':
+      return 'Run Scored';
+    case 'sb':
+      return ev.base ? `Stole ${ev.base}` : 'Stolen Base';
+    case 'cs':
+      return ev.base ? `Caught Stealing ${ev.base}` : 'Caught Stealing';
+    case 'po':
+    case 'pocs':
+      return ev.base ? `Picked Off ${ev.base}` : 'Picked Off';
+    case 'poe':
+      return 'Pickoff Error';
+    case 'balk':
+      return 'Balk';
+    case 'wp':
+      return 'Wild Pitch';
+    case 'pb':
+      return 'Passed Ball';
+    case 'di':
+      return 'Indifference';
+  }
+}
+
+/** A base as MLB's `movement` spells it ("2B") in the form the app prints. */
+export function baseName(base: string): string {
+  return base === '1B' ? '1st' : base === '2B' ? '2nd' : base === '3B' ? '3rd' : base;
+}
+
+/**
+ * The score a play or an event left behind, in the game badge's own away–home
+ * form. One helper because a feed item states it in one place whichever kind of
+ * item it is — an at-bat and a base event both read it off the same pair.
+ */
+export function scoreLine(
+  game: { awayTeam: string; homeTeam: string },
+  away: number | null,
+  home: number | null,
+): string | null {
+  if (away === null || home === null) return null;
+  return `${game.awayTeam} ${away}–${home} ${game.homeTeam}`;
 }
 
 /** The color keyed to a credit (W/L/S/HLD) — the accent on a pitcher's line,
@@ -601,6 +693,36 @@ export function statusCorner(status: PlayerStatus, kind: PlayerKind): Corner {
 }
 
 /**
+ * Is this player starting on `date` — in the posted lineup if he's a hitter,
+ * the announced (or actual) starting pitcher if he isn't.
+ *
+ * The summary table's one filter reads this. It is deliberately drawn from the
+ * player's own `PlayerGame` rather than from the league-wide `/api/statuses`
+ * map: the summary is a read on the watchlist, so every row already carries the
+ * report the pip on its headshot is drawn from, and a row marked "2" is exactly
+ * a row this keeps. The board and the details view fetch that map because they
+ * have *no* report — asking a hundred kilobytes of the whole league for the
+ * twenty players already in hand would be a second source that could disagree
+ * with the pip beside it.
+ *
+ * Reading a game rather than a report is what makes the date explicit, and it
+ * has to be: a report spans the range in view, and "starting" said of a game
+ * four days ago is a fact about a night that has already happened. A
+ * doubleheader passes on either game — `some`, not the first one found.
+ *
+ * A postponed game is not a start. The lineup for one is posted and then means
+ * nothing, which is exactly what the "!" pip on the headshot says.
+ */
+export function isStartingOn(report: PlayerReport, date: string): boolean {
+  return report.games.some((g) => {
+    if (g.date !== date || g.status.state === 'postponed') return false;
+    return report.kind === 'pitcher'
+      ? g.pitchingRole === 'starting'
+      : g.lineupStatus === 'starting';
+  });
+}
+
+/**
  * Label for a player with no batting to show. "No game" when their team wasn't
  * scheduled that day (no game to tie them to at all — getReport gives a rostered
  * player a placeholder for any game their team plays, so zero games means none
@@ -726,11 +848,29 @@ export function basesLabel(b: BaseState): string {
 }
 
 /**
- * Compact season line for the card header, e.g.
- * ".722 OPS, 11 HR, 30 RBI, 35 R, 1 SB". Commas separate the groups.
+ * A batter's line over the range in view: "4 G · .313/.389/.625". The card
+ * header's line now, in place of the season one (".722 OPS, 11 HR, 30 RBI, 35
+ * R, 1 SB"), which stated a different span from everything under it; the season
+ * reads whole on the details view's Season tab, a tap away.
+ *
+ * The slash rather than the counting stats, because the counting line sits in
+ * the same header a few centimetres to the right (`lineSummary` — "5-16, 3 R, 2
+ * HR, 5 RBI") and the two halves of a slash line are the one thing it cannot
+ * say. Its own OPS is left out for that same reason: the line beside it already
+ * ends in one, and this is that number's two halves.
  */
-export function seasonStatsSummary(s: SeasonStats): string {
-  return `${s.ops} OPS, ${s.hr} HR, ${s.rbi} RBI, ${s.runs} R, ${s.sb} SB`;
+export function rangeBattingSummary(line: BattingLine, games: number): string {
+  const g = `${games} G`;
+  // A range of nothing but walks has no at-bat to divide by, and the plate
+  // appearances are then the whole of what happened.
+  if (line.ab === 0) return `${g} · ${line.pa} PA`;
+  // The OBP denominator is lineOps's — sacrifice flies aren't on the line, so
+  // it runs a hair high when one happened.
+  const obpDen = line.ab + line.bb + line.hbp;
+  const obp = obpDen ? (line.hits + line.bb + line.hbp) / obpDen : 0;
+  return `${g} · ${formatRate(line.hits / line.ab)}/${formatRate(obp)}/${formatRate(
+    line.totalBases / line.ab,
+  )}`;
 }
 
 export type RosterTone = 'il' | 'susp' | 'dtd' | 'minors' | 'other';
