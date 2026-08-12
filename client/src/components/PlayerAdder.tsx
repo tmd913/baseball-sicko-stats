@@ -5,6 +5,7 @@ import type { SeasonPlayer, WatchPlayer } from '../types';
 export function PlayerAdder({
   players,
   watchlist,
+  canAdd = true,
   onAdd,
   onOpenDetails,
   loading,
@@ -13,6 +14,22 @@ export function PlayerAdder({
 }: {
   players: SeasonPlayer[];
   watchlist: WatchPlayer[];
+  /**
+   * Whether this search can put a player on the roster. False in fantasy mode,
+   * where ESPN owns that list: the ＋ goes and the field becomes what it always
+   * also was, a way of opening a player's page.
+   *
+   * It could have kept adding to the *saved* list — the one the app goes back
+   * to when the fantasy toggle is turned off — and that was the standing
+   * argument for leaving it alone. What it costs is a button whose entire
+   * effect is invisible: the player joins a list no view on screen is showing,
+   * and the only sign anything happened is that his row quietly stops appearing
+   * in this very search. The app had already decided the other half of this —
+   * the reorder screen is hidden in fantasy mode for exactly the reason ESPN
+   * owns the list — so the ＋ was the last surviving limb of an editing path
+   * whose other end was already gone.
+   */
+  canAdd?: boolean;
   onAdd: (p: WatchPlayer) => void;
   onOpenDetails: (key: string) => void;
   loading: boolean;
@@ -37,7 +54,16 @@ export function PlayerAdder({
 
   // Keyed by kind, not id: a two-way player is offered once per kind, and
   // watching him as a hitter shouldn't hide the pitcher row.
-  const watchedKeys = useMemo(() => new Set(watchlist.map(playerKey)), [watchlist]);
+  //
+  // The dedupe goes with the ＋ that justifies it. It is there so the menu shows
+  // the state of the thing its button changes — a player already on the roster
+  // has nothing left for this control to do — and with no button there is no
+  // such state to show: hiding the rostered player would only be the search
+  // declining to find someone, for a reason nothing on screen could explain.
+  const watchedKeys = useMemo(
+    () => (canAdd ? new Set(watchlist.map(playerKey)) : new Set<string>()),
+    [watchlist, canAdd],
+  );
 
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -93,7 +119,9 @@ export function PlayerAdder({
           {matches.map((p) => (
             <li key={p.id} className="adder-row">
               {/* Tapping the name opens the details view (works without adding);
-                  the ＋ button adds the player to the roster. */}
+                  the ＋ button adds the player to the roster, and is absent in
+                  fantasy mode — see `canAdd`. `.adder-option` is `flex: 1`, so
+                  it takes the whole row back without a rule of its own. */}
               <button
                 className="adder-option"
                 onMouseDown={() => openDetails(p)}
@@ -105,14 +133,16 @@ export function PlayerAdder({
                   {p.position ? ` · ${p.position}` : ''}
                 </span>
               </button>
-              <button
-                className="adder-add"
-                onMouseDown={() => select(p)}
-                title={`Add ${p.name} to your roster`}
-                aria-label={`Add ${p.name} to your roster`}
-              >
-                +
-              </button>
+              {canAdd && (
+                <button
+                  className="adder-add"
+                  onMouseDown={() => select(p)}
+                  title={`Add ${p.name} to your roster`}
+                  aria-label={`Add ${p.name} to your roster`}
+                >
+                  +
+                </button>
+              )}
             </li>
           ))}
         </ul>
