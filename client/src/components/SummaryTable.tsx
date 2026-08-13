@@ -196,7 +196,6 @@ function SumPhoto({
 
 interface RowHandlers {
   onOpenDetails: (key: string) => void;
-  onOpenPlayerDay: (key: string) => void;
 }
 
 /** The shared leading cells of a summary row: headshot, name (link), opponent. */
@@ -206,7 +205,6 @@ function LeadCells({
   role,
   corner,
   onOpenDetails,
-  onOpenPlayerDay,
 }: {
   r: PlayerReport;
   game: PlayerGame | null;
@@ -229,14 +227,19 @@ function LeadCells({
       <th className="sum-name-col" scope="row">
         {/* Ahead of the name rather than after it, and only on this table: the
             slot is what you scan a fantasy roster by, so it leads. Outside the
-            button, since the name is a link to that player's day and a slot
+            button, since the name is a link to that player's page and a slot
             chip is a label rather than part of what you are pressing. */}
         <FantasySlotTag playerKey={playerKey(r)} />
+        {/* The name opens his player page, exactly as the headshot beside it
+            does. It used to jump to his card on the feed's grouped reading —
+            the page that reading has since become *is* the player page, whose
+            Overview tab opens on the very day the jump was for, so the two
+            controls lead to one place rather than to two. */}
         <button
           type="button"
           className="sum-name sum-name-link"
-          title={`${r.name} — game log`}
-          onClick={() => onOpenPlayerDay(playerKey(r))}
+          title={`${r.name} — player page`}
+          onClick={() => onOpenDetails(playerKey(r))}
         >
           {r.name}
         </button>
@@ -383,19 +386,18 @@ function PitcherTable({
 export function SummaryTable({
   reports,
   onOpenDetails,
-  onOpenPlayerDay,
   chrome,
 }: {
   reports: PlayerReport[];
-  // The headshot opens the player's details; the name jumps to their game log.
+  /** The headshot and the name both open the player's page — the one that leads
+   *  with his day. */
   onOpenDetails: (key: string) => void;
-  onOpenPlayerDay: (key: string) => void;
   /** What to keep from the app's own chrome once the table has the page: the
    *  kind tabs and the date control, handed down as nodes because App owns both
    *  the state behind them and the markup. Rendered only while expanded. */
   chrome?: ReactNode;
 }) {
-  const handlers = { onOpenDetails, onOpenPlayerDay };
+  const handlers = { onOpenDetails };
   const batters = reports.filter((r) => r.kind !== 'pitcher');
   const pitchers = reports.filter((r) => r.kind === 'pitcher');
   const { isFull, toggle, ref: fullRef } = useFullPage<HTMLDivElement>();

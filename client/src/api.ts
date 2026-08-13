@@ -269,14 +269,25 @@ export const api = {
   /** The user's own roster, slot by slot. `refresh` as on `espnOwnership` —
    *  the two read the same upstream through the same cache.
    *
-   *  `date` is the day to read the **lineup** for: a manager sets tomorrow's
+   *  `end` is the day to read the **roster** for: a manager sets tomorrow's
    *  lineup today, and ESPN files it under tomorrow, so a view reporting on
    *  tomorrow has to ask for tomorrow or it draws today's slots. The server
-   *  reads anything at or before today as today. */
-  async espnRoster(refresh = false, date?: string | null): Promise<EspnRoster> {
+   *  reads anything at or before today as today.
+   *
+   *  `start` asks for `lineups` as well — one lineup per day of the range, each
+   *  at that day's own scoring period, which is what lets the roster views
+   *  credit a player only for the days he was actually in the lineup. Sent as
+   *  `end=` with the older `date=` dropped: the server reads both, so a tab
+   *  open across a deploy keeps working either way. */
+  async espnRoster(
+    refresh = false,
+    start?: string | null,
+    end?: string | null,
+  ): Promise<EspnRoster> {
     const q = new URLSearchParams();
     if (refresh) q.set('refresh', '1');
-    if (date) q.set('date', date);
+    if (start) q.set('start', start);
+    if (end) q.set('end', end);
     const qs = q.toString();
     return request(`/api/espn/roster${qs ? `?${qs}` : ''}`);
   },
@@ -338,6 +349,25 @@ export const api = {
     vsRight: PitcherSeasonStats | null;
   }> {
     return request(`/api/players/${playerId}/splits?type=pitcher`);
+  },
+  /**
+   * One player's day — the same `PlayerReport` the report route returns, for
+   * one man over one date. It backs the player page's **Overview** tab and the
+   * popup a Game Log row opens, both of which draw the feed's own item
+   * components and so need the feed's own report rather than a lighter shape.
+   *
+   * `date` omitted means the **server's** baseball today: the client mirrors
+   * the 3am ET rule for its date presets, but a tab left open past the rollover
+   * would ask for yesterday, and one definition of "now" beats two that agree
+   * most of the time.
+   */
+  async playerDay(
+    playerId: number,
+    kind: PlayerKind,
+    date?: string,
+  ): Promise<{ date: string; player: PlayerReport }> {
+    const q = `?type=${kind}${date ? `&date=${date}` : ''}`;
+    return request(`/api/players/${playerId}/day${q}`);
   },
   // Every game of the player's season, newest first — the Game Log tab.
   async gameLog(playerId: number): Promise<{ kind: 'batter'; games: BatterGameLog[] }> {
