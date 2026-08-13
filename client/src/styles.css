@@ -4922,7 +4922,86 @@ body {
   padding: 12px clamp(5px, 1.9vw, 28px);
   white-space: nowrap;
   border-bottom: 1px solid var(--border);
-  background: var(--bg);
+  /* Every cell in this table is opaque, and its ground is *named* rather than
+     assigned, because two things need the same colour and must not be able to
+     disagree: the cell's own background, and the hairline of it drawn just
+     outside its left edge by the rule below. Everything that follows sets
+     `--cell-bg` alone — the paint happens here, once, and resolves whichever
+     value won the cascade on that cell. */
+  --cell-bg: var(--bg);
+  background: var(--cell-bg);
+}
+/* ---- The seam between two cells, and why it needed covering ----
+   The reported artifact was a stray vertical line down the left edge of a stat
+   column — the OPS header and the Total row under it on the batter tab, the
+   last few columns on the pitcher tab — appearing and moving as the table was
+   scrolled sideways. It is not a border and nothing draws it: it is the
+   **boundary between two cell backgrounds landing on a fraction of a device
+   pixel**, which here is the ordinary case rather than a corner. The column
+   gutters are `clamp()`ed against the viewport and the numeric columns take
+   `width: auto`, so the browser distributes the table's surplus in thousandths
+   of a pixel — at 1200px the batter table's boundaries fall at 376.891,
+   641.938, 867.281 and so on. Where one lands mid-pixel the two cells each
+   cover part of it, neither ground comes out whole, and the page shows through
+   as a hairline a shade darker.
+
+   Two things follow, and both are exactly what was reported. It is **visible
+   only where the row's ground differs from the page's** — the header and the
+   Total row are `--panel-2` on a `--bg` page, so a seam there reads plainly,
+   while an odd body row is `--bg` on `--bg` and hides its own. And **which
+   columns show it changes with the width and the display**: measured on the
+   real table at 1200px, a 1.5× display seams at Batter|Opponent and RBI|SB
+   where a 2× one seams nowhere, and 900px at 1.75× seams at five boundaries at
+   once. A phone at 1.25× or a laptop at 110% zoom is a fractional ratio, which
+   is why this reads as artifacting while scrolling rather than as one line in
+   one place.
+
+   The cover is a **strip of the cell's own ground straddling the boundary**,
+   so it is painted solid by one cell instead of shared between two. Two things
+   about its box are load-bearing, and both were arrived at by measurement.
+
+   **It spans the padding box, not the border box** — which is why it is an
+   absolutely positioned child at `top: 0; bottom: 0` and not the `box-shadow`
+   the job looks like. A shadow spans the *border* box, so covering the seam
+   with one paints over the rules this table draws through that band: the body
+   rows' `border-bottom`, nicked once per column (measured, nine dots a line at
+   Δ34 — a line down the table traded for a dotted line across it), and the
+   Total row's 2px `border-top`, nicked at every one of its eleven boundaries at
+   Δ19. `top: 0; bottom: 0` is exactly the padding box, so every rule runs
+   through untouched and the seam's own last pixel — border meeting border — is
+   left to them.
+
+   **It straddles rather than butts**, 3px either side. A 1px strip laid against
+   the boundary has fractional edges of its own and still measured a Δ4–6 blend;
+   pushed out to 3px, both its edges land inside solid ground **of the same
+   colour**, because every cell in a row of this table carries one ground — the
+   zebra stripe, the three role tints, the header and the Total row each name
+   the pinned headshot cell alongside the rest. So the cover introduces no edge
+   anywhere, and its overspill is the row's own colour over the row's own
+   colour, into 5px of padding at its narrowest.
+
+   `position: relative` is declared on the body cells alone: the header's and
+   the Total row's are `position: sticky` already, and a rule naming all of them
+   would tie with `.summary-table thead th` on specificity and unstick the
+   header row. And none of this can reach the pinned headshot cell, which is the
+   first in every row and so matches no `+` selector — `--pin-edge` is
+   undisturbed. */
+.summary-table tbody th,
+.summary-table tbody td {
+  position: relative;
+}
+.summary-table th + th::before,
+.summary-table th + td::before,
+.summary-table td + th::before,
+.summary-table td + td::before {
+  content: '';
+  position: absolute;
+  left: -3px;
+  width: 6px;
+  top: 0;
+  bottom: 0;
+  background: var(--cell-bg);
+  pointer-events: none;
 }
 /* Zebra striping so rows are easy to track across the wide table. The sticky
    headshot cell is included so its background matches its row (a transparent
@@ -4931,7 +5010,7 @@ body {
 .summary-table tbody tr:nth-child(even) td,
 .summary-table tbody tr:nth-child(even) .sum-img-col,
 .summary-table tbody tr:nth-child(even) .sum-name-col {
-  background: var(--panel);
+  --cell-bg: var(--panel);
 }
 /* Numeric columns take a share of the slack rather than hugging their content,
    which is what makes a wide screen read as a table rather than as a table's
@@ -5010,7 +5089,7 @@ body {
   position: sticky;
   top: 0;
   z-index: 2;
-  background: var(--panel-2);
+  --cell-bg: var(--panel-2);
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.03em;
@@ -5025,13 +5104,13 @@ body {
   position: sticky;
   left: 0;
   z-index: 1;
-  background: var(--bg);
+  --cell-bg: var(--bg);
   box-shadow: var(--pin-edge);
 }
 /* Top-left corner: above both the sticky header and the sticky headshot column. */
 .summary-table thead .sum-img-col {
   z-index: 3;
-  background: var(--panel-2);
+  --cell-bg: var(--panel-2);
 }
 /* Total row pinned to the bottom while scrolling vertically — a touch more
    vertical padding sets it apart from the data rows. */
@@ -5042,13 +5121,22 @@ body {
   z-index: 2;
   padding-top: 15px;
   padding-bottom: 15px;
-  background: var(--panel-2);
+  --cell-bg: var(--panel-2);
   border-top: 2px solid var(--border);
   border-bottom: none;
   font-weight: 800;
 }
+/* Bottom-left corner, and it has to name its ground the way the top-left one
+   does. `.summary-table .sum-img-col` carries two classes where
+   `.summary-table tfoot td` carries one, so without this the pinned cell of the
+   Total row won the cascade with `--bg` and painted the *page* colour inside a
+   `--panel-2` row — a dark block the width of the headshot column at the foot
+   of the table, with a Δ41 edge against the row beside it. The header row has
+   had its own copy of this rule since it was written; this is the same
+   statement for the other end. */
 .summary-table tfoot .sum-img-col {
   z-index: 3;
+  --cell-bg: var(--panel-2);
 }
 /* A live player's whole row is tinted by their role (at bat / on deck / on
    base) — the same colours as the headshot ring, blended into an opaque shade
@@ -5057,17 +5145,17 @@ body {
 .summary-table tbody tr.role-at-bat td,
 .summary-table tbody tr.role-at-bat .sum-img-col,
 .summary-table tbody tr.role-at-bat .sum-name-col {
-  background: color-mix(in srgb, var(--strikeout) 22%, var(--bg));
+  --cell-bg: color-mix(in srgb, var(--strikeout) 22%, var(--bg));
 }
 .summary-table tbody tr.role-on-deck td,
 .summary-table tbody tr.role-on-deck .sum-img-col,
 .summary-table tbody tr.role-on-deck .sum-name-col {
-  background: color-mix(in srgb, var(--hr) 20%, var(--bg));
+  --cell-bg: color-mix(in srgb, var(--hr) 20%, var(--bg));
 }
 .summary-table tbody tr.role-on-base td,
 .summary-table tbody tr.role-on-base .sum-img-col,
 .summary-table tbody tr.role-on-base .sum-name-col {
-  background: color-mix(in srgb, var(--live-purple) 20%, var(--bg));
+  --cell-bg: color-mix(in srgb, var(--live-purple) 20%, var(--bg));
 }
 .sum-photo-wrap {
   position: relative;
