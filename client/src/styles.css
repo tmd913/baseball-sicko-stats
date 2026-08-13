@@ -103,6 +103,30 @@
   box-sizing: border-box;
 }
 
+/* Nothing in this app bounces. `overscroll-behavior` on the root element is
+   propagated to the viewport, so this one declaration is the document's half of
+   a rule every scroller in the file now keeps: `none` — the chaining stopped
+   *and* the element's own overscroll affordance dropped, which on iOS is the
+   elastic rubber-band. `contain` would only do the first half, which is what
+   left the page giving under the finger at its top and bottom on every view.
+
+   It is declared here rather than scoped, where it used to be
+   `html:has(.app.summary-mode), html:has(.app.research-mode)` — the two views
+   whose page is a viewport-tall column that cannot scroll, so a drag the pane
+   couldn't take rubber-banded the whole app. Games and Feed were deliberately
+   left out to keep their pull-to-refresh, and that is the one thing this costs:
+   on those two views a pull at the top of the page no longer reloads the tab.
+   The header's Refresh button is the app's own re-read and does more than a
+   reload would — it re-reads every source the page in front of you is drawn
+   from — so the trade is worth taking to be rid of the bounce everywhere.
+
+   On `html` alone: `body`'s value is only propagated when the root's is `auto`
+   in both axes, and the body is not a scroll container here, so a second
+   declaration on it would say nothing. */
+html {
+  overscroll-behavior: none;
+}
+
 body {
   margin: 0;
   background: radial-gradient(1200px 700px at 80% -10%, #16233f 0%, var(--bg) 55%);
@@ -2509,8 +2533,9 @@ body {
   inset: 0;
   z-index: 60;
   overflow-y: auto;
-  /* Keep the scroll in here — see .details-view, which this overlay mirrors. */
-  overscroll-behavior: contain;
+  /* Keep the scroll in here and let it stop dead at its own ends — see
+     `.details-view`, which this overlay mirrors. */
+  overscroll-behavior: none;
   scrollbar-gutter: stable;
   background: var(--bg);
   padding: 20px 16px 64px;
@@ -2885,9 +2910,16 @@ body {
   inset: 0;
   z-index: 50;
   overflow-y: auto;
-  /* Keep the scroll in here: no chaining to the page behind, and no rubber-band
-     / pull-to-refresh when the view is already at its top or bottom. */
-  overscroll-behavior: contain;
+  /* Keep the scroll in here: no chaining to the page behind, and no bounce of
+     its own at the top or bottom. This was `contain` for a while, on the
+     reasoning that an overlay is a *page* rather than a pane and a page that
+     refuses to give at its own end is a different bargain from a table that
+     does. It isn't a bargain anyone wanted: `contain` stops the chaining and
+     explicitly keeps the element's own overscroll affordance, which on iOS is
+     the elastic bounce, so the percentile card still slid up off the bottom of
+     the overlay and sprang back. `none` is the app's one answer now, on every
+     scroller in it — see the `html` rule at the top of this file. */
+  overscroll-behavior: none;
   /* The view is open only while the body is pinned (useLockBodyScroll), which
      takes the page's scrollbar away. When this view overflows its own scrollbar
      fills that gutter; reserving it keeps the short tabs from shifting sideways
@@ -3557,7 +3589,12 @@ body {
      rule the active tab is supposed to sit on. */
   overflow-x: auto;
   overflow-y: hidden;
-  overscroll-behavior-x: contain;
+  /* The inline axis alone, and `none` on it: the strip must neither chain a
+     sideways flick on to the overlay nor bounce at its own ends. The block axis
+     is deliberately left alone — a scroll container blocks chaining on an axis
+     it cannot itself scroll, so naming it here would swallow a vertical swipe
+     that belongs to the page under the strip. */
+  overscroll-behavior-x: none;
   scrollbar-width: none;
 }
 .details-tabs::-webkit-scrollbar {
@@ -4545,26 +4582,18 @@ body {
   flex-direction: column;
   overflow: hidden;
 }
-/* And on those two views the *document* mustn't bounce either. The pane inside
-   consumes its own gesture now (`overscroll-behavior: none` on it), but iOS
-   hands the drag to the page whenever the pane can't scroll in the axis it was
-   dragged in — a summary table of six rows on a tall phone, or any sideways
-   swipe on a board narrow enough to fit — and there the page is a viewport-tall
-   column that cannot scroll, so what moves is the whole app rubber-banding
-   under the finger. From the reader's side that is the same complaint as the
-   table scrolling past its own end.
-
-   Scoped to the two views where the table *is* the page, rather than declared
-   on the root: the games list and the feed are ordinary scrolling pages and
-   have a pull-to-refresh worth keeping. Nothing is lost here — these two can't
-   scroll at all, and the app's own re-read is the refresh button in the header.
-   `:has()` on the root is what makes the scoping possible from a stylesheet
-   that only ever gets a class onto `.app`; where it isn't understood the rule
-   is dropped and the page behaves exactly as it does today. */
-html:has(.app.summary-mode),
-html:has(.app.research-mode) {
-  overscroll-behavior: none;
-}
+/* The *document* mustn't bounce on these two views either — the pane inside
+   consumes its own gesture, but iOS hands the drag to the page whenever the
+   pane can't scroll in the axis it was dragged in (a summary table of six rows
+   on a tall phone, any sideways swipe on a board narrow enough to fit), and
+   here the page is a viewport-tall column that cannot scroll, so what moves is
+   the whole app rubber-banding under the finger. That used to be a scoped
+   `html:has(.app.summary-mode), html:has(.app.research-mode)` rule, written
+   this way to spare the games list and the feed their pull-to-refresh; the
+   bounce is unwanted on those two as well, so the root now takes
+   `overscroll-behavior: none` unconditionally and this case is covered by it —
+   see the `html` rule at the top of the file, which also records what the
+   pull-to-refresh cost. */
 /* And on the summary view the column gives its vertical margins back too, the
    way the three wide tables give back the side gutters (`--table-bleed`). The
    pane here is the whole of the page — there is nothing under it to separate it
@@ -5322,8 +5351,9 @@ html:has(.app.research-mode) {
   padding: 3px;
   overflow-x: auto;
   /* Sideways only: a finger dragged down this row has to scroll the page under
-     it, and containing an axis that cannot scroll would eat the gesture. */
-  overscroll-behavior-x: contain;
+     it, and naming an axis that cannot scroll would eat the gesture. `none` on
+     the axis it does scroll, so the pills neither chain nor bounce. */
+  overscroll-behavior-x: none;
   scrollbar-width: none;
   background: var(--panel);
   border: 1px solid var(--border);
@@ -5863,9 +5893,10 @@ html:has(.app.research-mode) {
   max-width: max-content;
   overflow-x: auto;
   /* The inline axis alone, as on every strip that scrolls sideways: a vertical
-     swipe landing on it has to reach the page, and `contain` on an axis with
-     nothing to scroll blocks the chain rather than passing it on. */
-  overscroll-behavior-x: contain;
+     swipe landing on it has to reach the page, and naming an axis with nothing
+     to scroll blocks the chain rather than passing it on. `none` on the inline
+     axis, the app's one answer everywhere it scrolls. */
+  overscroll-behavior-x: none;
   scrollbar-width: none;
 }
 .research-window-row::-webkit-scrollbar {
@@ -7131,7 +7162,8 @@ html:has(.app.research-mode) {
   gap: 4px;
   overflow-x: auto;
   overflow-y: hidden;
-  overscroll-behavior-x: contain;
+  /* Inline axis only, `none` on it — see `.details-tabs`, whose shape this is. */
+  overscroll-behavior-x: none;
   scrollbar-width: none;
 }
 .tut-nav::-webkit-scrollbar {
@@ -7532,7 +7564,7 @@ html:has(.app.research-mode) {
   padding: 11px 13px;
   overflow-x: auto;
   /* Inline axis only — the overlay behind it owns the vertical. */
-  overscroll-behavior-x: contain;
+  overscroll-behavior-x: none;
   color: var(--muted);
 }
 .espn-code b {
