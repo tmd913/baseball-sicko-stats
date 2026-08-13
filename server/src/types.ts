@@ -669,6 +669,20 @@ export interface PlayerStatus {
    *  about the game rather than the player, carried because a postponement is
    *  the reason a posted lineup means nothing. */
   gameState: GameStatus['state'] | null;
+  /** Who his club plays today — the other side's abbreviation, and which park
+   *  it is in. Null when he has no game at all, which for a man off the active
+   *  roster is the whole of what this map says about him.
+   *
+   *  It is the research board's opponent column, and it is the reason that
+   *  column costs no second upstream: the day this is built from already knows
+   *  every player's game, so the same read that answers "is he batting third"
+   *  answers "against whom". Being a fact about *today*, it is the same answer
+   *  on a 7-day board as on a season one — which is right: a season line is
+   *  read to decide whether to start him tonight. */
+  opponent: string | null;
+  /** True when his club is at home — what turns the abbreviation into `vs LAD`
+   *  or `@ LAD`. Null exactly when `opponent` is. */
+  isHome: boolean | null;
 }
 
 /** A player as returned in the day's report. */
@@ -779,6 +793,11 @@ export interface ResearchRow {
   savantName: string;
   kind: PlayerKind;
   team: string; // "MIL" — the abbreviation; a full name is column-wide
+  /** …and the id behind it, which is what MLB serves a club's cap logo by.
+   *  Null for a player the leaderboard files under no team at all. The board
+   *  draws the logo where it used to print the abbreviation — see the name
+   *  cell in `ResearchTable.tsx` — so the two are one fact at two widths. */
+  teamId: number | null;
   position: string; // "2B"
   // What the position-type filter selects on: Pitcher / Catcher / Infielder /
   // Outfielder / Hitter (DH) / Two-Way Player, straight from the Stats API.

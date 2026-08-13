@@ -5578,6 +5578,64 @@ html:has(.app.research-mode) {
   align-self: flex-start;
 }
 
+/* ---- Column order ----
+   The first block of the picker, and a flat one: an arrangement is a single
+   sequence that crosses every heading below it, so it cannot be a handle on
+   the grouped chips — see `ColumnOrder`. It reads as the same chip in a
+   different grammar: on-coloured throughout (every column in it is shown, that
+   being what it lists) with a grip at the end. */
+.research-order-hint {
+  margin: 0 0 6px;
+  font-size: 11px;
+  color: var(--faint);
+}
+.research-order-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.research-order-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 6px 0 10px;
+  color: var(--accent);
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  border-radius: var(--control-radius-inner);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  user-select: none;
+  /* A mouse can grab the chip anywhere, so it says so. */
+  cursor: grab;
+}
+/* The chip being dragged is lifted and made transparent to the pointer, which
+   is what lets `elementFromPoint` resolve to the chip underneath it — the drop
+   target — rather than to itself. The same two lines `.order-row.dragging`
+   carries, and for the same reason. */
+.research-order-chip.dragging {
+  pointer-events: none;
+  opacity: 0.55;
+  cursor: grabbing;
+}
+/* On touch this is the *only* part that starts a drag, which is what
+   `touch-action: none` here and nowhere else says: a finger anywhere else on
+   the block still scrolls the panel. The edit screen's `.order-grip` documents
+   what the other way round costs — `touch-action: none` on the whole row made
+   the page unscrollable in that mode. */
+.research-order-grip {
+  touch-action: none;
+  color: var(--faint);
+  font-size: 13px;
+  line-height: 1;
+  cursor: grab;
+}
+.research-order-grip:hover {
+  color: var(--accent);
+}
+
 /* ---- Active filters ---- */
 /* On a phone the four disclosure buttons go to their icons alone. The bar holds
    two tab groups and four buttons and was taking four lines before the first
@@ -5890,23 +5948,71 @@ html:has(.app.research-mode) {
   padding-left: clamp(5px, 1.6vw, 13px);
   padding-right: clamp(5px, 1.6vw, 13px);
 }
-/* Team and position hug their content; both scroll away with the name, only the
-   headshot staying pinned (as in the summary table, so stat columns get the
-   room on a phone). */
-.research-table .research-team-col,
-/* Hugs its own content and never wraps, which is what lets the cell print a
-   whole eligibility list — `1B/2B/3B/SS/OF/DH` at the widest — without a rule
-   here having to name a width. It is the one cell that says why a filtered row
-   is on the board, so a second line or an ellipsis would cost exactly what the
-   old `+3` cost; the table already scrolls sideways, and this column is a few
-   dozen pixels of that. */
-.research-table .research-pos-col {
-  width: 1%;
-  text-align: left;
-  font-size: 12px;
+/* ---- The identity cell: a name over its club and positions ----
+   Team and position were two columns of their own (`Tm` and `Pos`), and on the
+   app's widest table that was ~110px a row spent on two facts about *who the
+   player is*, sitting beside a name that is the same kind of fact and whose
+   column absorbs the table's slack anyway. Underneath the name they cost the
+   stat columns nothing — the name column is fluid, and the sub-line is
+   narrower than most names — and they read as what they are: the identity
+   block, which is the shape a player card's header already has.
+
+   What it costs is height: a row goes from one line to two. That is paid once
+   per row and bought back across every column, on a table that overflows a
+   1920px screen with a third of its columns showing. */
+.research-id {
+  display: flex;
+  flex-direction: column;
+  /* No gap, and the logo is 15px rather than 16, for a reason that was
+     measured rather than eyeballed: the row's height is set by whichever of
+     the headshot (37px) and this block is taller, and at 16px with a gap the
+     block came to 33px — over the 31 the headshot's own cell leaves — which
+     took the row from 51px to 54 and cost a row of the table per screen. At
+     31 the headshot is the tallest thing in the row again, exactly as it was
+     before this cell held two lines, and the board shows the same eleven rows
+     at 1200×800 that it did with `Tm` and `Pos` as columns. The two lines have
+     their own leading and read as a block without the gap. */
+  gap: 0;
+}
+/* The name, the roster baseball and the watchlist star stay one line, which is
+   what they were before this block existed — the two marks trail the name and
+   never push it. */
+.research-id-name {
+  white-space: nowrap;
+}
+.research-id-sub {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  /* The one line in the table that must not wrap and must not widen the
+     column: it is the whole eligibility list at its widest
+     (`1B/2B/3B/SS/OF/DH`), and a second line here would be a third row per
+     player. The column sizes to the names above it, which are longer. */
+  white-space: nowrap;
+  font-size: 11px;
   font-weight: 700;
   color: var(--muted);
-  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+/* The cap mark, at the size the line can give it. `object-fit: contain` because
+   MLB draws every one of these in a 300×300 box with its own margins — a mark
+   that is wide and short (a wordmark cap) and one that is square must sit on
+   the same baseline as the text beside them. */
+.research-id-logo {
+  width: 15px;
+  height: 15px;
+  object-fit: contain;
+  flex: none;
+}
+/* The abbreviation, for a club with no logo to draw — no id on the leaderboard
+   row, or an SVG that failed to load. Sized to sit where the mark would. */
+.research-id-team {
+  flex: none;
+  min-width: 15px;
+}
+.research-id-pos {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 /* The whole header cell is the hit target, so the button fills it rather than
    sitting as a smaller shape inside a cell that also looks clickable. */

@@ -1465,21 +1465,33 @@ function blankStatus(rosterStatus: RosterStatus | null): PlayerStatus {
     pitchingRole: null,
     entryInning: null,
     gameState: null,
+    opponent: null,
+    isHome: null,
   };
 }
 
 /**
- * Whether a status is worth sending at all. Most of a day's boxscore rosters
- * are active players with no lineup posted yet — 26 men a side who would each
- * cost a row to say nothing. A postponement is the exception that keeps
- * `gameState` in this test: it is the one game state that is itself a fact
- * about the player's day.
+ * Whether a status is worth sending at all. A player with nothing true of him
+ * costs a row to say nothing, and before this map carried an opponent the
+ * bench of every club before its lineup posted was most of a day's boxscore
+ * rosters — 26 men a side of pure payload. A postponement is why `gameState`
+ * is in the test: it is the one game state that is itself a fact about his day.
+ *
+ * **`opponent` widens this deliberately**, and it is worth being explicit about
+ * what that costs. Having a game today is now itself worth saying, because the
+ * research board draws it in a column of its own, so every player on a
+ * boxscore roster ships rather than only the ones a lineup or an IL stint has
+ * something to say about: ~1,300 entries on a full slate against the ~600 an
+ * unposted morning used to send. That is ~130KB of JSON, which `compression()`
+ * takes to a tenth — the price of the column, paid on the one request both
+ * views that draw it already make.
  */
 function saysSomething(s: PlayerStatus): boolean {
   return (
     s.rosterStatus !== null ||
     s.lineupStatus !== null ||
     s.pitchingRole !== null ||
+    s.opponent !== null ||
     s.gameState === 'postponed'
   );
 }
@@ -1570,6 +1582,11 @@ export async function getPlayerStatuses(
       ...lineupStatusFor(id, isHome ? game.homeStarters : game.awayStarters),
       ...pitchingRoleFor(announced, null),
       gameState: game.status.state,
+      // The other side of the game already picked for him, which is the whole
+      // of what the board's opponent column needs — `currentOf` above having
+      // settled the doubleheader the same way every other view settles it.
+      opponent: isHome ? game.awayTeam : game.homeTeam,
+      isHome,
     });
   }
 
@@ -1583,6 +1600,13 @@ export async function getPlayerStatuses(
     statuses.set(rep.id, {
       ...prev,
       gameState: game.status.state,
+      // The parsed game's own answer, which is the same club by a different
+      // route — a player in the day's reports is on that game's boxscore
+      // roster too. Restated here so the pass that overrides the game also
+      // overrides who it was against, rather than leaving the two halves of
+      // one game to come from two different picks of it.
+      opponent: game.opponent,
+      isHome: game.isHome,
       ...(rep.kind === 'pitcher'
         ? { pitchingRole: game.pitchingRole, entryInning: game.entryInning }
         : { lineupStatus: game.lineupStatus, lineupSpot: game.lineupSpot }),
