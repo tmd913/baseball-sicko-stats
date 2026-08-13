@@ -531,7 +531,10 @@ function ArsenalTab({
  * questions under every such decision — is he playing today, and is he hurt —
  * were answered by every other view in the app and not by this one. The marks
  * are the same ones the summary table and the board draw, in the same places,
- * scaled to a 64px portrait rather than a 37px row circle.
+ * scaled to a 64px portrait rather than a 42px row circle. The portrait itself
+ * deliberately did not grow when the row circle did: it is a page header rather
+ * than a row, sized to the head it sits in, and the two mark sets are each
+ * sized to their own circle.
  */
 function DetailsPhoto({
   playerId,

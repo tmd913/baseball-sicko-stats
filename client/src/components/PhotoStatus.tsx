@@ -14,7 +14,7 @@ import type { RosterStatus } from '../types';
  * so the row is the *first* thing he learns about a man, and "batting 3rd" or
  * "IL10" is most of what he is deciding on. One definition of both, drawn from
  * one place, so the board can't come to read differently from the table beside
- * it — each caller supplies only the class that sizes and pins it, since a 37px
+ * it — each caller supplies only the class that sizes and pins it, since a 42px
  * row circle and a 64px header portrait want the same marks at different sizes.
  */
 
