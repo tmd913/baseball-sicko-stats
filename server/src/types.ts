@@ -693,6 +693,29 @@ export interface PlayerStatus {
   /** True when his club is at home — what turns the abbreviation into `vs LAD`
    *  or `@ LAD`. Null exactly when `opponent` is. */
   isHome: boolean | null;
+  /** The score of that game, **his side first** — the vocabulary the game log
+   *  already uses for a narrow column (`W 5-3`), and the one that lets the cell
+   *  print a score without repeating both clubs' abbreviations beside a matchup
+   *  that has just named them. Both null before first pitch, and null together
+   *  or not at all. */
+  teamScore: number | null;
+  opponentScore: number | null;
+  /** Where a live game has got to, in `GameStatus`'s own two fields rather than
+   *  a label built here, so the client's one definition of "Top 7" serves the
+   *  research board and the summary table alike. Both null unless the game is
+   *  in progress — a final has an inning and nothing reads it. */
+  currentInning: number | null;
+  inningState: string | null; // "Top" | "Middle" | "Bottom" | "End"
+  /** First pitch, ISO, **scheduled games only** — once a game is under way the
+   *  time it started is not what anyone is reading the cell for, and leaving it
+   *  out is a third of the field's payload across a full slate. */
+  startTime: string | null;
+  /** The starter the **other** side announced — his counterpart on a pitcher's
+   *  row, someone he faces on a batter's, and the fact a pre-game cell exists
+   *  to carry. Scheduled games only, for the reason the summary table drops him
+   *  at first pitch: by then the score is the line that matters and the batter
+   *  is as likely to be facing a reliever. */
+  probablePitcher: ProbablePitcher | null;
 }
 
 /** A player as returned in the day's report. */

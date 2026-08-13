@@ -30,7 +30,7 @@
  * universe into the name index, where it would only add collisions.
  */
 
-import { toSavantName } from './names.js';
+import { stripAccents, toSavantName } from './names.js';
 import type { PlayerKind, WatchPlayer } from './types.js';
 import { readBlob, writeBlob } from './storage.js';
 import { baseballToday, daysBetween } from './etDate.js';
@@ -238,9 +238,7 @@ function eligiblePositions(slots: number[] | undefined): string[] {
  * carry the period or not.
  */
 function normalizeName(raw: string): string {
-  return raw
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
+  return stripAccents(raw)
     .toLowerCase()
     .replace(/[.'’]/g, ' ')
     .replace(/\b(jr|sr|ii|iii|iv)\b/g, ' ')

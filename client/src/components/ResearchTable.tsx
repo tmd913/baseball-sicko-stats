@@ -1,9 +1,16 @@
 import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { BaseballMark } from './BaseballMark';
 import { ExpandButton } from './ExpandButton';
 import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
-import { PlayerStatusContext, useFullPage, usePlayerStatus } from '../hooks';
+import {
+  PlayerStatusContext,
+  overlayAbove,
+  useFullPage,
+  useLockBodyScroll,
+  usePlayerStatus,
+} from '../hooks';
 import { RESEARCH_INCLUDE_KEYS, RESEARCH_WINDOWS, TREND_WINDOWS } from '../types';
 import type {
   PlayerKind,
@@ -13,7 +20,18 @@ import type {
   ResearchWindow,
   TrendWindow,
 } from '../types';
-import { eligibleForKind, headshotUrl, positionOrder, statusCorner, teamLogoUrl } from '../lib';
+import {
+  eligibleForKind,
+  formatStartTime,
+  handThrows,
+  headshotUrl,
+  inningLabel,
+  positionOrder,
+  searchFold,
+  statusCorner,
+  surname,
+  teamLogoUrl,
+} from '../lib';
 
 /**
  * A league-wide, season-to-date stat table: every player on one board, sortable
@@ -37,8 +55,11 @@ interface Column {
    *  rather than a phrase and would truncate in a select. Defaults to `title`. */
   pick?: string;
   // What the cell prints. Every sortable value is a number on the row, so the
-  // formatter is about presentation alone (`.265`, `3.52`, `20.8%`).
-  format: (r: ResearchRow) => string;
+  // formatter is about presentation alone (`.265`, `3.52`, `20.8%`) — and it
+  // returns a node rather than a string because one column is not a number at
+  // all: the opponent cell is two lines and colours its live inning, which is
+  // state rather than value and so is exactly what this table does colour.
+  format: (r: ResearchRow) => ReactNode;
   // What the sort compares. Null sorts to the bottom in both directions — a
   // player with no barrel rate is neither the best nor the worst at it.
   value: (r: ResearchRow) => number | null;
@@ -288,13 +309,15 @@ const trendColumn = (w: TrendWindow): Column => ({
 const TREND_COLUMNS: Column[] = TREND_WINDOWS.map(trendColumn);
 
 /**
- * **Who he plays today** — the one column on this board that is about this
- * afternoon rather than about the window the rest of the row is drawn from.
+ * **Who he plays today, and how it is going** — the one column on this board
+ * that is about this afternoon rather than about the window the rest of the row
+ * is drawn from.
  *
  * That is the point of it rather than an inconsistency: a season line is read
- * to decide whether to start a man *tonight*, and "against whom, and where"
- * is the fact that decision turns on which no amount of season data carries.
- * It reads the same on a 7-day board as on a season one for the same reason.
+ * to decide whether to start a man *tonight*, and against whom, off which
+ * starter, and how the game is going are the facts that decision turns on and
+ * that no amount of season data carries. It reads the same on a 7-day board as
+ * on a season one for the same reason.
  *
  * It comes off the league-wide status map (`/api/statuses`) — the same request
  * every row's lineup pip and IL badge already come from, so the column costs no
@@ -303,25 +326,87 @@ const TREND_COLUMNS: Column[] = TREND_WINDOWS.map(trendColumn);
  * would go stale inside that blob's six hours). The map is null until that one
  * request lands, and the cells are dashes until it does.
  *
- * Sorted **alphabetically**, which on this column means "group my players by
- * tonight's game" — hence `text` rather than `value`, and hence its absence
- * from the filter builder: `Opp ≥ 4` is not a question.
+ * **It says what the summary table's opponent cell says, in a narrower column**
+ * — the matchup and the announced starter before first pitch, the score and the
+ * inning while the game is on, the score and `Final` once it is over — and it
+ * departs from that cell in exactly one place, for width. There the score is
+ * the away-first line score (`SEA 3–5 LAD`), which names both clubs and so can
+ * stand in for the matchup; here the matchup **stays on the first line in every
+ * state** and the score is written from his side of it (`5–3`), which is the
+ * game log's own vocabulary for a narrow column (`W 5-3`) and saves a second
+ * club abbreviation on the app's widest table.
+ *
+ * Two lines, never three, which is the row-height rule: 51px is set by the 37px
+ * headshot, and the identity block under the name already spends 31 of it the
+ * same way. So the start time rides the matchup rather than taking a line of
+ * its own — exactly as `.sum-opp-time` does — leaving the second line to the
+ * starter.
+ *
+ * Still sorted **alphabetically on the opponent**, which on this column means
+ * "group my players by tonight's game". Everything the cell gained is a fact
+ * about that same game and so is constant within a group: sorting on any of it
+ * would only reorder ties. And none of it is a threshold anyone would type,
+ * which is why the column stays out of the filter builder (see `Column.text`).
  */
 const OPPONENT_KEY = 'opponent';
+
+/** What one player's cell reads, given today's status for him. */
+function OpponentCell({ status }: { status: PlayerStatus | null | undefined }) {
+  if (!status?.opponent) return <>{'—'}</>;
+  const scheduled = status.gameState === 'scheduled';
+  const matchup = `${status.isHome ? 'vs' : '@'} ${status.opponent}`;
+  const score =
+    status.teamScore !== null && status.opponentScore !== null
+      ? `${status.teamScore}–${status.opponentScore}`
+      : null;
+  const time = scheduled ? formatStartTime(status.startTime) : null;
+  const sp = scheduled ? status.probablePitcher : null;
+  // A postponement has no score and no inning, and this map carries no
+  // `detailedState` to spell it out with — `PPD` is what fits, in the amber the
+  // summary table's own postponed cell takes.
+  const detail = scheduled
+    ? null
+    : status.gameState === 'live'
+      ? inningLabel(status.inningState, status.currentInning)
+      : status.gameState === 'postponed'
+        ? 'PPD'
+        : status.gameState === 'final'
+          ? 'Final'
+          : null;
+  return (
+    <>
+      <span className="research-opp-main">
+        {matchup}
+        {score && <span className="research-opp-score">{score}</span>}
+        {time && <span className="research-opp-time">{time}</span>}
+      </span>
+      {sp && (
+        <span className="research-opp-sp" title={`Starting pitcher: ${sp.name}`}>
+          {handThrows(sp.hand)} {surname(sp.name)}
+        </span>
+      )}
+      {detail && <span className="research-opp-detail">{detail}</span>}
+    </>
+  );
+}
 
 const opponentColumn = (statuses: Map<number, PlayerStatus> | null): Column => ({
   key: OPPONENT_KEY,
   label: 'Opp',
   group: 'Today',
-  title: "Today's opponent — “@” away, “vs” at home. Sorts alphabetically, which groups your players by tonight's game",
-  format: (r) => {
-    const st = statuses?.get(r.id);
-    if (!st?.opponent) return '\u2014';
-    return `${st.isHome ? 'vs' : '@'} ${st.opponent}`;
-  },
+  title:
+    "Today's game — “@” away, “vs” at home, with the opposing starter before first pitch and the score from his side of it once there is one. Sorts alphabetically, which groups your players by tonight's game",
+  format: (r) => <OpponentCell status={statuses?.get(r.id)} />,
   text: (r) => statuses?.get(r.id)?.opponent ?? null,
   // Nothing numeric to compare, and nothing to threshold — see `Column.text`.
   value: () => null,
+  // The cell is words on two lines rather than a number, and its live inning is
+  // one of the few things on this board worth colouring — `cellClass` carries
+  // both, the same hook the trend columns use for their rise and fall.
+  cellClass: (r) => {
+    const st = statuses?.get(r.id);
+    return st?.opponent ? `research-opp research-opp-${st.gameState ?? 'none'}` : 'research-opp';
+  },
 });
 
 /** Which window a column key belongs to, for the two places that have to tell a
@@ -444,7 +529,7 @@ const PITCHER_COLUMNS: Column[] = [
 // A default set rather than everything: the two boards carry forty-odd columns
 // between them, which is the point of a research table but a poor thing to open
 // on. The default is the line you would find in a box score plus the headline
-// Statcast numbers; the rest are a click away in the Columns panel.
+// Statcast numbers; the rest are a click away in the Columns dialog.
 //
 // Expressed as what's *off* rather than what's on, so a column added later
 // shows up by default instead of being invisible until someone remembers to
@@ -456,7 +541,7 @@ const PITCHER_COLUMNS: Column[] = [
 // would put five near-identical signed columns at the very front of the table
 // for every connected user — before games played. So the one that has always
 // been there (7d, the fantasy convention) stays on and the rest are a tick
-// away in the Columns panel, next to it, under the same Fantasy heading where
+// away in the Columns dialog, next to it, under the same Fantasy heading where
 // nobody has to know they exist to find them.
 const DEFAULT_OFF: Record<PlayerKind, ReadonlySet<string>> = {
   batter: new Set([
@@ -1146,7 +1231,9 @@ const freshBoard = (): BoardState => ({
  */
 export interface ResearchUi {
   boards: Record<PlayerKind, BoardState>;
-  /** Which disclosures are open. An open panel is part of where you were:
+  /** Which disclosures are open (Columns being a dialog rather than a panel,
+   *  but held here with the other two: it is the same kind of state). An open
+   *  panel is part of where you were:
    *  coming back to find the Filters panel shut is the same surprise as coming
    *  back to find it empty. */
   panels: { search: boolean; filters: boolean; columns: boolean };
@@ -1237,15 +1324,104 @@ function TeamMark({ teamId, team }: { teamId: number | null; team: string }) {
 }
 
 /**
+ * The Columns picker, as a modal over the page rather than a panel in the row.
+ *
+ * Search and Filters stay inline and this one does not, and the difference is
+ * volume: those two are a field and a three-part sentence, one line of the
+ * wrapping tab row each, where this holds the order row **and** every column
+ * the board has in four labelled runs — 39 of them on the batting board and 44
+ * on the pitching one. Opened inline that is a block of chips several hundred
+ * pixels tall wedged into the chrome, pushing the table it describes down the
+ * page and, on a phone, taking the screen outright while pretending to be a
+ * strip of controls. A picker that costs you sight of the thing it is picking
+ * for is the wrong shape; a dialog is the right one, and it can carry a
+ * scroller of its own so a 44-column board scrolls *inside* it rather than
+ * growing the page.
+ *
+ * It takes the app's overlay conventions rather than a second visual language:
+ * a dimmed backdrop over a `--panel` box on the app's own radius and shadow,
+ * the body pinned by `useLockBodyScroll` and `overscroll-behavior: contain` on
+ * the scroller, exactly as `.details-view` and `.reel-view` do. Four ways out,
+ * which is what a modal owes: the ✕, Escape, a press on the backdrop, and the
+ * Columns button itself — the state is still `ui.panels.columns`, so that
+ * button keeps its `.active` fill and its count badge unchanged and pressing it
+ * again shuts this exactly as it shut the panel.
+ *
+ * **Portalled to the body**, not left in the chrome the rest of the control set
+ * is portalled into: that box is `position: sticky` with a `z-index`, so it
+ * opens a stacking context and a fixed child of it could never rise past its
+ * 41. At the root it takes 46 — over the pinned chrome that opened it and over
+ * the full-page table box (45), under the player page (50) and the reel and
+ * how-to pages (60), which are pages where this is a control's panel. Neither
+ * of those can be on screen with it in practice (the full-page mode covers the
+ * whole control set, and this backdrop swallows the click that would open a
+ * player), but Escape is written for the stacking anyway: it declines the key
+ * while one of those is above it, and it is itself in the list they consult, so
+ * one press undoes one thing whichever way round they end up.
+ */
+function ColumnsDialog({ onClose, children }: { onClose: () => void; children: ReactNode }) {
+  useLockBodyScroll();
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !overlayAbove(boxRef.current)) onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return createPortal(
+    <div
+      className="research-columns-dialog"
+      ref={boxRef}
+      /* `pointerdown` rather than a click, the rule `useDismissable` follows: a
+         press that starts on the backdrop dismisses on the way down, and a
+         chip-drag that happens to *end* out here — mouse down on the grip, up
+         on the backdrop, whose click would land on their common ancestor —
+         cannot close the dialog out from under the reorder it just made. */
+      onPointerDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="research-columns-box"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="research-columns-title"
+      >
+        <div className="research-columns-head">
+          <h2 id="research-columns-title">Columns</h2>
+          <button
+            type="button"
+            className="research-columns-close"
+            onClick={onClose}
+            aria-label="Close"
+            title="Close"
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
+              <path d="M6 6l12 12M18 6 6 18" />
+            </svg>
+          </button>
+        </div>
+        {/* Its own scroller, which is the whole point: 44 columns scroll in
+            here rather than growing the page behind. */}
+        <div className="research-columns-body">{children}</div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+/**
  * The columns in the order they are drawn, draggable — the board's answer to
  * "I want ERA next to the name, not past nine counting stats".
  *
- * It is a row of its own at the top of the Columns panel rather than a handle
+ * It is a row of its own at the top of the Columns dialog rather than a handle
  * on the chips below, and the reason is that those chips are grouped: they are
  * cut into Counting, Slash line, Rates and Statcast, which is the right shape
  * for *choosing* columns and no shape at all for arranging them, an
  * arrangement being one flat sequence that crosses every one of those
- * headings. So the panel now answers its two questions in two blocks — what
+ * headings. So the picker answers its two questions in two blocks — what
  * order, then which columns — and each is drawn the way its own question wants.
  *
  * Reordering is by **Pointer Events** and the drop target is found with
@@ -1253,7 +1429,7 @@ function TeamMark({ teamId, team }: { teamId: number | null; team: string }) {
  * reasons: one code path for a mouse and a finger, where HTML5 drag-and-drop is
  * mouse-only. On touch **only the grip starts a drag** (it alone carries
  * `touch-action: none`), so a finger anywhere else on a chip still scrolls the
- * panel — the mistake `.order-row` documents, which cost the edit screen its
+ * dialog — the mistake `.order-row` documents, which cost the edit screen its
  * scrolling until it was scoped to the grip.
  *
  * The order is held locally while the drag is live and **committed on
@@ -1357,7 +1533,7 @@ function ColumnOrder({
             className={`research-order-chip${draggingKey === k ? ' dragging' : ''}`}
             title={`Drag to move ${labels.get(k) ?? k}`}
             /* A mouse can grab the chip anywhere; a finger has to use the grip,
-               or the panel could not be scrolled past this block. */
+               or the dialog could not be scrolled past this block. */
             onPointerDown={(e) => {
               if (e.pointerType === 'mouse') startDrag(e, k);
             }}
@@ -1648,6 +1824,25 @@ export function ResearchTable({
     });
   }, [rows, kind, include, includeWatchlist, rosterKeys, watchlistKeys, ownedIds, espnConnected]);
 
+  /**
+   * What the search box matches each row against, **folded once per row rather
+   * than once per keystroke**: this is the whole league (~1,400 rows) and the
+   * filter re-runs on every letter typed, where the rows themselves arrive once
+   * per board and are then kept for the life of the tab. Keyed on the row
+   * object, so the include buttons rebuilding `boardRows` — which returns the
+   * same objects through a `filter` — costs nothing.
+   *
+   * Name and club are joined by a **space**, which `searchFold` can never leave
+   * in a query: it is therefore a separator no typed string can straddle, so
+   * `garcialad` cannot match García of the Dodgers while both halves stay in one
+   * string and one `includes`.
+   */
+  const searchText = useMemo(() => {
+    const m = new Map<ResearchRow, string>();
+    for (const r of rows) m.set(r, `${searchFold(r.name)} ${searchFold(r.team)}`);
+    return m;
+  }, [rows]);
+
   /** How many of the watchlist are on *this* board — the count on the Watchlist
    *  button, and what its empty state tests. A key carries its own kind, so
    *  this needs no lookup against the rows. */
@@ -1816,7 +2011,11 @@ export function ResearchTable({
     statWindow,
     includeKeys(include).join('+'),
     includeWatchlist,
-    search.trim().toLowerCase(),
+    // Folded, not merely trimmed: the signature has to describe the *population*
+    // the table came out as, and two spellings that fold together select the
+    // same rows — so typing the accent onto a name you have already typed is not
+    // a new table and must not scroll one back to the top.
+    searchFold(search),
     filters.map((f) => `${f.column}${f.op}${f.value}`).join(','),
     activeSortKey,
     sortAsc,
@@ -1844,12 +2043,12 @@ export function ResearchTable({
   }, [boardSignature]);
 
   const visible = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    // Folded exactly as the rows are, so `garcia` finds García and `García`
+    // finds him too, and so `crow-armstrong` and `crow armstrong` are one query.
+    const q = searchFold(search);
     const out = boardRows.filter((r) => {
       if (posMatch && !posMatch(r)) return false;
-      if (q && !r.name.toLowerCase().includes(q) && !r.team.toLowerCase().includes(q)) {
-        return false;
-      }
+      if (q && !(searchText.get(r) ?? '').includes(q)) return false;
       for (const f of filters) {
         const col = columnsByKey.get(f.column);
         // A text column can hold no threshold and is not offered in the
@@ -1895,7 +2094,7 @@ export function ResearchTable({
       if (av === bv) return a.name.localeCompare(b.name);
       return (av - bv) * dir;
     });
-  }, [boardRows, search, posMatch, filters, activeSortKey, sortAsc, columnsByKey]);
+  }, [boardRows, search, searchText, posMatch, filters, activeSortKey, sortAsc, columnsByKey]);
 
   function toggleSort(col: Column) {
     if (activeSortKey === col.key) {
@@ -2541,9 +2740,11 @@ export function ResearchTable({
             </div>
           )}
 
+          {/* **A modal, where Search and Filters beside it are inline panels**
+              — see `ColumnsDialog` for why this one alone leaves the row. */}
           {columnsOpen && (
-            <div className="research-panel research-columns">
-              {/* Which order, then which columns. The two questions this panel
+            <ColumnsDialog onClose={() => setPanel('columns', false)}>
+              {/* Which order, then which columns. The two questions this picker
                   answers are different shapes — one flat sequence against four
                   labelled runs — and each is drawn the way its own wants; see
                   `ColumnOrder`. */}
@@ -2587,8 +2788,9 @@ export function ResearchTable({
               >
                 Reset to defaults
               </button>
-            </div>
+            </ColumnsDialog>
           )}
+
           </>,
           controlsHost,
         )}

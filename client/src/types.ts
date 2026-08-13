@@ -608,6 +608,23 @@ export interface PlayerStatus {
    *  A fact about today, so it reads the same on every window of that board. */
   opponent: string | null;
   isHome: boolean | null;
+  /** That game's score, **his side first** — the game log's own vocabulary for
+   *  a narrow column (`W 5-3`), which is what lets the board's cell print a
+   *  score under a matchup that has already named both clubs. Null before
+   *  first pitch, and null together or not at all. */
+  teamScore: number | null;
+  opponentScore: number | null;
+  /** Where a live game has got to, in `GameStatus`'s own fields rather than a
+   *  label — `inningLabel` in `lib.ts` builds "Top 7" from them for this and
+   *  for `gameStatusView` alike. Null unless the game is in progress. */
+  currentInning: number | null;
+  inningState: string | null;
+  /** First pitch, ISO, scheduled games only. */
+  startTime: string | null;
+  /** The starter the other side announced — the counterpart on a pitcher's row.
+   *  Scheduled games only, as on the summary table, which drops him once the
+   *  game is under way. */
+  probablePitcher: ProbablePitcher | null;
 }
 
 export interface PlayerReport extends WatchPlayer {
