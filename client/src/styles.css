@@ -5532,7 +5532,7 @@ body {
 
    It reuses the app's overlay conventions rather than inventing a second visual
    language: `.details-view`'s dimmed fixed box, a `--panel` card on the app's
-   own `--control-radius` and `--shadow`, and `overscroll-behavior: contain` on
+   own `--control-radius` and `--shadow`, and `overscroll-behavior: none` on
    the one thing that scrolls. **46**, which is the layer the stack leaves for
    it — over the pinned chrome that opened it (41) and the full-page table box
    (45), under the player page (50) and the reel and how-to pages (60), those
@@ -5602,14 +5602,18 @@ body {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
-/* The one scroller. `contain` rather than `none`: this is a page-like box
-   rather than a pane inside one, which is the bargain `.details-view` and
-   `.reel-view` make and the opposite of the one the three wide tables make. */
+/* The one scroller, and it takes `none` like everything else in the app.
+   It landed as `contain` reasoning from `.details-view` and `.reel-view`,
+   which were page-like boxes that kept their own give; those two have since
+   gone to `none` themselves, so nothing bounces anywhere and the exception
+   this cited no longer exists. `contain` stops the chaining but explicitly
+   keeps the element's own overscroll affordance — on iOS the rubber-band —
+   which is the thing being removed. */
 .research-columns-body {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior: none;
   display: flex;
   flex-direction: column;
   align-items: stretch;
