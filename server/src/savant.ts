@@ -10,6 +10,7 @@ import {
   getPitcherStats,
   getPlayerStats,
   getRosterInfo,
+  getSeasonPlayers,
   getStatsApiGame,
 } from './mlbStats.js';
 import type {
@@ -35,6 +36,7 @@ import type {
   PitchingLine,
   PlateAppearance,
   PlayerGame,
+  PlayerKind,
   PlayerReport,
   BattingLine,
   GameStatus,
@@ -1440,6 +1442,64 @@ export async function getReport(
       throws,
     };
   });
+}
+
+/**
+ * One player's whole day, whether or not anybody has him on a roster.
+ *
+ * This is what the player page's **Overview** tab and the Game Log's per-game
+ * popup read, and both of those open on strangers: `PlayerDetails` takes an id
+ * and a name, never a report, so the roster-shaped `/api/report` cannot answer
+ * for them. It is the case `getPlayerStatuses` below exists for one level up —
+ * the day's facts for a player nobody is watching — and it takes the same
+ * shape: everything is already built, and this only asks for it on behalf of
+ * one man.
+ *
+ * **It goes through `getReport` rather than around it**, which is the whole
+ * design. What the Overview draws is the feed's own items — the at-bat card,
+ * the base event, the outing and its innings — so the report behind it has to
+ * be the report the feed reads, down to the arsenal baselines on each
+ * `PitchMix` and the `opponentHitting` an Upcoming row opens onto. A lighter
+ * parallel path would be a second answer to "what happened to him today",
+ * free to drift from the first, which is exactly what one shared route buys us
+ * out of.
+ *
+ * **It adds no cache of its own**, deliberately: every layer under it already
+ * has one — `getDay` is memoized (ten minutes on today, fifteen seconds while a
+ * game is live, and a frozen snapshot forever once every game is final), the
+ * season lines and roster info are half-hourly, the arsenals and the xERA
+ * leaderboard six-hourly and shared with every other reader. A cache here could
+ * only make one player's day *staler* than the same day read on the feed beside
+ * it, which is the one thing it must not be: it is the same day.
+ *
+ * The name and Savant spelling come off the season roster (a one-hour cache the
+ * add-player search already pays for) because `findPlayerDay` falls back to a
+ * same-kind `savantName` match when an id isn't present that day. A player that
+ * roster has never heard of still gets his day by id alone; he simply loses the
+ * fallback, which is the right way for an unknown id to fail.
+ */
+export async function getPlayerDay(
+  playerId: number,
+  kind: PlayerKind,
+  date: string,
+): Promise<PlayerReport> {
+  const season = await getSeasonPlayers().catch((err) => {
+    console.error('season roster unavailable for player day:', err);
+    return [];
+  });
+  // A two-way player has a row per kind and both carry the same name, so the
+  // same-kind row is preferred for tidiness alone; either would answer.
+  const known =
+    season.find((p) => p.id === playerId && p.kind === kind) ??
+    season.find((p) => p.id === playerId);
+  const player: WatchPlayer = {
+    id: playerId,
+    kind,
+    name: known?.name ?? '',
+    savantName: known?.savantName ?? '',
+  };
+  const [report] = await getReport(date, date, [player]);
+  return report;
 }
 
 // ---- Today's player statuses ----------------------------------------------

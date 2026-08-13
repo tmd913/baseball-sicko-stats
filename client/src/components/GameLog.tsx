@@ -1,9 +1,38 @@
 import { useState } from 'react';
-import type { ReactNode } from 'react';
-import type { BatterGameLog, PitcherGameLog } from '../types';
+import type { KeyboardEvent, ReactNode } from 'react';
+import type { BatterGameLog, PitcherGameLog, PlayerKind } from '../types';
 import { ExpandButton } from './ExpandButton';
 import { useFullPage } from '../hooks';
 import { creditLabel, decisionColor, formatIp, formatRate, ordinal, prettyGameDate } from '../lib';
+import { PlayerDayModal } from './PlayerDay';
+
+/**
+ * A row of the log is a press, and this is what makes it one.
+ *
+ * The log is the season as the games it is made of, and a row was the end of
+ * the road: fourteen columns of what he did that night with no way to see any
+ * of it. A press opens the feed's reading of that game — his plate appearances
+ * with their clips, his outing with its innings — which is the same reading the
+ * page's Overview tab gives for today, one date over.
+ *
+ * `role`/`tabIndex`/Enter/Space rather than wrapping the cells in a button: a
+ * `<tr>` cannot hold one without leaving table layout, and the whole row is the
+ * target. Space is `preventDefault`ed, or the press would also scroll the pane
+ * under it.
+ */
+function pressProps(onOpen: () => void, label: string) {
+  return {
+    role: 'button' as const,
+    tabIndex: 0,
+    'aria-label': label,
+    onClick: onOpen,
+    onKeyDown: (e: KeyboardEvent<HTMLTableRowElement>) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      e.preventDefault();
+      onOpen();
+    },
+  };
+}
 
 /**
  * How many games render before the Load more button. A batter's season is 150
@@ -111,11 +140,21 @@ function HitsPerAb({ g }: { g: BatterGameLog }) {
   );
 }
 
-function BatterRows({ games }: { games: BatterGameLog[] }) {
+function BatterRows({
+  games,
+  onOpen,
+}: {
+  games: BatterGameLog[];
+  onOpen: (g: BatterGameLog) => void;
+}) {
   return (
     <>
       {games.map((g) => (
-        <tr key={`${g.gamePk}-${g.date}`} title={g.summary}>
+        <tr
+          key={`${g.gamePk}-${g.date}`}
+          title={g.summary}
+          {...pressProps(() => onOpen(g), `${prettyGameDate(g.date)} — open the game`)}
+        >
           <th className="glog-date" scope="row">
             {prettyGameDate(g.date)}
           </th>
@@ -248,11 +287,23 @@ const PITCHER_COLUMNS = [
   'Szn ERA', 'Szn FIP', 'Szn WHIP', 'Inn', 'Ent',
 ];
 
-function PitcherRows({ games, roles }: { games: PitcherGameLog[]; roles: boolean }) {
+function PitcherRows({
+  games,
+  roles,
+  onOpen,
+}: {
+  games: PitcherGameLog[];
+  roles: boolean;
+  onOpen: (g: PitcherGameLog) => void;
+}) {
   return (
     <>
       {games.map((g) => (
-        <tr key={`${g.gamePk}-${g.date}`} title={g.summary}>
+        <tr
+          key={`${g.gamePk}-${g.date}`}
+          title={g.summary}
+          {...pressProps(() => onOpen(g), `${prettyGameDate(g.date)} — open the outing`)}
+        >
           <th className="glog-date" scope="row">
             {prettyGameDate(g.date)}
             {/* Whether he started is the shape of the outing — five innings out
@@ -364,6 +415,11 @@ export function GameLog(
     | { kind: 'batter'; games: BatterGameLog[] }
     | { kind: 'pitcher'; games: PitcherGameLog[] }
   ) & {
+    /** Who the log is about — needed now that a row opens that player's day for
+     *  the date it names, which is a fetch of its own rather than something the
+     *  log already holds. */
+    playerId: number;
+    name: string;
     /** Who the log is about, for when the table has the page and the details
      *  head that normally says so is behind it. Rendered only while expanded,
      *  and smaller than that head: a name and a face, not a page header. */
@@ -371,12 +427,19 @@ export function GameLog(
   },
 ) {
   const [shown, setShown] = useState(PAGE_SIZE);
+  // Which row is open, as the date and game it names. Held rather than derived
+  // because a doubleheader puts two rows on one date, and the popup is about a
+  // game rather than an afternoon.
+  const [open, setOpen] = useState<{ date: string; gamePk: number } | null>(null);
   // Above the early return: hooks are unconditional, and a player with no games
   // takes that branch.
   const { isFull, toggle, ref: fullRef } = useFullPage<HTMLDivElement>();
   if (log.games.length === 0) {
     return <div className="details-status">No games played this season.</div>;
   }
+  const kind: PlayerKind = log.kind;
+  const openGame = (g: BatterGameLog | PitcherGameLog) =>
+    setOpen({ date: g.date, gamePk: g.gamePk });
   const pitching = log.kind === 'pitcher';
   const more = log.games.length - shown;
   return (
@@ -405,9 +468,10 @@ export function GameLog(
               <PitcherRows
                 games={log.games.slice(0, shown)}
                 roles={log.games.some((g) => g.started) && log.games.some((g) => !g.started)}
+                onOpen={openGame}
               />
             ) : (
-              <BatterRows games={log.games.slice(0, shown)} />
+              <BatterRows games={log.games.slice(0, shown)} onOpen={openGame} />
             )}
           </tbody>
           <tfoot>
@@ -423,6 +487,16 @@ export function GameLog(
         <button type="button" className="glog-more" onClick={() => setShown(shown + PAGE_SIZE)}>
           Load more · {more} earlier {more === 1 ? 'game' : 'games'}
         </button>
+      )}
+      {open && (
+        <PlayerDayModal
+          playerId={log.playerId}
+          kind={kind}
+          name={log.name}
+          date={open.date}
+          gamePk={open.gamePk}
+          onClose={() => setOpen(null)}
+        />
       )}
     </div>
   );

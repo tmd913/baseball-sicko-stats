@@ -16,7 +16,7 @@ import type {
   TrendWindow,
   WatchPlayer,
 } from './types';
-import { eligibleForKind, isInjured, isStartingOn, positionCodes } from './lib';
+import { isInjured, isStartingOn } from './lib';
 import { BaseballMark } from './components/BaseballMark';
 import { PlayerAdder } from './components/PlayerAdder';
 import { PlayerOrderEditor } from './components/PlayerOrderEditor';
@@ -51,11 +51,6 @@ import type { FantasySlot } from './hooks';
 import { Tutorial } from './components/Tutorial';
 import { EspnSettings } from './components/EspnSettings';
 
-// Breathing room above a card scrolled to the top of the viewport — the bare
-// gap, matching `--scroll-offset`'s own; the pinned chrome's height is added to
-// it at the call site.
-const SCROLL_GAP = 12;
-
 // How long the header's refresh keeps spinning at a minimum — see `refreshAll`.
 // A warm `/api/report` comes back in about 16ms, which is a spinner nobody
 // sees, and a button that answers a press with nothing at all reads as broken.
@@ -63,16 +58,21 @@ const MIN_SPIN = 450;
 
 /**
  * The app's three pages. **Roster** is the summary table over the date range,
- * **Feed** the same players and days read as a stream — by clock, or grouped
- * one card per player — and **Research** the whole league over the season.
+ * **Feed** the same players and days read as a stream, and **Research** the
+ * whole league over the season.
  *
- * It was two tiers until now: Roster · Research on top, and Roster's own
- * Summary / Games / Feed below. What collapsed it was noticing that Games and
- * Feed were not two readings but one: a card per player over the range, and a
- * stream over the same range, differing in *sort order*. Sorting is not a page.
- * So Games folded into the feed as `groupByPlayer`, which left Roster with a
- * single reading — the summary table — and the sub-row with one live tab in it.
- * Three pages, one row.
+ * It was two tiers once: Roster · Research on top, and Roster's own Summary /
+ * Games / Feed below. What collapsed it was noticing that Games and Feed were
+ * not two readings but one: a card per player over the range, and a stream over
+ * the same range, differing in *sort order*. Sorting is not a page. So Games
+ * folded into the feed as a grouping, which left Roster with a single reading —
+ * the summary table — and the sub-row with one live tab in it.
+ *
+ * **The grouping has since gone too, and one step further on.** A card per
+ * player is a page about a *player*, and this app already had one that opened
+ * on anybody: the player page. So the reading moved onto it as the **Overview**
+ * tab, the toggle went with it, and a name in any view now opens the same page
+ * his headshot does. Three pages, one row, and one place a player's day is read.
  *
  * `summary` rather than `roster` because that is the name `view=` has always
  * used for it, and it is the default every link in the wild omits.
@@ -240,12 +240,6 @@ export default function App() {
    */
   const [watchlistKeys, setWatchlistKeys] = useState<Set<string>>(() => new Set());
   const [error, setError] = useState<string | null>(null);
-  // Player cards are collapsed by default; the URL tracks the keys the user has
-  // explicitly expanded (so a fresh visit — and any newly-added player — starts
-  // collapsed, while reloads/shared links restore whatever was opened).
-  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(
-    () => new Set(readKeys(initialParams.get('expanded'))),
-  );
   // The player whose details view (percentile rankings) is open, seeded from the
   // URL so a shared/reloaded link reopens it once that player's report loads.
   const [detailsKey, setDetailsKey] = useState<string | null>(
@@ -267,23 +261,20 @@ export default function App() {
   const [view, setView] = useState<View>(() => {
     const v = initialParams.get('view');
     if (v === 'research') return 'research';
-    // `games` was the card-per-player page and `players` its own older name.
-    // Both are the feed grouped by player now — that page *was* the grouping —
-    // so an old link opens the thing it asked for rather than 404ing into the
-    // default, the same courtesy `readKeys` extends to pre-two-way player ids.
+    // **Three dead view names, all meaning the feed.** `games` was the
+    // card-per-player page and `players` its own older name; both became the
+    // feed's grouping, and the grouping has since become the player page's
+    // Overview tab. The feed is where they still land: it is the same players
+    // over the same days, which is the closest thing to what those links asked
+    // for — and the alternative, opening a player page, needs a player, which a
+    // bare `view=games` does not name. `group=player` is read only in the sense
+    // that it is *ignored*: the first URL sync drops it, along with any
+    // `expanded=` the same link carried, since the cards those named no longer
+    // exist anywhere. That is the same courtesy `readKeys` extends to
+    // pre-two-way player ids, and the safe direction for an old link to fail in.
     if (v === 'feed' || v === 'games' || v === 'players') return 'feed';
     // Summary is the default; the rest are opted into explicitly.
     return 'summary';
-  });
-  /**
-   * Read the feed one card per player instead of newest-first. In the URL
-   * because it changes how a shared link reads, and seeded on for a legacy
-   * `view=games` link, that page having been exactly this.
-   */
-  const [groupByPlayer, setGroupByPlayer] = useState<boolean>(() => {
-    const v = initialParams.get('view');
-    if (v === 'games' || v === 'players') return true;
-    return initialParams.get('group') === 'player';
   });
   // Which half of the watchlist the players view is showing. Its own tab row,
   // since a batter card and a pitcher card have nothing in common to scan down.
@@ -1037,27 +1028,12 @@ export default function App() {
   }, []);
 
   // The pinned chrome, measured — it publishes `--chrome-h` for every
-  // `scroll-margin-top` in the stylesheet, and hands its height back here for
-  // the one scroll the app computes itself (below).
-  const [chromeRef, chromeH] = useStickyChromeOffset<HTMLDivElement>();
+  // `scroll-margin-top` in the stylesheet. It used to hand its height back for
+  // one scroll the app computed itself, the jump to a player's card; that jump
+  // is a player page now, which covers the bar rather than clearing it, so
+  // nothing reads the number by hand any more.
+  const chromeRef = useStickyChromeOffset<HTMLDivElement>()[0];
 
-  // Scroll a player's card to the top of the viewport — below the pinned
-  // chrome, which is what `scroll-margin-top` does for every collapsible that
-  // scrolls itself; this one does the arithmetic, so it subtracts the bar too.
-  //
-  // Deferred a frame because callers expand the card first: expanding grows the
-  // document, and only then is there room to scroll a bottom-of-page card's top
-  // up to the top. Scrolling before the grow would clamp at the old, shorter page
-  // bottom and stop short.
-  const scrollToPlayer = useCallback((key: string) => {
-    requestAnimationFrame(() => {
-      const el = document.getElementById(`player-${key}`);
-      if (!el) return;
-      const top =
-        el.getBoundingClientRect().top + window.scrollY - SCROLL_GAP - chromeH.current;
-      window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
-    });
-  }, [chromeH]);
   // Always-current reports, so the drag-end handler reads the latest order
   // without being recreated (and re-bound) on every reorder.
   const reportsRef = useRef(reports);
@@ -1073,12 +1049,8 @@ export default function App() {
       p.set('start', start);
       p.set('end', end);
     }
-    if (expandedKeys.size) p.set('expanded', [...expandedKeys].join(','));
     if (detailsKey) p.set('player', detailsKey);
     if (view !== 'summary') p.set('view', view);
-    /* Only meaningful on the feed, and off is the default — so a link can only
-       ever turn the grouping on, and `view=games` is what an old one says. */
-    if (view === 'feed' && groupByPlayer) p.set('group', 'player');
     if (playerKind !== 'batter') p.set('kind', playerKind);
     // Only meaningful on the research view, and 'batters' is its default.
     if (view === 'research' && researchPos !== 'batters') p.set('pos', researchPos);
@@ -1118,10 +1090,8 @@ export default function App() {
     start,
     end,
     activePreset,
-    expandedKeys,
     detailsKey,
     view,
-    groupByPlayer,
     playerKind,
     researchPos,
     researchWindow,
@@ -1495,8 +1465,11 @@ export default function App() {
   // value lives in the component that grows it, and App only has to hand the
   // same number back when it mounts again.
   const feedShown = useRef(new Map<string, number>());
-  // Expanded at-bats / upcoming rows in the feed view, lifted here so "collapse
-  // all" can clear them (the player view collapses via expandedKeys instead).
+  // Expanded at-bats / outings / upcoming rows in the feed, lifted here so
+  // "collapse all" can clear them. It is the feed's one level of collapsible
+  // again: the player groups above it went to the player page, and the day the
+  // Overview tab draws holds its own open keys, there being no cross-page
+  // control over an overlay that unmounts with them.
   const [feedOpenKeys, setFeedOpenKeys] = useState<Set<string>>(() => new Set());
   const toggleFeedKey = useCallback((key: string) => {
     setFeedOpenKeys((prev) => {
@@ -1506,22 +1479,11 @@ export default function App() {
       return next;
     });
   }, []);
-  // Whether the current view has anything expanded to collapse (the summary
-  // table and the edit screen have no collapsibles).
-  // The feed has two levels of collapsible now — the player groups
-  // (`expandedKeys`, which is what the Games view's cards used and what
-  // `expanded=` still carries) and the items inside them (`feedOpenKeys`) — so
-  // it answers for both. The summary table and the edit screen have neither.
-  const hasExpanded =
-    view === 'summary' || editMode
-      ? false
-      : view === 'feed'
-        ? feedOpenKeys.size > 0 || expandedKeys.size > 0
-        : false;
-  const collapseAll = () => {
-    setFeedOpenKeys(new Set());
-    setExpandedKeys(new Set());
-  };
+  // Whether the current view has anything expanded to collapse — the feed
+  // alone; the summary table, the research board and the edit screen have no
+  // collapsibles.
+  const hasExpanded = view === 'feed' && !editMode && feedOpenKeys.size > 0;
+  const collapseAll = () => setFeedOpenKeys(new Set());
 
   const onAdd = async (p: WatchPlayer) => {
     setRoster(await api.addPlayer(p));
@@ -1571,105 +1533,28 @@ export default function App() {
       .catch((e: Error) => setError(e.message));
   }, []);
 
-  const toggleCollapsed = (key: string) => {
-    const willExpand = !expandedKeys.has(key);
-    setExpandedKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-    // Expanding scrolls the card to the top of the viewport.
-    if (willExpand) scrollToPlayer(key);
-  };
-  // A link (from the summary/feed) jumped to the players page — remember which
-  // view we came from so a back button can return there. Cleared once we're back,
-  // or when the user navigates explicitly via the tabs. Where in that view the
-  // reader was is the page memory's business, not this one's.
-  // Only ever the summary table: the jump's origin used to be either of the
-  // two roster views, and the feed is now the jump's *destination*.
-  const [backView, setBackView] = useState<'summary' | null>(null);
-  // Set by the one path that places the scroll itself — the jump to a player's
-  // day, which scrolls to his card — so the page memory below doesn't restore
-  // the Games view's own offset out from under it. The back button needs no
-  // such flag: putting the reader back where they were on the view they came
-  // from is exactly what the memory does anyway.
-  const scrollPlaced = useRef(false);
-  const goBack = () => {
-    if (!backView) return;
-    setBackView(null);
-    setView(backView);
-  };
-  /**
-   * Jump to a player's full day: the grouped feed, his card open, scrolled to
-   * the top. This used to switch to the Games view, which *was* the grouped
-   * feed — so the destination is unchanged in everything but name, down to
-   * `expandedKeys` being what opens the card.
+  /*
+   * **A player's name opens his page, exactly as his headshot does.**
    *
-   * From the summary table it crosses pages and records the origin for the back
-   * button; from the feed itself there is nowhere to go back to, and the jump
-   * is the grouping turning on around the player you asked for.
+   * It used to jump: switch to the feed, turn the grouping on, expand his card
+   * and scroll to it — a cross-page navigation that needed a back button of its
+   * own, a `scrollPlaced` flag to keep the page memory from undoing the scroll,
+   * and `expandedKeys` in the URL to say which card was open. All of that was
+   * the machinery of getting to one player's day on a page that is about a
+   * roster. The day is on the player page now, so the name is a plain
+   * `setDetailsKey` and every one of those pieces is gone: no `backView`, no
+   * `goBack`, no float Back button, no `scrollToPlayer`, no `toggleCollapsed`,
+   * no `expanded=`.
+   *
+   * It is also strictly better where the old jump was weakest — the name in the
+   * summary table's *pitcher* tab used to land on the feed's pitcher tab, and a
+   * name on the research board had no jump at all, the board's rows being
+   * players nobody has rostered. The page opens on anybody.
    */
-  const openPlayerDay = useCallback(
-    (key: string) => {
-      const from = view === 'summary' ? 'summary' : null;
-      scrollPlaced.current = true;
-      setBackView(from);
-      setEditMode(false);
-      setView('feed');
-      setGroupByPlayer(true);
-      // The feed shows one kind at a time, so land on the tab this player is
-      // actually in — otherwise the jump scrolls to nothing.
-      const kind = reportsRef.current.find((r) => playerKey(r) === key)?.kind;
-      if (kind === 'pitcher' || kind === 'batter') setPlayerKind(kind);
-      setExpandedKeys((prev) => (prev.has(key) ? prev : new Set(prev).add(key)));
-      scrollToPlayer(key);
-    },
-    [scrollToPlayer, view],
-  );
   // Positions come from the season roster; look them up by id for each report.
   const positionById = useMemo(
     () => new Map(seasonPlayers.map((p) => [p.id, p.position])),
     [seasonPlayers],
-  );
-  /**
-   * The chip beside a card's name: **what your league will let you play him
-   * at** wherever ESPN can say so, and MLB's single listed position otherwise.
-   *
-   * The same swap the research board's pills already made, arriving on the
-   * cards for the same reason — a fantasy position is multi-valued and is
-   * sometimes flatly different from MLB's (Curtis Mead is listed at 2B and is
-   * eligible at 1B and 3B), so the one word MLB has for a man is the wrong
-   * answer to the question a card in this app is read with. It costs no fetch:
-   * the map rides on the `/api/espn/ownership` response the board and the
-   * player page already read, which is why the effect behind it now fires on
-   * any view rather than on those two.
-   *
-   * **Narrowed to the card's own kind** (`eligibleForKind`), exactly as each
-   * board is: a two-way player's bat reads `DH` where his arm reads `SP`, and a
-   * mis-joined pitcher reads his fallback rather than `2B/SS`. Whole lists are
-   * the player page's business, that being the one place with room for one.
-   *
-   * It was the *card's* chip until the Games view went; the grouped feed's
-   * player header is what that card became, so the chip moved with it rather
-   * than being dropped along with the page — losing it was never part of
-   * folding the two views together. Handed to the feed as a function rather
-   * than as the eligibility map, so the fallback rule and the two-code cap
-   * stay here beside the board's own copy of them.
-   */
-  const positionFor = useCallback(
-    (id: number, kind: PlayerKind): { position?: string; positionTitle?: string } => {
-      const espn = eligibleForKind(eligibility?.get(id), kind);
-      if (!espn) return { position: positionById.get(id) };
-      // Two codes and a count, the form the board's Pos cell prints — a card's
-      // header is a name and this chip on one line, and the widest list in the
-      // league wraps 8 of 14 names at 390px against the 1 that wraps today.
-      // The tooltip carries the whole of it, and the player page prints it
-      // whole in the first place.
-      const { ordered, text } = positionCodes(espn);
-      return { position: text, positionTitle: `Eligible in ESPN at ${ordered.join(', ')}` };
-    },
-    [eligibility, positionById],
   );
   // The player backing an open details view. Name comes from the report if the
   // player is watchlisted, otherwise from the season roster — so details can be
@@ -1874,11 +1759,11 @@ export default function App() {
 
   const firstPage = useRef(true);
   useLayoutEffect(() => {
-    // The jump to a player's day places the scroll itself, and the browser's
-    // own restore on a reload owns the first pass.
-    if (firstPage.current || scrollPlaced.current) {
+    // The browser's own restore on a reload owns the first pass. Nothing else
+    // places a scroll by hand any more: the jump to a player's day did, and it
+    // is a player page now, which is an overlay rather than a place on a page.
+    if (firstPage.current) {
       firstPage.current = false;
-      scrollPlaced.current = false;
       return;
     }
     const want = pageScroll.current.get(scrollKey) ?? 0;
@@ -2138,51 +2023,6 @@ export default function App() {
      alongside the calendar beside it — the pair is a run of two icons where a
      lone one on a row of tabs would have nothing beside it to say what it
      meant, and the two labels were 174px of a line a phone hasn't got. */
-  /* Read the feed one card per player rather than newest-first. This is the
-     Games view's own control, kept after the page itself went: what that page
-     did was sort the same days by roster instead of by clock, which is a
-     reading of the feed rather than a page beside it — so it is a toggle on
-     the feed, next to the other one that says which players the view is about.
-
-     `.group-toggle` is folded into `.research-toggle`/`.starters-toggle`'s
-     selector lists rather than restyled to resemble them: it is the same
-     object as the Starters button beside it, a plain toggle with no panel, so
-     it takes `.on` and never `.active`. On a phone it goes to its glyph with
-     them, the run of icons on this row being what makes that legible. */
-  const groupToggle = (
-    <button
-      type="button"
-      className={`group-toggle${groupByPlayer ? ' on' : ''}`}
-      aria-pressed={groupByPlayer}
-      onClick={() => setGroupByPlayer((v) => !v)}
-      title={
-        groupByPlayer
-          ? 'One card per player — his live at-bat, his plays and his next game together'
-          : 'Group the feed by player instead of reading it newest-first'
-      }
-    >
-      {/* Two stacked cards, each with a line in it: the shape the grouped feed
-          makes of the page. Drawn to the same optical weight as the clipboard
-          beside it — 20px, spanning 3–21 across — since on a phone the two are
-          a pair of glyphs with no words between them. */}
-      <svg
-        viewBox="0 0 24 24"
-        width="20"
-        height="20"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
-        <rect x="3" y="3.5" width="18" height="7" rx="2" />
-        <rect x="3" y="13.5" width="18" height="7" rx="2" />
-        <path d="M7 7h6M7 17h6" />
-      </svg>
-      <span className="starters-toggle-label">By player</span>
-    </button>
-  );
 
   const startersToggle = rangeHasToday ? (
       <button
@@ -2590,10 +2430,7 @@ export default function App() {
                       // this can be pressed from anywhere — so take the user
                       // there rather than flipping a mode with nothing on
                       // screen to show for it.
-                      if (view !== 'summary') {
-                        setBackView(null);
-                        setView('summary');
-                      }
+                      if (view !== 'summary') setView('summary');
                       // The edit screen hides the search bar too; closing it
                       // here stops it being restored on the way out of a mode
                       // it was never visible in.
@@ -2838,7 +2675,6 @@ export default function App() {
                   aria-selected={view === 'summary'}
                   className={`view-tab${view === 'summary' ? ' active' : ''}`}
                   onClick={() => {
-                    setBackView(null);
                     // The reorder screen lives on this page now, so coming back
                     // to it is not a reason to close it. The other two are.
                     setView('summary');
@@ -2854,7 +2690,6 @@ export default function App() {
                   aria-selected={view === 'feed'}
                   className={`view-tab${view === 'feed' ? ' active' : ''}`}
                   onClick={() => {
-                    setBackView(null);
                     setEditMode(false);
                     setView('feed');
                   }}
@@ -2870,7 +2705,6 @@ export default function App() {
                 aria-selected={view === 'research'}
                 className={`view-tab${view === 'research' ? ' active' : ''}`}
                 onClick={() => {
-                  setBackView(null);
                   setEditMode(false);
                   setView('research');
                 }}
@@ -2894,9 +2728,6 @@ export default function App() {
                 now stands here as the toggle that replaced the third of them. */}
             {view !== 'research' && showRosterViews && (
               <>
-              {/* Only on the feed — it is a reading of that page and nothing
-                  the summary table can do. */}
-              {view === 'feed' && groupToggle}
               {/* Only over a range that contains today — see `startersToggle`. */}
               {startersToggle}
               {dateToggle}
@@ -3126,7 +2957,6 @@ export default function App() {
           <SummaryTable
             reports={filteredCards}
             onOpenDetails={setDetailsKey}
-            onOpenPlayerDay={openPlayerDay}
             /* Kept when the table takes the page. The same nodes render in the
                view bar as well, which is behind the expanded box and so never
                on screen at the same time — the alternative is lifting the
@@ -3164,46 +2994,14 @@ export default function App() {
             reports={filteredCards}
             kind={shownKind}
             onOpenDetails={setDetailsKey}
-            onOpenPlayerDay={openPlayerDay}
             openKeys={feedOpenKeys}
             onToggleKey={toggleFeedKey}
-            groupByPlayer={groupByPlayer}
-            /* The player groups are what `expandedKeys` has always opened —
-               they are the Games view's cards, and `expanded=` still names
-               them. */
-            groupOpenKeys={expandedKeys}
-            onToggleGroup={toggleCollapsed}
-            positionFor={positionFor}
-            multiDay={start !== end}
             shown={feedShown.current.get(feedKey) ?? FEED_PAGE_SIZE}
             onShowMore={(n) => feedShown.current.set(feedKey, n)}
           />
         )
       )}
 
-      {/* Bottom-left back button, shown only after a name in the summary table
-          jumped to that player's card on the feed — returns to the table. */}
-      <button
-        type="button"
-        className={`float-btn back-nav${
-          view === 'feed' && backView && !editMode ? ' visible' : ''
-        }`}
-        onClick={goBack}
-        aria-label="Back to roster"
-        title="Back to Roster"
-      >
-        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-          <path
-            d="M15 18l-6-6 6-6"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-        Back
-      </button>
 
       <button
         type="button"

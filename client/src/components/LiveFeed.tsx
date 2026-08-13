@@ -4,8 +4,6 @@ import { playerKey } from '../types';
 import {
   baseEventLabel,
   baseEventTone,
-  combineLines,
-  combinePitchingLines,
   creditLabel,
   decisionColor,
   formatStartTime,
@@ -13,11 +11,9 @@ import {
   headshotUrl,
   isOnActiveRoster,
   isRotationStarter,
-  lineSummary as battingLineSummary,
   liveRoleGame,
   liveRoleLabel,
   outcomeKind,
-  prettyGameDate,
   scoreLine,
   surname,
 } from '../lib';
@@ -56,7 +52,7 @@ function liveInning(game: PlayerGame): string {
 }
 
 /** The matchup line, "NYY vs BOS" / "NYY @ BOS", from the batter's perspective. */
-function matchup(game: PlayerGame): string {
+export function matchup(game: PlayerGame): string {
   return `${game.batterTeam} ${game.isHome ? 'vs' : '@'} ${game.opponent}`;
 }
 
@@ -80,7 +76,7 @@ function roleAtBat(role: LiveRole, game: PlayerGame): PlateAppearance | null {
 
 /** A recent-stream item: a batter's plate appearance, a base-running event, or
  * a watched pitcher's whole outing (one item, grouped by inning below). */
-type FeedEntry =
+export type FeedEntry =
   | { type: 'pa'; report: PlayerReport; game: PlayerGame; pa: PlateAppearance }
   | { type: 'base'; report: PlayerReport; game: PlayerGame; evs: BaseEvent[]; key: string }
   | { type: 'pitching'; report: PlayerReport; game: PlayerGame };
@@ -124,9 +120,17 @@ function playOrder(e: FeedEntry): number {
 }
 
 /**
- * A player's name in a feed row — a button that jumps to their full day of
- * at-bats on the players view. stopPropagation so it doesn't also toggle a
- * collapsible the name sits inside (the live/upcoming row headers).
+ * A player's name in a feed row — a button that opens his player page, exactly
+ * as the headshot beside it does.
+ *
+ * It used to jump to his card on the grouped reading of this feed, which was
+ * the Games view before that. Both are gone: one player's day, read whole, is
+ * the player page's **Overview** tab now, and it is the same day drawn from the
+ * same items. So the name and the face lead to one place — the page that opens
+ * on his day and carries his season beside it — rather than to two.
+ *
+ * stopPropagation so it doesn't also toggle a collapsible the name sits inside
+ * (the live and upcoming row headers).
  */
 function FeedPlayerName({
   playerKey: key,
@@ -138,19 +142,17 @@ function FeedPlayerName({
   onOpen: (key: string) => void;
 }) {
   return (
-    <>
-      <button
-        type="button"
-        className="feed-player-name feed-player-name-link"
-        title={`${name} — full day`}
-        onClick={(e) => {
-          e.stopPropagation();
-          onOpen(key);
-        }}
-      >
-        {name}
-      </button>
-    </>
+    <button
+      type="button"
+      className="feed-player-name feed-player-name-link"
+      title={`${name} — player page`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpen(key);
+      }}
+    >
+      {name}
+    </button>
   );
 }
 
@@ -216,14 +218,13 @@ function FeedHeadshot({
  * overtaken by it. Only for a live at-bat, which is the only place the server
  * fills them.
  */
-function LiveEntry({
+export function LiveEntry({
   report,
   role,
   game,
   open,
   onToggle,
   onOpenDetails,
-  onOpenPlayerDay,
   grouped = false,
   multiGame = false,
 }: {
@@ -233,7 +234,6 @@ function LiveEntry({
   open: boolean;
   onToggle: () => void;
   onOpenDetails: (key: string) => void;
-  onOpenPlayerDay: (key: string) => void;
   /** Inside a player group: the group's own header carries the headshot, the
    * name and the matchup, so the item drops its identity row and keeps only
    * what is its own — the score, the role, the inning. */
@@ -261,7 +261,7 @@ function LiveEntry({
         )}
         <div className="feed-item-id">
           {!grouped && (
-            <FeedPlayerName playerKey={playerKey(report)} name={report.name} onOpen={onOpenPlayerDay} />
+            <FeedPlayerName playerKey={playerKey(report)} name={report.name} onOpen={onOpenDetails} />
           )}
           <span className="feed-context">
             {grouped && !multiGame ? liveInning(game) : `${matchup(game)} · ${liveInning(game)}`}
@@ -304,7 +304,6 @@ function FeedAtBat({
   open,
   onToggle,
   onOpenDetails,
-  onOpenPlayerDay,
   grouped = false,
   multiGame = false,
 }: {
@@ -314,7 +313,6 @@ function FeedAtBat({
   open: boolean;
   onToggle: () => void;
   onOpenDetails: (key: string) => void;
-  onOpenPlayerDay: (key: string) => void;
   /** Inside a player group: the group's own header carries the headshot, the
    * name and the matchup, so the item drops its identity row and keeps only
    * what is its own — the score, the role, the inning. */
@@ -343,7 +341,7 @@ function FeedAtBat({
         {(!grouped || multiGame) && (
           <div className="feed-item-id">
             {!grouped && (
-              <FeedPlayerName playerKey={playerKey(report)} name={report.name} onOpen={onOpenPlayerDay} />
+              <FeedPlayerName playerKey={playerKey(report)} name={report.name} onOpen={onOpenDetails} />
             )}
             <span className="feed-context">{matchup(game)}</span>
           </div>
@@ -503,7 +501,6 @@ function FeedBaseEvent({
   game,
   evs,
   onOpenDetails,
-  onOpenPlayerDay,
   grouped = false,
   multiGame = false,
 }: {
@@ -511,7 +508,6 @@ function FeedBaseEvent({
   game: PlayerGame;
   evs: BaseEvent[];
   onOpenDetails: (key: string) => void;
-  onOpenPlayerDay: (key: string) => void;
   /** Inside a player group: the group's own header carries the headshot, the
    * name and the matchup, so the item drops its identity row and keeps only
    * what is its own — the score, the role, the inning. */
@@ -551,7 +547,7 @@ function FeedBaseEvent({
         {(!grouped || multiGame) && (
           <div className="feed-item-id">
             {!grouped && (
-              <FeedPlayerName playerKey={playerKey(report)} name={report.name} onOpen={onOpenPlayerDay} />
+              <FeedPlayerName playerKey={playerKey(report)} name={report.name} onOpen={onOpenDetails} />
             )}
             <span className="feed-context">{matchup(game)}</span>
           </div>
@@ -603,7 +599,6 @@ function FeedPitcherGame({
   open,
   onToggle,
   onOpenDetails,
-  onOpenPlayerDay,
   grouped = false,
   multiGame = false,
 }: {
@@ -613,7 +608,6 @@ function FeedPitcherGame({
   open: boolean;
   onToggle: () => void;
   onOpenDetails: (key: string) => void;
-  onOpenPlayerDay: (key: string) => void;
   /** Inside a player group: the group's own header carries the headshot, the
    * name and the matchup, so the item drops its identity row and keeps only
    * what is its own — the score, the role, the inning. */
@@ -674,7 +668,7 @@ function FeedPitcherGame({
           {(!grouped || multiGame) && (
             <div className="feed-item-id">
               {!grouped && (
-                <FeedPlayerName playerKey={playerKey(report)} name={report.name} onOpen={onOpenPlayerDay} />
+                <FeedPlayerName playerKey={playerKey(report)} name={report.name} onOpen={onOpenDetails} />
               )}
               <span className="feed-context">{matchup(game)}</span>
             </div>
@@ -787,13 +781,12 @@ function isUpcomingFor(report: PlayerReport, game: PlayerGame): boolean {
  * when there's nothing to reveal yet, and carries no caret on either side — the
  * bar itself is the affordance (see styles.css).
  */
-function UpcomingRow({
+export function UpcomingRow({
   report,
   game,
   open,
   onToggle,
   onOpenDetails,
-  onOpenPlayerDay,
   grouped = false,
 }: {
   report: PlayerReport;
@@ -801,7 +794,6 @@ function UpcomingRow({
   open: boolean;
   onToggle: () => void;
   onOpenDetails: (key: string) => void;
-  onOpenPlayerDay: (key: string) => void;
   /** Inside a player group: the group's own header carries the headshot, the
    * name and the matchup, so the item drops its identity row and keeps only
    * what is its own — the score, the role, the inning. */
@@ -856,7 +848,7 @@ function UpcomingRow({
       {!grouped && (
         <div className="upcoming-id">
           <FeedHeadshot id={report.id} name={report.name} onOpen={() => onOpenDetails(playerKey(report))} />
-          <FeedPlayerName playerKey={playerKey(report)} name={report.name} onOpen={onOpenPlayerDay} />
+          <FeedPlayerName playerKey={playerKey(report)} name={report.name} onOpen={onOpenDetails} />
         </div>
       )}
       {expandable ? (
@@ -896,7 +888,7 @@ function UpcomingRow({
  * ever needs the first; it takes the `base-` prefix because a play's own id is
  * not unique against an at-bat's `player-game-atbat`.
  */
-function entryKey(e: FeedEntry): string {
+export function entryKey(e: FeedEntry): string {
   if (e.type === 'base') return `base-${e.key}`;
   if (e.type === 'pitching') return `pitching-${e.report.id}-${e.game.gamePk}`;
   return `${e.report.id}-${e.game.gamePk}-${e.pa.atBatNumber}`;
@@ -908,12 +900,11 @@ function entryKey(e: FeedEntry): string {
  * construction rather than by two call sites agreeing to — which is the trap
  * the `grouped` prop would otherwise set, one of them forgetting to pass it.
  */
-function FeedItem({
+export function FeedItem({
   entry,
   openKeys,
   onToggleKey,
   onOpenDetails,
-  onOpenPlayerDay,
   grouped = false,
   multiGame = false,
 }: {
@@ -921,7 +912,6 @@ function FeedItem({
   openKeys: Set<string>;
   onToggleKey: (key: string) => void;
   onOpenDetails: (key: string) => void;
-  onOpenPlayerDay: (key: string) => void;
   grouped?: boolean;
   multiGame?: boolean;
 }) {
@@ -933,7 +923,6 @@ function FeedItem({
         game={entry.game}
         evs={entry.evs}
         onOpenDetails={onOpenDetails}
-        onOpenPlayerDay={onOpenPlayerDay}
         grouped={grouped}
         multiGame={multiGame}
       />
@@ -947,7 +936,6 @@ function FeedItem({
         open={openKeys.has(key)}
         onToggle={() => onToggleKey(key)}
         onOpenDetails={onOpenDetails}
-        onOpenPlayerDay={onOpenPlayerDay}
         grouped={grouped}
         multiGame={multiGame}
       />
@@ -961,299 +949,120 @@ function FeedItem({
       open={openKeys.has(key)}
       onToggle={() => onToggleKey(key)}
       onOpenDetails={onOpenDetails}
-      onOpenPlayerDay={onOpenPlayerDay}
       grouped={grouped}
       multiGame={multiGame}
     />
   );
 }
 
-/** Everything the feed knows about one player, ready to be drawn as a group. */
-type PlayerGroup = {
-  report: PlayerReport;
-  live: { role: LiveRole; game: PlayerGame } | null;
-  entries: FeedEntry[];
-  upcoming: { report: PlayerReport; game: PlayerGame }[];
-  /** Newest thing that happened to him, for ordering the groups. */
-  time: number;
-};
-
 /**
- * The whole of one player's day, as a single collapsible card — the feed read
- * by player rather than by clock.
+ * Everything that happened to **one** player over the days in his report,
+ * ready to be drawn as feed items.
  *
- * This is the view the Games page used to be, and folding it in here is what
- * made that page redundant: it was one card per player over the same days as
- * the feed, differing only in that the feed sorted by time and it sorted by
- * roster. Sorting is not a page. So the feed carries both readings and the
- * grouped one absorbs what the Games page was for, down to the collapsed-card
- * default and the `expanded=` param that says which are open.
- *
- * The header is the games view's own bargain: **static identity above, a
- * tappable bar below**, the rule every other shape in this feed follows (the
- * headshot and the name are links, and a mistimed thumb inside the toggle
- * navigates away instead of opening the card). Collapsed, the bar still says
- * how his day went — the combined line and the game's score badge — so a closed
- * group answers the question without being opened, which is what makes the
- * default defensible on a thirty-player roster.
- *
- * Inside, the items are the feed's own: the live entry, the plays or the
- * outing, the upcoming row. Each drops its identity row (`grouped`), the group
- * header having said all three of those things once.
+ * The flat stream below is this fanned across a roster and re-sorted by clock;
+ * the player page's **Overview** tab is this for one man, drawn in game order.
+ * It is one function rather than two because the two readings must not be able
+ * to disagree about what happened — the trap the grouped feed avoided the same
+ * way before it moved onto the player page.
  */
-function FeedPlayerGroup({
-  group,
-  open,
-  onToggle,
-  openKeys,
-  onToggleKey,
-  onOpenDetails,
-  onOpenPlayerDay,
-  positionFor,
-  multiDay,
-}: {
-  group: PlayerGroup;
-  open: boolean;
-  onToggle: () => void;
-  openKeys: Set<string>;
-  onToggleKey: (key: string) => void;
-  onOpenDetails: (key: string) => void;
-  onOpenPlayerDay: (key: string) => void;
-  positionFor: (id: number, kind: PlayerKind) => { position?: string; positionTitle?: string };
-  /** Whether the range in view spans more than one date — see `byGame`. */
-  multiDay: boolean;
-}) {
-  const { report, live, entries, upcoming } = group;
-  const isPitcher = report.kind === 'pitcher';
-  const pos = positionFor(report.id, report.kind);
-  // Which games this group is actually about — the ones he appeared in, plus
-  // the one he is in right now. `multiGame` is what tells the items below
-  // whether their own matchup line is worth printing (see the prop's note).
-  const games = report.games;
-  const played = isPitcher
-    ? games.filter((g) => g.pitching)
-    : games.filter((g) => g.plateAppearances.length > 0);
-  const multiGame = games.length > 1;
-  // The line for the bar: his combined day, in the same vocabulary the flat
-  // feed's own items use — a batter's counting line, a pitcher's outing line.
-  const line = played.length
-    ? isPitcher
-      ? lineSummary(combinePitchingLines(played.map((g) => g.pitching!.line)))
-      : battingLineSummary(combineLines(played.map((g) => g.line)))
-    : null;
-  // The game the badge speaks for: the live one, else the last he played, else
-  // the next one up — the same live-first, then-played, then-scheduled order
-  // the summary table's opponent cell picks a representative game by.
-  const badgeGame =
-    live?.game ?? (played.length ? played[played.length - 1] : (upcoming[0]?.game ?? null));
-  /**
-   * **A batter's plays are cut into games once the range spans more than one
-   * date.** Over a single day a card is one game and a flat list of plays is the
-   * whole of it; over a week it is a run of at-bats with nothing saying which
-   * afternoon each belongs to — which the Games view answered with a game block
-   * per game, and which went with it. So the block comes back here, as a static
-   * header rather than a third level of collapsible: the group already opens,
-   * and the plays under it are the thing being read.
-   *
-   * A pitcher needs none of it. His item is a whole outing already — one per
-   * game by construction — so cutting his card into games would put one item in
-   * each section under a header repeating what its bar says.
-   */
-  const byGame = !isPitcher && multiDay && entries.length > 0;
-  const gameSections = (() => {
-    if (!byGame) return [];
-    const out: { game: PlayerGame; items: FeedEntry[] }[] = [];
-    // `entries` is newest-first, so first-seen is most-recent and the sections
-    // come out in the order the flat stream would have shown their contents.
-    for (const e of entries) {
-      const last = out[out.length - 1];
-      if (last && last.game.gamePk === e.game.gamePk) last.items.push(e);
-      else out.push({ game: e.game, items: [e] });
-    }
-    return out;
-  })();
-  const nothing = !live && entries.length === 0 && upcoming.length === 0;
-  const plural = (n: number, one: string) => `${n} ${n === 1 ? one : `${one}s`}`;
-  const countLabel = byGame
-    ? plural(gameSections.length, 'game')
-    : entries.length > 0
-      ? plural(entries.length, isPitcher ? 'outing' : 'play')
-      : '';
-  return (
-    <div
-      className={`feed-item feed-group${live ? ` live-entry role-${live.role}` : ''}${
-        nothing ? ' empty' : ''
-      }`}
-      /* The id `scrollToPlayer` aims at — the same one the Games view's cards
-         carried, so a name in the summary table still lands on the player it
-         names. Opening the group is App's `toggleCollapsed`, which scrolls it
-         itself; a `useScrollIntoViewOnExpand` here as well would be two smooth
-         scrolls racing to the same offset. The cards drew the line in exactly
-         this place, using the hook for their inner game blocks alone. */
-      id={`player-${playerKey(report)}`}
-    >
-      <div className="feed-item-head">
-        <FeedHeadshot
-          id={report.id}
-          name={report.name}
-          role={live?.role}
-          onOpen={() => onOpenDetails(playerKey(report))}
-        />
-        <div className="feed-item-id">
-          <span className="feed-group-name">
-            <FeedPlayerName playerKey={playerKey(report)} name={report.name} onOpen={onOpenPlayerDay} />
-            {pos.position && (
-              <span className="player-pos" title={pos.positionTitle}>
-                {pos.position}
-              </span>
-            )}
-          </span>
-          <span className="feed-context">
-            {live
-              ? `${matchup(live.game)} · ${liveInning(live.game)}`
-              : multiGame
-                ? `${games[0].batterTeam} · ${games.length} games`
-                : games.length === 1
-                  ? matchup(games[0])
-                  : 'No game'}
-          </span>
-        </div>
-        {live && <span className={`live-role role-${live.role}`}>{liveRoleLabel(live.role)}</span>}
-      </div>
-      {/* Nothing to open, so no bar to open it with — the header is the whole
-          card, which is what a watched player with no game looks like. */}
-      {!nothing && (
-        <button
-          type="button"
-          className="feed-item-toggle"
-          aria-expanded={open}
-          title={open ? `Collapse ${report.name}` : `Expand ${report.name}`}
-          onClick={onToggle}
-        >
-          {line && <span className="feed-pitch-line">{line}</span>}
-          {!line && upcoming.length > 0 && (
-            <span className="feed-group-pending">
-              {formatStartTime(upcoming[0].game.status.startTime) ?? 'Scheduled'}
-            </span>
-          )}
-          {/* Cut into games, the card counts games: over a week "5 games" is
-              what the reader is deciding on, where "23 plays" is a number about
-              a stream he is no longer reading. Single-day it is still plays,
-              there being exactly one game to count. */}
-          <span className="feed-group-count">{countLabel}</span>
-          {badgeGame && <GameStatusBadge game={badgeGame} />}
-        </button>
-      )}
-      {open && !nothing && (
-        <div className="feed-group-items">
-          {live &&
-            (isPitcher && live.game.pitching ? (
-              <FeedPitcherGame
-                report={report}
-                game={live.game}
-                role={live.role}
-                open={openKeys.has(`live-${report.id}`)}
-                onToggle={() => onToggleKey(`live-${report.id}`)}
-                onOpenDetails={onOpenDetails}
-                onOpenPlayerDay={onOpenPlayerDay}
-                grouped
-                multiGame={multiGame}
-              />
-            ) : (
-              <LiveEntry
-                report={report}
-                role={live.role}
-                game={live.game}
-                open={openKeys.has(`live-${report.id}`)}
-                onToggle={() => onToggleKey(`live-${report.id}`)}
-                onOpenDetails={onOpenDetails}
-                onOpenPlayerDay={onOpenPlayerDay}
-                grouped
-                multiGame={multiGame}
-              />
-            ))}
-          {byGame
-            ? gameSections.map(({ game, items }) => (
-                <div className="feed-game-section" key={game.gamePk}>
-                  {/* Static: the group above it already opens, and a third level
-                      of collapsible would be three taps to reach a pitch. */}
-                  <div className="feed-game-head">
-                    <span className="feed-game-date">{prettyGameDate(game.date)}</span>
-                    <span className="feed-context">{matchup(game)}</span>
-                    <span className="feed-game-line">{battingLineSummary(game.line)}</span>
-                    <GameStatusBadge game={game} />
-                  </div>
-                  {items.map((entry) => (
-                    <FeedItem
-                      key={entryKey(entry)}
-                      entry={entry}
-                      openKeys={openKeys}
-                      onToggleKey={onToggleKey}
-                      onOpenDetails={onOpenDetails}
-                      onOpenPlayerDay={onOpenPlayerDay}
-                      grouped
-                      /* The header directly above names the game, so an item
-                         repeating the matchup would be saying it twice. */
-                      multiGame={false}
-                    />
-                  ))}
-                </div>
-              ))
-            : entries.map((entry) => (
-                <FeedItem
-                  key={entryKey(entry)}
-                  entry={entry}
-                  openKeys={openKeys}
-                  onToggleKey={onToggleKey}
-                  onOpenDetails={onOpenDetails}
-                  onOpenPlayerDay={onOpenPlayerDay}
-                  grouped
-                  multiGame={multiGame}
-                />
-              ))}
-          {upcoming.map(({ game }) => {
-            const key = `up-${report.id}-${game.gamePk}`;
-            return (
-              <UpcomingRow
-                key={key}
-                report={report}
-                game={game}
-                open={openKeys.has(key)}
-                onToggle={() => onToggleKey(key)}
-                onOpenDetails={onOpenDetails}
-                onOpenPlayerDay={onOpenPlayerDay}
-                grouped
-              />
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
+export interface PlayerDayEntries {
+  /** His live role and the game it is in, if he is at bat, on deck, on base or
+   *  on the mound right now. */
+  live: { role: LiveRole; game: PlayerGame } | null;
+  /** Completed plays, newest first. A batter's plate appearances and his own
+   *  base-running interleaved; a pitcher's whole outing as one item per game. */
+  entries: FeedEntry[];
+  /** Games of his that haven't started, in schedule order — see `isUpcomingFor`
+   *  for why this is not simply "his club's games". */
+  upcoming: { report: PlayerReport; game: PlayerGame }[];
 }
 
 /**
- * The roster as a flat, most-recent-first stream — shown while games are
- * active. A "Live" section pins whoever is at bat, on deck, on base or on the
- * mound to the top; below it, everything that has happened reads newest-first,
- * with none of the per-player stats, season line or score chrome the grouped
- * player view carries. `reports` is one kind at a time (App's kind tabs sit
- * above this view), so a batter's at-bats and a pitcher's outings never mix:
- * for a batter an item is a single plate appearance or base-running event, for
- * a pitcher it's a whole outing grouped by inning.
+ * A batter's own base-running, one item per play.
+ *
+ * **A pitcher's are not items of their own**, and a batter's are. The
+ * difference is what each stream's item *is*: a batter's is one play, so the
+ * bag he took is a play like the at-bat above it, while a pitcher's is the
+ * whole outing — his balk belongs inside it, in the inning he threw it, which
+ * is where `InningsList` puts it. Drawn as a stream item too it was the same
+ * event twice on one page: once in the fourth inning of the outing and again a
+ * few hundred pixels below it, timed by its own clock and so detached from the
+ * outing by whatever else happened in between.
+ */
+function baseEntries(report: PlayerReport, game: PlayerGame): FeedEntry[] {
+  return groupBaseEvents(game.baseEvents).map((evs, i): FeedEntry => ({
+    type: 'base',
+    report,
+    game,
+    evs,
+    // The play's own id where it has one, so the item keeps its identity as the
+    // day's events arrive; the index only stands in for a play with neither a
+    // clip nor a timestamp.
+    key: `${report.id}-${game.gamePk}-${evs[0].playId ?? evs[0].timestamp ?? i}`,
+  }));
+}
+
+/** Newest first, with a play's own events kept in cause-then-effect order. */
+function byRecency(a: FeedEntry, b: FeedEntry): number {
+  const t = entryTime(b) - entryTime(a);
+  if (t) return t;
+  const gn = (b.game.gameNumber ?? 0) - (a.game.gameNumber ?? 0);
+  if (gn) return gn;
+  if (a.game.gamePk !== b.game.gamePk) return b.game.gamePk - a.game.gamePk;
+  return playOrder(b) - playOrder(a);
+}
+
+export function playerDayEntries(report: PlayerReport): PlayerDayEntries {
+  const lr = liveRoleGame(report);
+  const live = lr ? { role: lr.role, game: lr.game } : null;
+  // The game pinned to the Live section, so the stream below doesn't repeat it
+  // (a pitcher's outing is one item either way). Only a pitcher can collide:
+  // his live item *is* his outing, where a batter's is the in-progress at-bat,
+  // which is never one of the completed plays below.
+  const pinned = live && report.kind === 'pitcher' ? live.game.gamePk : null;
+  const entries = report.games
+    .flatMap((game): FeedEntry[] =>
+      report.kind === 'pitcher'
+        ? game.pitching && game.gamePk !== pinned
+          ? [{ type: 'pitching' as const, report, game }]
+          : []
+        : [
+            ...game.plateAppearances
+              .filter((pa) => pa.event)
+              .map((pa): FeedEntry => ({ type: 'pa', report, game, pa })),
+            ...baseEntries(report, game),
+          ],
+    )
+    .sort(byRecency);
+  const upcoming = report.games
+    .filter((game) => game.status.state === 'scheduled' && isUpcomingFor(report, game))
+    .map((game) => ({ report, game }));
+  return { live, entries, upcoming };
+}
+
+/**
+ * The roster as a flat, most-recent-first stream. A "Live" section pins whoever
+ * is at bat, on deck, on base or on the mound to the top; below it, everything
+ * that has happened reads newest-first. `reports` is one kind at a time (App's
+ * kind tabs sit above this view), so a batter's at-bats and a pitcher's outings
+ * never mix: for a batter an item is a single plate appearance or base-running
+ * event, for a pitcher it's a whole outing grouped by inning.
+ *
+ * **There used to be a second reading of this page** — the same days grouped
+ * one card per player, which was the Games view before that. It has moved to
+ * the player page's **Overview** tab, where it belongs: a card per player is a
+ * page *about a player*, and the app already had one that opened on anybody,
+ * carried his season beside his day, and was reachable from every row in every
+ * view. What that took away from this file is the grouping, its toggle and the
+ * `expanded=` cards; what it left is `playerDayEntries` above, which the tab
+ * calls for its one man.
  */
 export function LiveFeed({
   reports,
   kind,
   onOpenDetails,
-  onOpenPlayerDay,
   openKeys,
   onToggleKey,
-  groupByPlayer,
-  groupOpenKeys,
-  onToggleGroup,
-  positionFor,
-  multiDay,
   shown: shownFromParent,
   onShowMore,
 }: {
@@ -1261,27 +1070,12 @@ export function LiveFeed({
   // Which kind the tabs above are showing — the stream is one kind at a time,
   // and a pitcher's items are outings rather than plays.
   kind: PlayerKind;
+  /** Open a player's page — what the headshot and the name both do now. */
   onOpenDetails: (key: string) => void;
-  // Jump to a player's full day of at-bats on the players view.
-  onOpenPlayerDay: (key: string) => void;
   // Which at-bats / upcoming rows are expanded, keyed by player + game + at-bat
   // number. Lifted to the parent so a "collapse all" control can clear them.
   openKeys: Set<string>;
   onToggleKey: (key: string) => void;
-  /** Read the day by player instead of by clock — see `FeedPlayerGroup`. */
-  groupByPlayer: boolean;
-  /** Which player groups are open. App's own `expandedKeys`, which is what
-   * `expanded=` in the URL carries: a group is the card that param has always
-   * named, and the Games view it named it on is now this. */
-  groupOpenKeys: Set<string>;
-  onToggleGroup: (key: string) => void;
-  /** The position chip for a group's header — ESPN's eligibility where there
-   * is any, MLB's listed position otherwise. App owns the rule; see its
-   * `positionFor`. */
-  positionFor: (id: number, kind: PlayerKind) => { position?: string; positionTitle?: string };
-  /** Whether the range in view spans more than one date. Only the grouped
-   * reading uses it, to cut a batter's card into games. */
-  multiDay: boolean;
   /** How much of the Recent section to open on, and where to report a "Load
    * more" back to. App holds the number for the same reason it holds the
    * scroll offset, and keyed the same way — see its `feedShown`. */
@@ -1306,167 +1100,32 @@ export function LiveFeed({
     onShowMore(next);
   };
 
+  // One player's day at a time (`playerDayEntries`), then merged by clock — so
+  // the stream and the player page's Overview tab, which calls that same helper
+  // for its one man, cannot come to disagree about what happened.
+  const perPlayer = reports.map((report) => ({ report, ...playerDayEntries(report) }));
+
   // Players currently in a live at-bat/on-deck/on-base situation, highest-
   // priority role first (a player is listed once, for their leading role).
-  const liveRows = reports
-    .map((report) => {
-      const lr = liveRoleGame(report);
-      return lr ? { report, role: lr.role, game: lr.game } : null;
-    })
-    .filter((x): x is { report: PlayerReport; role: LiveRole; game: PlayerGame } => x !== null)
+  const liveRows = perPlayer
+    .filter((p) => p.live !== null)
+    .map((p) => ({ report: p.report, role: p.live!.role, game: p.live!.game }))
     .sort((a, b) => ROLE_ORDER[a.role] - ROLE_ORDER[b.role]);
-
-  // The games already pinned to the Live section, so the stream below doesn't
-  // repeat them (a pitcher's outing is one item either way).
-  const livePinned = new Set(liveRows.map((r) => `${r.report.id}-${r.game.gamePk}`));
 
   // Everything that has happened, interleaved newest-first: for a batter every
   // completed plate appearance and every base-running event of his own, and for
   // a pitcher his whole outing as a single item. The in-progress at-bat (no
-  // event yet) lives in the Live section above.
-  //
-  // **A pitcher's base events are not items of their own**, and a batter's are.
-  // The difference is what each stream's item *is*: a batter's is one play, so
-  // the bag he took is a play like the at-bat above it, while a pitcher's is the
-  // whole outing — his balk belongs inside it, in the inning he threw it, which
-  // is where `InningsList` puts it and where his card has always read it. Drawn
-  // as a stream item too it was the same event twice on one page: once in the
-  // fourth inning of the outing and again a few hundred pixels below it, timed
-  // by its own clock and so detached from the outing by whatever else happened
-  // in between. So the outing is now the one place his game is read, and the
-  // rule it replaces — that his events were never pinned to Live but stayed in
-  // the stream where they happened — is honoured more literally than before: a
-  // balk from the second sits in the second, not at the top of the page and not
-  // adrift in the middle of it.
-  const baseEntries = (report: PlayerReport, game: PlayerGame): FeedEntry[] =>
-    groupBaseEvents(game.baseEvents).map((evs, i): FeedEntry => ({
-      type: 'base',
-      report,
-      game,
-      evs,
-      // The play's own id where it has one, so the item keeps its identity as
-      // the day's events arrive; the index only stands in for a play with
-      // neither a clip nor a timestamp.
-      key: `${report.id}-${game.gamePk}-${evs[0].playId ?? evs[0].timestamp ?? i}`,
-    }));
-  const recent = reports
-    .flatMap((report) =>
-      report.games.flatMap((game): FeedEntry[] =>
-        report.kind === 'pitcher'
-          ? game.pitching && !livePinned.has(`${report.id}-${game.gamePk}`)
-            ? [{ type: 'pitching' as const, report, game }]
-            : []
-          : [
-              ...game.plateAppearances
-                .filter((pa) => pa.event)
-                .map((pa): FeedEntry => ({ type: 'pa', report, game, pa })),
-              ...baseEntries(report, game),
-            ],
-      ),
-    )
-    .sort((a, b) => {
-      const t = entryTime(b) - entryTime(a);
-      if (t) return t;
-      const gn = (b.game.gameNumber ?? 0) - (a.game.gameNumber ?? 0);
-      if (gn) return gn;
-      if (a.game.gamePk !== b.game.gamePk) return b.game.gamePk - a.game.gamePk;
-      return playOrder(b) - playOrder(a);
-    });
+  // event yet) lives in the Live section above, and a pitcher pinned there has
+  // already been kept out of this list by `playerDayEntries`.
+  const recent = perPlayer.flatMap((p) => p.entries).sort(byRecency);
 
   // Not-yet-started games, earliest first pitch first — so the feed still has
   // something to show before the day's first at-bat (and lists later games while
   // earlier ones are underway). Only the ones the player is actually in: see
   // `isUpcomingFor`.
-  const upcoming = reports
-    .flatMap((report) =>
-      report.games
-        .filter((game) => game.status.state === 'scheduled' && isUpcomingFor(report, game))
-        .map((game) => ({ report, game })),
-    )
-    .sort(byStartTime);
+  const upcoming = perPlayer.flatMap((p) => p.upcoming).sort(byStartTime);
 
   const isEmpty = liveRows.length === 0 && recent.length === 0 && upcoming.length === 0;
-
-  // The same three collections, bucketed by player rather than merged by
-  // clock — deliberately *derived from* them rather than gathered separately,
-  // so the two readings can never disagree about what happened (a pitcher
-  // pinned to Live is one item in both, `livePinned` having already kept his
-  // outing out of `recent`).
-  const groups: PlayerGroup[] = (() => {
-    const byKey = new Map<string, PlayerGroup>();
-    // Seeded from `reports` so the roster order is the tie-break, and so a
-    // watched player with no game today still gets a card — which is what the
-    // Games view showed him as, and the one thing a stream sorted by time can
-    // never say.
-    for (const report of reports) {
-      byKey.set(playerKey(report), {
-        report,
-        live: null,
-        entries: [],
-        upcoming: [],
-        time: Number.NEGATIVE_INFINITY,
-      });
-    }
-    for (const r of liveRows) {
-      const g = byKey.get(playerKey(r.report));
-      if (g) g.live = { role: r.role, game: r.game };
-    }
-    // `recent` is already newest-first, so pushing in order keeps each group's
-    // own items in the order the flat stream would have shown them.
-    for (const e of recent) {
-      const g = byKey.get(playerKey(e.report));
-      if (!g) continue;
-      g.entries.push(e);
-      g.time = Math.max(g.time, entryTime(e));
-    }
-    for (const u of upcoming) {
-      const g = byKey.get(playerKey(u.report));
-      if (g) g.upcoming.push(u);
-    }
-    // Live first, then whoever did something most recently, then whoever is due
-    // to play, then the rest — the flat feed's three sections collapsed into one
-    // ordering, which is what one-card-per-player makes of them.
-    const rank = (g: PlayerGroup) =>
-      g.live ? 0 : g.entries.length ? 1 : g.upcoming.length ? 2 : 3;
-    return [...byKey.values()].sort((a, b) => {
-      const r = rank(a) - rank(b);
-      if (r) return r;
-      if (a.live && b.live) return ROLE_ORDER[a.live.role] - ROLE_ORDER[b.live.role];
-      if (rank(a) === 1) return b.time - a.time;
-      if (rank(a) === 2) return byStartTime(a.upcoming[0], b.upcoming[0]);
-      return 0;
-    });
-  })();
-
-  if (groupByPlayer) {
-    return (
-      <div className="live-feed">
-        {isEmpty ? (
-          <div className="feed-empty">No games for these players.</div>
-        ) : (
-          <div className="feed-groups">
-            {groups.map((group) => {
-              const key = playerKey(group.report);
-              return (
-                <FeedPlayerGroup
-                  key={key}
-                  group={group}
-                  open={groupOpenKeys.has(key)}
-                  onToggle={() => onToggleGroup(key)}
-                  openKeys={openKeys}
-                  onToggleKey={toggle}
-                  onOpenDetails={onOpenDetails}
-                  onOpenPlayerDay={onOpenPlayerDay}
-                  positionFor={positionFor}
-                  multiDay={multiDay}
-                />
-              );
-            })}
-          </div>
-        )}
-      </div>
-    );
-  }
 
   return (
     <div className="live-feed">
@@ -1490,7 +1149,6 @@ export function LiveFeed({
                   open={openKeys.has(key)}
                   onToggle={() => toggle(key)}
                   onOpenDetails={onOpenDetails}
-                  onOpenPlayerDay={onOpenPlayerDay}
                 />
               ) : (
                 <LiveEntry
@@ -1501,7 +1159,6 @@ export function LiveFeed({
                   open={openKeys.has(key)}
                   onToggle={() => toggle(key)}
                   onOpenDetails={onOpenDetails}
-                  onOpenPlayerDay={onOpenPlayerDay}
                 />
               );
             })}
@@ -1522,7 +1179,6 @@ export function LiveFeed({
                 openKeys={openKeys}
                 onToggleKey={toggle}
                 onOpenDetails={onOpenDetails}
-                onOpenPlayerDay={onOpenPlayerDay}
               />
             ))}
           </div>
@@ -1553,7 +1209,6 @@ export function LiveFeed({
                   open={openKeys.has(key)}
                   onToggle={() => toggle(key)}
                   onOpenDetails={onOpenDetails}
-                  onOpenPlayerDay={onOpenPlayerDay}
                 />
               );
             })}
