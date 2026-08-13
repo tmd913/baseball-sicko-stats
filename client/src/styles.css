@@ -6016,8 +6016,9 @@ body {
   font-weight: 700;
   white-space: nowrap;
   user-select: none;
-  /* A mouse can grab the chip anywhere, so it says so. */
-  cursor: grab;
+  /* No cursor of its own: the chip is a label and the grip beside it is the
+     handle, for a mouse as much as for a finger. It said `grab` while a mouse
+     could start a drag anywhere on it, which is the asymmetry that went. */
 }
 /* The chip being dragged is lifted and made transparent to the pointer, which
    is what lets `elementFromPoint` resolve to the chip underneath it — the drop
@@ -6028,17 +6029,53 @@ body {
   opacity: 0.55;
   cursor: grabbing;
 }
-/* On touch this is the *only* part that starts a drag, which is what
-   `touch-action: none` here and nowhere else says: a finger anywhere else on
-   the block still scrolls the panel. The edit screen's `.order-grip` documents
-   what the other way round costs — `touch-action: none` on the whole row made
-   the page unscrollable in that mode. */
+/* The only thing that starts a drag, with a mouse or a finger — and the one
+   place in this dialog that departs from letting the browser scroll.
+
+   **`pan-y`, not `none`.** This block sits at the top of a box that scrolls,
+   so the two gestures have to be told apart, and telling them apart by *place*
+   is what the edit screen's `.order-grip` does. It does not work here, because
+   Chrome performs **touch adjustment**: a touch landing near a small target is
+   snapped onto it, so a finger up to ~10px outside a 9×13px glyph was
+   retargeted to the grip and `none` then forbade the scroll. Measured at 390px
+   on the real board, the swallowed band ran x=58 to past the chip's right edge
+   on a chip spanning 29–84, and vertically 199–237 on a chip spanning 203–231
+   — over half of it, in both axes — and over the first six chips 40 of 85
+   sample flicks moved the dialog **0px**. Widening the grip makes that worse
+   rather than better: the snap band grows outward from whatever box it is
+   given, so the more of the chip the grip covers the less of it can scroll.
+
+   `pan-y` hands the block axis back to the scroller and keeps the inline one,
+   which is the axis a wrapping row of chips is actually rearranged along — so
+   a flick up or down scrolls the picker wherever it lands, snapped or not, and
+   a sideways drag reorders. It is `.roll-chart`'s answer to the same mistake
+   (scope the property to the axis, not to the element) and the reason the
+   stylesheet now has three of these rather than two. `ColumnOrder` mirrors it
+   in JS — a press arms, the first move decides — so the two halves cannot come
+   to different answers about which gesture this is.
+
+   The edit screen keeps `none`, and rightly: there the drag runs *down* a list
+   that scrolls down, so the axis cannot separate them and only an element can.
+
+   The box is stretched over the chip's full height and out to its right edge
+   (a 25×28 target against the glyph's 9×13) — not because the snap needs it,
+   which it does not, but because a thing you are told to press should be big
+   enough to press. */
 .research-order-grip {
-  touch-action: none;
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  padding: 0 8px;
+  margin-right: -6px;
+  touch-action: pan-y;
   color: var(--faint);
   font-size: 13px;
   line-height: 1;
   cursor: grab;
+}
+.research-order-grip:active {
+  cursor: grabbing;
+  color: var(--accent);
 }
 .research-order-grip:hover {
   color: var(--accent);
