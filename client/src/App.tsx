@@ -854,12 +854,30 @@ export default function App() {
     return out;
   }, [start, end]);
 
-  /** Slot by player key, for the chips. Null when the views are reading the
-   *  saved watchlist, which is what makes every chip in the app disappear. */
+  /**
+   * Slot by player key, for the chips. Null when the views are reading the
+   * saved watchlist, which is what makes every chip in the app disappear.
+   *
+   * **Drawn from the roster as it stood at the end of the range**, which the
+   * server sends as `endRoster` whenever that is a past day it could read. A
+   * slot is a fact about a day, and the day the reader has asked about is the
+   * one the numbers beside the chip come from — so over `Yesterday` the chip
+   * says where he was in yesterday's lineup, and the man dropped this morning
+   * has one at all. Falling back to `players` covers the two cases where there
+   * is no such day to speak of and the one where it couldn't be read; see
+   * `EspnRoster.endRoster`, and `day` below for how the title stays true in
+   * each.
+   */
   const fantasySlots = useMemo(() => {
     if (!usingFantasy || !fantasyRoster) return null;
     const map = new Map<string, FantasySlot>();
-    for (const p of fantasyRoster.players) {
+    // Which day these slots are a fact about, `null` meaning today — which is
+    // what `endRoster`'s absence means when the range ends today or the read
+    // failed, while a range ending *later* is a day the ownership read itself
+    // answered for and so is named. The one thing this must never do is name a
+    // day the slots did not come from.
+    const slotDay = fantasyRoster.endRoster || end > baseballToday() ? end : null;
+    for (const p of fantasyRoster.endRoster ?? fantasyRoster.players) {
       if (p.mlbId === null) continue;
       // How many of the days in view he was in the lineup on — the fact the
       // chip's one-day slot can't carry over a range. Null without the per-day
@@ -873,6 +891,7 @@ export default function App() {
         map.set(`${kind}-${p.mlbId}`, {
           slot: p.slot,
           starting: p.starting,
+          day: slotDay,
           injuryStatus: p.injuryStatus,
           startedDays,
           rangeDays: startedDays === null ? null : rangeDates.length,
@@ -880,7 +899,7 @@ export default function App() {
       }
     }
     return map;
-  }, [usingFantasy, fantasyRoster, fantasyLineups, rangeDates]);
+  }, [usingFantasy, fantasyRoster, fantasyLineups, rangeDates, end]);
 
   /**
    * **Per-day lineups take the gate off.** The `rangeHasToday` rule exists
@@ -898,6 +917,27 @@ export default function App() {
   const startersActive = startersOnly && startersOffered;
 
   /**
+   * Your fantasy team **as it stands**, as player keys — or null when the views
+   * are reading the saved roster, or before the read has landed, which is what
+   * keeps `rosterKeys` on the saved list until there is a fantasy one to give
+   * it.
+   *
+   * `fantasyRoster.players` rather than the slot map beside it, because this is
+   * the set that answers "is he on my team" and that is a question about today
+   * whatever range is on screen. See `rosterKeys` below, which is its one
+   * reader and where the split is argued.
+   */
+  const fantasyTeam = useMemo(() => {
+    if (!usingFantasy || !fantasyRoster) return null;
+    const keys: string[] = [];
+    for (const p of fantasyRoster.players) {
+      if (p.mlbId === null) continue;
+      for (const kind of p.kinds) keys.push(`${kind}-${p.mlbId}`);
+    }
+    return keys;
+  }, [usingFantasy, fantasyRoster]);
+
+  /**
    * The keys "your roster" means on screen — the saved list, or the fantasy
    * team when that is what the views are reading. This is what the research
    * board's `My Roster` button selects on and what its baseball marks, so both
@@ -908,11 +948,22 @@ export default function App() {
    * app is in, and it should show the state of the thing it changes. And
    * deliberately nothing to do with `watchlistKeys`, which is the other list
    * entirely.
+   *
+   * **And deliberately not `fantasySlots.keys()`, which it used to be.** Every
+   * reader of this set asks the same question and it is a question about *now*:
+   * whose roster is he on, may I pick him up, does this page's badge say I hold
+   * him. The chips answer a different one — where was he in my lineup on the day
+   * in view — and since a past range anchors those to that day, the two sets
+   * genuinely part company: over `Yesterday` the slot map holds the catcher
+   * dropped this morning and lacks the man picked up in his place. Reading this
+   * off it would put a baseball on a free agent on the research board, which is
+   * a board with today's ownership map beside it, and have one row of it
+   * contradict the next.
    */
   const rosterKeys = useMemo(() => {
-    if (fantasySlots) return new Set(fantasySlots.keys());
+    if (fantasyTeam) return new Set(fantasyTeam);
     return new Set(roster.map(playerKey));
-  }, [roster, fantasySlots]);
+  }, [roster, fantasyTeam]);
 
   /** ESPN's global rostered percentage by MLB id, or null with no league —
    *  which is also what turns the board's `Ros%` column on and off. */

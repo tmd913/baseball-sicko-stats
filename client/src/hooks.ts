@@ -30,23 +30,39 @@ export function useMuted(): boolean {
   return useContext(MutedContext);
 }
 
-/** A player's place on the user's fantasy roster: today's slot, and whether
- *  that slot is a lineup spot rather than the bench or the IL. */
+/** A player's place on the user's fantasy roster: his slot on the day the range
+ *  in view ends, and whether that slot is a lineup spot rather than the bench or
+ *  the IL. */
 export interface FantasySlot {
   slot: string;
   starting: boolean;
+  /**
+   * Which day the slot above is a fact about, or **null when that day is
+   * today** — so the chip's title can say "today" rather than name a date the
+   * reader is already looking at.
+   *
+   * It is the end of the range in view wherever the server could read that day,
+   * which is what makes a chip over `Yesterday` describe yesterday's lineup
+   * rather than the one set this morning. It falls back to today for the two
+   * cases that leave the app on today's roster — a day ESPN wouldn't answer for,
+   * and a tab or a server from before `endRoster` existed — and the null is what
+   * keeps the wording honest in both: the title names the day the slot really
+   * came from, never the day that was asked for.
+   */
+  day: string | null;
   /**
    * How many days of the range in view he was in the lineup on, and how many
    * days the range holds — null on a single day, and null with no per-day
    * lineups (an older tab, a failed read), where the slot beside it is the
    * whole of what is known.
    *
-   * The chip's letters and its colour are still one day's — the day the roster
-   * was read for — because that is what a slot *is*. Over a range that is no
-   * longer the whole truth: the row beside it sums the days he was started, so
-   * a muted `BE` can sit against four days of stats. The count is what makes
-   * the pair honest, and it goes in the title rather than on the chip because
-   * this table's name column is measured in stat columns pushed off a phone.
+   * The chip's letters and its colour are still **one** day's — the last day of
+   * the range — because that is what a slot *is*, and there is no honest way to
+   * draw seven of them in one pill. Over a range that is not the whole truth:
+   * the row beside it sums the days he was started, so a muted `BE` can sit
+   * against four days of stats. The count is what makes the pair honest, and it
+   * goes in the title rather than on the chip because this table's name column
+   * is measured in stat columns pushed off a phone.
    */
   startedDays: number | null;
   rangeDays: number | null;
@@ -57,9 +73,16 @@ export interface FantasySlot {
 }
 
 /**
- * Where each watched player sits on the user's fantasy roster, by the app's
- * `${kind}-${id}` player key — or null when the views are reading the saved
- * watchlist, which is the state that renders no slot at all.
+ * Where each watched player sits on the user's fantasy roster **on the last day
+ * of the range in view**, by the app's `${kind}-${id}` player key — or null when
+ * the views are reading the saved watchlist, which is the state that renders no
+ * slot at all.
+ *
+ * **Not the same set of players as `rosterKeys`**, and the difference is the
+ * point rather than an accident: this is keyed on the roster as it stood that
+ * day, so over `Yesterday` it holds the catcher you started and dropped this
+ * morning and not the man you picked up in his place. "Is he on my team" is a
+ * question about now and is answered off today's roster; see App's `rosterKeys`.
  *
  * A context for the reason `MutedContext` is one: the players who need it are
  * leaves, and they are scattered. The same chip belongs on the summary table's

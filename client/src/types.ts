@@ -1027,7 +1027,27 @@ export interface EspnRosterPlayer {
 
 export interface EspnRoster {
   teamName: string | null;
+  /**
+   * Your team **as it stands** — today's roster, or the future day the request
+   * named. This is the "is he on my team" answer: the research board's `My
+   * Roster` button and its baseball, the player page's `On roster` badge, the
+   * empty-state test. A man you dropped this morning is not on it, whatever
+   * range is on screen.
+   */
   players: EspnRosterPlayer[];
+  /**
+   * Your team **as it was at the end of the range in view**, slots and all —
+   * the "where was he in my lineup that day" answer, which is what a slot chip
+   * is and what the roster's own order is drawn from.
+   *
+   * Absent on every range ending today or later, where `players` already *is*
+   * that day and shipping the same 28 rows twice would say nothing; absent too
+   * when the server couldn't read that day, which puts the chips back on
+   * today's roster exactly as they were before this existed. Either way the
+   * client falls back to `players`, so the ordinary case and the failure case
+   * are one line of code rather than two.
+   */
+  endRoster?: EspnRosterPlayer[] | null;
   /**
    * Your lineup for **each** day of the range in view, as MLB player ids, keyed
    * by date — present only when the request named a `start`, absent (or null)

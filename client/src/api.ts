@@ -276,9 +276,12 @@ export const api = {
    *
    *  `start` asks for `lineups` as well — one lineup per day of the range, each
    *  at that day's own scoring period, which is what lets the roster views
-   *  credit a player only for the days he was actually in the lineup. Sent as
-   *  `end=` with the older `date=` dropped: the server reads both, so a tab
-   *  open across a deploy keeps working either way. */
+   *  credit a player only for the days he was actually in the lineup — and for
+   *  `endRoster`, the team as it stood on the **last day** of that range, which
+   *  is what a slot chip is a fact about. That one comes back only when the day
+   *  differs from `players`, i.e. when the range ends in the past; see
+   *  `EspnRoster`. Sent as `end=` with the older `date=` dropped: the server
+   *  reads both, so a tab open across a deploy keeps working either way. */
   async espnRoster(
     refresh = false,
     start?: string | null,
