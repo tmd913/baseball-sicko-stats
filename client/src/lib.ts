@@ -460,12 +460,52 @@ export function pitchStyle(name: string): { abbr: string; color: string } {
   return PITCH_STYLE[name] ?? { abbr: name.slice(0, 2).toUpperCase(), color: '#8a8f98' };
 }
 
+/**
+ * A string reduced to unaccented ASCII: NFKD splits every accented letter into
+ * its base plus a combining mark, and the marks are then dropped. **The one
+ * definition of that in this workspace** — `searchFold` below and
+ * `savantPlayerUrl` under it both stand on it, and the server has its own copy
+ * in `names.ts` for the reason the two `types.ts` files are mirrored by hand:
+ * the workspaces cannot import from each other.
+ */
+export function stripAccents(raw: string): string {
+  return raw.normalize('NFKD').replace(/[̀-ͯ]/g, '');
+}
+
+/**
+ * A name reduced to what a typed query and a printed name can be expected to
+ * agree on — this is what every search box in the app matches on, so that
+ * `garcia` finds García and `García` finds him too. Accents folded away, case
+ * dropped, and **every** non-alphanumeric removed rather than collapsed to a
+ * space.
+ *
+ * That last part is what lets one `includes` answer the whole punctuation
+ * question at once: `Crow-Armstrong`, `O'Neill`, `J.T. Realmuto` and
+ * `Nestor Cortes Jr.` fold to `crowarmstrong`, `oneill`, `jtrealmuto` and
+ * `nestorcortesjr`, so `crow armstrong` / `crow-armstrong` / `crowarmstrong`
+ * are one query, and so are `o neill` / `o'neill` / `oneill` and `j.t.` / `jt`.
+ * It is also why generational suffixes are **kept** where the server's
+ * `normalizeName` drops them: that one matches two whole names against each
+ * other, where this one matches a fragment *into* one — strip `jr` here and a
+ * search for it is a search for nothing.
+ *
+ * **A fold rather than `localeCompare`.** `Intl.Collator` with
+ * `sensitivity: 'base'` is the other way to call `garcia` and `García` equal,
+ * and it compares whole strings: there is no collator-aware `includes`, so
+ * substring matching with one means sliding a window along every row by hand.
+ * A fold gives the same answer through the engine's own `includes`, and — the
+ * half that matters on the research board's ~1,400 rows — it can be computed
+ * **once per row** and held, where a collator would have to run per row per
+ * keystroke.
+ */
+export function searchFold(raw: string): string {
+  return stripAccents(raw).toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
 /** Slug + id for a Baseball Savant player page link. */
 export function savantPlayerUrl(name: string, id: number): string {
-  const slug = name
+  const slug = stripAccents(name)
     .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
   return `https://baseballsavant.mlb.com/savant-player/${slug}-${id}?stats=statcast-r-hitting-mlb`;

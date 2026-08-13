@@ -27,6 +27,7 @@ import {
   headshotUrl,
   inningLabel,
   positionOrder,
+  searchFold,
   statusCorner,
   surname,
   teamLogoUrl,
@@ -1823,6 +1824,25 @@ export function ResearchTable({
     });
   }, [rows, kind, include, includeWatchlist, rosterKeys, watchlistKeys, ownedIds, espnConnected]);
 
+  /**
+   * What the search box matches each row against, **folded once per row rather
+   * than once per keystroke**: this is the whole league (~1,400 rows) and the
+   * filter re-runs on every letter typed, where the rows themselves arrive once
+   * per board and are then kept for the life of the tab. Keyed on the row
+   * object, so the include buttons rebuilding `boardRows` — which returns the
+   * same objects through a `filter` — costs nothing.
+   *
+   * Name and club are joined by a **space**, which `searchFold` can never leave
+   * in a query: it is therefore a separator no typed string can straddle, so
+   * `garcialad` cannot match García of the Dodgers while both halves stay in one
+   * string and one `includes`.
+   */
+  const searchText = useMemo(() => {
+    const m = new Map<ResearchRow, string>();
+    for (const r of rows) m.set(r, `${searchFold(r.name)} ${searchFold(r.team)}`);
+    return m;
+  }, [rows]);
+
   /** How many of the watchlist are on *this* board — the count on the Watchlist
    *  button, and what its empty state tests. A key carries its own kind, so
    *  this needs no lookup against the rows. */
@@ -1991,7 +2011,11 @@ export function ResearchTable({
     statWindow,
     includeKeys(include).join('+'),
     includeWatchlist,
-    search.trim().toLowerCase(),
+    // Folded, not merely trimmed: the signature has to describe the *population*
+    // the table came out as, and two spellings that fold together select the
+    // same rows — so typing the accent onto a name you have already typed is not
+    // a new table and must not scroll one back to the top.
+    searchFold(search),
     filters.map((f) => `${f.column}${f.op}${f.value}`).join(','),
     activeSortKey,
     sortAsc,
@@ -2019,12 +2043,12 @@ export function ResearchTable({
   }, [boardSignature]);
 
   const visible = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    // Folded exactly as the rows are, so `garcia` finds García and `García`
+    // finds him too, and so `crow-armstrong` and `crow armstrong` are one query.
+    const q = searchFold(search);
     const out = boardRows.filter((r) => {
       if (posMatch && !posMatch(r)) return false;
-      if (q && !r.name.toLowerCase().includes(q) && !r.team.toLowerCase().includes(q)) {
-        return false;
-      }
+      if (q && !(searchText.get(r) ?? '').includes(q)) return false;
       for (const f of filters) {
         const col = columnsByKey.get(f.column);
         // A text column can hold no threshold and is not offered in the
@@ -2070,7 +2094,7 @@ export function ResearchTable({
       if (av === bv) return a.name.localeCompare(b.name);
       return (av - bv) * dir;
     });
-  }, [boardRows, search, posMatch, filters, activeSortKey, sortAsc, columnsByKey]);
+  }, [boardRows, search, searchText, posMatch, filters, activeSortKey, sortAsc, columnsByKey]);
 
   function toggleSort(col: Column) {
     if (activeSortKey === col.key) {
