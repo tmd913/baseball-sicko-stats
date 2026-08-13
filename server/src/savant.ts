@@ -1467,6 +1467,68 @@ function blankStatus(rosterStatus: RosterStatus | null): PlayerStatus {
     gameState: null,
     opponent: null,
     isHome: null,
+    ...noGameFacts(),
+  };
+}
+
+/** The half of a status that describes the game he is in, shaped so it can be
+ *  spread into either pass — `lineupStatusFor`'s trick, for the same reason:
+ *  the two passes pick a game by different routes and must not describe it
+ *  differently once they have.
+ *
+ *  Three of the five are **state-gated**, which is where most of the payload
+ *  saving is. A score exists only once a game has started; the inning is read
+ *  only while one is in progress (a final has one and nothing renders it); and
+ *  the start time and the opposing probable are dropped at first pitch, exactly
+ *  as the summary table's cell drops them — by then the score is the line that
+ *  matters and the batter is as likely to be facing a reliever. */
+function gameFacts(
+  status: GameStatus,
+  isHome: boolean,
+  opponent: string,
+  probable: ProbablePitcher | null,
+): Pick<
+  PlayerStatus,
+  | 'gameState'
+  | 'opponent'
+  | 'isHome'
+  | 'teamScore'
+  | 'opponentScore'
+  | 'currentInning'
+  | 'inningState'
+  | 'startTime'
+  | 'probablePitcher'
+> {
+  const live = status.state === 'live';
+  const scheduled = status.state === 'scheduled';
+  return {
+    gameState: status.state,
+    opponent,
+    isHome,
+    teamScore: isHome ? status.homeScore : status.awayScore,
+    opponentScore: isHome ? status.awayScore : status.homeScore,
+    currentInning: live ? status.currentInning : null,
+    inningState: live ? status.inningState : null,
+    startTime: scheduled ? status.startTime : null,
+    probablePitcher: scheduled ? probable : null,
+  };
+}
+
+/** The same fields for a player with no game at all — every one of them null,
+ *  which is what keeps `saysSomething` honest: none of these can make a man
+ *  worth shipping on his own, they only ever describe the game `opponent`
+ *  already establishes he has. */
+function noGameFacts(): Omit<
+  ReturnType<typeof gameFacts>,
+  'gameState' | 'opponent' | 'isHome'
+> {
+  return {
+    teamScore: null,
+    opponentScore: null,
+    currentInning: null,
+    inningState: null,
+    startTime: null,
+    probablePitcher: null,
   };
 }
 
@@ -1485,6 +1547,11 @@ function blankStatus(rosterStatus: RosterStatus | null): PlayerStatus {
  * unposted morning used to send. That is ~130KB of JSON, which `compression()`
  * takes to a tenth — the price of the column, paid on the one request both
  * views that draw it already make.
+ *
+ * The score, the inning, the first-pitch time and the opposing probable ride
+ * on the same game and **widen nothing**: each is null unless `opponent` is
+ * set, so the test below is unchanged and the population it ships is exactly
+ * the one the column already cost.
  */
 function saysSomething(s: PlayerStatus): boolean {
   return (
@@ -1581,12 +1648,16 @@ export async function getPlayerStatuses(
       rosterStatus: rosterStatuses.get(id) ?? null,
       ...lineupStatusFor(id, isHome ? game.homeStarters : game.awayStarters),
       ...pitchingRoleFor(announced, null),
-      gameState: game.status.state,
-      // The other side of the game already picked for him, which is the whole
-      // of what the board's opponent column needs — `currentOf` above having
-      // settled the doubleheader the same way every other view settles it.
-      opponent: isHome ? game.awayTeam : game.homeTeam,
-      isHome,
+      // The game already picked for him — `currentOf` above having settled the
+      // doubleheader the same way every other view settles it — reduced to what
+      // the board's opponent cell draws: who, where, the score, the inning, and
+      // (before first pitch) the time and the starter the other side announced.
+      ...gameFacts(
+        game.status,
+        isHome,
+        isHome ? game.awayTeam : game.homeTeam,
+        isHome ? game.awayProbablePitcher : game.homeProbablePitcher,
+      ),
     });
   }
 
@@ -1599,14 +1670,14 @@ export async function getPlayerStatuses(
     const prev = statuses.get(rep.id) ?? blankStatus(rosterStatuses.get(rep.id) ?? null);
     statuses.set(rep.id, {
       ...prev,
-      gameState: game.status.state,
       // The parsed game's own answer, which is the same club by a different
       // route — a player in the day's reports is on that game's boxscore
       // roster too. Restated here so the pass that overrides the game also
-      // overrides who it was against, rather than leaving the two halves of
-      // one game to come from two different picks of it.
-      opponent: game.opponent,
-      isHome: game.isHome,
+      // overrides everything the cell says about it, rather than leaving the
+      // two halves of one game to come from two different picks of it.
+      // `PlayerGame.probablePitcher` is already the *other* side's announced
+      // starter, which is precisely what the first pass hands over too.
+      ...gameFacts(game.status, game.isHome, game.opponent, game.probablePitcher),
       ...(rep.kind === 'pitcher'
         ? { pitchingRole: game.pitchingRole, entryInning: game.entryInning }
         : { lineupStatus: game.lineupStatus, lineupSpot: game.lineupSpot }),
