@@ -738,8 +738,14 @@ function UpcomingRow({
     </>
   );
 
+  // `feed-item` for the layout every item shape in this feed shares (column,
+  // 8px gap, the scroll offset that clears the sticky chrome on expand), and
+  // `upcoming-item` for the rail alone — the same 3px/11px edge the at-bat, the
+  // base event, the live entry and the outing group themselves with, in the
+  // muted tone a game that hasn't been played has earned. Without it the
+  // identity row, the bar and the detail read as three loose blocks.
   return (
-    <div className="upcoming-item" ref={ref}>
+    <div className="feed-item upcoming-item" ref={ref}>
       <div className="upcoming-id">
         <FeedHeadshot id={report.id} name={report.name} onOpen={() => onOpenDetails(playerKey(report))} />
         <FeedPlayerName playerKey={playerKey(report)} name={report.name} onOpen={onOpenPlayerDay} />

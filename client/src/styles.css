@@ -6568,13 +6568,23 @@ body {
   flex-direction: column;
   gap: 16px;
 }
+/* The rail, the last of the feed's five item shapes to take one — the identity
+   row, the bar and whatever the bar opens onto are one thing to read, and
+   without it the section was a run of loose blocks beside four neighbours that
+   group themselves. Same 3px/11px as `.live-entry`, `.feed-at-bat`,
+   `.feed-base-item` and `.feed-outing`, and a plain border rather than the
+   base event's gradient: that mechanism exists for a play that was two things
+   at once, and nothing scheduled is.
+
+   `--muted`, which is `.feed-outing`'s colour for an outing with no decision
+   yet, and for the same reason: the game hasn't been played. Every other rail
+   in the feed says what happened, and the honest thing for this one to say is
+   nothing — it groups the item and claims no more than that. The row's own
+   layout is `.feed-item`'s, which is what the other four use too. */
 .upcoming-item {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  /* When expanding scrolls this row to the top, clear the sticky nav strip
-     (same measured offset the player and at-bat cards use). */
-  scroll-margin-top: var(--scroll-offset);
+  border-left: 3px solid var(--muted);
+  border-radius: 3px;
+  padding-left: 11px;
 }
 /* Identity above the bar — headshot and name, both links, and nothing here
    toggles: inside a tappable row a thumb that missed either one navigated off
@@ -6587,7 +6597,11 @@ body {
 }
 /* The bar under the name: matchup, the SP chip, the opposing starter and first
    pitch — and the row's whole interactive surface, holding no links of its
-   own. */
+   own. It keeps its box, since it opens and that is what a box means in this
+   feed; what it gave up when the item took a rail is its own 4px accent left
+   edge, which would otherwise draw a second vertical line 11px inside the
+   first — the same fold `.feed-at-bat .pa-card` makes for the same reason. The
+   hover that lights the whole border accent stays: that is the affordance. */
 .upcoming-head {
   display: flex;
   align-items: center;
@@ -6602,8 +6616,6 @@ body {
   text-align: left;
   background: linear-gradient(180deg, var(--panel), var(--bg-2));
   border: 1px solid var(--border);
-  border-left-width: 4px;
-  border-left-color: var(--accent);
   border-radius: 12px;
 }
 /* Clickable when there's a platoon split to reveal; static otherwise. */
