@@ -1190,6 +1190,14 @@ export async function getDay(date: string, filter?: DayFilter): Promise<ParsedDa
       splitVsRight: null,
       rosterStatus: null,
       throws: null,
+      // Who he is, rather than what he did that day. Filled by `getReport` off
+      // `getRosterInfo`, which a day parse has no business calling — so these
+      // are null here and in every stored snapshot, and nothing reads them
+      // there: `getReport` takes `games` off a day and builds the report
+      // itself. That is why the fields need no `DAY_SNAPSHOT_VERSION` bump.
+      teamId: null,
+      team: null,
+      position: null,
     });
   }
 
@@ -1208,6 +1216,14 @@ export async function getDay(date: string, filter?: DayFilter): Promise<ParsedDa
       splitVsRight: null,
       rosterStatus: null,
       throws: null,
+      // Who he is, rather than what he did that day. Filled by `getReport` off
+      // `getRosterInfo`, which a day parse has no business calling — so these
+      // are null here and in every stored snapshot, and nothing reads them
+      // there: `getReport` takes `games` off a day and builds the report
+      // itself. That is why the fields need no `DAY_SNAPSHOT_VERSION` bump.
+      teamId: null,
+      team: null,
+      position: null,
     });
   }
 
@@ -1299,17 +1315,47 @@ function rosterGame(dg: DayGame, isHome: boolean, playerId: number): PlayerGame 
 }
 
 /**
+ * Which days of the range each player was actually on the roster, by
+ * `${kind}-${id}` — `store.ts::getRosterForRange`'s answer, threaded through so
+ * a report can be **projected** onto the days it is entitled to.
+ *
+ * A key absent from the map (or no map at all) is held every day, which is what
+ * the callers with no history to consult mean: `getPlayerDay`, which asks for
+ * one man on one date on behalf of somebody who may not be rostered at all, and
+ * the fantasy path, whose roster is ESPN's rather than ours.
+ */
+export type HeldDays = Map<string, Set<string>>;
+
+/**
  * Build each watched player's games across an inclusive date range (a single
  * day is just startDate === endDate). Games from every day are merged and
  * sorted chronologically, since a player's card already knows how to render
  * multiple games (originally added for doubleheaders). A player rostered for a
  * scheduled/in-progress game they haven't batted in yet gets a placeholder game
  * so the card can still surface the start time or live score.
+ *
+ * **`held` cuts days, not rows**, and that is the whole of how the roster's
+ * history reaches the app. Which players have a row at all is `players`, which
+ * the caller has already resolved over the range; which of a player's days
+ * count is this, applied to both of the loops below — the games he actually
+ * played, and the placeholder games his club played without him. The summary
+ * table's rows, its `Total` and every feed item all sum `report.games`, so
+ * cutting the games is the entire change and nothing downstream has to be told.
+ *
+ * **It is done here rather than on the client**, which is the same argument
+ * `dayFilterFor` already makes one level down: this function narrows a day to
+ * the players who want it as it parses, so narrowing a player to the days he
+ * wants costs nothing extra and happens in the one place that already knows the
+ * range day by day. Doing it on the client would mean shipping a report of days
+ * the reader was never entitled to and then throwing them away — a wire full of
+ * somebody else's at-bats, and a second definition of "held" living in `App.tsx`
+ * beside the first.
  */
 export async function getReport(
   startDate: string,
   endDate: string,
   players: WatchPlayer[],
+  held?: HeldDays,
 ): Promise<PlayerReport[]> {
   const ids = players.map((p) => p.id);
   const batterIds = players.filter((p) => p.kind === 'batter').map((p) => p.id);
@@ -1317,8 +1363,9 @@ export async function getReport(
   // Each day is narrowed to just these players as it's parsed — without that a
   // wide range holds every player who appeared on every date in memory at once.
   const filter = dayFilterFor(players);
+  const rangeDates = enumerateDates(startDate, endDate);
   const [days, playerStats, pitcherStats, rosterInfo] = await Promise.all([
-    mapLimit(enumerateDates(startDate, endDate), DAY_CONCURRENCY, (d) => getDay(d, filter)),
+    mapLimit(rangeDates, DAY_CONCURRENCY, (d) => getDay(d, filter)),
     getPlayerStats(batterIds),
     getPitcherStats(pitcherIds),
     getRosterInfo(ids),
@@ -1369,7 +1416,13 @@ export async function getReport(
   return players.map((p) => {
     const games: PlayerGame[] = [];
     const seen = new Set<number>();
-    for (const day of days) {
+    // The days of the range this player is entitled to. Read off the enumerated
+    // date rather than off `PlayerGame.date` so both loops below are gated by
+    // exactly the same thing — the day the report is being built for.
+    const onRoster = held?.get(`${p.kind}-${p.id}`);
+    const heldOn = (date: string) => onRoster === undefined || onRoster.has(date);
+    for (const [i, day] of days.entries()) {
+      if (!heldOn(rangeDates[i])) continue;
       const found = findPlayerDay(day, p);
       if (found) {
         for (const g of found.games) {
@@ -1386,7 +1439,8 @@ export async function getReport(
     // and the roster status below explains an off-roster absence. Games they
     // batted in are already in `seen`.
     const teamId = rosterInfo.get(p.id)?.teamId ?? null;
-    for (const day of days) {
+    for (const [i, day] of days.entries()) {
+      if (!heldOn(rangeDates[i])) continue;
       for (const dg of day.games) {
         if (seen.has(dg.gamePk)) continue;
         const isHome =
@@ -1401,6 +1455,11 @@ export async function getReport(
     games.sort(byGameOrder);
     const rosterStatus = rosterInfo.get(p.id)?.status ?? null;
     const throws = p.kind === 'pitcher' ? (rosterInfo.get(p.id)?.throws ?? null) : null;
+    // His club and his listed position — the identity block under his name on
+    // the summary table. `teamId` was already read above to tie him to his
+    // team's games; the other two ride along on the same lookup.
+    const team = rosterInfo.get(p.id)?.team ?? null;
+    const position = rosterInfo.get(p.id)?.position ?? null;
 
     if (p.kind === 'pitcher') {
       const arsenal = arsenals.get(p.id);
@@ -1426,6 +1485,9 @@ export async function getReport(
         splitVsRight: null,
         rosterStatus,
         throws,
+        teamId,
+        team,
+        position,
       };
     }
 
@@ -1440,6 +1502,9 @@ export async function getReport(
       splitVsRight: st?.vsRight ?? null,
       rosterStatus,
       throws,
+      teamId,
+      team,
+      position,
     };
   });
 }

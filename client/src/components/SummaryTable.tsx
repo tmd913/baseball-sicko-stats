@@ -3,7 +3,8 @@ import type { ReactNode } from 'react';
 import { FantasySlotTag } from './FantasySlot';
 import { ExpandButton } from './ExpandButton';
 import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
-import { useFullPage } from '../hooks';
+import { PlayerIdentity } from './PlayerIdentity';
+import { useEligible, useFullPage } from '../hooks';
 import type { BattingLine, PitchingLine, PlayerGame, PlayerReport } from '../types';
 import { playerKey } from '../types';
 import type { Corner, LiveRole } from '../lib';
@@ -16,11 +17,13 @@ import {
   gameStatusView,
   handThrows,
   headshotUrl,
+  isRotationStarter,
   lineupCorner,
   liveRole,
   lineOps,
   mostRecentGameFirst,
   pitchingCorner,
+  positionCell,
   surname,
   whipOf,
 } from '../lib';
@@ -194,6 +197,45 @@ function SumPhoto({
   );
 }
 
+/**
+ * The identity block on a summary row: the name line the caller draws, over his
+ * club's cap mark and the positions his league will let him fill.
+ *
+ * The **block** is the research board's, shared rather than copied — see
+ * `PlayerIdentity`. What this adds is where the two facts come from for a
+ * *report* rather than a leaderboard row, and both come off the report itself:
+ * `teamId`/`team` are his current club (`getRosterInfo`, so a traded man wears
+ * the cap he is wearing now rather than the one on a game in the range), and
+ * the position is `lib.ts::positionCell` over the same three-deep rule the
+ * board follows.
+ *
+ * The one thing that is not on the report is ESPN's eligibility, which is a
+ * per-user fact about a connected league and reaches this leaf through
+ * `EligibilityContext` — see `hooks.ts` for why it is a context and why it is
+ * not `FantasyRosterContext`, which is null in saved-roster mode where this
+ * must still answer.
+ *
+ * The **pitcher fallback is his season**, not a window: `isRotationStarter` is
+ * the same "a majority of his appearances are starts" test the feed's Upcoming
+ * section gates on, and the tooltip says so, where the board's says "over the
+ * window" because that is what its own `starter` measures.
+ */
+function RowIdentity({ r, children }: { r: PlayerReport; children: ReactNode }) {
+  const pos = positionCell({
+    eligible: useEligible(r.id),
+    kind: r.kind,
+    position: r.position,
+    starter: r.kind === 'pitcher' && isRotationStarter(r),
+    starterSource: 'off his appearances this season',
+    unknownTitle: (p) => `${p} — MLB's listed position`,
+  });
+  return (
+    <PlayerIdentity teamId={r.teamId} team={r.team ?? ''} pos={pos}>
+      {children}
+    </PlayerIdentity>
+  );
+}
+
 interface RowHandlers {
   onOpenDetails: (key: string) => void;
 }
@@ -228,26 +270,38 @@ function LeadCells({
         {/* Ahead of the name rather than after it, and only on this table: the
             slot is what you scan a fantasy roster by, so it leads. Outside the
             button, since the name is a link to that player's page and a slot
-            chip is a label rather than part of what you are pressing. */}
+            chip is a label rather than part of what you are pressing. It leads
+            the whole identity block rather than the name line inside it — the
+            chip is one fact about the row, not a second line of who he is, and
+            a 42px floor plus `align-items: center` is what keeps every name in
+            the column starting at one x against a two-line block. */}
         <FantasySlotTag playerKey={playerKey(r)} />
-        {/* The name opens his player page, exactly as the headshot beside it
-            does. It used to jump to his card on the feed's grouped reading —
-            the page that reading has since become *is* the player page, whose
-            Overview tab opens on the very day the jump was for, so the two
-            controls lead to one place rather than to two. */}
-        <button
-          type="button"
-          className="sum-name sum-name-link"
-          title={`${r.name} — player page`}
-          onClick={() => onOpenDetails(playerKey(r))}
-        >
-          {r.name}
-        </button>
-        {/* The status is on the headshot (`PhotoStatus`), not here: an injured
-            player is on this table whenever the hide-injured toggle is off, so
-            the row must say why its stats are dashes — but it can say it in
-            four characters on a circle the row already draws, instead of a
-            chip that widens the one column this table can least afford. */}
+        {/* **His club and his positions, under the name** — the research
+            board's identity block, drawn by the same component (see
+            `PlayerIdentity`). This table said neither: which club a man plays
+            for, and where a fantasy league will let you start him, are the two
+            standing facts about a roster row, and the only column with slack
+            to spend is the one already carrying his name. */}
+        <RowIdentity r={r}>
+          {/* The name opens his player page, exactly as the headshot beside it
+              does. It used to jump to his card on the feed's grouped reading —
+              the page that reading has since become *is* the player page, whose
+              Overview tab opens on the very day the jump was for, so the two
+              controls lead to one place rather than to two. */}
+          <button
+            type="button"
+            className="sum-name sum-name-link"
+            title={`${r.name} — player page`}
+            onClick={() => onOpenDetails(playerKey(r))}
+          >
+            {r.name}
+          </button>
+          {/* The status is on the headshot (`PhotoStatus`), not here: an injured
+              player is on this table whenever the hide-injured toggle is off, so
+              the row must say why its stats are dashes — but it can say it in
+              four characters on a circle the row already draws, instead of a
+              chip that widens the one column this table can least afford. */}
+        </RowIdentity>
       </th>
       <OpponentCell game={game} />
     </>

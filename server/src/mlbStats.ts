@@ -99,29 +99,48 @@ interface SportsPlayersResponse {
   people?: SportsPlayersPerson[];
 }
 interface TeamsResponse {
-  teams?: { id: number; name: string }[];
+  teams?: { id: number; name: string; abbreviation?: string }[];
 }
 
 /** The 30 clubs change once a decade; this is cached so the callers that want
  *  only the *ids* (`getAllRosterStatuses`, once a minute) don't re-download the
  *  list to learn what they already knew. */
 const TEAMS_TTL = 60 * 60 * 1000;
-let teamNamesCache: { teams: Map<number, string>; fetchedAt: number } | null = null;
+let teamsCache: {
+  names: Map<number, string>;
+  abbrevs: Map<number, string>;
+  fetchedAt: number;
+} | null = null;
 
-/** MLB Stats API's player payload only carries currentTeam.id, not its name. */
-async function getTeamNamesById(): Promise<Map<number, string>> {
-  if (teamNamesCache && Date.now() - teamNamesCache.fetchedAt < TEAMS_TTL) {
-    return teamNamesCache.teams;
-  }
-  const url = 'https://statsapi.mlb.com/api/v1/teams?sportId=1&fields=teams,id,name';
+/**
+ * The 30 clubs by id — full name and abbreviation, off one call.
+ *
+ * The two are wanted by different callers and neither is worth a request of its
+ * own: `getSeasonPlayers` prints a club's **name** in the roster search, where a
+ * row is a line to itself, and `getRosterInfo` carries its **abbreviation** onto
+ * every report, where the summary table's identity block wants three characters
+ * as the `alt` behind a cap logo. `fields` costs nothing to widen, so this is
+ * the same fetch answering one more question rather than a second table of the
+ * same thirty rows.
+ */
+async function getTeams(): Promise<{ names: Map<number, string>; abbrevs: Map<number, string> }> {
+  if (teamsCache && Date.now() - teamsCache.fetchedAt < TEAMS_TTL) return teamsCache;
+  const url = 'https://statsapi.mlb.com/api/v1/teams?sportId=1&fields=teams,id,name,abbreviation';
   const res = await fetch(url, { headers: UA });
   if (!res.ok) {
     throw new Error(`MLB Stats API teams returned ${res.status}`);
   }
   const data = (await res.json()) as TeamsResponse;
-  const teams = new Map((data.teams ?? []).map((t) => [t.id, t.name] as const));
-  teamNamesCache = { teams, fetchedAt: Date.now() };
-  return teams;
+  const names = new Map((data.teams ?? []).map((t) => [t.id, t.name] as const));
+  const abbrevs = new Map<number, string>();
+  for (const t of data.teams ?? []) if (t.abbreviation) abbrevs.set(t.id, t.abbreviation);
+  teamsCache = { names, abbrevs, fetchedAt: Date.now() };
+  return teamsCache;
+}
+
+/** MLB Stats API's player payload only carries currentTeam.id, not its name. */
+async function getTeamNamesById(): Promise<Map<number, string>> {
+  return (await getTeams()).names;
 }
 
 /** How long a season's player list stays fresh before we re-download (ms). */
@@ -420,14 +439,23 @@ export async function getPitcherStats(
 /** A player's current team id and 40-man roster status (IL, suspended, ...). */
 export interface RosterInfo {
   teamId: number | null;
+  /** His club's abbreviation ("KC"), joined from `getTeams` — the `alt` and the
+   *  tooltip behind the cap logo the summary table draws under his name, and
+   *  what that block prints outright when there is no logo to draw. */
+  team: string | null;
   status: RosterStatus | null;
   throws: string | null; // "L" | "R" — pitchers; meaningless for a batter's card
+  /** MLB's listed position ("1B", "P", "TWP") — the fallback the identity block
+   *  falls back *to* when ESPN has no eligibility for him, which is every
+   *  player for a user with no league connected. */
+  position: string | null;
 }
 
 /** What the people?hydrate=currentTeam call yields per id. */
 interface PlayerTeamInfo {
   teamId: number | null;
   throws: string | null;
+  position: string | null;
 }
 
 /** Team ids and rosters move at most day to day, so a 30-min TTL is plenty. */
@@ -435,12 +463,18 @@ const ROSTER_INFO_TTL = 30 * 60 * 1000;
 const playerTeamCache = new Map<number, PlayerTeamInfo & { fetchedAt: number }>();
 
 interface PeopleTeamResponse {
-  people?: { id: number; currentTeam?: { id?: number }; pitchHand?: { code?: string } }[];
+  people?: {
+    id: number;
+    currentTeam?: { id?: number };
+    pitchHand?: { code?: string };
+    primaryPosition?: { abbreviation?: string };
+  }[];
 }
 
-/** Each id's current team and throwing hand, batched into one people call. The
- *  hand is what a pitcher's card needs before he throws a pitch — his game has
- *  no `stand` until he appears in one. */
+/** Each id's current team, throwing hand and listed position, batched into one
+ *  people call. The hand is what a pitcher's card needs before he throws a
+ *  pitch — his game has no `stand` until he appears in one; the position is the
+ *  identity block's fallback where ESPN has no eligibility to print. */
 async function getPlayerTeamIds(ids: number[]): Promise<Map<number, PlayerTeamInfo>> {
   const now = Date.now();
   const stale = ids.filter((id) => {
@@ -452,7 +486,7 @@ async function getPlayerTeamIds(ids: number[]): Promise<Map<number, PlayerTeamIn
     try {
       const url =
         `https://statsapi.mlb.com/api/v1/people?personIds=${stale.join(',')}` +
-        `&hydrate=currentTeam&fields=people,id,currentTeam,pitchHand,code`;
+        `&hydrate=currentTeam&fields=people,id,currentTeam,pitchHand,code,primaryPosition,abbreviation`;
       const res = await fetch(url, { headers: UA });
       if (!res.ok) throw new Error(`people/currentTeam returned ${res.status}`);
       const data = (await res.json()) as PeopleTeamResponse;
@@ -461,13 +495,16 @@ async function getPlayerTeamIds(ids: number[]): Promise<Map<number, PlayerTeamIn
         playerTeamCache.set(p.id, {
           teamId: p.currentTeam?.id ?? null,
           throws: p.pitchHand?.code ?? null,
+          position: p.primaryPosition?.abbreviation ?? null,
           fetchedAt: now,
         });
         seen.add(p.id);
       }
       // Cache misses too, so an unknown id doesn't refetch every request.
       for (const id of stale) {
-        if (!seen.has(id)) playerTeamCache.set(id, { teamId: null, throws: null, fetchedAt: now });
+        if (!seen.has(id)) {
+          playerTeamCache.set(id, { teamId: null, throws: null, position: null, fetchedAt: now });
+        }
       }
     } catch (err) {
       console.error('player team lookup failed:', err);
@@ -477,7 +514,10 @@ async function getPlayerTeamIds(ids: number[]): Promise<Map<number, PlayerTeamIn
   return new Map(
     ids.map((id) => {
       const c = playerTeamCache.get(id);
-      return [id, { teamId: c?.teamId ?? null, throws: c?.throws ?? null }];
+      return [
+        id,
+        { teamId: c?.teamId ?? null, throws: c?.throws ?? null, position: c?.position ?? null },
+      ];
     }),
   );
 }
@@ -546,13 +586,23 @@ export async function getAllRosterStatuses(): Promise<Map<number, RosterStatus>>
 }
 
 /**
- * Each player's current team id and 40-man roster status. The team id lets a
- * report tie a watched player to their team's games even when they're off the
- * active roster (suspended, on the IL, optioned) and therefore absent from every
- * game's boxscore; the status is surfaced on the card to explain the absence.
+ * Each player's current team (id and abbreviation), listed position and 40-man
+ * roster status. The team id lets a report tie a watched player to their team's
+ * games even when they're off the active roster (suspended, on the IL,
+ * optioned) and therefore absent from every game's boxscore; the status is
+ * surfaced on the card to explain the absence.
+ *
+ * The abbreviation and the position ride along because the summary table's
+ * identity block wants exactly what the research board's does — a cap logo over
+ * a position list — and neither costs a request: the position is one more leaf
+ * on the `people` call above, and the abbreviation a join against the thirty
+ * clubs this module already downloads for their names. It is deliberately
+ * **his club** rather than the club of a game in the range, which is the same
+ * distinction `teamId` is already relied on for: a traded player's rows should
+ * carry the cap he is wearing now.
  */
 export async function getRosterInfo(ids: number[]): Promise<Map<number, RosterInfo>> {
-  const teamByPlayer = await getPlayerTeamIds(ids);
+  const [teamByPlayer, teams] = await Promise.all([getPlayerTeamIds(ids), getTeams()]);
   const teamIds = [
     ...new Set(
       [...teamByPlayer.values()].map((t) => t.teamId).filter((t): t is number => t !== null),
@@ -569,7 +619,16 @@ export async function getRosterInfo(ids: number[]): Promise<Map<number, RosterIn
       const info = teamByPlayer.get(id);
       const teamId = info?.teamId ?? null;
       const status = teamId !== null ? rosters.get(teamId)?.get(id) ?? null : null;
-      return [id, { teamId, status, throws: info?.throws ?? null }];
+      return [
+        id,
+        {
+          teamId,
+          team: teamId !== null ? (teams.abbrevs.get(teamId) ?? null) : null,
+          status,
+          throws: info?.throws ?? null,
+          position: info?.position ?? null,
+        },
+      ];
     }),
   );
 }

@@ -639,6 +639,17 @@ export interface PlayerReport extends WatchPlayer {
   // carry it as `stand` once he's appeared in one; this is what the card reads
   // before that, when the only thing on it is a game he hasn't pitched yet.
   throws: string | null;
+  /** His club, for the cap logo the summary table draws under his name — the id
+   *  MLB serves the mark by, and the abbreviation that is its `alt`, its
+   *  tooltip and what the block prints when there is no mark to draw. It is his
+   *  **current** club rather than the club of a game in the range, so a traded
+   *  player's rows carry the cap he is wearing now. */
+  teamId: number | null;
+  team: string | null;
+  /** MLB's listed position ("1B", "P", "TWP") — what the identity block prints
+   *  where ESPN has no eligibility for him, which is every player for a user
+   *  with no league connected. */
+  position: string | null;
 }
 
 export interface SeasonPlayer extends WatchPlayer {

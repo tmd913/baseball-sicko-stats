@@ -41,6 +41,7 @@ import { simulateLiveDay } from './simulate';
 import { PlayerDetails } from './components/PlayerDetails';
 import { DateRangePicker, numericRange, tightRange } from './components/DateRangePicker';
 import {
+  EligibilityContext,
   FantasyRosterContext,
   MutedContext,
   PlayerStatusContext,
@@ -2344,7 +2345,19 @@ export default function App() {
 
   // The reorder screen edits the raw watchlist order, one kind at a time, so it
   // reads `reports` rather than the simulate-overlaid copy the cards render.
+  //
+  // **And only the players who are on the roster *now*.** The report is the
+  // roster as it stood over the days in view, so over a range it can carry a
+  // man dropped on Tuesday — see **The roster is a range of rosters** in
+  // `auth-and-storage.md`. This screen answers a different question from the
+  // views behind it: it is the one place the roster is edited as a *list*, and
+  // a row you could drag or remove for somebody who is not on it would be
+  // offering an edit to a list he isn't in. It reads `rosterKeys`, the same set
+  // the research board's baseball and the player page's badge read, so "on the
+  // roster" means one thing everywhere; in this mode that is always the saved
+  // list, the screen being hidden while a fantasy team is in view.
   const editPlayers = reports
+    .filter((r) => rosterKeys.has(playerKey(r)))
     .filter((r) => (shownKind === 'pitcher' ? r.kind === 'pitcher' : r.kind !== 'pitcher'))
     .map((r) => ({ id: r.id, key: playerKey(r), name: r.name }));
 
@@ -2411,6 +2424,11 @@ export default function App() {
     <MutedContext.Provider value={muteAudio}>
     <FantasyRosterContext.Provider value={fantasySlots}>
     <PlayerStatusContext.Provider value={playerStatuses}>
+    {/* Where the connected league will let each player be started — read by the
+        summary table's identity block, which is three components down from here
+        and is the only leaf that wants it. Null with no league, which is what
+        makes that block fall back to MLB's own listed position. */}
+    <EligibilityContext.Provider value={eligibility}>
     <div
       /* `summary-mode` is the fixed-height flex column the table needs, and
          the edit screen is a long scrolling list that must not be trapped in
@@ -3197,6 +3215,7 @@ export default function App() {
         />
       )}
     </div>
+    </EligibilityContext.Provider>
     </PlayerStatusContext.Provider>
     </FantasyRosterContext.Provider>
     </MutedContext.Provider>
