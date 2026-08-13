@@ -330,14 +330,18 @@ export function useFullPage<T extends HTMLElement = HTMLDivElement>() {
 }
 
 /**
- * The app's full-screen overlays. `.details-view` is three of them — the player
- * page, the how-to page and the ESPN settings page all ride on it — and
- * `.reel-view` is the highlight reel.
+ * The app's fixed boxes that cover what is behind them. `.details-view` is
+ * three of them — the player page, the how-to page and the ESPN settings page
+ * all ride on it — `.reel-view` is the highlight reel, and
+ * `.research-columns-dialog` is the board's Columns picker, which is a modal
+ * rather than a page but sits over the app the same way and answers Escape the
+ * same way. Anything listed here both consults this test and is seen by it, so
+ * one press of Escape undoes exactly one of them.
  */
-const OVERLAYS = '.details-view, .reel-view';
+const OVERLAYS = '.details-view, .reel-view, .research-columns-dialog';
 
 /** Is one of those overlays stacked over `box` rather than behind or around it? */
-function overlayAbove(box: HTMLElement | null) {
+export function overlayAbove(box: HTMLElement | null) {
   if (!box) return false;
   return [...document.querySelectorAll(OVERLAYS)].some((el) => !el.contains(box));
 }
