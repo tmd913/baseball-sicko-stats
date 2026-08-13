@@ -1,6 +1,33 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { overlayAbove, useLockBodyScroll } from '../hooks';
+
+/**
+ * The z-index of the box a dialog opened *from here* would have to clear.
+ *
+ * A `Modal` is portalled to the body, so the DOM cannot tell it what it was
+ * opened out of — but the React tree can, and that is exactly the question:
+ * the board's Columns picker is opened from the page and belongs at the app's
+ * ordinary dialog layer, while the Game Log's per-game popup is opened from
+ * inside the **player page**, a fixed box at 50, and at 46 would render behind
+ * the very thing that opened it. A pitcher's full breakdown, opened from inside
+ * *that* popup, has to clear it in turn.
+ *
+ * So a host declares its layer once and every dialog anywhere inside it is
+ * right without knowing where it is — which is the property that matters, since
+ * `GameLog` has no business knowing it sits in an overlay. `Modal` provides its
+ * own layer to its children, so the ladder extends itself.
+ *
+ * Null at the page level, where the stylesheet's own 46 applies and nothing is
+ * written inline.
+ */
+export const DialogLayerContext = createContext<number | null>(null);
+
+/** `.app-dialog`'s own z-index, as declared in the stylesheet. */
+const BASE_LAYER = 46;
+
+/** `.details-view`'s, for the three overlays that ride on it. */
+export const OVERLAY_LAYER = 50;
 
 /**
  * The app's modal: a dimmed fixed box over everything, holding a `--panel` card
@@ -27,7 +54,10 @@ import { overlayAbove, useLockBodyScroll } from '../hooks';
  *
  * `z-index` lives in the stylesheet, at **46** — over the pinned chrome that
  * opens these (41) and the full-page table box (45), under the player page (50)
- * and the reel and how-to pages (60), those being pages rather than panels.
+ * and the reel and how-to pages (60), those being pages rather than panels. A
+ * dialog opened from inside one of those boxes climbs above it instead, which
+ * is `DialogLayerContext`'s whole job and the one case the number is written
+ * inline rather than declared.
  */
 export function Modal({
   title,
@@ -45,6 +75,12 @@ export function Modal({
   children: ReactNode;
 }) {
   useLockBodyScroll();
+  // One step above whatever this was opened out of — see `DialogLayerContext`.
+  // Written inline only when it differs from the stylesheet's own value, so the
+  // ordinary case stays declared in CSS and `overlayAbove` reads one number
+  // either way.
+  const host = useContext(DialogLayerContext);
+  const layer = host === null ? BASE_LAYER : host + 1;
   const boxRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -57,6 +93,7 @@ export function Modal({
   return createPortal(
     <div
       className="app-dialog"
+      style={layer === BASE_LAYER ? undefined : { zIndex: layer }}
       ref={boxRef}
       onPointerDown={(e) => {
         if (e.target === e.currentTarget) onClose();
@@ -92,8 +129,12 @@ export function Modal({
           </button>
         </div>
         {/* The one scroller, which is the whole point of a modal here: the
-            content scrolls in the box rather than growing the page behind. */}
-        <div className="app-dialog-body">{children}</div>
+            content scrolls in the box rather than growing the page behind.
+            The provider is what lets a dialog opened from in here clear this
+            one — a pitcher's full breakdown inside the Game Log's popup. */}
+        <div className="app-dialog-body">
+          <DialogLayerContext.Provider value={layer}>{children}</DialogLayerContext.Provider>
+        </div>
       </div>
     </div>,
     document.body,
