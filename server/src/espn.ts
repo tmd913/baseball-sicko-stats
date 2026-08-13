@@ -33,7 +33,7 @@
 import { stripAccents, toSavantName } from './names.js';
 import type { PlayerKind, WatchPlayer } from './types.js';
 import { readBlob, readJsonBlob, writeBlob, writeJsonBlob } from './storage.js';
-import { addDays, baseballToday, daysBetween } from './etDate.js';
+import { addDays, baseballToday, daysBetween, easternDate } from './etDate.js';
 import { mapLimit } from './limit.js';
 
 // Keep in sync with hfSea in savant.ts, CURRENT_SEASON in percentiles.ts, and
@@ -733,55 +733,239 @@ async function leagueGet(
 // end-of-range read answered only the first and answered it about today.
 
 /**
- * ESPN's scoring periods are numbered **one per calendar day of the season**,
- * the All-Star break included: 2026 allocates ids 111–113 to three days with no
- * game in them. So a day ahead is exactly a period ahead, and the offset needs
- * no season-start constant and no schedule download to compute. Checked against
- * ESPN's own `proTeamSchedules_wl` for all 184 game days of the season: period
- * number and calendar day advance together, with zero exceptions.
+ * A date shaped like one **and real**, or null.
+ *
+ * Shape is not enough: `2026-99-99` matches every YYYY-MM-DD test in the
+ * codebase and `Date.UTC` rolls it over into 2034, which would ask ESPN for a
+ * scoring period some 3,000 past the season. A day that doesn't exist means
+ * nothing, and nothing here is today.
  */
-function dayOffsetFor(date: string | null | undefined): number {
-  if (!date) return 0;
-  // Shape is not enough: `2026-99-99` matches every YYYY-MM-DD test in the
-  // codebase and `Date.UTC` rolls it over into 2034, which would ask ESPN for a
-  // scoring period some 3,000 past the season. A day that doesn't exist means
-  // nothing, and nothing here is today.
+function validDate(date: string | null | undefined): string | null {
+  if (!date) return null;
   const [y, m, d] = date.split('-').map(Number);
   const at = new Date(Date.UTC(y, m - 1, d));
-  if (at.getUTCFullYear() !== y || at.getUTCMonth() !== m - 1 || at.getUTCDate() !== d) return 0;
-  return daysBetween(baseballToday(), date);
+  if (at.getUTCFullYear() !== y || at.getUTCMonth() !== m - 1 || at.getUTCDate() !== d) return null;
+  return date;
 }
 
-function periodOffsetFor(date: string | null | undefined): number {
-  // Clamped at zero, which is what keeps the **league-wide** read — the
-  // ownership map every member of a league shares, and the one roster the slot
-  // chips are drawn from — on one entry rather than one per person's date
-  // range. `lineupPeriodFor` reads the same offset unclamped, because the
-  // per-team, per-day read below is precisely the one that wants a past period.
-  return Math.max(0, dayOffsetFor(date));
+/**
+ * Which **calendar day** the caller wants, for the reads that may only ever
+ * look forward.
+ *
+ * Clamped at today, which is what keeps the **league-wide** read — the
+ * ownership map every member of a league shares, and the one roster the slot
+ * chips are drawn from — on one entry rather than one per person's date range.
+ * `lineupPeriodFor` takes the date unclamped, because the per-team, per-day
+ * read below is precisely the one that wants a past day.
+ */
+function ownershipDay(date: string | null | undefined): string {
+  const today = baseballToday();
+  const day = validDate(date);
+  return day === null || day <= today ? today : day;
+}
+
+// ---- The period a day falls in --------------------------------------------
+//
+// **ESPN numbers its scoring periods one per calendar day of the season**, the
+// All-Star break included: 2026 allocates ids 111–113 to three gameless days.
+// So a day ahead is exactly a period ahead, and the whole mapping is one
+// straight line — but a line needs a point on it, and where that point comes
+// from is the thing this section is about.
+//
+// **It used to be ESPN's own `currentScoringPeriod`, plus the days from
+// `baseballToday()`**, and that quietly asserted something nobody had checked:
+// that ESPN's period pointer turns at the same moment the app's baseball day
+// does. It does not. The app's day turns at **3am ET** (`etDate.ts`), while
+// ESPN advances the pointer in a nightly batch — `status.lastUpdateInfo.source`
+// is `NightlyLeagueUpdateTaskProcessor`, and the `standingsUpdateDate` /
+// `waiverLastExecutionDate` pair it stamps landed at **04:26:40 ET** on
+// 2026-08-13, with the season's eighteen recorded waiver runs spread from
+// **03:39 to 05:19 ET**. Between 3am and whenever that batch runs, therefore,
+// `baseballToday()` had already rolled and ESPN's pointer had not, and **every
+// period this file computed was one too low** — which is a lineup and a roster
+// from the wrong day, drawn as though it were this one. Latent while only the
+// `Tomorrow` preset named a period; load-bearing since a range became a range
+// of rosters, which names one per day for up to 62 days.
+//
+// **So the anchor is derived from ESPN's own calendar instead**, and
+// `baseballToday()` drops out of the arithmetic entirely. `proTeamSchedules_wl`
+// maps every period to the ET date of the games in it; reduced to a single
+// `{ period, date }` pair, `period = anchor.period + daysBetween(anchor.date,
+// target)` answers for any day of the season and cannot disagree with ESPN
+// about when a day begins, because it never asks. The app's own clock is left
+// doing the one job it is right for — deciding *which day* the reader wants —
+// and none of the job it was wrong for.
+//
+// If the schedule can't be read the old rule stands as the fallback, logged: a
+// failed derivation must cost accuracy in the small hours, never the feature.
+
+/** One point on the line: this period held that ET calendar date. */
+interface PeriodAnchor {
+  period: number;
+  date: string;
+}
+
+/**
+ * The pro schedule is **static for the season and takes no cookies at all** —
+ * checked, 200 with no `Cookie` header, 850,891 bytes — so this is one read
+ * shared by every league and every user, exactly as `getPlayerPool` is. It is
+ * the 0.81MB that is not worth holding: what gets cached is the pair it
+ * reduces to — a **67-byte** blob, stamp and all — which is why the storage key
+ * is by season and the freshness window is measured in weeks rather than hours.
+ * Bump the `-v1` if the pair ever grows.
+ */
+const anchorBlobKey = (season: number) => `espn-period-anchor-${season}-v1.json`;
+const ANCHOR_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+let anchorCache: { anchor: PeriodAnchor; fetchedAt: number } | null = null;
+/** A cold container answering three tabs should send one upstream read — the
+ *  rule `inFlight` follows for the ownership blob and `poolInFlight` for the
+ *  player pool. */
+let anchorInFlight: Promise<PeriodAnchor> | null = null;
+
+/**
+ * Reduce ESPN's whole season schedule to one `{ period, date }` pair.
+ *
+ * Every game row is stamped with an epoch and filed under a period, and the
+ * date that matters is the **ET** one — the calendar the periods are actually
+ * cut on. Checked across the 2026 season: **184 periods map to exactly one ET
+ * date each, 0 mixed**, and every one of them satisfies `period = p0 +
+ * daysBetween(d0, date)` against the first pair, 0 violations. So one pair
+ * really is enough and no lookup table is needed.
+ *
+ * The pair is nonetheless picked by **majority vote** over all of them rather
+ * than by taking the first: the implied anchor is computed for every mapped
+ * period and the modal answer wins, so a single malformed row — a game filed
+ * under the wrong period, a date ESPN moves — costs nothing instead of
+ * shifting the entire season by a day. With 0 violations today the vote is
+ * unanimous; it is there for the day it isn't.
+ */
+async function fetchPeriodAnchor(): Promise<PeriodAnchor> {
+  const url = `${FANTASY_BASE}/${SEASON}?view=proTeamSchedules_wl`;
+  const res = await fetch(url, { headers: UA });
+  if (!res.ok) throw new Error(`ESPN pro schedule returned ${res.status}`);
+  const data = (await res.json()) as {
+    settings?: {
+      proTeams?: { proGamesByScoringPeriod?: Record<string, { date?: number }[]> }[];
+    };
+  };
+
+  // Period → the ET dates its games fall on. A period with more than one is a
+  // period this can't speak for and is dropped rather than guessed at.
+  const dates = new Map<number, Set<string>>();
+  for (const team of data.settings?.proTeams ?? []) {
+    for (const [id, games] of Object.entries(team.proGamesByScoringPeriod ?? {})) {
+      const period = Number(id);
+      if (!Number.isInteger(period) || period < 1) continue;
+      for (const game of games ?? []) {
+        if (typeof game.date !== 'number') continue;
+        const day = easternDate(new Date(game.date));
+        const at = dates.get(period);
+        if (at) at.add(day);
+        else dates.set(period, new Set([day]));
+      }
+    }
+  }
+
+  const pairs = [...dates.entries()]
+    .filter(([, days]) => days.size === 1)
+    .map(([period, days]): PeriodAnchor => ({ period, date: [...days][0] }))
+    .sort((a, b) => a.period - b.period);
+  if (pairs.length === 0) throw new Error('ESPN pro schedule carried no usable scoring periods');
+
+  // Every pair, restated as "what period would `base.date` have been?", and the
+  // most popular answer wins.
+  const base = pairs[0];
+  const votes = new Map<number, number>();
+  for (const pair of pairs) {
+    const implied = pair.period - daysBetween(base.date, pair.date);
+    votes.set(implied, (votes.get(implied) ?? 0) + 1);
+  }
+  let period = base.period;
+  let best = 0;
+  for (const [value, count] of votes) {
+    if (count > best) {
+      best = count;
+      period = value;
+    }
+  }
+  return { period, date: base.date };
+}
+
+/** How long a failed derivation is remembered before it is tried again. */
+const ANCHOR_RETRY_MS = 60 * 1000;
+let anchorFailedAt = 0;
+
+/**
+ * The anchor, or null if ESPN's schedule can't be read at all.
+ *
+ * **This never rejects**, and that is load-bearing rather than tidy: a single
+ * fan-out asks for one period per day of the range, so a throwing anchor would
+ * reject in every one of `MAX_RANGE_DAYS` places at once — and `getTeamRosters`
+ * catches per *roster read*, not around the naming of the period, so the throw
+ * would escape the whole range instead of costing it its accuracy. Caught by
+ * driving the module with the schedule read forced to 503: the in-flight guard
+ * handed the same rejecting promise to five concurrent callers and the range
+ * died. Every path out of here is an anchor or a null.
+ *
+ * A failure is remembered for `ANCHOR_RETRY_MS` for the same reason: without
+ * it, a 62-day range against a dead upstream would retry an 850KB fetch once
+ * per wave of the fan-out rather than once.
+ */
+async function getPeriodAnchor(): Promise<PeriodAnchor | null> {
+  if (anchorCache && Date.now() - anchorCache.fetchedAt < ANCHOR_TTL_MS) return anchorCache.anchor;
+  if (anchorFailedAt && Date.now() - anchorFailedAt < ANCHOR_RETRY_MS) return null;
+
+  if (!anchorInFlight) {
+    anchorInFlight = (async () => {
+      const key = anchorBlobKey(SEASON);
+      const stored = await readJsonBlob<PeriodAnchor>(
+        key,
+        (_value, cachedAt) => Date.now() - cachedAt < ANCHOR_TTL_MS,
+      );
+      if (stored && typeof stored.period === 'number' && typeof stored.date === 'string') {
+        anchorCache = { anchor: stored, fetchedAt: Date.now() };
+        return stored;
+      }
+      const anchor = await fetchPeriodAnchor();
+      anchorCache = { anchor, fetchedAt: Date.now() };
+      await writeJsonBlob(key, anchor);
+      return anchor;
+    })().finally(() => {
+      anchorInFlight = null;
+    });
+  }
+
+  try {
+    return await anchorInFlight;
+  } catch (err) {
+    // One line per failure window rather than one per concurrent caller: a
+    // 62-day fan-out shares the rejecting promise and would otherwise log the
+    // same outage six times over.
+    const first = !anchorFailedAt || Date.now() - anchorFailedAt >= ANCHOR_RETRY_MS;
+    anchorFailedAt = Date.now();
+    if (first) console.error('ESPN period anchor unavailable:', (err as Error).message);
+    return null;
+  }
 }
 
 /**
  * ESPN's own current scoring period for a league.
  *
- * A probe of its own rather than a field lifted off the roster response,
- * because the number has to be **in hand before** the request that uses it: to
- * ask for tomorrow's lineup you must name the period in the query string. It is
- * cheap enough to be worth a round trip — a bare league read is **3KB** against
- * `mRoster`'s 2.2MB — and it is only ever fetched when a future day is actually
- * asked for, which is the `Tomorrow` preset and nothing else.
- *
- * Deliberately *learned* rather than derived from the date. The season's first
- * period is a constant this file would then have to carry and keep in step with
- * `SEASON`, and getting it wrong would silently shift every lineup by a day —
- * where an anchor read from ESPN cannot disagree with ESPN.
+ * **The fallback, and only the fallback.** It was the anchor until the schedule
+ * above became one, and it is kept because a derivation that fails must cost
+ * accuracy rather than the feature: without it a dead schedule read would leave
+ * every period unnamed and every day reading as today's. It is a bare league
+ * read — **3KB** against `mRoster`'s 2.2MB — cached per league for the same ten
+ * minutes the rosters take, and on the ordinary path it is now never issued at
+ * all.
  */
 const periodCache = new Map<number, { period: number; fetchedAt: number }>();
 
 async function currentScoringPeriod(creds: EspnCreds): Promise<number | null> {
   const hit = periodCache.get(creds.leagueId);
-  // The same ten minutes the rosters take. A period turns once a day, so this
-  // is generous; sharing the window keeps one answer about how fresh "now" is.
+  // A period turns once a day, so ten minutes is generous; sharing the window
+  // with the rosters keeps one answer about how fresh "now" is.
   if (hit && Date.now() - hit.fetchedAt < OWNERSHIP_TTL_MS) return hit.period;
   const data = await leagueGet(creds, []);
   const period = data.scoringPeriodId;
@@ -791,23 +975,27 @@ async function currentScoringPeriod(creds: EspnCreds): Promise<number | null> {
 }
 
 /**
- * The period holding the lineup for `date`, or null to let ESPN answer for its
- * own current day — which is both the answer for today and the fallback if the
- * probe can't tell us where "now" is. A missing anchor costs the future lineup
- * and leaves everything else standing, which is the right direction to fail in:
- * the alternative is guessing an absolute period and showing the wrong day's.
+ * The absolute period holding `day`'s lineup, or null when nothing can name it.
+ *
+ * The anchor answers whenever the schedule could be read, and the arithmetic
+ * touches no clock of ours. Failing that it is the old rule — ESPN's pointer
+ * plus the days from `baseballToday()` — which is right whenever the two clocks
+ * agree and is the behaviour this file had for its whole life; the point of the
+ * anchor is that agreement is no longer something we have to hope for.
+ *
+ * Null only when neither could answer, which leaves the request
+ * un-parameterised and ESPN answering for its own current day — the right
+ * direction to fail in, the alternative being to guess an absolute period and
+ * show the wrong day's.
  */
-async function scoringPeriodFor(
-  creds: EspnCreds,
-  date: string | null | undefined,
-): Promise<number | null> {
-  const offset = periodOffsetFor(date);
-  if (offset === 0) return null;
+async function periodFor(creds: EspnCreds, day: string): Promise<number | null> {
+  const anchor = await getPeriodAnchor();
+  if (anchor) return anchor.period + daysBetween(anchor.date, day);
   const base = await currentScoringPeriod(creds).catch((err: Error) => {
     console.error('ESPN scoring period unavailable:', err.message);
     return null;
   });
-  return base === null ? null : base + offset;
+  return base === null ? null : base + daysBetween(baseballToday(), day);
 }
 
 /** One fantasy team, as the client shows it. */
@@ -1024,7 +1212,7 @@ const inFlight = new Map<string, Promise<EspnOwnership>>();
  * `date` is the day the caller wants the **lineup** for — the last day of the
  * range the roster views are reporting on. Today and anything before it read
  * ESPN's current period, so the default is the behaviour this has always had;
- * see the note above `periodOffsetFor` for why only the future is named.
+ * see `ownershipDay` above for why a past day reads as today here.
  *
  * `force` drops **every** period of the league, not just the one being asked
  * for. "Read my league again" is a statement about the league rather than about
@@ -1039,8 +1227,15 @@ export async function getOwnership(
   force = false,
   date?: string | null,
 ): Promise<EspnOwnership> {
-  const period = await scoringPeriodFor(creds, date);
-  const key = cacheKey(creds.leagueId, period);
+  // The day first, then the period it falls in. The two are separate because
+  // the **key** wants the day and the **request** wants the period: today's
+  // entry keeps the bare league id, so the map every member of a league shares
+  // stays one entry, while the request still names the period rather than
+  // letting ESPN's own pointer answer — which in the small hours is a different
+  // day (see **The period a day falls in** above).
+  const day = ownershipDay(date);
+  const period = await periodFor(creds, day);
+  const key = cacheKey(creds.leagueId, day === baseballToday() ? null : period);
   if (force) {
     const prefix = `${creds.leagueId}`;
     for (const k of ownershipCache.keys()) {
@@ -1149,21 +1344,22 @@ export async function getOwnership(
 // rule above refuses. Stated rather than papered over.
 
 /**
- * The absolute period holding `date`'s lineup — **signed**, so a past day
- * resolves to a past period. Null when the anchor can't be read, or when the
- * date is so far back it lands before the season's first period (ESPN has
- * nothing to say about period 0 and a range that reaches past opening day is a
- * range with no lineups in its early half rather than an error).
+ * The absolute period holding `date`'s lineup — **unclamped**, so a past day
+ * resolves to a past period, which is the whole point of reading a range one
+ * day at a time. Null when no anchor could be had at all, and null below period
+ * 1: ESPN has nothing to say about period 0, so a range reaching past opening
+ * day has no lineups in its early half rather than erroring.
+ *
+ * This is the caller the anchor was derived from the schedule *for*. It names a
+ * period per day for up to `MAX_RANGE_DAYS` of them, so an anchor off by one
+ * shifts every roster and every lineup in the range by a day — silently wrong
+ * rather than absent, which is the failure this file least wants.
  */
 async function lineupPeriodFor(creds: EspnCreds, date: string): Promise<number | null> {
-  const offset = dayOffsetFor(date);
-  const base = await currentScoringPeriod(creds).catch((err: Error) => {
-    console.error('ESPN scoring period unavailable:', err.message);
-    return null;
-  });
-  if (base === null) return null;
-  const period = base + offset;
-  return period >= 1 ? period : null;
+  const day = validDate(date);
+  if (day === null) return null;
+  const period = await periodFor(creds, day);
+  return period !== null && period >= 1 ? period : null;
 }
 
 /**
