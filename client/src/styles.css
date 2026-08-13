@@ -5531,7 +5531,11 @@ body {
    it — over the pinned chrome that opened it (41) and the full-page table box
    (45), under the player page (50) and the reel and how-to pages (60), those
    being pages where this is a control's panel. */
-.research-columns-dialog {
+/* Two dialogs share this shell — the board's Columns picker and a pitcher's
+   full breakdown — through `components/Modal.tsx`, which is why the classes are
+   `.app-dialog*` and the board's own name is folded into the box rule below
+   rather than restyled beside it. */
+.app-dialog {
   position: fixed;
   inset: 0;
   z-index: 46;
@@ -5547,7 +5551,7 @@ body {
    cap is what keeps a 44-column board inside the dialog instead of growing the
    page behind it; `dvh` because a phone's browser chrome comes and goes, the
    unit `.app.summary-mode` is already declared in. */
-.research-columns-box {
+.app-dialog-box {
   display: flex;
   flex-direction: column;
   width: min(720px, 100%);
@@ -5558,7 +5562,7 @@ body {
   box-shadow: var(--shadow);
   overflow: hidden;
 }
-.research-columns-head {
+.app-dialog-head {
   flex: none;
   display: flex;
   align-items: center;
@@ -5567,7 +5571,7 @@ body {
   padding: 12px 12px 10px;
   border-bottom: 1px solid var(--border);
 }
-.research-columns-head h2 {
+.app-dialog-head h2 {
   margin: 0;
   font-size: 14px;
   font-weight: 800;
@@ -5575,7 +5579,7 @@ body {
   color: var(--text);
 }
 /* The app's square icon button, at the size the header's own controls take. */
-.research-columns-close {
+.app-dialog-close {
   flex: none;
   display: inline-flex;
   align-items: center;
@@ -5588,11 +5592,41 @@ body {
   border-radius: var(--control-radius-inner);
   cursor: pointer;
 }
-.research-columns-close:hover {
+.app-dialog-close:hover {
   color: var(--text);
   border-color: var(--accent);
 }
-.research-columns-close:focus-visible {
+.app-dialog-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+/* An arsenal table is wider than four runs of column chips, so the breakdown
+   takes its own width off the shared box. Still `min(…, 100%)`, so a phone is
+   unaffected and the padding around it holds. */
+.outing-breakdown-box {
+  width: min(860px, 100%);
+}
+/* The way into it, under the innings. A quiet full-width bar rather than a
+   button floating at one end: it closes the opened outing the way `Load more`
+   closes the feed's own list, and at that width it is a thumb target on a phone
+   without being a second accent competing with the credit chip above it. */
+.outing-breakdown-btn {
+  align-self: stretch;
+  padding: 9px 12px;
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.outing-breakdown-btn:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.outing-breakdown-btn:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
@@ -5603,7 +5637,7 @@ body {
    this cited no longer exists. `contain` stops the chaining but explicitly
    keeps the element's own overscroll affordance — on iOS the rubber-band —
    which is the thing being removed. */
-.research-columns-body {
+.app-dialog-body {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
@@ -6747,6 +6781,43 @@ body {
   margin-right: auto;
 }
 
+/* One game inside a batter's card, once the range spans more than one date.
+   The Games view cut a card into game blocks for this reason and the grouped
+   feed inherits the job: over a week a flat run of at-bats says nothing about
+   which afternoon each belongs to. No rail and no box — the plays under it have
+   their own, and a third edge inside the group's would be a thicket. */
+.feed-game-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+/* The block's head: date, matchup, his line for that game, the score. Static,
+   and quiet — it labels the plays under it rather than competing with them, so
+   it takes the faint rule the game bars use and no panel of its own. */
+.feed-game-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.feed-game-date {
+  flex: none;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+/* The line pushes the badge to the far end, the grammar every bar in this feed
+   reads by: what happened on the left, how the game stands on the right. */
+.feed-game-line {
+  margin-right: auto;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
 /* The items inside. Each keeps its own rail — the outcome, the tone, the
    decision — which is what makes a group scannable rather than a wall: the
    group's edge says whose it is and theirs say how each went. 12px rather than

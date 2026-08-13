@@ -1,14 +1,13 @@
 import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { createPortal } from 'react-dom';
 import { BaseballMark } from './BaseballMark';
 import { ExpandButton } from './ExpandButton';
 import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
+import { createPortal } from 'react-dom';
+import { Modal } from './Modal';
 import {
   PlayerStatusContext,
-  overlayAbove,
   useFullPage,
-  useLockBodyScroll,
   usePlayerStatus,
 } from '../hooks';
 import { RESEARCH_INCLUDE_KEYS, RESEARCH_WINDOWS, TREND_WINDOWS } from '../types';
@@ -1357,56 +1356,21 @@ function TeamMark({ teamId, team }: { teamId: number | null; team: string }) {
  * while one of those is above it, and it is itself in the list they consult, so
  * one press undoes one thing whichever way round they end up.
  */
+/**
+ * The board's column picker. The shell — portal, body lock, Escape, backdrop,
+ * head, one scrolling body — is the app's shared `Modal`; what is left here is
+ * the title and the width, this box being sized for four labelled runs of chips
+ * where the pitcher breakdown next door is sized for an arsenal table.
+ */
 function ColumnsDialog({ onClose, children }: { onClose: () => void; children: ReactNode }) {
-  useLockBodyScroll();
-  const boxRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !overlayAbove(boxRef.current)) onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
-  return createPortal(
-    <div
-      className="research-columns-dialog"
-      ref={boxRef}
-      /* `pointerdown` rather than a click, the rule `useDismissable` follows: a
-         press that starts on the backdrop dismisses on the way down, and a
-         chip-drag that happens to *end* out here — mouse down on the grip, up
-         on the backdrop, whose click would land on their common ancestor —
-         cannot close the dialog out from under the reorder it just made. */
-      onPointerDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+  return (
+    <Modal
+      title="Columns"
+      titleId="research-columns-title"
+      onClose={onClose}
     >
-      <div
-        className="research-columns-box"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="research-columns-title"
-      >
-        <div className="research-columns-head">
-          <h2 id="research-columns-title">Columns</h2>
-          <button
-            type="button"
-            className="research-columns-close"
-            onClick={onClose}
-            aria-label="Close"
-            title="Close"
-          >
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
-              <path d="M6 6l12 12M18 6 6 18" />
-            </svg>
-          </button>
-        </div>
-        {/* Its own scroller, which is the whole point: 44 columns scroll in
-            here rather than growing the page behind. */}
-        <div className="research-columns-body">{children}</div>
-      </div>
-    </div>,
-    document.body,
+      {children}
+    </Modal>
   );
 }
 

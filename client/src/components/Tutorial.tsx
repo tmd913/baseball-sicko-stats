@@ -311,6 +311,10 @@ const CHAPTERS: Chapter[] = [
             the deep read — every plate appearance, every pitch, the video — and it is
             where the old <strong>Games</strong> tab went, that page having been this
             grouping and nothing else. Cards start collapsed; tap a header to open one.
+            Pick more than one day and a batter's card splits into his games, dated,
+            with the closed card counting games instead of plays. A pitcher's outing
+            carries a <Ui>Full breakdown</Ui> button — his line, the lineup he faced
+            and his arsenal for that outing.
           </dd>
         </dl>
         <p className="tut-note">

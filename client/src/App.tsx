@@ -3137,6 +3137,7 @@ export default function App() {
             groupOpenKeys={expandedKeys}
             onToggleGroup={toggleCollapsed}
             positionFor={positionFor}
+            multiDay={start !== end}
           />
         )
       )}
