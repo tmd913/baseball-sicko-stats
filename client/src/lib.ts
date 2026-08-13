@@ -54,16 +54,21 @@ export function eligibleForKind(
  * **How many codes a position chip prints before it starts counting.**
  *
  * Two, and the number is a phone's line rather than a preference. The widest
- * list in the league is `1B/2B/3B/SS/OF` — fourteen characters — and both the
- * places that print one are tight: the research board's Pos cell hugs its
- * content on the app's widest table, where the difference is a stat column off
- * the right edge (measured at 390px: 39px of column for a single code, 108
- * uncapped, 65 here), and a card's header is a name and this chip on one line,
- * where the uncapped list wraps **8 of 14 names at 390 and 13 of 14 at 360**
- * against the 1 and 2 that wrap today. Two plus a count is bounded at seven
- * characters (`2B/SS+3`), which is the form a fantasy site prints in a roster
- * row, and is the whole list for 533 of the 628 matched batters. The player
- * page prints it whole; it is the one place with the room.
+ * list in the league is `1B/2B/3B/SS/OF` — fourteen characters — and a card's
+ * header is a name and this chip on **one** line, where the uncapped list wraps
+ * 8 of 14 names at 390px and 13 of 14 at 360, against the 1 and 2 that wrap
+ * today. Two plus a count is bounded at seven characters (`2B/SS+3`), which is
+ * the form a fantasy site prints in a roster row, and is the whole list for 533
+ * of the 628 matched batters.
+ *
+ * **The card chip is now the only thing this governs.** The research board's
+ * Pos cell took the same cap for a while, on the argument that the column hugs
+ * its content on the app's widest table and every pixel of it is a stat off the
+ * right edge — measured at 390px, 39px of column for a single code, 65 capped,
+ * 108 whole. It prints the list whole now (see `positionOrder`): that cell is
+ * where a filtered row says why it is on screen, and a table that already
+ * scrolls sideways has 43px to spend on saying it. The player page prints it
+ * whole too, and always has.
  */
 const POS_CHIP_MAX = 2;
 
@@ -85,13 +90,30 @@ export function positionCodes(
   lead?: string[],
 ): { ordered: string[]; text: string } {
   const trimmed = codes.length > 1 ? codes.filter((p) => p !== 'DH') : codes;
-  const hoisted = lead ? trimmed.filter((p) => lead.includes(p)) : [];
-  const ordered = hoisted.length
-    ? [...hoisted, ...trimmed.filter((p) => !hoisted.includes(p))]
-    : trimmed;
+  const ordered = positionOrder(trimmed, lead);
   const shown = ordered.slice(0, POS_CHIP_MAX);
   const extra = ordered.length - shown.length;
   return { ordered, text: shown.join('/') + (extra > 0 ? `+${extra}` : '') };
+}
+
+/**
+ * The same list, hoisted the same way, with neither the cap nor the DH rule.
+ *
+ * Both of those are the *chip's* rules rather than the list's, and both are
+ * paid for by a width that only the chip is short of: two codes and a count is
+ * what keeps a name and its chip on one phone line, and dropping DH is what
+ * stops the two slots a cap allows being spent on the one position no filter
+ * can select. The research board's Pos cell has no such line to hold — it hugs
+ * its own content in a table that scrolls sideways regardless — so it prints
+ * what the app actually knows, DH included, and the `+3` that used to stand in
+ * for three quarters of a utility man's eligibility is gone. The hoist stays
+ * either way: it costs nothing, and it is what puts the position a reader has
+ * filtered to at the front of the cell that is there to say why the row is on
+ * screen.
+ */
+export function positionOrder(codes: string[], lead?: string[]): string[] {
+  const hoisted = lead ? codes.filter((p) => lead.includes(p)) : [];
+  return hoisted.length ? [...hoisted, ...codes.filter((p) => !hoisted.includes(p))] : codes;
 }
 
 /** Category used for color-coding an outcome. */

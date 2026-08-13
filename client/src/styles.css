@@ -3302,8 +3302,10 @@ body {
   /* Both axes: this pane scrolls sideways always and vertically in
      `.details-view.gamelog-mode`, and what sits behind it there is the player
      page's own scroller — so an unbounded flick down the log carried straight
-     on into the overlay behind it. */
-  overscroll-behavior: contain;
+     on into the overlay behind it. `none` rather than `contain` for the reason
+     `.summary-scroll` gives: `contain` keeps the element's own iOS bounce, and
+     a log that springs back off its last game reads as one still scrolling. */
+  overscroll-behavior: none;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg);
@@ -3331,10 +3333,14 @@ body {
 .glog-table tbody tr:nth-child(even) .glog-date {
   background: var(--panel);
 }
-.glog-table tbody tr:hover td,
-.glog-table tbody tr:hover .glog-date {
-  background: var(--panel-2);
-}
+/* No hover tint on a row. It was the one thing in this table the other two wide
+   tables don't do, and it earned nothing in either place it was seen: with a
+   pointer it lit a row that is read across rather than picked, and on a touch
+   device — where `:hover` sticks to whatever was last tapped — it left a band
+   of `--panel-2` sitting on a random game until something else was pressed,
+   which reads as a selection the app then declines to act on. The zebra stripe
+   stays: it is what keeps a fourteen-column row readable across, and it is the
+   same device the summary table and the research board use. */
 .glog-table thead th {
   /* Sticky against .glog-scroll, which is the scroll container in both axes —
      which is the whole reason the Game Log tab reshapes the overlay below. */
@@ -4572,6 +4578,26 @@ body {
   flex-direction: column;
   overflow: hidden;
 }
+/* And on those two views the *document* mustn't bounce either. The pane inside
+   consumes its own gesture now (`overscroll-behavior: none` on it), but iOS
+   hands the drag to the page whenever the pane can't scroll in the axis it was
+   dragged in — a summary table of six rows on a tall phone, or any sideways
+   swipe on a board narrow enough to fit — and there the page is a viewport-tall
+   column that cannot scroll, so what moves is the whole app rubber-banding
+   under the finger. From the reader's side that is the same complaint as the
+   table scrolling past its own end.
+
+   Scoped to the two views where the table *is* the page, rather than declared
+   on the root: the games list and the feed are ordinary scrolling pages and
+   have a pull-to-refresh worth keeping. Nothing is lost here — these two can't
+   scroll at all, and the app's own re-read is the refresh button in the header.
+   `:has()` on the root is what makes the scoping possible from a stylesheet
+   that only ever gets a class onto `.app`; where it isn't understood the rule
+   is dropped and the page behaves exactly as it does today. */
+html:has(.app.summary-mode),
+html:has(.app.research-mode) {
+  overscroll-behavior: none;
+}
 /* And on the summary view the column gives its vertical margins back too, the
    way the three wide tables give back the side gutters (`--table-bleed`). The
    pane here is the whole of the page — there is nothing under it to separate it
@@ -4638,9 +4664,19 @@ body {
      or the last column must not hand the scroll on to whatever is behind it —
      the page in the ordinary view, and on a phone the browser's own rubber-band
      and pull-to-refresh. Both axes here, unlike the tab strips below, because
-     this box genuinely scrolls in both and `contain` on an axis that can't
-     scroll would swallow the gesture rather than pass it on. */
-  overscroll-behavior: contain;
+     this box genuinely scrolls in both and a value on an axis that can't scroll
+     would swallow the gesture rather than pass it on.
+
+     **`none` rather than `contain`, and the difference is the whole of what a
+     phone sees.** `contain` stops the *chaining* — the page behind no longer
+     moves — but it explicitly keeps the element's own overscroll affordance,
+     which on iOS is the elastic bounce, so the last row still slid up off the
+     pane and sprang back and the far-right column still pulled away from the
+     edge. That reads as a table that has kept scrolling past its own end, which
+     is exactly the report. `none` keeps the chaining fix and drops the bounce,
+     so the gesture is consumed and the rows hold still. Nothing is lost on a
+     desktop, where there is no bounce to suppress. */
+  overscroll-behavior: none;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--bg);
@@ -5241,8 +5277,10 @@ body {
   min-height: 0;
   max-height: 100%;
   overflow: auto;
-  /* Both axes, for the reason `.summary-scroll` gives. */
-  overscroll-behavior: contain;
+  /* Both axes, and `none` rather than `contain`, for the reasons
+     `.summary-scroll` gives — the second of them being what stops a phone
+     bouncing the board past its last row. */
+  overscroll-behavior: none;
   border: 1px solid var(--border);
   border-radius: var(--control-radius);
   background: var(--bg);
@@ -5889,6 +5927,12 @@ body {
    headshot staying pinned (as in the summary table, so stat columns get the
    room on a phone). */
 .research-table .research-team-col,
+/* Hugs its own content and never wraps, which is what lets the cell print a
+   whole eligibility list — `1B/2B/3B/SS/OF/DH` at the widest — without a rule
+   here having to name a width. It is the one cell that says why a filtered row
+   is on the board, so a second line or an ellipsis would cost exactly what the
+   old `+3` cost; the table already scrolls sideways, and this column is a few
+   dozen pixels of that. */
 .research-table .research-pos-col {
   width: 1%;
   text-align: left;
