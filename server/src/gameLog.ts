@@ -1,5 +1,6 @@
 import type { BatterGameLog, GameLogEntry, PitcherGameLog, PitchingCredit } from './types.js';
 import { getSeasonArsenal, type Appearances } from './pitcherArsenal.js';
+import { fipLike } from './leagueRates.js';
 
 const UA = { 'User-Agent': 'statcast-sicko/1.0' };
 
@@ -203,11 +204,28 @@ function decisionOf(st: Record<string, unknown>): PitchingCredit | null {
   return null;
 }
 
+/**
+ * The three true outcomes and the outs behind them, accumulated down the log so
+ * each row can carry a season-to-date FIP. MLB publishes ERA and WHIP that way
+ * itself; it publishes no FIP at all, and the counting stats in a game-log split
+ * are **that game's own** — so the running totals have to be kept here, over the
+ * splits in the order MLB sends them, which is scorebook order (the reverse of
+ * the order the table reads in).
+ */
+interface RunningFip {
+  hr: number;
+  bb: number;
+  hbp: number;
+  k: number;
+  outs: number;
+}
+
 function toPitcherGame(
   sp: GameLogSplit,
   abbrevs: Map<number, string>,
   sched: Schedule,
   appearances: Appearances,
+  fip: number | null,
 ): PitcherGameLog {
   const st = sp.stat ?? {};
   const app = appearances.get(sp.game?.gamePk ?? 0) ?? null;
@@ -235,6 +253,10 @@ function toPitcherGame(
     pitches: n(st.numberOfPitches),
     strikes: n(st.strikes),
     seasonEra: s(st.era),
+    // Ours, not MLB's — see `RunningFip`. Formatted here the way the pitcher
+    // card's season line formats its own, so the two read alike.
+    seasonFip: fip === null ? null : fip.toFixed(2),
+    seasonWhip: s(st.whip),
   };
 }
 
@@ -305,7 +327,27 @@ export async function getPitcherGameLog(
       },
     ),
   ]);
-  const games = splits.map((sp) => toPitcherGame(sp, abbrevs, sched, appearances)).reverse();
+  // Oldest first, which is how MLB sends them — the running totals behind each
+  // row's FIP only mean anything in that order, so they are accumulated before
+  // the list is turned around for the table.
+  const run: RunningFip = { hr: 0, bb: 0, hbp: 0, k: 0, outs: 0 };
+  const games = splits
+    .map((sp) => {
+      const st = sp.stat ?? {};
+      run.hr += n(st.homeRuns);
+      run.bb += n(st.baseOnBalls);
+      run.hbp += n(st.hitBatsmen);
+      run.k += n(st.strikeOuts);
+      run.outs += n(st.outs);
+      return toPitcherGame(
+        sp,
+        abbrevs,
+        sched,
+        appearances,
+        fipLike(run.hr, run.bb, run.hbp, run.k, run.outs),
+      );
+    })
+    .reverse();
   pitcherCache.set(key, { games, fetchedAt: Date.now() });
   return games;
 }
