@@ -16,11 +16,12 @@ import type {
   TrendWindow,
   WatchPlayer,
 } from './types';
-import { eligibleForKind, isInjured, isStartingOn, positionCodes } from './lib';
+import { isInjured, isStartingOn } from './lib';
 import { BaseballMark } from './components/BaseballMark';
 import { PlayerAdder } from './components/PlayerAdder';
 import { PlayerOrderEditor } from './components/PlayerOrderEditor';
-import { LiveFeed } from './components/LiveFeed';
+import { LiveFeed, FEED_PAGE_SIZE } from './components/LiveFeed';
+import { clearClipCache } from './components/PlateAppearanceCard';
 import { SummaryTable } from './components/SummaryTable';
 import {
   ResearchTable,
@@ -43,45 +44,41 @@ import {
   FantasyRosterContext,
   MutedContext,
   PlayerStatusContext,
+  useDelayedFlag,
   useDismissable,
   useStickyChromeOffset,
 } from './hooks';
 import type { FantasySlot } from './hooks';
+import { LoadingBlock, LoadingLine, SpinningBaseball } from './components/Loading';
 import { Tutorial } from './components/Tutorial';
 import { EspnSettings } from './components/EspnSettings';
 
-// A page's remembered scroll offset is re-applied every frame until the page
-// has been the same height for PAGE_SCROLL_QUIET — long enough to outlast the
-// gaps between bursts of content arriving — and abandoned after
-// PAGE_SCROLL_SETTLE whatever happens, so a page that really is shorter now
-// settles rather than being held against an offset it can never reach.
-const PAGE_SCROLL_QUIET = 250;
-const PAGE_SCROLL_SETTLE = 900;
-// Anything that means the reader has taken the scroll back.
-const USER_SCROLLS = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const;
-
-// Breathing room above a card scrolled to the top of the viewport — the bare
-// gap, matching `--scroll-offset`'s own; the pinned chrome's height is added to
-// it at the call site.
-const SCROLL_GAP = 12;
-
 // How long the header's refresh keeps spinning at a minimum — see `refreshAll`.
-// A warm `/api/report` comes back in about 16ms, which is a spinner nobody
-// sees, and a button that answers a press with nothing at all reads as broken.
+// A warm `/api/report` comes back in about 16ms, which is a baseball nobody
+// sees turn, and a button that answers a press with nothing at all reads as
+// broken. Every press-triggered mark in the app takes this floor; the waits
+// nobody pressed take `WAIT_DELAY` at the other end of the same argument
+// (`hooks.ts`), which is a delay before a mark goes up rather than a floor on
+// how long it stays.
 const MIN_SPIN = 450;
 
 /**
  * The app's three pages. **Roster** is the summary table over the date range,
- * **Feed** the same players and days read as a stream — by clock, or grouped
- * one card per player — and **Research** the whole league over the season.
+ * **Feed** the same players and days read as a stream, and **Research** the
+ * whole league over the season.
  *
- * It was two tiers until now: Roster · Research on top, and Roster's own
- * Summary / Games / Feed below. What collapsed it was noticing that Games and
- * Feed were not two readings but one: a card per player over the range, and a
- * stream over the same range, differing in *sort order*. Sorting is not a page.
- * So Games folded into the feed as `groupByPlayer`, which left Roster with a
- * single reading — the summary table — and the sub-row with one live tab in it.
- * Three pages, one row.
+ * It was two tiers once: Roster · Research on top, and Roster's own Summary /
+ * Games / Feed below. What collapsed it was noticing that Games and Feed were
+ * not two readings but one: a card per player over the range, and a stream over
+ * the same range, differing in *sort order*. Sorting is not a page. So Games
+ * folded into the feed as a grouping, which left Roster with a single reading —
+ * the summary table — and the sub-row with one live tab in it.
+ *
+ * **The grouping has since gone too, and one step further on.** A card per
+ * player is a page about a *player*, and this app already had one that opened
+ * on anybody: the player page. So the reading moved onto it as the **Overview**
+ * tab, the toggle went with it, and a name in any view now opens the same page
+ * his headshot does. Three pages, one row, and one place a player's day is read.
  *
  * `summary` rather than `roster` because that is the name `view=` has always
  * used for it, and it is the default every link in the wild omits.
@@ -125,6 +122,26 @@ function addDays(date: string, delta: number): string {
   const dt = new Date(Date.UTC(y, m - 1, day));
   dt.setUTCDate(dt.getUTCDate() + delta);
   return dt.toISOString().slice(0, 10);
+}
+
+/**
+ * Was this player in your fantasy lineup on `date`?
+ *
+ * The one place that question is answered, so the filter that credits a
+ * player's day and the count on his slot chip cannot come to disagree. A date
+ * the map has no entry for is a day the server couldn't read, not a day nobody
+ * started: it falls back to `fallback`, the single end-of-range lineup the
+ * chips are drawn from, which is the answer the app gave before per-day lineups
+ * existed and the right direction to fail in.
+ */
+function startedOn(
+  lineups: Map<string, Set<number>>,
+  date: string,
+  mlbId: number,
+  fallback: boolean,
+): boolean {
+  const day = lineups.get(date);
+  return day ? day.has(mlbId) : fallback;
 }
 
 /** Today's baseball date — the Eastern date of a clock set back to the rollover
@@ -235,7 +252,10 @@ export default function App() {
   const [roster, setRoster] = useState<WatchPlayer[]>([]);
   const [reports, setReports] = useState<PlayerReport[]>([]);
   const [reportLoading, setReportLoading] = useState(false);
-  const [showLoading, setShowLoading] = useState(false);
+  /* The report's read, held back by `WAIT_DELAY` — nobody pressed anything to
+     start this one, so it owes the reader nothing until it is slow enough to
+     be worth saying. The same hook now guards every block wait in the app. */
+  const showLoading = useDelayedFlag(reportLoading);
   const [rosterLoaded, setRosterLoaded] = useState(false);
   /**
    * The **watchlist** — `${kind}-${id}` keys the user is following on the
@@ -249,12 +269,6 @@ export default function App() {
    */
   const [watchlistKeys, setWatchlistKeys] = useState<Set<string>>(() => new Set());
   const [error, setError] = useState<string | null>(null);
-  // Player cards are collapsed by default; the URL tracks the keys the user has
-  // explicitly expanded (so a fresh visit — and any newly-added player — starts
-  // collapsed, while reloads/shared links restore whatever was opened).
-  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(
-    () => new Set(readKeys(initialParams.get('expanded'))),
-  );
   // The player whose details view (percentile rankings) is open, seeded from the
   // URL so a shared/reloaded link reopens it once that player's report loads.
   const [detailsKey, setDetailsKey] = useState<string | null>(
@@ -276,23 +290,20 @@ export default function App() {
   const [view, setView] = useState<View>(() => {
     const v = initialParams.get('view');
     if (v === 'research') return 'research';
-    // `games` was the card-per-player page and `players` its own older name.
-    // Both are the feed grouped by player now — that page *was* the grouping —
-    // so an old link opens the thing it asked for rather than 404ing into the
-    // default, the same courtesy `readKeys` extends to pre-two-way player ids.
+    // **Three dead view names, all meaning the feed.** `games` was the
+    // card-per-player page and `players` its own older name; both became the
+    // feed's grouping, and the grouping has since become the player page's
+    // Overview tab. The feed is where they still land: it is the same players
+    // over the same days, which is the closest thing to what those links asked
+    // for — and the alternative, opening a player page, needs a player, which a
+    // bare `view=games` does not name. `group=player` is read only in the sense
+    // that it is *ignored*: the first URL sync drops it, along with any
+    // `expanded=` the same link carried, since the cards those named no longer
+    // exist anywhere. That is the same courtesy `readKeys` extends to
+    // pre-two-way player ids, and the safe direction for an old link to fail in.
     if (v === 'feed' || v === 'games' || v === 'players') return 'feed';
     // Summary is the default; the rest are opted into explicitly.
     return 'summary';
-  });
-  /**
-   * Read the feed one card per player instead of newest-first. In the URL
-   * because it changes how a shared link reads, and seeded on for a legacy
-   * `view=games` link, that page having been exactly this.
-   */
-  const [groupByPlayer, setGroupByPlayer] = useState<boolean>(() => {
-    const v = initialParams.get('view');
-    if (v === 'games' || v === 'players') return true;
-    return initialParams.get('group') === 'player';
   });
   // Which half of the watchlist the players view is showing. Its own tab row,
   // since a batter card and a pitcher card have nothing in common to scan down.
@@ -359,7 +370,6 @@ export default function App() {
     const today = baseballToday();
     return start <= today && today <= end;
   }, [start, end]);
-  const startersActive = startersOnly && rangeHasToday;
   // Play every clip with the sound off. Saved per user like the toggle above,
   // but deliberately **not** in the URL: hide-injured is there because it
   // changes which players a view is reporting on, and a link that says so is
@@ -403,7 +413,7 @@ export default function App() {
   // The research board, fetched per kind the first time that tab is opened and
   // kept for the session: it's the whole league in one blob, season-to-date, and
   // the server caches it for six hours — re-fetching on every tab switch would
-  // buy nothing but a spinner.
+  // buy nothing but a wait.
   // Which pill the research board is on. Its own selector rather than the
   // watchlist's `kind` tabs, because the row it drives is both — Batters and
   // Pitchers are two of its eleven entries, and the rest are slices of one or
@@ -793,24 +803,55 @@ export default function App() {
   const loadFantasyRoster = useCallback((refresh = false) => {
     const seq = ++rosterRead.current;
     return api
-      .espnRoster(refresh, end)
+      .espnRoster(refresh, start, end)
       .then((r) => {
         if (seq === rosterRead.current) setFantasyRoster(r);
       })
       // The report request carries the same failure and banners it; a second
       // copy of the same message would only say it twice.
       .catch((e: Error) => console.error('fantasy roster unavailable:', e.message));
-    // `end` rather than nothing: it decides which day's lineup is asked for, so
-    // a stale closure would hold the chips on the day the range was last
+    // The whole range rather than nothing: `end` decides which day's roster and
+    // slot chips come back, and `start` opts the response into a lineup **per
+    // day** of it, which is what the roster views credit a player's days
+    // against. A stale closure would hold both on the range the view was last
     // changed *from*. It re-identifies this callback on a date change, which
-    // the effect below wanted anyway — it already lists `end` — so the two move
+    // the effect below wanted anyway — it already lists both — so they move
     // together and it still fires once.
-  }, [end]);
+  }, [start, end]);
 
   useEffect(() => {
     if (!usingFantasy) return;
     loadFantasyRoster();
   }, [usingFantasy, espnLeagueId, fantasyTeamId, start, end, loadFantasyRoster]);
+
+  /**
+   * Your lineup on **each** day of the range, by MLB id — the whole point of
+   * which is that a range is a range of lineups. ESPN answers for one scoring
+   * period at a time, so the server reads one per date (see `espn.ts`'s **The
+   * lineup, one day at a time**); this turns the wire's `{ date: id[] }` into
+   * the shape the filter reads it in.
+   *
+   * Null when the views aren't reading a fantasy team, and null when the read
+   * didn't happen or failed — in which case everything below falls back to
+   * `fantasySlots`, i.e. the single end-of-range lineup, which is exactly what
+   * the app did before. A **date missing from a present map** falls back the
+   * same way and for the same reason: absent means unread, not empty.
+   */
+  const fantasyLineups = useMemo(() => {
+    const raw = usingFantasy ? fantasyRoster?.lineups : null;
+    if (!raw) return null;
+    const map = new Map<string, Set<number>>();
+    for (const [date, ids] of Object.entries(raw)) map.set(date, new Set(ids));
+    return map.size > 0 ? map : null;
+  }, [usingFantasy, fantasyRoster]);
+
+  /** The dates in the range, which the count on a slot chip and the per-day
+   *  filter both walk. Cheap — `MAX_RANGE_DAYS` is 62. */
+  const rangeDates = useMemo(() => {
+    const out: string[] = [];
+    for (let d = start; d <= end; d = addDays(d, 1)) out.push(d);
+    return out;
+  }, [start, end]);
 
   /** Slot by player key, for the chips. Null when the views are reading the
    *  saved watchlist, which is what makes every chip in the app disappear. */
@@ -819,16 +860,41 @@ export default function App() {
     const map = new Map<string, FantasySlot>();
     for (const p of fantasyRoster.players) {
       if (p.mlbId === null) continue;
+      // How many of the days in view he was in the lineup on — the fact the
+      // chip's one-day slot can't carry over a range. Null without the per-day
+      // map, where there is no second fact to state.
+      const startedDays =
+        fantasyLineups === null
+          ? null
+          : rangeDates.filter((d) => startedOn(fantasyLineups, d, p.mlbId as number, p.starting))
+              .length;
       for (const kind of p.kinds) {
         map.set(`${kind}-${p.mlbId}`, {
           slot: p.slot,
           starting: p.starting,
           injuryStatus: p.injuryStatus,
+          startedDays,
+          rangeDays: startedDays === null ? null : rangeDates.length,
         });
       }
     }
     return map;
-  }, [usingFantasy, fantasyRoster]);
+  }, [usingFantasy, fantasyRoster, fantasyLineups, rangeDates]);
+
+  /**
+   * **Per-day lineups take the gate off.** The `rangeHasToday` rule exists
+   * because the MLB reading of this filter is a fact about tonight, so over a
+   * week in July there is nobody it could keep and a control that empties a
+   * table with no way to read why is a trap. That argument does not survive a
+   * lineup read per day: on a fantasy team every day of the range now has its
+   * own answer, so "the men I started" is exactly as meaningful over `Yesterday`
+   * or last July as it is today. Without the map — saved-roster mode, an older
+   * tab, a failed read — the old gate stands, since the single end-of-range
+   * lineup really is only about one afternoon.
+   */
+  const startersPerDay = fantasyLineups !== null;
+  const startersOffered = rangeHasToday || startersPerDay;
+  const startersActive = startersOnly && startersOffered;
 
   /**
    * The keys "your roster" means on screen — the saved list, or the fantasy
@@ -1046,27 +1112,12 @@ export default function App() {
   }, []);
 
   // The pinned chrome, measured — it publishes `--chrome-h` for every
-  // `scroll-margin-top` in the stylesheet, and hands its height back here for
-  // the one scroll the app computes itself (below).
-  const [chromeRef, chromeH] = useStickyChromeOffset<HTMLDivElement>();
+  // `scroll-margin-top` in the stylesheet. It used to hand its height back for
+  // one scroll the app computed itself, the jump to a player's card; that jump
+  // is a player page now, which covers the bar rather than clearing it, so
+  // nothing reads the number by hand any more.
+  const chromeRef = useStickyChromeOffset<HTMLDivElement>()[0];
 
-  // Scroll a player's card to the top of the viewport — below the pinned
-  // chrome, which is what `scroll-margin-top` does for every collapsible that
-  // scrolls itself; this one does the arithmetic, so it subtracts the bar too.
-  //
-  // Deferred a frame because callers expand the card first: expanding grows the
-  // document, and only then is there room to scroll a bottom-of-page card's top
-  // up to the top. Scrolling before the grow would clamp at the old, shorter page
-  // bottom and stop short.
-  const scrollToPlayer = useCallback((key: string) => {
-    requestAnimationFrame(() => {
-      const el = document.getElementById(`player-${key}`);
-      if (!el) return;
-      const top =
-        el.getBoundingClientRect().top + window.scrollY - SCROLL_GAP - chromeH.current;
-      window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
-    });
-  }, [chromeH]);
   // Always-current reports, so the drag-end handler reads the latest order
   // without being recreated (and re-bound) on every reorder.
   const reportsRef = useRef(reports);
@@ -1082,12 +1133,8 @@ export default function App() {
       p.set('start', start);
       p.set('end', end);
     }
-    if (expandedKeys.size) p.set('expanded', [...expandedKeys].join(','));
     if (detailsKey) p.set('player', detailsKey);
     if (view !== 'summary') p.set('view', view);
-    /* Only meaningful on the feed, and off is the default — so a link can only
-       ever turn the grouping on, and `view=games` is what an old one says. */
-    if (view === 'feed' && groupByPlayer) p.set('group', 'player');
     if (playerKind !== 'batter') p.set('kind', playerKind);
     // Only meaningful on the research view, and 'batters' is its default.
     if (view === 'research' && researchPos !== 'batters') p.set('pos', researchPos);
@@ -1127,10 +1174,8 @@ export default function App() {
     start,
     end,
     activePreset,
-    expandedKeys,
     detailsKey,
     view,
-    groupByPlayer,
     playerKind,
     researchPos,
     researchWindow,
@@ -1210,16 +1255,6 @@ export default function App() {
       .finally(() => setRosterLoaded(true));
   }, []);
 
-  // Only surface the loading UI if the fetch is slow enough to matter — quick
-  // loads finish before this fires, so the spinner/empty flicker never shows.
-  useEffect(() => {
-    if (!reportLoading) {
-      setShowLoading(false);
-      return;
-    }
-    const t = setTimeout(() => setShowLoading(true), 250);
-    return () => clearTimeout(t);
-  }, [reportLoading]);
 
   /**
    * The watchlist, read once on boot beside the roster — it decides whether a
@@ -1295,7 +1330,7 @@ export default function App() {
     // A session that opens on `roster=fantasy` waits for the connection status
     // first. Firing now would read the saved watchlist, render it, and replace
     // it a moment later — a flash of the wrong list of players, which is worse
-    // than a slightly longer spinner.
+    // than a slightly longer wait.
     if (rosterSource === 'fantasy' && !espnStatusSettled) return;
     loadReport();
     // `fantasyTeamId` because the report is *about* that team's players: pick a
@@ -1412,6 +1447,10 @@ export default function App() {
    * - **The statuses map** on the two views that draw it (the research board
    *   and the details view) — lineups post and IL moves land through the day.
    * - **The research blob** on the research view alone.
+   * - **The clips**, which are a source like any other: a play's video is
+   *   looked up once per tab and then remembered (see `clearClipCache`), so
+   *   without this a miss made at nine in the morning would still be a miss at
+   *   noon on a page that has been asked to go and look again.
    *
    * Every one of those keeps what is on screen until its replacement arrives:
    * the report goes through `loadReport`'s quiet path, so the page's own
@@ -1421,6 +1460,7 @@ export default function App() {
   const [refreshing, setRefreshing] = useState(false);
   const refreshAll = useCallback(() => {
     setRefreshing(true);
+    clearClipCache();
     const espnFirst =
       espnConnected && (ownership !== null || usingFantasy)
         ? loadOwnership(true)
@@ -1433,8 +1473,8 @@ export default function App() {
       return Promise.all(rest);
     });
     // Spin for at least `MIN_SPIN` however fast the answer comes. Measured: a
-    // warm server answers `/api/report` in **16ms**, which is one frame of
-    // spinner — a press that leaves no trace at all reads as a dead button, and
+    // warm server answers `/api/report` in **16ms**, which is one frame of a
+    // turning ball — a press that leaves no trace reads as a dead button, and
     // the one thing this control has to say is "I heard you and I have gone and
     // looked". Long enough to be seen, short enough that a genuinely quick read
     // still feels quick.
@@ -1488,8 +1528,22 @@ export default function App() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  // Expanded at-bats / upcoming rows in the feed view, lifted here so "collapse
-  // all" can clear them (the player view collapses via expandedKeys instead).
+  // How far the feed's Recent section has been paged out, keyed exactly as the
+  // component itself is (kind + range) so it still resets when either of those
+  // changes, which is the rule that has always governed it. What it no longer
+  // resets on is a **view** switch, and that is the point: the count decides
+  // how tall the page is, so a reader who had pressed "Load more" twice and
+  // gone to the board came back to twenty items and to a remembered offset the
+  // page no longer had the room for — the one way the memory below could be
+  // exactly right and still land short. A ref rather than state: the live
+  // value lives in the component that grows it, and App only has to hand the
+  // same number back when it mounts again.
+  const feedShown = useRef(new Map<string, number>());
+  // Expanded at-bats / outings / upcoming rows in the feed, lifted here so
+  // "collapse all" can clear them. It is the feed's one level of collapsible
+  // again: the player groups above it went to the player page, and the day the
+  // Overview tab draws holds its own open keys, there being no cross-page
+  // control over an overlay that unmounts with them.
   const [feedOpenKeys, setFeedOpenKeys] = useState<Set<string>>(() => new Set());
   const toggleFeedKey = useCallback((key: string) => {
     setFeedOpenKeys((prev) => {
@@ -1499,22 +1553,11 @@ export default function App() {
       return next;
     });
   }, []);
-  // Whether the current view has anything expanded to collapse (the summary
-  // table and the edit screen have no collapsibles).
-  // The feed has two levels of collapsible now — the player groups
-  // (`expandedKeys`, which is what the Games view's cards used and what
-  // `expanded=` still carries) and the items inside them (`feedOpenKeys`) — so
-  // it answers for both. The summary table and the edit screen have neither.
-  const hasExpanded =
-    view === 'summary' || editMode
-      ? false
-      : view === 'feed'
-        ? feedOpenKeys.size > 0 || expandedKeys.size > 0
-        : false;
-  const collapseAll = () => {
-    setFeedOpenKeys(new Set());
-    setExpandedKeys(new Set());
-  };
+  // Whether the current view has anything expanded to collapse — the feed
+  // alone; the summary table, the research board and the edit screen have no
+  // collapsibles.
+  const hasExpanded = view === 'feed' && !editMode && feedOpenKeys.size > 0;
+  const collapseAll = () => setFeedOpenKeys(new Set());
 
   const onAdd = async (p: WatchPlayer) => {
     setRoster(await api.addPlayer(p));
@@ -1564,105 +1607,28 @@ export default function App() {
       .catch((e: Error) => setError(e.message));
   }, []);
 
-  const toggleCollapsed = (key: string) => {
-    const willExpand = !expandedKeys.has(key);
-    setExpandedKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-    // Expanding scrolls the card to the top of the viewport.
-    if (willExpand) scrollToPlayer(key);
-  };
-  // A link (from the summary/feed) jumped to the players page — remember which
-  // view we came from so a back button can return there. Cleared once we're back,
-  // or when the user navigates explicitly via the tabs. Where in that view the
-  // reader was is the page memory's business, not this one's.
-  // Only ever the summary table: the jump's origin used to be either of the
-  // two roster views, and the feed is now the jump's *destination*.
-  const [backView, setBackView] = useState<'summary' | null>(null);
-  // Set by the one path that places the scroll itself — the jump to a player's
-  // day, which scrolls to his card — so the page memory below doesn't restore
-  // the Games view's own offset out from under it. The back button needs no
-  // such flag: putting the reader back where they were on the view they came
-  // from is exactly what the memory does anyway.
-  const scrollPlaced = useRef(false);
-  const goBack = () => {
-    if (!backView) return;
-    setBackView(null);
-    setView(backView);
-  };
-  /**
-   * Jump to a player's full day: the grouped feed, his card open, scrolled to
-   * the top. This used to switch to the Games view, which *was* the grouped
-   * feed — so the destination is unchanged in everything but name, down to
-   * `expandedKeys` being what opens the card.
+  /*
+   * **A player's name opens his page, exactly as his headshot does.**
    *
-   * From the summary table it crosses pages and records the origin for the back
-   * button; from the feed itself there is nowhere to go back to, and the jump
-   * is the grouping turning on around the player you asked for.
+   * It used to jump: switch to the feed, turn the grouping on, expand his card
+   * and scroll to it — a cross-page navigation that needed a back button of its
+   * own, a `scrollPlaced` flag to keep the page memory from undoing the scroll,
+   * and `expandedKeys` in the URL to say which card was open. All of that was
+   * the machinery of getting to one player's day on a page that is about a
+   * roster. The day is on the player page now, so the name is a plain
+   * `setDetailsKey` and every one of those pieces is gone: no `backView`, no
+   * `goBack`, no float Back button, no `scrollToPlayer`, no `toggleCollapsed`,
+   * no `expanded=`.
+   *
+   * It is also strictly better where the old jump was weakest — the name in the
+   * summary table's *pitcher* tab used to land on the feed's pitcher tab, and a
+   * name on the research board had no jump at all, the board's rows being
+   * players nobody has rostered. The page opens on anybody.
    */
-  const openPlayerDay = useCallback(
-    (key: string) => {
-      const from = view === 'summary' ? 'summary' : null;
-      scrollPlaced.current = true;
-      setBackView(from);
-      setEditMode(false);
-      setView('feed');
-      setGroupByPlayer(true);
-      // The feed shows one kind at a time, so land on the tab this player is
-      // actually in — otherwise the jump scrolls to nothing.
-      const kind = reportsRef.current.find((r) => playerKey(r) === key)?.kind;
-      if (kind === 'pitcher' || kind === 'batter') setPlayerKind(kind);
-      setExpandedKeys((prev) => (prev.has(key) ? prev : new Set(prev).add(key)));
-      scrollToPlayer(key);
-    },
-    [scrollToPlayer, view],
-  );
   // Positions come from the season roster; look them up by id for each report.
   const positionById = useMemo(
     () => new Map(seasonPlayers.map((p) => [p.id, p.position])),
     [seasonPlayers],
-  );
-  /**
-   * The chip beside a card's name: **what your league will let you play him
-   * at** wherever ESPN can say so, and MLB's single listed position otherwise.
-   *
-   * The same swap the research board's pills already made, arriving on the
-   * cards for the same reason — a fantasy position is multi-valued and is
-   * sometimes flatly different from MLB's (Curtis Mead is listed at 2B and is
-   * eligible at 1B and 3B), so the one word MLB has for a man is the wrong
-   * answer to the question a card in this app is read with. It costs no fetch:
-   * the map rides on the `/api/espn/ownership` response the board and the
-   * player page already read, which is why the effect behind it now fires on
-   * any view rather than on those two.
-   *
-   * **Narrowed to the card's own kind** (`eligibleForKind`), exactly as each
-   * board is: a two-way player's bat reads `DH` where his arm reads `SP`, and a
-   * mis-joined pitcher reads his fallback rather than `2B/SS`. Whole lists are
-   * the player page's business, that being the one place with room for one.
-   *
-   * It was the *card's* chip until the Games view went; the grouped feed's
-   * player header is what that card became, so the chip moved with it rather
-   * than being dropped along with the page — losing it was never part of
-   * folding the two views together. Handed to the feed as a function rather
-   * than as the eligibility map, so the fallback rule and the two-code cap
-   * stay here beside the board's own copy of them.
-   */
-  const positionFor = useCallback(
-    (id: number, kind: PlayerKind): { position?: string; positionTitle?: string } => {
-      const espn = eligibleForKind(eligibility?.get(id), kind);
-      if (!espn) return { position: positionById.get(id) };
-      // Two codes and a count, the form the board's Pos cell prints — a card's
-      // header is a name and this chip on one line, and the widest list in the
-      // league wraps 8 of 14 names at 390px against the 1 that wraps today.
-      // The tooltip carries the whole of it, and the player page prints it
-      // whole in the first place.
-      const { ordered, text } = positionCodes(espn);
-      return { position: text, positionTitle: `Eligible in ESPN at ${ordered.join(', ')}` };
-    },
-    [eligibility, positionById],
   );
   // The player backing an open details view. Name comes from the report if the
   // player is watchlisted, otherwise from the season roster — so details can be
@@ -1791,12 +1757,43 @@ export default function App() {
     // direction to fail in: an empty table under a lit toggle reads as "nobody
     // is starting", which would be a claim where the truth is that the app
     // hasn't been told yet.
+    //
+    // **And a range is a range of lineups, so the filter cuts days as well as
+    // rows.** Applying one lineup to a week is the arithmetic this whole thing
+    // was wrong about: a man you started on Monday and benched on Wednesday
+    // earned you Monday and none of Wednesday, where a row-level filter either
+    // counted his whole week or dropped him from it. With the per-day map in
+    // hand each report is **projected** onto the days he was actually in the
+    // lineup — the games on every other day simply aren't his to have — and the
+    // summary table's rows, its Total and the feed's items all add up correctly
+    // with no knowledge of any of this, since every one of them sums
+    // `report.games`.
+    //
+    // A player kept with **no games left** is deliberate and is not the same as
+    // one dropped: he is kept when he was in the lineup on some day of the
+    // range and simply had no game to play, which is a row of dashes and the
+    // honest answer to "am I starting him". Dropped means you were not playing
+    // him on any day in view — including every day before you picked him up,
+    // where his line belonged to whoever held him.
+    if (fantasyLineups) {
+      const out: PlayerReport[] = [];
+      for (const r of kindCards) {
+        const fallback = fantasySlots?.get(playerKey(r))?.starting === true;
+        const days = new Set(
+          rangeDates.filter((d) => startedOn(fantasyLineups, d, r.id, fallback)),
+        );
+        if (days.size === 0) continue;
+        const games = r.games.filter((g) => days.has(g.date));
+        out.push(games.length === r.games.length ? r : { ...r, games });
+      }
+      return out;
+    }
     if (fantasySlots) {
       return kindCards.filter((r) => fantasySlots.get(playerKey(r))?.starting === true);
     }
     const today = baseballToday();
     return kindCards.filter((r) => isStartingOn(r, today));
-  }, [kindCards, startersActive, fantasySlots]);
+  }, [kindCards, startersActive, fantasySlots, fantasyLineups, rangeDates]);
   /**
    * Which of the two rules the toggle applies — see `filteredCards`. The
    * button's tooltip and the empty state under it both have to say which set
@@ -1822,15 +1819,22 @@ export default function App() {
   // the row being read is still on screen. A page not yet visited opens at the
   // top, which is what the old reset did for every page.
   const scrollKey = view === 'research' ? 'research' : `${view}:${shownKind}`;
+  // The feed's own key — see `feedShown` above, which is keyed by it.
+  const feedKey = `${shownKind}-${start}-${end}`;
   // Read by the scroll listener, which is bound once and would otherwise close
   // over the key from the render that bound it.
   const scrollKeyRef = useRef(scrollKey);
   scrollKeyRef.current = scrollKey;
   const pageScroll = useRef(new Map<string, number>());
-  // High while a restore is in flight, so the listener doesn't record the
-  // half-way positions the restore itself passes through as the reader's.
+  // High from the moment a restore writes an offset until the frame after it,
+  // so the scroll event that write raises isn't recorded as the reader's own —
+  // which would overwrite a remembered 2,000 with whatever the write was
+  // clamped to. A scroll event is dispatched in the rendering step *ahead* of
+  // that frame's animation callbacks, so one frame is exactly long enough and
+  // no longer: the flag used to be held for the length of a restore, which is
+  // also the window in which the reader might have scrolled themselves.
   const restoring = useRef(false);
-  const restoreRaf = useRef(0);
+  const restoreFrame = useRef(0);
 
   // Two of the four views don't scroll the window at all: the summary and
   // research boards are fixed-height columns whose table scrolls inside them,
@@ -1847,9 +1851,9 @@ export default function App() {
       // A scroll inside an overlay (the player page, the how-to) is not the
       // page's, and nor is a table's own horizontal scroller.
       if (el) {
-        if (target === el) pageScroll.current.set(scrollKeyRef.current, el.scrollTop);
+        if (target === el) pageScroll.current.set(scrollKeyRef.current, Math.round(el.scrollTop));
       } else if (target === document || target === document.documentElement) {
-        pageScroll.current.set(scrollKeyRef.current, window.scrollY);
+        pageScroll.current.set(scrollKeyRef.current, Math.round(window.scrollY));
       }
     };
     // Capture, because a scroll event doesn't bubble: the inner scrollers'
@@ -1860,73 +1864,96 @@ export default function App() {
 
   const firstPage = useRef(true);
   useLayoutEffect(() => {
-    // The jump to a player's day places the scroll itself, and the browser's
-    // own restore on a reload owns the first pass.
-    if (firstPage.current || scrollPlaced.current) {
+    // The browser's own restore on a reload owns the first pass. Nothing else
+    // places a scroll by hand any more: the jump to a player's day did, and it
+    // is a player page now, which is an overlay rather than a place on a page.
+    if (firstPage.current) {
       firstPage.current = false;
-      scrollPlaced.current = false;
       return;
     }
-    const top = pageScroll.current.get(scrollKey) ?? 0;
-    const inner = pageScroller();
-    if (inner) {
-      inner.scrollTop = top;
-      return;
-    }
-    if (top <= 0) {
-      window.scrollTo(0, 0);
-      return;
-    }
-    // A page re-mounts shorter than it will be — the feed's clips and images
-    // size themselves as they load, 3158px growing to 5426px on a measured
-    // watchlist — so a single `scrollTo` lands wherever the page currently
-    // ends. Worse, it can't simply be repeated until the offset is *reachable*
-    // and then left alone: content arriving **above** the viewport pushes
-    // everything down, and the browser's scroll anchoring follows it to keep
-    // the visible rows still, which took a restored 1800 to 2934 a frame after
-    // it landed. So the offset is held until the page has **stopped growing**,
-    // with anchoring switched off underneath it — the saved number was
-    // measured against the finished page, and it is the finished page it has
-    // to be applied to. `PAGE_SCROLL_SETTLE` ends it either way: a page that
-    // really is shorter now (a live update dropped an item) must not be held
-    // against an offset it can never reach.
-    restoring.current = true;
-    const root = document.documentElement;
-    const anchor = root.style.overflowAnchor;
-    root.style.overflowAnchor = 'none';
-    const started = performance.now();
-    let lastHeight = -1;
-    let steadySince = started;
-    const stop = () => {
-      cancelAnimationFrame(restoreRaf.current);
-      root.style.overflowAnchor = anchor;
+    const want = pageScroll.current.get(scrollKey) ?? 0;
+    const pane = pageScroller();
+    const read = () => Math.round(pane ? pane.scrollTop : window.scrollY);
+    // What was actually reached — the browser clamps a write to the page as it
+    // stands, and the difference between the two is the whole subject below.
+    let placed = 0;
+    const place = () => {
+      restoring.current = true;
+      if (pane) pane.scrollTop = want;
+      else window.scrollTo(0, want);
+      placed = read();
+      cancelAnimationFrame(restoreFrame.current);
+      restoreFrame.current = requestAnimationFrame(() => {
+        restoring.current = false;
+      });
+    };
+    const release = () => {
+      cancelAnimationFrame(restoreFrame.current);
       restoring.current = false;
     };
-    const step = () => {
-      window.scrollTo(0, top);
-      const now = performance.now();
-      const height = root.scrollHeight;
-      if (height !== lastHeight) {
-        lastHeight = height;
-        steadySince = now;
-      }
-      // Two frames of the same height is not settled — the content arrives in
-      // bursts, and letting go on the first pause put the feed back at 1800
-      // and watched it drift to 2934 when the next burst landed 36ms later.
-      const held = Math.abs(window.scrollY - top) < 1 && now - steadySince > PAGE_SCROLL_QUIET;
-      if (held || now - started > PAGE_SCROLL_SETTLE) {
-        stop();
+    // **One write, before the page is painted.** A layout effect on the commit
+    // that swapped the page, so the first frame of the new page is drawn where
+    // the reader left it — and it is *exact*, because the page being written
+    // to is the page the number was measured against.
+    //
+    // That last clause is the change. The feed used to come back 1,890px
+    // shorter than it was left and grow into itself as its clips resolved, so
+    // the write clamped — 2,000 asked for, 1,739 painted, measured — and the
+    // offset then had to be *held* against a growing document, every frame,
+    // with the browser's scroll anchoring switched off underneath it, until
+    // the height had been quiet for 250ms or 900ms had passed. Every symptom
+    // came out of that shape: the clamped first paint was the flash; the frame
+    // in which the page grew and the hold had not yet caught it was the jump
+    // (measured at 2,873 against that same target of 2,000); and the 900ms
+    // deadline was the inconsistency — with the clip lookups answering in 1.5s
+    // rather than 50ms the hold gave up wherever the page had got to, landing
+    // +873, +1,134 and −327 off three consecutive targets, with nothing on
+    // screen to say so. What removed all of it is not a better hold but the
+    // growth: a clip's lookup is remembered for the life of the tab
+    // (`clipUrls` in `PlateAppearanceCard`), so a returning feed renders its
+    // clips in its first commit at the height it had when it was left.
+    //
+    // `overflow-anchor` is untouched now, where the hold used to switch the
+    // browser's anchoring off across the whole document for the length of it.
+    // That was a defence against a stale pixel target being dragged about by
+    // content arriving above the viewport; with nothing arriving, anchoring is
+    // on our side — it is what keeps a reader's place when the 20s live poll
+    // inserts an at-bat above them, and it has no business being off.
+    place();
+    if (placed >= want) return release;
+    // What a size cache cannot answer: a **scrollport whose own box isn't
+    // final** at the instant this runs. Both boards are fixed-height columns
+    // and each settles a frame or two after mount — measured,
+    // `.research-scroll` is 26px shorter then than it ends up, which is why
+    // leaving the board at 31,736 came back to 31,710 and stayed there, the
+    // inner branch having been a single assignment with nothing to catch it.
+    //
+    // So a clamped write is repeated whenever the scrollport reports a new
+    // size, and it ends on a **condition** rather than a clock: the offset has
+    // been reached, or somebody else has taken the scroll. That second test
+    // needs no list of events to watch, because it is the same test either
+    // way — the reader scrolling and the research board resetting itself to
+    // the top (which this must never pull back) both move the offset off the
+    // value we wrote.
+    const ro = new ResizeObserver(() => {
+      if (read() !== placed) {
+        ro.disconnect();
         return;
       }
-      restoreRaf.current = requestAnimationFrame(step);
-    };
-    // The reader wins: a scroll of their own during that window ends it, or
-    // the retry would drag the page back under their finger.
-    for (const ev of USER_SCROLLS) window.addEventListener(ev, stop, { once: true, passive: true });
-    step();
+      place();
+      if (placed >= want) ro.disconnect();
+    });
+    if (pane) {
+      // The pane's own box, and its content: a pane grows by the table inside
+      // it growing, which is a resize of the child rather than of the pane.
+      ro.observe(pane);
+      for (const child of pane.children) ro.observe(child);
+    } else {
+      ro.observe(document.documentElement);
+    }
     return () => {
-      stop();
-      for (const ev of USER_SCROLLS) window.removeEventListener(ev, stop);
+      ro.disconnect();
+      release();
     };
   }, [scrollKey]);
   // The second tier of tabs, in the view bar beside the view switch: every view
@@ -1969,10 +1996,10 @@ export default function App() {
    * whether a 418px field fits: the cluster is the side that overflows first,
    * so a 44px square is worth more given away than kept.
    *
-   * Disabled while a read is in flight, with the app's own `.spinner` in place
-   * of the icon inside a square that doesn't move — so nothing in the header
-   * shifts, which matters more here than it did on the right-hand end, the
-   * title and two buttons now sitting to its left.
+   * Disabled while a read is in flight, with the app's own spinning baseball
+   * in place of the icon inside a square that doesn't move — so nothing in the
+   * header shifts, which matters more here than it did on the right-hand end,
+   * the title and two buttons now sitting to its left.
    */
   const refreshButton = (
     <button
@@ -1985,7 +2012,7 @@ export default function App() {
       title={refreshing ? 'Refreshing…' : 'Refresh what is on screen'}
     >
       {refreshing ? (
-        <span className="spinner" aria-hidden="true" />
+        <SpinningBaseball />
       ) : (
         <svg
           viewBox="0 0 24 24"
@@ -1999,8 +2026,8 @@ export default function App() {
           aria-hidden="true"
         >
           {/* Three quarters of a circle with an arrowhead on the open end —
-              the same gesture at 17px as the 13px spinner that replaces it,
-              so the swap reads as the icon starting to turn. */}
+              the same gesture at 17px as the 14px baseball that replaces it,
+              so the swap reads as the icon becoming the thing it was drawing. */}
           <path d="M20 12a8 8 0 1 1-2.34-5.66" />
           <path d="M20 4v4.5h-4.5" />
         </svg>
@@ -2101,53 +2128,8 @@ export default function App() {
      alongside the calendar beside it — the pair is a run of two icons where a
      lone one on a row of tabs would have nothing beside it to say what it
      meant, and the two labels were 174px of a line a phone hasn't got. */
-  /* Read the feed one card per player rather than newest-first. This is the
-     Games view's own control, kept after the page itself went: what that page
-     did was sort the same days by roster instead of by clock, which is a
-     reading of the feed rather than a page beside it — so it is a toggle on
-     the feed, next to the other one that says which players the view is about.
 
-     `.group-toggle` is folded into `.research-toggle`/`.starters-toggle`'s
-     selector lists rather than restyled to resemble them: it is the same
-     object as the Starters button beside it, a plain toggle with no panel, so
-     it takes `.on` and never `.active`. On a phone it goes to its glyph with
-     them, the run of icons on this row being what makes that legible. */
-  const groupToggle = (
-    <button
-      type="button"
-      className={`group-toggle${groupByPlayer ? ' on' : ''}`}
-      aria-pressed={groupByPlayer}
-      onClick={() => setGroupByPlayer((v) => !v)}
-      title={
-        groupByPlayer
-          ? 'One card per player — his live at-bat, his plays and his next game together'
-          : 'Group the feed by player instead of reading it newest-first'
-      }
-    >
-      {/* Two stacked cards, each with a line in it: the shape the grouped feed
-          makes of the page. Drawn to the same optical weight as the clipboard
-          beside it — 20px, spanning 3–21 across — since on a phone the two are
-          a pair of glyphs with no words between them. */}
-      <svg
-        viewBox="0 0 24 24"
-        width="20"
-        height="20"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
-        <rect x="3" y="3.5" width="18" height="7" rx="2" />
-        <rect x="3" y="13.5" width="18" height="7" rx="2" />
-        <path d="M7 7h6M7 17h6" />
-      </svg>
-      <span className="starters-toggle-label">By player</span>
-    </button>
-  );
-
-  const startersToggle = rangeHasToday ? (
+  const startersToggle = startersOffered ? (
       <button
         type="button"
         className={`starters-toggle${startersOnly ? ' on' : ''}`}
@@ -2157,9 +2139,11 @@ export default function App() {
            fantasy team, so the tooltip says which. The label can't — it is one
            word, and "Starters" is the right word for both readings. */
         title={
-          startersReadFantasy
-            ? 'Only the players in your fantasy starting lineup — your bench and IL are hidden whatever their clubs do with them'
-            : "Only the players starting today — hitters in a posted lineup, pitchers named as today's starter"
+          startersPerDay && rangeDates.length > 1
+            ? 'Only the days you had each player in your fantasy lineup — a day he sat on your bench or your IL is not counted, however he hit'
+            : startersReadFantasy
+              ? 'Only the players in your fantasy starting lineup — your bench and IL are hidden whatever their clubs do with them'
+              : "Only the players starting today — hitters in a posted lineup, pitchers named as today's starter"
         }
       >
         {/* A lineup card, which is what the filter is: the men written on
@@ -2553,10 +2537,7 @@ export default function App() {
                       // this can be pressed from anywhere — so take the user
                       // there rather than flipping a mode with nothing on
                       // screen to show for it.
-                      if (view !== 'summary') {
-                        setBackView(null);
-                        setView('summary');
-                      }
+                      if (view !== 'summary') setView('summary');
                       // The edit screen hides the search bar too; closing it
                       // here stops it being restored on the way out of a mode
                       // it was never visible in.
@@ -2696,10 +2677,10 @@ export default function App() {
                   title="Read your league from ESPN again — for a lineup or roster move you have just made there"
                 >
                   {/* The header refresh's arrow at the menu's 15px, swapped for
-                      the app's own spinner in flight — the same pair, so the
-                      two controls that re-read ESPN read as one idea. */}
+                      the app's own spinning baseball in flight — the same pair,
+                      so the two controls that re-read ESPN read as one idea. */}
                   {fantasyRefreshing ? (
-                    <span className="spinner" aria-hidden="true" />
+                    <SpinningBaseball />
                   ) : (
                     <svg
                       viewBox="0 0 24 24"
@@ -2716,8 +2697,11 @@ export default function App() {
                       <path d="M20 4.2V9h-4.8" />
                     </svg>
                   )}
+                  {/* No ellipsis: the ball beside the word is what says the
+                      read is still going, which is the rule everywhere the two
+                      appear together. */}
                   {fantasyRefreshing
-                    ? 'Reading…'
+                    ? 'Reading'
                     : fantasyRefreshed
                       ? 'Up to date ✓'
                       : 'Refresh from ESPN'}
@@ -2801,7 +2785,6 @@ export default function App() {
                   aria-selected={view === 'summary'}
                   className={`view-tab${view === 'summary' ? ' active' : ''}`}
                   onClick={() => {
-                    setBackView(null);
                     // The reorder screen lives on this page now, so coming back
                     // to it is not a reason to close it. The other two are.
                     setView('summary');
@@ -2817,7 +2800,6 @@ export default function App() {
                   aria-selected={view === 'feed'}
                   className={`view-tab${view === 'feed' ? ' active' : ''}`}
                   onClick={() => {
-                    setBackView(null);
                     setEditMode(false);
                     setView('feed');
                   }}
@@ -2833,7 +2815,6 @@ export default function App() {
                 aria-selected={view === 'research'}
                 className={`view-tab${view === 'research' ? ' active' : ''}`}
                 onClick={() => {
-                  setBackView(null);
                   setEditMode(false);
                   setView('research');
                 }}
@@ -2857,9 +2838,6 @@ export default function App() {
                 now stands here as the toggle that replaced the third of them. */}
             {view !== 'research' && showRosterViews && (
               <>
-              {/* Only on the feed — it is a reading of that page and nothing
-                  the summary table can do. */}
-              {view === 'feed' && groupToggle}
               {/* Only over a range that contains today — see `startersToggle`. */}
               {startersToggle}
               {dateToggle}
@@ -2970,15 +2948,16 @@ export default function App() {
           </div>
         )}
 
+      {/* The two halves of the same read, and which one shows turns on whether
+          there is anything on screen to protect. With nothing yet, the wait
+          takes the page and names what it is reading; with cards already up it
+          is a badge beside them and the cards stay exactly as they are. */}
       {showLoading && reports.length === 0 && view !== 'research' && (
-        <div className="loading">Loading events…</div>
+        <LoadingBlock>Reading your roster&rsquo;s games</LoadingBlock>
       )}
 
       {showLoading && reports.length > 0 && view !== 'research' && (
-        <div className="refreshing" role="status">
-          <span className="spinner" aria-hidden="true" />
-          Updating…
-        </div>
+        <LoadingLine className="refreshing">Updating</LoadingLine>
       )}
 
       {/* Everyone the active view would show is on the IL and the toggle is
@@ -3006,9 +2985,11 @@ export default function App() {
         !editMode && (
           <div className="empty-state">
             <p className="empty-title">
-              {startersReadFantasy
-                ? 'Nothing to show — nobody here is in your lineup today'
-                : 'Nothing to show — nobody here is starting today'}
+              {startersPerDay && rangeDates.length > 1
+                ? 'Nothing to show — nobody here was in your lineup on any of these days'
+                : startersReadFantasy
+                  ? 'Nothing to show — nobody here is in your lineup today'
+                  : 'Nothing to show — nobody here is starting today'}
             </p>
             {/* Two causes, two messages. The MLB reading can be empty simply
                 because the day is young, which is the thing a reader most needs
@@ -3019,8 +3000,8 @@ export default function App() {
                 already happened. */}
             {startersReadFantasy ? (
               <p>
-                Turn off “Starters” in the row above to see your whole team — your bench and
-                IL are what it is hiding.
+                Turn off “Starters” in the row above to see your whole team — the days you had
+                these players on your bench or your IL are what it is leaving out.
               </p>
             ) : (
               <p>
@@ -3089,7 +3070,6 @@ export default function App() {
           <SummaryTable
             reports={filteredCards}
             onOpenDetails={setDetailsKey}
-            onOpenPlayerDay={openPlayerDay}
             /* Kept when the table takes the page. The same nodes render in the
                view bar as well, which is behind the expanded box and so never
                on screen at the same time — the alternative is lifting the
@@ -3123,48 +3103,18 @@ export default function App() {
              stream is about, and re-reading it from the top is what the reader
              wants when the list has become a different one. */
           <LiveFeed
-            key={`${shownKind}-${start}-${end}`}
+            key={feedKey}
             reports={filteredCards}
             kind={shownKind}
             onOpenDetails={setDetailsKey}
-            onOpenPlayerDay={openPlayerDay}
             openKeys={feedOpenKeys}
             onToggleKey={toggleFeedKey}
-            groupByPlayer={groupByPlayer}
-            /* The player groups are what `expandedKeys` has always opened —
-               they are the Games view's cards, and `expanded=` still names
-               them. */
-            groupOpenKeys={expandedKeys}
-            onToggleGroup={toggleCollapsed}
-            positionFor={positionFor}
-            multiDay={start !== end}
+            shown={feedShown.current.get(feedKey) ?? FEED_PAGE_SIZE}
+            onShowMore={(n) => feedShown.current.set(feedKey, n)}
           />
         )
       )}
 
-      {/* Bottom-left back button, shown only after a name in the summary table
-          jumped to that player's card on the feed — returns to the table. */}
-      <button
-        type="button"
-        className={`float-btn back-nav${
-          view === 'feed' && backView && !editMode ? ' visible' : ''
-        }`}
-        onClick={goBack}
-        aria-label="Back to roster"
-        title="Back to Roster"
-      >
-        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-          <path
-            d="M15 18l-6-6 6-6"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-        Back
-      </button>
 
       <button
         type="button"

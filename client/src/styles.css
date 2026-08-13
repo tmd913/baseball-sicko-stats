@@ -610,6 +610,14 @@ body {
   cursor: pointer;
   font-size: 15px;
 }
+/* The wait sits in the clear button's slot — the two can never both be on
+   screen, the field being disabled until the roster lands. */
+.adder-busy {
+  position: absolute;
+  right: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+}
 .adder-menu {
   list-style: none;
   margin: 6px 0 0;
@@ -725,17 +733,156 @@ body {
   margin: 0 0 8px;
   font-weight: 700;
 }
-.loading {
-  color: var(--muted);
-  padding: 20px;
-  text-align: center;
+/* ---- Loading: the spinning baseball ------------------------------------ */
+
+/* The app has one loading indicator and this is it. It replaces a 13px CSS
+   ring (`.spinner`), an "Updating…" badge that owned its own layout, a bare
+   `.loading` line, and five `.details-status` lines that each said "Loading…"
+   about a different thing — see `components/Loading.tsx` for the rules the
+   system keeps and why the glyph is built the way it is.
+
+   Three sizes, one per situation: inline inside a pressed control or beside
+   data that is still on screen (`sm`), a pane with nothing in it yet (`md`),
+   and the boot splash, which owns the window (`lg`). The box is set here
+   rather than by a `width`/`height` attribute so a slot that has its own idea
+   of the size — the fantasy popover's 15px glyph column — can say so in one
+   place, the way it already did for the ring this replaces. */
+.ball-spin {
+  display: block;
+  flex: none;
+  color: var(--accent);
+}
+.ball-spin-sm {
+  width: 14px;
+  height: 14px;
+}
+.ball-spin-md {
+  width: 28px;
+  height: 28px;
+}
+.ball-spin-lg {
+  width: 44px;
+  height: 44px;
+}
+/* The silhouette is quieter than the seams: at full accent the rim is the
+   loudest thing in the mark and the seams — the only part that moves — read as
+   detail inside it, which is backwards for something whose whole job is to
+   look like it is turning. */
+.ball-rim {
+  stroke-opacity: 0.5;
 }
 
-/* Inline "Updating…" badge shown when refreshing over already-visible data. */
-.refreshing {
+/* One seam's turn. `translateX` is `9·sin θ` and `scaleX` is `cos θ`, sampled
+   every eighth of a revolution and interpolated linearly between — which is
+   the projection a point on a sphere actually has, and is why the seams bunch
+   and thin at the limbs rather than at the centre. Opacity carries a seam
+   round the back: it fades out over the last eighth before the limb, where the
+   seam is already a hairline, so nothing pops.
+
+   `transform-box: view-box` is what makes `9px` mean nine *viewBox units* and
+   `transform-origin: 12px 12px` the ball's own centre, so one keyframe set is
+   correct at 14px and at 44px alike. The stroke is deliberately left to scale
+   with the transform: a seam near the limb thinning as it foreshortens is the
+   same fact stated twice, and `non-scaling-stroke` would have pinned the ink
+   to device pixels and made the small ball heavy and the large one spindly. */
+.ball-seam {
+  transform-box: view-box;
+  transform-origin: 12px 12px;
+  animation: ball-seam 1.5s linear infinite;
+}
+.ball-seam-2 {
+  animation-delay: -0.375s;
+}
+.ball-seam-3 {
+  animation-delay: -0.75s;
+}
+.ball-seam-4 {
+  animation-delay: -1.125s;
+}
+@keyframes ball-seam {
+  0% {
+    transform: translateX(0px) scaleX(1);
+    opacity: 1;
+  }
+  12.5% {
+    transform: translateX(6.36px) scaleX(0.707);
+    opacity: 1;
+  }
+  25% {
+    transform: translateX(9px) scaleX(0);
+    opacity: 0;
+  }
+  37.5% {
+    transform: translateX(6.36px) scaleX(-0.707);
+    opacity: 0;
+  }
+  50% {
+    transform: translateX(0px) scaleX(-1);
+    opacity: 0;
+  }
+  62.5% {
+    transform: translateX(-6.36px) scaleX(-0.707);
+    opacity: 0;
+  }
+  75% {
+    transform: translateX(-9px) scaleX(0);
+    opacity: 0;
+  }
+  87.5% {
+    transform: translateX(-6.36px) scaleX(0.707);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(0px) scaleX(1);
+    opacity: 1;
+  }
+}
+
+/* Reduced motion: hold the ball at the pose the turn passes through four times
+   a revolution — which is `BaseballMark` exactly — and pulse the whole thing
+   instead. A still ball is a logo and says nothing about whether anything is
+   still happening; a fade is not the kind of motion this preference is asking
+   to be spared. The two hidden seams are given the pose of the two visible
+   ones so nothing has to be rewritten per seam. */
+@media (prefers-reduced-motion: reduce) {
+  .ball-seam {
+    animation: none;
+  }
+  .ball-seam-1,
+  .ball-seam-3 {
+    transform: translateX(6.36px) scaleX(0.707);
+  }
+  .ball-seam-2,
+  .ball-seam-4 {
+    transform: translateX(-6.36px) scaleX(0.707);
+  }
+  .ball-seam-3,
+  .ball-seam-4 {
+    opacity: 0;
+  }
+  .ball-spin {
+    animation: ball-pulse 1.8s ease-in-out infinite;
+  }
+}
+@keyframes ball-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* A wait that sits beside what it is about rather than in place of it. Bare by
+   default — the research board's count line is a caption and wants no chrome —
+   with `.refreshing` adding the pill the "Updating" badge has always worn. */
+.loading-line {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+.refreshing {
   margin-bottom: 14px;
   padding: 6px 12px;
   border: 1px solid var(--border);
@@ -745,30 +892,27 @@ body {
   font-size: 13px;
   font-weight: 600;
 }
-.spinner {
-  width: 13px;
-  height: 13px;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .spinner {
-    animation: none;
-  }
-}
 
-/* Dim and freeze the list while a refresh replaces its contents. */
-.content-layout.is-loading .player-list {
-  opacity: 0.5;
-  pointer-events: none;
-  transition: opacity 0.15s ease;
+/* A pane with nothing in it yet: the ball centred over a line naming what is
+   being read. `.details-status` is folded onto it rather than restyled to
+   resemble it — the player page's five lazily-fetched tabs are the same wait
+   as the report's and the board's, and two rules would be two things to keep
+   true. The reading width and the generous margin are that class's own and
+   are what the block takes everywhere. */
+.loading-block,
+.details-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  max-width: 680px;
+  margin: 40px auto;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+.loading-what {
+  margin: 0;
 }
 
 /* ---- Content layout (the player list / edit screen) ---- */
@@ -3249,15 +3393,36 @@ body {
 .details-savant-link:hover {
   color: var(--accent);
 }
-.details-status {
-  max-width: 680px;
-  margin: 40px auto;
-  text-align: center;
-  color: var(--muted);
-  font-size: 14px;
-}
+/* `.details-status` is styled up beside `.loading-block`, whose selector list
+   it is folded into — it is the same wait, and the tab that failed is the same
+   box saying so instead. What is left here is only what a *failed* tab adds. */
 .details-error {
   color: var(--strikeout);
+}
+/* The details view's **Overview** tab: this player's day, drawn from the feed's
+   own items. It takes `--card-column` rather than the 860px the tabs beside it
+   use, because what is in it is exactly what the feed holds — an at-bat card, a
+   clip, an outing's innings — and those were sized against that number (a
+   header with a name at one end and a line of stats at the other, with nothing
+   in the middle to fill). A day read here and the same day read on the stream
+   is then the same reading at the same width.
+
+   `container-type` for the reason the arsenal box carries one: `.player-card`
+   and `.faced-batter` size themselves off their container, and inside an
+   overlay that is otherwise a plain block they would read the window instead. */
+.details-overview {
+  max-width: var(--card-column);
+  margin: 18px auto 0;
+  container-type: inline-size;
+}
+/* His combined line for the day, over the sections. A `.details-note` because
+   that is what it is — a caption on what is under it — with the tabular figures
+   every stat line in the app carries and a touch more presence than a note,
+   since this one is the numbers rather than a remark about them. */
+.details-day-line {
+  color: var(--muted);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 /* The details view's Arsenal tab (pitchers): the same .arsenal rows the pitcher
    card uses, over the whole season instead of one game. Boxed to the reading
@@ -3335,14 +3500,43 @@ body {
 .glog-table tbody tr:nth-child(even) .glog-date {
   background: var(--panel);
 }
-/* No hover tint on a row. It was the one thing in this table the other two wide
-   tables don't do, and it earned nothing in either place it was seen: with a
-   pointer it lit a row that is read across rather than picked, and on a touch
-   device — where `:hover` sticks to whatever was last tapped — it left a band
-   of `--panel-2` sitting on a random game until something else was pressed,
-   which reads as a selection the app then declines to act on. The zebra stripe
-   stays: it is what keeps a fourteen-column row readable across, and it is the
-   same device the summary table and the research board use. */
+/* **A row is a press now, so it looks like one.** It carried no hover tint for
+   a long time and the argument was sound while it held: with a pointer the tint
+   lit a row that is read *across* rather than picked, and on a touch device,
+   where `:hover` sticks to whatever was last tapped, it left a band of
+   `--panel-2` on some arbitrary game until something else was pressed — a
+   selection the app then declined to act on. Both halves of that turned on the
+   row doing nothing. It opens that game as a feed, so a tint is the truth
+   rather than a tease, and the pointer is the shape of the thing you can do.
+
+   **Scoped to `(hover: hover)` all the same**, which is the half of the old
+   complaint that survives its cause: a sticky hover on a touch device is still
+   a mark left on the last row pressed after its dialog has been closed, and
+   there the affordance is the press itself. `:focus-visible` carries the
+   keyboard, the rows being `role="button"` with a tabindex (see
+   `GameLog.tsx::pressProps`), and the ring is inset because a row spans a
+   scrollport that clips at both edges.
+
+   The zebra stripe is untouched: it is what keeps a fourteen-column row
+   readable across, and it is the same device the summary table and the research
+   board use. */
+.glog-table tbody tr {
+  cursor: pointer;
+}
+@media (hover: hover) {
+  .glog-table tbody tr:hover td,
+  .glog-table tbody tr:hover .glog-date {
+    background: var(--panel-2);
+  }
+}
+.glog-table tbody tr:focus-visible {
+  outline: none;
+}
+.glog-table tbody tr:focus-visible td,
+.glog-table tbody tr:focus-visible .glog-date {
+  background: var(--panel-2);
+  box-shadow: inset 0 2px 0 var(--accent), inset 0 -2px 0 var(--accent);
+}
 .glog-table thead th {
   /* Sticky against .glog-scroll, which is the scroll container in both axes —
      which is the whole reason the Game Log tab reshapes the overlay below. */
@@ -4110,21 +4304,26 @@ body {
   color: var(--bg);
   border-color: var(--accent);
 }
-/* Refreshing: the button holds its place and its size — the 13px `.spinner`
-   swaps in for the 17px icon inside a square that doesn't move, so nothing in
+/* Refreshing: the button holds its place and its size — the spinning baseball
+   swaps in for the 17px arrow inside a square that doesn't move, so nothing in
    the header shifts while a read is in flight. Disabled rather than merely
    ignored, so a second press is refused by the browser and says so; the muted
-   fill is the only thing that changes, since a spinner turning is already the
+   fill is the only thing that changes, since a ball turning is already the
    loudest thing on the row. */
 .refresh-btn:disabled {
   cursor: default;
   border-color: var(--border);
   color: var(--faint);
 }
-.refresh-btn .spinner {
-  /* Its own 13px is right beside a 17px icon: the disc reads as the same
-     weight as the arrow it replaces rather than as a smaller thing. */
-  flex: none;
+/* 16px rather than the inline 14: the arrow it replaces is a three-quarter
+   circle of radius 8 in a 17px box, and the ball's rim is radius 9 in its own
+   — so 16 is where the two silhouettes are the same size on the row, and the
+   swap reads as the arrow closing into the ball it was drawing rather than as
+   a smaller thing arriving. The slot states it, not the glyph, which is what
+   lets the same component be 14px in a line of text an inch away. */
+.refresh-btn .ball-spin {
+  width: 16px;
+  height: 16px;
 }
 .edit-order-icon {
   display: inline-flex;
@@ -4190,8 +4389,7 @@ body {
    looking small. Only the calendar takes the muted fill; the toggle's glyph
    follows its own text colour, which is what carries its `.on` state. */
 .date-toggle svg,
-.starters-toggle svg,
-.group-toggle svg {
+.starters-toggle svg {
   flex: none;
 }
 .date-toggle svg {
@@ -5201,11 +5399,11 @@ body {
    it rather than a control of its own — the two are the same kind of row and
    folding the class on keeps them identical by construction.
 
-   The one thing it adds is a glyph slot that doesn't move: the app's `.spinner`
-   is 13px and the arrow it replaces is 15, so without this the label steps 2px
-   left the moment the read starts and back when it lands — the same reason the
-   header's refresh swaps its icon inside a square that holds its size. */
-.fantasy-refresh > .spinner,
+   The one thing it adds is a glyph slot that doesn't move: the baseball is
+   14px inline and the arrow it replaces is 15, so without this the label steps
+   1px left the moment the read starts and back when it lands — the same reason
+   the header's refresh swaps its icon inside a square that holds its size.
+   Naming `svg` covers both, the ball being one. */
 .fantasy-refresh > svg {
   flex: none;
   width: 15px;
@@ -5440,8 +5638,7 @@ body {
    by construction. (Qualified was the closer twin of the two and is gone —
    see `research.ts`.) */
 .research-toggle,
-.starters-toggle,
-.group-toggle {
+.starters-toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -5457,8 +5654,7 @@ body {
   cursor: pointer;
 }
 .research-toggle:hover,
-.starters-toggle:hover,
-.group-toggle:hover {
+.starters-toggle:hover {
   color: var(--text);
 }
 /* `.active` is "the panel is open"; `.on` is "the panel holds something",
@@ -5476,21 +5672,18 @@ body {
    phone, which is right for four icons in a known run and wrong for a lone
    button on a row of tabs, where nothing beside it would say what the glyph
    meant. */
-.starters-toggle,
-.group-toggle {
+.starters-toggle {
   flex: none;
   white-space: nowrap;
 }
 .research-toggle.on,
-.starters-toggle.on,
-.group-toggle.on {
+.starters-toggle.on {
   color: var(--accent);
   border-color: rgba(56, 189, 248, 0.5);
   background: rgba(56, 189, 248, 0.12);
 }
 .research-toggle:focus-visible,
-.starters-toggle:focus-visible,
-.group-toggle:focus-visible {
+.starters-toggle:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
@@ -5599,6 +5792,15 @@ body {
      dimmed rather than as a second page. */
   background: rgba(6, 11, 20, 0.66);
 }
+/* **A dialog opened from inside one of the overlays** — the Game Log's per-game
+   popup, reached from a table on the player page — writes its own z-index
+   inline instead, one step above whatever box it was opened out of. It has to
+   be computed rather than declared: the ladder is three deep (the page, the
+   player page at 50, and a full breakdown opened from inside that popup), and
+   only the React tree knows which rung a given dialog is on. See
+   `Modal.tsx::DialogLayerContext`; `hooks.ts::overlayAbove` reads the computed
+   value back off whichever of the two set it, so one press of Escape still
+   undoes one thing. */
 /* A column, so the head holds its place and only the body scrolls. The height
    cap is what keeps a 44-column board inside the dialog instead of growing the
    page behind it; `dvh` because a phone's browser chrome comes and goes, the
@@ -5657,6 +5859,14 @@ body {
    unaffected and the padding around it holds. */
 .outing-breakdown-box {
   width: min(860px, 100%);
+}
+/* One player's day is a column of feed items, so the popup takes the width the
+   feed itself is capped at — `--card-column`, which is set by what a card
+   actually holds (a name at one end of a header and a line of stats at the
+   other) rather than by what the window has. A day read in a dialog and the
+   same day read on the stream are then the same width by construction. */
+.player-day-box {
+  width: min(var(--card-column), 100%);
 }
 /* The way into it, under the innings. A quiet full-width bar rather than a
    button floating at one end: it closes the opened outing the way `Load more`
@@ -5879,7 +6089,6 @@ body {
      button in the header already takes — rather than whatever their padding
      leaves around a 15px glyph, so the pair reads as a set. */
   .starters-toggle,
-  .group-toggle,
   .date-toggle {
     width: var(--control-h);
     padding: 0;
@@ -6802,78 +7011,14 @@ body {
 }
 
 /* Recent-at-bats section: one row per plate appearance, newest first. */
-/* ---- The feed grouped by player ----
+/* ---- One player's day, drawn inside the player page ----
 
-   One card per player instead of a stream: his live at-bat, his plays or his
-   outing and his next game, under one identity header. This is the Games view
-   folded into the feed — that page was a card per player over the same days,
-   differing from the feed in sort order alone — so it keeps that page's shape
-   down to the collapsed-by-default card and the `expanded=` param that says
-   which are open.
-
-   It is a `.feed-item` like the other four shapes, so the layout, the 8px gap
-   and the scroll offset all come from there, and it groups itself with the same
-   3px/11px rail. `--muted` at rest: a group is not an outcome, and every rail in
-   this feed that claims something claims something about *one play*. A live
-   player's group is a `.live-entry` as well and takes the role colour, which is
-   the one claim a group can honestly make — the rule below is above that one in
-   the file, so the role wins without needing a specificity bump. */
-.feed-groups {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.feed-group {
-  border-left: 3px solid var(--muted);
-  border-radius: 3px;
-  padding-left: 11px;
-}
-/* A watched player with no game at all — the one card a stream sorted by time
-   can never draw, and the reason the grouped feed seeds itself from the roster
-   rather than from what happened. Dashed because nothing is coming, the same
-   claim `.player-card.empty` and the pitcher's no-outing card make. */
-.feed-group.empty {
-  border-left-style: dashed;
-}
-/* The name and its position chip on one line. The chip is the card header's,
-   carried over when the card became this — `.player-pos` unchanged, so the two
-   cannot drift. */
-.feed-group-name {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  min-width: 0;
-}
-/* How many plays or outings are folded up in there — the one thing the bar says
-   that isn't already a stat, and what tells a quiet day from an unopened one. */
-.feed-group-count {
-  flex: none;
-  color: var(--faint);
-  font-size: 12px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-/* Nothing to total yet: a scheduled game's first pitch stands in for the line,
-   so the bar is never blank on a player who simply hasn't played. */
-.feed-group-pending {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 600;
-}
-/* A group's bar has no leading tags — a pitcher's carries the SP chip and his
-   credit before the line, which is what `margin-left: auto` on `.feed-pitch-line`
-   is written for, and without them the whole bar bunches against the right edge
-   over a hand's width of empty panel. So the line leads, the count follows the
-   line it qualifies, and the badge still closes the row: the same
-   identity-then-summary grammar read from the other end. Scoped `>` so an outing
-   nested *inside* a group keeps the bar it has everywhere else. */
-.feed-group > .feed-item-toggle > .feed-pitch-line {
-  margin-left: 0;
-}
-.feed-group > .feed-item-toggle > .feed-group-count {
-  margin-right: auto;
-}
-
+   The block below was the grouped feed's, and before that the Games view's:
+   a card cut into games, each a static header over the plays in it. Both of
+   those pages are gone and the reading is the player page's **Overview** tab,
+   which `PlayerDay.tsx` draws from the very same items — so the classes stay
+   where they are rather than being renamed into a third home, and the two
+   readings of a game block cannot drift because there is only one. */
 /* One game inside a batter's card, once the range spans more than one date.
    The Games view cut a card into game blocks for this reason and the grouped
    feed inherits the job: over a week a flat run of at-bats says nothing about
@@ -6911,15 +7056,23 @@ body {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
-/* The items inside. Each keeps its own rail — the outcome, the tone, the
-   decision — which is what makes a group scannable rather than a wall: the
-   group's edge says whose it is and theirs say how each went. 12px rather than
-   the 16 between groups, so a player's own plays read as one block against the
-   space that separates him from the next. */
-.feed-group-items {
+/* The column that holds one player's day — the live entry, the game sections
+   and the scheduled row, one under another. Each item keeps its own rail (the
+   outcome, the tone, the decision), which is what makes the day scannable
+   rather than a wall. 16px between the blocks, the feed's own spacing between
+   items, so the page reads as the same list of things it is on the stream. */
+.player-day {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
+}
+/* A game he was on the roster for and never appeared in. The section's header
+   has already said the matchup and the final, so this is the one line left. */
+.pday-none {
+  margin: 0;
+  color: var(--faint);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .feed-items {
@@ -7320,6 +7473,13 @@ body {
   margin: 0;
   font-size: 22px;
   letter-spacing: -0.01em;
+}
+/* The boot splash: the same card with the ball centred in it. `align-self` on
+   the ball rather than `align-items` on the card, since the card is a stretch
+   column and every other thing in it — the fields, the buttons — wants that. */
+.auth-splash .ball-spin {
+  align-self: center;
+  margin: 6px 0 2px;
 }
 .auth-sub {
   margin: 0 0 4px;

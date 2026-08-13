@@ -4,6 +4,7 @@ import { api } from '../api';
 import { eventLabel, outcomeKind } from '../lib';
 import { useLockBodyScroll } from '../hooks';
 import { ClipVideo } from './ClipVideo';
+import { LoadingBlock, SpinningBaseball } from './Loading';
 
 /** A resolved clip in the reel: its playable URL plus the caption metadata. */
 interface ReelClip {
@@ -143,7 +144,11 @@ export function GameReel({
         {clips.length > 0 && (
           <span className="reel-progress">
             {Math.min(index + 1, clips.length)} / {clips.length}
-            {loading ? '…' : ''}
+            {/* The reel plays while the rest of its clips are still being
+                resolved, so this is the one indicator in the app that sits
+                beside a *growing* number rather than an absent one — a ball at
+                the end of the count, where an ellipsis used to be. */}
+            {loading && <SpinningBaseball />}
           </span>
         )}
       </div>
@@ -189,9 +194,9 @@ export function GameReel({
           </div>
         </div>
       ) : loading ? (
-        <div className="reel-empty">
-          Loading highlights… {attempted}/{pas.length}
-        </div>
+        <LoadingBlock>
+          Finding the clips — {attempted} of {pas.length} plays
+        </LoadingBlock>
       ) : (
         <div className="reel-empty">No video available for this game.</div>
       )}
