@@ -593,6 +593,11 @@ export interface PlayerStatus {
   /** The state of the game these facts are about — carried because a
    *  postponement is the reason a posted lineup means nothing. */
   gameState: GameStatus['state'] | null;
+  /** Who his club plays today, and whether at home — the research board's
+   *  opponent column, drawn as `vs LAD` / `@ LAD`. Null when he has no game.
+   *  A fact about today, so it reads the same on every window of that board. */
+  opponent: string | null;
+  isHome: boolean | null;
 }
 
 export interface PlayerReport extends WatchPlayer {
@@ -716,6 +721,11 @@ export interface ResearchRow {
   savantName: string;
   kind: PlayerKind;
   team: string; // "MIL" — the abbreviation; a full name is column-wide
+  /** …and the id behind it, which is what MLB serves a club's cap logo by.
+   *  Null for a player the leaderboard files under no team at all. The board
+   *  draws the logo where it used to print the abbreviation — see the name
+   *  cell in `ResearchTable.tsx` — so the two are one fact at two widths. */
+  teamId: number | null;
   position: string; // "2B"
   // What the position-type filter selects on: Pitcher / Catcher / Infielder /
   // Outfielder / Hitter (DH) / Two-Way Player, straight from the Stats API.

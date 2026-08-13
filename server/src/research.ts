@@ -75,7 +75,7 @@ async function getTeamAbbrevs(): Promise<Map<number, string>> {
 // deliberately: the reasoning is unchanged and correct, and one client-side
 // filter would make it useful again. Pruning it would drop this whole section,
 // `getTeamGames`/`getTeamGamesInRange`'s standings and schedule calls, and the
-// field from both `types.ts` — and would need the storage key's `-v6` bumped,
+// field from both `types.ts` — and would need the storage key's `-v7` bumped,
 // or a stored blob keeps deserializing with it. `starter` must survive either
 // way: the SP/RP position pills read it.
 
@@ -212,6 +212,11 @@ async function buildBase(kind: PlayerKind, window: ResearchWindow): Promise<Rese
       savantName: toSavantName(name),
       kind,
       team: (sp.team?.id !== undefined && teams.get(sp.team.id)) || '',
+      // The abbreviation's own id, carried purely so the client can draw the
+      // club's cap logo: MLB serves those by team id and nothing else, and a
+      // second abbreviation-to-id table on the client would be a copy of what
+      // `getTeamAbbrevs` already has in hand.
+      teamId: sp.team?.id ?? null,
       // Both are the player's own position, not the one he filled that day: a
       // reliever on the pitching board is 'P'/'Pitcher', and the position
       // player who mopped up an eleven-run loss keeps his own, which is what
@@ -529,11 +534,11 @@ const boardKey = (kind: PlayerKind, window: ResearchWindow): BoardKey => `${kind
 const mem = new Map<BoardKey, { data: Cached; fetchedAt: number }>();
 const inFlight = new Map<BoardKey, Promise<Cached>>();
 
-// -v3: a stored older blob deserializes with every field added since missing,
+// -v7: a stored older blob deserializes with every field added since missing,
 // and would quietly cost each row its estimators, its batted-ball profile or
 // its discipline columns for six hours. Bump this whenever a field is added.
 const storeKey = (kind: PlayerKind, window: ResearchWindow) =>
-  `research-${kind}-${window}-${SEASON}-v6.json`;
+  `research-${kind}-${window}-${SEASON}-v7.json`;
 
 async function build(kind: PlayerKind, window: ResearchWindow): Promise<Cached> {
   const rows = await buildBase(kind, window);

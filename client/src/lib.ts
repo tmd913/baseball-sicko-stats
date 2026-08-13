@@ -476,6 +476,23 @@ export function headshotUrl(id: number): string {
   return `https://midfield.mlbstatic.com/v1/people/${id}/spots/120`;
 }
 
+/**
+ * A club's cap logo, by team id — what the research board draws where it used
+ * to print the abbreviation.
+ *
+ * **The `on-dark` variant, deliberately.** MLB publishes each cap mark cut for
+ * a light ground and for a dark one, and this app has one palette and it is
+ * dark: the light cut is drawn in the club's own navy for half the league, so
+ * the Yankees and the Rays would be a smudge on `--panel`. The dark cut is the
+ * same mark with its fills lifted (white or the club's bright secondary), which
+ * is legible at the 16px a table row can give it. The primary `team-logos/{id}`
+ * full logo is the wrong shape as well as the wrong contrast — it is wordmarks
+ * and roundels, which do not survive being 16px tall.
+ */
+export function teamLogoUrl(teamId: number): string {
+  return `https://www.mlbstatic.com/team-logos/team-cap-on-dark/${teamId}.svg`;
+}
+
 const PITCH_ABBR: Record<string, string> = {
   '4-Seam Fastball': 'FF',
   Sinker: 'SI',

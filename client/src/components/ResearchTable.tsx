@@ -1,18 +1,19 @@
-import { useLayoutEffect, useMemo, useRef } from 'react';
+import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { BaseballMark } from './BaseballMark';
 import { ExpandButton } from './ExpandButton';
 import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
-import { useFullPage, usePlayerStatus } from '../hooks';
+import { PlayerStatusContext, useFullPage, usePlayerStatus } from '../hooks';
 import { RESEARCH_INCLUDE_KEYS, RESEARCH_WINDOWS, TREND_WINDOWS } from '../types';
 import type {
   PlayerKind,
+  PlayerStatus,
   ResearchIncludeKey,
   ResearchRow,
   ResearchWindow,
   TrendWindow,
 } from '../types';
-import { eligibleForKind, headshotUrl, positionOrder, statusCorner } from '../lib';
+import { eligibleForKind, headshotUrl, positionOrder, statusCorner, teamLogoUrl } from '../lib';
 
 /**
  * A league-wide, season-to-date stat table: every player on one board, sortable
@@ -41,6 +42,13 @@ interface Column {
   // What the sort compares. Null sorts to the bottom in both directions — a
   // player with no barrel rate is neither the best nor the worst at it.
   value: (r: ResearchRow) => number | null;
+  /** What the sort compares when the column holds words rather than a number —
+   *  only the opponent does. A column with this is sorted alphabetically (which
+   *  on that column means "group my players by tonight's game") and is left out
+   *  of the filter builder, a threshold on a club abbreviation being nothing
+   *  anyone can type. Its `value` is null throughout, which is what keeps the
+   *  numeric paths below from having to know about it. */
+  text?: (r: ResearchRow) => string | null;
   align?: Align;
   // Converts a threshold typed in the column's *displayed* units into the units
   // `value` compares in. Only IP needs it — it displays thirds ("158.1") and
@@ -279,6 +287,43 @@ const trendColumn = (w: TrendWindow): Column => ({
 
 const TREND_COLUMNS: Column[] = TREND_WINDOWS.map(trendColumn);
 
+/**
+ * **Who he plays today** — the one column on this board that is about this
+ * afternoon rather than about the window the rest of the row is drawn from.
+ *
+ * That is the point of it rather than an inconsistency: a season line is read
+ * to decide whether to start a man *tonight*, and "against whom, and where"
+ * is the fact that decision turns on which no amount of season data carries.
+ * It reads the same on a 7-day board as on a season one for the same reason.
+ *
+ * It comes off the league-wide status map (`/api/statuses`) — the same request
+ * every row's lineup pip and IL badge already come from, so the column costs no
+ * second upstream and no extra field on the research blob (which is cached per
+ * kind and window and served to everyone alike; this is a fact about a day, and
+ * would go stale inside that blob's six hours). The map is null until that one
+ * request lands, and the cells are dashes until it does.
+ *
+ * Sorted **alphabetically**, which on this column means "group my players by
+ * tonight's game" — hence `text` rather than `value`, and hence its absence
+ * from the filter builder: `Opp ≥ 4` is not a question.
+ */
+const OPPONENT_KEY = 'opponent';
+
+const opponentColumn = (statuses: Map<number, PlayerStatus> | null): Column => ({
+  key: OPPONENT_KEY,
+  label: 'Opp',
+  group: 'Today',
+  title: "Today's opponent — “@” away, “vs” at home. Sorts alphabetically, which groups your players by tonight's game",
+  format: (r) => {
+    const st = statuses?.get(r.id);
+    if (!st?.opponent) return '\u2014';
+    return `${st.isHome ? 'vs' : '@'} ${st.opponent}`;
+  },
+  text: (r) => statuses?.get(r.id)?.opponent ?? null,
+  // Nothing numeric to compare, and nothing to threshold — see `Column.text`.
+  value: () => null,
+});
+
 /** Which window a column key belongs to, for the two places that have to tell a
  *  trend column from an ordinary one without re-deriving the names. */
 const TREND_BY_KEY = new Map<string, TrendWindow>(TREND_WINDOWS.map((w) => [trendKey(w), w]));
@@ -302,9 +347,18 @@ const ROSTER_PCT_COLUMN: Column = {
 const BATTER_COLUMNS: Column[] = [
   ROSTER_PCT_COLUMN,
   ...TREND_COLUMNS,
+  // The statuses map is injected in `allColumns`, the way a trend column's
+  // measured label is — the canonical order belongs in this array.
+  opponentColumn(null),
   { key: 'games', label: 'G', group: 'Counting', title: 'Games played', format: (r) => count(r.games), value: (r) => r.games },
   { key: 'pa', label: 'PA', title: 'Plate appearances', format: (r) => count(r.pa), value: (r) => r.pa },
   { key: 'ab', label: 'AB', title: 'At bats', format: (r) => count(r.ab), value: (r) => r.ab },
+  // One cell where H and AB are two columns — the shape the summary table and
+  // the game log's leading cell already use, and the way a batting line is
+  // read. It **sorts on hits**, the numerator being what a counting column is
+  // asked for; the average it implies is the AVG column three along, computed
+  // over this very pair. `hits` is off by default now that this carries it.
+  { key: 'hAb', label: 'H/AB', title: 'Hits and at-bats — sorts on hits', format: (r) => (r.hits === null || r.ab === null ? '\u2014' : `${r.hits}/${r.ab}`), value: (r) => r.hits },
   { key: 'runs', label: 'R', title: 'Runs scored', format: (r) => count(r.runs), value: (r) => r.runs },
   { key: 'hits', label: 'H', title: 'Hits', format: (r) => count(r.hits), value: (r) => r.hits },
   { key: 'doubles', label: '2B', title: 'Doubles', format: (r) => count(r.doubles), value: (r) => r.doubles },
@@ -335,6 +389,7 @@ const BATTER_COLUMNS: Column[] = [
 const PITCHER_COLUMNS: Column[] = [
   ROSTER_PCT_COLUMN,
   ...TREND_COLUMNS,
+  opponentColumn(null),
   { key: 'games', label: 'G', group: 'Counting', title: 'Games pitched', format: (r) => count(r.games), value: (r) => r.games },
   { key: 'gamesStarted', label: 'GS', title: 'Games started', format: (r) => count(r.gamesStarted), value: (r) => r.gamesStarted },
   // Shown as thirds ("158.1") and ordered on the out count behind it — 6.2 is
@@ -406,7 +461,9 @@ const PITCHER_COLUMNS: Column[] = [
 const DEFAULT_OFF: Record<PlayerKind, ReadonlySet<string>> = {
   batter: new Set([
     'rosterTrend1', 'rosterTrend3', 'rosterTrend15', 'rosterTrend30',
-    'ab', 'cs', 'iso', 'babip', 'bbPerK', 'paPerHr', 'sbRate',
+    // `hits` and `ab` are what `hAb` prints, so the two of them off is the
+    // same line in one column rather than a stat dropped from the board.
+    'hits', 'ab', 'cs', 'iso', 'babip', 'bbPerK', 'paPerHr', 'sbRate',
     'launchAngle', 'sweetSpotRate', 'gbRate', 'ldRate', 'fbRate',
     'whiffRate', 'chaseRate', 'firstPitchStrikeRate', 'sprintSpeed',
   ]),
@@ -431,21 +488,64 @@ export function defaultColumnKeys(kind: PlayerKind): string[] {
     .map((c) => c.key);
 }
 
-/** Narrows a `cols=` list off the URL: unknown keys are dropped (a link from an
- *  older build, or one board's keys pasted onto the other), and a list with
- *  nothing left in it falls back to the defaults rather than an empty table. */
+/**
+ * Narrows a `cols=` list off the URL: unknown keys are dropped (a link from an
+ * older build, or one board's keys pasted onto the other), and a list with
+ * nothing left in it falls back to the defaults rather than an empty table.
+ *
+ * **The order it arrives in is kept**, which it deliberately was not until the
+ * columns became reorderable: the list used to be read into a `Set` on the
+ * grounds that a hand-edited `cols=` had no business shuffling the table. Now
+ * that the order is the reader's to set, it is part of what the parameter says
+ * — so a link carries the arrangement as well as the selection. What a
+ * hand-edited one still cannot do is name a column twice: a duplicate key would
+ * render two identical columns under one React key, so the list is deduped on
+ * the way in and the first mention wins.
+ */
 export function toColumnKeys(kind: PlayerKind, raw: string | null): string[] | null {
   if (!raw) return null;
   const known = new Set(allColumns(kind).map((c) => c.key));
-  const keys = raw.split(',').filter((k) => known.has(k));
+  const seen = new Set<string>();
+  const keys = raw.split(',').filter((k) => {
+    if (!known.has(k) || seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
   return keys.length ? keys : null;
 }
 
 /** Whether a selection is just the defaults — the test App uses to keep `cols=`
- *  out of the URL until the user has actually changed something. */
+ *  out of the URL until the user has actually changed something. **Order
+ *  counts**: the same columns in a different arrangement is a change the reader
+ *  made and a link should carry, so this compares position by position rather
+ *  than membership. */
 export function isDefaultColumns(kind: PlayerKind, keys: string[]): boolean {
   const def = defaultColumnKeys(kind);
-  return keys.length === def.length && def.every((k) => keys.includes(k));
+  return keys.length === def.length && def.every((k, i) => keys[i] === k);
+}
+
+/**
+ * Where a column that has just been switched *on* lands in a list the reader
+ * may have rearranged: at its canonical place relative to the columns already
+ * there — ahead of the first one that follows it in the board's own order, and
+ * at the end if none does.
+ *
+ * The alternative, appending, is worse in the ordinary case and no better in
+ * the rearranged one: someone ticking `2B` with the default set on screen wants
+ * it beside `H/AB`, not out past the Statcast group. Whatever custom order is
+ * in force is left alone either way — one column is inserted, nothing else
+ * moves.
+ */
+function withColumn(kind: PlayerKind, keys: string[], key: string): string[] {
+  if (keys.includes(key)) return keys;
+  const canonical = allColumns(kind).map((c) => c.key);
+  const at = canonical.indexOf(key);
+  const before = keys.findIndex((k) => {
+    const i = canonical.indexOf(k);
+    return i > at;
+  });
+  if (before === -1) return [...keys, key];
+  return [...keys.slice(0, before), key, ...keys.slice(before)];
 }
 
 /** The column the board opens on: the players with the most work behind them,
@@ -1108,6 +1208,179 @@ function ResearchPhoto({
 }
 
 /**
+ * A club's cap logo, under the player's name, standing in for the `Tm` column
+ * this board used to carry.
+ *
+ * **The abbreviation is not lost, it is moved off the pixel grid**: it is the
+ * image's `alt` and its tooltip, it is what the board's search still matches
+ * on, and it is what shows outright when there is no logo to draw. A club MLB
+ * files under no team id at all (a leaderboard row for a player between
+ * organisations) keeps the three letters, and so does one whose SVG fails to
+ * load — that second case is why this holds a `failed` flag rather than
+ * trusting the CDN, the same courtesy `OrderPhoto` extends to a headshot.
+ */
+function TeamMark({ teamId, team }: { teamId: number | null; team: string }) {
+  const [failed, setFailed] = useState(false);
+  if (teamId === null || failed) {
+    return <span className="research-id-team">{team || '\u2014'}</span>;
+  }
+  return (
+    <img
+      className="research-id-logo"
+      src={teamLogoUrl(teamId)}
+      alt={team}
+      title={team}
+      loading="lazy"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+/**
+ * The columns in the order they are drawn, draggable — the board's answer to
+ * "I want ERA next to the name, not past nine counting stats".
+ *
+ * It is a row of its own at the top of the Columns panel rather than a handle
+ * on the chips below, and the reason is that those chips are grouped: they are
+ * cut into Counting, Slash line, Rates and Statcast, which is the right shape
+ * for *choosing* columns and no shape at all for arranging them, an
+ * arrangement being one flat sequence that crosses every one of those
+ * headings. So the panel now answers its two questions in two blocks — what
+ * order, then which columns — and each is drawn the way its own question wants.
+ *
+ * Reordering is by **Pointer Events** and the drop target is found with
+ * `elementFromPoint`, which is `PlayerOrderEditor`'s method and is here for its
+ * reasons: one code path for a mouse and a finger, where HTML5 drag-and-drop is
+ * mouse-only. On touch **only the grip starts a drag** (it alone carries
+ * `touch-action: none`), so a finger anywhere else on a chip still scrolls the
+ * panel — the mistake `.order-row` documents, which cost the edit screen its
+ * scrolling until it was scoped to the grip.
+ *
+ * The order is held locally while the drag is live and **committed on
+ * release**, unlike the editor's row list, which moves the real list as it
+ * goes. The difference is what is downstream: there it is twenty rows, here it
+ * is six hundred players by twenty-five columns, and re-rendering fifteen
+ * thousand cells on every pointer move is a drag that stutters. The chips
+ * themselves reorder live, which is the feedback the gesture actually needs.
+ */
+function ColumnOrder({
+  columns,
+  onReorder,
+}: {
+  columns: Column[];
+  onReorder: (keys: string[]) => void;
+}) {
+  const keys = columns.map((c) => c.key);
+  const signature = keys.join(',');
+  const [order, setOrder] = useState<string[]>(keys);
+  const [draggingKey, setDraggingKey] = useState<string | null>(null);
+  const dragKey = useRef<string | null>(null);
+  // The order as the drag last left it — read by the release handler, which
+  // cannot see the state it has been setting through a closure.
+  const liveOrder = useRef<string[]>(keys);
+
+  // The board's own list is the truth whenever it changes under us — a column
+  // ticked on or off, a board switch, a reset. Keyed on the joined keys rather
+  // than the array, which is a new object every render.
+  useEffect(() => {
+    setOrder(signature.split(','));
+    liveOrder.current = signature.split(',');
+  }, [signature]);
+
+  const labels = new Map(columns.map((c) => [c.key, c.label]));
+
+  const move = (from: string, to: string) => {
+    if (from === to) return;
+    setOrder((prev) => {
+      const i = prev.indexOf(from);
+      const j = prev.indexOf(to);
+      if (i === -1 || j === -1) return prev;
+      const next = [...prev];
+      next.splice(i, 1);
+      next.splice(j, 0, from);
+      liveOrder.current = next;
+      return next;
+    });
+  };
+
+  // Whatever the live drag has bound to the window, so an unmount mid-gesture
+  // (the panel closed, a board switch) tears it down rather than leaving a
+  // pointer listener holding a dead component's setState.
+  const teardown = useRef<(() => void) | null>(null);
+  useEffect(() => () => teardown.current?.(), []);
+
+  const startDrag = (e: React.PointerEvent, key: string) => {
+    e.preventDefault();
+    dragKey.current = key;
+    setDraggingKey(key);
+    // The dragged chip has `pointer-events: none` (see `.research-order-chip.
+    // dragging`), so this resolves to the chip underneath rather than itself.
+    const onMove = (ev: PointerEvent) => {
+      const from = dragKey.current;
+      if (from === null) return;
+      const chip = (document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null)
+        ?.closest('.research-order-chip') as HTMLElement | null;
+      const to = chip?.dataset.key;
+      if (to) move(from, to);
+    };
+    const unbind = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
+      teardown.current = null;
+    };
+    const end = () => {
+      unbind();
+      dragKey.current = null;
+      setDraggingKey(null);
+      onReorder(liveOrder.current);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+    teardown.current = unbind;
+  };
+
+  return (
+    <div className="research-colgroup research-order">
+      <div className="research-colgroup-head">
+        <span>Order</span>
+      </div>
+      <p className="research-order-hint">
+        Drag ⠿ to move a column. The table reads left to right in this order.
+      </p>
+      <div className="research-order-chips">
+        {order.map((k) => (
+          <span
+            key={k}
+            data-key={k}
+            className={`research-order-chip${draggingKey === k ? ' dragging' : ''}`}
+            title={`Drag to move ${labels.get(k) ?? k}`}
+            /* A mouse can grab the chip anywhere; a finger has to use the grip,
+               or the panel could not be scrolled past this block. */
+            onPointerDown={(e) => {
+              if (e.pointerType === 'mouse') startDrag(e, k);
+            }}
+          >
+            {labels.get(k) ?? k}
+            <span
+              className="research-order-grip"
+              aria-hidden="true"
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                startDrag(e, k);
+              }}
+            >
+              ⠿
+            </span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
  * The star that puts a row on the watchlist, or takes it off.
  *
  * It sits **after the name**, and the cost is the reason: this is the app's
@@ -1196,10 +1469,20 @@ export function ResearchTable({
     () => new Map((trendWindows ?? []).map((t) => [trendKey(t.window), t.days])),
     [trendWindows],
   );
+  // Today's facts for the whole league — the same map every row's lineup pip
+  // and IL badge are drawn from, read here because one *column* is drawn from
+  // it too (see `opponentColumn`). Straight off the context rather than a prop:
+  // the rows already read it a row at a time through `usePlayerStatus`, and a
+  // second route to the same map is a second thing to keep in step.
+  const statuses = useContext(PlayerStatusContext);
   const allColumns = useMemo(() => {
     const base = kind === 'pitcher' ? PITCHER_COLUMNS : BATTER_COLUMNS;
     return base
       .filter((c) => (c.key === 'rosterPct' ? hasRosterPct : true))
+      // The one column whose cells read something other than the row. Injected
+      // here for the reason a trend column's label is: the array above is the
+      // canonical *order*, and runtime is where the data to fill it arrives.
+      .map((c) => (c.key === OPPONENT_KEY ? opponentColumn(statuses) : c))
       // A window with no baseline is dropped rather than dashed, and so is
       // every one of them on a cold install: a column of zeroes would read as
       // "nobody is moving", which is a claim where the truth is an absence.
@@ -1214,21 +1497,33 @@ export function ResearchTable({
               title: `Change in roster % over the last ${days} day${days === 1 ? '' : 's'}`,
             };
       });
-  }, [kind, hasRosterPct, measured]);
+  }, [kind, hasRosterPct, measured, statuses]);
   const columnsByKey = useMemo(
     () => new Map(allColumns.map((c) => [c.key, c])),
     [allColumns],
   );
-  // A set rather than the array, so the rendered order is always the canonical
-  // one however the keys arrived (a hand-edited `cols=` can't shuffle columns).
-  const visibleKeys = useMemo(
-    () => new Set(columnKeys ?? defaultColumnKeys(kind)),
+  // **The list is the order**, which it was not until the columns became
+  // reorderable: the keys used to be read into a `Set` and the table rendered
+  // `allColumns.filter(...)`, so the arrangement was always the board's own
+  // however the keys arrived. Now the arrangement is the reader's, and the
+  // array is what carries it — through the URL, through the saved preference,
+  // and into the header row below. The set is kept beside it for the half-dozen
+  // membership tests that don't care about order (the picker's ticks, the
+  // sort's "is this column still shown").
+  const orderedKeys = useMemo(
+    () => columnKeys ?? defaultColumnKeys(kind),
     [columnKeys, kind],
   );
-  const columns = useMemo(
-    () => allColumns.filter((c) => visibleKeys.has(c.key)),
-    [allColumns, visibleKeys],
-  );
+  const visibleKeys = useMemo(() => new Set(orderedKeys), [orderedKeys]);
+  const columns = useMemo(() => {
+    const byKey = new Map(allColumns.map((c) => [c.key, c]));
+    // `filter(Boolean)` rather than a fallback: a key with no column on this
+    // board is one the board doesn't have — Ros% without a league, a trend
+    // window with no baseline — and dropping it is what those two rules
+    // already do. A saved list keeps the key, so connecting a league puts the
+    // column back where the reader had it.
+    return orderedKeys.map((k) => byKey.get(k)).filter((c): c is Column => c !== undefined);
+  }, [allColumns, orderedKeys]);
 
   // Search and the stat filters each sit behind their own button. The table is
   // the page; on a phone a permanently-open control bar cost it four rows
@@ -1293,10 +1588,13 @@ export function ResearchTable({
   // free: a column the *other* board doesn't have is not a value this select
   // can show, so crossing falls back rather than leaving it on a dead option.
   const { column: draftColumnRaw, op: draftOp, value: draftValue } = ui.draft;
+  // …and it has to be a column a threshold can be typed against: the board's
+  // first is now `Opp` for a user with no fantasy league, which holds words.
+  const filterableColumns = useMemo(() => allColumns.filter((c) => !c.text), [allColumns]);
   const draftColumn =
-    draftColumnRaw && allColumns.some((c) => c.key === draftColumnRaw)
+    draftColumnRaw && filterableColumns.some((c) => c.key === draftColumnRaw)
       ? draftColumnRaw
-      : allColumns[0].key;
+      : filterableColumns[0].key;
   const patchDraft = (next: Partial<ResearchUi['draft']>) =>
     onUiChange((u) => ({ ...u, draft: { ...u.draft, ...next } }));
   const setDraftColumn = (v: string) => patchDraft({ column: v });
@@ -1554,7 +1852,10 @@ export function ResearchTable({
       }
       for (const f of filters) {
         const col = columnsByKey.get(f.column);
-        if (!col) continue;
+        // A text column can hold no threshold and is not offered in the
+        // builder; skipping it here is belt and braces against a filter built
+        // against a key that has since become one.
+        if (!col || col.text) continue;
         const v = col.value(r);
         // No value fails every threshold: a player Savant has no barrel rate for
         // hasn't cleared 10%, and letting him through would put a row of dashes
@@ -1568,6 +1869,21 @@ export function ResearchTable({
     const col = columnsByKey.get(activeSortKey);
     if (!col) return out;
     const dir = sortAsc ? 1 : -1;
+    // A column of words orders by them, the null-to-the-bottom rule below being
+    // exactly as right for a player with no game today as for one with no
+    // barrel rate. Only the opponent takes this path — see `Column.text`.
+    if (col.text) {
+      const text = col.text;
+      return [...out].sort((a, b) => {
+        const av = text(a);
+        const bv = text(b);
+        if (av === null && bv === null) return a.name.localeCompare(b.name);
+        if (av === null) return 1;
+        if (bv === null) return -1;
+        if (av === bv) return a.name.localeCompare(b.name);
+        return av.localeCompare(bv) * dir;
+      });
+    }
     return [...out].sort((a, b) => {
       const av = col.value(a);
       const bv = col.value(b);
@@ -1590,29 +1906,53 @@ export function ResearchTable({
     }
   }
 
-  /** Show or hide one column, always emitting the full list in canonical order
-   *  so the URL never encodes a shuffle. Emits null when the result is just the
-   *  defaults again, which is what keeps `cols=` out of the URL. */
-  function setColumn(key: string, on: boolean) {
-    const next = new Set(visibleKeys);
-    if (on) next.add(key);
-    else next.delete(key);
+  /** Emit a selection, keeping the reader's arrangement, and emit **null** when
+   *  it has come back to the defaults — which is what keeps `cols=` out of a
+   *  link that isn't saying anything, and what makes a reset go on following
+   *  the defaults as they change rather than pinning today's copy of them. */
+  function commitColumns(keys: string[]) {
     // Never let the last one go: an empty table has no headers left to click,
     // so there would be no way back except the Reset button beside it.
-    if (next.size === 0) return;
-    const keys = allColumns.filter((c) => next.has(c.key)).map((c) => c.key);
+    if (keys.length === 0) return;
     onColumnsChange(isDefaultColumns(kind, keys) ? null : keys);
   }
 
+  /**
+   * Take the arrangement back from the order row.
+   *
+   * It cannot simply be committed as it comes, and the reason is the gap
+   * between `orderedKeys` and `columns`: a saved list can name a column this
+   * board has no answer for right now — `rosterPct` before the ESPN status
+   * lands or with no league at all, a trend window with no baseline yet — and
+   * those are filtered out of `columns` and so never reach the order row.
+   * Committing what the row hands back would drop them from the saved list
+   * outright, so connecting a league later would find Ros% gone from a set the
+   * reader never touched.
+   *
+   * So the new order is threaded back through the saved list: each key the
+   * board *can* resolve takes the next place in the new arrangement, and each
+   * one it can't stays exactly where it was.
+   */
+  function reorderColumns(nextVisible: string[]) {
+    const resolvable = new Set(columns.map((c) => c.key));
+    let i = 0;
+    commitColumns(orderedKeys.map((k) => (resolvable.has(k) ? (nextVisible[i++] ?? k) : k)));
+  }
+
+  /** Show or hide one column. Switching one on puts it at its canonical place
+   *  among the ones already there (`withColumn`) rather than at the end, and
+   *  switching one off moves nothing else. */
+  function setColumn(key: string, on: boolean) {
+    commitColumns(on ? withColumn(kind, orderedKeys, key) : orderedKeys.filter((k) => k !== key));
+  }
+
   function setGroup(group: Column[], on: boolean) {
-    const next = new Set(visibleKeys);
-    for (const c of group) {
-      if (on) next.add(c.key);
-      else next.delete(c.key);
+    const inGroup = new Set(group.map((c) => c.key));
+    if (!on) {
+      commitColumns(orderedKeys.filter((k) => !inGroup.has(k)));
+      return;
     }
-    if (next.size === 0) return;
-    const keys = allColumns.filter((c) => next.has(c.key)).map((c) => c.key);
-    onColumnsChange(isDefaultColumns(kind, keys) ? null : keys);
+    commitColumns(group.reduce((keys, c) => withColumn(kind, keys, c.key), orderedKeys));
   }
 
   function addFilter() {
@@ -2116,11 +2456,13 @@ export function ResearchTable({
                 onChange={(e) => setDraftColumn(e.target.value)}
                 aria-label="Stat to filter on"
               >
-                {allColumns.map((c) => (
-                  <option key={c.key} value={c.key}>
-                    {c.pick ?? c.title}
-                  </option>
-                ))}
+                {allColumns
+                  .filter((c) => !c.text)
+                  .map((c) => (
+                    <option key={c.key} value={c.key}>
+                      {c.pick ?? c.title}
+                    </option>
+                  ))}
               </select>
               <select
                 className="research-op"
@@ -2201,6 +2543,11 @@ export function ResearchTable({
 
           {columnsOpen && (
             <div className="research-panel research-columns">
+              {/* Which order, then which columns. The two questions this panel
+                  answers are different shapes — one flat sequence against four
+                  labelled runs — and each is drawn the way its own wants; see
+                  `ColumnOrder`. */}
+              <ColumnOrder columns={columns} onReorder={reorderColumns} />
               {columnGroups(allColumns).map((g) => {
                 const allOn = g.columns.every((c) => visibleKeys.has(c.key));
                 return (
@@ -2284,14 +2631,10 @@ export function ResearchTable({
                   <span className="sr-only">Headshot</span>
                   <ExpandButton isFull={isFull} onToggle={toggle} what="board" />
                 </th>
+                {/* Club and position used to be two columns of their own here
+                    and are now the second line of this one — see the cell. */}
                 <th className="sum-name-col" scope="col">
                   Player
-                </th>
-                <th className="research-team-col" scope="col">
-                  Tm
-                </th>
-                <th className="research-pos-col" scope="col">
-                  Pos
                 </th>
                 {columns.map((c, i) => {
                   const active = activeSortKey === c.key;
@@ -2335,6 +2678,8 @@ export function ResearchTable({
                       <ResearchPhoto row={r} playerKey={key} onOpen={onOpenDetails} />
                     </td>
                     <td className="sum-name-col">
+                      <div className="research-id">
+                      <div className="research-id-name">
                       <button
                         type="button"
                         className="sum-name-link"
@@ -2365,16 +2710,38 @@ export function ResearchTable({
                         name={r.name}
                         onToggle={(on) => onWatchlistToggle(key, on)}
                       />
-                    </td>
-                    <td className="research-team-col">{r.team || '—'}</td>
-                    {/* The one cell that says *why* a filtered row is on the
-                        board, which is why it prints the eligibility whole and
-                        leads on the pill in force — see `posCellText`. The
-                        tooltip names its source, since `SS` alone can't say
-                        whether it came from ESPN or is the fallback for a
-                        player the join couldn't place. */}
-                    <td className="research-pos-col" title={posCell.title}>
-                      {posCell.text}
+                      </div>
+                      {/* **Club and position, under the name.** They were two
+                          columns of their own — `Tm` and `Pos` — and on the
+                          app's widest table that is ~110px of a row spent on
+                          two facts about *who the player is*, beside a name
+                          that is the same kind of fact and has a column that
+                          absorbs the table's slack anyway. Underneath, they
+                          cost the stats nothing and read as what they are: the
+                          identity block, the way a player card's header
+                          already sets a name over its context line.
+
+                          The club is its **cap logo** rather than its
+                          abbreviation, which is what makes the pair fit on one
+                          line under the name: a mark is read at a glance where
+                          three letters are read, and the abbreviation is still
+                          there for anyone who wants it — as the image's `alt`,
+                          on its tooltip, and in the search box, which has
+                          always matched on team as well as name.
+
+                          The position half is unchanged in every respect but
+                          where it is drawn: still the whole eligibility list,
+                          still leading on the pill in force, still saying in
+                          its tooltip which source answered — see
+                          `posCellText`, whose reasoning is about what the cell
+                          prints rather than which column it sits in. */}
+                      <div className="research-id-sub">
+                        <TeamMark teamId={r.teamId} team={r.team} />
+                        <span className="research-id-pos" title={posCell.title}>
+                          {posCell.text}
+                        </span>
+                      </div>
+                      </div>
                     </td>
                     {columns.map((c, i) => (
                       <td
