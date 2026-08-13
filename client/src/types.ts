@@ -563,7 +563,17 @@ export interface PitcherGameLog extends GameLogEntry {
   battersFaced: number;
   pitches: number;
   strikes: number;
-  seasonEra: string; // his ERA through this game, as with the batter's rates
+  // All three are his line **through** this game, as with the batter's rates.
+  // ERA and WHIP are MLB's own — the game log publishes both cumulatively, so
+  // they are read rather than derived. FIP is not published anywhere and is
+  // computed here off `leagueRates.ts::fipLike`, the same definition the pitcher
+  // card's season line and the research board use, over the counting stats
+  // accumulated across the log in scorebook order. Null under three innings,
+  // which is `fipLike`'s own rule — so an opening relief appearance carries no
+  // FIP until the season-to-date innings reach three.
+  seasonEra: string;
+  seasonFip: string | null;
+  seasonWhip: string;
 }
 
 export interface RosterStatus {

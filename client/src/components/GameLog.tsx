@@ -51,12 +51,17 @@ function Count({ n }: { n: number }) {
 }
 
 /* Batting is where he hit in the order — game context like the opponent beside
-   it, so it leads rather than sitting among the counting stats. The last two are
-   prefixed Szn because they're his line *through* that game rather than the
-   game's own — see the field comments on BatterGameLog. H/AB is where AB and H
-   used to be two columns; see `HitsPerAb` for why one cell. */
+   it, so it leads rather than sitting among the counting stats. The last three
+   are prefixed Szn because they're his line *through* that game rather than the
+   game's own — see the field comments on BatterGameLog. They read in slash-line
+   order, AVG · OBP · OPS, so the eye takes them the way a slash line is taken;
+   the SLG that would sit between the last two is the one part of it this table
+   doesn't spend a column on, being exactly OPS − OBP off the two beside it.
+   H/AB is where AB and H used to be two columns; see `HitsPerAb` for why one
+   cell. */
 const BATTER_COLUMNS = [
-  'Batting', 'H/AB', 'R', '2B', '3B', 'HR', 'RBI', 'BB', 'K', 'SB', 'Szn AVG', 'Szn OPS',
+  'Batting', 'H/AB', 'R', '2B', '3B', 'HR', 'RBI', 'BB', 'K', 'SB',
+  'Szn AVG', 'Szn OBP', 'Szn OPS',
 ];
 
 /**
@@ -131,6 +136,7 @@ function BatterRows({ games }: { games: BatterGameLog[] }) {
           <Count n={g.so} />
           <Count n={g.sb} />
           <td className="glog-num glog-rate">{g.seasonAvg}</td>
+          <td className="glog-num glog-rate">{g.seasonObp}</td>
           <td className="glog-num glog-rate">{g.seasonOps}</td>
         </tr>
       ))}
@@ -180,6 +186,13 @@ function BatterTotals({ games }: { games: BatterGameLog[] }) {
       <td className="glog-num">{sum((g) => g.so)}</td>
       <td className="glog-num">{sum((g) => g.sb)}</td>
       <td className="glog-num glog-rate">{avg}</td>
+      {/* Recomputed from the totals like the two beside it, rather than taken
+          off the newest row's running line — the three cells are then one
+          arithmetic over one set of sums, and the OPS at the end of the row is
+          this number plus a slugging over the same at-bats. It agrees with the
+          newest row's Szn OBP by construction: a season-to-date line through the
+          last game is the season. */}
+      <td className="glog-num glog-rate">{obp !== null ? formatRate(obp) : '—'}</td>
       <td className="glog-num glog-rate">
         {obp !== null && slg !== null ? formatRate(obp + slg) : '—'}
       </td>
@@ -231,7 +244,8 @@ function EntryMargin({ m }: { m: number | null }) {
    margin he inherited — and sit after the line rather than before it so the
    stats keep the left of the row, where a phone can see them without scrolling. */
 const PITCHER_COLUMNS = [
-  'Dec', 'IP', 'H', 'R', 'ER', 'BB', 'K', 'HR', 'P', 'Szn ERA', 'Inn', 'Ent',
+  'Dec', 'IP', 'H', 'R', 'ER', 'BB', 'K', 'HR', 'P',
+  'Szn ERA', 'Szn FIP', 'Szn WHIP', 'Inn', 'Ent',
 ];
 
 function PitcherRows({ games, roles }: { games: PitcherGameLog[]; roles: boolean }) {
@@ -265,7 +279,15 @@ function PitcherRows({ games, roles }: { games: PitcherGameLog[]; roles: boolean
           <Count n={g.strikeOuts} />
           <Count n={g.hr} />
           <td className="glog-num">{g.pitches || <span className="glog-zero">—</span>}</td>
+          {/* The estimator sits immediately after the number it estimates, the
+              rule the pitcher card's season line and the research board both
+              follow; WHIP comes after the pair rather than between them, being
+              a different question — what he allowed on the bases rather than a
+              second reading of the runs. Dashed under three innings, where
+              `fipLike` declines to answer. */}
           <td className="glog-num glog-rate">{g.seasonEra}</td>
+          <td className="glog-num glog-rate">{g.seasonFip ?? <span className="glog-zero">—</span>}</td>
+          <td className="glog-num glog-rate">{g.seasonWhip}</td>
           <td className="glog-num" title={inningsSpan(g)?.title}>
             {inningsSpan(g)?.label ?? <span className="glog-zero">—</span>}
           </td>
@@ -312,6 +334,15 @@ function PitcherTotals({ games }: { games: PitcherGameLog[] }) {
       <td className="glog-num glog-rate">
         {outs > 0 ? ((er * 27) / outs).toFixed(2) : '—'}
       </td>
+      {/* Neither of these is summed, because neither is summable: a
+          season-to-date rate through the newest game **is** the season, so the
+          foot takes the top row's rather than recomputing it. That also keeps
+          FIP's one definition on the server — the constant behind it lives in
+          `leagueRates.ts` and has no business being restated in a table. */}
+      <td className="glog-num glog-rate">
+        {games[0]?.seasonFip ?? <span className="glog-zero">—</span>}
+      </td>
+      <td className="glog-num glog-rate">{games[0]?.seasonWhip ?? '—'}</td>
       {/* A season has no entry inning and no margin to walk into. */}
       <td className="glog-num">
         <span className="glog-zero">—</span>
