@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { requireUser, userId } from './auth.js';
 import { addDays, baseballToday } from './etDate.js';
 import { getPlayerDay, getPlayerStatuses, getReport, withEstimators } from './savant.js';
+import type { HeldDays } from './savant.js';
 import { getPercentiles } from './percentiles.js';
 import { getXwobaSeries } from './xwoba.js';
 import { getBatterGameLog, getPitcherGameLog } from './gameLog.js';
@@ -24,6 +25,7 @@ import {
   getLeague,
   getPrefs,
   getRoster,
+  getRosterForRange,
   joinLeague,
   leagueForInvite,
   getWatchlist,
@@ -46,11 +48,12 @@ import {
   EspnAuthError,
   getLeagueInfo,
   getOwnership,
-  getTeamLineups,
+  lineupsFrom,
+  getTeamRosters,
   normalizeS2,
   normalizeSwid,
   rosterToWatchlist,
-  startedIds,
+  rostersToWatchlist,
 } from './espn.js';
 import type { EspnRosterPlayer } from './espn.js';
 import type { WatchPlayer } from './types.js';
@@ -265,16 +268,31 @@ app.get(
     // for the same reason the refresh carries: the report's player order *is*
     // the lineup order, and a report ordered by today's lineup under chips
     // drawn from tomorrow's would be one roster described two ways.
+    //
+    // The saved roster is read **as it stood over those days**, not as it
+    // stands now: `getRosterForRange` answers with everyone who was on it on
+    // any day of the range and, per player, which of those days were his. A man
+    // added this morning has no row over "Yesterday", and a man dropped this
+    // morning still has his week. See **The roster is a range of rosters** in
+    // `auth-and-storage.md` for the whole of that rule.
     const fantasy = req.query.source === 'fantasy';
     let watched: WatchPlayer[];
+    let held: HeldDays | undefined;
     let teamName: string | null = null;
     if (fantasy) {
       try {
-        ({ players: watched, teamName } = await fantasyWatchlist(
-          userId(req),
-          req.query.refresh === '1',
+        // The **range**, not just its end: a fantasy team is a range of rosters
+        // exactly as the saved one is, so the report reads one per day and is
+        // told which of them each player was on. A read that fails leaves
+        // `held` null, which is the old behaviour — today's team over every day
+        // of the range.
+        const fan = await fantasyWatchlist(userId(req), req.query.refresh === '1', end, {
+          start,
           end,
-        ));
+        });
+        watched = fan.players;
+        teamName = fan.teamName;
+        held = fan.held ?? undefined;
       } catch (err) {
         // A league that can't be read is the user's to fix, and the client
         // offers the way to — so 409 rather than the 502 `asyncRoute` would
@@ -283,9 +301,9 @@ app.get(
         throw err;
       }
     } else {
-      watched = await getRoster(userId(req));
+      ({ players: watched, heldDays: held } = await getRosterForRange(userId(req), start, end));
     }
-    const players = await getReport(start, end, watched);
+    const players = await getReport(start, end, watched, held);
     // `'watchlist'` is what the source has always been called on the wire and
     // stays so for an old tab's sake; it means the saved roster.
     res.json({ start, end, players, source: fantasy ? 'fantasy' : 'watchlist', teamName });
@@ -507,6 +525,7 @@ async function fantasyWatchlist(
   teamName: string | null;
   roster: EspnRosterPlayer[];
   lineups: Record<string, number[]> | null;
+  held: HeldDays | null;
 }> {
   const espn = await getEspnLeague(user);
   if (!espn) throw new EspnAuthError('No ESPN league connected');
@@ -520,38 +539,42 @@ async function fantasyWatchlist(
   const own = await getOwnership(creds, refresh, date);
   const roster = own.rosters[espn.teamId] ?? [];
   const team = own.teams.find((t) => t.id === espn.teamId);
-  // Which players the views report on is the roster above — your team as it
-  // stands. Which of a player's *days* count is a different question, and this
-  // is it: one lineup per date, each read at that date's own scoring period.
-  // See `espn.ts`'s **The lineup, one day at a time** for why the two rules
-  // point in opposite directions and why that is right.
+  // **One read per day answers both questions**, where it used to answer one.
+  // *Which players do the views report on* is the union of every day's roster —
+  // your team as it stood over those days, the man you dropped on Tuesday
+  // included, for the days you had him — and *which of a player's days count*
+  // is that same map read a second way. See `espn.ts`'s **A range is a range of
+  // rosters** for why the roster rule reversed and what it costs.
   //
   // The seed is the day `getOwnership` has just answered for — today, or the
   // future day a `Tomorrow` view asked for — so the map and the slot chips
   // beside it come from one read and cannot disagree about that day.
-  let lineups: Record<string, number[]> | null = null;
+  let byDate: Record<string, EspnRosterPlayer[]> | null = null;
   if (range) {
     const seedDate = date && date > baseballToday() ? date : baseballToday();
-    lineups = await getTeamLineups(
+    byDate = await getTeamRosters(
       creds,
       espn.teamId,
       range.start,
       range.end,
-      { date: seedDate, started: startedIds(roster) },
+      { date: seedDate, roster },
       refresh,
     ).catch((err: Error) => {
-      // One lineup per day is a refinement of the slot chips, not a
-      // prerequisite for them: without it the client falls back to the single
-      // lineup it already has, which is exactly what the app did before.
-      console.error('ESPN per-day lineups unavailable:', err.message);
+      // One roster per day is a refinement of the single end-of-range read, not
+      // a prerequisite for it: without it the views report on today's team with
+      // one lineup applied to the range, which is exactly what the app did
+      // before any of this.
+      console.error('ESPN per-day rosters unavailable:', err.message);
       return null;
     });
   }
+  const over = byDate && Object.keys(byDate).length > 0 ? rostersToWatchlist(byDate, roster) : null;
   return {
-    players: rosterToWatchlist(roster),
+    players: over?.players ?? rosterToWatchlist(roster),
     teamName: team?.name ?? espn.teamName ?? null,
     roster,
-    lineups,
+    lineups: byDate && lineupsFrom(byDate),
+    held: over?.heldDays ?? null,
   };
 }
 

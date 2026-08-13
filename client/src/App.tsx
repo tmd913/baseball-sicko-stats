@@ -2345,7 +2345,19 @@ export default function App() {
 
   // The reorder screen edits the raw watchlist order, one kind at a time, so it
   // reads `reports` rather than the simulate-overlaid copy the cards render.
+  //
+  // **And only the players who are on the roster *now*.** The report is the
+  // roster as it stood over the days in view, so over a range it can carry a
+  // man dropped on Tuesday — see **The roster is a range of rosters** in
+  // `auth-and-storage.md`. This screen answers a different question from the
+  // views behind it: it is the one place the roster is edited as a *list*, and
+  // a row you could drag or remove for somebody who is not on it would be
+  // offering an edit to a list he isn't in. It reads `rosterKeys`, the same set
+  // the research board's baseball and the player page's badge read, so "on the
+  // roster" means one thing everywhere; in this mode that is always the saved
+  // list, the screen being hidden while a fantasy team is in view.
   const editPlayers = reports
+    .filter((r) => rosterKeys.has(playerKey(r)))
     .filter((r) => (shownKind === 'pitcher' ? r.kind === 'pitcher' : r.kind !== 'pitcher'))
     .map((r) => ({ id: r.id, key: playerKey(r), name: r.name }));
 
