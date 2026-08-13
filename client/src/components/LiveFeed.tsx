@@ -37,7 +37,7 @@ import { InningsList } from './Innings';
 
 /** How many stream items the Recent section shows at a time — a day of at-bats
  * across a roster runs to hundreds, and every one of them mounts a card. */
-const PAGE_SIZE = 20;
+export const FEED_PAGE_SIZE = 20;
 
 /** Priority order for the Live section: at bat, then on deck, then on base. */
 const ROLE_ORDER: Record<LiveRole, number> = {
@@ -1254,6 +1254,8 @@ export function LiveFeed({
   onToggleGroup,
   positionFor,
   multiDay,
+  shown: shownFromParent,
+  onShowMore,
 }: {
   reports: PlayerReport[];
   // Which kind the tabs above are showing — the stream is one kind at a time,
@@ -1280,6 +1282,11 @@ export function LiveFeed({
   /** Whether the range in view spans more than one date. Only the grouped
    * reading uses it, to cut a batter's card into games. */
   multiDay: boolean;
+  /** How much of the Recent section to open on, and where to report a "Load
+   * more" back to. App holds the number for the same reason it holds the
+   * scroll offset, and keyed the same way — see its `feedShown`. */
+  shown: number;
+  onShowMore: (shown: number) => void;
 }) {
   const toggle = onToggleKey;
   // How much of the Recent section is on screen, grown a page at a time by the
@@ -1287,7 +1294,17 @@ export function LiveFeed({
   // not a view. It survives the 20s live poll (only the data changes, the
   // component stays mounted) and resets when the kind or the date range does,
   // since App keys this view on both.
-  const [shown, setShown] = useState(PAGE_SIZE);
+  //
+  // Seeded from App and reported back to it, because a *view* switch unmounts
+  // this component and a count that died with it took the scroll memory's
+  // answer down with it: read sixty items, cross to Research and come back,
+  // and the offset the reader left is not an offset a twenty-item page has.
+  const [shown, setShown] = useState(shownFromParent);
+  const showMore = () => {
+    const next = shown + FEED_PAGE_SIZE;
+    setShown(next);
+    onShowMore(next);
+  };
 
   // Players currently in a live at-bat/on-deck/on-base situation, highest-
   // priority role first (a player is listed once, for their leading role).
@@ -1513,7 +1530,7 @@ export function LiveFeed({
             <button
               type="button"
               className="feed-more"
-              onClick={() => setShown((n) => n + PAGE_SIZE)}
+              onClick={showMore}
             >
               Load more
               <span className="feed-more-count">{recent.length - shown}</span>

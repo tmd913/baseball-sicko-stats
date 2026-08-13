@@ -20,7 +20,8 @@ import { eligibleForKind, isInjured, isStartingOn, positionCodes } from './lib';
 import { BaseballMark } from './components/BaseballMark';
 import { PlayerAdder } from './components/PlayerAdder';
 import { PlayerOrderEditor } from './components/PlayerOrderEditor';
-import { LiveFeed } from './components/LiveFeed';
+import { LiveFeed, FEED_PAGE_SIZE } from './components/LiveFeed';
+import { clearClipCache } from './components/PlateAppearanceCard';
 import { SummaryTable } from './components/SummaryTable';
 import {
   ResearchTable,
@@ -49,16 +50,6 @@ import {
 import type { FantasySlot } from './hooks';
 import { Tutorial } from './components/Tutorial';
 import { EspnSettings } from './components/EspnSettings';
-
-// A page's remembered scroll offset is re-applied every frame until the page
-// has been the same height for PAGE_SCROLL_QUIET — long enough to outlast the
-// gaps between bursts of content arriving — and abandoned after
-// PAGE_SCROLL_SETTLE whatever happens, so a page that really is shorter now
-// settles rather than being held against an offset it can never reach.
-const PAGE_SCROLL_QUIET = 250;
-const PAGE_SCROLL_SETTLE = 900;
-// Anything that means the reader has taken the scroll back.
-const USER_SCROLLS = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const;
 
 // Breathing room above a card scrolled to the top of the viewport — the bare
 // gap, matching `--scroll-offset`'s own; the pinned chrome's height is added to
@@ -1412,6 +1403,10 @@ export default function App() {
    * - **The statuses map** on the two views that draw it (the research board
    *   and the details view) — lineups post and IL moves land through the day.
    * - **The research blob** on the research view alone.
+   * - **The clips**, which are a source like any other: a play's video is
+   *   looked up once per tab and then remembered (see `clearClipCache`), so
+   *   without this a miss made at nine in the morning would still be a miss at
+   *   noon on a page that has been asked to go and look again.
    *
    * Every one of those keeps what is on screen until its replacement arrives:
    * the report goes through `loadReport`'s quiet path, so the page's own
@@ -1421,6 +1416,7 @@ export default function App() {
   const [refreshing, setRefreshing] = useState(false);
   const refreshAll = useCallback(() => {
     setRefreshing(true);
+    clearClipCache();
     const espnFirst =
       espnConnected && (ownership !== null || usingFantasy)
         ? loadOwnership(true)
@@ -1488,6 +1484,17 @@ export default function App() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
+  // How far the feed's Recent section has been paged out, keyed exactly as the
+  // component itself is (kind + range) so it still resets when either of those
+  // changes, which is the rule that has always governed it. What it no longer
+  // resets on is a **view** switch, and that is the point: the count decides
+  // how tall the page is, so a reader who had pressed "Load more" twice and
+  // gone to the board came back to twenty items and to a remembered offset the
+  // page no longer had the room for — the one way the memory below could be
+  // exactly right and still land short. A ref rather than state: the live
+  // value lives in the component that grows it, and App only has to hand the
+  // same number back when it mounts again.
+  const feedShown = useRef(new Map<string, number>());
   // Expanded at-bats / upcoming rows in the feed view, lifted here so "collapse
   // all" can clear them (the player view collapses via expandedKeys instead).
   const [feedOpenKeys, setFeedOpenKeys] = useState<Set<string>>(() => new Set());
@@ -1822,15 +1829,22 @@ export default function App() {
   // the row being read is still on screen. A page not yet visited opens at the
   // top, which is what the old reset did for every page.
   const scrollKey = view === 'research' ? 'research' : `${view}:${shownKind}`;
+  // The feed's own key — see `feedShown` above, which is keyed by it.
+  const feedKey = `${shownKind}-${start}-${end}`;
   // Read by the scroll listener, which is bound once and would otherwise close
   // over the key from the render that bound it.
   const scrollKeyRef = useRef(scrollKey);
   scrollKeyRef.current = scrollKey;
   const pageScroll = useRef(new Map<string, number>());
-  // High while a restore is in flight, so the listener doesn't record the
-  // half-way positions the restore itself passes through as the reader's.
+  // High from the moment a restore writes an offset until the frame after it,
+  // so the scroll event that write raises isn't recorded as the reader's own —
+  // which would overwrite a remembered 2,000 with whatever the write was
+  // clamped to. A scroll event is dispatched in the rendering step *ahead* of
+  // that frame's animation callbacks, so one frame is exactly long enough and
+  // no longer: the flag used to be held for the length of a restore, which is
+  // also the window in which the reader might have scrolled themselves.
   const restoring = useRef(false);
-  const restoreRaf = useRef(0);
+  const restoreFrame = useRef(0);
 
   // Two of the four views don't scroll the window at all: the summary and
   // research boards are fixed-height columns whose table scrolls inside them,
@@ -1847,9 +1861,9 @@ export default function App() {
       // A scroll inside an overlay (the player page, the how-to) is not the
       // page's, and nor is a table's own horizontal scroller.
       if (el) {
-        if (target === el) pageScroll.current.set(scrollKeyRef.current, el.scrollTop);
+        if (target === el) pageScroll.current.set(scrollKeyRef.current, Math.round(el.scrollTop));
       } else if (target === document || target === document.documentElement) {
-        pageScroll.current.set(scrollKeyRef.current, window.scrollY);
+        pageScroll.current.set(scrollKeyRef.current, Math.round(window.scrollY));
       }
     };
     // Capture, because a scroll event doesn't bubble: the inner scrollers'
@@ -1867,66 +1881,89 @@ export default function App() {
       scrollPlaced.current = false;
       return;
     }
-    const top = pageScroll.current.get(scrollKey) ?? 0;
-    const inner = pageScroller();
-    if (inner) {
-      inner.scrollTop = top;
-      return;
-    }
-    if (top <= 0) {
-      window.scrollTo(0, 0);
-      return;
-    }
-    // A page re-mounts shorter than it will be — the feed's clips and images
-    // size themselves as they load, 3158px growing to 5426px on a measured
-    // watchlist — so a single `scrollTo` lands wherever the page currently
-    // ends. Worse, it can't simply be repeated until the offset is *reachable*
-    // and then left alone: content arriving **above** the viewport pushes
-    // everything down, and the browser's scroll anchoring follows it to keep
-    // the visible rows still, which took a restored 1800 to 2934 a frame after
-    // it landed. So the offset is held until the page has **stopped growing**,
-    // with anchoring switched off underneath it — the saved number was
-    // measured against the finished page, and it is the finished page it has
-    // to be applied to. `PAGE_SCROLL_SETTLE` ends it either way: a page that
-    // really is shorter now (a live update dropped an item) must not be held
-    // against an offset it can never reach.
-    restoring.current = true;
-    const root = document.documentElement;
-    const anchor = root.style.overflowAnchor;
-    root.style.overflowAnchor = 'none';
-    const started = performance.now();
-    let lastHeight = -1;
-    let steadySince = started;
-    const stop = () => {
-      cancelAnimationFrame(restoreRaf.current);
-      root.style.overflowAnchor = anchor;
+    const want = pageScroll.current.get(scrollKey) ?? 0;
+    const pane = pageScroller();
+    const read = () => Math.round(pane ? pane.scrollTop : window.scrollY);
+    // What was actually reached — the browser clamps a write to the page as it
+    // stands, and the difference between the two is the whole subject below.
+    let placed = 0;
+    const place = () => {
+      restoring.current = true;
+      if (pane) pane.scrollTop = want;
+      else window.scrollTo(0, want);
+      placed = read();
+      cancelAnimationFrame(restoreFrame.current);
+      restoreFrame.current = requestAnimationFrame(() => {
+        restoring.current = false;
+      });
+    };
+    const release = () => {
+      cancelAnimationFrame(restoreFrame.current);
       restoring.current = false;
     };
-    const step = () => {
-      window.scrollTo(0, top);
-      const now = performance.now();
-      const height = root.scrollHeight;
-      if (height !== lastHeight) {
-        lastHeight = height;
-        steadySince = now;
-      }
-      // Two frames of the same height is not settled — the content arrives in
-      // bursts, and letting go on the first pause put the feed back at 1800
-      // and watched it drift to 2934 when the next burst landed 36ms later.
-      const held = Math.abs(window.scrollY - top) < 1 && now - steadySince > PAGE_SCROLL_QUIET;
-      if (held || now - started > PAGE_SCROLL_SETTLE) {
-        stop();
+    // **One write, before the page is painted.** A layout effect on the commit
+    // that swapped the page, so the first frame of the new page is drawn where
+    // the reader left it — and it is *exact*, because the page being written
+    // to is the page the number was measured against.
+    //
+    // That last clause is the change. The feed used to come back 1,890px
+    // shorter than it was left and grow into itself as its clips resolved, so
+    // the write clamped — 2,000 asked for, 1,739 painted, measured — and the
+    // offset then had to be *held* against a growing document, every frame,
+    // with the browser's scroll anchoring switched off underneath it, until
+    // the height had been quiet for 250ms or 900ms had passed. Every symptom
+    // came out of that shape: the clamped first paint was the flash; the frame
+    // in which the page grew and the hold had not yet caught it was the jump
+    // (measured at 2,873 against that same target of 2,000); and the 900ms
+    // deadline was the inconsistency — with the clip lookups answering in 1.5s
+    // rather than 50ms the hold gave up wherever the page had got to, landing
+    // +873, +1,134 and −327 off three consecutive targets, with nothing on
+    // screen to say so. What removed all of it is not a better hold but the
+    // growth: a clip's lookup is remembered for the life of the tab
+    // (`clipUrls` in `PlateAppearanceCard`), so a returning feed renders its
+    // clips in its first commit at the height it had when it was left.
+    //
+    // `overflow-anchor` is untouched now, where the hold used to switch the
+    // browser's anchoring off across the whole document for the length of it.
+    // That was a defence against a stale pixel target being dragged about by
+    // content arriving above the viewport; with nothing arriving, anchoring is
+    // on our side — it is what keeps a reader's place when the 20s live poll
+    // inserts an at-bat above them, and it has no business being off.
+    place();
+    if (placed >= want) return release;
+    // What a size cache cannot answer: a **scrollport whose own box isn't
+    // final** at the instant this runs. Both boards are fixed-height columns
+    // and each settles a frame or two after mount — measured,
+    // `.research-scroll` is 26px shorter then than it ends up, which is why
+    // leaving the board at 31,736 came back to 31,710 and stayed there, the
+    // inner branch having been a single assignment with nothing to catch it.
+    //
+    // So a clamped write is repeated whenever the scrollport reports a new
+    // size, and it ends on a **condition** rather than a clock: the offset has
+    // been reached, or somebody else has taken the scroll. That second test
+    // needs no list of events to watch, because it is the same test either
+    // way — the reader scrolling and the research board resetting itself to
+    // the top (which this must never pull back) both move the offset off the
+    // value we wrote.
+    const ro = new ResizeObserver(() => {
+      if (read() !== placed) {
+        ro.disconnect();
         return;
       }
-      restoreRaf.current = requestAnimationFrame(step);
-    };
-    // The reader wins: a scroll of their own during that window ends it, or
-    // the retry would drag the page back under their finger.
-    for (const ev of USER_SCROLLS) window.addEventListener(ev, stop, { once: true, passive: true });
-    step();
+      place();
+      if (placed >= want) ro.disconnect();
+    });
+    if (pane) {
+      // The pane's own box, and its content: a pane grows by the table inside
+      // it growing, which is a resize of the child rather than of the pane.
+      ro.observe(pane);
+      for (const child of pane.children) ro.observe(child);
+    } else {
+      ro.observe(document.documentElement);
+    }
     return () => {
-      stop();
-      for (const ev of USER_SCROLLS) window.removeEventListener(ev, stop);
+      ro.disconnect();
+      release();
     };
   }, [scrollKey]);
   // The second tier of tabs, in the view bar beside the view switch: every view
@@ -3123,7 +3160,7 @@ export default function App() {
              stream is about, and re-reading it from the top is what the reader
              wants when the list has become a different one. */
           <LiveFeed
-            key={`${shownKind}-${start}-${end}`}
+            key={feedKey}
             reports={filteredCards}
             kind={shownKind}
             onOpenDetails={setDetailsKey}
@@ -3138,6 +3175,8 @@ export default function App() {
             onToggleGroup={toggleCollapsed}
             positionFor={positionFor}
             multiDay={start !== end}
+            shown={feedShown.current.get(feedKey) ?? FEED_PAGE_SIZE}
+            onShowMore={(n) => feedShown.current.set(feedKey, n)}
           />
         )
       )}
