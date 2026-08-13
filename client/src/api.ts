@@ -4,6 +4,7 @@ import type {
   EspnRoster,
   EspnStatus,
   PitcherGameLog,
+  NextGameInfo,
   SeasonArsenal,
   PlayerKind,
   PitcherSeasonStats,
@@ -371,6 +372,20 @@ export const api = {
   ): Promise<{ date: string; player: PlayerReport }> {
     const q = `?type=${kind}${date ? `&date=${date}` : ''}`;
     return request(`/api/players/${playerId}/day${q}`);
+  },
+  /**
+   * What he has coming, for a day that holds no game of his — the Overview
+   * tab's middle section when there is nothing to draw for today.
+   *
+   * `start` asks for his next **announced start** rather than his club's next
+   * game, and the caller decides it off `lib.ts::isRotationStarter`: a batter or
+   * a reliever could be in any of his club's games, where a starter is in one in
+   * five and the only useful answer is the one he is named for. The response
+   * carries the flag back, so a starter with nothing announced can be told so
+   * rather than shown somebody else's start.
+   */
+  async nextGame(playerId: number, start: boolean): Promise<NextGameInfo> {
+    return request(`/api/players/${playerId}/next-game${start ? '?start=1' : ''}`);
   },
   // Every game of the player's season, newest first — the Game Log tab.
   async gameLog(playerId: number): Promise<{ kind: 'batter'; games: BatterGameLog[] }> {

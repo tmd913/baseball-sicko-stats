@@ -143,6 +143,13 @@ async function getTeamNamesById(): Promise<Map<number, string>> {
   return (await getTeams()).names;
 }
 
+/** The other half of the same table — "MIL" by team id, on the same 24h cache.
+ *  `getRosterInfo` already joins it for a *player's* own club; this is for the
+ *  caller that has a bare team id and a column too narrow for a full name. */
+export async function getTeamAbbrevs(): Promise<Map<number, string>> {
+  return (await getTeams()).abbrevs;
+}
+
 /** How long a season's player list stays fresh before we re-download (ms). */
 const SEASON_PLAYERS_TTL = 60 * 60 * 1000;
 const seasonPlayersCache = new Map<number, { players: SeasonPlayer[]; fetchedAt: number }>();
@@ -355,6 +362,13 @@ function toPitcherSeasonStats(stat: Record<string, unknown>): PitcherSeasonStats
     inningsPitched: str(stat.inningsPitched),
     era: str(stat.era),
     whip: str(stat.whip),
+    // Read rather than derived: this line carries all four itself. A split
+    // reports 0s for them, which is honest — earned runs aren't split by hand
+    // and neither is a decision — and nothing reads them off a split.
+    wins: n(stat.wins),
+    losses: n(stat.losses),
+    saves: n(stat.saves),
+    holds: n(stat.holds),
     strikeOuts: k,
     baseOnBalls: bb,
     hits: n(stat.hits),

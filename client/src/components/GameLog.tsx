@@ -405,16 +405,174 @@ function PitcherTotals({ games }: { games: PitcherGameLog[] }) {
   );
 }
 
+/** The log as the two routes hand it back — the pair every piece here reads. */
+type Log =
+  | { kind: 'batter'; games: BatterGameLog[] }
+  | { kind: 'pitcher'; games: PitcherGameLog[] };
+
+/**
+ * The table itself, with nobody's chrome around it.
+ *
+ * It is factored out because the player page draws this table **twice**: whole
+ * on the Game Log tab, and five rows of it on the Overview as "how he has been
+ * going". Two tables that merely resembled each other would be two tables free
+ * to drift the next time a column moved — the same argument `PlayerIdentity` and
+ * `PhotoStatus` are shared on — so the column lists, the cells, the zebra stripe
+ * and the two sticky axes have one definition, and the preview is this component
+ * with `shown` set small and `totals` off.
+ *
+ * `totals` is the one thing the preview genuinely doesn't want: the season row
+ * sums **every** game in the log rather than the rows on screen, which is right
+ * under a table that pages toward it and a non-sequitur under one that shows
+ * five and says so in its heading.
+ */
+function GameLogTable({
+  log,
+  shown,
+  totals,
+  corner,
+  onOpen,
+}: {
+  log: Log;
+  /** How many rows to draw, newest first. */
+  shown: number;
+  /** Close with the season row — the whole log's totals, not the page's. */
+  totals: boolean;
+  /** What sits in the Date header ahead of the word, in the corner cell that is
+   *  pinned on both axes: the expand button on the tab, nothing on the preview. */
+  corner?: ReactNode;
+  onOpen: (g: BatterGameLog | PitcherGameLog) => void;
+}) {
+  const pitching = log.kind === 'pitcher';
+  return (
+    <div className="glog-scroll">
+      <table className="glog-table">
+        <thead>
+          <tr>
+            <th className="glog-date" scope="col">
+              {corner}
+              Date
+            </th>
+            <th className="glog-opp" scope="col">
+              Opp
+            </th>
+            {(pitching ? PITCHER_COLUMNS : BATTER_COLUMNS).map((c) => (
+              <th key={c} className="glog-num" scope="col">
+                {c}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {log.kind === 'pitcher' ? (
+            <PitcherRows
+              games={log.games.slice(0, shown)}
+              roles={log.games.some((g) => g.started) && log.games.some((g) => !g.started)}
+              onOpen={onOpen}
+            />
+          ) : (
+            <BatterRows games={log.games.slice(0, shown)} onOpen={onOpen} />
+          )}
+        </tbody>
+        {totals && (
+          <tfoot>
+            {log.kind === 'pitcher' ? (
+              <PitcherTotals games={log.games} />
+            ) : (
+              <BatterTotals games={log.games} />
+            )}
+          </tfoot>
+        )}
+      </table>
+    </div>
+  );
+}
+
+/**
+ * Which row's game is open, and the dialog it opens. Both drawings of the table
+ * want the same thing — a press opens that afternoon as a feed — so the state
+ * and the modal travel together rather than being written out twice.
+ *
+ * Keyed on the **game** rather than the date, because a doubleheader puts two
+ * rows on one afternoon and they are two different readings.
+ */
+function useGameOpen(playerId: number, kind: PlayerKind, name: string) {
+  const [open, setOpen] = useState<{ date: string; gamePk: number } | null>(null);
+  const openGame = (g: BatterGameLog | PitcherGameLog) =>
+    setOpen({ date: g.date, gamePk: g.gamePk });
+  const modal = open ? (
+    <PlayerDayModal
+      playerId={playerId}
+      kind={kind}
+      name={name}
+      date={open.date}
+      gamePk={open.gamePk}
+      onClose={() => setOpen(null)}
+    />
+  ) : null;
+  return { openGame, modal };
+}
+
+/**
+ * The last few games, for the player page's **Overview** tab.
+ *
+ * That tab is a summary page — how good he is, what he is doing today, how he
+ * has been going — and this is the third of those. Five rows is the shape of
+ * "lately": enough that a slump or a hot week shows, few enough that it stays a
+ * glance rather than the tab beside it. Whatever it can't say, the link over it
+ * goes to.
+ *
+ * It draws the *same table* the Game Log tab does, down to the sticky date
+ * column and the press that opens a game — see `GameLogTable`.
+ */
+export function GameLogPreview({
+  log,
+  playerId,
+  name,
+  limit = 5,
+  onSeeAll,
+}: {
+  log: Log;
+  playerId: number;
+  name: string;
+  limit?: number;
+  /** Switch the page to the Game Log tab. The preview is a doorway as much as a
+   *  reading, so it says where the rest of the season is. */
+  onSeeAll: () => void;
+}) {
+  const { openGame, modal } = useGameOpen(playerId, log.kind, name);
+  if (log.games.length === 0) {
+    return (
+      <section className="ovw-block">
+        <h2 className="ovw-head">Recent games</h2>
+        <p className="ovw-none">No games played this season.</p>
+      </section>
+    );
+  }
+  const shown = Math.min(limit, log.games.length);
+  return (
+    <section className="ovw-block">
+      <div className="ovw-head-row">
+        <h2 className="ovw-head">
+          Last {shown} {shown === 1 ? 'game' : 'games'}
+        </h2>
+        <button type="button" className="ovw-link" onClick={onSeeAll}>
+          Game Log →
+        </button>
+      </div>
+      <GameLogTable log={log} shown={shown} totals={false} onOpen={openGame} />
+      {modal}
+    </section>
+  );
+}
+
 /**
  * The Game Log tab: every game of the player's season, newest first. The Season
  * tab is the season as one line; this is the season as the games it's made of,
  * which is the only place in the app that shows how he got there.
  */
 export function GameLog(
-  log: (
-    | { kind: 'batter'; games: BatterGameLog[] }
-    | { kind: 'pitcher'; games: PitcherGameLog[] }
-  ) & {
+  log: Log & {
     /** Who the log is about — needed now that a row opens that player's day for
      *  the date it names, which is a fetch of its own rather than something the
      *  log already holds. */
@@ -427,77 +585,30 @@ export function GameLog(
   },
 ) {
   const [shown, setShown] = useState(PAGE_SIZE);
-  // Which row is open, as the date and game it names. Held rather than derived
-  // because a doubleheader puts two rows on one date, and the popup is about a
-  // game rather than an afternoon.
-  const [open, setOpen] = useState<{ date: string; gamePk: number } | null>(null);
-  // Above the early return: hooks are unconditional, and a player with no games
-  // takes that branch.
+  // Both above the early return: hooks are unconditional, and a player with no
+  // games takes that branch.
+  const { openGame, modal } = useGameOpen(log.playerId, log.kind, log.name);
   const { isFull, toggle, ref: fullRef } = useFullPage<HTMLDivElement>();
   if (log.games.length === 0) {
     return <div className="details-status">No games played this season.</div>;
   }
-  const kind: PlayerKind = log.kind;
-  const openGame = (g: BatterGameLog | PitcherGameLog) =>
-    setOpen({ date: g.date, gamePk: g.gamePk });
-  const pitching = log.kind === 'pitcher';
   const more = log.games.length - shown;
   return (
     <div ref={fullRef} className={`details-gamelog${isFull ? ' is-expanded' : ''}`}>
       {isFull && log.chrome && <div className="expanded-chrome">{log.chrome}</div>}
-      <div className="glog-scroll">
-        <table className="glog-table">
-          <thead>
-            <tr>
-              <th className="glog-date" scope="col">
-                <ExpandButton isFull={isFull} onToggle={toggle} what="log" />
-                Date
-              </th>
-              <th className="glog-opp" scope="col">
-                Opp
-              </th>
-              {(pitching ? PITCHER_COLUMNS : BATTER_COLUMNS).map((c) => (
-                <th key={c} className="glog-num" scope="col">
-                  {c}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {log.kind === 'pitcher' ? (
-              <PitcherRows
-                games={log.games.slice(0, shown)}
-                roles={log.games.some((g) => g.started) && log.games.some((g) => !g.started)}
-                onOpen={openGame}
-              />
-            ) : (
-              <BatterRows games={log.games.slice(0, shown)} onOpen={openGame} />
-            )}
-          </tbody>
-          <tfoot>
-            {log.kind === 'pitcher' ? (
-              <PitcherTotals games={log.games} />
-            ) : (
-              <BatterTotals games={log.games} />
-            )}
-          </tfoot>
-        </table>
-      </div>
+      <GameLogTable
+        log={log}
+        shown={shown}
+        totals
+        corner={<ExpandButton isFull={isFull} onToggle={toggle} what="log" />}
+        onOpen={openGame}
+      />
       {more > 0 && (
         <button type="button" className="glog-more" onClick={() => setShown(shown + PAGE_SIZE)}>
           Load more · {more} earlier {more === 1 ? 'game' : 'games'}
         </button>
       )}
-      {open && (
-        <PlayerDayModal
-          playerId={log.playerId}
-          kind={kind}
-          name={log.name}
-          date={open.date}
-          gamePk={open.gamePk}
-          onClose={() => setOpen(null)}
-        />
-      )}
+      {modal}
     </div>
   );
 }

@@ -9,6 +9,7 @@ import type { HeldDays } from './savant.js';
 import { getPercentiles } from './percentiles.js';
 import { getXwobaSeries } from './xwoba.js';
 import { getBatterGameLog, getPitcherGameLog } from './gameLog.js';
+import { getNextGame } from './nextGame.js';
 import { getSeasonArsenal } from './pitcherArsenal.js';
 import { getPitcherXera } from './expectedStats.js';
 import { getResearch } from './research.js';
@@ -1036,6 +1037,26 @@ app.get(
     const date =
       typeof asked === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(asked) ? asked : baseballToday();
     res.json({ date, kind, player: await getPlayerDay(playerId, kind, date) });
+  }),
+);
+
+// What a player has coming, for a day that holds no game of his — the other
+// half of the Overview tab's middle section. `?start=1` asks for his next
+// **announced start** rather than his club's next game, and that flag is the
+// client's to set: `lib.ts::isRotationStarter` is the app's one definition of
+// who works out of the rotation, and restating it here would be a second one
+// free to drift. The answer carries the flag back (`NextGameInfo.start`) so the
+// block can say "next start not yet scheduled" rather than nothing at all.
+app.get(
+  '/api/players/:playerId/next-game',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const playerId = Number(req.params.playerId);
+    if (!Number.isInteger(playerId) || playerId <= 0) {
+      res.status(400).json({ error: 'invalid playerId' });
+      return;
+    }
+    res.json(await getNextGame(playerId, req.query.start === '1'));
   }),
 );
 
