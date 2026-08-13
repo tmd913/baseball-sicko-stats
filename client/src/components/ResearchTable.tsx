@@ -1,9 +1,16 @@
 import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { BaseballMark } from './BaseballMark';
 import { ExpandButton } from './ExpandButton';
 import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
-import { PlayerStatusContext, useFullPage, usePlayerStatus } from '../hooks';
+import {
+  PlayerStatusContext,
+  overlayAbove,
+  useFullPage,
+  useLockBodyScroll,
+  usePlayerStatus,
+} from '../hooks';
 import { RESEARCH_INCLUDE_KEYS, RESEARCH_WINDOWS, TREND_WINDOWS } from '../types';
 import type {
   PlayerKind,
@@ -444,7 +451,7 @@ const PITCHER_COLUMNS: Column[] = [
 // A default set rather than everything: the two boards carry forty-odd columns
 // between them, which is the point of a research table but a poor thing to open
 // on. The default is the line you would find in a box score plus the headline
-// Statcast numbers; the rest are a click away in the Columns panel.
+// Statcast numbers; the rest are a click away in the Columns dialog.
 //
 // Expressed as what's *off* rather than what's on, so a column added later
 // shows up by default instead of being invisible until someone remembers to
@@ -456,7 +463,7 @@ const PITCHER_COLUMNS: Column[] = [
 // would put five near-identical signed columns at the very front of the table
 // for every connected user — before games played. So the one that has always
 // been there (7d, the fantasy convention) stays on and the rest are a tick
-// away in the Columns panel, next to it, under the same Fantasy heading where
+// away in the Columns dialog, next to it, under the same Fantasy heading where
 // nobody has to know they exist to find them.
 const DEFAULT_OFF: Record<PlayerKind, ReadonlySet<string>> = {
   batter: new Set([
@@ -1146,7 +1153,9 @@ const freshBoard = (): BoardState => ({
  */
 export interface ResearchUi {
   boards: Record<PlayerKind, BoardState>;
-  /** Which disclosures are open. An open panel is part of where you were:
+  /** Which disclosures are open (Columns being a dialog rather than a panel,
+   *  but held here with the other two: it is the same kind of state). An open
+   *  panel is part of where you were:
    *  coming back to find the Filters panel shut is the same surprise as coming
    *  back to find it empty. */
   panels: { search: boolean; filters: boolean; columns: boolean };
@@ -1237,15 +1246,104 @@ function TeamMark({ teamId, team }: { teamId: number | null; team: string }) {
 }
 
 /**
+ * The Columns picker, as a modal over the page rather than a panel in the row.
+ *
+ * Search and Filters stay inline and this one does not, and the difference is
+ * volume: those two are a field and a three-part sentence, one line of the
+ * wrapping tab row each, where this holds the order row **and** every column
+ * the board has in four labelled runs — 39 of them on the batting board and 44
+ * on the pitching one. Opened inline that is a block of chips several hundred
+ * pixels tall wedged into the chrome, pushing the table it describes down the
+ * page and, on a phone, taking the screen outright while pretending to be a
+ * strip of controls. A picker that costs you sight of the thing it is picking
+ * for is the wrong shape; a dialog is the right one, and it can carry a
+ * scroller of its own so a 44-column board scrolls *inside* it rather than
+ * growing the page.
+ *
+ * It takes the app's overlay conventions rather than a second visual language:
+ * a dimmed backdrop over a `--panel` box on the app's own radius and shadow,
+ * the body pinned by `useLockBodyScroll` and `overscroll-behavior: contain` on
+ * the scroller, exactly as `.details-view` and `.reel-view` do. Four ways out,
+ * which is what a modal owes: the ✕, Escape, a press on the backdrop, and the
+ * Columns button itself — the state is still `ui.panels.columns`, so that
+ * button keeps its `.active` fill and its count badge unchanged and pressing it
+ * again shuts this exactly as it shut the panel.
+ *
+ * **Portalled to the body**, not left in the chrome the rest of the control set
+ * is portalled into: that box is `position: sticky` with a `z-index`, so it
+ * opens a stacking context and a fixed child of it could never rise past its
+ * 41. At the root it takes 46 — over the pinned chrome that opened it and over
+ * the full-page table box (45), under the player page (50) and the reel and
+ * how-to pages (60), which are pages where this is a control's panel. Neither
+ * of those can be on screen with it in practice (the full-page mode covers the
+ * whole control set, and this backdrop swallows the click that would open a
+ * player), but Escape is written for the stacking anyway: it declines the key
+ * while one of those is above it, and it is itself in the list they consult, so
+ * one press undoes one thing whichever way round they end up.
+ */
+function ColumnsDialog({ onClose, children }: { onClose: () => void; children: ReactNode }) {
+  useLockBodyScroll();
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !overlayAbove(boxRef.current)) onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return createPortal(
+    <div
+      className="research-columns-dialog"
+      ref={boxRef}
+      /* `pointerdown` rather than a click, the rule `useDismissable` follows: a
+         press that starts on the backdrop dismisses on the way down, and a
+         chip-drag that happens to *end* out here — mouse down on the grip, up
+         on the backdrop, whose click would land on their common ancestor —
+         cannot close the dialog out from under the reorder it just made. */
+      onPointerDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="research-columns-box"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="research-columns-title"
+      >
+        <div className="research-columns-head">
+          <h2 id="research-columns-title">Columns</h2>
+          <button
+            type="button"
+            className="research-columns-close"
+            onClick={onClose}
+            aria-label="Close"
+            title="Close"
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
+              <path d="M6 6l12 12M18 6 6 18" />
+            </svg>
+          </button>
+        </div>
+        {/* Its own scroller, which is the whole point: 44 columns scroll in
+            here rather than growing the page behind. */}
+        <div className="research-columns-body">{children}</div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+/**
  * The columns in the order they are drawn, draggable — the board's answer to
  * "I want ERA next to the name, not past nine counting stats".
  *
- * It is a row of its own at the top of the Columns panel rather than a handle
+ * It is a row of its own at the top of the Columns dialog rather than a handle
  * on the chips below, and the reason is that those chips are grouped: they are
  * cut into Counting, Slash line, Rates and Statcast, which is the right shape
  * for *choosing* columns and no shape at all for arranging them, an
  * arrangement being one flat sequence that crosses every one of those
- * headings. So the panel now answers its two questions in two blocks — what
+ * headings. So the picker answers its two questions in two blocks — what
  * order, then which columns — and each is drawn the way its own question wants.
  *
  * Reordering is by **Pointer Events** and the drop target is found with
@@ -1253,7 +1351,7 @@ function TeamMark({ teamId, team }: { teamId: number | null; team: string }) {
  * reasons: one code path for a mouse and a finger, where HTML5 drag-and-drop is
  * mouse-only. On touch **only the grip starts a drag** (it alone carries
  * `touch-action: none`), so a finger anywhere else on a chip still scrolls the
- * panel — the mistake `.order-row` documents, which cost the edit screen its
+ * dialog — the mistake `.order-row` documents, which cost the edit screen its
  * scrolling until it was scoped to the grip.
  *
  * The order is held locally while the drag is live and **committed on
@@ -1357,7 +1455,7 @@ function ColumnOrder({
             className={`research-order-chip${draggingKey === k ? ' dragging' : ''}`}
             title={`Drag to move ${labels.get(k) ?? k}`}
             /* A mouse can grab the chip anywhere; a finger has to use the grip,
-               or the panel could not be scrolled past this block. */
+               or the dialog could not be scrolled past this block. */
             onPointerDown={(e) => {
               if (e.pointerType === 'mouse') startDrag(e, k);
             }}
@@ -2541,9 +2639,11 @@ export function ResearchTable({
             </div>
           )}
 
+          {/* **A modal, where Search and Filters beside it are inline panels**
+              — see `ColumnsDialog` for why this one alone leaves the row. */}
           {columnsOpen && (
-            <div className="research-panel research-columns">
-              {/* Which order, then which columns. The two questions this panel
+            <ColumnsDialog onClose={() => setPanel('columns', false)}>
+              {/* Which order, then which columns. The two questions this picker
                   answers are different shapes — one flat sequence against four
                   labelled runs — and each is drawn the way its own wants; see
                   `ColumnOrder`. */}
@@ -2587,8 +2687,9 @@ export function ResearchTable({
               >
                 Reset to defaults
               </button>
-            </div>
+            </ColumnsDialog>
           )}
+
           </>,
           controlsHost,
         )}
