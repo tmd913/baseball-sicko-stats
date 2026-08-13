@@ -1190,6 +1190,14 @@ export async function getDay(date: string, filter?: DayFilter): Promise<ParsedDa
       splitVsRight: null,
       rosterStatus: null,
       throws: null,
+      // Who he is, rather than what he did that day. Filled by `getReport` off
+      // `getRosterInfo`, which a day parse has no business calling — so these
+      // are null here and in every stored snapshot, and nothing reads them
+      // there: `getReport` takes `games` off a day and builds the report
+      // itself. That is why the fields need no `DAY_SNAPSHOT_VERSION` bump.
+      teamId: null,
+      team: null,
+      position: null,
     });
   }
 
@@ -1208,6 +1216,14 @@ export async function getDay(date: string, filter?: DayFilter): Promise<ParsedDa
       splitVsRight: null,
       rosterStatus: null,
       throws: null,
+      // Who he is, rather than what he did that day. Filled by `getReport` off
+      // `getRosterInfo`, which a day parse has no business calling — so these
+      // are null here and in every stored snapshot, and nothing reads them
+      // there: `getReport` takes `games` off a day and builds the report
+      // itself. That is why the fields need no `DAY_SNAPSHOT_VERSION` bump.
+      teamId: null,
+      team: null,
+      position: null,
     });
   }
 
@@ -1439,6 +1455,11 @@ export async function getReport(
     games.sort(byGameOrder);
     const rosterStatus = rosterInfo.get(p.id)?.status ?? null;
     const throws = p.kind === 'pitcher' ? (rosterInfo.get(p.id)?.throws ?? null) : null;
+    // His club and his listed position — the identity block under his name on
+    // the summary table. `teamId` was already read above to tie him to his
+    // team's games; the other two ride along on the same lookup.
+    const team = rosterInfo.get(p.id)?.team ?? null;
+    const position = rosterInfo.get(p.id)?.position ?? null;
 
     if (p.kind === 'pitcher') {
       const arsenal = arsenals.get(p.id);
@@ -1464,6 +1485,9 @@ export async function getReport(
         splitVsRight: null,
         rosterStatus,
         throws,
+        teamId,
+        team,
+        position,
       };
     }
 
@@ -1478,6 +1502,9 @@ export async function getReport(
       splitVsRight: st?.vsRight ?? null,
       rosterStatus,
       throws,
+      teamId,
+      team,
+      position,
     };
   });
 }

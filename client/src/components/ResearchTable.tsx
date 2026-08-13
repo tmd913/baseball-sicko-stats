@@ -21,17 +21,17 @@ import type {
   TrendWindow,
 } from '../types';
 import {
-  eligibleForKind,
+  eligibleCodes,
   formatStartTime,
   handThrows,
   headshotUrl,
   inningLabel,
-  positionOrder,
+  positionCell,
   searchFold,
   statusCorner,
   surname,
-  teamLogoUrl,
 } from '../lib';
+import { PlayerIdentity } from './PlayerIdentity';
 
 /**
  * A league-wide, season-to-date stat table: every player on one board, sortable
@@ -707,20 +707,10 @@ function isBatterByTrade(r: ResearchRow): boolean {
  * falls back to MLB's listed position, which is exactly what the board did
  * before and reads identically: `Infielder`/`Outfielder` are precisely the four
  * infield and three outfield abbreviations, so IF and OF answer the same as the
- * `positionType` tests they replace.
+ * `positionType` tests they replace. That map is `lib.ts::MLB_TO_ELIGIBLE`,
+ * shared with the summary table's identity block, which falls back the same way
+ * for the same reason.
  */
-const MLB_TO_ELIGIBLE: Record<string, string> = {
-  C: 'C',
-  '1B': '1B',
-  '2B': '2B',
-  '3B': '3B',
-  SS: 'SS',
-  LF: 'OF',
-  CF: 'OF',
-  RF: 'OF',
-  OF: 'OF',
-  DH: 'DH',
-};
 
 /**
  * ESPN's vocabulary, cut by the board that reads it.
@@ -778,13 +768,11 @@ const MLB_TO_ELIGIBLE: Record<string, string> = {
  * to a different question ("where may I start him") — so the two can differ,
  * and where they can be compared they mostly don't: of the 601 pitchers with a
  * single ESPN answer, 561 match.
+ *
+ * The narrowing itself is `lib.ts::eligibleForKind`, read through
+ * `eligibleCodes` below — the card chip and the summary table's identity block
+ * take the same half of the same list for the same reason.
  */
-function espnPositions(r: ResearchRow): string[] | null {
-  // `lib.ts`'s, because the card chip reads the same half of the same list for
-  // the same reason — see `eligibleForKind` there.
-  return eligibleForKind(r.eligible, r.kind);
-}
-
 /**
  * ESPN's answer where there is one, and the app's own where there isn't — per
  * row, never per page, so a player the join can't place is filtered by what the
@@ -801,11 +789,16 @@ function espnPositions(r: ResearchRow): string[] | null {
  * for at all, and the mis-joined Fernando Cruz above).
  */
 function eligibleFor(r: ResearchRow): string[] {
-  const espn = espnPositions(r);
-  if (espn) return espn;
-  if (r.kind === 'pitcher') return [r.starter ? 'SP' : 'RP'];
-  const one = MLB_TO_ELIGIBLE[r.position];
-  return one ? [one] : [];
+  // `lib.ts::eligibleCodes`, which is also what the Pos cell beside these pills
+  // reads through `positionCell` — so a pill and the row it lets through cannot
+  // come to disagree about where a man is eligible.
+  return eligibleCodes(posFacts(r));
+}
+
+/** A board row in the shape `lib.ts`'s position helpers read — the summary
+ *  table hands them the same four facts off a `PlayerReport`. */
+function posFacts(r: ResearchRow) {
+  return { eligible: r.eligible, kind: r.kind, position: r.position, starter: r.starter };
 }
 
 /**
@@ -824,37 +817,30 @@ function eligibleFor(r: ResearchRow): string[] {
  * The order still comes from `lib.ts::positionOrder`, shared with the card
  * chip, so the active pill leads here exactly as it does there; what the board
  * no longer takes from it is the cap and the DH trim, both of which are that
- * chip's line-width rules — see there. The fallback below and the tooltip
- * naming which source answered are this file's own.
+ * chip's line-width rules — see there.
+ *
+ * **The rule itself is `lib.ts::positionCell` now**, shared with the summary
+ * table's identity block, which is the same block under the same kind of name
+ * and had no business owning a second copy of a three-deep fallback. What stays
+ * here is the two things that really are this board's: the pill to hoist, and
+ * the wording of a pitcher's fallback — `starter` is measured over the window
+ * the board is on, where a report's is his season.
  */
 function posCellText(
   r: ResearchRow,
   leadCodes: string[] | undefined,
 ): { text: string; title: string } {
-  const all = eligibleFor(r);
-  // Nothing in the board's vocabulary at all, which on the batting board is a
-  // two-way player (`TWP`) or a position MLB has no record of. The cell prints
-  // MLB's own spelling and its old tooltip, which is exactly what it did before
-  // any of this. A pitching row can no longer reach this: `eligibleFor` always
-  // has `starter` to fall back on, which is the point of the change — the cell
-  // used to print `P` here beside a pill that had already split P in two.
-  if (all.length === 0) {
-    return {
-      text: r.position || '—',
-      title: r.position ? posTypeLabel(r.positionType) : 'No position listed',
-    };
-  }
-  const ordered = positionOrder(all, leadCodes);
-  const text = ordered.join('/');
-  // The tooltip names the source, `SS` (or `SP`) alone being unable to say
-  // whether it is ESPN's answer or the fallback — and the two boards fall back
-  // to different things, so they say different things.
-  const source = espnPositions(r)
-    ? `Eligible in ESPN at ${ordered.join(', ')}`
-    : r.kind === 'pitcher'
-      ? `${ordered[0]} — off his own appearances over the window; ESPN has no eligibility for him`
-      : `${ordered.join(', ')} — MLB's listed position; ESPN has no eligibility for him`;
-  return { text, title: source };
+  return positionCell({
+    ...posFacts(r),
+    lead: leadCodes,
+    starterSource: 'off his own appearances over the window',
+    // Nothing in the board's vocabulary at all, which on the batting board is a
+    // two-way player (`TWP`) or a position MLB has no record of; the cell then
+    // prints MLB's own spelling with its old `positionType` tooltip, exactly as
+    // it did before any of this. A pitching row can no longer reach it,
+    // `starter` always being there to fall back on.
+    unknownTitle: () => posTypeLabel(r.positionType),
+  });
 }
 
 interface PositionOption {
@@ -1289,35 +1275,6 @@ function ResearchPhoto({
       />
       <PhotoStatus badge={badge} className="sum-photo-status" />
     </button>
-  );
-}
-
-/**
- * A club's cap logo, under the player's name, standing in for the `Tm` column
- * this board used to carry.
- *
- * **The abbreviation is not lost, it is moved off the pixel grid**: it is the
- * image's `alt` and its tooltip, it is what the board's search still matches
- * on, and it is what shows outright when there is no logo to draw. A club MLB
- * files under no team id at all (a leaderboard row for a player between
- * organisations) keeps the three letters, and so does one whose SVG fails to
- * load — that second case is why this holds a `failed` flag rather than
- * trusting the CDN, the same courtesy `OrderPhoto` extends to a headshot.
- */
-function TeamMark({ teamId, team }: { teamId: number | null; team: string }) {
-  const [failed, setFailed] = useState(false);
-  if (teamId === null || failed) {
-    return <span className="research-id-team">{team || '\u2014'}</span>;
-  }
-  return (
-    <img
-      className="research-id-logo"
-      src={teamLogoUrl(teamId)}
-      alt={team}
-      title={team}
-      loading="lazy"
-      onError={() => setFailed(true)}
-    />
   );
 }
 
@@ -2992,8 +2949,30 @@ export function ResearchTable({
                       <ResearchPhoto row={r} playerKey={key} onOpen={onOpenDetails} />
                     </td>
                     <td className="sum-name-col">
-                      <div className="research-id">
-                      <div className="research-id-name">
+                      {/* **Club and position, under the name.** They were two
+                          columns of their own — `Tm` and `Pos` — and on the
+                          app's widest table that is ~110px of a row spent on
+                          two facts about *who the player is*, beside a name
+                          that is the same kind of fact and has a column that
+                          absorbs the table's slack anyway. Underneath, they
+                          cost the stats nothing and read as what they are: the
+                          identity block, the way a player card's header
+                          already sets a name over its context line.
+
+                          The block itself is `PlayerIdentity`, shared with the
+                          summary table, which draws the same two facts under
+                          the same name for the same reason — see there, and
+                          `PhotoStatus` for the rule that says two tables which
+                          merely resemble each other are two tables that will
+                          one day differ. What this row supplies is its own name
+                          line: the board trails a name with the roster baseball
+                          and the watchlist star, where the summary table leads
+                          it with a fantasy slot chip. */}
+                      <PlayerIdentity
+                        teamId={r.teamId}
+                        team={r.team}
+                        pos={posCell}
+                      >
                       <button
                         type="button"
                         className="sum-name-link"
@@ -3024,38 +3003,7 @@ export function ResearchTable({
                         name={r.name}
                         onToggle={(on) => onWatchlistToggle(key, on)}
                       />
-                      </div>
-                      {/* **Club and position, under the name.** They were two
-                          columns of their own — `Tm` and `Pos` — and on the
-                          app's widest table that is ~110px of a row spent on
-                          two facts about *who the player is*, beside a name
-                          that is the same kind of fact and has a column that
-                          absorbs the table's slack anyway. Underneath, they
-                          cost the stats nothing and read as what they are: the
-                          identity block, the way a player card's header
-                          already sets a name over its context line.
-
-                          The club is its **cap logo** rather than its
-                          abbreviation, which is what makes the pair fit on one
-                          line under the name: a mark is read at a glance where
-                          three letters are read, and the abbreviation is still
-                          there for anyone who wants it — as the image's `alt`,
-                          on its tooltip, and in the search box, which has
-                          always matched on team as well as name.
-
-                          The position half is unchanged in every respect but
-                          where it is drawn: still the whole eligibility list,
-                          still leading on the pill in force, still saying in
-                          its tooltip which source answered — see
-                          `posCellText`, whose reasoning is about what the cell
-                          prints rather than which column it sits in. */}
-                      <div className="research-id-sub">
-                        <TeamMark teamId={r.teamId} team={r.team} />
-                        <span className="research-id-pos" title={posCell.title}>
-                          {posCell.text}
-                        </span>
-                      </div>
-                      </div>
+                      </PlayerIdentity>
                     </td>
                     {columns.map((c) => (
                       <td

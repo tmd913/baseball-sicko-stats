@@ -116,6 +116,109 @@ export function positionOrder(codes: string[], lead?: string[]): string[] {
   return hoisted.length ? [...hoisted, ...codes.filter((p) => !hoisted.includes(p))] : codes;
 }
 
+/**
+ * MLB's listed position in ESPN's vocabulary — the batting-side fallback for a
+ * player ESPN has no eligibility for, which is every player for a user with no
+ * league connected.
+ *
+ * It lives here rather than on the research board because both tables that draw
+ * an identity block need it and there is one answer: `LF`/`CF`/`RF` collapse to
+ * `OF`, since neither the board's pills nor the block's line has an outfield
+ * finer than one. A position not in the map — `TWP`, or nothing on record —
+ * yields no code at all, which is what sends the cell to its last branch.
+ */
+export const MLB_TO_ELIGIBLE: Record<string, string> = {
+  C: 'C',
+  '1B': '1B',
+  '2B': '2B',
+  '3B': '3B',
+  SS: 'SS',
+  LF: 'OF',
+  CF: 'OF',
+  RF: 'OF',
+  OF: 'OF',
+  DH: 'DH',
+};
+
+/**
+ * What the position half of an identity block prints, and what its tooltip
+ * says — one definition for the research board's cell and the summary table's,
+ * which is the whole reason it is here rather than on either of them.
+ *
+ * The rule is three-deep and identical on both. **ESPN's eligibility if there
+ * is any**, narrowed to the half this kind of player speaks (`eligibleForKind`)
+ * so a mis-joined pitcher reads his fallback rather than `2B/SS`. Otherwise the
+ * app's own answer, which differs by kind because the two have different things
+ * to fall back *to*: a batter has MLB's listed position, where a pitcher's is
+ * `P`, a word no reader can act on — so his is whether he **starts**. And if
+ * that leaves nothing in the vocabulary at all, MLB's own spelling, which on
+ * the batting side is a two-way player's `TWP` or a position nobody has on
+ * record. A pitching row can never reach the third branch, `starter` always
+ * being there.
+ *
+ * The **whole list** is printed, uncapped: that is the board's rule (see
+ * `positionOrder`) and it is the summary table's for the same reason — the
+ * sub-line is narrower than the name above it either way, so the cap the card
+ * chip pays for buys neither table a pixel. `lead` hoists the pill a reader has
+ * filtered to; a roster table has no pill and passes none.
+ *
+ * The tooltip **names the source**, because `SS` alone cannot say whether it is
+ * ESPN's answer or the app's guess, and the two callers phrase the fallback
+ * differently — a board's `starter` is measured over its window, a report's
+ * over the season — so each supplies its own wording.
+ */
+export interface PositionFacts {
+  eligible: readonly string[] | null | undefined;
+  kind: PlayerKind;
+  /** MLB's listed position abbreviation, for the batting-side fallback. */
+  position: string | null;
+  /** Whether he starts, for the pitching-side one. */
+  starter: boolean;
+}
+
+/**
+ * The codes themselves, with no tooltip and no hoist — the three-deep rule
+ * above, and the half of it a *filter* wants. The research board's position
+ * pills read this while the cell beside them reads `positionCell`, so a pill
+ * and the row it lets through can never come to disagree about where a man is
+ * eligible.
+ */
+export function eligibleCodes(f: PositionFacts): string[] {
+  const espn = eligibleForKind(f.eligible, f.kind);
+  if (espn) return espn;
+  if (f.kind === 'pitcher') return [f.starter ? 'SP' : 'RP'];
+  const one = f.position ? MLB_TO_ELIGIBLE[f.position] : undefined;
+  return one ? [one] : [];
+}
+
+export function positionCell(
+  input: PositionFacts & {
+    /** Codes to pull to the front — the board's active pill; none on a roster. */
+    lead?: string[];
+    /** How the tooltip describes the pitching fallback ("over the window",
+     *  "this season"), the only phrase the two callers disagree about. */
+    starterSource: string;
+    /** The tooltip when MLB's own position is all there is. */
+    unknownTitle: (position: string) => string;
+  },
+): { text: string; title: string } {
+  const espn = eligibleForKind(input.eligible, input.kind);
+  const codes = eligibleCodes(input);
+  if (codes.length === 0) {
+    return {
+      text: input.position || '—',
+      title: input.position ? input.unknownTitle(input.position) : 'No position listed',
+    };
+  }
+  const ordered = positionOrder(codes, input.lead);
+  const title = espn
+    ? `Eligible in ESPN at ${ordered.join(', ')}`
+    : input.kind === 'pitcher'
+      ? `${ordered[0]} — ${input.starterSource}; ESPN has no eligibility for him`
+      : `${ordered.join(', ')} — MLB's listed position; ESPN has no eligibility for him`;
+  return { text: ordered.join('/'), title };
+}
+
 /** Category used for color-coding an outcome. */
 export type OutcomeKind = 'hr' | 'hit' | 'walk' | 'out' | 'strikeout' | 'other';
 
