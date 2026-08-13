@@ -17,14 +17,20 @@ const ET_ZONE = 'America/New_York';
 /** The hour (ET) a new baseball day begins. */
 export const DAY_ROLLOVER_HOUR = 3;
 
+/** One formatter rather than one per call. `Intl.DateTimeFormat` is stateless
+ *  and its construction is the expensive part of this — measured over the 4,914
+ *  game rows of ESPN's season schedule (`espn.ts::fetchPeriodAnchor`, far and
+ *  away the heaviest caller in the app), one per call costs 99ms against 13. */
+const ET_FORMAT = new Intl.DateTimeFormat('en-US', {
+  timeZone: ET_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
 /** The Eastern calendar date of an instant, as YYYY-MM-DD. */
 export function easternDate(d: Date): string {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: ET_ZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(d);
+  const parts = ET_FORMAT.formatToParts(d);
   const get = (t: string) => parts.find((p) => p.type === t)!.value;
   return `${get('year')}-${get('month')}-${get('day')}`;
 }
