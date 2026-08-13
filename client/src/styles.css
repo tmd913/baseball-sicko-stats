@@ -914,6 +914,36 @@ body {
 .loading-what {
   margin: 0;
 }
+/* The one block wait that sits *directly under the pinned bar* — the report's
+   first read, which is a child of `.app` itself on the Roster and Feed views —
+   needs the bar's own breathing room as well as its own, and on both of those
+   views it was getting none of it. Two different reasons, measured immediately
+   under `.app-chrome` at 900px wide:
+
+   - **Roster is a flex column** (`.app.summary-mode`), so nothing collapses,
+     and `.app.summary-mode .app-chrome { margin-bottom: 0 }` — written so the
+     *table* meets the bar with no strip of page between — leaves the wait with
+     its own 40px and literally nothing else: **40px**.
+   - **Feed is ordinary block flow**, where the chrome's 14px bottom margin
+     *collapses into* the block's 40px rather than adding to it: **40px** again,
+     by a different route.
+   - **Research is a flex column whose chrome keeps its 14px**, so a block
+     placed there sits at **54px** — which is the app's own answer to this
+     question, and the number both of the others are short of.
+
+   So the page-level wait takes 54 (its own 40 plus the bar's 14) and the two
+   views land on it identically: on the Roster view the flex column adds them,
+   on the Feed the collapse resolves to the larger. Scoped to `.app > …` rather
+   than written onto `.loading-block` because every other consumer is inside an
+   overlay or a board with something above it — the player page's six tabs, the
+   reel, the Game Log's popup, the board's ESPN read — and none of those is
+   under the bar or wants the extra room; `.details-status` is folded onto that
+   class too and keeps its 40 unchanged. And scoped to the *wait* rather than
+   given back to the chrome, which would push the table down and undo the 0px
+   the Roster view's pane is measured at. */
+.app > .loading-block {
+  margin-top: 54px;
+}
 
 /* ---- Content layout (the player list / edit screen) ---- */
 .content-layout {
