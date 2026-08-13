@@ -12,7 +12,7 @@ import type {
   ResearchWindow,
   TrendWindow,
 } from '../types';
-import { eligibleForKind, headshotUrl, positionCodes, statusCorner } from '../lib';
+import { eligibleForKind, headshotUrl, positionOrder, statusCorner } from '../lib';
 
 /**
  * A league-wide, season-to-date stat table: every player on one board, sortable
@@ -628,10 +628,21 @@ function eligibleFor(r: ResearchRow): string[] {
 /**
  * The Pos cell's text and its tooltip.
  *
- * The cap, the DH rule and the hoist all live in `lib.ts::positionCodes`, the
- * card chip printing the same list under the same constraints — see there for
- * why two codes and why the active pill leads. What is this file's own is the
- * fallback below and the tooltip that names which of the two sources answered.
+ * **The cell prints the whole list.** It used to print two codes and a count
+ * (`2B/SS+3`), the card chip's form, on the argument that this column hugs its
+ * content on the app's widest table and every pixel of it is a stat off the
+ * right edge of a phone. What that traded away is the one thing this cell is
+ * for: it is where a filtered row says *why* it is on screen, and on the 301 of
+ * 628 matched batters who are eligible in more than one place — 95 in three or
+ * more — a `+3` said that three quarters of the answer existed somewhere else.
+ * The hoist made the cap safe rather than harmless: the reader could trust the
+ * pill they had filtered to was in front, and had no way to see the rest.
+ *
+ * The order still comes from `lib.ts::positionOrder`, shared with the card
+ * chip, so the active pill leads here exactly as it does there; what the board
+ * no longer takes from it is the cap and the DH trim, both of which are that
+ * chip's line-width rules — see there. The fallback below and the tooltip
+ * naming which source answered are this file's own.
  */
 function posCellText(
   r: ResearchRow,
@@ -650,7 +661,8 @@ function posCellText(
       title: r.position ? posTypeLabel(r.positionType) : 'No position listed',
     };
   }
-  const { ordered, text } = positionCodes(all, leadCodes);
+  const ordered = positionOrder(all, leadCodes);
+  const text = ordered.join('/');
   // The tooltip names the source, `SS` (or `SP`) alone being unable to say
   // whether it is ESPN's answer or the fallback — and the two boards fall back
   // to different things, so they say different things.
@@ -2356,10 +2368,11 @@ export function ResearchTable({
                     </td>
                     <td className="research-team-col">{r.team || '—'}</td>
                     {/* The one cell that says *why* a filtered row is on the
-                        board — see `posCellText` for the cap, the hoist and
-                        what happens to DH. The tooltip names its source, since
-                        `SS` alone can't say whether it came from ESPN or is the
-                        fallback for a player the join couldn't place. */}
+                        board, which is why it prints the eligibility whole and
+                        leads on the pill in force — see `posCellText`. The
+                        tooltip names its source, since `SS` alone can't say
+                        whether it came from ESPN or is the fallback for a
+                        player the join couldn't place. */}
                     <td className="research-pos-col" title={posCell.title}>
                       {posCell.text}
                     </td>
