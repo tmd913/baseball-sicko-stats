@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { addDays, baseballToday } from './etDate.js';
 import { playerKey } from './types.js';
 import type { PlayerKind, ResearchIncludeKey, WatchPlayer } from './types.js';
 
@@ -128,11 +129,91 @@ export interface EspnLeague {
   savedAt: number;
 }
 
+/**
+ * A roster entry as it is **stored** — a `WatchPlayer` plus the day it joined.
+ *
+ * The stamp is on this type rather than on `WatchPlayer` itself deliberately:
+ * `WatchPlayer` is what every report, season player and card in both workspaces
+ * is built on, and *when he joined your roster* is a fact about this one list.
+ * Nothing outside this file needs it, so nothing outside this file carries it —
+ * which is also why the client's hand-mirrored `types.ts` did not have to move
+ * for any of this.
+ */
+export interface RosterEntry extends WatchPlayer {
+  /**
+   * The ET baseball day he went on the roster (`baseballToday()` — the app's
+   * one definition of today, which turns at 3am ET), **inclusive**: he is
+   * reported on from this day forward.
+   *
+   * Optional, and that is the migration. An entry saved before the roster had a
+   * history has no stamp and is read as having been there **forever**, so it
+   * passes every date test. The other way round — reading an unstamped entry as
+   * added today — would make every existing user's history appear to begin on
+   * the day this deployed, which is a claim the reader has no way to catch. It
+   * is the rule `getEspnCreds` follows for the legacy inline credential: read
+   * the older shape on the way in, write only the newer one, and let a record
+   * migrate the first time its owner touches it.
+   */
+  addedAt?: string;
+}
+
+/**
+ * A player who has come **off** the roster, kept as a tombstone rather than
+ * dropped outright, so the days he *was* held can still be reported on.
+ *
+ * The two stamps make a **half-open** interval, `[addedAt, removedAt)`: each is
+ * the day its own action happened, and a removal takes effect on the day it is
+ * made. That asymmetry is doing real work. It keeps "remove" meaning remove —
+ * press ✕ and he is off today's table on the very next read, exactly as he
+ * always was, which is what `removeFromEditor` on the client already assumes
+ * when it drops his row before the refetch lands — while yesterday, which you
+ * really did hold him for, still has him. A player added and dropped inside one
+ * day was held for no days at all and leaves no tombstone at all.
+ */
+export interface RosterRemoval extends RosterEntry {
+  /** The ET baseball day the removal happened — the first day he was no longer
+   *  held. */
+  removedAt: string;
+}
+
+/**
+ * How far back a tombstone is worth keeping.
+ *
+ * `/api/report` caps a span at `MAX_RANGE_DAYS` (62), so a player dropped more
+ * than that many days before the latest day anyone can be looking at can never
+ * appear on a range that reaches him. 70 is that with a week of slack for a
+ * range running into the future (the `Tomorrow` preset ends a day past today,
+ * and the picker allows the rest of the season). Pruned on every write that
+ * touches the list, or the item grows for the life of the account.
+ *
+ * Pruning too eagerly fails **into the old behaviour and no further**: a player
+ * whose tombstone has gone is simply absent from that range, which is what
+ * every dropped player was from every range before any of this existed.
+ */
+const HISTORY_DAYS = 70;
+
+function pruneRemovals(list: RosterRemoval[], today: string): RosterRemoval[] {
+  const cutoff = addDays(today, -HISTORY_DAYS);
+  return list.filter((r) => r.removedAt > cutoff);
+}
+
 /** The saved record plus the version it was read at, so a write can detect a
  *  lost update. */
 interface Versioned {
-  /** The roster — the saved list the Summary, Games and Feed views read. */
-  players: WatchPlayer[];
+  /** The roster — the saved list the Summary, Games and Feed views read, each
+   *  entry stamped with the day it joined. */
+  players: RosterEntry[];
+  /**
+   * The roster's tombstones — players dropped recently enough that a range on
+   * screen could still reach a day they were held.
+   *
+   * Absent from the stored item when empty, the convention `watchlist` and
+   * `espn` already follow, so a user who has never dropped anybody and one
+   * whose history has aged out are the same stored state. A record saved before
+   * this existed has no attribute either, which reads as "nobody has ever been
+   * dropped" — the same direction the missing `addedAt` fails in.
+   */
+  removed: RosterRemoval[];
   /** The watchlist — `playerKey` strings followed on the research board.
    *  Keys rather than entries: the board already holds every row it could
    *  mark, so a stored copy of the name would only be a second and staler one,
@@ -144,7 +225,7 @@ interface Versioned {
 }
 
 /** Entries saved before `kind` existed are batters. */
-function migrate(players: WatchPlayer[]): WatchPlayer[] {
+function migrate(players: RosterEntry[]): RosterEntry[] {
   return players.map((p) => ({ ...p, kind: p.kind ?? 'batter' }));
 }
 
@@ -190,7 +271,8 @@ async function ddbLoad(userId: string): Promise<Versioned> {
   );
   const item = res.Item as
     | {
-        players?: WatchPlayer[];
+        players?: RosterEntry[];
+        removed?: RosterRemoval[];
         watchlist?: string[];
         prefs?: UserPrefs;
         espn?: EspnLeague;
@@ -200,9 +282,12 @@ async function ddbLoad(userId: string): Promise<Versioned> {
   // Only a genuinely absent item is an empty watchlist. Anything else — a
   // throttle, a network blip — throws, because swallowing it would render the
   // "your watchlist is empty" state and then persist that emptiness.
-  if (!item) return { players: [], watchlist: [], prefs: {}, espn: null, version: 0 };
+  if (!item) {
+    return { players: [], removed: [], watchlist: [], prefs: {}, espn: null, version: 0 };
+  }
   return {
     players: migrate(item.players ?? []),
+    removed: migrate(item.removed ?? []) as RosterRemoval[],
     watchlist: item.watchlist ?? [],
     prefs: item.prefs ?? {},
     espn: item.espn ?? null,
@@ -220,7 +305,8 @@ async function ddbPersist(userId: string, next: Versioned): Promise<void> {
         players: next.players,
         // Absent rather than empty, for the reason `espn` is: a user who has
         // never watchlisted anybody and one who has cleared the list are the
-        // same stored state.
+        // same stored state. The roster's tombstones follow the same rule.
+        ...(next.removed.length ? { removed: next.removed } : {}),
         ...(next.watchlist.length ? { watchlist: next.watchlist } : {}),
         prefs: next.prefs,
         // Absent rather than null when there is no connection, so disconnecting
@@ -279,13 +365,15 @@ async function fileWriteDb(db: FileDb): Promise<void> {
 async function fileLoad(userId: string): Promise<Versioned> {
   const db = await fileDb();
   const item = (db[userId] ?? db.__legacy ?? {}) as {
-    players?: WatchPlayer[];
+    players?: RosterEntry[];
+    removed?: RosterRemoval[];
     watchlist?: string[];
     prefs?: UserPrefs;
     espn?: EspnLeague;
   };
   return {
     players: migrate(item.players ?? []),
+    removed: migrate(item.removed ?? []) as RosterRemoval[],
     watchlist: item.watchlist ?? [],
     prefs: item.prefs ?? {},
     espn: item.espn ?? null,
@@ -298,6 +386,7 @@ async function filePersist(userId: string, next: Versioned): Promise<void> {
   delete db.__legacy;
   db[userId] = {
     players: next.players,
+    ...(next.removed.length ? { removed: next.removed } : {}),
     ...(next.watchlist.length ? { watchlist: next.watchlist } : {}),
     prefs: next.prefs,
     ...(next.espn ? { espn: next.espn } : {}),
@@ -355,8 +444,8 @@ async function mutate(
  *  rides through untouched. */
 async function update(
   userId: string,
-  change: (players: WatchPlayer[]) => WatchPlayer[] | null,
-): Promise<WatchPlayer[]> {
+  change: (players: RosterEntry[]) => RosterEntry[] | null,
+): Promise<RosterEntry[]> {
   const next = await mutate(userId, (cur) => {
     const players = change(cur.players);
     return players === null ? null : { players };
@@ -367,30 +456,152 @@ async function update(
 /** The user's roster — the list the Summary, Games and Feed views report on.
  *  (Named `getWatchlist` until the two lists were told apart; that name now
  *  belongs to the research board's list, further down.) */
-export async function getRoster(userId: string): Promise<WatchPlayer[]> {
+export async function getRoster(userId: string): Promise<RosterEntry[]> {
   return (await load(userId)).players;
 }
 
-/** Adds unless the same player is already watched *as that kind* — a two-way
- * player is two separate entries, one per kind. */
-export async function addRosterPlayer(userId: string, player: WatchPlayer): Promise<WatchPlayer[]> {
+/**
+ * Adds unless the same player is already watched *as that kind* — a two-way
+ * player is two separate entries, one per kind.
+ *
+ * The `addedAt` stamp is minted **here** rather than by the route, so every
+ * caller gets one and there is one place that decides what "today" means. A
+ * re-add after a drop leaves the old tombstone standing rather than clearing
+ * it: those were days he really was held, and the two intervals are read as a
+ * union (see `getRosterForRange`).
+ */
+export async function addRosterPlayer(userId: string, player: WatchPlayer): Promise<RosterEntry[]> {
+  const addedAt = baseballToday();
   return update(userId, (list) => {
     const key = playerKey(player);
     if (list.some((p) => playerKey(p) === key)) return null;
-    return [player, ...list];
+    return [{ ...player, addedAt }, ...list];
   });
 }
 
-/** Removes one entry. Without `kind`, removes every entry for the id — which is
- * what a client that predates two-way support means by "remove this player". */
+/**
+ * Removes one entry. Without `kind`, removes every entry for the id — which is
+ * what a client that predates two-way support means by "remove this player".
+ *
+ * Each entry that goes leaves a **tombstone** stamped with today, so the days
+ * he was held can still be reported on; an entry added and dropped inside the
+ * same day was held for no days and leaves nothing behind. The write goes
+ * through `mutate` rather than the roster-only `update` because it touches two
+ * fields of the item, and it is the one place the tombstone list is pruned —
+ * which is exactly the right place, being the only one that ever grows it.
+ */
 export async function removeRosterPlayer(
   userId: string,
   id: number,
   kind?: PlayerKind,
-): Promise<WatchPlayer[]> {
-  return update(userId, (list) =>
-    list.filter((p) => p.id !== id || (kind !== undefined && p.kind !== kind)),
-  );
+): Promise<RosterEntry[]> {
+  const removedAt = baseballToday();
+  const next = await mutate(userId, (cur) => {
+    const hit = (p: RosterEntry) => p.id === id && (kind === undefined || p.kind === kind);
+    const gone = cur.players.filter(hit);
+    const players = cur.players.filter((p) => !hit(p));
+    const removed = pruneRemovals(
+      [
+        // A zero-length span is no history at all.
+        ...gone.flatMap((p) =>
+          p.addedAt !== undefined && p.addedAt >= removedAt ? [] : [{ ...p, removedAt }],
+        ),
+        ...cur.removed,
+      ],
+      removedAt,
+    );
+    // Nothing removed and nothing to prune is nothing to write.
+    if (gone.length === 0 && removed.length === cur.removed.length) return null;
+    return { players, removed };
+  });
+  return next.players;
+}
+
+/** One interval of the range a player was held for, resolved into the days
+ *  themselves — the range is at most `MAX_RANGE_DAYS` (62) long, so a set of
+ *  date strings is both the cheapest and the least ambiguous way to say it. */
+export interface RosterOverRange {
+  /**
+   * Everyone who was on the roster on **any** day of the range: the live
+   * entries first, in their saved order — which is the order the reorder screen
+   * set and the order the summary table reads — then the dropped ones,
+   * most-recently-dropped first. A player who was on it for none of the days is
+   * not in this list at all.
+   */
+  players: WatchPlayer[];
+  /** Player key → the days of the range he was actually held. Always fully
+   *  populated for every key in `players`, so a reader never has to know what
+   *  an absent entry would have meant. */
+  heldDays: Map<string, Set<string>>;
+}
+
+/**
+ * The roster **as it stood over a range**, which is what the Roster and Feed
+ * views are about: they report on a span of days, and the list of players those
+ * days belonged to is not today's list.
+ *
+ * Two facts come back rather than one, because the question has two halves and
+ * only answering the first is what the app used to do. *Who* was on the roster
+ * at some point in the range decides which rows exist; *which days* each was
+ * held decides what each row is allowed to count. A player added on Wednesday
+ * has a row over a week that starts on Monday, and Monday and Tuesday are not
+ * his.
+ *
+ * A player dropped and picked back up inside one range is **one entry with the
+ * union of his intervals**, not two: the app keys everything on `${kind}-${id}`
+ * and two rows for one man would be two React keys, two summary rows and a
+ * doubled `Total`. Resolving each interval down to days and unioning the sets
+ * is what makes that fall out rather than needing a rule.
+ */
+export async function getRosterForRange(
+  userId: string,
+  start: string,
+  end: string,
+): Promise<RosterOverRange> {
+  const { players, removed } = await load(userId);
+  const dates: string[] = [];
+  for (let d = start; d <= end; d = addDays(d, 1)) dates.push(d);
+
+  const heldDays = new Map<string, Set<string>>();
+  const identity = new Map<string, WatchPlayer>();
+  const order: string[] = [];
+  // `until` is exclusive and null means "still held" — the half-open interval
+  // `[addedAt, removedAt)` the two stamps describe. An absent `addedAt` is the
+  // migration: he has been there forever, so every day of the range is his.
+  const hold = (p: RosterEntry, until: string | null) => {
+    const key = playerKey(p);
+    let days = heldDays.get(key);
+    if (!days) {
+      days = new Set<string>();
+      heldDays.set(key, days);
+      order.push(key);
+    }
+    // The live entry's own name and Savant spelling win where there is one,
+    // being the fresher of the two; a tombstone only ever names a man no live
+    // entry does.
+    if (!identity.has(key) || until === null) {
+      identity.set(key, { id: p.id, savantName: p.savantName, name: p.name, kind: p.kind });
+    }
+    for (const d of dates) {
+      if (p.addedAt !== undefined && d < p.addedAt) continue;
+      if (until !== null && d >= until) continue;
+      days.add(d);
+    }
+  };
+
+  for (const p of players) hold(p, null);
+  // Newest first, so the men who left most recently read closest to the roster
+  // they left.
+  for (const r of [...removed].sort((a, b) => (a.removedAt < b.removedAt ? 1 : -1))) {
+    hold(r, r.removedAt);
+  }
+
+  const out: WatchPlayer[] = [];
+  for (const key of order) {
+    if (heldDays.get(key)?.size) out.push(identity.get(key)!);
+    else heldDays.delete(key);
+  }
+  return { players: out, heldDays };
 }
 
 /**

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { requireUser, userId } from './auth.js';
 import { addDays, baseballToday } from './etDate.js';
 import { getPlayerDay, getPlayerStatuses, getReport, withEstimators } from './savant.js';
+import type { HeldDays } from './savant.js';
 import { getPercentiles } from './percentiles.js';
 import { getXwobaSeries } from './xwoba.js';
 import { getBatterGameLog, getPitcherGameLog } from './gameLog.js';
@@ -24,6 +25,7 @@ import {
   getLeague,
   getPrefs,
   getRoster,
+  getRosterForRange,
   joinLeague,
   leagueForInvite,
   getWatchlist,
@@ -265,8 +267,16 @@ app.get(
     // for the same reason the refresh carries: the report's player order *is*
     // the lineup order, and a report ordered by today's lineup under chips
     // drawn from tomorrow's would be one roster described two ways.
+    //
+    // The saved roster is read **as it stood over those days**, not as it
+    // stands now: `getRosterForRange` answers with everyone who was on it on
+    // any day of the range and, per player, which of those days were his. A man
+    // added this morning has no row over "Yesterday", and a man dropped this
+    // morning still has his week. See **The roster is a range of rosters** in
+    // `auth-and-storage.md` for the whole of that rule.
     const fantasy = req.query.source === 'fantasy';
     let watched: WatchPlayer[];
+    let held: HeldDays | undefined;
     let teamName: string | null = null;
     if (fantasy) {
       try {
@@ -283,9 +293,9 @@ app.get(
         throw err;
       }
     } else {
-      watched = await getRoster(userId(req));
+      ({ players: watched, heldDays: held } = await getRosterForRange(userId(req), start, end));
     }
-    const players = await getReport(start, end, watched);
+    const players = await getReport(start, end, watched, held);
     // `'watchlist'` is what the source has always been called on the wire and
     // stays so for an old tab's sake; it means the saved roster.
     res.json({ start, end, players, source: fantasy ? 'fantasy' : 'watchlist', teamName });
