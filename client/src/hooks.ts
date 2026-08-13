@@ -35,6 +35,21 @@ export function useMuted(): boolean {
 export interface FantasySlot {
   slot: string;
   starting: boolean;
+  /**
+   * How many days of the range in view he was in the lineup on, and how many
+   * days the range holds — null on a single day, and null with no per-day
+   * lineups (an older tab, a failed read), where the slot beside it is the
+   * whole of what is known.
+   *
+   * The chip's letters and its colour are still one day's — the day the roster
+   * was read for — because that is what a slot *is*. Over a range that is no
+   * longer the whole truth: the row beside it sums the days he was started, so
+   * a muted `BE` can sit against four days of stats. The count is what makes
+   * the pair honest, and it goes in the title rather than on the chip because
+   * this table's name column is measured in stat columns pushed off a phone.
+   */
+  startedDays: number | null;
+  rangeDays: number | null;
   /** ESPN's injury designation for him, raw — see `espnInjuryBadge`. It rides
    *  on this map rather than taking one of its own because it comes off the
    *  same roster read and reaches the same leaves. */

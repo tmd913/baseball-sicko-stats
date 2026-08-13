@@ -1,4 +1,5 @@
 import { useFantasySlot } from '../hooks';
+import type { FantasySlot } from '../hooks';
 
 /**
  * Where this player sits in the user's fantasy lineup today — `SS`, `UTIL`,
@@ -18,19 +19,33 @@ import { useFantasySlot } from '../hooks';
  * A fully-round pill, per the app's rule that round is for things you read and
  * the control radius is for things you press.
  */
+function dayTitle(spot: FantasySlot): string {
+  return spot.starting
+    ? `In your fantasy lineup today at ${spot.slot}`
+    : spot.slot === 'IL'
+      ? 'On your fantasy injured list'
+      : 'On your fantasy bench today';
+}
+
+/**
+ * What the chip cannot say and the row needs said: the slot is one day's, and
+ * over a range the numbers beside it are the days he was started on. Silent on
+ * a single day, where the two are the same fact, and silent without per-day
+ * lineups, where there is only the one day to report.
+ */
+function rangeTitle(spot: FantasySlot): string {
+  const { startedDays, rangeDays } = spot;
+  if (startedDays === null || rangeDays === null || rangeDays < 2) return '';
+  return ` · in your lineup on ${startedDays} of the ${rangeDays} days in view`;
+}
+
 export function FantasySlotTag({ playerKey }: { playerKey: string }) {
   const spot = useFantasySlot(playerKey);
   if (!spot) return null;
   return (
     <span
       className={`fantasy-slot${spot.starting ? ' starting' : ''}`}
-      title={
-        spot.starting
-          ? `In your fantasy lineup today at ${spot.slot}`
-          : spot.slot === 'IL'
-            ? 'On your fantasy injured list'
-            : 'On your fantasy bench today'
-      }
+      title={dayTitle(spot) + rangeTitle(spot)}
     >
       {spot.slot}
     </span>

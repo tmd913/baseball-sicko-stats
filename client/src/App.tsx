@@ -127,6 +127,26 @@ function addDays(date: string, delta: number): string {
   return dt.toISOString().slice(0, 10);
 }
 
+/**
+ * Was this player in your fantasy lineup on `date`?
+ *
+ * The one place that question is answered, so the filter that credits a
+ * player's day and the count on his slot chip cannot come to disagree. A date
+ * the map has no entry for is a day the server couldn't read, not a day nobody
+ * started: it falls back to `fallback`, the single end-of-range lineup the
+ * chips are drawn from, which is the answer the app gave before per-day lineups
+ * existed and the right direction to fail in.
+ */
+function startedOn(
+  lineups: Map<string, Set<number>>,
+  date: string,
+  mlbId: number,
+  fallback: boolean,
+): boolean {
+  const day = lineups.get(date);
+  return day ? day.has(mlbId) : fallback;
+}
+
 /** Today's baseball date — the Eastern date of a clock set back to the rollover
  *  hour, so the small hours still belong to the night before. */
 function baseballToday(): string {
@@ -359,7 +379,6 @@ export default function App() {
     const today = baseballToday();
     return start <= today && today <= end;
   }, [start, end]);
-  const startersActive = startersOnly && rangeHasToday;
   // Play every clip with the sound off. Saved per user like the toggle above,
   // but deliberately **not** in the URL: hide-injured is there because it
   // changes which players a view is reporting on, and a link that says so is
@@ -793,24 +812,55 @@ export default function App() {
   const loadFantasyRoster = useCallback((refresh = false) => {
     const seq = ++rosterRead.current;
     return api
-      .espnRoster(refresh, end)
+      .espnRoster(refresh, start, end)
       .then((r) => {
         if (seq === rosterRead.current) setFantasyRoster(r);
       })
       // The report request carries the same failure and banners it; a second
       // copy of the same message would only say it twice.
       .catch((e: Error) => console.error('fantasy roster unavailable:', e.message));
-    // `end` rather than nothing: it decides which day's lineup is asked for, so
-    // a stale closure would hold the chips on the day the range was last
+    // The whole range rather than nothing: `end` decides which day's roster and
+    // slot chips come back, and `start` opts the response into a lineup **per
+    // day** of it, which is what the roster views credit a player's days
+    // against. A stale closure would hold both on the range the view was last
     // changed *from*. It re-identifies this callback on a date change, which
-    // the effect below wanted anyway — it already lists `end` — so the two move
+    // the effect below wanted anyway — it already lists both — so they move
     // together and it still fires once.
-  }, [end]);
+  }, [start, end]);
 
   useEffect(() => {
     if (!usingFantasy) return;
     loadFantasyRoster();
   }, [usingFantasy, espnLeagueId, fantasyTeamId, start, end, loadFantasyRoster]);
+
+  /**
+   * Your lineup on **each** day of the range, by MLB id — the whole point of
+   * which is that a range is a range of lineups. ESPN answers for one scoring
+   * period at a time, so the server reads one per date (see `espn.ts`'s **The
+   * lineup, one day at a time**); this turns the wire's `{ date: id[] }` into
+   * the shape the filter reads it in.
+   *
+   * Null when the views aren't reading a fantasy team, and null when the read
+   * didn't happen or failed — in which case everything below falls back to
+   * `fantasySlots`, i.e. the single end-of-range lineup, which is exactly what
+   * the app did before. A **date missing from a present map** falls back the
+   * same way and for the same reason: absent means unread, not empty.
+   */
+  const fantasyLineups = useMemo(() => {
+    const raw = usingFantasy ? fantasyRoster?.lineups : null;
+    if (!raw) return null;
+    const map = new Map<string, Set<number>>();
+    for (const [date, ids] of Object.entries(raw)) map.set(date, new Set(ids));
+    return map.size > 0 ? map : null;
+  }, [usingFantasy, fantasyRoster]);
+
+  /** The dates in the range, which the count on a slot chip and the per-day
+   *  filter both walk. Cheap — `MAX_RANGE_DAYS` is 62. */
+  const rangeDates = useMemo(() => {
+    const out: string[] = [];
+    for (let d = start; d <= end; d = addDays(d, 1)) out.push(d);
+    return out;
+  }, [start, end]);
 
   /** Slot by player key, for the chips. Null when the views are reading the
    *  saved watchlist, which is what makes every chip in the app disappear. */
@@ -819,16 +869,41 @@ export default function App() {
     const map = new Map<string, FantasySlot>();
     for (const p of fantasyRoster.players) {
       if (p.mlbId === null) continue;
+      // How many of the days in view he was in the lineup on — the fact the
+      // chip's one-day slot can't carry over a range. Null without the per-day
+      // map, where there is no second fact to state.
+      const startedDays =
+        fantasyLineups === null
+          ? null
+          : rangeDates.filter((d) => startedOn(fantasyLineups, d, p.mlbId as number, p.starting))
+              .length;
       for (const kind of p.kinds) {
         map.set(`${kind}-${p.mlbId}`, {
           slot: p.slot,
           starting: p.starting,
           injuryStatus: p.injuryStatus,
+          startedDays,
+          rangeDays: startedDays === null ? null : rangeDates.length,
         });
       }
     }
     return map;
-  }, [usingFantasy, fantasyRoster]);
+  }, [usingFantasy, fantasyRoster, fantasyLineups, rangeDates]);
+
+  /**
+   * **Per-day lineups take the gate off.** The `rangeHasToday` rule exists
+   * because the MLB reading of this filter is a fact about tonight, so over a
+   * week in July there is nobody it could keep and a control that empties a
+   * table with no way to read why is a trap. That argument does not survive a
+   * lineup read per day: on a fantasy team every day of the range now has its
+   * own answer, so "the men I started" is exactly as meaningful over `Yesterday`
+   * or last July as it is today. Without the map — saved-roster mode, an older
+   * tab, a failed read — the old gate stands, since the single end-of-range
+   * lineup really is only about one afternoon.
+   */
+  const startersPerDay = fantasyLineups !== null;
+  const startersOffered = rangeHasToday || startersPerDay;
+  const startersActive = startersOnly && startersOffered;
 
   /**
    * The keys "your roster" means on screen — the saved list, or the fantasy
@@ -1791,12 +1866,43 @@ export default function App() {
     // direction to fail in: an empty table under a lit toggle reads as "nobody
     // is starting", which would be a claim where the truth is that the app
     // hasn't been told yet.
+    //
+    // **And a range is a range of lineups, so the filter cuts days as well as
+    // rows.** Applying one lineup to a week is the arithmetic this whole thing
+    // was wrong about: a man you started on Monday and benched on Wednesday
+    // earned you Monday and none of Wednesday, where a row-level filter either
+    // counted his whole week or dropped him from it. With the per-day map in
+    // hand each report is **projected** onto the days he was actually in the
+    // lineup — the games on every other day simply aren't his to have — and the
+    // summary table's rows, its Total and the feed's items all add up correctly
+    // with no knowledge of any of this, since every one of them sums
+    // `report.games`.
+    //
+    // A player kept with **no games left** is deliberate and is not the same as
+    // one dropped: he is kept when he was in the lineup on some day of the
+    // range and simply had no game to play, which is a row of dashes and the
+    // honest answer to "am I starting him". Dropped means you were not playing
+    // him on any day in view — including every day before you picked him up,
+    // where his line belonged to whoever held him.
+    if (fantasyLineups) {
+      const out: PlayerReport[] = [];
+      for (const r of kindCards) {
+        const fallback = fantasySlots?.get(playerKey(r))?.starting === true;
+        const days = new Set(
+          rangeDates.filter((d) => startedOn(fantasyLineups, d, r.id, fallback)),
+        );
+        if (days.size === 0) continue;
+        const games = r.games.filter((g) => days.has(g.date));
+        out.push(games.length === r.games.length ? r : { ...r, games });
+      }
+      return out;
+    }
     if (fantasySlots) {
       return kindCards.filter((r) => fantasySlots.get(playerKey(r))?.starting === true);
     }
     const today = baseballToday();
     return kindCards.filter((r) => isStartingOn(r, today));
-  }, [kindCards, startersActive, fantasySlots]);
+  }, [kindCards, startersActive, fantasySlots, fantasyLineups, rangeDates]);
   /**
    * Which of the two rules the toggle applies — see `filteredCards`. The
    * button's tooltip and the empty state under it both have to say which set
@@ -2147,7 +2253,7 @@ export default function App() {
     </button>
   );
 
-  const startersToggle = rangeHasToday ? (
+  const startersToggle = startersOffered ? (
       <button
         type="button"
         className={`starters-toggle${startersOnly ? ' on' : ''}`}
@@ -2157,9 +2263,11 @@ export default function App() {
            fantasy team, so the tooltip says which. The label can't — it is one
            word, and "Starters" is the right word for both readings. */
         title={
-          startersReadFantasy
-            ? 'Only the players in your fantasy starting lineup — your bench and IL are hidden whatever their clubs do with them'
-            : "Only the players starting today — hitters in a posted lineup, pitchers named as today's starter"
+          startersPerDay && rangeDates.length > 1
+            ? 'Only the days you had each player in your fantasy lineup — a day he sat on your bench or your IL is not counted, however he hit'
+            : startersReadFantasy
+              ? 'Only the players in your fantasy starting lineup — your bench and IL are hidden whatever their clubs do with them'
+              : "Only the players starting today — hitters in a posted lineup, pitchers named as today's starter"
         }
       >
         {/* A lineup card, which is what the filter is: the men written on
@@ -3006,9 +3114,11 @@ export default function App() {
         !editMode && (
           <div className="empty-state">
             <p className="empty-title">
-              {startersReadFantasy
-                ? 'Nothing to show — nobody here is in your lineup today'
-                : 'Nothing to show — nobody here is starting today'}
+              {startersPerDay && rangeDates.length > 1
+                ? 'Nothing to show — nobody here was in your lineup on any of these days'
+                : startersReadFantasy
+                  ? 'Nothing to show — nobody here is in your lineup today'
+                  : 'Nothing to show — nobody here is starting today'}
             </p>
             {/* Two causes, two messages. The MLB reading can be empty simply
                 because the day is young, which is the thing a reader most needs
@@ -3019,8 +3129,8 @@ export default function App() {
                 already happened. */}
             {startersReadFantasy ? (
               <p>
-                Turn off “Starters” in the row above to see your whole team — your bench and
-                IL are what it is hiding.
+                Turn off “Starters” in the row above to see your whole team — the days you had
+                these players on your bench or your IL are what it is leaving out.
               </p>
             ) : (
               <p>

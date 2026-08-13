@@ -269,14 +269,25 @@ export const api = {
   /** The user's own roster, slot by slot. `refresh` as on `espnOwnership` —
    *  the two read the same upstream through the same cache.
    *
-   *  `date` is the day to read the **lineup** for: a manager sets tomorrow's
+   *  `end` is the day to read the **roster** for: a manager sets tomorrow's
    *  lineup today, and ESPN files it under tomorrow, so a view reporting on
    *  tomorrow has to ask for tomorrow or it draws today's slots. The server
-   *  reads anything at or before today as today. */
-  async espnRoster(refresh = false, date?: string | null): Promise<EspnRoster> {
+   *  reads anything at or before today as today.
+   *
+   *  `start` asks for `lineups` as well — one lineup per day of the range, each
+   *  at that day's own scoring period, which is what lets the roster views
+   *  credit a player only for the days he was actually in the lineup. Sent as
+   *  `end=` with the older `date=` dropped: the server reads both, so a tab
+   *  open across a deploy keeps working either way. */
+  async espnRoster(
+    refresh = false,
+    start?: string | null,
+    end?: string | null,
+  ): Promise<EspnRoster> {
     const q = new URLSearchParams();
     if (refresh) q.set('refresh', '1');
-    if (date) q.set('date', date);
+    if (start) q.set('start', start);
+    if (end) q.set('end', end);
     const qs = q.toString();
     return request(`/api/espn/roster${qs ? `?${qs}` : ''}`);
   },
