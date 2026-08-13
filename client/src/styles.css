@@ -975,25 +975,13 @@ body {
   font-size: 11px;
 }
 
-/* ---- Player list ---- */
-/* One cap, and it is not the app's: a list of cards is read down rather than
-   across, and uncapped it is a single window-wide box holding a pitch table with
-   an inch between its columns. `--card-column` is narrower than these two views
-   have ever been, because the card's own contents are what set it: a name at one
-   end of the header and a line of stats at the other, with nothing in between to
-   fill. So the width change gave the room to the three wide tables and took some
-   back off the cards. The feed takes the same number for the same reason: its
-   items are these cards. */
-.player-list {
-  flex: 1 1 auto;
-  min-width: 0;
-  width: 100%;
-  max-width: var(--card-column);
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
+/* ---- Player card ----
+   `.player-list` was the Games view's column of these and is gone with it; the
+   cap it carried lives on `.live-feed` alone now (see `--card-column` there),
+   the feed's items being made of the same parts. `.player-card` itself is
+   likewise unrendered — `PlayerCard`/`PitcherCard` have no call site since that
+   view folded into the feed — and is kept against the day the grouped feed wants
+   the card's own sections back; see **Pitchers on the roster**. */
 .player-card {
   /* Breathing room above a card scrolled to the top of the viewport. */
   scroll-margin-top: var(--scroll-offset);
@@ -4184,7 +4172,8 @@ body {
    looking small. Only the calendar takes the muted fill; the toggle's glyph
    follows its own text colour, which is what carries its `.on` state. */
 .date-toggle svg,
-.starters-toggle svg {
+.starters-toggle svg,
+.group-toggle svg {
   flex: none;
 }
 .date-toggle svg {
@@ -5399,7 +5388,8 @@ body {
    by construction. (Qualified was the closer twin of the two and is gone —
    see `research.ts`.) */
 .research-toggle,
-.starters-toggle {
+.starters-toggle,
+.group-toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -5415,7 +5405,8 @@ body {
   cursor: pointer;
 }
 .research-toggle:hover,
-.starters-toggle:hover {
+.starters-toggle:hover,
+.group-toggle:hover {
   color: var(--text);
 }
 /* `.active` is "the panel is open"; `.on` is "the panel holds something",
@@ -5433,18 +5424,21 @@ body {
    phone, which is right for four icons in a known run and wrong for a lone
    button on a row of tabs, where nothing beside it would say what the glyph
    meant. */
-.starters-toggle {
+.starters-toggle,
+.group-toggle {
   flex: none;
   white-space: nowrap;
 }
 .research-toggle.on,
-.starters-toggle.on {
+.starters-toggle.on,
+.group-toggle.on {
   color: var(--accent);
   border-color: rgba(56, 189, 248, 0.5);
   background: rgba(56, 189, 248, 0.12);
 }
 .research-toggle:focus-visible,
-.starters-toggle:focus-visible {
+.starters-toggle:focus-visible,
+.group-toggle:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
@@ -5799,6 +5793,7 @@ body {
      button in the header already takes — rather than whatever their padding
      leaves around a 15px glyph, so the pair reads as a set. */
   .starters-toggle,
+  .group-toggle,
   .date-toggle {
     width: var(--control-h);
     padding: 0;
@@ -6337,10 +6332,16 @@ body {
   color: var(--hr);
 }
 
-/* ---- View switch (Roster / Research, and Roster's own tabs) ---- */
+/* ---- View switch (Roster / Feed / Research) ----
+
+   `.roster-switch`/`.roster-tab` were folded into these same lists while Roster
+   had its own Summary / Games / Feed row under the top one. That row is gone —
+   Games became the feed's grouping and Roster was left with one reading — so
+   the two classes go with it. Nothing else changes: the pills that remain were
+   always styled off `.view-switch`/`.view-tab`, which is the point of folding
+   rather than restyling. */
 .view-switch,
 .kind-switch,
-.roster-switch,
 .research-window-row,
 .date-presets {
   display: inline-flex;
@@ -6354,7 +6355,6 @@ body {
 }
 .view-tab,
 .kind-tab,
-.roster-tab,
 .research-window-tab,
 .date-preset {
   display: inline-flex;
@@ -6372,14 +6372,12 @@ body {
 }
 .view-tab:hover,
 .kind-tab:hover,
-.roster-tab:hover,
 .research-window-tab:hover,
 .date-preset:hover {
   color: var(--text);
 }
 .view-tab.active,
 .kind-tab.active,
-.roster-tab.active,
 .research-window-tab.active,
 .date-preset.active {
   color: var(--bg);
@@ -6387,7 +6385,6 @@ body {
 }
 .view-tab:focus-visible,
 .kind-tab:focus-visible,
-.roster-tab:focus-visible,
 .research-window-tab:focus-visible,
 .date-preset:focus-visible {
   outline: 2px solid var(--accent);
@@ -6395,11 +6392,16 @@ body {
 }
 
 /* ---- Live feed (per-at-bat stream) ---- */
-/* The same column the games view's cards take (`--card-column`), where this was
-   860px: a stream of at-bats is read down rather than across,
-   but so is that list, and the two are made of the same cards — a feed narrower
-   than the view beside it reads as a different page rather than another way of
-   reading the same days. */
+/* One cap, and it is not the app's (`--card-column`, 800px; this was 860 before
+   the two views became one). A stream of at-bats is read down rather than
+   across, and uncapped it is a single window-wide box holding a pitch table with
+   an inch between its columns. The number is set by what an item actually holds
+   — a name at one end of the header and a line of stats at the other, with
+   nothing in between to fill — which is why the app dropping its own cap gave
+   the room to the three wide tables and took some back off the cards. It was
+   shared with the Games view's `.player-list` on the reasoning that a feed
+   narrower than the view beside it would read as a different page; that view is
+   now this one grouped, so the two can no longer differ at all. */
 .live-feed {
   max-width: var(--card-column);
   width: 100%;
@@ -6673,6 +6675,89 @@ body {
 }
 
 /* Recent-at-bats section: one row per plate appearance, newest first. */
+/* ---- The feed grouped by player ----
+
+   One card per player instead of a stream: his live at-bat, his plays or his
+   outing and his next game, under one identity header. This is the Games view
+   folded into the feed — that page was a card per player over the same days,
+   differing from the feed in sort order alone — so it keeps that page's shape
+   down to the collapsed-by-default card and the `expanded=` param that says
+   which are open.
+
+   It is a `.feed-item` like the other four shapes, so the layout, the 8px gap
+   and the scroll offset all come from there, and it groups itself with the same
+   3px/11px rail. `--muted` at rest: a group is not an outcome, and every rail in
+   this feed that claims something claims something about *one play*. A live
+   player's group is a `.live-entry` as well and takes the role colour, which is
+   the one claim a group can honestly make — the rule below is above that one in
+   the file, so the role wins without needing a specificity bump. */
+.feed-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.feed-group {
+  border-left: 3px solid var(--muted);
+  border-radius: 3px;
+  padding-left: 11px;
+}
+/* A watched player with no game at all — the one card a stream sorted by time
+   can never draw, and the reason the grouped feed seeds itself from the roster
+   rather than from what happened. Dashed because nothing is coming, the same
+   claim `.player-card.empty` and the pitcher's no-outing card make. */
+.feed-group.empty {
+  border-left-style: dashed;
+}
+/* The name and its position chip on one line. The chip is the card header's,
+   carried over when the card became this — `.player-pos` unchanged, so the two
+   cannot drift. */
+.feed-group-name {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+/* How many plays or outings are folded up in there — the one thing the bar says
+   that isn't already a stat, and what tells a quiet day from an unopened one. */
+.feed-group-count {
+  flex: none;
+  color: var(--faint);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+/* Nothing to total yet: a scheduled game's first pitch stands in for the line,
+   so the bar is never blank on a player who simply hasn't played. */
+.feed-group-pending {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+/* A group's bar has no leading tags — a pitcher's carries the SP chip and his
+   credit before the line, which is what `margin-left: auto` on `.feed-pitch-line`
+   is written for, and without them the whole bar bunches against the right edge
+   over a hand's width of empty panel. So the line leads, the count follows the
+   line it qualifies, and the badge still closes the row: the same
+   identity-then-summary grammar read from the other end. Scoped `>` so an outing
+   nested *inside* a group keeps the bar it has everywhere else. */
+.feed-group > .feed-item-toggle > .feed-pitch-line {
+  margin-left: 0;
+}
+.feed-group > .feed-item-toggle > .feed-group-count {
+  margin-right: auto;
+}
+
+/* The items inside. Each keeps its own rail — the outcome, the tone, the
+   decision — which is what makes a group scannable rather than a wall: the
+   group's edge says whose it is and theirs say how each went. 12px rather than
+   the 16 between groups, so a player's own plays read as one block against the
+   space that separates him from the next. */
+.feed-group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .feed-items {
   display: flex;
   flex-direction: column;

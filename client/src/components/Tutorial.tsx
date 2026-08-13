@@ -255,31 +255,27 @@ const CHAPTERS: Chapter[] = [
   {
     id: 'tut-views',
     tab: 'Views',
-    title: 'Three ways to read the day',
+    title: 'Two ways to read the day',
     body: (
       <>
         <p>
-          <Ui>Roster</Ui> is your own players over the dates you picked, and it has
-          three tabs of its own after the <Ui>Batters · Pitchers</Ui> pair — three
-          takes on that same set of players over those same days. Pick whichever
-          answers the question you actually have. (<Ui>Research</Ui> at the front
-          is the other thing entirely: the whole league, covered further down.)
+          <Ui>Roster</Ui> and <Ui>Feed</Ui> are two takes on the same thing: your own
+          players over the dates you picked. One is a table you read across, the other
+          a stream you read down. Pick whichever answers the question you actually
+          have. (<Ui>Research</Ui> at the end is the other thing entirely: the whole
+          league, covered in the next chapter.)
         </p>
         <Demo label="The view bar — the groups wrap as the window allows">
           <div className="view-bar">
             <div className="view-bar-tabs">
               <div className="view-switch">
                 <span className="view-tab active">Roster</span>
+                <span className="view-tab">Feed</span>
                 <span className="view-tab">Research</span>
               </div>
               <div className="kind-switch">
                 <span className="kind-tab active">Batters</span>
                 <span className="kind-tab">Pitchers</span>
-              </div>
-              <div className="roster-switch">
-                <span className="roster-tab active">Summary</span>
-                <span className="roster-tab">Games</span>
-                <span className="roster-tab">Feed</span>
               </div>
               <span className="date-toggle">
                 <CalendarIcon />
@@ -289,7 +285,7 @@ const CHAPTERS: Chapter[] = [
           </div>
         </Demo>
         <dl className="tut-defs">
-          <dt>Summary</dt>
+          <dt>Roster</dt>
           <dd>
             The default. One row per player — opponent, H/AB, R, HR, RBI, SB, OPS, BB,
             K — with a <strong>Total</strong> row pinned at the bottom. The opponent
@@ -297,28 +293,32 @@ const CHAPTERS: Chapter[] = [
             and inning during it, the final after. Scroll it sideways on a phone; the
             headshot column stays put.
           </dd>
-          <dt>Games</dt>
-          <dd>
-            One card per player, in your own order. This is the deep read: every plate
-            appearance, every pitch, the video. Cards start collapsed — tap a header
-            to open one.
-          </dd>
           <dt>Feed</dt>
           <dd>
-            A chronological stream across everyone you watch, in three sections:{' '}
-            <strong>Live</strong> (whoever is at bat, on deck, on base or on the
-            mound), <strong>Recent plays</strong> — <strong>Recent outings</strong> on
-            the pitcher side — and <strong>Upcoming</strong> games that haven't started
-            yet. Tap any row to open it. The recent section pages 20 at a time behind a{' '}
-            <Ui>Load more</Ui> button.
+            Everything that happened, newest first, across everyone you watch, in three
+            sections: <strong>Live</strong> (whoever is at bat, on deck, on base or on
+            the mound), <strong>Recent plays</strong> — <strong>Recent outings</strong>{' '}
+            on the pitcher side — and <strong>Upcoming</strong> games that haven't
+            started yet. Tap any row to open it; the recent section pages 20 at a time
+            behind a <Ui>Load more</Ui> button.
+          </dd>
+          <dt>
+            Feed, <Ui>By player</Ui>
+          </dt>
+          <dd>
+            The same day sorted by who rather than by when: one card per player,
+            holding his live at-bat, his plays or his outing and his next game. This is
+            the deep read — every plate appearance, every pitch, the video — and it is
+            where the old <strong>Games</strong> tab went, that page having been this
+            grouping and nothing else. Cards start collapsed; tap a header to open one.
           </dd>
         </dl>
         <p className="tut-note">
-          Every one of the three shows one kind at a time. Once you watch both
-          batters and pitchers, the <Ui>Batters</Ui> / <Ui>Pitchers</Ui> tabs appear
-          ahead of them and follow you from tab to tab. <Ui>Research</Ui>, beside{' '}
-          <Ui>Roster</Ui> at the front of the row, is a different animal — the whole
-          league rather than your roster — and has the next chapter to itself.
+          Both show one kind at a time. Once you watch both batters and pitchers, the{' '}
+          <Ui>Batters</Ui> / <Ui>Pitchers</Ui> tabs appear beside them and follow you
+          from page to page. <Ui>Research</Ui>, at the end of the row, is a different
+          animal — the whole league rather than your roster — and has the next chapter
+          to itself.
         </p>
       </>
     ),
