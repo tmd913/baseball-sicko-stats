@@ -43,10 +43,12 @@ import {
   FantasyRosterContext,
   MutedContext,
   PlayerStatusContext,
+  useDelayedFlag,
   useDismissable,
   useStickyChromeOffset,
 } from './hooks';
 import type { FantasySlot } from './hooks';
+import { LoadingBlock, LoadingLine, SpinningBaseball } from './components/Loading';
 import { Tutorial } from './components/Tutorial';
 import { EspnSettings } from './components/EspnSettings';
 
@@ -66,8 +68,12 @@ const USER_SCROLLS = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const;
 const SCROLL_GAP = 12;
 
 // How long the header's refresh keeps spinning at a minimum — see `refreshAll`.
-// A warm `/api/report` comes back in about 16ms, which is a spinner nobody
-// sees, and a button that answers a press with nothing at all reads as broken.
+// A warm `/api/report` comes back in about 16ms, which is a baseball nobody
+// sees turn, and a button that answers a press with nothing at all reads as
+// broken. Every press-triggered mark in the app takes this floor; the waits
+// nobody pressed take `WAIT_DELAY` at the other end of the same argument
+// (`hooks.ts`), which is a delay before a mark goes up rather than a floor on
+// how long it stays.
 const MIN_SPIN = 450;
 
 /**
@@ -235,7 +241,10 @@ export default function App() {
   const [roster, setRoster] = useState<WatchPlayer[]>([]);
   const [reports, setReports] = useState<PlayerReport[]>([]);
   const [reportLoading, setReportLoading] = useState(false);
-  const [showLoading, setShowLoading] = useState(false);
+  /* The report's read, held back by `WAIT_DELAY` — nobody pressed anything to
+     start this one, so it owes the reader nothing until it is slow enough to
+     be worth saying. The same hook now guards every block wait in the app. */
+  const showLoading = useDelayedFlag(reportLoading);
   const [rosterLoaded, setRosterLoaded] = useState(false);
   /**
    * The **watchlist** — `${kind}-${id}` keys the user is following on the
@@ -403,7 +412,7 @@ export default function App() {
   // The research board, fetched per kind the first time that tab is opened and
   // kept for the session: it's the whole league in one blob, season-to-date, and
   // the server caches it for six hours — re-fetching on every tab switch would
-  // buy nothing but a spinner.
+  // buy nothing but a wait.
   // Which pill the research board is on. Its own selector rather than the
   // watchlist's `kind` tabs, because the row it drives is both — Batters and
   // Pitchers are two of its eleven entries, and the rest are slices of one or
@@ -1210,16 +1219,6 @@ export default function App() {
       .finally(() => setRosterLoaded(true));
   }, []);
 
-  // Only surface the loading UI if the fetch is slow enough to matter — quick
-  // loads finish before this fires, so the spinner/empty flicker never shows.
-  useEffect(() => {
-    if (!reportLoading) {
-      setShowLoading(false);
-      return;
-    }
-    const t = setTimeout(() => setShowLoading(true), 250);
-    return () => clearTimeout(t);
-  }, [reportLoading]);
 
   /**
    * The watchlist, read once on boot beside the roster — it decides whether a
@@ -1295,7 +1294,7 @@ export default function App() {
     // A session that opens on `roster=fantasy` waits for the connection status
     // first. Firing now would read the saved watchlist, render it, and replace
     // it a moment later — a flash of the wrong list of players, which is worse
-    // than a slightly longer spinner.
+    // than a slightly longer wait.
     if (rosterSource === 'fantasy' && !espnStatusSettled) return;
     loadReport();
     // `fantasyTeamId` because the report is *about* that team's players: pick a
@@ -1433,8 +1432,8 @@ export default function App() {
       return Promise.all(rest);
     });
     // Spin for at least `MIN_SPIN` however fast the answer comes. Measured: a
-    // warm server answers `/api/report` in **16ms**, which is one frame of
-    // spinner — a press that leaves no trace at all reads as a dead button, and
+    // warm server answers `/api/report` in **16ms**, which is one frame of a
+    // turning ball — a press that leaves no trace reads as a dead button, and
     // the one thing this control has to say is "I heard you and I have gone and
     // looked". Long enough to be seen, short enough that a genuinely quick read
     // still feels quick.
@@ -1969,10 +1968,10 @@ export default function App() {
    * whether a 418px field fits: the cluster is the side that overflows first,
    * so a 44px square is worth more given away than kept.
    *
-   * Disabled while a read is in flight, with the app's own `.spinner` in place
-   * of the icon inside a square that doesn't move — so nothing in the header
-   * shifts, which matters more here than it did on the right-hand end, the
-   * title and two buttons now sitting to its left.
+   * Disabled while a read is in flight, with the app's own spinning baseball
+   * in place of the icon inside a square that doesn't move — so nothing in the
+   * header shifts, which matters more here than it did on the right-hand end,
+   * the title and two buttons now sitting to its left.
    */
   const refreshButton = (
     <button
@@ -1985,7 +1984,7 @@ export default function App() {
       title={refreshing ? 'Refreshing…' : 'Refresh what is on screen'}
     >
       {refreshing ? (
-        <span className="spinner" aria-hidden="true" />
+        <SpinningBaseball />
       ) : (
         <svg
           viewBox="0 0 24 24"
@@ -1999,8 +1998,8 @@ export default function App() {
           aria-hidden="true"
         >
           {/* Three quarters of a circle with an arrowhead on the open end —
-              the same gesture at 17px as the 13px spinner that replaces it,
-              so the swap reads as the icon starting to turn. */}
+              the same gesture at 17px as the 14px baseball that replaces it,
+              so the swap reads as the icon becoming the thing it was drawing. */}
           <path d="M20 12a8 8 0 1 1-2.34-5.66" />
           <path d="M20 4v4.5h-4.5" />
         </svg>
@@ -2696,10 +2695,10 @@ export default function App() {
                   title="Read your league from ESPN again — for a lineup or roster move you have just made there"
                 >
                   {/* The header refresh's arrow at the menu's 15px, swapped for
-                      the app's own spinner in flight — the same pair, so the
-                      two controls that re-read ESPN read as one idea. */}
+                      the app's own spinning baseball in flight — the same pair,
+                      so the two controls that re-read ESPN read as one idea. */}
                   {fantasyRefreshing ? (
-                    <span className="spinner" aria-hidden="true" />
+                    <SpinningBaseball />
                   ) : (
                     <svg
                       viewBox="0 0 24 24"
@@ -2716,8 +2715,11 @@ export default function App() {
                       <path d="M20 4.2V9h-4.8" />
                     </svg>
                   )}
+                  {/* No ellipsis: the ball beside the word is what says the
+                      read is still going, which is the rule everywhere the two
+                      appear together. */}
                   {fantasyRefreshing
-                    ? 'Reading…'
+                    ? 'Reading'
                     : fantasyRefreshed
                       ? 'Up to date ✓'
                       : 'Refresh from ESPN'}
@@ -2970,15 +2972,16 @@ export default function App() {
           </div>
         )}
 
+      {/* The two halves of the same read, and which one shows turns on whether
+          there is anything on screen to protect. With nothing yet, the wait
+          takes the page and names what it is reading; with cards already up it
+          is a badge beside them and the cards stay exactly as they are. */}
       {showLoading && reports.length === 0 && view !== 'research' && (
-        <div className="loading">Loading events…</div>
+        <LoadingBlock>Reading your roster&rsquo;s games</LoadingBlock>
       )}
 
       {showLoading && reports.length > 0 && view !== 'research' && (
-        <div className="refreshing" role="status">
-          <span className="spinner" aria-hidden="true" />
-          Updating…
-        </div>
+        <LoadingLine className="refreshing">Updating</LoadingLine>
       )}
 
       {/* Everyone the active view would show is on the IL and the toggle is

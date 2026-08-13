@@ -1,6 +1,7 @@
 import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { BaseballMark } from './BaseballMark';
+import { LoadingBlock, LoadingLine } from './Loading';
 import { ExpandButton } from './ExpandButton';
 import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
 import { createPortal } from 'react-dom';
@@ -2227,9 +2228,11 @@ export function ResearchTable({
           </div>
         </div>
       ) : (
-        <div className="empty-state">
-          <p className="empty-title">Reading your league…</p>
-        </div>
+        /* Not an `.empty-state`, which is the app's box for a finding: "there
+           is nobody here" is precisely what this must not say while the league
+           read is still out. A block wait says the opposite, in the same slot
+           the finding would have taken. */
+        <LoadingBlock>Reading your ESPN league</LoadingBlock>
       );
     }
     if (!espnConnected && include.others) {
@@ -2768,11 +2771,19 @@ export function ResearchTable({
       {/* Directly above the table, reading as its caption — how many rows the
           filters left, out of the board they were applied to. No season: the
           app shows one season and says so nowhere else on the page either. */}
+      {/* The wait and the answer arrive in the same place, which is why this is
+          a `LoadingLine` rather than a block: the caption is the one line on
+          the page that is about to hold the count, so the ball turning in it
+          says the count is on its way. App keeps the rows it already has while
+          a re-read is in flight (`loading` is gated on the cache being empty),
+          so this can only ever be a board with nothing on it yet. */}
       {(loading || boardRows.length > 0) && (
         <div className="research-count" role="status">
-          {loading
-            ? 'Loading league leaderboard…'
-            : `${visible.length} of ${boardRows.length} ${kind === 'pitcher' ? 'pitchers' : 'batters'}`}
+          {loading ? (
+            <LoadingLine>Reading the league leaderboard</LoadingLine>
+          ) : (
+            `${visible.length} of ${boardRows.length} ${kind === 'pitcher' ? 'pitchers' : 'batters'}`
+          )}
         </div>
       )}
 
