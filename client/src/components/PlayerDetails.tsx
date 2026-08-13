@@ -20,7 +20,9 @@ import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
 import { BaseballMark } from './BaseballMark';
 import { RollingXwoba } from './RollingXwoba';
 import { GameLog } from './GameLog';
+import { LoadingBlock } from './Loading';
 import {
+  useDelayedFlag,
   overlayAbove,
   useLockBodyScroll,
   useOverlayChromeOffset,
@@ -727,6 +729,24 @@ export function PlayerDetails({
   // different requests, and the batter's must not stand in for the pitcher's.
   const gameLogReq = useRef<string | null>(null);
 
+  /**
+   * Each tab's read, held back by `WAIT_DELAY` before it is allowed to say so.
+   *
+   * Five tabs, five fetches, and the same rule for all of them: a percentile
+   * card the server already has comes back in a few tens of milliseconds, and
+   * a wait that appears and vanishes inside a tenth of a second reads as the
+   * page breaking rather than as an answer. Held here rather than inside
+   * `LoadingBlock` because the *content* must go on being gated on the real
+   * flag — a tab that showed nothing while its read was still in flight would
+   * be a blank pane instead of a wait.
+   */
+  const pctWait = useDelayedFlag(loading);
+  const splitsWait = useDelayedFlag(splitsLoading);
+  const xwobaWait = useDelayedFlag(xwobaLoading);
+  const gameLogWait = useDelayedFlag(gameLogLoading);
+  const arsenalWait = useDelayedFlag(arsenalLoading);
+  const dayWait = useDelayedFlag(dayLoading);
+
   // The percentile-point distance below which two paired bubbles would overlap,
   // measured from the live track width (~a bubble diameter's worth of the rail)
   // so the stagger threshold stays correct across desktop and mobile widths.
@@ -1174,15 +1194,13 @@ export function PlayerDetails({
         </div>
       </div>
 
-      {tab === 'overview' && dayLoading && <div className="details-status">Loading today…</div>}
+      {tab === 'overview' && dayWait && <LoadingBlock>Reading today&rsquo;s game</LoadingBlock>}
       {tab === 'overview' && dayError && !dayLoading && (
-        <div className="details-status details-error">Couldn’t load today: {dayError}</div>
+        <div className="details-status details-error">Couldn&rsquo;t load today: {dayError}</div>
       )}
       {tab === 'overview' && day && !dayLoading && <OverviewTab report={day} />}
 
-      {tab === 'arsenal' && arsenalLoading && (
-        <div className="details-status">Loading season arsenal…</div>
-      )}
+      {tab === 'arsenal' && arsenalWait && <LoadingBlock>Reading the season arsenal</LoadingBlock>}
       {tab === 'arsenal' && arsenalError && !arsenalLoading && (
         <div className="details-status details-error">⚠ {arsenalError}</div>
       )}
@@ -1190,9 +1208,7 @@ export function PlayerDetails({
         <ArsenalTab arsenal={arsenal} split={arsenalSplit} onSplit={setArsenalSplit} />
       )}
 
-      {tab === 'gamelog' && gameLogLoading && (
-        <div className="details-status">Loading game log…</div>
-      )}
+      {tab === 'gamelog' && gameLogWait && <LoadingBlock>Reading the game log</LoadingBlock>}
       {tab === 'gamelog' && gameLogError && !gameLogLoading && (
         <div className="details-status details-error">
           Couldn’t load the game log: {gameLogError}
@@ -1219,9 +1235,7 @@ export function PlayerDetails({
         />
       )}
 
-      {tab === 'rolling' && xwobaLoading && (
-        <div className="details-status">Loading season xwOBA…</div>
-      )}
+      {tab === 'rolling' && xwobaWait && <LoadingBlock>Reading the season&rsquo;s plate appearances</LoadingBlock>}
       {tab === 'rolling' && xwobaError && !xwobaLoading && (
         <div className="details-status details-error">
           Couldn’t load xwOBA: {xwobaError}
@@ -1231,9 +1245,7 @@ export function PlayerDetails({
         <RollingXwoba series={xwoba} name={name} />
       )}
 
-      {tab === 'splits' && splitsLoading && (
-        <div className="details-status">Loading season stats…</div>
-      )}
+      {tab === 'splits' && splitsWait && <LoadingBlock>Reading the season line</LoadingBlock>}
       {tab === 'splits' && splitsError && !splitsLoading && (
         <div className="details-status details-error">
           Couldn’t load season stats: {splitsError}
@@ -1250,9 +1262,7 @@ export function PlayerDetails({
         <SeasonPanel season={splits.season} vsLeft={splits.vsLeft} vsRight={splits.vsRight} />
       )}
 
-      {tab === 'percentiles' && loading && (
-        <div className="details-status">Loading percentile rankings…</div>
-      )}
+      {tab === 'percentiles' && pctWait && <LoadingBlock>Reading the percentile card</LoadingBlock>}
       {tab === 'percentiles' && error && !loading && (
         <div className="details-status details-error">
           Couldn’t load percentile rankings: {error}

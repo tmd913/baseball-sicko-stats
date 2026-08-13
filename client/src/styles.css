@@ -601,6 +601,14 @@ body {
   cursor: pointer;
   font-size: 15px;
 }
+/* The wait sits in the clear button's slot — the two can never both be on
+   screen, the field being disabled until the roster lands. */
+.adder-busy {
+  position: absolute;
+  right: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+}
 .adder-menu {
   list-style: none;
   margin: 6px 0 0;
@@ -716,17 +724,156 @@ body {
   margin: 0 0 8px;
   font-weight: 700;
 }
-.loading {
-  color: var(--muted);
-  padding: 20px;
-  text-align: center;
+/* ---- Loading: the spinning baseball ------------------------------------ */
+
+/* The app has one loading indicator and this is it. It replaces a 13px CSS
+   ring (`.spinner`), an "Updating…" badge that owned its own layout, a bare
+   `.loading` line, and five `.details-status` lines that each said "Loading…"
+   about a different thing — see `components/Loading.tsx` for the rules the
+   system keeps and why the glyph is built the way it is.
+
+   Three sizes, one per situation: inline inside a pressed control or beside
+   data that is still on screen (`sm`), a pane with nothing in it yet (`md`),
+   and the boot splash, which owns the window (`lg`). The box is set here
+   rather than by a `width`/`height` attribute so a slot that has its own idea
+   of the size — the fantasy popover's 15px glyph column — can say so in one
+   place, the way it already did for the ring this replaces. */
+.ball-spin {
+  display: block;
+  flex: none;
+  color: var(--accent);
+}
+.ball-spin-sm {
+  width: 14px;
+  height: 14px;
+}
+.ball-spin-md {
+  width: 28px;
+  height: 28px;
+}
+.ball-spin-lg {
+  width: 44px;
+  height: 44px;
+}
+/* The silhouette is quieter than the seams: at full accent the rim is the
+   loudest thing in the mark and the seams — the only part that moves — read as
+   detail inside it, which is backwards for something whose whole job is to
+   look like it is turning. */
+.ball-rim {
+  stroke-opacity: 0.5;
 }
 
-/* Inline "Updating…" badge shown when refreshing over already-visible data. */
-.refreshing {
+/* One seam's turn. `translateX` is `9·sin θ` and `scaleX` is `cos θ`, sampled
+   every eighth of a revolution and interpolated linearly between — which is
+   the projection a point on a sphere actually has, and is why the seams bunch
+   and thin at the limbs rather than at the centre. Opacity carries a seam
+   round the back: it fades out over the last eighth before the limb, where the
+   seam is already a hairline, so nothing pops.
+
+   `transform-box: view-box` is what makes `9px` mean nine *viewBox units* and
+   `transform-origin: 12px 12px` the ball's own centre, so one keyframe set is
+   correct at 14px and at 44px alike. The stroke is deliberately left to scale
+   with the transform: a seam near the limb thinning as it foreshortens is the
+   same fact stated twice, and `non-scaling-stroke` would have pinned the ink
+   to device pixels and made the small ball heavy and the large one spindly. */
+.ball-seam {
+  transform-box: view-box;
+  transform-origin: 12px 12px;
+  animation: ball-seam 1.5s linear infinite;
+}
+.ball-seam-2 {
+  animation-delay: -0.375s;
+}
+.ball-seam-3 {
+  animation-delay: -0.75s;
+}
+.ball-seam-4 {
+  animation-delay: -1.125s;
+}
+@keyframes ball-seam {
+  0% {
+    transform: translateX(0px) scaleX(1);
+    opacity: 1;
+  }
+  12.5% {
+    transform: translateX(6.36px) scaleX(0.707);
+    opacity: 1;
+  }
+  25% {
+    transform: translateX(9px) scaleX(0);
+    opacity: 0;
+  }
+  37.5% {
+    transform: translateX(6.36px) scaleX(-0.707);
+    opacity: 0;
+  }
+  50% {
+    transform: translateX(0px) scaleX(-1);
+    opacity: 0;
+  }
+  62.5% {
+    transform: translateX(-6.36px) scaleX(-0.707);
+    opacity: 0;
+  }
+  75% {
+    transform: translateX(-9px) scaleX(0);
+    opacity: 0;
+  }
+  87.5% {
+    transform: translateX(-6.36px) scaleX(0.707);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(0px) scaleX(1);
+    opacity: 1;
+  }
+}
+
+/* Reduced motion: hold the ball at the pose the turn passes through four times
+   a revolution — which is `BaseballMark` exactly — and pulse the whole thing
+   instead. A still ball is a logo and says nothing about whether anything is
+   still happening; a fade is not the kind of motion this preference is asking
+   to be spared. The two hidden seams are given the pose of the two visible
+   ones so nothing has to be rewritten per seam. */
+@media (prefers-reduced-motion: reduce) {
+  .ball-seam {
+    animation: none;
+  }
+  .ball-seam-1,
+  .ball-seam-3 {
+    transform: translateX(6.36px) scaleX(0.707);
+  }
+  .ball-seam-2,
+  .ball-seam-4 {
+    transform: translateX(-6.36px) scaleX(0.707);
+  }
+  .ball-seam-3,
+  .ball-seam-4 {
+    opacity: 0;
+  }
+  .ball-spin {
+    animation: ball-pulse 1.8s ease-in-out infinite;
+  }
+}
+@keyframes ball-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* A wait that sits beside what it is about rather than in place of it. Bare by
+   default — the research board's count line is a caption and wants no chrome —
+   with `.refreshing` adding the pill the "Updating" badge has always worn. */
+.loading-line {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+.refreshing {
   margin-bottom: 14px;
   padding: 6px 12px;
   border: 1px solid var(--border);
@@ -736,30 +883,27 @@ body {
   font-size: 13px;
   font-weight: 600;
 }
-.spinner {
-  width: 13px;
-  height: 13px;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .spinner {
-    animation: none;
-  }
-}
 
-/* Dim and freeze the list while a refresh replaces its contents. */
-.content-layout.is-loading .player-list {
-  opacity: 0.5;
-  pointer-events: none;
-  transition: opacity 0.15s ease;
+/* A pane with nothing in it yet: the ball centred over a line naming what is
+   being read. `.details-status` is folded onto it rather than restyled to
+   resemble it — the player page's five lazily-fetched tabs are the same wait
+   as the report's and the board's, and two rules would be two things to keep
+   true. The reading width and the generous margin are that class's own and
+   are what the block takes everywhere. */
+.loading-block,
+.details-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  max-width: 680px;
+  margin: 40px auto;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+.loading-what {
+  margin: 0;
 }
 
 /* ---- Content layout (the player list / edit screen) ---- */
@@ -3240,13 +3384,9 @@ body {
 .details-savant-link:hover {
   color: var(--accent);
 }
-.details-status {
-  max-width: 680px;
-  margin: 40px auto;
-  text-align: center;
-  color: var(--muted);
-  font-size: 14px;
-}
+/* `.details-status` is styled up beside `.loading-block`, whose selector list
+   it is folded into — it is the same wait, and the tab that failed is the same
+   box saying so instead. What is left here is only what a *failed* tab adds. */
 .details-error {
   color: var(--strikeout);
 }
@@ -4146,21 +4286,26 @@ body {
   color: var(--bg);
   border-color: var(--accent);
 }
-/* Refreshing: the button holds its place and its size — the 13px `.spinner`
-   swaps in for the 17px icon inside a square that doesn't move, so nothing in
+/* Refreshing: the button holds its place and its size — the spinning baseball
+   swaps in for the 17px arrow inside a square that doesn't move, so nothing in
    the header shifts while a read is in flight. Disabled rather than merely
    ignored, so a second press is refused by the browser and says so; the muted
-   fill is the only thing that changes, since a spinner turning is already the
+   fill is the only thing that changes, since a ball turning is already the
    loudest thing on the row. */
 .refresh-btn:disabled {
   cursor: default;
   border-color: var(--border);
   color: var(--faint);
 }
-.refresh-btn .spinner {
-  /* Its own 13px is right beside a 17px icon: the disc reads as the same
-     weight as the arrow it replaces rather than as a smaller thing. */
-  flex: none;
+/* 16px rather than the inline 14: the arrow it replaces is a three-quarter
+   circle of radius 8 in a 17px box, and the ball's rim is radius 9 in its own
+   — so 16 is where the two silhouettes are the same size on the row, and the
+   swap reads as the arrow closing into the ball it was drawing rather than as
+   a smaller thing arriving. The slot states it, not the glyph, which is what
+   lets the same component be 14px in a line of text an inch away. */
+.refresh-btn .ball-spin {
+  width: 16px;
+  height: 16px;
 }
 .edit-order-icon {
   display: inline-flex;
@@ -5202,11 +5347,11 @@ body {
    it rather than a control of its own — the two are the same kind of row and
    folding the class on keeps them identical by construction.
 
-   The one thing it adds is a glyph slot that doesn't move: the app's `.spinner`
-   is 13px and the arrow it replaces is 15, so without this the label steps 2px
-   left the moment the read starts and back when it lands — the same reason the
-   header's refresh swaps its icon inside a square that holds its size. */
-.fantasy-refresh > .spinner,
+   The one thing it adds is a glyph slot that doesn't move: the baseball is
+   14px inline and the arrow it replaces is 15, so without this the label steps
+   1px left the moment the read starts and back when it lands — the same reason
+   the header's refresh swaps its icon inside a square that holds its size.
+   Naming `svg` covers both, the ball being one. */
 .fantasy-refresh > svg {
   flex: none;
   width: 15px;
@@ -7235,6 +7380,13 @@ body {
   margin: 0;
   font-size: 22px;
   letter-spacing: -0.01em;
+}
+/* The boot splash: the same card with the ball centred in it. `align-self` on
+   the ball rather than `align-items` on the card, since the card is a stretch
+   column and every other thing in it — the fields, the buttons — wants that. */
+.auth-splash .ball-spin {
+  align-self: center;
+  margin: 6px 0 2px;
 }
 .auth-sub {
   margin: 0 0 4px;

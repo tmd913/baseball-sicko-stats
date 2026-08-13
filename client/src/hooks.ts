@@ -400,3 +400,44 @@ export function overlayAbove(box: HTMLElement | null) {
     (el) => !el.contains(box) && layerOf(el) > mine,
   );
 }
+
+/**
+ * How long a read has to be in flight before the app admits to it.
+ *
+ * A warm server answers `/api/report` in about 16ms and a cached details tab in
+ * not much more, which is one frame of a spinner — a wait that appears and
+ * vanishes inside a tenth of a second reads as a flicker rather than as an
+ * answer, and on a pane that then fills with rows it reads as the page
+ * breaking. The report has held this floor since it was written; every block
+ * wait in the app now takes it, so "nothing to show yet" and "nothing to show
+ * yet *and it is taking a moment*" are two different states everywhere.
+ *
+ * It is the opposite end of the same argument as `MIN_SPIN`, and the two are
+ * deliberately different numbers because they answer different questions.
+ * `MIN_SPIN` is a *floor on how long a mark stays up* once a press has put it
+ * there — a press that leaves no trace reads as a dead button, so a trace is
+ * owed however fast the answer comes. This is a *delay before a mark goes up at
+ * all*, for the waits nobody pressed a button to start.
+ */
+export const WAIT_DELAY = 250;
+
+/**
+ * `on`, but only once it has been true for `delay` — the guard that keeps a
+ * fast answer from flashing a wait.
+ *
+ * Returns to false immediately when `on` does: the delay is on the way up
+ * alone, since a wait that outstayed the thing it was waiting for would be the
+ * flicker again with worse timing.
+ */
+export function useDelayedFlag(on: boolean, delay = WAIT_DELAY) {
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    if (!on) {
+      setShown(false);
+      return;
+    }
+    const t = setTimeout(() => setShown(true), delay);
+    return () => clearTimeout(t);
+  }, [on, delay]);
+  return shown;
+}

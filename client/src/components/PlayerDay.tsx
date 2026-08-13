@@ -14,6 +14,8 @@ import {
   playerDayEntries,
 } from './LiveFeed';
 import type { FeedEntry } from './LiveFeed';
+import { useDelayedFlag } from '../hooks';
+import { LoadingBlock } from './Loading';
 import { Modal } from './Modal';
 
 /**
@@ -294,6 +296,8 @@ export function PlayerDayModal({
   const [report, setReport] = useState<PlayerReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // Behind WAIT_DELAY like every other block wait — see `Loading.tsx`.
+  const wait = useDelayedFlag(loading);
   useEffect(() => {
     let live = true;
     setLoading(true);
@@ -320,7 +324,7 @@ export function PlayerDayModal({
       className="player-day-box"
       onClose={onClose}
     >
-      {loading && <div className="details-status">Loading the game…</div>}
+      {wait && <LoadingBlock>Reading the game</LoadingBlock>}
       {error && !loading && <div className="details-status details-error">⚠ {error}</div>}
       {report && !loading && <PlayerDay report={report} gamePk={gamePk} />}
     </Modal>
