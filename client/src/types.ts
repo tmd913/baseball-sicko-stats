@@ -1017,4 +1017,18 @@ export interface EspnRosterPlayer {
 export interface EspnRoster {
   teamName: string | null;
   players: EspnRosterPlayer[];
+  /**
+   * Your lineup for **each** day of the range in view, as MLB player ids, keyed
+   * by date — present only when the request named a `start`, absent (or null)
+   * when the read failed.
+   *
+   * `players[].starting` above is one day's answer, the day the roster was read
+   * for; this is every day's, each off that day's own ESPN scoring period. It
+   * is what lets the summary table aggregate a week against the lineup that was
+   * actually set for each of its days rather than applying today's to all
+   * seven. A **missing date** is "we couldn't read that day", not "nobody
+   * started" — the client falls back to `starting` there, which is what the app
+   * did before this existed.
+   */
+  lineups?: Record<string, number[]> | null;
 }

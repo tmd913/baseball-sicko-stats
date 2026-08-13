@@ -46,9 +46,11 @@ import {
   EspnAuthError,
   getLeagueInfo,
   getOwnership,
+  getTeamLineups,
   normalizeS2,
   normalizeSwid,
   rosterToWatchlist,
+  startedIds,
 } from './espn.js';
 import type { EspnRosterPlayer } from './espn.js';
 import type { WatchPlayer } from './types.js';
@@ -499,7 +501,13 @@ async function fantasyWatchlist(
   user: string,
   refresh = false,
   date?: string | null,
-): Promise<{ players: WatchPlayer[]; teamName: string | null; roster: EspnRosterPlayer[] }> {
+  range?: { start: string; end: string } | null,
+): Promise<{
+  players: WatchPlayer[];
+  teamName: string | null;
+  roster: EspnRosterPlayer[];
+  lineups: Record<string, number[]> | null;
+}> {
   const espn = await getEspnLeague(user);
   if (!espn) throw new EspnAuthError('No ESPN league connected');
   if (espn.teamId == null) {
@@ -512,7 +520,39 @@ async function fantasyWatchlist(
   const own = await getOwnership(creds, refresh, date);
   const roster = own.rosters[espn.teamId] ?? [];
   const team = own.teams.find((t) => t.id === espn.teamId);
-  return { players: rosterToWatchlist(roster), teamName: team?.name ?? espn.teamName ?? null, roster };
+  // Which players the views report on is the roster above — your team as it
+  // stands. Which of a player's *days* count is a different question, and this
+  // is it: one lineup per date, each read at that date's own scoring period.
+  // See `espn.ts`'s **The lineup, one day at a time** for why the two rules
+  // point in opposite directions and why that is right.
+  //
+  // The seed is the day `getOwnership` has just answered for — today, or the
+  // future day a `Tomorrow` view asked for — so the map and the slot chips
+  // beside it come from one read and cannot disagree about that day.
+  let lineups: Record<string, number[]> | null = null;
+  if (range) {
+    const seedDate = date && date > baseballToday() ? date : baseballToday();
+    lineups = await getTeamLineups(
+      creds,
+      espn.teamId,
+      range.start,
+      range.end,
+      { date: seedDate, started: startedIds(roster) },
+      refresh,
+    ).catch((err: Error) => {
+      // One lineup per day is a refinement of the slot chips, not a
+      // prerequisite for them: without it the client falls back to the single
+      // lineup it already has, which is exactly what the app did before.
+      console.error('ESPN per-day lineups unavailable:', err.message);
+      return null;
+    });
+  }
+  return {
+    players: rosterToWatchlist(roster),
+    teamName: team?.name ?? espn.teamName ?? null,
+    roster,
+    lineups,
+  };
 }
 
 app.get(
@@ -527,25 +567,41 @@ app.get(
 // when it is reading the fantasy team rather than the saved watchlist.
 // `?refresh=1` skips the ten-minute cache, for the lineup change just made.
 //
-// `?date=` is the day to read the lineup for — the end of the range on screen.
-// Validated for shape and otherwise left to `getOwnership`, which clamps
-// anything at or before today back onto ESPN's current period, so a nonsense
-// date can only ever cost the caller today's answer rather than someone else's
-// team from June.
+// `?end=` (`?date=` is the older tab's name for it) is the day to read the
+// *roster* for — the end of the range on screen. Validated for shape and
+// otherwise left to `getOwnership`, which clamps anything at or before today
+// back onto ESPN's current period, so a nonsense date can only ever cost the
+// caller today's answer rather than someone else's team from June.
+//
+// `?start=` opts the response into `lineups`: which of your players were in
+// your lineup on **each** day of `start`…`end`, so the summary table can
+// aggregate a range against the lineup that was actually set for each of its
+// days rather than applying one day's to all of them. Omitted (an older tab, or
+// a caller that only wants the chips) the field is simply absent and nothing
+// downstream changes. The span is capped like the report's, since it is the
+// same span and the fan-out is one ESPN read per day of it.
 app.get(
   '/api/espn/roster',
   requireUser,
   asyncRoute(async (req, res) => {
-    const date = typeof req.query.date === 'string' && DATE_RE.test(req.query.date)
-      ? req.query.date
-      : null;
+    const q = (k: string) =>
+      typeof req.query[k] === 'string' && DATE_RE.test(req.query[k] as string)
+        ? (req.query[k] as string)
+        : null;
+    const end = q('end') ?? q('date');
+    const start = q('start');
+    const range =
+      start && end && start <= end && dayCount(start, end) <= MAX_RANGE_DAYS
+        ? { start, end }
+        : null;
     try {
-      const { roster, teamName } = await fantasyWatchlist(
+      const { roster, teamName, lineups } = await fantasyWatchlist(
         userId(req),
         req.query.refresh === '1',
-        date,
+        end,
+        range,
       );
-      res.json({ teamName, players: roster });
+      res.json({ teamName, players: roster, lineups });
     } catch (err) {
       if (!espnError(err, res)) throw err;
     }
