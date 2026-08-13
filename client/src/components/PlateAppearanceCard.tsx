@@ -8,6 +8,64 @@ import { ClipVideo } from './ClipVideo';
 import { PitchTable } from './PitchSequence';
 import { StrikeZone } from './StrikeZone';
 
+/**
+ * Every clip the tab has already looked up: `playId:gamePk` → its URL, or null
+ * where there is no clip. It is a **layout** cache as much as a network one.
+ *
+ * A clip's URL is resolved lazily, one request per play, and `InlineVideoClip`
+ * renders nothing until its own answers — so the height of the feed is a
+ * function of how many of its lookups have come back. Without this, every
+ * remount (which is every tab switch) started that all over again: the feed
+ * came back 1,890px shorter than it was left and grew as the answers landed,
+ * which is exactly the growth App's scroll memory used to have to chase. With
+ * it, a returning feed renders its clips in the very first commit and is the
+ * page the reader left, at the height they left it — measured on a real
+ * roster by sampling every frame across the swap, one height (4,529px) from
+ * the first frame on, where before it was 2,639 growing into 4,529 as five
+ * 360px clip frames landed.
+ *
+ * The misses are cached too, and for the same reason as the hits: they are the
+ * plays whose lookup would otherwise be re-issued on every switch, and a miss
+ * renders nothing whether it is remembered or asked for again. What that costs
+ * is a clip that lands *during* the session (today's miss is tomorrow's clip,
+ * and the server only holds a miss for ten minutes), so `clearClipCache` drops
+ * the lot and the header's Refresh calls it — "read every source this page is
+ * drawn from again" is exactly what that button means.
+ */
+const clipUrls = new Map<string, string | null>();
+/** Lookups still in flight, so two cards for one play ask once. */
+const clipLookups = new Map<string, Promise<string | null>>();
+
+const clipKey = (playId: string, gamePk: number) => `${playId}:${gamePk}`;
+
+function lookupClip(playId: string, gamePk: number): Promise<string | null> {
+  const key = clipKey(playId, gamePk);
+  const known = clipUrls.get(key);
+  if (known !== undefined) return Promise.resolve(known);
+  let pending = clipLookups.get(key);
+  if (!pending) {
+    pending = api
+      .video(playId, gamePk)
+      .then(
+        (url) => url,
+        () => null,
+      )
+      .then((url) => {
+        clipUrls.set(key, url);
+        clipLookups.delete(key);
+        return url;
+      });
+    clipLookups.set(key, pending);
+  }
+  return pending;
+}
+
+/** Forget every resolved clip, so the next render asks again. */
+export function clearClipCache() {
+  clipUrls.clear();
+  clipLookups.clear();
+}
+
 export function VideoClip({ playId, gamePk }: { playId: string; gamePk: number }) {
   const [state, setState] = useState<'checking' | 'available' | 'unavailable' | 'watching'>(
     'checking',
@@ -28,16 +86,11 @@ export function VideoClip({ playId, gamePk }: { playId: string; gamePk: number }
   useEffect(() => {
     let cancelled = false;
     setState('checking');
-    api
-      .video(playId, gamePk)
-      .then((resolved) => {
-        if (cancelled) return;
-        setUrl(resolved);
-        setState('available');
-      })
-      .catch(() => {
-        if (!cancelled) setState('unavailable');
-      });
+    lookupClip(playId, gamePk).then((resolved) => {
+      if (cancelled) return;
+      setUrl(resolved);
+      setState(resolved ? 'available' : 'unavailable');
+    });
     return () => {
       cancelled = true;
     };
@@ -76,22 +129,23 @@ export function VideoClip({ playId, gamePk }: { playId: string; gamePk: number }
  * clip; a placeholder holds the (16:9) frame until the video is near.
  */
 export function InlineVideoClip({ playId, gamePk }: { playId: string; gamePk: number }) {
-  const [url, setUrl] = useState<string | null>(null);
+  // Seeded from the cache rather than fetched into: a clip this tab has
+  // already looked up is part of the *first* commit, so a remounted feed has
+  // the height it had when it was left instead of growing into it.
+  const [url, setUrl] = useState<string | null>(() => clipUrls.get(clipKey(playId, gamePk)) ?? null);
   const [near, setNear] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
-    setUrl(null);
+    const known = clipUrls.get(clipKey(playId, gamePk));
+    setUrl(known ?? null);
     setNear(false);
-    api
-      .video(playId, gamePk)
-      .then((resolved) => {
-        if (!cancelled) setUrl(resolved);
-      })
-      .catch(() => {
-        // No clip for this play — stay unrendered.
-      });
+    // Already answered — and already rendered, this render.
+    if (known !== undefined) return;
+    lookupClip(playId, gamePk).then((resolved) => {
+      if (!cancelled) setUrl(resolved);
+    });
     return () => {
       cancelled = true;
     };

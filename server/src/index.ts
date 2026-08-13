@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { requireUser, userId } from './auth.js';
 import { addDays, baseballToday } from './etDate.js';
-import { getPlayerStatuses, getReport, withEstimators } from './savant.js';
+import { getPlayerDay, getPlayerStatuses, getReport, withEstimators } from './savant.js';
 import { getPercentiles } from './percentiles.js';
 import { getXwobaSeries } from './xwoba.js';
 import { getBatterGameLog, getPitcherGameLog } from './gameLog.js';
@@ -937,6 +937,38 @@ app.get(
       vsRight: stats?.vsRight ?? null,
       kind: 'batter',
     });
+  }),
+);
+
+// One player's day, for the player page's Overview tab and the Game Log's
+// per-game popup — the same `PlayerReport` shape `/api/report` returns, for one
+// player over one date. Both callers open on players nobody has rostered, which
+// is why this exists beside the roster-shaped report rather than inside it; see
+// `getPlayerDay`, which reuses that very function so the Overview and the feed
+// can never disagree about what happened.
+//
+// `date` defaults to the **server's** baseball today rather than the client's,
+// which is the right way round: the client mirrors the 3am ET rule for its date
+// presets, and a tab left open past the rollover would otherwise ask for
+// yesterday. The Game Log passes a date explicitly, that being the whole point
+// of the row it was opened from.
+app.get(
+  '/api/players/:playerId/day',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const playerId = Number(req.params.playerId);
+    if (!Number.isInteger(playerId) || playerId <= 0) {
+      res.status(400).json({ error: 'invalid playerId' });
+      return;
+    }
+    const kind = req.query.type === 'pitcher' ? 'pitcher' : 'batter';
+    const asked = req.query.date;
+    // Shape-checked and otherwise trusted, the way `/api/espn/roster` treats
+    // its own `date`: a day nothing was played on is an empty report, not an
+    // error, and `getDay` answers for any date the schedule has.
+    const date =
+      typeof asked === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(asked) ? asked : baseballToday();
+    res.json({ date, kind, player: await getPlayerDay(playerId, kind, date) });
   }),
 );
 

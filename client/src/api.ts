@@ -350,6 +350,25 @@ export const api = {
   }> {
     return request(`/api/players/${playerId}/splits?type=pitcher`);
   },
+  /**
+   * One player's day — the same `PlayerReport` the report route returns, for
+   * one man over one date. It backs the player page's **Overview** tab and the
+   * popup a Game Log row opens, both of which draw the feed's own item
+   * components and so need the feed's own report rather than a lighter shape.
+   *
+   * `date` omitted means the **server's** baseball today: the client mirrors
+   * the 3am ET rule for its date presets, but a tab left open past the rollover
+   * would ask for yesterday, and one definition of "now" beats two that agree
+   * most of the time.
+   */
+  async playerDay(
+    playerId: number,
+    kind: PlayerKind,
+    date?: string,
+  ): Promise<{ date: string; player: PlayerReport }> {
+    const q = `?type=${kind}${date ? `&date=${date}` : ''}`;
+    return request(`/api/players/${playerId}/day${q}`);
+  },
   // Every game of the player's season, newest first — the Game Log tab.
   async gameLog(playerId: number): Promise<{ kind: 'batter'; games: BatterGameLog[] }> {
     return request(`/api/players/${playerId}/gamelog`);
