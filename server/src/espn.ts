@@ -712,25 +712,25 @@ async function leagueGet(
 //    surface a watched player's scheduled games before they are played, and the
 //    lineup he is scheduled to play *in* is the same kind of fact. So the slot
 //    chip on that preset is the lineup set for that day.
-//  - **The past is not.** ESPN answers a past period with the roster **as it
-//    was then**, players and all — checked, period 100 carries eight players
-//    since dropped and is missing eight since added — so reading it would have
-//    the roster views reporting on a team the manager no longer has. What he
-//    wants over "Last 15 days" is *his* team's last fifteen days. Anything at
-//    or before today therefore reads ESPN's current period, which is exactly
-//    what the app did before and is why the common case is untouched.
+//  - **And the past is read at its own period too**, which is a reversal. ESPN
+//    answers a past period with the roster **as it was then**, players and all
+//    — re-checked over the seven days ending 2026-08-13 (periods 136–142): 31
+//    players were on the team at some point in that week against the 28 on it
+//    today. That used to be the argument *against* reading a past period for
+//    the roster, on the reasoning that what a manager wants over "Last 15 days"
+//    is *his* team's last fifteen days. It is the same mistake the whole-range
+//    lineup made beside it: what he wants is what he actually **had**. See
+//    `getTeamRosters` below, and **A range is a range of rosters** in
+//    `docs/claude/espn.md`.
 //
-// The asymmetry costs nothing in the other direction: a future period returns
-// the **current** roster with the lineup as it stands (checked: periods 141
-// through 200 carry the same 28 players as today, and 200 is past the season's
-// last period without erroring), so naming one can't invent or lose a player.
+// A future period costs nothing either: it returns the **current** roster with
+// the lineup as it stands (checked: periods 141 through 200 carry the same 28
+// players as today, and 200 is past the season's last period without erroring),
+// so naming one can't invent or lose a player.
 //
-// **That rule is about the roster — which players the views report on — and it
-// stands.** It is not the rule for the *lineup*, which is a second question the
-// same payload answers and which `getTeamLineups` below reads one day at a
-// time, at each day's own period, past ones included. The thing that made a
-// past period wrong for the roster is exactly what makes it right for the
-// lineup: it is what you actually had set that afternoon.
+// One read per day now answers both questions the payload holds — which players
+// the views report on, and which of a player's days count — where the single
+// end-of-range read answered only the first and answered it about today.
 
 /**
  * ESPN's scoring periods are numbered **one per calendar day of the season**,
@@ -753,10 +753,11 @@ function dayOffsetFor(date: string | null | undefined): number {
 }
 
 function periodOffsetFor(date: string | null | undefined): number {
-  // Clamped at zero rather than allowed negative — see the note above on why
-  // the *roster* is deliberately not read at a past period. `getTeamLineups`
-  // reads the same offset unclamped, because the question it asks of a past day
-  // is the one a past period is the only possible answer to.
+  // Clamped at zero, which is what keeps the **league-wide** read — the
+  // ownership map every member of a league shares, and the one roster the slot
+  // chips are drawn from — on one entry rather than one per person's date
+  // range. `lineupPeriodFor` reads the same offset unclamped, because the
+  // per-team, per-day read below is precisely the one that wants a past period.
   return Math.max(0, dayOffsetFor(date));
 }
 
@@ -911,6 +912,55 @@ export interface EspnRosterPlayer {
   injuryStatus: string | null;
 }
 
+/** One `mRoster` entry, joined to MLB. Null for a row with no name at all.
+ *
+ *  Shared by the league-wide read below and the per-day `forTeamId` one further
+ *  down, because the two are the same payload asked for at two widths — one
+ *  parse rather than two that can come to disagree about a slot or a name. */
+function toRosterPlayer(
+  entry: {
+    lineupSlotId?: number;
+    playerPoolEntry?: {
+      player?: {
+        id?: number;
+        fullName?: string;
+        proTeamId?: number;
+        injured?: boolean;
+        injuryStatus?: string;
+      };
+    };
+  },
+  index: MlbIndex,
+): EspnRosterPlayer | null {
+  const player = entry.playerPoolEntry?.player;
+  if (!player?.fullName) return null;
+  const found = matchPlayer(index, player.fullName, player.proTeamId);
+  const slotId = entry.lineupSlotId ?? BENCH_SLOT;
+  return {
+    espnId: player.id ?? 0,
+    // MLB's spelling where the join succeeded: it is the one the rest of the
+    // app shows, and ESPN drops the accents MLB keeps.
+    name: found?.name ?? player.fullName,
+    mlbId: found?.id ?? null,
+    savantName: found ? toSavantName(found.name) : null,
+    kinds: found?.kinds ?? [],
+    slot: LINEUP_SLOTS[slotId] ?? String(slotId),
+    slotId,
+    starting: slotId !== BENCH_SLOT && slotId !== IL_SLOT,
+    injured: player.injured === true,
+    // 'ACTIVE' is the overwhelming majority and means nothing worth saying, so
+    // it is normalised to null here rather than filtered at every read site.
+    injuryStatus:
+      player.injuryStatus && player.injuryStatus !== 'ACTIVE' ? player.injuryStatus : null,
+  };
+}
+
+/** Lineup first, then the bench, then the IL — the order a manager reads their
+ *  own team in, and the order the watchlist inherits. */
+function sortRoster(roster: EspnRosterPlayer[]): EspnRosterPlayer[] {
+  return roster.sort((a, b) => Number(b.starting) - Number(a.starting) || a.slotId - b.slotId);
+}
+
 export interface EspnOwnership extends EspnLeagueInfo {
   /** MLB player id to the fantasy team id that holds him. */
   owned: Record<number, number>;
@@ -1027,40 +1077,16 @@ export async function getOwnership(
     for (const team of data.teams ?? []) {
       const roster: EspnRosterPlayer[] = [];
       for (const entry of team.roster?.entries ?? []) {
-        const player = entry.playerPoolEntry?.player;
-        if (!player?.fullName) continue;
+        const player = toRosterPlayer(entry, index);
+        if (!player) continue;
         rosterCount++;
-        const found = matchPlayer(index, player.fullName, player.proTeamId);
-        if (found) {
+        if (player.mlbId !== null) {
           matched++;
-          owned[found.id] = team.id;
+          owned[player.mlbId] = team.id;
         }
-        const slotId = entry.lineupSlotId ?? BENCH_SLOT;
-        roster.push({
-          espnId: player.id ?? 0,
-          // MLB's spelling where the join succeeded: it is the one the rest of
-          // the app shows, and ESPN drops the accents MLB keeps.
-          name: found?.name ?? player.fullName,
-          mlbId: found?.id ?? null,
-          savantName: found ? toSavantName(found.name) : null,
-          kinds: found?.kinds ?? [],
-          slot: LINEUP_SLOTS[slotId] ?? String(slotId),
-          slotId,
-          starting: slotId !== BENCH_SLOT && slotId !== IL_SLOT,
-          injured: player.injured === true,
-          // 'ACTIVE' is the overwhelming majority and means nothing worth
-          // saying, so it is normalised to null here rather than filtered at
-          // every read site.
-          injuryStatus:
-            player.injuryStatus && player.injuryStatus !== 'ACTIVE' ? player.injuryStatus : null,
-        });
+        roster.push(player);
       }
-      // Lineup first, then the bench, then the IL — the order a manager reads
-      // their own team in, and the order the watchlist inherits.
-      roster.sort(
-        (a, b) => Number(b.starting) - Number(a.starting) || a.slotId - b.slotId,
-      );
-      rosters[team.id] = roster;
+      rosters[team.id] = sortRoster(roster);
     }
     const result: EspnOwnership = {
       ...info,
@@ -1083,7 +1109,12 @@ export async function getOwnership(
   return job;
 }
 
-// ---- The lineup, one day at a time ---------------------------------------
+// ---- The roster and the lineup, one day at a time -------------------------
+//
+// **A range of days is a range of rosters as well as a range of lineups**, and
+// the two were found wrong in that order — see `getTeamRosters` at the end of
+// this section for the roster half, which is the later of the two and reverses
+// a rule stated above.
 //
 // **A range of days is a range of lineups.** The roster views summarise a date
 // range, and until now they applied *one* lineup — the one set for the end of
@@ -1168,31 +1199,36 @@ const LINEUP_CONCURRENCY = 6;
  * grows past a list of ids.
  */
 const lineupBlobKey = (leagueId: number, teamId: number, period: number) =>
-  `espn-lineup-${leagueId}-${teamId}-${period}-v1.json`;
+  `espn-lineup-${leagueId}-${teamId}-${period}-v2.json`;
 
-const lineupCache = new Map<string, { started: number[]; fetchedAt: number }>();
+const lineupCache = new Map<string, { roster: EspnRosterPlayer[]; fetchedAt: number }>();
 /** One cold container asking for the same day from three tabs should send one
  *  upstream read — the rule `inFlight` follows for the ownership blob. */
-const lineupInFlight = new Map<string, Promise<number[]>>();
+const lineupInFlight = new Map<string, Promise<EspnRosterPlayer[]>>();
 
 /**
- * The MLB ids in a team's lineup on one day — neither benched nor on the IL,
- * the same `starting` test `EspnRosterPlayer` carries, and joined to MLB ids by
- * the same name-plus-club index everything else in this file uses.
+ * A team's **whole roster** on one day, slot by slot — the same
+ * `EspnRosterPlayer` the league-wide read builds, off the same `toRosterPlayer`,
+ * so a day read here and the same day read there cannot disagree.
  *
- * **Read `forTeamId`, not the whole league.** The consumer is always one team's
- * lineup on one day, and ESPN honours the filter: measured, `view=mRoster` for
- * a single team is **197,944 bytes against the full league's 2,237,620** — 11.3×
- * smaller — and the 28 entries it returns are byte-identical to that team's
- * entries in the full read (checked name and `lineupSlotId` for all 28, 0
- * differences), `injuryStatus` included. That factor is the whole reason a
- * 62-day range is affordable: at the league-wide payload it would be 136MB.
+ * **It used to return the started ids alone** and now returns the roster they
+ * are a subset of, because a range turned out to be a range of *rosters* as
+ * well as a range of lineups — see **A range is a range of rosters** in
+ * `docs/claude/espn.md`. `startedIds` derives the old answer from the new one.
+ *
+ * **Read `forTeamId`, not the whole league.** The consumer is always one team on
+ * one day, and ESPN honours the filter: measured, `view=mRoster` for a single
+ * team is **197,554 bytes against the full league's 2,237,620** — 11.3× smaller
+ * — and the 28 entries it returns are byte-identical to that team's entries in
+ * the full read (checked name and `lineupSlotId` for all 28, 0 differences),
+ * `injuryStatus` included. That factor is the whole reason a 62-day range is
+ * affordable: at the league-wide payload it would be 136MB.
  */
-async function fetchTeamLineup(
+async function fetchTeamRoster(
   creds: EspnCreds,
   teamId: number,
   period: number,
-): Promise<number[]> {
+): Promise<EspnRosterPlayer[]> {
   const url =
     `${FANTASY_BASE}/${SEASON}/segments/0/leagues/${creds.leagueId}` +
     `?view=mRoster&forTeamId=${teamId}&scoringPeriodId=${period}`;
@@ -1208,50 +1244,49 @@ async function fetchTeamLineup(
   const data = Array.isArray(body) ? body[0] : body;
   const team = (data.teams ?? []).find((t) => t.id === teamId);
   const index = await getMlbIndex();
-  const started: number[] = [];
+  const roster: EspnRosterPlayer[] = [];
   for (const entry of team?.roster?.entries ?? []) {
-    const player = entry.playerPoolEntry?.player;
-    if (!player?.fullName) continue;
-    const slotId = entry.lineupSlotId ?? BENCH_SLOT;
-    if (slotId === BENCH_SLOT || slotId === IL_SLOT) continue;
-    const found = matchPlayer(index, player.fullName, player.proTeamId);
-    if (found) started.push(found.id);
+    const player = toRosterPlayer(entry, index);
+    if (player) roster.push(player);
   }
-  return started;
+  return sortRoster(roster);
 }
 
-async function getTeamLineup(
+async function getTeamRoster(
   creds: EspnCreds,
   teamId: number,
   period: number,
   frozen: boolean,
   force = false,
-): Promise<number[]> {
+): Promise<EspnRosterPlayer[]> {
   const key = `${creds.leagueId}:${teamId}:${period}`;
   // **A forced read only reaches the days that can have changed.** `Refresh
   // from ESPN` is somebody saying "I have just moved a player", and the only
-  // lineups a move can touch are today's and the days after it — a finished
-  // day's is a fact, so re-fetching thirty of them would spend thirty ESPN
-  // reads to be told what the blobs already say.
+  // days a move can touch are today's and the ones after it — a finished day's
+  // roster and lineup are facts, so re-fetching thirty of them would spend
+  // thirty ESPN reads to be told what the blobs already say.
   const stale = force && !frozen;
   const hit = lineupCache.get(key);
-  if (!stale && hit && (frozen || Date.now() - hit.fetchedAt < LINEUP_TTL_MS)) return hit.started;
+  if (!stale && hit && (frozen || Date.now() - hit.fetchedAt < LINEUP_TTL_MS)) return hit.roster;
   const running = lineupInFlight.get(key);
   if (running && !stale) return running;
 
   const job = (async () => {
     if (frozen) {
-      // No freshness test: the day is over and its lineup is a fact.
-      const stored = await readJsonBlob<number[]>(lineupBlobKey(creds.leagueId, teamId, period), () => true);
+      // No freshness test: the day is over and what you had is a fact.
+      const stored = await readJsonBlob<EspnRosterPlayer[]>(
+        lineupBlobKey(creds.leagueId, teamId, period),
+        () => true,
+      );
       if (stored) {
-        lineupCache.set(key, { started: stored, fetchedAt: Date.now() });
+        lineupCache.set(key, { roster: stored, fetchedAt: Date.now() });
         return stored;
       }
     }
-    const started = await fetchTeamLineup(creds, teamId, period);
-    lineupCache.set(key, { started, fetchedAt: Date.now() });
-    if (frozen) await writeJsonBlob(lineupBlobKey(creds.leagueId, teamId, period), started);
-    return started;
+    const roster = await fetchTeamRoster(creds, teamId, period);
+    lineupCache.set(key, { roster, fetchedAt: Date.now() });
+    if (frozen) await writeJsonBlob(lineupBlobKey(creds.leagueId, teamId, period), roster);
+    return roster;
   })().finally(() => {
     lineupInFlight.delete(key);
   });
@@ -1289,37 +1324,49 @@ export function startedIds(roster: EspnRosterPlayer[]): number[] {
  * cannot have changed since the button was last pressed, so forcing it would
  * spend one ESPN read per day of the range to confirm what the blobs hold.
  */
-export async function getTeamLineups(
+export async function getTeamRosters(
   creds: EspnCreds,
   teamId: number,
   start: string,
   end: string,
-  seed?: { date: string; started: number[] } | null,
+  seed?: { date: string; roster: EspnRosterPlayer[] } | null,
   force = false,
-): Promise<Record<string, number[]>> {
+): Promise<Record<string, EspnRosterPlayer[]>> {
   const today = baseballToday();
   const dates: string[] = [];
   for (let d = start; d <= end; d = addDays(d, 1)) dates.push(d);
   if (dates.length === 0) return {};
 
-  const out: Record<string, number[]> = {};
-  if (seed && seed.date >= start && seed.date <= end) out[seed.date] = seed.started;
+  const out: Record<string, EspnRosterPlayer[]> = {};
+  if (seed && seed.date >= start && seed.date <= end) out[seed.date] = seed.roster;
 
   const wanted = dates.filter((d) => !(d in out));
   const resolved = await mapLimit(wanted, LINEUP_CONCURRENCY, async (date) => {
     const period = await lineupPeriodFor(creds, date);
     if (period === null) return null;
-    // Strictly before today: the games are played and the lineup is frozen.
-    return getTeamLineup(creds, teamId, period, date < today, force).catch((err: Error) => {
-      console.error(`ESPN lineup for ${date} unavailable:`, err.message);
+    // Strictly before today: the games are played and what you had is frozen.
+    return getTeamRoster(creds, teamId, period, date < today, force).catch((err: Error) => {
+      console.error(`ESPN roster for ${date} unavailable:`, err.message);
       return null;
     });
   });
   wanted.forEach((date, i) => {
-    const started = resolved[i];
-    if (started) out[date] = started;
+    const roster = resolved[i];
+    if (roster) out[date] = roster;
   });
   return out;
+}
+
+/** Which MLB ids a day's roster had in its lineup — the `lineups` map
+ *  `/api/espn/roster` ships and the `Starters` filter reads, **derived** from
+ *  the same per-day read rather than fetched again, so the chips, the filter
+ *  and the days a report counts cannot come to disagree about an afternoon. */
+export function lineupsFrom(
+  byDate: Record<string, EspnRosterPlayer[]>,
+): Record<string, number[]> {
+  return Object.fromEntries(
+    Object.entries(byDate).map(([date, roster]) => [date, startedIds(roster)]),
+  );
 }
 
 /**
@@ -1332,6 +1379,64 @@ export async function getTeamLineups(
  * pitcher separately. Roster order is preserved, so the lineup comes first and
  * the bench and IL follow.
  */
+/**
+ * A fantasy team over a **range** of days, as the app's own roster plus the days
+ * each man was on it.
+ *
+ * The two halves are the same two `store.ts::getRosterForRange` answers for the
+ * saved roster, and for the same reason: which players have a row is one
+ * question and which of a player's days count is another. Here the first is the
+ * union of every day's roster — including the man you have since dropped, whose
+ * Monday you really did earn — and the second is exactly the days he was on it.
+ *
+ * **Order is today's team first, in its own order** (lineup, bench, IL — what
+ * `rosterToWatchlist` has always preserved), then the men who are no longer on
+ * it, most-recently-held first. A manager reads his own team down the page and a
+ * dropped player is a footnote to it, not an interruption in the middle.
+ */
+export interface FantasyRosterRange {
+  players: WatchPlayer[];
+  /** Player key → the days of the range he was on the team. */
+  heldDays: Map<string, Set<string>>;
+}
+
+export function rostersToWatchlist(
+  byDate: Record<string, EspnRosterPlayer[]>,
+  current: EspnRosterPlayer[],
+): FantasyRosterRange {
+  const heldDays = new Map<string, Set<string>>();
+  const identity = new Map<string, WatchPlayer>();
+  const lastHeld = new Map<string, string>();
+  for (const date of Object.keys(byDate).sort()) {
+    for (const p of rosterToWatchlist(byDate[date])) {
+      const key = `${p.kind}-${p.id}`;
+      let days = heldDays.get(key);
+      if (!days) {
+        days = new Set<string>();
+        heldDays.set(key, days);
+      }
+      days.add(date);
+      // The newest spelling of a name wins, the way the live entry does in the
+      // saved roster's own history.
+      identity.set(key, p);
+      lastHeld.set(key, date);
+    }
+  }
+
+  const players: WatchPlayer[] = [];
+  const placed = new Set<string>();
+  for (const p of rosterToWatchlist(current)) {
+    const key = `${p.kind}-${p.id}`;
+    if (!heldDays.has(key) || placed.has(key)) continue;
+    placed.add(key);
+    players.push(identity.get(key) ?? p);
+  }
+  const gone = [...heldDays.keys()].filter((k) => !placed.has(k));
+  gone.sort((a, b) => (lastHeld.get(a)! < lastHeld.get(b)! ? 1 : -1));
+  for (const key of gone) players.push(identity.get(key)!);
+  return { players, heldDays };
+}
+
 export function rosterToWatchlist(roster: EspnRosterPlayer[]): WatchPlayer[] {
   return roster.flatMap((p) =>
     p.mlbId === null || p.savantName === null
