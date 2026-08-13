@@ -1,4 +1,5 @@
 import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { BaseballMark } from './BaseballMark';
 import { ExpandButton } from './ExpandButton';
@@ -13,7 +14,17 @@ import type {
   ResearchWindow,
   TrendWindow,
 } from '../types';
-import { eligibleForKind, headshotUrl, positionOrder, statusCorner, teamLogoUrl } from '../lib';
+import {
+  eligibleForKind,
+  formatStartTime,
+  handThrows,
+  headshotUrl,
+  inningLabel,
+  positionOrder,
+  statusCorner,
+  surname,
+  teamLogoUrl,
+} from '../lib';
 
 /**
  * A league-wide, season-to-date stat table: every player on one board, sortable
@@ -37,8 +48,11 @@ interface Column {
    *  rather than a phrase and would truncate in a select. Defaults to `title`. */
   pick?: string;
   // What the cell prints. Every sortable value is a number on the row, so the
-  // formatter is about presentation alone (`.265`, `3.52`, `20.8%`).
-  format: (r: ResearchRow) => string;
+  // formatter is about presentation alone (`.265`, `3.52`, `20.8%`) — and it
+  // returns a node rather than a string because one column is not a number at
+  // all: the opponent cell is two lines and colours its live inning, which is
+  // state rather than value and so is exactly what this table does colour.
+  format: (r: ResearchRow) => ReactNode;
   // What the sort compares. Null sorts to the bottom in both directions — a
   // player with no barrel rate is neither the best nor the worst at it.
   value: (r: ResearchRow) => number | null;
@@ -288,13 +302,15 @@ const trendColumn = (w: TrendWindow): Column => ({
 const TREND_COLUMNS: Column[] = TREND_WINDOWS.map(trendColumn);
 
 /**
- * **Who he plays today** — the one column on this board that is about this
- * afternoon rather than about the window the rest of the row is drawn from.
+ * **Who he plays today, and how it is going** — the one column on this board
+ * that is about this afternoon rather than about the window the rest of the row
+ * is drawn from.
  *
  * That is the point of it rather than an inconsistency: a season line is read
- * to decide whether to start a man *tonight*, and "against whom, and where"
- * is the fact that decision turns on which no amount of season data carries.
- * It reads the same on a 7-day board as on a season one for the same reason.
+ * to decide whether to start a man *tonight*, and against whom, off which
+ * starter, and how the game is going are the facts that decision turns on and
+ * that no amount of season data carries. It reads the same on a 7-day board as
+ * on a season one for the same reason.
  *
  * It comes off the league-wide status map (`/api/statuses`) — the same request
  * every row's lineup pip and IL badge already come from, so the column costs no
@@ -303,25 +319,87 @@ const TREND_COLUMNS: Column[] = TREND_WINDOWS.map(trendColumn);
  * would go stale inside that blob's six hours). The map is null until that one
  * request lands, and the cells are dashes until it does.
  *
- * Sorted **alphabetically**, which on this column means "group my players by
- * tonight's game" — hence `text` rather than `value`, and hence its absence
- * from the filter builder: `Opp ≥ 4` is not a question.
+ * **It says what the summary table's opponent cell says, in a narrower column**
+ * — the matchup and the announced starter before first pitch, the score and the
+ * inning while the game is on, the score and `Final` once it is over — and it
+ * departs from that cell in exactly one place, for width. There the score is
+ * the away-first line score (`SEA 3–5 LAD`), which names both clubs and so can
+ * stand in for the matchup; here the matchup **stays on the first line in every
+ * state** and the score is written from his side of it (`5–3`), which is the
+ * game log's own vocabulary for a narrow column (`W 5-3`) and saves a second
+ * club abbreviation on the app's widest table.
+ *
+ * Two lines, never three, which is the row-height rule: 51px is set by the 37px
+ * headshot, and the identity block under the name already spends 31 of it the
+ * same way. So the start time rides the matchup rather than taking a line of
+ * its own — exactly as `.sum-opp-time` does — leaving the second line to the
+ * starter.
+ *
+ * Still sorted **alphabetically on the opponent**, which on this column means
+ * "group my players by tonight's game". Everything the cell gained is a fact
+ * about that same game and so is constant within a group: sorting on any of it
+ * would only reorder ties. And none of it is a threshold anyone would type,
+ * which is why the column stays out of the filter builder (see `Column.text`).
  */
 const OPPONENT_KEY = 'opponent';
+
+/** What one player's cell reads, given today's status for him. */
+function OpponentCell({ status }: { status: PlayerStatus | null | undefined }) {
+  if (!status?.opponent) return <>{'—'}</>;
+  const scheduled = status.gameState === 'scheduled';
+  const matchup = `${status.isHome ? 'vs' : '@'} ${status.opponent}`;
+  const score =
+    status.teamScore !== null && status.opponentScore !== null
+      ? `${status.teamScore}–${status.opponentScore}`
+      : null;
+  const time = scheduled ? formatStartTime(status.startTime) : null;
+  const sp = scheduled ? status.probablePitcher : null;
+  // A postponement has no score and no inning, and this map carries no
+  // `detailedState` to spell it out with — `PPD` is what fits, in the amber the
+  // summary table's own postponed cell takes.
+  const detail = scheduled
+    ? null
+    : status.gameState === 'live'
+      ? inningLabel(status.inningState, status.currentInning)
+      : status.gameState === 'postponed'
+        ? 'PPD'
+        : status.gameState === 'final'
+          ? 'Final'
+          : null;
+  return (
+    <>
+      <span className="research-opp-main">
+        {matchup}
+        {score && <span className="research-opp-score">{score}</span>}
+        {time && <span className="research-opp-time">{time}</span>}
+      </span>
+      {sp && (
+        <span className="research-opp-sp" title={`Starting pitcher: ${sp.name}`}>
+          {handThrows(sp.hand)} {surname(sp.name)}
+        </span>
+      )}
+      {detail && <span className="research-opp-detail">{detail}</span>}
+    </>
+  );
+}
 
 const opponentColumn = (statuses: Map<number, PlayerStatus> | null): Column => ({
   key: OPPONENT_KEY,
   label: 'Opp',
   group: 'Today',
-  title: "Today's opponent — “@” away, “vs” at home. Sorts alphabetically, which groups your players by tonight's game",
-  format: (r) => {
-    const st = statuses?.get(r.id);
-    if (!st?.opponent) return '\u2014';
-    return `${st.isHome ? 'vs' : '@'} ${st.opponent}`;
-  },
+  title:
+    "Today's game — “@” away, “vs” at home, with the opposing starter before first pitch and the score from his side of it once there is one. Sorts alphabetically, which groups your players by tonight's game",
+  format: (r) => <OpponentCell status={statuses?.get(r.id)} />,
   text: (r) => statuses?.get(r.id)?.opponent ?? null,
   // Nothing numeric to compare, and nothing to threshold — see `Column.text`.
   value: () => null,
+  // The cell is words on two lines rather than a number, and its live inning is
+  // one of the few things on this board worth colouring — `cellClass` carries
+  // both, the same hook the trend columns use for their rise and fall.
+  cellClass: (r) => {
+    const st = statuses?.get(r.id);
+    return st?.opponent ? `research-opp research-opp-${st.gameState ?? 'none'}` : 'research-opp';
+  },
 });
 
 /** Which window a column key belongs to, for the two places that have to tell a

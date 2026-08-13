@@ -6163,6 +6163,77 @@ html:has(.app.research-mode) {
   opacity: 1;
 }
 
+/* ---- The opponent cell: today's game, on a column two characters wide ----
+   The summary table's opponent cell says the matchup and the announced starter
+   before first pitch, the score and the inning while the game is on, and the
+   score and "Final" once it is over. This says the same things in a column that
+   has to pay for every pixel out of a stat pushed off the right edge, so the
+   type sizes and the muted second line are `.sum-opp-*`'s exactly, and only the
+   score's form differs — his side first (`5–3`) rather than the away-first line
+   score, the matchup above it having already named the other club.
+
+   It stays right-aligned like every other cell on this board: the headers are
+   sort buttons that align their labels to the right, and a lone left-aligned
+   column between two right-aligned ones reads as a mistake rather than as
+   prose. Nothing wraps — a third line would cost the row its height.
+
+   The height budget is 31px, which is what the 37px headshot leaves inside the
+   cell's 10px of padding, and it is the same budget `.research-id` spends on a
+   name over its club and positions. 16 + 14 with no gap is 30 of it, so a
+   scheduled row is exactly as tall as a row with no game at all. */
+.research-table td.research-opp {
+  white-space: nowrap;
+}
+.research-opp-main {
+  display: block;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
+}
+/* Part of the same line and the same weight as the matchup: the score is the
+   news once a game has started, not a qualifier on it. */
+.research-opp-score {
+  margin-left: 5px;
+}
+/* Pre-game the start time rides the matchup rather than taking a line of its
+   own, exactly as it does in the summary table's cell and for the same reason:
+   the second line is spoken for by the starter, and three lines would make the
+   scheduled rows taller than every other row on the board. */
+.research-opp-time {
+  margin-left: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.research-opp-sp,
+.research-opp-detail {
+  display: block;
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 600;
+}
+/* Who is pitching is context rather than state, so it takes the quieter of the
+   two greys — the same one `.sum-opp-sp` takes. Surname only, and the full name
+   is on the cell's own tooltip. */
+.research-opp-sp {
+  color: var(--faint);
+}
+.research-opp-detail {
+  color: var(--muted);
+}
+/* Colour is for state on these tables and nothing else, which is why the stat
+   columns are monochrome and these two are not: a live inning is the green the
+   summary table's own cell uses, and a postponement its amber. Scoped to the
+   span rather than the cell so sorting *by* this column — which tints the whole
+   cell accent — cannot be the moment the state stops being legible, the same
+   trap the trend columns' `td` scoping avoids. */
+.research-table td.research-opp-live .research-opp-detail {
+  color: var(--hit);
+}
+.research-table td.research-opp-postponed .research-opp-detail {
+  color: var(--hr);
+}
+
 /* ---- View switch (Roster / Research, and Roster's own tabs) ---- */
 .view-switch,
 .kind-switch,
