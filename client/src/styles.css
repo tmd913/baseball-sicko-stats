@@ -5206,8 +5206,8 @@ body {
    The same wide, scroll-locked stat table the summary view uses — .summary-table
    and its sticky header / sticky headshot column are shared outright, since the
    two are one object cut two ways (the watchlist over a range, the league over a
-   season). Only what differs is styled here: the filter bar above it, the
-   sortable headers, and the Statcast group at the right end. */
+   season). Only what differs is styled here: the filter bar above it and the
+   sortable headers. */
 
 /* The board's control set lives **in the pinned chrome, in the tab row itself**
    — App renders an empty box inside `.view-bar-tabs` and `ResearchTable` portals
@@ -6264,22 +6264,6 @@ body {
 .research-table thead th.research-sort.active {
   top: 0;
   z-index: 3;
-}
-/* The Statcast half of the row is a different kind of number from the counting
-   stats beside it — what the contact was worth, not what it went for — so the
-   seam between them is drawn, and the group named in the header's own colour.
-   Deliberately *not* a wash behind the cells: the zebra stripe is defined later
-   in the file and would win on half the rows, leaving a tint that flickers down
-   the table rather than marking a group. */
-.research-table .research-statcast-start {
-  border-left: 1px solid var(--border);
-}
-.research-table thead th.research-statcast button {
-  color: var(--accent);
-  opacity: 0.75;
-}
-.research-table thead th.research-statcast.active button {
-  opacity: 1;
 }
 
 /* ---- The opponent cell: today's game, on a column two characters wide ----

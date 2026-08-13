@@ -86,7 +86,6 @@ interface Column {
   // news, and a signed number in the same colour as everything around it makes
   // the reader do the arithmetic.
   cellClass?: (r: ResearchRow) => string | undefined;
-  statcast?: boolean; // tinted, and grouped behind a divider
   // Names the run of columns this one *starts*, for the column picker's
   // headings. Set on the first column of each run only and carried forward by
   // `columnGroups` — a group per column would be forty lines of the same
@@ -173,67 +172,66 @@ function statcastColumns(kind: PlayerKind): Column[] {
   const shared: Column[] = [
     {
       key: 'xba', label: 'xBA', group: 'Statcast', title: `Expected batting average${p ? ' against' : ''}`,
-      format: (r) => rate(r.xba), value: (r) => r.xba, ascFirst: p, statcast: true,
+      format: (r) => rate(r.xba), value: (r) => r.xba, ascFirst: p,
     },
     {
       key: 'xslg', label: 'xSLG', title: `Expected slugging${p ? ' against' : ''}`,
-      format: (r) => rate(r.xslg), value: (r) => r.xslg, ascFirst: p, statcast: true,
+      format: (r) => rate(r.xslg), value: (r) => r.xslg, ascFirst: p,
     },
     {
       key: 'xwoba', label: 'xwOBA', title: `Expected wOBA${p ? ' against' : ''}`,
-      format: (r) => rate(r.xwoba), value: (r) => r.xwoba, ascFirst: p, statcast: true,
+      format: (r) => rate(r.xwoba), value: (r) => r.xwoba, ascFirst: p,
     },
     {
       key: 'exitVelocity', label: 'EV', title: `Average exit velocity${allowed} (mph)`,
-      format: (r) => dec(r.exitVelocity, 1), value: (r) => r.exitVelocity, ascFirst: p, statcast: true,
+      format: (r) => dec(r.exitVelocity, 1), value: (r) => r.exitVelocity, ascFirst: p,
     },
     {
       key: 'launchAngle', label: 'LA', title: `Average launch angle${allowed} (degrees)`,
       format: (r) => dec(r.launchAngle, 1), value: (r) => r.launchAngle,
       // Neither high nor low is "good" — it's a profile, not a grade — so it
-      // opens descending like any other column and colours nothing.
-      statcast: true,
+      // declares no `ascFirst` and opens descending like any other column.
     },
     {
       key: 'barrelRate', label: 'Brl%', title: `Barrels per batted ball${allowed}`,
-      format: (r) => pct(r.barrelRate), value: (r) => r.barrelRate, ascFirst: p, statcast: true,
+      format: (r) => pct(r.barrelRate), value: (r) => r.barrelRate, ascFirst: p,
     },
     {
       key: 'hardHitRate', label: 'HH%', title: `Hard-hit rate — 95+ mph${allowed}`,
-      format: (r) => pct(r.hardHitRate), value: (r) => r.hardHitRate, ascFirst: p, statcast: true,
+      format: (r) => pct(r.hardHitRate), value: (r) => r.hardHitRate, ascFirst: p,
     },
     {
       key: 'sweetSpotRate', label: 'SwSp%', title: `Sweet-spot rate — batted balls at 8-32°${allowed}`,
-      format: (r) => pct(r.sweetSpotRate), value: (r) => r.sweetSpotRate, ascFirst: p, statcast: true,
+      format: (r) => pct(r.sweetSpotRate), value: (r) => r.sweetSpotRate, ascFirst: p,
     },
     {
       key: 'gbRate', label: 'GB%', title: `Ground balls per batted ball${allowed}`,
-      format: (r) => pct(r.gbRate), value: (r) => r.gbRate, statcast: true,
+      format: (r) => pct(r.gbRate), value: (r) => r.gbRate,
     },
     {
       key: 'ldRate', label: 'LD%', title: `Line drives per batted ball${allowed}`,
-      format: (r) => pct(r.ldRate), value: (r) => r.ldRate, statcast: true,
+      format: (r) => pct(r.ldRate), value: (r) => r.ldRate,
     },
     {
       key: 'fbRate', label: 'FB%', title: `Fly balls per batted ball${allowed}`,
-      format: (r) => pct(r.fbRate), value: (r) => r.fbRate, statcast: true,
+      format: (r) => pct(r.fbRate), value: (r) => r.fbRate,
     },
     {
       key: 'whiffRate', label: 'Whiff%', title: 'Whiffs per swing',
       // The one metric whose good end flips: a pitcher wants swings and misses,
       // a batter wants not to be the one missing.
-      format: (r) => pct(r.whiffRate), value: (r) => r.whiffRate, ascFirst: !p, statcast: true,
+      format: (r) => pct(r.whiffRate), value: (r) => r.whiffRate, ascFirst: !p,
     },
     {
       key: 'chaseRate', label: 'Chase%',
       title: p ? 'Chases induced — swings at pitches out of the zone' : 'Swings at pitches out of the zone',
-      format: (r) => pct(r.chaseRate), value: (r) => r.chaseRate, ascFirst: !p, statcast: true,
+      format: (r) => pct(r.chaseRate), value: (r) => r.chaseRate, ascFirst: !p,
     },
     {
       key: 'firstPitchStrikeRate', label: 'F-Str%',
       title: p ? 'First-pitch strike rate — how often he gets ahead 0-1' : 'First-pitch strikes seen — how often he falls behind 0-1',
       format: (r) => pct(r.firstPitchStrikeRate), value: (r) => r.firstPitchStrikeRate,
-      ascFirst: !p, statcast: true,
+      ascFirst: !p,
     },
   ];
   // xERA is a Statcast number but does not live in this group: it sits beside
@@ -243,7 +241,7 @@ function statcastColumns(kind: PlayerKind): Column[] {
     ...shared,
     {
       key: 'sprintSpeed', label: 'Sprint', title: 'Sprint speed — feet per second in his fastest one-second window',
-      format: (r) => dec(r.sprintSpeed, 1), value: (r) => r.sprintSpeed, statcast: true,
+      format: (r) => dec(r.sprintSpeed, 1), value: (r) => r.sprintSpeed,
     },
   ];
 }
@@ -259,7 +257,7 @@ function inningsToOuts(ip: number): number {
 
 // The two boards' column tables. Order follows how a stat line is read: the
 // counting stats first, then the slash line and the rate stats derived from
-// them, then the Statcast group behind its divider.
+// them, then the Statcast group.
 
 /**
  * Which way a roster % has moved, one column per span.
@@ -2330,8 +2328,6 @@ export function ResearchTable({
     );
   }
 
-  const statcastStart = columns.findIndex((c) => c.statcast);
-
   const { isFull, toggle, ref: fullRef } = useFullPage<HTMLDivElement>();
 
   return (
@@ -2841,15 +2837,13 @@ export function ResearchTable({
                 <th className="sum-name-col" scope="col">
                   Player
                 </th>
-                {columns.map((c, i) => {
+                {columns.map((c) => {
                   const active = activeSortKey === c.key;
                   return (
                     <th
                       key={c.key}
                       scope="col"
-                      className={`sum-num research-sort${active ? ' active' : ''}${
-                        i === statcastStart ? ' research-statcast-start' : ''
-                      }${c.statcast ? ' research-statcast' : ''}`}
+                      className={`sum-num research-sort${active ? ' active' : ''}`}
                       aria-sort={active ? (sortAsc ? 'ascending' : 'descending') : 'none'}
                     >
                       <button type="button" onClick={() => toggleSort(c)} title={c.title}>
@@ -2948,12 +2942,12 @@ export function ResearchTable({
                       </div>
                       </div>
                     </td>
-                    {columns.map((c, i) => (
+                    {columns.map((c) => (
                       <td
                         key={c.key}
                         className={`sum-num${activeSortKey === c.key ? ' research-sorted' : ''}${
-                          i === statcastStart ? ' research-statcast-start' : ''
-                        }${c.cellClass ? ` ${c.cellClass(r) ?? ''}` : ''}`}
+                          c.cellClass ? ` ${c.cellClass(r) ?? ''}` : ''
+                        }`}
                       >
                         {c.format(r)}
                       </td>
