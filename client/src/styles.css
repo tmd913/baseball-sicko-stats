@@ -5489,18 +5489,102 @@ html:has(.app.research-mode) {
   cursor: default;
 }
 
-/* ---- Column picker ---- */
-/* A block panel rather than the single wrapping row the other two panels are:
-   it holds forty checkboxes in four labelled runs, and laying those out as one
-   flow would lose the runs that make them findable. */
-.research-panel.research-columns {
+/* ---- Column picker ----------------------------------------------------------
+   **A modal, where Search and Filters are inline panels**, and the reason is
+   volume: those two are a field and a three-part sentence, one line of the
+   wrapping tab row each, where this holds the order row and every column the
+   board has in four labelled runs — 39 on the batting board and 44 on the
+   pitching one. Inline that is several hundred pixels of chips wedged into the
+   chrome, pushing the table it describes down the page and taking a phone's
+   screen outright; a picker that costs you sight of the thing it is picking for
+   is the wrong shape. See `ResearchTable.tsx::ColumnsDialog` for the rest of
+   the argument and for why it is portalled to the body.
+
+   It reuses the app's overlay conventions rather than inventing a second visual
+   language: `.details-view`'s dimmed fixed box, a `--panel` card on the app's
+   own `--control-radius` and `--shadow`, and `overscroll-behavior: contain` on
+   the one thing that scrolls. **46**, which is the layer the stack leaves for
+   it — over the pinned chrome that opened it (41) and the full-page table box
+   (45), under the player page (50) and the reel and how-to pages (60), those
+   being pages where this is a control's panel. */
+.research-columns-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 46;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  /* A shade under `--bg` (#0b1220) at two thirds, so the board behind reads as
+     dimmed rather than as a second page. */
+  background: rgba(6, 11, 20, 0.66);
+}
+/* A column, so the head holds its place and only the body scrolls. The height
+   cap is what keeps a 44-column board inside the dialog instead of growing the
+   page behind it; `dvh` because a phone's browser chrome comes and goes, the
+   unit `.app.summary-mode` is already declared in. */
+.research-columns-box {
+  display: flex;
+  flex-direction: column;
+  width: min(720px, 100%);
+  max-height: min(80dvh, 720px);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.research-columns-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 12px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.research-columns-head h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: var(--text);
+}
+/* The app's square icon button, at the size the header's own controls take. */
+.research-columns-close {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius-inner);
+  cursor: pointer;
+}
+.research-columns-close:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.research-columns-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+/* The one scroller. `contain` rather than `none`: this is a page-like box
+   rather than a pane inside one, which is the bargain `.details-view` and
+   `.reel-view` make and the opposite of the one the three wide tables make. */
+.research-columns-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
   flex-direction: column;
   align-items: stretch;
   gap: 10px;
   padding: 12px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--control-radius);
 }
 .research-colgroup-head {
   display: flex;
@@ -6161,6 +6245,77 @@ html:has(.app.research-mode) {
 }
 .research-table thead th.research-statcast.active button {
   opacity: 1;
+}
+
+/* ---- The opponent cell: today's game, on a column two characters wide ----
+   The summary table's opponent cell says the matchup and the announced starter
+   before first pitch, the score and the inning while the game is on, and the
+   score and "Final" once it is over. This says the same things in a column that
+   has to pay for every pixel out of a stat pushed off the right edge, so the
+   type sizes and the muted second line are `.sum-opp-*`'s exactly, and only the
+   score's form differs — his side first (`5–3`) rather than the away-first line
+   score, the matchup above it having already named the other club.
+
+   It stays right-aligned like every other cell on this board: the headers are
+   sort buttons that align their labels to the right, and a lone left-aligned
+   column between two right-aligned ones reads as a mistake rather than as
+   prose. Nothing wraps — a third line would cost the row its height.
+
+   The height budget is 31px, which is what the 37px headshot leaves inside the
+   cell's 10px of padding, and it is the same budget `.research-id` spends on a
+   name over its club and positions. 16 + 14 with no gap is 30 of it, so a
+   scheduled row is exactly as tall as a row with no game at all. */
+.research-table td.research-opp {
+  white-space: nowrap;
+}
+.research-opp-main {
+  display: block;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
+}
+/* Part of the same line and the same weight as the matchup: the score is the
+   news once a game has started, not a qualifier on it. */
+.research-opp-score {
+  margin-left: 5px;
+}
+/* Pre-game the start time rides the matchup rather than taking a line of its
+   own, exactly as it does in the summary table's cell and for the same reason:
+   the second line is spoken for by the starter, and three lines would make the
+   scheduled rows taller than every other row on the board. */
+.research-opp-time {
+  margin-left: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.research-opp-sp,
+.research-opp-detail {
+  display: block;
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 600;
+}
+/* Who is pitching is context rather than state, so it takes the quieter of the
+   two greys — the same one `.sum-opp-sp` takes. Surname only, and the full name
+   is on the cell's own tooltip. */
+.research-opp-sp {
+  color: var(--faint);
+}
+.research-opp-detail {
+  color: var(--muted);
+}
+/* Colour is for state on these tables and nothing else, which is why the stat
+   columns are monochrome and these two are not: a live inning is the green the
+   summary table's own cell uses, and a postponement its amber. Scoped to the
+   span rather than the cell so sorting *by* this column — which tints the whole
+   cell accent — cannot be the moment the state stops being legible, the same
+   trap the trend columns' `td` scoping avoids. */
+.research-table td.research-opp-live .research-opp-detail {
+  color: var(--hit);
+}
+.research-table td.research-opp-postponed .research-opp-detail {
+  color: var(--hr);
 }
 
 /* ---- View switch (Roster / Research, and Roster's own tabs) ---- */

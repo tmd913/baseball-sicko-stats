@@ -573,6 +573,22 @@ export function formatStartTime(iso: string | null): string | null {
   return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }
 
+/**
+ * "Top 7" from the two fields MLB publishes it as. One definition, because two
+ * places read it now: this file's own `gameStatusView`, off a `PlayerGame`, and
+ * the research board's opponent cell, off a `PlayerStatus` — which carries the
+ * same pair rather than a label built on the server, so the board and the
+ * summary table cannot come to word a live inning differently. Null when there
+ * is no inning to name, which is the caller's cue to fall back.
+ */
+export function inningLabel(
+  inningState: string | null,
+  inning: number | null,
+): string | null {
+  if (inning === null) return null;
+  return `${inningState ?? ''} ${inning}`.trim();
+}
+
 export interface GameStatusView {
   kind: 'scheduled' | 'live' | 'final' | 'postponed';
   /** Away-first line score, e.g. "BOS 2–3 NYY" (null before a game starts). */
@@ -599,11 +615,11 @@ export function gameStatusView(game: PlayerGame): GameStatusView {
     return { kind: 'scheduled', score: null, detail: t ?? (s.detailedState || 'Scheduled') };
   }
   if (s.state === 'live') {
-    const inning =
-      s.currentInning !== null
-        ? `${s.inningState ?? ''} ${s.currentInning}`.trim()
-        : s.detailedState || 'Live';
-    return { kind: 'live', score, detail: inning };
+    return {
+      kind: 'live',
+      score,
+      detail: inningLabel(s.inningState, s.currentInning) ?? (s.detailedState || 'Live'),
+    };
   }
   return { kind: 'final', score, detail: 'Final' };
 }
