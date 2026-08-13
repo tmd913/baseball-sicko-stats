@@ -95,6 +95,15 @@
      `.app`'s own padding, the pinned chrome's negative bleed back out through
      it, and the three wide tables', which do the same. */
   --app-gutter: 22px;
+  /* The headshot circle in a table row, and one definition because the research
+     board's pinned name column is offset by *this number plus its two gutters*
+     — an arithmetic that sat in the stylesheet as a hardcoded `63px` and would
+     have been silently wrong the moment the circle grew. A token is what lets
+     that offset be derived rather than restated; see
+     `.research-table .sum-name-col`. The marks drawn on the circle are sized
+     against it too. The player page's 64px portrait is deliberately *not* this:
+     it is a page header rather than a row, and is sized to the head it sits in. */
+  --row-photo: 42px;
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
   font-synthesis: none;
 }
@@ -3307,10 +3316,16 @@ body {
 /* Gutters tighten with the viewport, as in the summary table: the table
    overflows on a phone and every pixel of padding is a stat pushed off it. The
    row height doesn't, though — vertical space costs a scroll, not a column, and
-   this pane scrolls anyway. */
+   this pane scrolls anyway.
+
+   Both grew with the summary table's and by the same clamp, this being the
+   other table with slack to spend: 11 → 13px down and `1.6vw/22` → `1.9vw/28`
+   across. Measured, a batter's log goes 40.6px a row to 44.6 and 736 → 772px
+   wide at 390 — the width being paid in a pane that already scrolls sideways at
+   every phone width there is. */
 .glog-table th,
 .glog-table td {
-  padding: 11px clamp(5px, 1.6vw, 22px);
+  padding: 13px clamp(5px, 1.9vw, 28px);
   line-height: 1.35;
   white-space: nowrap;
   border-bottom: 1px solid var(--border);
@@ -3334,8 +3349,11 @@ body {
   position: sticky;
   top: 0;
   z-index: 2;
-  padding-top: 9px;
-  padding-bottom: 9px;
+  /* Two under the body's 13, the same two the research board's sort headers
+     sit under theirs: a header is one short line and matching a body row full
+     of numbers would buy a band of empty panel. */
+  padding-top: 11px;
+  padding-bottom: 11px;
   background: var(--panel-2);
   font-size: 11px;
   font-weight: 800;
@@ -3461,8 +3479,8 @@ body {
   position: sticky;
   bottom: 0;
   z-index: 2;
-  padding-top: 12px;
-  padding-bottom: 12px;
+  padding-top: 14px;
+  padding-bottom: 14px;
   background: var(--panel-2);
   border-top: 2px solid var(--border);
   border-bottom: none;
@@ -4514,10 +4532,11 @@ body {
 }
 
 /* Small enough to sit in a header cell without setting the width of a column
-   that exists to be narrow: the headshot column is 37px of photo between two
-   gutters. Its own look rather than the header's square icon family — those are
-   36px and sit on a control line, this one sits on a table cell's tinted
-   background. */
+   that exists to be narrow: the headshot column is `--row-photo` of photo
+   between two gutters, 68px on the research board at a desktop width and less
+   than that on a phone. Its own look rather than the header's square icon
+   family — those are 36px and sit on a control line, this one sits on a table
+   cell's tinted background. */
 .expand-btn {
   display: inline-flex;
   align-items: center;
@@ -4686,10 +4705,23 @@ body {
 /* When both a batter and a pitcher table stack in the scroll box, space them.
    Column gutters tighten with the viewport: on a phone the table always needs
    horizontal scrolling, and every pixel of padding is a stat pushed off screen.
-   Full width at desktop sizes, where the whole table already fits. */
+   Full width at desktop sizes, where the whole table already fits.
+
+   The gutter grew from `clamp(5px, 1.6vw, 22px)`, and it grew at the wide end
+   rather than the narrow one, which is the shape the clamp was written for: a
+   phone pays for a gutter in stat columns and a monitor pays for it in nothing
+   at all. Measured on the real board, 1.6→1.9vw and 22→28px costs a 390px phone
+   **0.98px a side** (6.24 → 7.22) and the whole batter table 683 → 702px, while
+   1920 goes 22 → 28 and 1200 19.2 → 22.8. The floor is untouched, so the
+   narrowest screens the app is checked at pay the least of all.
+
+   The vertical half is 10 → 12px, and it is the same figure on the research
+   board, which shares this rule. It is what "make the rows breathe" costs and
+   the only place it is spent: a row's height is paid in scrolling, where a
+   column's width is paid in a stat pushed off the right edge. */
 .summary-table th,
 .summary-table td {
-  padding: 10px clamp(5px, 1.6vw, 22px);
+  padding: 12px clamp(5px, 1.9vw, 28px);
   white-space: nowrap;
   border-bottom: 1px solid var(--border);
   background: var(--bg);
@@ -4797,8 +4829,8 @@ body {
   position: sticky;
   bottom: 0;
   z-index: 2;
-  padding-top: 13px;
-  padding-bottom: 13px;
+  padding-top: 15px;
+  padding-bottom: 15px;
   background: var(--panel-2);
   border-top: 2px solid var(--border);
   border-bottom: none;
@@ -4853,15 +4885,22 @@ body {
   outline-offset: 2px;
 }
 /* Bigger than the other cells' content would allow: the headshot column trades
-   its vertical padding for image, so the row height is unchanged (5 + 37 + 5
-   is the old 8 + 31 + 8) and the live-role ring still clears the row border. */
+   its vertical padding for image, which is what lets the circle be the tallest
+   thing in the row without the row being the circle plus the text cells' full
+   padding. 6 + 46 + 6 is 58 (the 46 being a 42px circle plus the ~4px of
+   descender the td's own strut hangs under an inline image), against the
+   12 + 31 + 12 = 55 the research board's identity block asks for and the
+   12 + 30 + 12 = 54 the summary table's name cell does — so the headshot still
+   sets the row height on both boards, exactly as it did at 5 + 37 + 5 = 51.
+   The 6 also keeps the live-role ring (a 2px `box-shadow` outside a 1px border)
+   clear of the row border with a pixel to spare. */
 .summary-table tbody td.sum-img-col {
-  padding-top: 5px;
-  padding-bottom: 5px;
+  padding-top: 6px;
+  padding-bottom: 6px;
 }
 .sum-photo {
-  width: 37px;
-  height: 37px;
+  width: var(--row-photo);
+  height: var(--row-photo);
   border-radius: 50%;
   object-fit: cover;
   object-position: top center;
@@ -4875,17 +4914,22 @@ body {
   position: absolute;
   /* Tucked closer than the nav's: on a circle the bounding box's corner sits
      further outside the edge as the image grows, so the bigger headshot needs
-     a smaller offset to keep the pip sitting on the rim. */
+     a smaller offset to keep the pip sitting on the rim. The −2 survived the
+     circle growing to 42 because the two effects cancel — the pip grew with it.
+     Worked through: a 15px pip at −2 on a 37px circle has its centre 15.8px
+     from the photo's centre against a rim at 18.5, i.e. 2.7px inside it; a 17px
+     pip at −2 on a 42px circle sits 17.9 against a rim at 21, 3.1px inside.
+     Same mark in the same place, a fifth of a pixel apart. */
   top: -2px;
   right: -2px;
-  width: 15px;
-  height: 15px;
-  font-size: 9px;
+  width: 17px;
+  height: 17px;
+  font-size: 10px;
 }
 .sum-photo-spot.spot-start,
 .sum-photo-spot.spot-relief {
-  min-width: 15px;
-  font-size: 8px;
+  min-width: 17px;
+  font-size: 9px;
 }
 /* Roster status as a short code on the bottom edge of the headshot — IL10, RA,
    DTD, OUT, DFA. The opposite pole of the circle from the lineup-spot pip, so
@@ -4899,28 +4943,33 @@ body {
    the border, which is all that is left once the fill is spoken for.
 
    Sized to fit four characters (IL60 is the widest the app can print) inside a
-   37px circle without touching either rim. */
+   42px circle without touching either rim. */
 .sum-photo-status {
   position: absolute;
   /* Sits lower and smaller than it first did — far enough down that it reads as
      a tag *on* the rim rather than a band across the face, and small enough that
      the headshot is still a headshot. It hangs below the circle, so the limit is
-     the row rather than taste: the cell keeps 5px of padding under the 37px
-     image, and the sticky total row is what a badge on the last row of the table
-     would disappear behind. Measured at both widths after the change: 11px tall,
-     hanging 5px below the circle, 4px clear of the row and of the footer under
-     the last row — which is most of the room the 5px padding leaves. */
+     the row rather than taste: the cell's padding under the image is what it has
+     to fit in, and the sticky total row is what a badge on the last row of the
+     table would disappear behind. `bottom` fixes the badge's *bottom* edge, so
+     growing it 11 → 12px with the circle spends the pixel upward and changes
+     neither clearance: measured at 390 and 1200 after, 12px tall, hanging 5px
+     below the circle, **5px clear of the row and of the footer** under the last
+     row (4px before — the img cell's extra padding, not the badge). Across:
+     `IL60` measures **32.3px inside the 42px circle, 4.8px clear of either
+     rim**, where it was 28.1 inside 37 clearing 4.5 — so the widest code the
+     app can print gained a third of a pixel of air rather than losing any. */
   bottom: -5px;
   left: 50%;
   transform: translateX(-50%);
   display: inline-flex;
   align-items: center;
-  height: 11px;
-  padding: 0 3px;
-  border-radius: 5px;
+  height: 12px;
+  padding: 0 4px;
+  border-radius: 6px;
   border: 1px solid;
   background: #0a1120;
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.02em;
   line-height: 1;
@@ -4947,7 +4996,7 @@ body {
 
 /* ---- Centring the marks on a headshot -------------------------------------
    Every badge the app draws on a photograph — the lineup pip and the status
-   code, at the tables' 37px circle and at the details view's 64px portrait —
+   code, at the tables' 42px circle and at the details view's 64px portrait —
    centres its text here, in one place, because all four of them had it wrong
    and each was wrong by a different amount.
 
@@ -4961,7 +5010,10 @@ body {
    not to the design. Measured with a canvas against the rendered baseline, the
    digit pip in the summary table had 3.31px of air above it and 5.22px below
    inside a 15px circle (**0.95px high**), `SP` 3.47/5.60 (**1.06px**), and the
-   status code 1.75/3.40 in an 11px pill (**0.83px**).
+   status code 1.75/3.40 in an 11px pill (**0.83px**). (Those are the pips at
+   the sizes they were when the bug was found; the marks have since grown with
+   the row circle — 17px pip, 12px pill — and the rule below was re-measured at
+   the new sizes rather than assumed to carry: see the figures at the end.)
 
    The direction was not even consistent, which is what "not *always* centred"
    was: on the details portrait, in the app's own font rather than the tables'
@@ -6090,11 +6142,28 @@ body {
    another swipe to reach it. Same table, opposite problem. (The `width: auto` on
    the numeric columns needs no such exception: it only does anything when there
    is surplus to share, which on this board there is not — and on the one where
-   there is, a board narrowed to a handful of columns, it is just as welcome.) */
+   there is, a board narrowed to a handful of columns, it is just as welcome.)
+
+   **The exemption held when the other two tables' gutters grew**, and this is
+   the paragraph that decided it: at the *default* 27 columns on a checked board
+   a pixel a side is 54px of extra scroll, and the 1.9vw/28px the summary table
+   took would have been 320px of it — on a table already 1,881px wide in a
+   1200px window with a fifth of its columns hidden, i.e. two more stat columns
+   pushed past the right edge to buy air the reader then has to swipe through.
+   So this board takes the *vertical* half of the change and none of the
+   horizontal: rows 52.08 → 58, gutters exactly as they were.
+
+   The clamp is a variable now because two rules read it — this one and the
+   pinned name column's offset, which is this gutter twice plus the headshot.
+   That offset was a hardcoded `63px` and would have gone quietly wrong the
+   moment either number moved. */
+.research-table {
+  --research-gutter: clamp(5px, 1.6vw, 13px);
+}
 .research-table th,
 .research-table td {
-  padding-left: clamp(5px, 1.6vw, 13px);
-  padding-right: clamp(5px, 1.6vw, 13px);
+  padding-left: var(--research-gutter);
+  padding-right: var(--research-gutter);
 }
 /* ---- The identity cell: a name over its club and positions ----
    Team and position were two columns of their own (`Tm` and `Pos`), and on the
@@ -6113,13 +6182,20 @@ body {
   flex-direction: column;
   /* No gap, and the logo is 15px rather than 16, for a reason that was
      measured rather than eyeballed: the row's height is set by whichever of
-     the headshot (37px) and this block is taller, and at 16px with a gap the
-     block came to 33px — over the 31 the headshot's own cell leaves — which
-     took the row from 51px to 54 and cost a row of the table per screen. At
-     31 the headshot is the tallest thing in the row again, exactly as it was
-     before this cell held two lines, and the board shows the same eleven rows
-     at 1200×800 that it did with `Tm` and `Pos` as columns. The two lines have
-     their own leading and read as a block without the gap. */
+     the headshot and this block is taller, and at 16px with a gap the block
+     came to 33px — over the 31 the 37px headshot's own cell left — which took
+     the row from 51px to 54 and cost a row of the table per screen. At 31 the
+     headshot was the tallest thing in the row again, exactly as it was before
+     this cell held two lines. The two lines have their own leading and read as
+     a block without the gap.
+
+     The headshot has since grown to 42px and the cells' vertical padding to 12,
+     which moves that budget rather than removing it: the image cell is now
+     6 + 46 + 6 = 58 against this block's 12 + 31 + 12 = 55, so the circle is
+     still what sets the row and this block has **three pixels of slack it did
+     not have before** — measured, not inferred: rows are 58.00px on both boards
+     (51.00 and 52.08 before) and this block 31.08. Anything added here has that
+     much room and not a pixel more. */
   gap: 0;
 }
 /* The name, the roster baseball and the watchlist star stay one line, which is
@@ -6173,9 +6249,13 @@ body {
   justify-content: flex-end;
   gap: 3px;
   width: 100%;
-  /* Matches the padding the shared th rule gives every other cell, so the
-     header text lines up with the numbers under it. */
-  padding: 8px clamp(5px, 1.6vw, 13px);
+  /* The horizontal half is exactly the gutter the shared rule gives every other
+     cell — the same variable, so a header can't line up differently from the
+     numbers under it. The vertical half is deliberately two pixels under the
+     body's: a header row is one short line where a body row is a headshot, and
+     matching it would spend the height on a band of empty panel. It rose with
+     the body's, 8 → 10, so the proportion is the one it always had. */
+  padding: 10px var(--research-gutter);
   color: inherit;
   background: none;
   border: 0;
@@ -6219,16 +6299,25 @@ body {
    as wide, so by the time you have scrolled out to Chase% or FB% there is no
    way to tell whose row you are reading — the name is worth its width here.
 
-   The 63px offset is the headshot cell exactly: a 37px photo (border-box, so
-   its border is inside that) between two 13px gutters. Those gutters are
-   `clamp(5px, 1.6vw, 13px)`, which only reaches 13px from ~813px of viewport
-   up — which is the other half of why this starts at 820px rather than lower.
-   Narrower than that the offset would be wrong *and* the pinned pair would eat
-   two fifths of the screen, so the name goes back to scrolling away. */
+   The offset is the headshot cell exactly: the photo (border-box, so its border
+   is inside that) between two of this board's gutters. It was written out as
+   `63px` — 13 + 37 + 13 — and that is the kind of number that is right until
+   somebody grows the circle, which is what happened: 37 → 42 makes it 68, and a
+   stale 63 pins the name column five pixels *under* the headshot it is meant to
+   clear. So it is **derived** rather than restated, off the same two tokens the
+   cells themselves are laid out with, and the next change to either carries
+   here for free.
+
+   `--research-gutter` is `clamp(5px, 1.6vw, 13px)`, which only reaches 13px from
+   ~813px of viewport up — which is the other half of why this starts at 820px
+   rather than lower, and is why the calc resolves to a flat 68 everywhere the
+   media query applies. Narrower than that the offset would be wrong *and* the
+   pinned pair would eat two fifths of the screen, so the name goes back to
+   scrolling away. */
 @media (min-width: 820px) {
   .research-table .sum-name-col {
     position: sticky;
-    left: 63px;
+    left: calc(var(--row-photo) + 2 * var(--research-gutter));
     z-index: 1;
   }
   /* Above both the sticky header and the sticky column, as the corner cell. */
@@ -6260,8 +6349,9 @@ body {
    resolves which, so there is no scroll listener and no state to drift.
 
    `--research-pin-left` is measured in the component (the name column is fluid,
-   so unlike its own 63px this offset can't be a constant) and is the right edge
-   of whatever is already pinned there — the headshot alone below 820px, the
+   so unlike the headshot cell's own width this offset can't be a calc) and is
+   the right edge of whatever is already pinned there — the headshot alone
+   below 820px, the
    headshot and name above it. Without clearing it the sorted column would slide
    underneath the name rather than alongside it.
 
@@ -6281,7 +6371,9 @@ body {
 .research-table td.research-sorted,
 .research-table th.research-sort.active {
   position: sticky;
-  left: var(--research-pin-left, 63px);
+  /* The fallback is the headshot cell — what is pinned before the effect has
+     measured, and derived from the same two tokens for the same reason. */
+  left: var(--research-pin-left, calc(var(--row-photo) + 2 * var(--research-gutter)));
   right: 0;
   z-index: 1;
   box-shadow: var(--pin-edge), var(--pin-edge-left);
@@ -6309,10 +6401,11 @@ body {
    column between two right-aligned ones reads as a mistake rather than as
    prose. Nothing wraps — a third line would cost the row its height.
 
-   The height budget is 31px, which is what the 37px headshot leaves inside the
-   cell's 10px of padding, and it is the same budget `.research-id` spends on a
-   name over its club and positions. 16 + 14 with no gap is 30 of it, so a
-   scheduled row is exactly as tall as a row with no game at all. */
+   The height budget is 34px — what the 42px headshot's own cell (6 + 46 + 6 =
+   58) leaves inside this cell's 12px of padding — and it is the same budget
+   `.research-id` spends on a name over its club and positions. 16 + 14 with no
+   gap is 30 of it, so a scheduled row is exactly as tall as a row with no game
+   at all, with four pixels in hand where the 37px circle left three. */
 .research-table td.research-opp {
   white-space: nowrap;
 }
