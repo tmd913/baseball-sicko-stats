@@ -1071,8 +1071,10 @@ export interface EspnRosterPlayer {
   /** Usually one; two for a two-way player, who is two watchlist entries. */
   kinds: PlayerKind[];
   /** The fantasy slot he is in on the day this was read for — 'SS', 'UTIL',
-   *  'SP', 'BE', 'IL'. Today's, unless the caller asked for a future one; see
-   *  **Which day's lineup** above. */
+   *  'SP', 'BE', 'IL'. Whichever day that is, is the caller's business: the
+   *  league-wide read answers for today or a future day, and `getTeamRoster`
+   *  answers for any day of the season, past ones included. See **Which day's
+   *  lineup** above. */
   slot: string;
   slotId: number;
   /** In that day's lineup, i.e. not benched and not on the IL. */
@@ -1328,20 +1330,24 @@ export async function getOwnership(
 // opposite of the rule above it, and deliberately: the two are different
 // questions off the same payload.
 //
-//  - *Which players does the view report on?* Your team **as it stands** —
-//    today's roster, or a future day's, exactly as before. A man you dropped on
-//    Tuesday is not on your team and has no row.
+//  - *Which players does the view report on?* The **union of every day's
+//    roster** — see `rostersToWatchlist`, which reverses what this line used to
+//    say. The man you dropped on Tuesday has the days he was yours.
 //  - *Which of his days count?* The days **you actually had him in your
 //    lineup**, read off each day's own period.
 //
 // A player who was not on your team at all on some day is, on that day, not in
 // your lineup — which is the same answer as benched and is the honest one: his
-// Monday belonged to whoever held him on Monday. The two rules compose into one
-// sentence a reader can hold: *your team as it is now, credited only for the
-// days you were playing them.* What it cannot show is the man you have since
-// dropped, whose Monday you really did earn — he is off the roster the whole
-// app is reporting on, and putting him back would be the very thing the roster
-// rule above refuses. Stated rather than papered over.
+// Monday belonged to whoever held him on Monday.
+//
+// **Three things read this file's rosters and only one of them wants today's.**
+// `getOwnership`'s clamp is right for *whose team is this* — a past period
+// answers with the roster you had then, and the app must not report on a team
+// you no longer have. It is wrong for the two questions that are about a *day*:
+// the slot chip a row wears and the order the roster reads in. Those take
+// `byDate[end]` instead — see `index.ts::fantasyWatchlist`, where the split is
+// argued, and **The slot chip and the order are the range end's, not today's**
+// in `docs/claude/espn.md`.
 
 /**
  * The absolute period holding `date`'s lineup — **unclamped**, so a past day
@@ -1585,10 +1591,18 @@ export function lineupsFrom(
  * union of every day's roster — including the man you have since dropped, whose
  * Monday you really did earn — and the second is exactly the days he was on it.
  *
- * **Order is today's team first, in its own order** (lineup, bench, IL — what
- * `rosterToWatchlist` has always preserved), then the men who are no longer on
- * it, most-recently-held first. A manager reads his own team down the page and a
- * dropped player is a footnote to it, not an interruption in the middle.
+ * **Order is the `anchor` day's team first, in its own order** (lineup, bench,
+ * IL — what `rosterToWatchlist` has always preserved), then the men who were on
+ * the team over the range but not on it that day, most-recently-held first. A
+ * manager reads his own team down the page and a man he wasn't holding on the
+ * day in question is a footnote to it, not an interruption in the middle.
+ *
+ * **The anchor is the end of the range, not today**, which for four of the five
+ * date presets is the same thing and for a past range is the whole point: with
+ * `Yesterday` on screen, the catcher you started yesterday belongs in the
+ * catcher's spot, not at the bottom under the men you have since picked up. The
+ * caller passes whichever day it could actually read; see
+ * `index.ts::fantasyWatchlist`, where the fallback to today is argued.
  */
 export interface FantasyRosterRange {
   players: WatchPlayer[];
@@ -1598,7 +1612,7 @@ export interface FantasyRosterRange {
 
 export function rostersToWatchlist(
   byDate: Record<string, EspnRosterPlayer[]>,
-  current: EspnRosterPlayer[],
+  anchor: EspnRosterPlayer[],
 ): FantasyRosterRange {
   const heldDays = new Map<string, Set<string>>();
   const identity = new Map<string, WatchPlayer>();
@@ -1621,7 +1635,7 @@ export function rostersToWatchlist(
 
   const players: WatchPlayer[] = [];
   const placed = new Set<string>();
-  for (const p of rosterToWatchlist(current)) {
+  for (const p of rosterToWatchlist(anchor)) {
     const key = `${p.kind}-${p.id}`;
     if (!heldDays.has(key) || placed.has(key)) continue;
     placed.add(key);

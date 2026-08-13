@@ -514,6 +514,18 @@ function espnError(err: unknown, res: express.Response): boolean {
  * passing it here rather than only to the route that draws the chips: the
  * report's player list is that order, so without it a Tomorrow report would
  * list the lineup one way and chip it another.
+ *
+ * **A past day is where that clamp stops being enough**, and it is why this
+ * returns two rosters rather than one. `roster` is the team **as it stands** —
+ * today's, or the future day asked for — and is the answer to every "is he on
+ * my team" question the app asks: what the research board's `My Roster` button
+ * selects, what its baseball marks, what the player page's badge states.
+ * `endRoster` is the team **as it was at the end of the range in view**, which
+ * is what a slot chip and the roster's own order are facts about. The two are
+ * one array on every range ending today or later, which is four of the five
+ * date presets; they part company exactly when the reader has asked about a day
+ * gone by, and the whole of this fix is that the second question stops being
+ * answered with the first one's roster.
  */
 async function fantasyWatchlist(
   user: string,
@@ -524,6 +536,7 @@ async function fantasyWatchlist(
   players: WatchPlayer[];
   teamName: string | null;
   roster: EspnRosterPlayer[];
+  endRoster: EspnRosterPlayer[] | null;
   lineups: Record<string, number[]> | null;
   held: HeldDays | null;
 }> {
@@ -568,11 +581,35 @@ async function fantasyWatchlist(
       return null;
     });
   }
-  const over = byDate && Object.keys(byDate).length > 0 ? rostersToWatchlist(byDate, roster) : null;
+  // **The slot chip and the roster's order are anchored to the end of the
+  // range, not to today.** `getOwnership` clamps anything at or before today
+  // back onto ESPN's current period — deliberately, since *which players the
+  // views report on* must not become a team the manager no longer has — so on
+  // a past range the roster it answers with is today's, and reading the chips
+  // and the order off it says a man was benched yesterday because he is on the
+  // bench now, and files the catcher you did start under "no longer on the
+  // team". The per-day map has that day's roster, slots and all, so the anchor
+  // is `byDate[end]` where there is one.
+  //
+  // **Where there isn't, today's roster stands**, which is the pre-per-day
+  // behaviour and the right direction to fail in: a day ESPN wouldn't answer
+  // for costs its precision, not the chips. That covers a failed read, a
+  // caller that named no range at all, and every range ending today or later —
+  // the last of which needs no fallback at all, `getTeamRosters` having seeded
+  // the map with this very array (`byDate[end] === roster` by construction), so
+  // the two agree by identity rather than by luck.
+  const endRoster = (range && byDate?.[range.end]) ?? null;
+  const anchor = endRoster ?? roster;
+  const over = byDate && Object.keys(byDate).length > 0 ? rostersToWatchlist(byDate, anchor) : null;
   return {
     players: over?.players ?? rosterToWatchlist(roster),
     teamName: team?.name ?? espn.teamName ?? null,
     roster,
+    // Sent only when it is genuinely a *different* day's list. Ending today or
+    // later it is the same 28 rows the caller already has under `roster`, and a
+    // second copy of them on the wire would say nothing the client's own
+    // fallback doesn't.
+    endRoster: endRoster === roster ? null : endRoster,
     lineups: byDate && lineupsFrom(byDate),
     held: over?.heldDays ?? null,
   };
@@ -603,6 +640,13 @@ app.get(
 // a caller that only wants the chips) the field is simply absent and nothing
 // downstream changes. The span is capped like the report's, since it is the
 // same span and the fan-out is one ESPN read per day of it.
+//
+// It opts the response into **`endRoster`** as well — the roster as it stood at
+// the end of that span, when that is a past day the per-day read could answer
+// for. `players` stays the team as it stands, so the two questions the client
+// asks of this payload keep their own answers: *where was he in my lineup that
+// day* reads `endRoster`, *is he on my team* reads `players`. Absent means the
+// second answers both, which is what every range ending today already did.
 app.get(
   '/api/espn/roster',
   requireUser,
@@ -618,13 +662,13 @@ app.get(
         ? { start, end }
         : null;
     try {
-      const { roster, teamName, lineups } = await fantasyWatchlist(
+      const { roster, endRoster, teamName, lineups } = await fantasyWatchlist(
         userId(req),
         req.query.refresh === '1',
         end,
         range,
       );
-      res.json({ teamName, players: roster, lineups });
+      res.json({ teamName, players: roster, endRoster, lineups });
     } catch (err) {
       if (!espnError(err, res)) throw err;
     }
