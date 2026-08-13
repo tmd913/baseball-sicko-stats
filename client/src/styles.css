@@ -4978,7 +4978,20 @@ body {
   margin: 0 8px 0 0;
   vertical-align: middle;
 }
-.summary-table .sum-name-col .fantasy-slot + .sum-name {
+/* The identity block (`.row-id`, shared with the research board) sits *beside*
+   the chip rather than under it, which is why it is inline here and a plain
+   block there: this is the one table whose name cell leads with a control, and
+   a block-level flex column would have pushed the whole of who-he-is onto a
+   third line. `inline-flex` shrink-to-fits, so the sub-line still cannot widen
+   the column past the names above it.
+
+   It must not be a flex `<th>`: making the cell itself a flex box takes it out
+   of table layout altogether, which is the mistake the game log's corner header
+   already documents. `vertical-align: middle` on both is what centres a 15px
+   pill against a two-line block — the default baseline alignment would sit the
+   chip on the *name's* baseline and hang the club line below it. */
+.summary-table .sum-name-col .row-id {
+  display: inline-flex;
   vertical-align: middle;
 }
 .summary-table .sum-name-col {
@@ -6422,8 +6435,17 @@ body {
 
    What it costs is height: a row goes from one line to two. That is paid once
    per row and bought back across every column, on a table that overflows a
-   1920px screen with a third of its columns showing. */
-.research-id {
+   1920px screen with a third of its columns showing.
+
+   **These rules are unscoped because the block is shared**: the summary table
+   draws the same two facts under the same name off `PlayerIdentity`, and both
+   tables are 58px rows off a 42px circle, so there is one set of numbers to
+   keep true rather than two. The only thing either table adds is how the block
+   sits in its own cell — see `.summary-table .sum-name-col .row-id`, which is
+   inline because that cell leads with a fantasy slot chip. Named `.row-id`
+   rather than `.player-id`, which the player card's own header block has held
+   since long before this existed. */
+.row-id {
   display: flex;
   flex-direction: column;
   /* No gap, and the logo is 15px rather than 16, for a reason that was
@@ -6447,10 +6469,10 @@ body {
 /* The name, the roster baseball and the watchlist star stay one line, which is
    what they were before this block existed — the two marks trail the name and
    never push it. */
-.research-id-name {
+.row-id-name {
   white-space: nowrap;
 }
-.research-id-sub {
+.row-id-sub {
   display: flex;
   align-items: center;
   gap: 5px;
@@ -6468,7 +6490,7 @@ body {
    MLB draws every one of these in a 300×300 box with its own margins — a mark
    that is wide and short (a wordmark cap) and one that is square must sit on
    the same baseline as the text beside them. */
-.research-id-logo {
+.row-id-logo {
   width: 15px;
   height: 15px;
   object-fit: contain;
@@ -6476,11 +6498,11 @@ body {
 }
 /* The abbreviation, for a club with no logo to draw — no id on the leaderboard
    row, or an SVG that failed to load. Sized to sit where the mark would. */
-.research-id-team {
+.row-id-team {
   flex: none;
   min-width: 15px;
 }
-.research-id-pos {
+.row-id-pos {
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -6649,7 +6671,7 @@ body {
 
    The height budget is 34px — what the 42px headshot's own cell (6 + 46 + 6 =
    58) leaves inside this cell's 12px of padding — and it is the same budget
-   `.research-id` spends on a name over its club and positions. 16 + 14 with no
+   `.row-id` spends on a name over its club and positions. 16 + 14 with no
    gap is 30 of it, so a scheduled row is exactly as tall as a row with no game
    at all, with four pixels in hand where the 37px circle left three. */
 .research-table td.research-opp {

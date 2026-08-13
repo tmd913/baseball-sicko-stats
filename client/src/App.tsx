@@ -41,6 +41,7 @@ import { simulateLiveDay } from './simulate';
 import { PlayerDetails } from './components/PlayerDetails';
 import { DateRangePicker, numericRange, tightRange } from './components/DateRangePicker';
 import {
+  EligibilityContext,
   FantasyRosterContext,
   MutedContext,
   PlayerStatusContext,
@@ -2411,6 +2412,11 @@ export default function App() {
     <MutedContext.Provider value={muteAudio}>
     <FantasyRosterContext.Provider value={fantasySlots}>
     <PlayerStatusContext.Provider value={playerStatuses}>
+    {/* Where the connected league will let each player be started — read by the
+        summary table's identity block, which is three components down from here
+        and is the only leaf that wants it. Null with no league, which is what
+        makes that block fall back to MLB's own listed position. */}
+    <EligibilityContext.Provider value={eligibility}>
     <div
       /* `summary-mode` is the fixed-height flex column the table needs, and
          the edit screen is a long scrolling list that must not be trapped in
@@ -3197,6 +3203,7 @@ export default function App() {
         />
       )}
     </div>
+    </EligibilityContext.Provider>
     </PlayerStatusContext.Provider>
     </FantasyRosterContext.Provider>
     </MutedContext.Provider>

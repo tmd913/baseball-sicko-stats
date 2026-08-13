@@ -737,6 +737,15 @@ export interface PlayerReport extends WatchPlayer {
   // carry it as `stand` once he's appeared in one; this is what the card reads
   // before that, when the only thing on it is a game he hasn't pitched yet.
   throws: string | null;
+  // Who he is rather than what he did: his club (id for the cap logo,
+  // abbreviation for the `alt` and the fallback) and MLB's listed position.
+  // All three come off `getRosterInfo` and are filled by `getReport` alone —
+  // the per-day reports a snapshot holds carry nulls and nothing reads them
+  // there, `getReport` taking only `games` off a day. See the summary table's
+  // identity block in `docs/claude/client.md`.
+  teamId: number | null;
+  team: string | null;
+  position: string | null;
 }
 
 /** A rostered player for the season, used for search/autocomplete. */

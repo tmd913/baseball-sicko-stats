@@ -93,6 +93,34 @@ export function usePlayerStatus(id: number): PlayerStatus | null {
 }
 
 /**
+ * Where the connected ESPN league will let each player be started, by MLB id —
+ * or null with no league, which is what makes every reader fall back to what
+ * MLB knows on its own.
+ *
+ * A context for the reason the three above are: the summary table's identity
+ * block is a leaf, and the two components between it and App — the per-kind
+ * table and the row — have no interest in a fantasy league whatsoever. Keyed by
+ * **id** rather than by the app's player key, exactly as `PlayerStatusContext`
+ * is and for the same reason: ESPN's answer is about a person, and the caller
+ * says which half of a two-way player it is drawing (`lib.ts::positionCell`
+ * takes the kind).
+ *
+ * **Deliberately not `FantasyRosterContext`**, which is the obvious neighbour
+ * and is the wrong vehicle: that map is null whenever the views are reading the
+ * *saved* roster, where eligibility is a fact about the league and applies the
+ * moment one is connected, whatever list is on screen. And deliberately not
+ * threaded into the research board, which takes the same map as a prop from App
+ * — it merges eligibility onto its rows to *filter* by it, which is a question
+ * the table asks rather than the row, and a prop is what a table-level concern
+ * should be.
+ */
+export const EligibilityContext = createContext<Map<number, string[]> | null>(null);
+
+export function useEligible(id: number): string[] | null {
+  return useContext(EligibilityContext)?.get(id) ?? null;
+}
+
+/**
  * Returns a ref to attach to a collapsible element. When `expanded` flips from
  * false to true, the element scrolls to the top of the viewport (its own
  * scroll-margin-top clears the sticky nav). Only fires on the closed→open
