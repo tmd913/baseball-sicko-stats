@@ -2326,53 +2326,10 @@ export function ResearchTable({
                 belong together — they name which slice of the league the table
                 is, where the buttons open panels. */}
             <div className="research-tools">
-            {/**
-             * **Watchlist leads the run, and it is the one control here that
-             * adds players rather than taking them away.** It stays in this
-             * group rather than joining the three include buttons it now
-             * composes with, and the reason is measured: moved into
-             * `.research-include` it takes that group from 170px to 240 at
-             * 390px wide, where the first row has 346 to spend and the
-             * `Roster · Research` pills already have 171 of it — so the group
-             * drops to a line of its own and the bar goes **three rows to four,
-             * 207px of chrome to 255**, on the one page where every pixel of
-             * height is a row of the table. At 640, 900, 1200 and 1920 the move
-             * costs and buys nothing at all (2 / 3 / 2 / 2 rows either way), so
-             * it would be tidiness bought only where there is room to spare and
-             * paid for only where there isn't. Keeping the icon-only phone form
-             * doesn't save it either — 240px is the group *with* the label
-             * hidden.
-             *
-             * It reads first in the run instead, which is the honest ordering
-             * once it widens the board: **add who, then narrow who** (Search,
-             * Filters), then change what is shown about them (Columns). It also
-             * puts it as close to the include group as a bar that wraps between
-             * groups allows.
-             *
-             * The one button in the run with **no panel**, so it takes `.on` and
-             * never `.active`, and it carries the count for the same reason the
-             * Filters button does — a control that holds something has to say so
-             * with its panel shut, and this one has no panel at all.
-             */}
-            <button
-              type="button"
-              className={`research-toggle${includeWatchlist ? ' on' : ''}`}
-              aria-pressed={includeWatchlist}
-              onClick={() => onIncludeWatchlistChange(!includeWatchlist)}
-              title="Also show the players on your watchlist, whoever owns them — the star on each row is what puts them there"
-            >
-              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
-                <path d="m12 3.6 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9Z" />
-              </svg>
-              <span className="research-toggle-label">Watchlist</span>
-              {watchlistCount > 0 && (
-                <span className="research-toggle-count">{watchlistCount}</span>
-              )}
-            </button>
-            {/* Search and Filters next — the two disclosures you come to the board
-                with a question in. Each carries an `on` state whenever its panel
-                holds something, open or shut: a collapsed control must never be the
-                only place a filter lives. */}
+            {/* Search and Filters lead the run — the two disclosures you come to
+                the board with a question in. Each carries an `on` state whenever
+                its panel holds something, open or shut: a collapsed control must
+                never be the only place a filter lives. */}
             <button
               type="button"
               className={`research-toggle${searchOpen ? ' active' : ''}${
@@ -2406,7 +2363,53 @@ export function ResearchTable({
               <span className="research-toggle-label">Filters</span>
               {filters.length > 0 && <span className="research-toggle-count">{filters.length}</span>}
             </button>
-            {/* Columns reads last: the three before it narrow *who* is in the
+            {/**
+             * **Watchlist sits after Filters, and it is the one control here
+             * that adds players rather than taking them away.** It stays in this
+             * group rather than joining the three include buttons it now
+             * composes with, and the reason is measured: moved into
+             * `.research-include` it takes that group from 170px to 240 at
+             * 390px wide, where the first row has 346 to spend and the
+             * `Roster · Research` pills already have 171 of it — so the group
+             * drops to a line of its own and the bar goes **three rows to four,
+             * 207px of chrome to 255**, on the one page where every pixel of
+             * height is a row of the table. At 640, 900, 1200 and 1920 the move
+             * costs and buys nothing at all (2 / 3 / 2 / 1 rows either way), so
+             * it would be tidiness bought only where there is room to spare and
+             * paid for only where there isn't. Keeping the icon-only phone form
+             * doesn't save it either — 240px is the group *with* the label
+             * hidden.
+             *
+             * Within the run it reads third, after the two disclosures and
+             * before Columns. Where it sits in the group is a matter of the
+             * order the four are read in and not of layout: they are one flex
+             * item that wraps whole, so a button moved among them cannot change
+             * a width — measured before and after, the group is 240 / 468px and
+             * the bar wraps to 3 / 2 / 3 / 2 / 1 rows (207 / 159 / 207 / 161 /
+             * 115px of chrome) at 390 / 640 / 900 / 1200 / 1920 either way, with
+             * no horizontal overflow at any of them.
+             *
+             * The one button in the run with **no panel**, so it takes `.on` and
+             * never `.active`, and it carries the count for the same reason the
+             * Filters button does — a control that holds something has to say so
+             * with its panel shut, and this one has no panel at all.
+             */}
+            <button
+              type="button"
+              className={`research-toggle${includeWatchlist ? ' on' : ''}`}
+              aria-pressed={includeWatchlist}
+              onClick={() => onIncludeWatchlistChange(!includeWatchlist)}
+              title="Also show the players on your watchlist, whoever owns them — the star on each row is what puts them there"
+            >
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
+                <path d="m12 3.6 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9Z" />
+              </svg>
+              <span className="research-toggle-label">Watchlist</span>
+              {watchlistCount > 0 && (
+                <span className="research-toggle-count">{watchlistCount}</span>
+              )}
+            </button>
+            {/* Columns reads last: the three before it decide *who* is in the
                 table, where this changes what is shown about them. */}
             <button
               type="button"
