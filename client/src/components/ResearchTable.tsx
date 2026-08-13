@@ -1,6 +1,7 @@
 import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { BaseballMark } from './BaseballMark';
+import { LoadingBlock, LoadingLine } from './Loading';
 import { ExpandButton } from './ExpandButton';
 import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
 import { createPortal } from 'react-dom';
@@ -333,11 +334,11 @@ const TREND_COLUMNS: Column[] = TREND_WINDOWS.map(trendColumn);
  * game log's own vocabulary for a narrow column (`W 5-3`) and saves a second
  * club abbreviation on the app's widest table.
  *
- * Two lines, never three, which is the row-height rule: 51px is set by the 37px
- * headshot, and the identity block under the name already spends 31 of it the
- * same way. So the start time rides the matchup rather than taking a line of
- * its own — exactly as `.sum-opp-time` does — leaving the second line to the
- * starter.
+ * Two lines, never three, which is the row-height rule: 58px is set by the 42px
+ * headshot (6 + 46 + 6 against the text cells' 12 + content + 12), and the
+ * identity block under the name spends 31 of the 34 that leaves. So the start
+ * time rides the matchup rather than taking a line of its own — exactly as
+ * `.sum-opp-time` does — leaving the second line to the starter.
  *
  * Still sorted **alphabetically on the opponent**, which on this column means
  * "group my players by tonight's game". Everything the cell gained is a fact
@@ -2007,7 +2008,8 @@ export function ResearchTable({
    * `position: sticky` with **both** `left` and `right` set; the browser picks
    * the edge, so there is no scroll listener and nothing to keep in sync.
    *
-   * The `left` offset can't be a constant the way the name column's 63px is.
+   * The `left` offset can't be a calc the way the name column's own is (the
+   * headshot plus its two gutters, off `--row-photo` and `--research-gutter`).
    * It has to clear whatever is already pinned there, and the name column is
    * fluid — it absorbs the table's slack — so the width is measured and handed
    * to CSS as `--research-pin-left`. Below 820px the name isn't sticky at all
@@ -2366,9 +2368,11 @@ export function ResearchTable({
           </div>
         </div>
       ) : (
-        <div className="empty-state">
-          <p className="empty-title">Reading your league…</p>
-        </div>
+        /* Not an `.empty-state`, which is the app's box for a finding: "there
+           is nobody here" is precisely what this must not say while the league
+           read is still out. A block wait says the opposite, in the same slot
+           the finding would have taken. */
+        <LoadingBlock>Reading your ESPN league</LoadingBlock>
       );
     }
     if (!espnConnected && include.others) {
@@ -2907,11 +2911,19 @@ export function ResearchTable({
       {/* Directly above the table, reading as its caption — how many rows the
           filters left, out of the board they were applied to. No season: the
           app shows one season and says so nowhere else on the page either. */}
+      {/* The wait and the answer arrive in the same place, which is why this is
+          a `LoadingLine` rather than a block: the caption is the one line on
+          the page that is about to hold the count, so the ball turning in it
+          says the count is on its way. App keeps the rows it already has while
+          a re-read is in flight (`loading` is gated on the cache being empty),
+          so this can only ever be a board with nothing on it yet. */}
       {(loading || boardRows.length > 0) && (
         <div className="research-count" role="status">
-          {loading
-            ? 'Loading league leaderboard…'
-            : `${visible.length} of ${boardRows.length} ${kind === 'pitcher' ? 'pitchers' : 'batters'}`}
+          {loading ? (
+            <LoadingLine>Reading the league leaderboard</LoadingLine>
+          ) : (
+            `${visible.length} of ${boardRows.length} ${kind === 'pitcher' ? 'pitchers' : 'batters'}`
+          )}
         </div>
       )}
 

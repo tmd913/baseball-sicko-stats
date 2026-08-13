@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { setAuthToken, setReauthHandler } from './api';
+import { LoadingLine, SpinningBaseball } from './components/Loading';
 import {
   CognitoError,
   confirmForgotPassword,
@@ -347,7 +348,7 @@ function Gate({ config, children }: { config: CognitoConfig; children: ReactNode
     return () => setPublished(null);
   }, [session, signOut]);
 
-  if (phase === 'boot') return <Splash>Signing in…</Splash>;
+  if (phase === 'boot') return <Splash>Signing you in</Splash>;
   if (phase === 'out') {
     return (
       <AuthScreen
@@ -362,11 +363,21 @@ function Gate({ config, children }: { config: CognitoConfig; children: ReactNode
 
 /* ---- The screens -------------------------------------------------------- */
 
-function Splash({ children }: { children: ReactNode }) {
+/**
+ * The one wait that owns the whole window, and so the one place the baseball is
+ * drawn at `lg`. There is nothing behind it to protect and nothing else on
+ * screen to look at, which is the exact opposite of every other wait in the
+ * app — hence a 44px ball over the product's own name rather than a mark in a
+ * corner. Exported because `main.tsx` shows the same card for the step before
+ * this one (reading `/config.json`), where it used to render `null` and give a
+ * cold load a blank window with nothing in it at all.
+ */
+export function Splash({ children }: { children: ReactNode }) {
   return (
     <div className="auth-screen">
-      <div className="auth-card">
+      <div className="auth-card auth-splash">
         <h1 className="auth-title">Statcast Sicko</h1>
+        <SpinningBaseball size="lg" />
         <p className="auth-sub">{children}</p>
       </div>
     </div>
@@ -602,8 +613,18 @@ function AuthScreen({
             </label>
           )}
 
-          <button className="auth-btn auth-btn-primary" type="submit" disabled={busy}>
-            {busy ? 'Working…' : action[mode]}
+          <button
+            className="auth-btn auth-btn-primary"
+            type="submit"
+            disabled={busy}
+            aria-busy={busy}
+          >
+            {/* No `MIN_SPIN` floor here and none wanted: a Cognito round trip
+                is hundreds of milliseconds at best, so there is no fast answer
+                to leave a press without a trace — and the *result* of this
+                press is the whole app replacing the card, which is the loudest
+                confirmation in the product. */}
+            {busy ? <LoadingLine announce={false}>Working</LoadingLine> : action[mode]}
           </button>
         </form>
 

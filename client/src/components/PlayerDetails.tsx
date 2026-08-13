@@ -7,6 +7,7 @@ import type {
   PlayerPercentiles,
   PercentileMetric,
   PlayerKind,
+  PlayerReport,
   SeasonArsenal,
   SeasonStats,
   XwobaSeries,
@@ -19,7 +20,16 @@ import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
 import { BaseballMark } from './BaseballMark';
 import { RollingXwoba } from './RollingXwoba';
 import { GameLog } from './GameLog';
-import { useLockBodyScroll, useOverlayChromeOffset, usePlayerStatus } from '../hooks';
+import { LoadingBlock } from './Loading';
+import {
+  useDelayedFlag,
+  overlayAbove,
+  useLockBodyScroll,
+  useOverlayChromeOffset,
+  usePlayerStatus,
+} from '../hooks';
+import { PlayerDay, playerDayLine } from './PlayerDay';
+import { DialogLayerContext, OVERLAY_LAYER } from './Modal';
 
 /**
  * Savant's diverging percentile scale: deep blue (poor, 0) → neutral grey
@@ -425,7 +435,48 @@ function PitcherSeasonPanel({
   );
 }
 
-type DetailsTab = 'percentiles' | 'splits' | 'gamelog' | 'rolling' | 'arsenal';
+type DetailsTab = 'overview' | 'percentiles' | 'splits' | 'gamelog' | 'rolling' | 'arsenal';
+
+/**
+ * The **Overview** tab: this player's day, read whole — his game, his line for
+ * it, and every play of it with its clip.
+ *
+ * It is the feed's grouped reading, which was the Games view before that, and
+ * it has landed here because a card per player is a page *about a player* and
+ * the app already had one. What that page could never do as a feed toggle it
+ * does trivially now: it opens on **anybody**, rostered or not, which is
+ * precisely the reader this view exists for — someone who came from a research
+ * board row to decide whether a stranger is worth picking up, and whose first
+ * question is what he did today.
+ *
+ * It leads the tab strip and is the default, for the same reason: the season
+ * readings beside it answer "how good is he", where this answers "what is he
+ * doing", and on a game day that is the question the page is opened with.
+ *
+ * The day comes from `/api/players/:id/day`, which is `getReport` for one man
+ * over one date — the very report the feed reads — so the items here and the
+ * items in the stream are the same objects drawn by the same components.
+ */
+function OverviewTab({
+  report,
+  onOpenDetails,
+}: {
+  report: PlayerReport;
+  onOpenDetails?: (key: string) => void;
+}) {
+  // **The combined line only appears when there is something to combine.** A
+  // day is one game almost every time, and that game's own section header
+  // already carries his line for it — so on a single-game day the strip was the
+  // same string twice, an inch apart. On a doubleheader it is genuinely new,
+  // being the only place the two halves are added up.
+  const line = report.games.length > 1 ? playerDayLine(report) : null;
+  return (
+    <div className="details-overview">
+      {line && <p className="details-note details-day-line">{line}</p>}
+      <PlayerDay report={report} onOpenDetails={onOpenDetails} />
+    </div>
+  );
+}
 
 /**
  * The Arsenal tab: a pitcher's season pitch mix, overall or against one batter
@@ -480,7 +531,10 @@ function ArsenalTab({
  * questions under every such decision — is he playing today, and is he hurt —
  * were answered by every other view in the app and not by this one. The marks
  * are the same ones the summary table and the board draw, in the same places,
- * scaled to a 64px portrait rather than a 37px row circle.
+ * scaled to a 64px portrait rather than a 42px row circle. The portrait itself
+ * deliberately did not grow when the row circle did: it is a page header rather
+ * than a row, sized to the head it sits in, and the two mark sets are each
+ * sized to their own circle.
  */
 function DetailsPhoto({
   playerId,
@@ -564,7 +618,7 @@ export function PlayerDetails({
   // the view lands somewhere the user never scrolled to.
   useLockBodyScroll();
   const kind = isPitcher ? 'pitcher' : 'batter';
-  const [tab, setTab] = useState<DetailsTab>('percentiles');
+  const [tab, setTab] = useState<DetailsTab>('overview');
 
   /**
    * The position chip, in the one vocabulary this page speaks: **what he can
@@ -625,6 +679,18 @@ export function PlayerDetails({
   // The Remove button arms on the first tap and commits on the second, as it
   // does on the reorder screen — see RemoveButton. There is no undo.
   const [armedRemove, setArmedRemove] = useState(false);
+  // The Overview tab's day. Lazy like the three below it — the difference being
+  // that it is the *default* tab, so in practice it loads with the page. That
+  // is what the tab is for and it is the cheap half of the two requests the
+  // page already makes on open: `getPlayerDay` is one day of one player, and
+  // every layer under it is a cache the feed and the boards are already filling.
+  const [day, setDay] = useState<PlayerReport | null>(null);
+  const [dayError, setDayError] = useState<string | null>(null);
+  const [dayLoading, setDayLoading] = useState(false);
+  // Keyed by kind as well as player, the way the game log's is: a two-way
+  // player's bat and his arm are two days, and neither may stand in for the
+  // other.
+  const dayReq = useRef<string | null>(null);
   const [data, setData] = useState<PlayerPercentiles | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -666,6 +732,24 @@ export function PlayerDetails({
   // different requests, and the batter's must not stand in for the pitcher's.
   const gameLogReq = useRef<string | null>(null);
 
+  /**
+   * Each tab's read, held back by `WAIT_DELAY` before it is allowed to say so.
+   *
+   * Five tabs, five fetches, and the same rule for all of them: a percentile
+   * card the server already has comes back in a few tens of milliseconds, and
+   * a wait that appears and vanishes inside a tenth of a second reads as the
+   * page breaking rather than as an answer. Held here rather than inside
+   * `LoadingBlock` because the *content* must go on being gated on the real
+   * flag — a tab that showed nothing while its read was still in flight would
+   * be a blank pane instead of a wait.
+   */
+  const pctWait = useDelayedFlag(loading);
+  const splitsWait = useDelayedFlag(splitsLoading);
+  const xwobaWait = useDelayedFlag(xwobaLoading);
+  const gameLogWait = useDelayedFlag(gameLogLoading);
+  const arsenalWait = useDelayedFlag(arsenalLoading);
+  const dayWait = useDelayedFlag(dayLoading);
+
   // The percentile-point distance below which two paired bubbles would overlap,
   // measured from the live track width (~a bubble diameter's worth of the rail)
   // so the stagger threshold stays correct across desktop and mobile widths.
@@ -685,16 +769,20 @@ export function PlayerDetails({
     return () => ro.disconnect();
   }, [data]);
 
-  // Close on Escape, matching a modal/back affordance — unless the game log
-  // inside has taken the page, in which case that box is the thing on top and
-  // Escape is its to answer (`hooks.ts::useFullPage` declines the key from the
-  // other side, when *this* view is the one on top). One press, one thing
-  // undone: without this, leaving an expanded log threw you out of the player
-  // page it belongs to as well.
+  // Close on Escape, matching a modal/back affordance — unless something is on
+  // top of this view, in which case the key is that thing's to answer. Two
+  // shapes of "on top" and they need different tests. A **descendant** that has
+  // taken the page is the game log's full-page box, which lives inside this
+  // overlay and so is found by reading our own subtree (`hooks.ts::useFullPage`
+  // declines the key from the other side, when *this* view is the one above).
+  // A **portalled** one is a `Modal` opened from in here — a Game Log row's
+  // per-game popup — which is nobody's descendant and is caught by the shared
+  // stacking test instead. One press, one thing undone, either way round.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       if (viewRef.current?.querySelector('.is-expanded')) return;
+      if (overlayAbove(viewRef.current)) return;
       onClose();
     };
     window.addEventListener('keydown', onKey);
@@ -759,7 +847,40 @@ export function PlayerDetails({
     gameLogReq.current = null;
     setGameLog(null);
     setGameLogError(null);
+    dayReq.current = null;
+    setDay(null);
+    setDayError(null);
   }, [playerId]);
+
+  // The Overview tab's day, lazily on first open (which for this tab is the
+  // page opening). No date is sent: the server's own baseball day is the one
+  // definition of "today" the app should have, and a tab left open past the 3am
+  // rollover would otherwise keep asking for yesterday.
+  useEffect(() => {
+    const req = `${kind}-${playerId}`;
+    if (tab !== 'overview' || dayReq.current === req) return;
+    dayReq.current = req;
+    let live = true;
+    setDayLoading(true);
+    setDayError(null);
+    api
+      .playerDay(playerId, kind)
+      .then((d) => {
+        if (live) setDay(d.player);
+      })
+      .catch((e: unknown) => {
+        if (live) {
+          setDayError(e instanceof Error ? e.message : 'Failed to load');
+          dayReq.current = null; // allow a retry on re-open
+        }
+      })
+      .finally(() => {
+        if (live) setDayLoading(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [tab, playerId, kind]);
 
   // Same lazy load for the Game Log tab.
   useEffect(() => {
@@ -844,6 +965,12 @@ export function PlayerDetails({
     // The Game Log makes the overlay a fixed-height column so only its table
     // scrolls — see `.details-view.gamelog-mode`, which is the only way its
     // header row can stick over a season's worth of rows.
+    //
+    // The provider declares this box's own layer for anything opened from
+    // inside it — the Game Log's per-game popup, which is portalled to the body
+    // and so has no other way of knowing it must clear a page at 50. See
+    // `Modal.tsx::DialogLayerContext`.
+    <DialogLayerContext.Provider value={OVERLAY_LAYER}>
     <div ref={viewRef} className={`details-view${tab === 'gamelog' ? ' gamelog-mode' : ''}`}>
       {/* The head and the tabs are one pinned box, held at the top of this
           overlay's own scroller — see `.details-chrome`. They are one statement
@@ -1008,6 +1135,18 @@ export function PlayerDetails({
         </div>
 
         <div className="details-tabs" role="tablist" ref={tabsRef}>
+          {/* First and default: what he is doing today, which is the question
+              this page is opened with on a game day. The five beside it are
+              readings of his season. */}
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'overview'}
+            className={`details-tab${tab === 'overview' ? ' is-active' : ''}`}
+            onClick={() => setTab('overview')}
+          >
+            Overview
+          </button>
           <button
             type="button"
             role="tab"
@@ -1058,9 +1197,13 @@ export function PlayerDetails({
         </div>
       </div>
 
-      {tab === 'arsenal' && arsenalLoading && (
-        <div className="details-status">Loading season arsenal…</div>
+      {tab === 'overview' && dayWait && <LoadingBlock>Reading today&rsquo;s game</LoadingBlock>}
+      {tab === 'overview' && dayError && !dayLoading && (
+        <div className="details-status details-error">Couldn&rsquo;t load today: {dayError}</div>
       )}
+      {tab === 'overview' && day && !dayLoading && <OverviewTab report={day} />}
+
+      {tab === 'arsenal' && arsenalWait && <LoadingBlock>Reading the season arsenal</LoadingBlock>}
       {tab === 'arsenal' && arsenalError && !arsenalLoading && (
         <div className="details-status details-error">⚠ {arsenalError}</div>
       )}
@@ -1068,9 +1211,7 @@ export function PlayerDetails({
         <ArsenalTab arsenal={arsenal} split={arsenalSplit} onSplit={setArsenalSplit} />
       )}
 
-      {tab === 'gamelog' && gameLogLoading && (
-        <div className="details-status">Loading game log…</div>
-      )}
+      {tab === 'gamelog' && gameLogWait && <LoadingBlock>Reading the game log</LoadingBlock>}
       {tab === 'gamelog' && gameLogError && !gameLogLoading && (
         <div className="details-status details-error">
           Couldn’t load the game log: {gameLogError}
@@ -1079,6 +1220,11 @@ export function PlayerDetails({
       {tab === 'gamelog' && gameLog && !gameLogLoading && (
         <GameLog
           {...gameLog}
+          /* A row opens that game as a feed, which is a fetch of its own — so
+             the log has to know whose season it is drawing rather than only
+             what is in it. */
+          playerId={playerId}
+          name={name}
           /* Expanded, this table covers the head that says whose season it is.
              A face and a name put that back at a size that belongs above a
              table rather than at the top of a page. */
@@ -1092,9 +1238,7 @@ export function PlayerDetails({
         />
       )}
 
-      {tab === 'rolling' && xwobaLoading && (
-        <div className="details-status">Loading season xwOBA…</div>
-      )}
+      {tab === 'rolling' && xwobaWait && <LoadingBlock>Reading the season&rsquo;s plate appearances</LoadingBlock>}
       {tab === 'rolling' && xwobaError && !xwobaLoading && (
         <div className="details-status details-error">
           Couldn’t load xwOBA: {xwobaError}
@@ -1104,9 +1248,7 @@ export function PlayerDetails({
         <RollingXwoba series={xwoba} name={name} />
       )}
 
-      {tab === 'splits' && splitsLoading && (
-        <div className="details-status">Loading season stats…</div>
-      )}
+      {tab === 'splits' && splitsWait && <LoadingBlock>Reading the season line</LoadingBlock>}
       {tab === 'splits' && splitsError && !splitsLoading && (
         <div className="details-status details-error">
           Couldn’t load season stats: {splitsError}
@@ -1123,9 +1265,7 @@ export function PlayerDetails({
         <SeasonPanel season={splits.season} vsLeft={splits.vsLeft} vsRight={splits.vsRight} />
       )}
 
-      {tab === 'percentiles' && loading && (
-        <div className="details-status">Loading percentile rankings…</div>
-      )}
+      {tab === 'percentiles' && pctWait && <LoadingBlock>Reading the percentile card</LoadingBlock>}
       {tab === 'percentiles' && error && !loading && (
         <div className="details-status details-error">
           Couldn’t load percentile rankings: {error}
@@ -1148,5 +1288,6 @@ export function PlayerDetails({
         </div>
       )}
     </div>
+    </DialogLayerContext.Provider>
   );
 }

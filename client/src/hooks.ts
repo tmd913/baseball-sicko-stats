@@ -35,6 +35,21 @@ export function useMuted(): boolean {
 export interface FantasySlot {
   slot: string;
   starting: boolean;
+  /**
+   * How many days of the range in view he was in the lineup on, and how many
+   * days the range holds — null on a single day, and null with no per-day
+   * lineups (an older tab, a failed read), where the slot beside it is the
+   * whole of what is known.
+   *
+   * The chip's letters and its colour are still one day's — the day the roster
+   * was read for — because that is what a slot *is*. Over a range that is no
+   * longer the whole truth: the row beside it sums the days he was started, so
+   * a muted `BE` can sit against four days of stats. The count is what makes
+   * the pair honest, and it goes in the title rather than on the chip because
+   * this table's name column is measured in stat columns pushed off a phone.
+   */
+  startedDays: number | null;
+  rangeDays: number | null;
   /** ESPN's injury designation for him, raw — see `espnInjuryBadge`. It rides
    *  on this map rather than taking one of its own because it comes off the
    *  same roster read and reaches the same leaves. */
@@ -332,16 +347,97 @@ export function useFullPage<T extends HTMLElement = HTMLDivElement>() {
 /**
  * The app's fixed boxes that cover what is behind them. `.details-view` is
  * three of them — the player page, the how-to page and the ESPN settings page
- * all ride on it — `.reel-view` is the highlight reel, and
- * `.research-columns-dialog` is the board's Columns picker, which is a modal
- * rather than a page but sits over the app the same way and answers Escape the
- * same way. Anything listed here both consults this test and is seen by it, so
- * one press of Escape undoes exactly one of them.
+ * all ride on it — `.reel-view` is the highlight reel, and **`.app-dialog`** is
+ * every `Modal` in the app (the board's Columns picker, a pitcher's full
+ * breakdown, a Game Log row's popup), which are panels rather than pages but sit
+ * over what is behind them the same way and answer Escape the same way. Anything
+ * listed here both consults this test and is seen by it, so one press of Escape
+ * undoes exactly one of them.
+ *
+ * (It named `.research-columns-dialog` until now, which was the Columns
+ * picker's class before the shell was extracted into `Modal` and the stylesheet
+ * renamed its rules `.app-dialog-*`. A selector that matches nothing is a test
+ * that quietly always passes, so the board's dialog and an expanded table were
+ * both answering the one press.)
  */
-const OVERLAYS = '.details-view, .reel-view, .research-columns-dialog';
+const OVERLAYS = '.details-view, .reel-view, .app-dialog';
 
-/** Is one of those overlays stacked over `box` rather than behind or around it? */
+/**
+ * The stacking layer an element sits on: the nearest ancestor's declared
+ * `z-index`, or 0 if nothing on the way up declares one.
+ */
+function layerOf(el: Element | null): number {
+  for (let n: Element | null = el; n; n = n.parentElement) {
+    const z = Number(getComputedStyle(n).zIndex);
+    if (!Number.isNaN(z)) return z;
+  }
+  return 0;
+}
+
+/**
+ * Is one of those overlays stacked **over** `box` rather than behind or around
+ * it?
+ *
+ * Containment answers most of it — the game log's expanded box lives *inside*
+ * `.details-view`, so its ancestor overlay is behind it and the key stays the
+ * log's — but containment alone is not enough once a `Modal` is portalled to the
+ * body from inside an overlay. That dialog is nobody's descendant, so every
+ * open overlay looked like it was above it and it declined a key nothing else
+ * was going to answer, while the player page under it happily closed on the
+ * same press: one Escape, two things undone, and the wrong two.
+ *
+ * So a non-containing overlay only counts when it is genuinely **higher up the
+ * stack**, which is a number the stylesheet already declares and this reads back
+ * rather than restating (`layerOf`). Every pair in the app falls out of it: a
+ * player page (50) over an expanded table (45) wins; a dialog opened from that
+ * page (55) beats the page; the Columns dialog (46) beats an expanded board;
+ * and the how-to page (60) beats a player page under it.
+ */
 export function overlayAbove(box: HTMLElement | null) {
   if (!box) return false;
-  return [...document.querySelectorAll(OVERLAYS)].some((el) => !el.contains(box));
+  const mine = layerOf(box);
+  return [...document.querySelectorAll(OVERLAYS)].some(
+    (el) => !el.contains(box) && layerOf(el) > mine,
+  );
+}
+
+/**
+ * How long a read has to be in flight before the app admits to it.
+ *
+ * A warm server answers `/api/report` in about 16ms and a cached details tab in
+ * not much more, which is one frame of a spinner — a wait that appears and
+ * vanishes inside a tenth of a second reads as a flicker rather than as an
+ * answer, and on a pane that then fills with rows it reads as the page
+ * breaking. The report has held this floor since it was written; every block
+ * wait in the app now takes it, so "nothing to show yet" and "nothing to show
+ * yet *and it is taking a moment*" are two different states everywhere.
+ *
+ * It is the opposite end of the same argument as `MIN_SPIN`, and the two are
+ * deliberately different numbers because they answer different questions.
+ * `MIN_SPIN` is a *floor on how long a mark stays up* once a press has put it
+ * there — a press that leaves no trace reads as a dead button, so a trace is
+ * owed however fast the answer comes. This is a *delay before a mark goes up at
+ * all*, for the waits nobody pressed a button to start.
+ */
+export const WAIT_DELAY = 250;
+
+/**
+ * `on`, but only once it has been true for `delay` — the guard that keeps a
+ * fast answer from flashing a wait.
+ *
+ * Returns to false immediately when `on` does: the delay is on the way up
+ * alone, since a wait that outstayed the thing it was waiting for would be the
+ * flicker again with worse timing.
+ */
+export function useDelayedFlag(on: boolean, delay = WAIT_DELAY) {
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    if (!on) {
+      setShown(false);
+      return;
+    }
+    const t = setTimeout(() => setShown(true), delay);
+    return () => clearTimeout(t);
+  }, [on, delay]);
+  return shown;
 }

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useLockBodyScroll } from '../hooks';
 import { api } from '../api';
 import type { EspnStatus, EspnTeam } from '../types';
+import { LoadingLine } from './Loading';
 
 /**
  * What a pasted ESPN league URL yields. Both ids are in the address bar of any
@@ -395,9 +396,21 @@ export function EspnSettings({
                 className="espn-refresh"
                 onClick={refresh}
                 disabled={saving || refreshing}
+                aria-busy={refreshing}
                 title="Read your league from ESPN again — for a lineup or roster move you have just made there"
               >
-                {refreshing ? 'Reading…' : refreshed ? 'Up to date ✓' : 'Refresh from ESPN'}
+                {/* The popover's own Refresh from ESPN swaps its arrow for the
+                    ball; this one has a label rather than a glyph, so the ball
+                    joins the label instead of replacing it. Same mark, same
+                    press, one loading language across the two doorways to one
+                    action. */}
+                {refreshing ? (
+                  <LoadingLine announce={false}>Reading</LoadingLine>
+                ) : refreshed ? (
+                  'Up to date ✓'
+                ) : (
+                  'Refresh from ESPN'
+                )}
               </button>
               <button
                 type="button"
@@ -665,8 +678,19 @@ export function EspnSettings({
           {error && <p className="espn-error">{error}</p>}
 
           <div className="espn-actions">
-            <button type="submit" className="espn-submit" disabled={!ready || saving}>
-              {saving ? 'Checking…' : justSaved ? 'Connected' : 'Connect league'}
+            <button
+              type="submit"
+              className="espn-submit"
+              disabled={!ready || saving}
+              aria-busy={saving}
+            >
+              {saving ? (
+                <LoadingLine announce={false}>Checking with ESPN</LoadingLine>
+              ) : justSaved ? (
+                'Connected'
+              ) : (
+                'Connect league'
+              )}
             </button>
             {/* The check is a real read of the league, so the button says what
                 it is doing rather than "Save": a set of cookies that can't open

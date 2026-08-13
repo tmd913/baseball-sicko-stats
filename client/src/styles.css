@@ -95,6 +95,15 @@
      `.app`'s own padding, the pinned chrome's negative bleed back out through
      it, and the three wide tables', which do the same. */
   --app-gutter: 22px;
+  /* The headshot circle in a table row, and one definition because the research
+     board's pinned name column is offset by *this number plus its two gutters*
+     — an arithmetic that sat in the stylesheet as a hardcoded `63px` and would
+     have been silently wrong the moment the circle grew. A token is what lets
+     that offset be derived rather than restated; see
+     `.research-table .sum-name-col`. The marks drawn on the circle are sized
+     against it too. The player page's 64px portrait is deliberately *not* this:
+     it is a page header rather than a row, and is sized to the head it sits in. */
+  --row-photo: 42px;
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
   font-synthesis: none;
 }
@@ -601,6 +610,14 @@ body {
   cursor: pointer;
   font-size: 15px;
 }
+/* The wait sits in the clear button's slot — the two can never both be on
+   screen, the field being disabled until the roster lands. */
+.adder-busy {
+  position: absolute;
+  right: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+}
 .adder-menu {
   list-style: none;
   margin: 6px 0 0;
@@ -716,17 +733,156 @@ body {
   margin: 0 0 8px;
   font-weight: 700;
 }
-.loading {
-  color: var(--muted);
-  padding: 20px;
-  text-align: center;
+/* ---- Loading: the spinning baseball ------------------------------------ */
+
+/* The app has one loading indicator and this is it. It replaces a 13px CSS
+   ring (`.spinner`), an "Updating…" badge that owned its own layout, a bare
+   `.loading` line, and five `.details-status` lines that each said "Loading…"
+   about a different thing — see `components/Loading.tsx` for the rules the
+   system keeps and why the glyph is built the way it is.
+
+   Three sizes, one per situation: inline inside a pressed control or beside
+   data that is still on screen (`sm`), a pane with nothing in it yet (`md`),
+   and the boot splash, which owns the window (`lg`). The box is set here
+   rather than by a `width`/`height` attribute so a slot that has its own idea
+   of the size — the fantasy popover's 15px glyph column — can say so in one
+   place, the way it already did for the ring this replaces. */
+.ball-spin {
+  display: block;
+  flex: none;
+  color: var(--accent);
+}
+.ball-spin-sm {
+  width: 14px;
+  height: 14px;
+}
+.ball-spin-md {
+  width: 28px;
+  height: 28px;
+}
+.ball-spin-lg {
+  width: 44px;
+  height: 44px;
+}
+/* The silhouette is quieter than the seams: at full accent the rim is the
+   loudest thing in the mark and the seams — the only part that moves — read as
+   detail inside it, which is backwards for something whose whole job is to
+   look like it is turning. */
+.ball-rim {
+  stroke-opacity: 0.5;
 }
 
-/* Inline "Updating…" badge shown when refreshing over already-visible data. */
-.refreshing {
+/* One seam's turn. `translateX` is `9·sin θ` and `scaleX` is `cos θ`, sampled
+   every eighth of a revolution and interpolated linearly between — which is
+   the projection a point on a sphere actually has, and is why the seams bunch
+   and thin at the limbs rather than at the centre. Opacity carries a seam
+   round the back: it fades out over the last eighth before the limb, where the
+   seam is already a hairline, so nothing pops.
+
+   `transform-box: view-box` is what makes `9px` mean nine *viewBox units* and
+   `transform-origin: 12px 12px` the ball's own centre, so one keyframe set is
+   correct at 14px and at 44px alike. The stroke is deliberately left to scale
+   with the transform: a seam near the limb thinning as it foreshortens is the
+   same fact stated twice, and `non-scaling-stroke` would have pinned the ink
+   to device pixels and made the small ball heavy and the large one spindly. */
+.ball-seam {
+  transform-box: view-box;
+  transform-origin: 12px 12px;
+  animation: ball-seam 1.5s linear infinite;
+}
+.ball-seam-2 {
+  animation-delay: -0.375s;
+}
+.ball-seam-3 {
+  animation-delay: -0.75s;
+}
+.ball-seam-4 {
+  animation-delay: -1.125s;
+}
+@keyframes ball-seam {
+  0% {
+    transform: translateX(0px) scaleX(1);
+    opacity: 1;
+  }
+  12.5% {
+    transform: translateX(6.36px) scaleX(0.707);
+    opacity: 1;
+  }
+  25% {
+    transform: translateX(9px) scaleX(0);
+    opacity: 0;
+  }
+  37.5% {
+    transform: translateX(6.36px) scaleX(-0.707);
+    opacity: 0;
+  }
+  50% {
+    transform: translateX(0px) scaleX(-1);
+    opacity: 0;
+  }
+  62.5% {
+    transform: translateX(-6.36px) scaleX(-0.707);
+    opacity: 0;
+  }
+  75% {
+    transform: translateX(-9px) scaleX(0);
+    opacity: 0;
+  }
+  87.5% {
+    transform: translateX(-6.36px) scaleX(0.707);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(0px) scaleX(1);
+    opacity: 1;
+  }
+}
+
+/* Reduced motion: hold the ball at the pose the turn passes through four times
+   a revolution — which is `BaseballMark` exactly — and pulse the whole thing
+   instead. A still ball is a logo and says nothing about whether anything is
+   still happening; a fade is not the kind of motion this preference is asking
+   to be spared. The two hidden seams are given the pose of the two visible
+   ones so nothing has to be rewritten per seam. */
+@media (prefers-reduced-motion: reduce) {
+  .ball-seam {
+    animation: none;
+  }
+  .ball-seam-1,
+  .ball-seam-3 {
+    transform: translateX(6.36px) scaleX(0.707);
+  }
+  .ball-seam-2,
+  .ball-seam-4 {
+    transform: translateX(-6.36px) scaleX(0.707);
+  }
+  .ball-seam-3,
+  .ball-seam-4 {
+    opacity: 0;
+  }
+  .ball-spin {
+    animation: ball-pulse 1.8s ease-in-out infinite;
+  }
+}
+@keyframes ball-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* A wait that sits beside what it is about rather than in place of it. Bare by
+   default — the research board's count line is a caption and wants no chrome —
+   with `.refreshing` adding the pill the "Updating" badge has always worn. */
+.loading-line {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+.refreshing {
   margin-bottom: 14px;
   padding: 6px 12px;
   border: 1px solid var(--border);
@@ -736,30 +892,27 @@ body {
   font-size: 13px;
   font-weight: 600;
 }
-.spinner {
-  width: 13px;
-  height: 13px;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .spinner {
-    animation: none;
-  }
-}
 
-/* Dim and freeze the list while a refresh replaces its contents. */
-.content-layout.is-loading .player-list {
-  opacity: 0.5;
-  pointer-events: none;
-  transition: opacity 0.15s ease;
+/* A pane with nothing in it yet: the ball centred over a line naming what is
+   being read. `.details-status` is folded onto it rather than restyled to
+   resemble it — the player page's five lazily-fetched tabs are the same wait
+   as the report's and the board's, and two rules would be two things to keep
+   true. The reading width and the generous margin are that class's own and
+   are what the block takes everywhere. */
+.loading-block,
+.details-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  max-width: 680px;
+  margin: 40px auto;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+.loading-what {
+  margin: 0;
 }
 
 /* ---- Content layout (the player list / edit screen) ---- */
@@ -3240,15 +3393,36 @@ body {
 .details-savant-link:hover {
   color: var(--accent);
 }
-.details-status {
-  max-width: 680px;
-  margin: 40px auto;
-  text-align: center;
-  color: var(--muted);
-  font-size: 14px;
-}
+/* `.details-status` is styled up beside `.loading-block`, whose selector list
+   it is folded into — it is the same wait, and the tab that failed is the same
+   box saying so instead. What is left here is only what a *failed* tab adds. */
 .details-error {
   color: var(--strikeout);
+}
+/* The details view's **Overview** tab: this player's day, drawn from the feed's
+   own items. It takes `--card-column` rather than the 860px the tabs beside it
+   use, because what is in it is exactly what the feed holds — an at-bat card, a
+   clip, an outing's innings — and those were sized against that number (a
+   header with a name at one end and a line of stats at the other, with nothing
+   in the middle to fill). A day read here and the same day read on the stream
+   is then the same reading at the same width.
+
+   `container-type` for the reason the arsenal box carries one: `.player-card`
+   and `.faced-batter` size themselves off their container, and inside an
+   overlay that is otherwise a plain block they would read the window instead. */
+.details-overview {
+  max-width: var(--card-column);
+  margin: 18px auto 0;
+  container-type: inline-size;
+}
+/* His combined line for the day, over the sections. A `.details-note` because
+   that is what it is — a caption on what is under it — with the tabular figures
+   every stat line in the app carries and a touch more presence than a note,
+   since this one is the numbers rather than a remark about them. */
+.details-day-line {
+  color: var(--muted);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 /* The details view's Arsenal tab (pitchers): the same .arsenal rows the pitcher
    card uses, over the whole season instead of one game. Boxed to the reading
@@ -3307,10 +3481,16 @@ body {
 /* Gutters tighten with the viewport, as in the summary table: the table
    overflows on a phone and every pixel of padding is a stat pushed off it. The
    row height doesn't, though — vertical space costs a scroll, not a column, and
-   this pane scrolls anyway. */
+   this pane scrolls anyway.
+
+   Both grew with the summary table's and by the same clamp, this being the
+   other table with slack to spend: 11 → 13px down and `1.6vw/22` → `1.9vw/28`
+   across. Measured, a batter's log goes 40.6px a row to 44.6 and 736 → 772px
+   wide at 390 — the width being paid in a pane that already scrolls sideways at
+   every phone width there is. */
 .glog-table th,
 .glog-table td {
-  padding: 11px clamp(5px, 1.6vw, 22px);
+  padding: 13px clamp(5px, 1.9vw, 28px);
   line-height: 1.35;
   white-space: nowrap;
   border-bottom: 1px solid var(--border);
@@ -3320,22 +3500,54 @@ body {
 .glog-table tbody tr:nth-child(even) .glog-date {
   background: var(--panel);
 }
-/* No hover tint on a row. It was the one thing in this table the other two wide
-   tables don't do, and it earned nothing in either place it was seen: with a
-   pointer it lit a row that is read across rather than picked, and on a touch
-   device — where `:hover` sticks to whatever was last tapped — it left a band
-   of `--panel-2` sitting on a random game until something else was pressed,
-   which reads as a selection the app then declines to act on. The zebra stripe
-   stays: it is what keeps a fourteen-column row readable across, and it is the
-   same device the summary table and the research board use. */
+/* **A row is a press now, so it looks like one.** It carried no hover tint for
+   a long time and the argument was sound while it held: with a pointer the tint
+   lit a row that is read *across* rather than picked, and on a touch device,
+   where `:hover` sticks to whatever was last tapped, it left a band of
+   `--panel-2` on some arbitrary game until something else was pressed — a
+   selection the app then declined to act on. Both halves of that turned on the
+   row doing nothing. It opens that game as a feed, so a tint is the truth
+   rather than a tease, and the pointer is the shape of the thing you can do.
+
+   **Scoped to `(hover: hover)` all the same**, which is the half of the old
+   complaint that survives its cause: a sticky hover on a touch device is still
+   a mark left on the last row pressed after its dialog has been closed, and
+   there the affordance is the press itself. `:focus-visible` carries the
+   keyboard, the rows being `role="button"` with a tabindex (see
+   `GameLog.tsx::pressProps`), and the ring is inset because a row spans a
+   scrollport that clips at both edges.
+
+   The zebra stripe is untouched: it is what keeps a fourteen-column row
+   readable across, and it is the same device the summary table and the research
+   board use. */
+.glog-table tbody tr {
+  cursor: pointer;
+}
+@media (hover: hover) {
+  .glog-table tbody tr:hover td,
+  .glog-table tbody tr:hover .glog-date {
+    background: var(--panel-2);
+  }
+}
+.glog-table tbody tr:focus-visible {
+  outline: none;
+}
+.glog-table tbody tr:focus-visible td,
+.glog-table tbody tr:focus-visible .glog-date {
+  background: var(--panel-2);
+  box-shadow: inset 0 2px 0 var(--accent), inset 0 -2px 0 var(--accent);
+}
 .glog-table thead th {
   /* Sticky against .glog-scroll, which is the scroll container in both axes —
      which is the whole reason the Game Log tab reshapes the overlay below. */
   position: sticky;
   top: 0;
   z-index: 2;
-  padding-top: 9px;
-  padding-bottom: 9px;
+  /* Two under the body's 13, the same two the research board's sort headers
+     sit under theirs: a header is one short line and matching a body row full
+     of numbers would buy a band of empty panel. */
+  padding-top: 11px;
+  padding-bottom: 11px;
   background: var(--panel-2);
   font-size: 11px;
   font-weight: 800;
@@ -3461,8 +3673,8 @@ body {
   position: sticky;
   bottom: 0;
   z-index: 2;
-  padding-top: 12px;
-  padding-bottom: 12px;
+  padding-top: 14px;
+  padding-bottom: 14px;
   background: var(--panel-2);
   border-top: 2px solid var(--border);
   border-bottom: none;
@@ -4092,21 +4304,26 @@ body {
   color: var(--bg);
   border-color: var(--accent);
 }
-/* Refreshing: the button holds its place and its size — the 13px `.spinner`
-   swaps in for the 17px icon inside a square that doesn't move, so nothing in
+/* Refreshing: the button holds its place and its size — the spinning baseball
+   swaps in for the 17px arrow inside a square that doesn't move, so nothing in
    the header shifts while a read is in flight. Disabled rather than merely
    ignored, so a second press is refused by the browser and says so; the muted
-   fill is the only thing that changes, since a spinner turning is already the
+   fill is the only thing that changes, since a ball turning is already the
    loudest thing on the row. */
 .refresh-btn:disabled {
   cursor: default;
   border-color: var(--border);
   color: var(--faint);
 }
-.refresh-btn .spinner {
-  /* Its own 13px is right beside a 17px icon: the disc reads as the same
-     weight as the arrow it replaces rather than as a smaller thing. */
-  flex: none;
+/* 16px rather than the inline 14: the arrow it replaces is a three-quarter
+   circle of radius 8 in a 17px box, and the ball's rim is radius 9 in its own
+   — so 16 is where the two silhouettes are the same size on the row, and the
+   swap reads as the arrow closing into the ball it was drawing rather than as
+   a smaller thing arriving. The slot states it, not the glyph, which is what
+   lets the same component be 14px in a line of text an inch away. */
+.refresh-btn .ball-spin {
+  width: 16px;
+  height: 16px;
 }
 .edit-order-icon {
   display: inline-flex;
@@ -4172,8 +4389,7 @@ body {
    looking small. Only the calendar takes the muted fill; the toggle's glyph
    follows its own text colour, which is what carries its `.on` state. */
 .date-toggle svg,
-.starters-toggle svg,
-.group-toggle svg {
+.starters-toggle svg {
   flex: none;
 }
 .date-toggle svg {
@@ -4514,10 +4730,11 @@ body {
 }
 
 /* Small enough to sit in a header cell without setting the width of a column
-   that exists to be narrow: the headshot column is 37px of photo between two
-   gutters. Its own look rather than the header's square icon family — those are
-   36px and sit on a control line, this one sits on a table cell's tinted
-   background. */
+   that exists to be narrow: the headshot column is `--row-photo` of photo
+   between two gutters, 68px on the research board at a desktop width and less
+   than that on a phone. Its own look rather than the header's square icon
+   family — those are 36px and sit on a control line, this one sits on a table
+   cell's tinted background. */
 .expand-btn {
   display: inline-flex;
   align-items: center;
@@ -4686,10 +4903,23 @@ body {
 /* When both a batter and a pitcher table stack in the scroll box, space them.
    Column gutters tighten with the viewport: on a phone the table always needs
    horizontal scrolling, and every pixel of padding is a stat pushed off screen.
-   Full width at desktop sizes, where the whole table already fits. */
+   Full width at desktop sizes, where the whole table already fits.
+
+   The gutter grew from `clamp(5px, 1.6vw, 22px)`, and it grew at the wide end
+   rather than the narrow one, which is the shape the clamp was written for: a
+   phone pays for a gutter in stat columns and a monitor pays for it in nothing
+   at all. Measured on the real board, 1.6→1.9vw and 22→28px costs a 390px phone
+   **0.98px a side** (6.24 → 7.22) and the whole batter table 683 → 702px, while
+   1920 goes 22 → 28 and 1200 19.2 → 22.8. The floor is untouched, so the
+   narrowest screens the app is checked at pay the least of all.
+
+   The vertical half is 10 → 12px, and it is the same figure on the research
+   board, which shares this rule. It is what "make the rows breathe" costs and
+   the only place it is spent: a row's height is paid in scrolling, where a
+   column's width is paid in a stat pushed off the right edge. */
 .summary-table th,
 .summary-table td {
-  padding: 10px clamp(5px, 1.6vw, 22px);
+  padding: 12px clamp(5px, 1.9vw, 28px);
   white-space: nowrap;
   border-bottom: 1px solid var(--border);
   background: var(--bg);
@@ -4797,8 +5027,8 @@ body {
   position: sticky;
   bottom: 0;
   z-index: 2;
-  padding-top: 13px;
-  padding-bottom: 13px;
+  padding-top: 15px;
+  padding-bottom: 15px;
   background: var(--panel-2);
   border-top: 2px solid var(--border);
   border-bottom: none;
@@ -4853,15 +5083,22 @@ body {
   outline-offset: 2px;
 }
 /* Bigger than the other cells' content would allow: the headshot column trades
-   its vertical padding for image, so the row height is unchanged (5 + 37 + 5
-   is the old 8 + 31 + 8) and the live-role ring still clears the row border. */
+   its vertical padding for image, which is what lets the circle be the tallest
+   thing in the row without the row being the circle plus the text cells' full
+   padding. 6 + 46 + 6 is 58 (the 46 being a 42px circle plus the ~4px of
+   descender the td's own strut hangs under an inline image), against the
+   12 + 31 + 12 = 55 the research board's identity block asks for and the
+   12 + 30 + 12 = 54 the summary table's name cell does — so the headshot still
+   sets the row height on both boards, exactly as it did at 5 + 37 + 5 = 51.
+   The 6 also keeps the live-role ring (a 2px `box-shadow` outside a 1px border)
+   clear of the row border with a pixel to spare. */
 .summary-table tbody td.sum-img-col {
-  padding-top: 5px;
-  padding-bottom: 5px;
+  padding-top: 6px;
+  padding-bottom: 6px;
 }
 .sum-photo {
-  width: 37px;
-  height: 37px;
+  width: var(--row-photo);
+  height: var(--row-photo);
   border-radius: 50%;
   object-fit: cover;
   object-position: top center;
@@ -4875,17 +5112,22 @@ body {
   position: absolute;
   /* Tucked closer than the nav's: on a circle the bounding box's corner sits
      further outside the edge as the image grows, so the bigger headshot needs
-     a smaller offset to keep the pip sitting on the rim. */
+     a smaller offset to keep the pip sitting on the rim. The −2 survived the
+     circle growing to 42 because the two effects cancel — the pip grew with it.
+     Worked through: a 15px pip at −2 on a 37px circle has its centre 15.8px
+     from the photo's centre against a rim at 18.5, i.e. 2.7px inside it; a 17px
+     pip at −2 on a 42px circle sits 17.9 against a rim at 21, 3.1px inside.
+     Same mark in the same place, a fifth of a pixel apart. */
   top: -2px;
   right: -2px;
-  width: 15px;
-  height: 15px;
-  font-size: 9px;
+  width: 17px;
+  height: 17px;
+  font-size: 10px;
 }
 .sum-photo-spot.spot-start,
 .sum-photo-spot.spot-relief {
-  min-width: 15px;
-  font-size: 8px;
+  min-width: 17px;
+  font-size: 9px;
 }
 /* Roster status as a short code on the bottom edge of the headshot — IL10, RA,
    DTD, OUT, DFA. The opposite pole of the circle from the lineup-spot pip, so
@@ -4899,28 +5141,33 @@ body {
    the border, which is all that is left once the fill is spoken for.
 
    Sized to fit four characters (IL60 is the widest the app can print) inside a
-   37px circle without touching either rim. */
+   42px circle without touching either rim. */
 .sum-photo-status {
   position: absolute;
   /* Sits lower and smaller than it first did — far enough down that it reads as
      a tag *on* the rim rather than a band across the face, and small enough that
      the headshot is still a headshot. It hangs below the circle, so the limit is
-     the row rather than taste: the cell keeps 5px of padding under the 37px
-     image, and the sticky total row is what a badge on the last row of the table
-     would disappear behind. Measured at both widths after the change: 11px tall,
-     hanging 5px below the circle, 4px clear of the row and of the footer under
-     the last row — which is most of the room the 5px padding leaves. */
+     the row rather than taste: the cell's padding under the image is what it has
+     to fit in, and the sticky total row is what a badge on the last row of the
+     table would disappear behind. `bottom` fixes the badge's *bottom* edge, so
+     growing it 11 → 12px with the circle spends the pixel upward and changes
+     neither clearance: measured at 390 and 1200 after, 12px tall, hanging 5px
+     below the circle, **5px clear of the row and of the footer** under the last
+     row (4px before — the img cell's extra padding, not the badge). Across:
+     `IL60` measures **32.3px inside the 42px circle, 4.8px clear of either
+     rim**, where it was 28.1 inside 37 clearing 4.5 — so the widest code the
+     app can print gained a third of a pixel of air rather than losing any. */
   bottom: -5px;
   left: 50%;
   transform: translateX(-50%);
   display: inline-flex;
   align-items: center;
-  height: 11px;
-  padding: 0 3px;
-  border-radius: 5px;
+  height: 12px;
+  padding: 0 4px;
+  border-radius: 6px;
   border: 1px solid;
   background: #0a1120;
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.02em;
   line-height: 1;
@@ -4947,7 +5194,7 @@ body {
 
 /* ---- Centring the marks on a headshot -------------------------------------
    Every badge the app draws on a photograph — the lineup pip and the status
-   code, at the tables' 37px circle and at the details view's 64px portrait —
+   code, at the tables' 42px circle and at the details view's 64px portrait —
    centres its text here, in one place, because all four of them had it wrong
    and each was wrong by a different amount.
 
@@ -4961,7 +5208,10 @@ body {
    not to the design. Measured with a canvas against the rendered baseline, the
    digit pip in the summary table had 3.31px of air above it and 5.22px below
    inside a 15px circle (**0.95px high**), `SP` 3.47/5.60 (**1.06px**), and the
-   status code 1.75/3.40 in an 11px pill (**0.83px**).
+   status code 1.75/3.40 in an 11px pill (**0.83px**). (Those are the pips at
+   the sizes they were when the bug was found; the marks have since grown with
+   the row circle — 17px pip, 12px pill — and the rule below was re-measured at
+   the new sizes rather than assumed to carry: see the figures at the end.)
 
    The direction was not even consistent, which is what "not *always* centred"
    was: on the details portrait, in the app's own font rather than the tables'
@@ -5149,11 +5399,11 @@ body {
    it rather than a control of its own — the two are the same kind of row and
    folding the class on keeps them identical by construction.
 
-   The one thing it adds is a glyph slot that doesn't move: the app's `.spinner`
-   is 13px and the arrow it replaces is 15, so without this the label steps 2px
-   left the moment the read starts and back when it lands — the same reason the
-   header's refresh swaps its icon inside a square that holds its size. */
-.fantasy-refresh > .spinner,
+   The one thing it adds is a glyph slot that doesn't move: the baseball is
+   14px inline and the arrow it replaces is 15, so without this the label steps
+   1px left the moment the read starts and back when it lands — the same reason
+   the header's refresh swaps its icon inside a square that holds its size.
+   Naming `svg` covers both, the ball being one. */
 .fantasy-refresh > svg {
   flex: none;
   width: 15px;
@@ -5388,8 +5638,7 @@ body {
    by construction. (Qualified was the closer twin of the two and is gone —
    see `research.ts`.) */
 .research-toggle,
-.starters-toggle,
-.group-toggle {
+.starters-toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -5405,8 +5654,7 @@ body {
   cursor: pointer;
 }
 .research-toggle:hover,
-.starters-toggle:hover,
-.group-toggle:hover {
+.starters-toggle:hover {
   color: var(--text);
 }
 /* `.active` is "the panel is open"; `.on` is "the panel holds something",
@@ -5424,21 +5672,18 @@ body {
    phone, which is right for four icons in a known run and wrong for a lone
    button on a row of tabs, where nothing beside it would say what the glyph
    meant. */
-.starters-toggle,
-.group-toggle {
+.starters-toggle {
   flex: none;
   white-space: nowrap;
 }
 .research-toggle.on,
-.starters-toggle.on,
-.group-toggle.on {
+.starters-toggle.on {
   color: var(--accent);
   border-color: rgba(56, 189, 248, 0.5);
   background: rgba(56, 189, 248, 0.12);
 }
 .research-toggle:focus-visible,
-.starters-toggle:focus-visible,
-.group-toggle:focus-visible {
+.starters-toggle:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
@@ -5547,6 +5792,15 @@ body {
      dimmed rather than as a second page. */
   background: rgba(6, 11, 20, 0.66);
 }
+/* **A dialog opened from inside one of the overlays** — the Game Log's per-game
+   popup, reached from a table on the player page — writes its own z-index
+   inline instead, one step above whatever box it was opened out of. It has to
+   be computed rather than declared: the ladder is three deep (the page, the
+   player page at 50, and a full breakdown opened from inside that popup), and
+   only the React tree knows which rung a given dialog is on. See
+   `Modal.tsx::DialogLayerContext`; `hooks.ts::overlayAbove` reads the computed
+   value back off whichever of the two set it, so one press of Escape still
+   undoes one thing. */
 /* A column, so the head holds its place and only the body scrolls. The height
    cap is what keeps a 44-column board inside the dialog instead of growing the
    page behind it; `dvh` because a phone's browser chrome comes and goes, the
@@ -5605,6 +5859,14 @@ body {
    unaffected and the padding around it holds. */
 .outing-breakdown-box {
   width: min(860px, 100%);
+}
+/* One player's day is a column of feed items, so the popup takes the width the
+   feed itself is capped at — `--card-column`, which is set by what a card
+   actually holds (a name at one end of a header and a line of stats at the
+   other) rather than by what the window has. A day read in a dialog and the
+   same day read on the stream are then the same width by construction. */
+.player-day-box {
+  width: min(var(--card-column), 100%);
 }
 /* The way into it, under the innings. A quiet full-width bar rather than a
    button floating at one end: it closes the opened outing the way `Load more`
@@ -5864,7 +6126,6 @@ body {
      button in the header already takes — rather than whatever their padding
      leaves around a 15px glyph, so the pair reads as a set. */
   .starters-toggle,
-  .group-toggle,
   .date-toggle {
     width: var(--control-h);
     padding: 0;
@@ -6127,11 +6388,28 @@ body {
    another swipe to reach it. Same table, opposite problem. (The `width: auto` on
    the numeric columns needs no such exception: it only does anything when there
    is surplus to share, which on this board there is not — and on the one where
-   there is, a board narrowed to a handful of columns, it is just as welcome.) */
+   there is, a board narrowed to a handful of columns, it is just as welcome.)
+
+   **The exemption held when the other two tables' gutters grew**, and this is
+   the paragraph that decided it: at the *default* 27 columns on a checked board
+   a pixel a side is 54px of extra scroll, and the 1.9vw/28px the summary table
+   took would have been 320px of it — on a table already 1,881px wide in a
+   1200px window with a fifth of its columns hidden, i.e. two more stat columns
+   pushed past the right edge to buy air the reader then has to swipe through.
+   So this board takes the *vertical* half of the change and none of the
+   horizontal: rows 52.08 → 58, gutters exactly as they were.
+
+   The clamp is a variable now because two rules read it — this one and the
+   pinned name column's offset, which is this gutter twice plus the headshot.
+   That offset was a hardcoded `63px` and would have gone quietly wrong the
+   moment either number moved. */
+.research-table {
+  --research-gutter: clamp(5px, 1.6vw, 13px);
+}
 .research-table th,
 .research-table td {
-  padding-left: clamp(5px, 1.6vw, 13px);
-  padding-right: clamp(5px, 1.6vw, 13px);
+  padding-left: var(--research-gutter);
+  padding-right: var(--research-gutter);
 }
 /* ---- The identity cell: a name over its club and positions ----
    Team and position were two columns of their own (`Tm` and `Pos`), and on the
@@ -6150,13 +6428,20 @@ body {
   flex-direction: column;
   /* No gap, and the logo is 15px rather than 16, for a reason that was
      measured rather than eyeballed: the row's height is set by whichever of
-     the headshot (37px) and this block is taller, and at 16px with a gap the
-     block came to 33px — over the 31 the headshot's own cell leaves — which
-     took the row from 51px to 54 and cost a row of the table per screen. At
-     31 the headshot is the tallest thing in the row again, exactly as it was
-     before this cell held two lines, and the board shows the same eleven rows
-     at 1200×800 that it did with `Tm` and `Pos` as columns. The two lines have
-     their own leading and read as a block without the gap. */
+     the headshot and this block is taller, and at 16px with a gap the block
+     came to 33px — over the 31 the 37px headshot's own cell left — which took
+     the row from 51px to 54 and cost a row of the table per screen. At 31 the
+     headshot was the tallest thing in the row again, exactly as it was before
+     this cell held two lines. The two lines have their own leading and read as
+     a block without the gap.
+
+     The headshot has since grown to 42px and the cells' vertical padding to 12,
+     which moves that budget rather than removing it: the image cell is now
+     6 + 46 + 6 = 58 against this block's 12 + 31 + 12 = 55, so the circle is
+     still what sets the row and this block has **three pixels of slack it did
+     not have before** — measured, not inferred: rows are 58.00px on both boards
+     (51.00 and 52.08 before) and this block 31.08. Anything added here has that
+     much room and not a pixel more. */
   gap: 0;
 }
 /* The name, the roster baseball and the watchlist star stay one line, which is
@@ -6210,9 +6495,13 @@ body {
   justify-content: flex-end;
   gap: 3px;
   width: 100%;
-  /* Matches the padding the shared th rule gives every other cell, so the
-     header text lines up with the numbers under it. */
-  padding: 8px clamp(5px, 1.6vw, 13px);
+  /* The horizontal half is exactly the gutter the shared rule gives every other
+     cell — the same variable, so a header can't line up differently from the
+     numbers under it. The vertical half is deliberately two pixels under the
+     body's: a header row is one short line where a body row is a headshot, and
+     matching it would spend the height on a band of empty panel. It rose with
+     the body's, 8 → 10, so the proportion is the one it always had. */
+  padding: 10px var(--research-gutter);
   color: inherit;
   background: none;
   border: 0;
@@ -6256,16 +6545,25 @@ body {
    as wide, so by the time you have scrolled out to Chase% or FB% there is no
    way to tell whose row you are reading — the name is worth its width here.
 
-   The 63px offset is the headshot cell exactly: a 37px photo (border-box, so
-   its border is inside that) between two 13px gutters. Those gutters are
-   `clamp(5px, 1.6vw, 13px)`, which only reaches 13px from ~813px of viewport
-   up — which is the other half of why this starts at 820px rather than lower.
-   Narrower than that the offset would be wrong *and* the pinned pair would eat
-   two fifths of the screen, so the name goes back to scrolling away. */
+   The offset is the headshot cell exactly: the photo (border-box, so its border
+   is inside that) between two of this board's gutters. It was written out as
+   `63px` — 13 + 37 + 13 — and that is the kind of number that is right until
+   somebody grows the circle, which is what happened: 37 → 42 makes it 68, and a
+   stale 63 pins the name column five pixels *under* the headshot it is meant to
+   clear. So it is **derived** rather than restated, off the same two tokens the
+   cells themselves are laid out with, and the next change to either carries
+   here for free.
+
+   `--research-gutter` is `clamp(5px, 1.6vw, 13px)`, which only reaches 13px from
+   ~813px of viewport up — which is the other half of why this starts at 820px
+   rather than lower, and is why the calc resolves to a flat 68 everywhere the
+   media query applies. Narrower than that the offset would be wrong *and* the
+   pinned pair would eat two fifths of the screen, so the name goes back to
+   scrolling away. */
 @media (min-width: 820px) {
   .research-table .sum-name-col {
     position: sticky;
-    left: 63px;
+    left: calc(var(--row-photo) + 2 * var(--research-gutter));
     z-index: 1;
   }
   /* Above both the sticky header and the sticky column, as the corner cell. */
@@ -6297,8 +6595,9 @@ body {
    resolves which, so there is no scroll listener and no state to drift.
 
    `--research-pin-left` is measured in the component (the name column is fluid,
-   so unlike its own 63px this offset can't be a constant) and is the right edge
-   of whatever is already pinned there — the headshot alone below 820px, the
+   so unlike the headshot cell's own width this offset can't be a calc) and is
+   the right edge of whatever is already pinned there — the headshot alone
+   below 820px, the
    headshot and name above it. Without clearing it the sorted column would slide
    underneath the name rather than alongside it.
 
@@ -6318,7 +6617,9 @@ body {
 .research-table td.research-sorted,
 .research-table th.research-sort.active {
   position: sticky;
-  left: var(--research-pin-left, 63px);
+  /* The fallback is the headshot cell — what is pinned before the effect has
+     measured, and derived from the same two tokens for the same reason. */
+  left: var(--research-pin-left, calc(var(--row-photo) + 2 * var(--research-gutter)));
   right: 0;
   z-index: 1;
   box-shadow: var(--pin-edge), var(--pin-edge-left);
@@ -6346,10 +6647,11 @@ body {
    column between two right-aligned ones reads as a mistake rather than as
    prose. Nothing wraps — a third line would cost the row its height.
 
-   The height budget is 31px, which is what the 37px headshot leaves inside the
-   cell's 10px of padding, and it is the same budget `.research-id` spends on a
-   name over its club and positions. 16 + 14 with no gap is 30 of it, so a
-   scheduled row is exactly as tall as a row with no game at all. */
+   The height budget is 34px — what the 42px headshot's own cell (6 + 46 + 6 =
+   58) leaves inside this cell's 12px of padding — and it is the same budget
+   `.research-id` spends on a name over its club and positions. 16 + 14 with no
+   gap is 30 of it, so a scheduled row is exactly as tall as a row with no game
+   at all, with four pixels in hand where the 37px circle left three. */
 .research-table td.research-opp {
   white-space: nowrap;
 }
@@ -6746,78 +7048,14 @@ body {
 }
 
 /* Recent-at-bats section: one row per plate appearance, newest first. */
-/* ---- The feed grouped by player ----
+/* ---- One player's day, drawn inside the player page ----
 
-   One card per player instead of a stream: his live at-bat, his plays or his
-   outing and his next game, under one identity header. This is the Games view
-   folded into the feed — that page was a card per player over the same days,
-   differing from the feed in sort order alone — so it keeps that page's shape
-   down to the collapsed-by-default card and the `expanded=` param that says
-   which are open.
-
-   It is a `.feed-item` like the other four shapes, so the layout, the 8px gap
-   and the scroll offset all come from there, and it groups itself with the same
-   3px/11px rail. `--muted` at rest: a group is not an outcome, and every rail in
-   this feed that claims something claims something about *one play*. A live
-   player's group is a `.live-entry` as well and takes the role colour, which is
-   the one claim a group can honestly make — the rule below is above that one in
-   the file, so the role wins without needing a specificity bump. */
-.feed-groups {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.feed-group {
-  border-left: 3px solid var(--muted);
-  border-radius: 3px;
-  padding-left: 11px;
-}
-/* A watched player with no game at all — the one card a stream sorted by time
-   can never draw, and the reason the grouped feed seeds itself from the roster
-   rather than from what happened. Dashed because nothing is coming, the same
-   claim `.player-card.empty` and the pitcher's no-outing card make. */
-.feed-group.empty {
-  border-left-style: dashed;
-}
-/* The name and its position chip on one line. The chip is the card header's,
-   carried over when the card became this — `.player-pos` unchanged, so the two
-   cannot drift. */
-.feed-group-name {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  min-width: 0;
-}
-/* How many plays or outings are folded up in there — the one thing the bar says
-   that isn't already a stat, and what tells a quiet day from an unopened one. */
-.feed-group-count {
-  flex: none;
-  color: var(--faint);
-  font-size: 12px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-/* Nothing to total yet: a scheduled game's first pitch stands in for the line,
-   so the bar is never blank on a player who simply hasn't played. */
-.feed-group-pending {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 600;
-}
-/* A group's bar has no leading tags — a pitcher's carries the SP chip and his
-   credit before the line, which is what `margin-left: auto` on `.feed-pitch-line`
-   is written for, and without them the whole bar bunches against the right edge
-   over a hand's width of empty panel. So the line leads, the count follows the
-   line it qualifies, and the badge still closes the row: the same
-   identity-then-summary grammar read from the other end. Scoped `>` so an outing
-   nested *inside* a group keeps the bar it has everywhere else. */
-.feed-group > .feed-item-toggle > .feed-pitch-line {
-  margin-left: 0;
-}
-.feed-group > .feed-item-toggle > .feed-group-count {
-  margin-right: auto;
-}
-
+   The block below was the grouped feed's, and before that the Games view's:
+   a card cut into games, each a static header over the plays in it. Both of
+   those pages are gone and the reading is the player page's **Overview** tab,
+   which `PlayerDay.tsx` draws from the very same items — so the classes stay
+   where they are rather than being renamed into a third home, and the two
+   readings of a game block cannot drift because there is only one. */
 /* One game inside a batter's card, once the range spans more than one date.
    The Games view cut a card into game blocks for this reason and the grouped
    feed inherits the job: over a week a flat run of at-bats says nothing about
@@ -6855,15 +7093,23 @@ body {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
-/* The items inside. Each keeps its own rail — the outcome, the tone, the
-   decision — which is what makes a group scannable rather than a wall: the
-   group's edge says whose it is and theirs say how each went. 12px rather than
-   the 16 between groups, so a player's own plays read as one block against the
-   space that separates him from the next. */
-.feed-group-items {
+/* The column that holds one player's day — the live entry, the game sections
+   and the scheduled row, one under another. Each item keeps its own rail (the
+   outcome, the tone, the decision), which is what makes the day scannable
+   rather than a wall. 16px between the blocks, the feed's own spacing between
+   items, so the page reads as the same list of things it is on the stream. */
+.player-day {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
+}
+/* A game he was on the roster for and never appeared in. The section's header
+   has already said the matchup and the final, so this is the one line left. */
+.pday-none {
+  margin: 0;
+  color: var(--faint);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .feed-items {
@@ -7264,6 +7510,13 @@ body {
   margin: 0;
   font-size: 22px;
   letter-spacing: -0.01em;
+}
+/* The boot splash: the same card with the ball centred in it. `align-self` on
+   the ball rather than `align-items` on the card, since the card is a stretch
+   column and every other thing in it — the fields, the buttons — wants that. */
+.auth-splash .ball-spin {
+  align-self: center;
+  margin: 6px 0 2px;
 }
 .auth-sub {
   margin: 0 0 4px;

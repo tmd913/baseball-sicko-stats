@@ -52,7 +52,7 @@ letting it grow past it.
 
 @docs/claude/server.md
 
-**Client** — player keys, the three views, chrome, the research board, summary table, feed (by clock or grouped by player) and details overlay.
+**Client** — player keys, the three views, chrome, the research board, summary table, the feed, and the player page (whose Overview tab is one player's day).
 
 @docs/claude/client.md
 
