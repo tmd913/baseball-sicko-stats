@@ -35,6 +35,7 @@ import {
 } from './Arsenal';
 import type { SplitKey } from './Arsenal';
 import { InningsList } from './Innings';
+import { Modal } from './Modal';
 import {
   GameStatusBadge,
   Headshot,
@@ -117,12 +118,12 @@ function splitOf(pg: PitcherGame, key: SplitKey): PitcherSplit | null {
 
 /** The Savant-style arsenal table (one row per pitch type), for the whole
  * outing or one batter handedness. */
-function ArsenalSection({ pg }: { pg: PitcherGame }) {
+export function ArsenalSection({ pg, defaultOpen = false }: { pg: PitcherGame; defaultOpen?: boolean }) {
   const [split, setSplit] = useState<SplitKey>('all');
   if (pg.pitchMix.length === 0) return null;
   const mix = splitOf(pg, split)?.pitchMix ?? pg.pitchMix;
   return (
-    <CardSection title="Arsenal">
+    <CardSection title="Arsenal" defaultOpen={defaultOpen}>
       <SplitTabs hasRight={!!pg.vsRight} hasLeft={!!pg.vsLeft} value={split} onChange={setSplit} />
       <div className="arsenal">
         {mix.map((m) => (
@@ -186,7 +187,7 @@ function battedBallStats(faced: FacedBatter[]) {
  * counting stats fill the metric grid, and the rates ride in the same dashed
  * strip the arsenal uses for its season results.
  */
-function GameLine({ pg }: { pg: PitcherGame }) {
+export function GameLine({ pg, defaultOpen = true }: { pg: PitcherGame; defaultOpen?: boolean }) {
   const [split, setSplit] = useState<SplitKey>('all');
   const sp = splitOf(pg, split);
   // A split's line is derived from the plays, so it has no innings, and the
@@ -202,7 +203,7 @@ function GameLine({ pg }: { pg: PitcherGame }) {
   const perBf = (n: number) => (L.battersFaced ? n / L.battersFaced : null);
   const singles = Math.max(0, L.hits - L.doubles - L.triples - L.hr);
   return (
-    <CardSection title="Line" defaultOpen>
+    <CardSection title="Line" defaultOpen={defaultOpen}>
       <SplitTabs hasRight={!!pg.vsRight} hasLeft={!!pg.vsLeft} value={split} onChange={setSplit} />
       <div className="pline">
         <div className="ars-row" style={{ borderLeftColor: color }}>
@@ -310,10 +311,12 @@ export function OpponentSection({
   game,
   throws: reportThrows,
   collapsible = false,
+  defaultOpen = false,
 }: {
   game: PlayerGame;
   throws?: string | null;
   collapsible?: boolean;
+  defaultOpen?: boolean;
 }) {
   const hitting = game.opponentHitting;
   if (!hitting) return null;
@@ -392,7 +395,7 @@ export function OpponentSection({
   // one short block under it and nothing to collapse away from, so it needs
   // neither the bar's frame nor the height it reserves for its controls.
   return collapsible ? (
-    <CardSection title="Opponent">{body}</CardSection>
+    <CardSection title="Opponent" defaultOpen={defaultOpen}>{body}</CardSection>
   ) : (
     <div className="card-section">
       <div className="section-title opp-title">Opponent</div>
@@ -495,6 +498,52 @@ function creditTally(games: PlayerGame[]): { credit: PitchingCredit; n: number }
     credit,
     n: games.filter((g) => g.pitching?.decision === credit).length,
   })).filter((c) => c.n > 0);
+}
+
+
+/**
+ * A pitcher's outing in full, in a dialog: the game line with its Results,
+ * Rates and Contact strips, the lineup he faced, and his arsenal for that
+ * outing.
+ *
+ * These are three of the four sections `PitcherCard` was made of, and they went
+ * off screen with it when the Games view folded into the feed. The fourth —
+ * Innings — did not, being what the feed's outing item already opens onto, so
+ * this holds exactly the parts that had no other home. The sections are the
+ * card's own components rather than a second rendering of the same numbers,
+ * which is the point: a breakdown that drifted from the card it replaced would
+ * be worse than the gap it fills.
+ *
+ * Reached from a button inside the opened outing rather than from its bar. The
+ * bar is the toggle, every pixel of it — a documented rule, and a `<button>`
+ * inside a `<button>` is not a thing — so the control sits with the innings,
+ * which is where a reader wanting more detail already is.
+ */
+export function OutingBreakdown({
+  report,
+  game,
+  onClose,
+}: {
+  report: PlayerReport;
+  game: PlayerGame;
+  onClose: () => void;
+}) {
+  const pg = game.pitching;
+  if (!pg) return null;
+  return (
+    <Modal
+      title={`${report.name} — ${matchupLine(game)}`}
+      titleId="outing-breakdown-title"
+      className="outing-breakdown-box"
+      onClose={onClose}
+    >
+      {/* Open by default, all three: this dialog was opened *for* them, and a
+          box of three collapsed bars would be asking the same question twice. */}
+      <GameLine pg={pg} defaultOpen />
+      <OpponentSection game={game} throws={report.throws} collapsible defaultOpen />
+      <ArsenalSection pg={pg} defaultOpen />
+    </Modal>
+  );
 }
 
 export function PitcherCard({
