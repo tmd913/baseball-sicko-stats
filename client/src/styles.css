@@ -2286,12 +2286,16 @@ body {
   color: var(--faint);
   font-variant-numeric: tabular-nums;
 }
+/* A batter faced, or a base event, in full — a dialog's contents now, so the
+   inset padding that held it inside a card and the rule that divided it from
+   the row above both go, for the reason `.pa-detail`'s did. */
 .faced-detail {
-  padding: 0 12px 12px;
-  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 .faced-detail .pa-des {
-  margin: 10px 0 4px;
+  margin: 0;
 }
 
 /* ---- PA card ---- */
@@ -2380,17 +2384,12 @@ body {
   cursor: pointer;
   transition: background 0.14s ease;
 }
-/* Collapsed: the card shows only this row, so drop the card's bottom padding
-   and let the row's own padding fill to the bottom edge (hover included). */
-.pa-card:not(.expanded) {
+/* The card is only ever this row now — the detail it used to unroll is a dialog
+   (`PlateAppearanceCard`) — so the bottom padding is always the row's own, and
+   the pair of rules that squared its corners against a detail below it has gone
+   with the detail. */
+.pa-card {
   padding-bottom: 0;
-}
-/* Expanded: keep the bottom padding so the hover area extends down to the
-   divider, and square the bottom corners against the detail below. */
-.pa-card.expanded .pa-summary-row {
-  padding-bottom: 10px;
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0;
 }
 .pa-summary-row:hover {
   background: rgba(56, 189, 248, 0.06);
@@ -2400,10 +2399,13 @@ body {
   outline-offset: -2px;
   border-radius: 12px;
 }
+/* The at-bat's detail, which is a dialog's contents now rather than the bottom
+   half of a card. It carried a `border-top` to divide it from the summary row
+   above it; there is no row above it any more — the box's own head is — so the
+   rule would be a stray line across the top of the body. */
 .pa-detail {
-  /* Top spacing lives on the button's padding-bottom now (so the hover covers
-     it); the divider sits flush at the button's bottom edge. */
-  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
 }
 .pa-badge {
   font-size: 12px;
@@ -3007,9 +3009,12 @@ body {
 }
 
 /* ---- Back to top ---- */
-/* Floating round action buttons stacked in the bottom-right corner. Each fades
-   in independently (back-to-top on scroll, collapse-all when anything is open),
-   so hiding one never shifts the other — they sit at fixed offsets. */
+/* Floating round action buttons in the bottom-right corner, fading in on their
+   own terms. There were two of them (back-to-top on scroll, collapse-all when
+   anything was open) at fixed offsets so hiding one never shifted the other;
+   the second went with the accordions, and back-to-top has the corner to
+   itself. The class stays shared with `.back-nav`, which is not in that corner
+   at all. */
 .float-btn {
   position: fixed;
   right: 24px;
@@ -3059,14 +3064,12 @@ body {
   font-size: 14px;
   font-weight: 700;
 }
-/* In the corner by default; rises above the back-to-top button when it's shown
-   (so it never floats with an empty gap beneath it). */
-.collapse-all {
-  bottom: 24px;
-}
-.collapse-all.raised {
-  bottom: 80px;
-}
+/* `.collapse-all` and its `.raised` stood here — the button that closed every
+   expanded at-bat, outing and upcoming row in the feed, and the offset that
+   lifted it clear of back-to-top when both were showing. Every one of those
+   shapes opens a dialog now, so at most one is open and the box itself is what
+   closes it; there is nothing left to collapse and nothing left to be raised
+   over back-to-top, which is why that button's `bottom` is plain again. */
 @media (prefers-reduced-motion: reduce) {
   .float-btn {
     transition: opacity 0.18s ease;
@@ -6040,12 +6043,21 @@ body {
 .outing-breakdown-box {
   width: min(860px, 100%);
 }
-/* One player's day is a column of feed items, so the popup takes the width the
-   feed itself is capped at — `--card-column`, which is set by what a card
-   actually holds (a name at one end of a header and a line of stats at the
-   other) rather than by what the window has. A day read in a dialog and the
-   same day read on the stream are then the same width by construction. */
-.player-day-box {
+/* Every dialog holding a piece of the feed takes the width the feed itself is
+   capped at — `--card-column`, which is set by what a card actually holds (a
+   name at one end of a header and a line of stats at the other) rather than by
+   what the window has. A play read in a dialog and the same play read on the
+   stream are then the same width by construction, which is the whole point of
+   the accordion-to-popup swap being a change of *place* rather than of drawing.
+
+   `.player-day-box` is a game read whole (the Game Log's row, an Overview
+   card); `.outing-box` is a pitcher's innings; `.play-detail-box` is one at-bat,
+   one base-running play or one Upcoming row's detail. Three names for one width
+   because each says what it holds, and a box that later wants its own number
+   can take one without disturbing the other two. */
+.player-day-box,
+.outing-box,
+.play-detail-box {
   width: min(var(--card-column), 100%);
 }
 /* The way into it, under the innings. A quiet full-width bar rather than a
@@ -6089,6 +6101,18 @@ body {
   align-items: stretch;
   gap: 10px;
   padding: 12px;
+  /* **And it is a container**, which the accordion-to-popup swap made
+     load-bearing. A plate appearance's detail sizes itself with `@container`
+     queries — the strike zone stacks under the pitch table below 600, the
+     swing-speed pill drops its column below 380 — and those were anchored on
+     `.pa-card` and `.inning-block`, the boxes the detail used to unroll inside.
+     Drawn in a dialog it has neither as an ancestor, and a query with no
+     container silently fails: measured at 390 before this line, a batter-faced
+     dialog kept the 210px strike-zone column and crushed the result text to one
+     letter a line. This is the box the detail actually has, and its inline size
+     is exactly the width the detail gets. It is the same fix `.inning-block`
+     records one file up, for the same reason. */
+  container-type: inline-size;
 }
 .research-colgroup-head {
   display: flex;
@@ -7245,27 +7269,19 @@ body {
    which `PlayerDay.tsx` draws from the very same items — so the classes stay
    where they are rather than being renamed into a third home, and the two
    readings of a game block cannot drift because there is only one. */
-/* One game inside a batter's card, once the range spans more than one date.
-   The Games view cut a card into game blocks for this reason and the grouped
-   feed inherits the job: over a week a flat run of at-bats says nothing about
-   which afternoon each belongs to. No rail and no box — the plays under it have
-   their own, and a third edge inside the group's would be a thicket. */
+/* The plays of one game, in play order — the contents of the dialog a game card
+   opens and of the Game Log's own popup. No rail and no box: the plays inside it
+   have their own, and a third edge around them would be a thicket. */
 .feed-game-section {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
-/* The block's head: date, matchup, his line for that game, the score. Static,
-   and quiet — it labels the plays under it rather than competing with them, so
-   it takes the faint rule the game bars use and no panel of its own. */
-.feed-game-head {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--border);
-}
+/* `.feed-game-head` stood here — the static row of date, matchup, line and
+   badge that labelled the plays under it. Those two facts are the *card* now
+   (`.pday-game`, folded into `.feed-item-toggle` below), and the box the plays
+   are drawn in has a title of its own, so a header inside it would name the
+   game a second time. Its two children stay: the card is what draws them. */
 .feed-game-date {
   flex: none;
   color: var(--text);
@@ -7292,8 +7308,8 @@ body {
   flex-direction: column;
   gap: 16px;
 }
-/* A game he was on the roster for and never appeared in. The section's header
-   has already said the matchup and the final, so this is the one line left. */
+/* A game he was on the roster for and never appeared in — the card's own line
+   where his stat line would be, and the one row inside a box opened on it. */
 .pday-none {
   margin: 0;
   color: var(--faint);
@@ -7333,7 +7349,14 @@ body {
    the affordance (it lights up on hover and takes focus), and the only triangle
    allowed near an inning is the top/bottom half-inning indicator, which is a
    *label*, not a toggle. Don't reintroduce one. */
-.feed-item-toggle {
+/* `.pday-game` is folded in rather than restyled to match: the Overview tab's
+   game card is the same object as this bar — a full-width row carrying a line
+   and the game's status badge, pressed to open what is behind it — so it is one
+   control by construction, the rule this stylesheet applies everywhere. Only
+   its contents differ (a date and his line for the game, against the outing's
+   role chip and credit). */
+.feed-item-toggle,
+.pday-game {
   display: flex;
   align-items: center;
   /* A finished outing carries an SP chip, a decision, a full line ("6.0 IP, 5 H,
@@ -7348,18 +7371,33 @@ body {
   font: inherit;
   color: inherit;
   text-align: left;
-  cursor: pointer;
   background: linear-gradient(180deg, var(--panel), var(--bg-2));
   border: 1px solid var(--border);
   border-radius: var(--control-radius);
+}
+/* Pressable unless it is standing in for itself: inside a box that is already
+   about this one game the bar states the outing and opens nothing, so it drops
+   the cursor and the hover that would promise otherwise. `.upcoming-head` makes
+   the same split for the same reason. */
+.feed-item-toggle:not(.static),
+.pday-game:not(.static) {
+  cursor: pointer;
   transition: border-color 0.14s ease;
 }
-.feed-item-toggle:hover {
+.feed-item-toggle:not(.static):hover,
+.pday-game:not(.static):hover {
   border-color: var(--accent);
 }
-.feed-item-toggle:focus-visible {
+.feed-item-toggle:focus-visible,
+.pday-game:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+/* The card's own line, when there is nothing to press through to. `.pday-none`
+   is a `<p>` elsewhere and zeroes its margin, which would undo the
+   `margin-right: auto` that pushes the badge to the far end of the row. */
+.pday-game .pday-none {
+  margin-right: auto;
 }
 /* Its own container so the narrow layout below tracks the item's width rather
    than the viewport's, the way the player cards do. (`.pa-card` and

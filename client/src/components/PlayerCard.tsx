@@ -168,15 +168,8 @@ function GameBlock({
   const [collapsed, setCollapsed] = useState(showMatchup);
   // Expanding a game brings it to the top of the screen, like the card and PAs.
   const blockRef = useScrollIntoViewOnExpand<HTMLDivElement>(!collapsed);
-  // PAs start collapsed; clicking an individual row opens it.
-  const [openIds, setOpenIds] = useState<Set<number>>(() => new Set());
-  const togglePa = (id: number) =>
-    setOpenIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  // Each at-bat row holds its own dialog now (`PlateAppearanceCard`), so the
+  // block no longer keeps a set of open ids for them.
 
   // The highlight reel: once the game is final (so all its video exists), every
   // at-bat's final play in chronological order, stitched into one sequence. Only
@@ -306,8 +299,7 @@ function GameBlock({
               key={pa.atBatNumber}
               pa={pa}
               gamePk={game.gamePk}
-              open={openIds.has(pa.atBatNumber)}
-              onToggle={() => togglePa(pa.atBatNumber)}
+              name={report.name}
             />
           ))}
         </div>
