@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
-import { answersEscape, useLockBodyScroll } from '../hooks';
+import { answersEscape, useLockBodyScroll, useOverlayFocus } from '../hooks';
 
 /**
  * The how-to page: a full-screen overlay in the same shape as PlayerDetails —
@@ -792,6 +792,10 @@ export function Tutorial({ onClose }: { onClose: () => void }) {
   useLockBodyScroll();
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const active = useActiveChapter(scrollRef);
+  // The background inert and the focus in here, as every overlay in this app
+  // now does — measured before the fix, 10 of 10 tab stops off this page and
+  // into the chrome behind it. See `hooks.ts::useOverlayFocus`.
+  useOverlayFocus(scrollRef);
 
   // Close on Escape, as every other full-screen view does — through the shared
   // test, so this page claims the press rather than leaving it for the player
@@ -811,7 +815,7 @@ export function Tutorial({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="details-view tutorial-view" ref={scrollRef}>
+    <div className="details-view tutorial-view" ref={scrollRef} tabIndex={-1}>
       <div className="tut-head">
         <button type="button" className="details-back" onClick={onClose}>
           <svg

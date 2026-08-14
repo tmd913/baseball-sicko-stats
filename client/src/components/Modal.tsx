@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { answersEscape, useLockBodyScroll } from '../hooks';
+import { answersEscape, useLockBodyScroll, useOverlayFocus } from '../hooks';
 
 /**
  * The z-index of the box a dialog opened *from here* would have to clear.
@@ -43,7 +43,16 @@ export const OVERLAY_LAYER = 50;
  * Columns picker takes the default width and passes no modifier at all.
  *
  * It owes a modal four ways out and has them: the ✕, Escape, a press on the
- * backdrop, and whatever control opened it. Escape goes through `answersEscape`,
+ * backdrop, and whatever control opened it. **And it owes the keyboard the same
+ * thing it owes the pointer**, which for a long time it did not: the backdrop
+ * has always covered the page — measured, nine points including all four
+ * corners hit it, and a press aimed at a sort header behind the board lands on
+ * the dialog — but Tab walked straight out of the box and Enter then worked
+ * whatever it found. `useOverlayFocus` is the whole of that fix: the background
+ * inert, the box focused on open, the opener focused again on close. See the
+ * hook, which carries the measurement.
+ *
+ * Escape goes through `answersEscape`,
  * which asks both halves of "one press undoes one thing": is anything stacked
  * *above* this box, and has this very press already been answered by somebody
  * else. The second half is not belt-and-braces — see the hook, which records
@@ -86,6 +95,12 @@ export function Modal({
   const host = useContext(DialogLayerContext);
   const layer = host === null ? BASE_LAYER : host + 1;
   const boxRef = useRef<HTMLDivElement | null>(null);
+  // The card, not the backdrop: it carries `role="dialog"` and the title, so a
+  // screen reader opens on what this box *is*. The backdrop is what stays live
+  // (it is the portal's root, and the press that dismisses lands on it), which
+  // is why the two refs are different — see `useOverlayFocus`.
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  useOverlayFocus(boxRef, cardRef);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (answersEscape(e, boxRef.current)) onClose();
@@ -108,6 +123,8 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        ref={cardRef}
+        tabIndex={-1}
       >
         <div className="app-dialog-head">
           <h2 id={titleId}>{title}</h2>
