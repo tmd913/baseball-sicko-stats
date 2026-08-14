@@ -7192,10 +7192,32 @@ body {
 .research-order {
   user-select: none;
 }
+/* The height is **reserved by the worst case laying itself out**, not declared:
+   the live text and an invisible copy of the resting sentence share one grid
+   cell, so the box is as tall as the taller of the two at whatever width the
+   dialog is and the chips below cannot move when the text changes. The two
+   strings wrap differently — measured, the resting one is three rows below a
+   328px viewport, two to 584 and one above, where `Moving G …` is one row from
+   390 up — so the block under the hint jumped 13px on the very press that picks
+   a column up, which on a phone moves the chips out from under the finger
+   mid-reorder. A fixed height would be three tiers on two font-derived
+   breakpoints; this is what `--chrome-h`, `--clip-w` and `--roll-font` already
+   do when there is no one number. See `ColumnOrder`. */
 .research-order-hint {
+  display: grid;
+  align-items: start;
   margin: 0 0 6px;
   font-size: 11px;
   color: var(--faint);
+}
+.research-order-hint > * {
+  grid-area: 1 / 1;
+}
+/* `visibility: hidden` rather than `opacity: 0`: it takes the ghost out of the
+   accessibility tree as well as off the screen, so the live region announces
+   the sentence once. It still lays out, which is the whole point. */
+.research-order-hint-ghost {
+  visibility: hidden;
 }
 .research-order-chips {
   display: flex;
