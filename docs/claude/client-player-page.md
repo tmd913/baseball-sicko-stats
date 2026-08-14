@@ -1040,11 +1040,17 @@ either workspace (grepped). What the strip is *not* is a promise of more charts:
 the tab holds one today, and a name that can hold a second is worth having when
 the alternative is renaming the tab the day one arrives.
 
-**The how-to page still lists this tab as `Rolling xwOBA` and is left alone**,
-because its list of the player page's tabs is already several renames behind —
-it names a `Season` tab that has been `Stats` for some time and lists neither
-`Overview` nor `Splits` — so a one-line fix here would be tidying one corner of
-a passage that wants rewriting whole against the strip as it stands.
+**The how-to page's list of these tabs was several renames behind and has been
+rewritten whole**, which is what that passage asked for rather than the one-line
+fix it declined. It named a `Season` tab that had been `Stats` for some time,
+listed neither `Overview` nor `Splits`, and ended on `Rolling xwOBA` — five
+entries against a strip of six, one of them describing a tab that no longer
+existed. It now runs `Overview · Percentile Rankings · Splits · Stats ·
+Game Log · Arsenal · Charts`, in the strip's own order, with a sentence each
+for the three that had never been described at all. That list is the one place
+in the app that tells a new reader what the player page *is*, so it is worth
+keeping in step with the strip rather than behind it — and the four renames it
+had accumulated are the argument for checking it whenever a tab moves.
 
 ### The key is behind an ⓘ here too
 
