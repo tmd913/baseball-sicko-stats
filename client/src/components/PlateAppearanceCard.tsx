@@ -27,10 +27,10 @@ import { StrikeZone } from './StrikeZone';
  * The misses are cached too, and for the same reason as the hits: they are the
  * plays whose lookup would otherwise be re-issued on every switch, and a miss
  * renders nothing whether it is remembered or asked for again. What that costs
- * is a clip that lands *during* the session (today's miss is tomorrow's clip,
- * and the server only holds a miss for ten minutes), so `clearClipCache` drops
- * the lot and the header's Refresh calls it — "read every source this page is
- * drawn from again" is exactly what that button means.
+ * is a clip that lands *during* the session: today's miss is tomorrow's clip,
+ * and the server only holds a miss for ten minutes, where this holds one for
+ * the life of the tab. A reload is what drops it, there being no control in
+ * the app that re-reads a page's sources wholesale.
  */
 const clipUrls = new Map<string, string | null>();
 /** Lookups still in flight, so two cards for one play ask once. */
@@ -58,12 +58,6 @@ function lookupClip(playId: string, gamePk: number): Promise<string | null> {
     clipLookups.set(key, pending);
   }
   return pending;
-}
-
-/** Forget every resolved clip, so the next render asks again. */
-export function clearClipCache() {
-  clipUrls.clear();
-  clipLookups.clear();
 }
 
 export function VideoClip({ playId, gamePk }: { playId: string; gamePk: number }) {

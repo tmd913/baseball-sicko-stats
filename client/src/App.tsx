@@ -22,7 +22,6 @@ import { BaseballMark } from './components/BaseballMark';
 import { PlayerAdder } from './components/PlayerAdder';
 import { PlayerOrderEditor } from './components/PlayerOrderEditor';
 import { LiveFeed, FEED_PAGE_SIZE } from './components/LiveFeed';
-import { clearClipCache } from './components/PlateAppearanceCard';
 import { SummaryTable } from './components/SummaryTable';
 import {
   ResearchTable,
@@ -56,11 +55,11 @@ import { LoadingBlock, LoadingLine, SpinningBaseball } from './components/Loadin
 import { Tutorial } from './components/Tutorial';
 import { EspnSettings } from './components/EspnSettings';
 
-// How long the header's refresh keeps spinning at a minimum — see `refreshAll`.
-// A warm `/api/report` comes back in about 16ms, which is a baseball nobody
-// sees turn, and a button that answers a press with nothing at all reads as
-// broken. Every press-triggered mark in the app takes this floor; the waits
-// nobody pressed take `WAIT_DELAY` at the other end of the same argument
+// How long a press-triggered mark keeps spinning at a minimum — the fantasy
+// popover's `Refresh from ESPN`, and the league page's own Refresh through it.
+// A warm league answers in milliseconds, which is a baseball nobody sees turn,
+// and a control that answers a press with nothing at all reads as broken. The
+// waits nobody pressed take `WAIT_DELAY` at the other end of the same argument
 // (`hooks.ts`), which is a delay before a mark goes up rather than a floor on
 // how long it stays.
 const MIN_SPIN = 450;
@@ -1298,8 +1297,8 @@ export default function App() {
   const [playerStatuses, setPlayerStatuses] = useState<Map<number, PlayerStatus> | null>(null);
   const statusesInFlight = useRef(false);
   const loadStatuses = useCallback(() => {
-    // Returns a promise so the header's refresh can wait on it — an in-flight
-    // read resolves immediately rather than sending a second copy of itself.
+    // Returns a promise so a caller can wait on it — an in-flight read
+    // resolves immediately rather than sending a second copy of itself.
     if (statusesInFlight.current) return Promise.resolve();
     statusesInFlight.current = true;
     return api
@@ -1778,9 +1777,9 @@ export default function App() {
   const refreshFantasyFromMenu = useCallback(() => {
     setFantasyRefreshing(true);
     setFantasyRefreshed(false);
-    // The same `MIN_SPIN` floor the header's refresh takes, for the same
-    // measured reason: a warm league answers in milliseconds, and a menu row
-    // that flickers and settles reads as a press that did nothing.
+    // `MIN_SPIN`, for the measured reason it exists: a warm league answers in
+    // milliseconds, and a menu row that flickers and settles reads as a press
+    // that did nothing.
     Promise.all([
       Promise.resolve(refreshFantasy()),
       new Promise((r) => setTimeout(r, MIN_SPIN)),
@@ -1799,94 +1798,6 @@ export default function App() {
   useEffect(() => {
     if (fantasyOpen) setFantasyRefreshed(false);
   }, [fantasyOpen]);
-
-  /**
-   * Re-read the board on screen, past the copy this session is holding. The
-   * research blob is fetched once per kind and window and then kept for the
-   * life of the tab — which is the right default for a megabyte of league-wide
-   * season stats behind a six-hour server cache, and the one thing about it
-   * that goes stale on a tab left open all day.
-   *
-   * The rows already on screen are left standing until the new ones land:
-   * `research` is only written on success, and the table's `loading` prop is
-   * gated on the cache being *empty*, so nothing blanks while this is in
-   * flight.
-   */
-  const reloadResearch = useCallback(() => {
-    return api
-      .research(researchKind, researchWindow)
-      .then((r) => {
-        setResearchError(null);
-        setResearch((prev) => ({ ...prev, [`${r.kind}:${r.window}`]: r.rows }));
-      })
-      .catch((e: Error) => setResearchError(e.message));
-  }, [researchKind, researchWindow]);
-
-  /**
-   * The header's refresh: **re-read every source the page in front of you is
-   * drawn from**, and nothing else. That rule is what decides each of the four
-   * reads below — a button that re-fetched the whole app would spend a 2MB
-   * league read and a megabyte of leaderboard to update a summary table.
-   *
-   * - **ESPN first**, and only when a league is connected *and* something on
-   *   screen is drawn from it (the ownership map has been read, or the views
-   *   are reading the fantasy roster). It is the same sequential dance
-   *   `refreshFantasy` does and for the same reason: `?refresh=1` on the
-   *   ownership call is the only true cache bypass in the app, it bypasses the
-   *   server's in-flight guard as well, and the roster and the report read the
-   *   same league payload — so firing them together would send three copies of
-   *   one upstream read instead of one and two lookups.
-   * - **The report always.** It is what the three roster views are, and in
-   *   fantasy mode it is *about* the roster the call above just re-read.
-   * - **The statuses map** on the two views that draw it (the research board
-   *   and the details view) — lineups post and IL moves land through the day.
-   * - **The research blob** on the research view alone.
-   * - **The clips**, which are a source like any other: a play's video is
-   *   looked up once per tab and then remembered (see `clearClipCache`), so
-   *   without this a miss made at nine in the morning would still be a miss at
-   *   noon on a page that has been asked to go and look again.
-   *
-   * Every one of those keeps what is on screen until its replacement arrives:
-   * the report goes through `loadReport`'s quiet path, so the page's own
-   * "Updating…" badge stays away and the button is the only thing that says a
-   * read is happening.
-   */
-  const [refreshing, setRefreshing] = useState(false);
-  const refreshAll = useCallback(() => {
-    setRefreshing(true);
-    clearClipCache();
-    const espnFirst =
-      espnConnected && (ownership !== null || usingFantasy)
-        ? loadOwnership(true)
-        : Promise.resolve();
-    const work = espnFirst.then(() => {
-      const rest: Promise<unknown>[] = [loadReport(true)];
-      if (usingFantasy) rest.push(loadFantasyRoster());
-      if (view === 'research' || detailsKey !== null) rest.push(loadStatuses());
-      if (view === 'research') rest.push(reloadResearch());
-      return Promise.all(rest);
-    });
-    // Spin for at least `MIN_SPIN` however fast the answer comes. Measured: a
-    // warm server answers `/api/report` in **16ms**, which is one frame of a
-    // turning ball — a press that leaves no trace reads as a dead button, and
-    // the one thing this control has to say is "I heard you and I have gone and
-    // looked". Long enough to be seen, short enough that a genuinely quick read
-    // still feels quick.
-    return Promise.all([work, new Promise((r) => setTimeout(r, MIN_SPIN))]).finally(() =>
-      setRefreshing(false),
-    );
-  }, [
-    espnConnected,
-    ownership,
-    usingFantasy,
-    view,
-    detailsKey,
-    loadOwnership,
-    loadReport,
-    loadFantasyRoster,
-    loadStatuses,
-    reloadResearch,
-  ]);
 
   // The reports as rendered: the real ones, or a synthetic live-day overlay when
   // the demo toggle is on. Everything downstream (nav, cards, feed, the live
@@ -2384,61 +2295,6 @@ export default function App() {
       </button>
     </div>
   ) : null;
-  /**
-   * Reload what is on screen. The app re-polls on its own only while a real
-   * game is live, and even then only the report — so this is the one control
-   * that says "read it all again now": the report, the statuses map behind the
-   * headshot marks, the research blob, and the connected league past its
-   * ten-minute cache. See `refreshAll` for the rule and why the order matters.
-   *
-   * **It lives in the brand cluster, beside the gear and the fantasy button**,
-   * where it used to sit at the right-hand end of `.header-tools` behind the
-   * search field. Two things put it here. It is *app* chrome — it acts on
-   * whatever page you are on rather than on the roster, which is exactly what
-   * the other two squares beside the title are, where the cluster it left is
-   * the roster's own search. And the header's one-line budget is measured in
-   * whether a 418px field fits: the cluster is the side that overflows first,
-   * so a 44px square is worth more given away than kept.
-   *
-   * Disabled while a read is in flight, with the app's own spinning baseball
-   * in place of the icon inside a square that doesn't move — so nothing in the
-   * header shifts, which matters more here than it did on the right-hand end,
-   * the title and two buttons now sitting to its left.
-   */
-  const refreshButton = (
-    <button
-      type="button"
-      className="refresh-btn"
-      onClick={refreshAll}
-      disabled={refreshing}
-      aria-label={refreshing ? 'Refreshing' : 'Refresh'}
-      aria-busy={refreshing}
-      title={refreshing ? 'Refreshing…' : 'Refresh what is on screen'}
-    >
-      {refreshing ? (
-        <SpinningBaseball />
-      ) : (
-        <svg
-          viewBox="0 0 24 24"
-          width="17"
-          height="17"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.1"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          {/* Three quarters of a circle with an arrowhead on the open end —
-              the same gesture at 17px as the 14px baseball that replaces it,
-              so the swap reads as the icon becoming the thing it was drawing. */}
-          <path d="M20 12a8 8 0 1 1-2.34-5.66" />
-          <path d="M20 4v4.5h-4.5" />
-        </svg>
-      )}
-    </button>
-  );
-
   // The header's cluster, at the top right: the roster search, and nothing
   // else. The calendar was once beside it and moved down to the roster row (see
   // `dateToggle`); Edit was the next and is now an entry in the settings menu;
@@ -3101,9 +2957,10 @@ export default function App() {
                   aria-busy={fantasyRefreshing}
                   title="Read your league from ESPN again — for a lineup or roster move you have just made there"
                 >
-                  {/* The header refresh's arrow at the menu's 15px, swapped for
-                      the app's own spinning baseball in flight — the same pair,
-                      so the two controls that re-read ESPN read as one idea. */}
+                  {/* Three quarters of a circle with an arrowhead on the open
+                      end, at the menu's 15px, swapped for the app's own
+                      spinning baseball in flight — so the swap reads as the
+                      arrow closing into the ball it was drawing. */}
                   {fantasyRefreshing ? (
                     <SpinningBaseball />
                   ) : (
@@ -3150,15 +3007,6 @@ export default function App() {
               </div>
             )}
           </div>
-          {/* Last of the three squares, after the two that open something. It
-              is the only one that *does* something on the press, so it reads
-              last. Being outside `.fantasy-menu` puts it outside that popover's
-              own subtree, so a press here with the popover open dismisses it —
-              and, since `useDismissable` spends that press on the dismissal,
-              dismisses it and nothing else. Refreshing then takes a second
-              press, which is what a first press dismissing means everywhere
-              else in the app. See `refreshButton`. */}
-          {refreshButton}
         </div>
         {/* The icon cluster, in the header rather than over the list: these
             belong to the watchlist itself, not to whichever view is reading it,
