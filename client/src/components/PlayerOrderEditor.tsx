@@ -157,8 +157,15 @@ export function PlayerOrderEditor({
 
   return (
     <div className="order-editor">
+      {/* The hint names two controls, so with no rows under it it would be
+          instructions for something that isn't there — and removing the last
+          player is exactly what this screen is for, so the state is ordinary
+          rather than a corner. It names the way out instead: the chrome is
+          hidden in this mode, and Done in the head above is the whole of it. */}
       <p className="order-hint">
-        Drag ⠿ to change a player's order, or ✕ to remove them.
+        {players.length === 0
+          ? 'Nothing left to order — press Done to go back.'
+          : "Drag ⠿ to change a player's order, or ✕ to remove them."}
       </p>
       <ul className="order-list">
         {players.map((p, i) => {
