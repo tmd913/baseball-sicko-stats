@@ -3,13 +3,17 @@
  *
  * The precedent is `BaseballMark` and the rule is the same one — one marker for
  * one concept, drawn from one path, because a glyph copied into two callers is a
- * glyph that eventually differs in one of them. What is different here is *how
- * much* of the mark is shared: the baseball exports the glyph alone and lets
- * each caller wrap it, because its wrappers genuinely differ (a bare mark on a
- * research row, a badge carrying the words `On roster` with a Remove button
- * beside it on the player page). The lock is the same label in both places — a
- * fact about the player, never a control — so the whole mark lives here, title
- * and all, and neither caller can give it different words.
+ * glyph that eventually differs in one of them.
+ *
+ * **Two exports, because the mark has two kinds of caller.** `LockMark` is the
+ * labelled mark on a row: a fact about a player, never a control, and the same
+ * label in both places it appears, so the title lives here and neither caller
+ * can give it different words. `LockGlyph` is the path alone, which is what the
+ * research board's `Other Rosters` button draws — a *control*, whose accessible
+ * name is its own label and whose colour is the button's `.on` state rather
+ * than this file's. That split is the one `BaseballMark` has always had (it
+ * exports the glyph and lets each caller wrap it); the lock only needed it once
+ * a button had to wear the same mark as the rows it selects.
  *
  * **Muted rather than accent.** The baseball says "this one is yours", which is
  * the loudest thing a row can say on a board read to decide who to pick up; the
@@ -40,26 +44,34 @@ export function LockMark({
   const label = `${name} is on ${team} in your ESPN league`;
   return (
     <span className="name-lock" title={label}>
-      <svg
-        viewBox="0 0 24 24"
-        width={size}
-        height={size}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={width}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
-        {/* Body and shackle, balanced about the box's own centre the way the
-            baseball's seams are: the ink runs 3 → 20.5 down and 4.5 → 19.5
-            across, so the mark sits on the same optical middle as the ball it
-            stands beside and needs no nudge of its own — it takes the
-            `.research-watched` alignment wholesale. */}
-        <rect x="4.5" y="10.5" width="15" height="10" rx="2.5" />
-        <path d="M8 10.5V7a4 4 0 0 1 8 0v3.5" />
-      </svg>
+      <LockGlyph size={size} width={width} />
       <span className="sr-only">{label}</span>
     </span>
+  );
+}
+
+/** The padlock alone, in `currentColor` and saying nothing — for a caller that
+ *  supplies its own name and its own colour. */
+export function LockGlyph({ size = 13, width = 2 }: { size?: number; width?: number }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={width}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {/* Body and shackle, balanced about the box's own centre the way the
+          baseball's seams are: the ink runs 3 → 20.5 down and 4.5 → 19.5
+          across, so the mark sits on the same optical middle as the ball it
+          stands beside and needs no nudge of its own — it takes the
+          `.research-watched` alignment wholesale. */}
+      <rect x="4.5" y="10.5" width="15" height="10" rx="2.5" />
+      <path d="M8 10.5V7a4 4 0 0 1 8 0v3.5" />
+    </svg>
   );
 }
