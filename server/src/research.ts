@@ -426,33 +426,43 @@ const battedBallUrl = (kind: PlayerKind) =>
  * `statcastWindow.ts` for why, and for the 25,000-row cap that rules out the
  * obvious alternative).
  *
- * **Three** columns are absent by nature on a window and stay null:
- * `sprintSpeed` is never in a pitch row, `xera` is Statcast's own model, and
- * `pullAirRate` is a batted-ball-board figure whose classification this file
- * cannot reproduce. The client dashes all three like any other missing value,
+ * **Two** columns are absent by nature on a window and stay null: `sprintSpeed`
+ * is never in a pitch row, and `xera` is Statcast's own model, which only
+ * Savant can publish. The client dashes both like any other missing value,
  * which is the honest rendering — a window has no sprint speed rather than a
  * sprint speed of zero.
  *
- * The third of those was measured rather than assumed, and the result is worth
- * keeping so it is not attempted again on a hunch. The day export carries
- * `hc_x`/`hc_y`/`stand`, so a pulled air ball *looks* derivable: take the spray
- * angle off the landing coordinates, flip its sign for a lefty, and count the
- * batted balls past some boundary that are not ground balls. Reconstructing the
- * whole season from the 138 cached daily CSVs reproduces Savant's own row set
- * exactly (627 batters, 798 pitchers) and its `bbe` count on 606 of 627 — so
- * the population and the denominator are right — and then **fails on the
- * classification**. No boundary fits: sweeping it, pull *air* rate is closest
- * at 16.1° (median error 0.585 points, p90 1.44, max 3.60 over the 359 batters
- * with 100+ batted balls) while pull *ground-ball* rate wants 20.1° and bottoms
- * out at 2.03 points, and `pull_rate` is exactly their sum on every row of the
- * board — so one spray-angle rule provably cannot produce both. Fitting the
- * coordinate origin as well (a 10 × 12 grid around the usual 125.42 / 198.27,
- * threshold refitted at each point, scored on the two jointly) does no better:
- * 0.985 + 1.261 at its best. Savant is not deriving these from the landing
- * coordinates at all, and 0.6 points of error off a *fitted* constant — on the
- * generous end of the sample, where a 7-day window would have twenty batted
- * balls rather than a hundred — is not a number to print beside four columns
- * measured to a median error of 0.000. An em dash is the truthful answer.
+ * **`pullAirRate` was a third and is not any more**, and the way it stopped
+ * being one is worth keeping, because the obvious route to it stays a dead end.
+ * The day export carries `hc_x`/`hc_y`/`stand`, so a pulled air ball *looks*
+ * derivable from a spray angle off the landing coordinates — and it is not.
+ * Reconstructing the whole season from the cached daily CSVs gets the
+ * population exactly right and then **fails on the classification**: no single
+ * threshold can even be *feasible*, let alone accurate. Sorting each player's
+ * batted balls by spray angle and asking where the boundary would have to fall
+ * to make Savant's own pull count come out — a sharper test than fitting an
+ * error, since it either has a solution or provably has none — the constraints
+ * intersect empty on both boards, and by a mile: the pull threshold must be
+ * both `> 51.17°` and `<= 11.77°` over 235 batters, `> 34.83°` and `<= 0.31°`
+ * over 348 pitchers. Ground balls are what wreck it, and the reason is plain
+ * once seen: their `hc` coordinates are where the ball was *fielded*. Measured
+ * on one day's labels, Savant's pulled ground balls span **−15.5° to 175.6°**
+ * while its straightaway ones span −47.7° to 92.9° — the two overlap almost
+ * entirely, so 319 of 320 pulled balls sit below the largest straightaway
+ * angle. The old note here recorded a best fit of 0.585 points of error and
+ * concluded, correctly, that an em dash beat it.
+ *
+ * **What answers it is the field Savant classifies on**, which is exactly what
+ * that note said to go and find. It is the Hawk-Eye *launch direction* — the
+ * Statcast Search UI names it in two commented-out options,
+ * `api_h_launch_direction` and `api_h_launch_direction_pullopp` — and it is not
+ * a column of any export. What *is* reachable is the filter built on it:
+ * **`hfPull=Pull|`** on the same per-date `statcast_search` CSV this file's
+ * windows are already made of, which returns precisely the batted balls Savant
+ * files as pulled. That is a *second small request per day* rather than a new
+ * classifier of ours, so the numbers are Savant's own by construction — see
+ * `statcastWindow.ts::addPull`, and **Data sources** for the season-long
+ * validation (median error 0.000 points on both kinds).
  */
 async function enrichWindow(
   rows: ResearchRow[],
@@ -483,6 +493,7 @@ async function enrichWindow(
     row.gbRate = v.gbRate;
     row.ldRate = v.ldRate;
     row.fbRate = v.fbRate;
+    row.pullAirRate = v.pullAirRate;
     row.whiffRate = v.whiffRate;
     row.chaseRate = v.chaseRate;
     row.firstPitchStrikeRate = v.firstPitchStrikeRate;
@@ -589,13 +600,18 @@ const boardKey = (kind: PlayerKind, window: ResearchWindow): BoardKey => `${kind
 const mem = new Map<BoardKey, { data: Cached; fetchedAt: number }>();
 const inFlight = new Map<BoardKey, Promise<Cached>>();
 
-// -v8: a stored older blob deserializes with every field added since missing,
+// -v9: a stored older blob deserializes with every field added since missing,
 // and would quietly cost each row its estimators, its batted-ball profile or
 // its discipline columns for six hours. Bump this whenever a field is added —
-// v8 is `pullAirRate`, which a v7 blob would leave undefined on every row and
-// so dash for six hours on a board that has the column switched on.
+// v8 was `pullAirRate`, which a v7 blob left undefined on every row. **v9 is
+// the same field changing meaning rather than arriving**: a v8 *window* blob
+// holds an explicit `null` there, which deserializes perfectly and would go on
+// dashing the column for six hours after the deploy that filled it in. The rule
+// the version answers is "would a stored blob serve the wrong thing", and a
+// field that has started having a value is as much a wrong thing as one that is
+// missing.
 const storeKey = (kind: PlayerKind, window: ResearchWindow) =>
-  `research-${kind}-${window}-${SEASON}-v8.json`;
+  `research-${kind}-${window}-${SEASON}-v9.json`;
 
 async function build(kind: PlayerKind, window: ResearchWindow): Promise<Cached> {
   const rows = await buildBase(kind, window);

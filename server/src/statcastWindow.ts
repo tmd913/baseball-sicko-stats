@@ -1,6 +1,6 @@
 import { parse } from 'csv-parse/sync';
 import { readGzipBlob, writeGzipBlob } from './storage.js';
-import { downloadDayCsv } from './savant.js';
+import { downloadDayCsv, downloadPullCsv } from './savant.js';
 import { addDays, baseballToday } from './etDate.js';
 import { mapLimit } from './limit.js';
 import type { PlayerKind } from './types.js';
@@ -54,6 +54,15 @@ export interface StatcastCounts {
   xwobaSum: number;
   xbaSum: number;
   xslgSum: number;
+  /** Pulled batted balls that were not ground balls — the numerator of pull
+   *  air rate. Off the day's `hfPull=Pull` export rather than off the pitch
+   *  rows, since Savant's own direction is nowhere in them; see `pullFor`. */
+  pullAir: number;
+  /** The batted balls those `pullAir` were counted out of. Normally identical
+   *  to `bip`, and 0 for a day whose pull export could not be read — which is
+   *  what keeps the rate honest over a window with a hole in it: that day
+   *  contributes to neither half rather than diluting the numerator. */
+  pullBip: number;
 }
 
 function empty(): StatcastCounts {
@@ -61,7 +70,7 @@ function empty(): StatcastCounts {
     bip: 0, evSum: 0, evN: 0, laSum: 0, laN: 0, barrels: 0, hardHit: 0,
     sweetSpot: 0, gb: 0, ld: 0, fb: 0, pu: 0, swings: 0, whiffs: 0,
     ozPitches: 0, ozSwings: 0, firstPitches: 0, firstStrikes: 0,
-    paDen: 0, xwobaSum: 0, xbaSum: 0, xslgSum: 0,
+    paDen: 0, xwobaSum: 0, xbaSum: 0, xslgSum: 0, pullAir: 0, pullBip: 0,
   };
 }
 
@@ -73,7 +82,7 @@ export function addCounts(a: StatcastCounts, b: StatcastCounts): void {
   a.ozPitches += b.ozPitches; a.ozSwings += b.ozSwings;
   a.firstPitches += b.firstPitches; a.firstStrikes += b.firstStrikes;
   a.paDen += b.paDen; a.xwobaSum += b.xwobaSum; a.xbaSum += b.xbaSum;
-  a.xslgSum += b.xslgSum;
+  a.xslgSum += b.xslgSum; a.pullAir += b.pullAir; a.pullBip += b.pullBip;
 }
 
 // ---- Classifying one pitch row ---------------------------------------------
@@ -185,25 +194,28 @@ function tally(into: StatcastCounts, r: Record<string, string>): void {
 
 type DayCounts = Record<PlayerKind, Record<string, StatcastCounts>>;
 
-/** `-v2`: bumped when bunts came out of the EV/LA averages — a stored blob
- *  holds *sums*, so a stale one would keep serving the pre-fix numbers. A blob
- *  deserializes with any field added since it missing, too, so
- *  bump this whenever `StatcastCounts` gains one, exactly as the day snapshot
- *  and the research board itself do. */
-const dayKey = (date: string) => `statcast-counts-${date}-v2.json`;
+/** `-v3`: bumped when bunts came out of the EV/LA averages (v2) and again when
+ *  `pullAir`/`pullBip` were added (v3) — a stored blob holds *sums*, so a stale
+ *  one would keep serving the pre-fix numbers, and it deserializes with any
+ *  field added since it missing. Bump this whenever `StatcastCounts` gains one,
+ *  exactly as the day snapshot and the research board itself do. */
+const dayKey = (date: string) => `statcast-counts-${date}-v3.json`;
 
 const dayMem = new Map<string, DayCounts>();
 const dayInFlight = new Map<string, Promise<DayCounts>>();
 
-function parseDay(csv: string): DayCounts {
-  const rows = parse(csv, {
+function parseCsv(csv: string): Record<string, string>[] {
+  return parse(csv, {
     columns: true,
     skip_empty_lines: true,
     bom: true,
     relax_column_count: true,
   }) as Record<string, string>[];
+}
+
+function parseDay(csv: string): DayCounts {
   const out: DayCounts = { batter: {}, pitcher: {} };
-  for (const r of rows) {
+  for (const r of parseCsv(csv)) {
     for (const kind of ['batter', 'pitcher'] as const) {
       const id = r[kind];
       if (!id) continue;
@@ -215,10 +227,48 @@ function parseDay(csv: string): DayCounts {
 }
 
 /**
+ * Fold the day's pulled batted balls into counts already built from the full
+ * export. The pull file is Savant's own classification and nothing else is: no
+ * spray-angle rule over `hc_x`/`hc_y` reproduces it, which was measured to
+ * exhaustion (see `research.ts::enrichWindow` and **Data sources**).
+ *
+ * `pullBip` is copied from `bip` rather than counted, because the pull export
+ * is a **subset** of the very rows `bip` was tallied from — so the two always
+ * describe the same population, and a player with no pulled ball still gets his
+ * denominator.
+ */
+function addPull(day: DayCounts, csv: string): void {
+  for (const kind of ['batter', 'pitcher'] as const) {
+    for (const counts of Object.values(day[kind])) counts.pullBip = counts.bip;
+  }
+  for (const r of parseCsv(csv)) {
+    // Every row of this export is a batted ball (checked: 781 of 781 on a real
+    // day), but the guard costs nothing and keeps the rule stated where it is
+    // read: pull *air* is everything pulled that stayed off the ground.
+    if (!r.bb_type || r.bb_type === 'ground_ball') continue;
+    for (const kind of ['batter', 'pitcher'] as const) {
+      const id = r[kind];
+      if (!id) continue;
+      const bucket = day[kind];
+      (bucket[id] ??= empty()).pullAir++;
+    }
+  }
+}
+
+/**
  * A finished day's counts never change, so they are cached without a TTL — the
  * same reasoning that lets `savant.ts` keep a past date's CSV forever. Today is
  * the exception and is deliberately **not** stored: its games are still being
  * played, and a blob written at 4pm would be served as complete all evening.
+ *
+ * **A day whose pull export fails is neither memoized nor stored**, which is
+ * the one place this parts from "cache a settled day forever". The main export
+ * throwing is fatal for the day and always was — `windowStatcast` catches per
+ * day and skips it — but the pull half is one column against fifteen, so it
+ * costs its own numbers and leaves the rest standing. Not caching it is what
+ * keeps that from being permanent: the next reader re-attempts the small pull
+ * request (the day CSV itself being on disk), where a stored `pullBip: 0` would
+ * have quietly excluded that day from the rate for ever.
  */
 async function countsFor(date: string): Promise<DayCounts> {
   const hit = dayMem.get(date);
@@ -237,7 +287,14 @@ async function countsFor(date: string): Promise<DayCounts> {
       }
     }
     const counts = parseDay(await downloadDayCsv(date));
-    if (settled) {
+    let pulled = false;
+    try {
+      addPull(counts, await downloadPullCsv(date));
+      pulled = true;
+    } catch (err) {
+      console.error(`Statcast window: ${date} pull-direction export unavailable:`, err);
+    }
+    if (settled && pulled) {
       dayMem.set(date, counts);
       await writeGzipBlob(dayKey(date), JSON.stringify(counts));
     }
@@ -257,7 +314,9 @@ async function countsFor(date: string): Promise<DayCounts> {
  *  board's Statcast columns are **absent by nature** rather than by failure:
  *  `sprintSpeed` is a separate measurement that never appears in a pitch row,
  *  and `xera` is Statcast's own model, which only Savant can publish. Both stay
- *  null on a window, and the client dashes them like any other missing value. */
+ *  null on a window, and the client dashes them like any other missing value.
+ *  `pullAirRate` was a third until Savant's `hfPull` filter turned up; it is a
+ *  real number here now. */
 export interface WindowStatcast {
   xba: number | null;
   xslg: number | null;
@@ -270,6 +329,7 @@ export interface WindowStatcast {
   gbRate: number | null;
   ldRate: number | null;
   fbRate: number | null;
+  pullAirRate: number | null;
   whiffRate: number | null;
   chaseRate: number | null;
   firstPitchStrikeRate: number | null;
@@ -296,6 +356,9 @@ export function toStatcast(c: StatcastCounts): WindowStatcast {
     gbRate: r1(rate(c.gb, c.bip)),
     ldRate: r1(rate(c.ld, c.bip)),
     fbRate: r1(rate(c.fb + c.pu, c.bip)),
+    // Over `pullBip` rather than `bip`: they are the same number on every day
+    // whose pull export was read, and differ only by excluding a day it wasn't.
+    pullAirRate: r1(rate(c.pullAir, c.pullBip)),
     whiffRate: r1(rate(c.whiffs, c.swings)),
     chaseRate: r1(rate(c.ozSwings, c.ozPitches)),
     firstPitchStrikeRate: r1(rate(c.firstStrikes, c.firstPitches)),
