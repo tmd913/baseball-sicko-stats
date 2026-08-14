@@ -1,6 +1,6 @@
 import { useContext, useLayoutEffect, useMemo, useRef } from 'react';
 import { BaseballMark } from './BaseballMark';
-import { LockMark } from './LockMark';
+import { LockGlyph, LockMark } from './LockMark';
 import { LoadingBlock, LoadingLine } from './Loading';
 import { ExpandButton } from './ExpandButton';
 import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
@@ -429,39 +429,62 @@ export function toResearchInclude(inc: string | null, scope: string | null): Res
 }
 
 /**
- * What each button is called. `fa` carries a second wording for the
- * unconnected case, because with no league the set genuinely is a different
- * one: ownership is unknowable, so the button means "everyone off your roster"
- * and says so rather than promising a free agency it cannot check. The `abbr`
- * is what a phone shows — both are rendered and swapped by the 640px query,
- * the pattern the date presets and the window tabs already use.
+ * What each button is called, at each of the three widths it is drawn at. `fa`
+ * carries a second wording for the unconnected case, because with no league the
+ * set genuinely is a different one: ownership is unknowable, so the button
+ * means "everyone off your roster" and says so rather than promising a free
+ * agency it cannot check. All three forms are rendered and swapped by the
+ * queries, the pattern the date presets and the window tabs already use.
+ *
+ * **`code` is the narrowest form and is deliberately not always a glyph.** The
+ * two sets the app already has a mark for take it — the accent baseball that
+ * means "mine" on every row of this board and on the fantasy button, and the
+ * padlock that means "somebody else has him" on the rows beside it — so the
+ * control wears the same marks as the thing it selects, which is the whole
+ * reason to reach for icons here rather than draw three new ones. Free agency
+ * has no such mark, so it is the letters `FA`, set in the same slot the glyphs
+ * occupy so the three buttons stay one shape. And the *solo* wording gets `Rest`
+ * rather than `FA`, because `Everyone Else` is not free agency: with no league
+ * the app cannot read ownership, and two characters promising it would be a
+ * claim rather than an abbreviation.
  */
-const INCLUDE_META: Record<
-  ResearchIncludeKey,
-  { full: string; abbr: string; title: string; solo?: { full: string; abbr: string; title: string } }
-> = {
+type IncludeWording = { full: string; abbr: string; code: string; title: string };
+
+const INCLUDE_META: Record<ResearchIncludeKey, IncludeWording & { solo?: IncludeWording }> = {
   mine: {
     full: 'My Roster',
     abbr: 'Mine',
+    code: 'baseball',
     title: 'Players on your roster — the list the Summary, Games and Feed views report on',
   },
   others: {
     full: 'Other Rosters',
     abbr: 'Others',
+    code: 'lock',
     title: "Players on somebody else's roster in your ESPN fantasy league",
   },
   fa: {
     full: 'Free Agents',
     abbr: 'Free',
+    code: 'FA',
     title: 'Players nobody in your ESPN fantasy league has rostered',
     solo: {
       full: 'Everyone Else',
       abbr: 'Rest',
+      code: 'Rest',
       title:
         'Every other player in the majors. With no fantasy league connected there is no ownership to read, so this is everyone who is not on your roster',
     },
   },
 };
+
+/** The narrowest form: one of the app's two ownership marks, or short text for
+ *  the set that has none. */
+function IncludeCode({ code }: { code: string }) {
+  if (code === 'baseball') return <BaseballMark size={17} width={2} />;
+  if (code === 'lock') return <LockGlyph size={17} width={2} />;
+  return <>{code}</>;
+}
 
 const includeMeta = (k: ResearchIncludeKey, connected: boolean) =>
   (!connected && INCLUDE_META[k].solo) || INCLUDE_META[k];
@@ -1539,13 +1562,25 @@ export function ResearchTable({
                   title={meta.title}
                   onClick={() => onIncludeChange({ ...include, [k]: !on })}
                 >
-                  {/* Both rendered, swapped by the 640px query — the pattern
+                  {/* All three rendered, swapped by the queries — the pattern
                       the date presets and the window tabs already use, so the
-                      breakpoint lives in one place. A phone has no room for
-                      "Other Rosters" three times over, and an icon would say
-                      nothing at all here. */}
+                      breakpoints live in one place. A phone has no room for
+                      "Other Rosters" three times over.
+
+                      The full label is the one that stays in the accessibility
+                      tree once the button is down to its mark: at the icon
+                      width it is *visually* hidden rather than dropped, the
+                      rule `.research-toggle-label` already sets, so what a
+                      screen reader reads is "My Roster" and not three buttons
+                      whose only content is an `aria-hidden` glyph. The mark
+                      itself is hidden from it wholesale — the glyphs carry no
+                      words and `FA` is a shorthand for a label already there,
+                      so announcing it would only be the name said twice. */}
                   <span className="research-inc-full">{meta.full}</span>
                   <span className="research-inc-abbr">{meta.abbr}</span>
+                  <span className="research-inc-code" aria-hidden="true">
+                    <IncludeCode code={meta.code} />
+                  </span>
                 </button>
               );
             })}
