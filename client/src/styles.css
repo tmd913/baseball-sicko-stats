@@ -2117,26 +2117,23 @@ body {
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }
-/* Batters faced — result-only rows (no pitch table / strike zone). */
-/* Batters faced, grouped into collapsible per-inning cards. */
+/* An outing as a list of per-inning bars, each opening that inning as a feed. */
 .innings-list {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
+/* The bar and nothing else. It held the inning's rows until those moved into a
+   dialog of their own, which took two declarations with them: the
+   `scroll-margin-top` that brought an expanding block to the top of the screen
+   (a dialog needs no such thing), and the `container-type` that gave the pitch
+   table and the strike zone a container to size against — those are inside
+   `.app-dialog-body` now, which is a container for exactly this reason and says
+   so. */
 .inning-block {
   border: 1px solid var(--border);
   border-radius: 12px;
   overflow: hidden;
-  /* Expanding an inning scrolls it to the top — clear the sticky nav strip. */
-  scroll-margin-top: var(--scroll-offset);
-  /* An outing's insides size themselves with @container queries (the faced
-     batter's name, and the pitch table / strike zone of an expanded at-bat).
-     The block has to be the container: in the pitcher card the nearest one
-     would otherwise be `.player-card`, and in the feed there is none at all —
-     so on a phone every one of those queries silently failed and the pitch
-     table kept its 210px strike-zone column, crushed to ~65px. */
-  container-type: inline-size;
 }
 .inning-head {
   width: 100%;
@@ -2151,9 +2148,6 @@ body {
   text-align: left;
   cursor: pointer;
   transition: background 0.14s ease;
-}
-.inning-block:not(.collapsed) .inning-head {
-  border-bottom: 1px solid var(--border);
 }
 .inning-label {
   display: inline-flex;
@@ -2220,11 +2214,30 @@ body {
   border-radius: 5px;
   padding: 1px 5px;
 }
+/* The inning's line, restated at the head of its own dialog: the bar carrying
+   it is behind the box, and a box about one inning should say what happened in
+   it before listing the men it happened to. Quieter than the bar — it is a
+   caption rather than a control — and it keeps the row's own hairline so the
+   feed under it reads as a list rather than as more of the caption. */
+.inning-box-line {
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+/* The inning's rows inside that dialog — and the wrapper is **load-bearing**
+   rather than tidy. `.app-dialog-body` is a column flex container with a bounded
+   height, and a flex item whose `overflow` is not `visible` has an automatic
+   minimum size of **zero** — so `.faced-card`, which clips its own corners,
+   shrank instead of overflowing and cut its own clip off inside itself.
+   Measured at 1200px on a four-batter inning: cards 150px tall against the ~418
+   their contents ask for, each clip 640×360 by the box model and a 90px strip
+   on the screen. The batter's plays next door never had it because
+   `.feed-game-section` already wraps them and lets its overflow show, which is
+   exactly what this restores — one item of visible overflow, whose own
+   content-based minimum then holds the list open and lets the dialog scroll. */
 .inning-batters {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 10px;
 }
 .faced-row {
   display: flex;
@@ -2280,7 +2293,14 @@ body {
   overflow: hidden;
   scroll-margin-top: var(--scroll-offset);
 }
-.faced-summary {
+/* The row *inside* a `.faced-card`: the card around it carries the box, so the
+   row gives up the border, radius and ground `.faced-row` gives a bare one.
+   `.faced-line` is the same row where nothing opens — a base-running play, whose
+   whole story is the sentence and the clip under it — folded onto this selector
+   rather than restated, so a pressable row and a static one can only ever
+   differ by the press. */
+.faced-summary,
+.faced-line {
   width: 100%;
   border: none;
   border-radius: 0;
@@ -2288,8 +2308,28 @@ body {
   font: inherit;
   color: inherit;
   text-align: left;
+}
+.faced-summary {
   cursor: pointer;
   transition: background 0.14s ease;
+}
+/* MLB's own line for a base-running play, under its row. It reads here rather
+   than behind a press because a press onto one sentence is a rung of the Escape
+   ladder spent on nothing — see `InningBaseEvent`. */
+.faced-des {
+  margin: 0;
+  padding: 0 12px 11px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+/* The play's clip, directly under the row it belongs to — the shape a batter's
+   feed item has (`FeedAtBat`: the card, then `InlineVideoClip`). The card's own
+   left accent runs past it, which is the rail the feed draws around the two of
+   them; the inset is the row's own horizontal padding, so the video lines up
+   with the badge above it. */
+.faced-card .pa-video {
+  margin: 0 12px 12px;
 }
 /* Same tint the batter at-bat rows use, on every expandable a pitcher card owns. */
 .inning-head:hover,
@@ -2308,9 +2348,11 @@ body {
   color: var(--faint);
   font-variant-numeric: tabular-nums;
 }
-/* A batter faced, or a base event, in full — a dialog's contents now, so the
-   inset padding that held it inside a card and the rule that divided it from
-   the row above both go, for the reason `.pa-detail`'s did. */
+/* A batter faced, in full — a dialog's contents now, so the inset padding that
+   held it inside a card and the rule that divided it from the row above both
+   go, for the reason `.pa-detail`'s did. (A base event no longer reaches this:
+   its line and its clip read on the row itself, an inning being a box of its
+   own now with the room for them.) */
 .faced-detail {
   display: flex;
   flex-direction: column;
@@ -6446,12 +6488,14 @@ body {
    the accordion-to-popup swap being a change of *place* rather than of drawing.
 
    `.player-day-box` is a game read whole (the Game Log's row, an Overview
-   card); `.outing-box` is a pitcher's innings; `.play-detail-box` is one at-bat,
-   one base-running play or one Upcoming row's detail. Three names for one width
-   because each says what it holds, and a box that later wants its own number
-   can take one without disturbing the other two. */
+   card); `.outing-box` is a pitcher's innings; `.inning-box` is one of those
+   innings read as a feed; `.play-detail-box` is one at-bat or one Upcoming
+   row's detail. Four names for one width because each says what it holds, and a
+   box that later wants its own number can take one without disturbing the
+   others. */
 .player-day-box,
 .outing-box,
+.inning-box,
 .play-detail-box {
   width: min(var(--card-column), 100%);
 }

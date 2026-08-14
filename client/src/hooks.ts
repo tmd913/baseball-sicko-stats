@@ -386,7 +386,7 @@ export function useFullPage<T extends HTMLElement = HTMLDivElement>() {
   useEffect(() => {
     if (!isFull) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !overlayAbove(ref.current)) setFull(false);
+      if (answersEscape(e, ref.current)) setFull(false);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -450,6 +450,50 @@ export function overlayAbove(box: HTMLElement | null) {
   return [...document.querySelectorAll(OVERLAYS)].some(
     (el) => !el.contains(box) && layerOf(el) > mine,
   );
+}
+
+/** Presses already answered — see `answersEscape`. A `WeakSet` so a key event
+ *  is forgotten the moment the browser is done with it. */
+const answered = new WeakSet<KeyboardEvent>();
+
+/**
+ * Does `box` answer *this* press of Escape? The one test every overlay in the
+ * stack asks, and the whole of the app's "one press undoes one thing" rule.
+ *
+ * `overlayAbove` was that rule on its own, and it was **not enough** — the
+ * ladder unwound whole on a single press, which was measured rather than
+ * reasoned about. Instrumented with a capture listener and a bubble listener on
+ * `window`, one keydown over a player page with a Game Log popup and a play's
+ * detail open reads `dialogs=2 view=1` at the first listener and `dialogs=0
+ * view=0` at the last: **the DOM changed in the middle of the dispatch.**
+ *
+ * The cause is a rule of the platform rather than of React. A microtask
+ * checkpoint runs after *each* listener callback, not only at the end of the
+ * event, and React schedules its sync flush in a microtask — so the topmost
+ * dialog closing in listener *n* is gone from the DOM before listener *n+1*
+ * runs, and `overlayAbove` then truthfully reports that nothing is above the
+ * next box down. It closes, flushes, and the one below it inherits the same
+ * false answer. Three things undone by one key, in the order the listeners
+ * happened to be registered in — which is itself unstable, every re-render of a
+ * `Modal` moving its listener to the end of the list.
+ *
+ * So the press itself is marked. `overlayAbove` still decides **who** answers —
+ * the topmost, whatever order the handlers run in, since nothing has moved yet
+ * when the first of them looks — and this decides **how many**: one. The two
+ * are complementary rather than redundant, and either alone is wrong: without
+ * the stacking test the first-registered box answers instead of the top one,
+ * and without the mark every box under the top one answers as well.
+ *
+ * Callers with a further reason to decline — the player page, which leaves the
+ * key to an expanded table inside itself — must test that **before** calling
+ * this, or they claim a press they then decline to answer.
+ */
+export function answersEscape(e: KeyboardEvent, box: HTMLElement | null) {
+  if (e.key !== 'Escape') return false;
+  if (answered.has(e)) return false;
+  if (overlayAbove(box)) return false;
+  answered.add(e);
+  return true;
 }
 
 /**

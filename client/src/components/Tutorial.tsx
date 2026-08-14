@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
-import { useLockBodyScroll } from '../hooks';
+import { answersEscape, useLockBodyScroll } from '../hooks';
 
 /**
  * The how-to page: a full-screen overlay in the same shape as PlayerDetails —
@@ -793,10 +793,12 @@ export function Tutorial({ onClose }: { onClose: () => void }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const active = useActiveChapter(scrollRef);
 
-  // Close on Escape, as every other full-screen view does.
+  // Close on Escape, as every other full-screen view does — through the shared
+  // test, so this page claims the press rather than leaving it for the player
+  // page underneath to answer as well. See `hooks.ts::answersEscape`.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (answersEscape(e, scrollRef.current)) onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

@@ -27,7 +27,7 @@ import { BatterSplitsTab, PitcherSplitsTab } from './PlatoonSplits';
 import { LoadingBlock } from './Loading';
 import {
   useDelayedFlag,
-  overlayAbove,
+  answersEscape,
   useLockBodyScroll,
   useOverlayChromeOffset,
   usePlayerStatus,
@@ -589,8 +589,10 @@ export function PlayerDetails({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
+      // Before the claim, not after: a box that declines the key must not have
+      // taken the press with it (see `answersEscape`).
       if (viewRef.current?.querySelector('.is-expanded')) return;
-      if (overlayAbove(viewRef.current)) return;
+      if (!answersEscape(e, viewRef.current)) return;
       onClose();
     };
     window.addEventListener('keydown', onKey);
