@@ -6434,6 +6434,13 @@ body {
    the grouped chips — see `ColumnOrder`. It reads as the same chip in a
    different grammar: on-coloured throughout (every column in it is shown, that
    being what it lists) with a grip at the end. */
+/* The whole block, not the chips alone: a mouse drag that leaves a chip would
+   otherwise paint a selection across whatever it crossed, `pointerdown`'s
+   `preventDefault` having been given up so that a press can still arrive as a
+   `click` (see `ColumnOrder`). */
+.research-order {
+  user-select: none;
+}
 .research-order-hint {
   margin: 0 0 6px;
   font-size: 11px;
@@ -6444,6 +6451,11 @@ body {
   flex-wrap: wrap;
   gap: 6px;
 }
+/* A real <button>, and the whole chip is the target. The grip inside it is a
+   mark rather than a handle: a 9×13px glyph is a fifth the width of a
+   fingertip, and there is no longer any reason for the press to be aimed at
+   it — see `ColumnOrder` and the grip's own comment below. `cursor: grab`
+   because a mouse may also drag it, which is the one thing a finger can't. */
 .research-order-chip {
   display: inline-flex;
   align-items: center;
@@ -6454,13 +6466,40 @@ body {
   background: rgba(56, 189, 248, 0.12);
   border: 1px solid rgba(56, 189, 248, 0.45);
   border-radius: var(--control-radius-inner);
+  font: inherit;
   font-size: 12px;
   font-weight: 700;
   white-space: nowrap;
   user-select: none;
-  /* No cursor of its own: the chip is a label and the grip beside it is the
-     handle, for a mouse as much as for a finger. It said `grab` while a mouse
-     could start a drag anywhere on it, which is the asymmetry that went. */
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: grab;
+}
+.research-order-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+/* Picked up and waiting for somewhere to go. Filled rather than tinted, which
+   is the app's own way of saying a control is doing something. */
+.research-order-chip.picked {
+  color: var(--bg);
+  background: var(--accent);
+  border-color: var(--accent);
+  cursor: grabbing;
+}
+.research-order-chip.picked .research-order-grip {
+  color: var(--bg);
+}
+/* Every other chip while one is picked up: a place to drop it. Dimmed so the
+   lifted one reads as lifted, and a pointer because that is now what a press
+   on it does. */
+.research-order-chip.target {
+  opacity: 0.7;
+  cursor: pointer;
+}
+.research-order-chip.target:hover {
+  opacity: 1;
+  border-color: var(--accent);
 }
 /* The chip being dragged is lifted and made transparent to the pointer, which
    is what lets `elementFromPoint` resolve to the chip underneath it — the drop
@@ -6471,55 +6510,46 @@ body {
   opacity: 0.55;
   cursor: grabbing;
 }
-/* The only thing that starts a drag, with a mouse or a finger — and the one
-   place in this dialog that departs from letting the browser scroll.
+/* The mark that says a column can be moved. It starts nothing of its own and
+   **declares no `touch-action`** — which is the whole of the fix here, and the
+   third answer this block has had.
 
-   **`pan-y`, not `none`.** This block sits at the top of a box that scrolls,
-   so the two gestures have to be told apart, and telling them apart by *place*
-   is what the edit screen's `.order-grip` does. It does not work here, because
-   Chrome performs **touch adjustment**: a touch landing near a small target is
-   snapped onto it, so a finger up to ~10px outside a 9×13px glyph was
-   retargeted to the grip and `none` then forbade the scroll. Measured at 390px
-   on the real board, the swallowed band ran x=58 to past the chip's right edge
-   on a chip spanning 29–84, and vertically 199–237 on a chip spanning 203–231
-   — over half of it, in both axes — and over the first six chips 40 of 85
-   sample flicks moved the dialog **0px**. Widening the grip makes that worse
-   rather than better: the snap band grows outward from whatever box it is
-   given, so the more of the chip the grip covers the less of it can scroll.
+   The first was `touch-action: none` on this glyph, the edit screen's answer.
+   Chrome performs **touch adjustment** — a touch landing near a small target
+   is snapped onto it — so the `none` covered a band from ~10px left of a 9×13
+   glyph to past the chip's right edge, and 40 of 85 sample flicks over the
+   first six chips scrolled the picker **0px**. The second was `pan-y` here
+   plus a matching axis test in JS: the block axis to the scroller, the inline
+   axis to the drag. That did fix the scrolling — 0 of 450 flicks dead,
+   re-measured — and could not fix the reordering, because **the chips wrap**:
+   25 of them are six rows on a 390px phone and 26 are seven, so the commonest
+   move there is a *downward* one, and the axis test threw exactly those away.
+   Measured, **22 of 30** drags landed the chip where it was dragged on a
+   six-row board and **10 of 30** on a seven-row one, every single failure
+   crossing a row; press-and-press is 30 of 30 at both.
 
-   `pan-y` hands the block axis back to the scroller and keeps the inline one,
-   which is the axis a wrapping row of chips is actually rearranged along — so
-   a flick up or down scrolls the picker wherever it lands, snapped or not, and
-   a sideways drag reorders. It is `.roll-chart`'s answer to the same mistake
-   (scope the property to the axis, not to the element) and the reason the
-   stylesheet now has three of these rather than two. `ColumnOrder` mirrors it
-   in JS — a press arms, the first move decides — so the two halves cannot come
-   to different answers about which gesture this is.
+   There is no axis left to separate the two gestures with and no element
+   either, so on touch there is **no drag at all**: a press picks a column up
+   and a second press drops it (see `ColumnOrder`). Nothing here competes with
+   the scroller, so every pixel of the picker scrolls from every pixel of a
+   chip, and touch adjustment stops mattering for a second reason as well — a
+   snap can only move the press from one part of a chip to another, and every
+   part of a chip does the same thing.
 
-   The edit screen keeps `none`, and rightly: there the drag runs *down* a list
-   that scrolls down, so the axis cannot separate them and only an element can.
-
-   The box is stretched over the chip's full height and out to its right edge
-   (a 25×28 target against the glyph's 9×13) — not because the snap needs it,
-   which it does not, but because a thing you are told to press should be big
-   enough to press. */
+   The edit screen keeps its `none`, and rightly: a row there is dragged *down*
+   a list that scrolls down and is a target a finger can aim at, so an element
+   really can separate the two. */
 .research-order-grip {
   display: flex;
   align-items: center;
   align-self: stretch;
   padding: 0 8px;
   margin-right: -6px;
-  touch-action: pan-y;
   color: var(--faint);
   font-size: 13px;
   line-height: 1;
-  cursor: grab;
 }
-.research-order-grip:active {
-  cursor: grabbing;
-  color: var(--accent);
-}
-.research-order-grip:hover {
+.research-order-chip:hover .research-order-grip {
   color: var(--accent);
 }
 
