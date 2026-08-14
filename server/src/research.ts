@@ -3,6 +3,7 @@ import { readJsonBlob, writeJsonBlob } from './storage.js';
 import { toSavantName } from './names.js';
 import { LEAGUE_HR_PER_FB, fipLike, ipToOuts } from './leagueRates.js';
 import { windowDates, windowStatcast } from './statcastWindow.js';
+import { RESEARCH_WINDOWS } from './types.js';
 import type { PlayerKind, ResearchRow, ResearchWindow } from './types.js';
 
 // Keep in sync with hfSea in savant.ts, CURRENT_SEASON in percentiles.ts, and
@@ -587,4 +588,50 @@ export async function getResearch(
   } finally {
     inFlight.delete(key);
   }
+}
+
+/**
+ * **One player's row on every window at once** — what the player page's Stats
+ * tab is: the same board, transposed, with the windows down the side instead of
+ * six hundred names.
+ *
+ * It is deliberately five reads of `getResearch` rather than a per-player
+ * upstream of its own, and the reason is that a per-player path would be a
+ * *second* definition of every number on it. The board's row is where FIP's
+ * constant, xFIP's fly-ball count, the qualifier's three rules and the whole
+ * Statcast join already live; a lighter route asking MLB for one man's
+ * `byDateRange` line would be free to drift from the board the moment either
+ * was touched, and the reader would have two answers to "what is his 30-day
+ * xwOBA" with nothing on screen to say which is which.
+ *
+ * What that costs is nothing new upstream. Every one of the ten boards is
+ * pulled warm nightly by `warmer.ts` and each is cached six hours in memory and
+ * in the storage tier, so the ordinary call is five `Map` lookups. A genuinely
+ * cold one pays exactly what a reader flipping the board through its five
+ * window tabs would pay — and pays it once for everybody, since these are the
+ * same blobs the board itself reads.
+ *
+ * `Promise.all` rather than a loop: on a warm server the five resolve in the
+ * same tick, and on a cold one `getResearch`'s own `inFlight` guard is what
+ * stops a stampede — the concurrency that matters is between *users*, and it is
+ * already handled a layer down.
+ *
+ * A window he does not appear on comes back **null rather than a zeroed row**,
+ * and the two are genuinely different: a starter with no outing in the last
+ * seven days is absent from the 7d board, where a zeroed row would claim he
+ * pitched and did nothing.
+ */
+export async function getPlayerWindows(
+  playerId: number,
+  kind: PlayerKind,
+): Promise<{ season: number; kind: PlayerKind; windows: { window: ResearchWindow; row: ResearchRow | null }[] }> {
+  const boards = await Promise.all(
+    RESEARCH_WINDOWS.map((window) =>
+      getResearch(kind, window).then((b) => ({
+        window,
+        row: b.rows.find((r) => r.id === playerId) ?? null,
+      })),
+    ),
+  );
+  return { season: SEASON, kind, windows: boards };
 }

@@ -8,6 +8,7 @@ import type {
   PercentileMetric,
   PlayerKind,
   PlayerReport,
+  PlayerWindows,
   SeasonArsenal,
   SeasonStats,
   XwobaSeries,
@@ -20,6 +21,7 @@ import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
 import { BaseballMark } from './BaseballMark';
 import { RollingXwoba } from './RollingXwoba';
 import { GameLog } from './GameLog';
+import { PlayerWindowTable } from './PlayerWindowTable';
 import { LoadingBlock } from './Loading';
 import {
   useDelayedFlag,
@@ -387,10 +389,27 @@ function PitcherBlock({
 }
 
 /**
- * The Season tab: the whole season and the two halves of it, as one card. They
- * are the same line cut three ways, so they read as one table of labelled blocks
- * rather than as separate cards — the overall row is the thing a split is a
- * split *of*, and the comparison only lands with them stacked together.
+ * **The platoon card**, at the foot of the Stats tab: the whole season and the
+ * two halves of it, as one card. They are the same line cut three ways, so they
+ * read as one table of labelled blocks rather than as separate cards — the
+ * overall row is the thing a split is a split *of*, and the comparison only
+ * lands with them stacked together.
+ *
+ * It was the whole of the tab when the tab was called **Season**, and it keeps
+ * its `Overall` block now that a window table sits above it carrying the same
+ * season line in twenty columns. That looks like the line stated twice and
+ * isn't quite: these are the seven or eight stats MLB actually splits, and the
+ * comparison a split invites is against the figure *directly above it* rather
+ * than against the same figure twenty columns along a table that scrolls
+ * sideways. Dropping it would have saved a row and cost the card the thing it
+ * is a card about.
+ *
+ * **This is the only reader `/api/players/:playerId/splits` has left**, and it
+ * is a real one: the window table above cannot answer for a platoon half at
+ * all. The research board's rows are cut by *time*, and MLB publishes no
+ * handedness split of them — nor does Savant, so a split has no Statcast half
+ * either. The two tables are cut along different axes of the same season and
+ * neither can stand in for the other.
  */
 function SeasonPanel({
   season,
@@ -404,7 +423,7 @@ function SeasonPanel({
   return (
     <div className="pct-card">
       <div className="pct-card-head">
-        <span className="pct-card-title">Season</span>
+        <span className="pct-card-title">Platoon splits</span>
       </div>
       <BatterBlock label="Overall" s={season} whole />
       <BatterBlock label="vs LHP" s={vsLeft} />
@@ -426,7 +445,7 @@ function PitcherSeasonPanel({
   return (
     <div className="pct-card">
       <div className="pct-card-head">
-        <span className="pct-card-title">Season</span>
+        <span className="pct-card-title">Platoon splits</span>
       </div>
       <PitcherBlock label="Overall" s={season} whole />
       <PitcherBlock label="vs LHB" s={vsLeft} />
@@ -667,6 +686,16 @@ export function PlayerDetails({
   } | null>(null);
   const [splitsError, setSplitsError] = useState<string | null>(null);
   const [splitsLoading, setSplitsLoading] = useState(true);
+  // The Stats tab's window table: this player's row on each of the research
+  // board's five windows. Lazy on first open like the three heavy tabs below —
+  // it is five reads of blobs the warmer already keeps hot, so the cost is a
+  // round trip rather than an upstream, but it is a round trip nobody who never
+  // opens the tab should pay. Keyed by kind as well as player, the way the game
+  // log's is: a two-way player's bat and his arm are two boards.
+  const [windows, setWindows] = useState<PlayerWindows | null>(null);
+  const [windowsError, setWindowsError] = useState<string | null>(null);
+  const [windowsLoading, setWindowsLoading] = useState(false);
+  const windowsReq = useRef<string | null>(null);
   // The season xwOBA series backs the Rolling xwOBA tab. It's a heavier Savant
   // fetch, so it's loaded lazily — only once that tab is first opened.
   const [xwoba, setXwoba] = useState<XwobaSeries | null>(null);
@@ -704,6 +733,7 @@ export function PlayerDetails({
    */
   const pctWait = useDelayedFlag(loading);
   const splitsWait = useDelayedFlag(splitsLoading);
+  const windowsWait = useDelayedFlag(windowsLoading);
   const xwobaWait = useDelayedFlag(xwobaLoading);
   const gameLogWait = useDelayedFlag(gameLogLoading);
   const arsenalWait = useDelayedFlag(arsenalLoading);
@@ -809,6 +839,9 @@ export function PlayerDetails({
     dayReq.current = null;
     setDay(null);
     setDayError(null);
+    windowsReq.current = null;
+    setWindows(null);
+    setWindowsError(null);
   }, [playerId]);
 
   // The Overview tab's day, lazily on first open (which for this tab is the
@@ -835,6 +868,33 @@ export function PlayerDetails({
       })
       .finally(() => {
         if (live) setDayLoading(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [tab, playerId, kind]);
+
+  // The Stats tab's five window rows, lazily on first open.
+  useEffect(() => {
+    const req = `${kind}-${playerId}`;
+    if (tab !== 'splits' || windowsReq.current === req) return;
+    windowsReq.current = req;
+    let live = true;
+    setWindowsLoading(true);
+    setWindowsError(null);
+    api
+      .playerWindows(playerId, kind)
+      .then((d) => {
+        if (live) setWindows(d);
+      })
+      .catch((e: unknown) => {
+        if (live) {
+          setWindowsError(e instanceof Error ? e.message : 'Failed to load');
+          windowsReq.current = null; // allow a retry on re-open
+        }
+      })
+      .finally(() => {
+        if (live) setWindowsLoading(false);
       });
     return () => {
       live = false;
@@ -1125,7 +1185,13 @@ export function PlayerDetails({
             className={`details-tab${tab === 'splits' ? ' is-active' : ''}`}
             onClick={() => setTab('splits')}
           >
-            Season
+            {/* **The key stays `splits` and only the word changed.** It is in
+                no URL — the open tab is component state — but it is named by
+                every `setTab` in this file and by anything that links to a tab
+                from elsewhere on the page, and renaming it would have been a
+                rename for the sake of matching a label. What the tab holds is
+                no longer the season alone, which is why the word had to go. */}
+            Stats
           </button>
           <button
             type="button"
@@ -1226,10 +1292,36 @@ export function PlayerDetails({
         <RollingXwoba series={xwoba} name={name} />
       )}
 
-      {tab === 'splits' && splitsWait && <LoadingBlock>Reading the season line</LoadingBlock>}
+      {/* **The Stats tab: the research board, cut two ways.** Down the side of
+          the table, the five spans the board itself offers — so "how has he
+          been going lately, against his season" is one read rather than five
+          visits to a league table. Under it, the platoon card, which is the
+          same season cut along the *other* axis and is the only thing here the
+          board cannot answer for at all. */}
+      {tab === 'splits' && windowsWait && <LoadingBlock>Reading the stat lines</LoadingBlock>}
+      {tab === 'splits' && windowsError && !windowsLoading && (
+        <div className="details-status details-error">
+          Couldn’t load stats: {windowsError}
+        </div>
+      )}
+      {tab === 'splits' && windows && !windowsLoading && (
+        <>
+          {/* The table is a direct child of the view, as the game log is, so
+              `--table-bleed` takes it out to the overlay's own edges rather
+              than leaving it inside a reading column's padding. Its caption
+              sits above it and keeps the gutters, the way the research board's
+              count line does. */}
+          <p className="stats-caption">
+            The research board&rsquo;s own columns, one row per span.
+          </p>
+          <PlayerWindowTable kind={kind} windows={windows.windows} />
+        </>
+      )}
+
+      {tab === 'splits' && splitsWait && <LoadingBlock>Reading the platoon splits</LoadingBlock>}
       {tab === 'splits' && splitsError && !splitsLoading && (
         <div className="details-status details-error">
-          Couldn’t load season stats: {splitsError}
+          Couldn’t load platoon splits: {splitsError}
         </div>
       )}
       {tab === 'splits' && !splitsLoading && isPitcher && pitcherSplits && (

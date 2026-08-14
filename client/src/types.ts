@@ -761,6 +761,26 @@ export type ResearchWindow = 'season' | 7 | 15 | 30 | 60;
 /** The tabs, in the order the Filters panel shows them. */
 export const RESEARCH_WINDOWS: ResearchWindow[] = ['season', 7, 15, 30, 60];
 
+/**
+ * One player's row on each of the research board's five windows — the player
+ * page's **Stats** tab, which is that board transposed.
+ *
+ * `row` is **null rather than a zeroed row** for a window he does not appear
+ * on, and the difference is real: a starter with no outing in the last seven
+ * days is absent from the 7d board, where a row of noughts would claim he
+ * pitched and did nothing.
+ */
+export interface PlayerWindowRow {
+  window: ResearchWindow;
+  row: ResearchRow | null;
+}
+
+export interface PlayerWindows {
+  season: number;
+  kind: PlayerKind;
+  windows: PlayerWindowRow[];
+}
+
 export interface ResearchRow {
   id: number;
   name: string;

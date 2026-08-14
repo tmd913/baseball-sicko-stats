@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PlateAppearance } from '../types';
 import { api } from '../api';
-import { useScrollIntoViewOnExpand } from '../hooks';
 import { contactHighlight, eventLabel, finalSwingBatSpeed, outcomeKind } from '../lib';
 import { PlaySituation } from './BaseDiamond';
 import { ClipVideo } from './ClipVideo';
+import { Modal } from './Modal';
 import { PitchTable } from './PitchSequence';
 import { StrikeZone } from './StrikeZone';
 
@@ -187,45 +187,70 @@ export function InlineVideoClip({ playId, gamePk }: { playId: string; gamePk: nu
   );
 }
 
+/**
+ * The heading a plate appearance's dialog carries: who, what and when.
+ *
+ * The card itself is one row in a list of them, so the row says the least it
+ * can get away with; the dialog is a page about that one at-bat and has to say
+ * whose it was, which the item's own header used to do from outside it.
+ */
+function paTitle(pa: PlateAppearance, name?: string): string {
+  const when = `${pa.half === 'Top' ? 'Top' : 'Bot'} ${pa.inning}`;
+  return `${name ? `${name} — ` : ''}${eventLabel(pa.event)} · ${when}`;
+}
+
+/**
+ * One plate appearance: a summary row that **opens a dialog** holding the
+ * description, the batted ball, the pitch sequence and the strike-zone plot.
+ *
+ * **It was an accordion and is now a popup**, which is the change this file
+ * exists to record. An at-bat's detail is a *detail about one thing* — one trip
+ * to the plate, its own pitches, its own zone — and an accordion pays for that
+ * in the page around it: opening one in the feed pushed every item below it
+ * down by three or four hundred pixels, which is why the card had to scroll
+ * itself to the top on expand (`useScrollIntoViewOnExpand`, now gone from this
+ * file), why the feed needed a "collapse all" float button to undo a session's
+ * worth of them, and why App had to hold `feedOpenKeys` for a reading position
+ * nobody asked to keep. A dialog costs the list nothing: the row stays where it
+ * is, the detail takes a box with its own scroller, and Escape or the backdrop
+ * puts it back.
+ *
+ * **The open state is local**, which is the other half of that. It was lifted
+ * to App so a control at the bottom of the page could clear it; a dialog is one
+ * at a time by construction, so there is nothing to clear and nothing to lift.
+ *
+ * **No caret** — the row is the affordance, which is this app's standing rule
+ * for every collapsible and is no less true of a control that opens a box.
+ */
 export function PlateAppearanceCard({
   pa,
   gamePk,
-  open,
-  onToggle,
-  autoScroll = true,
+  name,
   showVideo = true,
 }: {
   pa: PlateAppearance;
   gamePk: number;
-  open: boolean;
-  onToggle: () => void;
-  // When false, expanding doesn't scroll the card itself into view — the caller
-  // scrolls a larger wrapper instead (the feed scrolls the whole player+at-bat
-  // item so the player header isn't left cut off above the viewport).
-  autoScroll?: boolean;
-  // When false, the card omits its own (expand-gated, button-triggered) clip —
-  // the feed shows the clip directly below the card instead.
+  /** Whose at-bat, for the dialog's heading — the row itself sits under a
+   *  header that has already said it. */
+  name?: string;
+  // When false, the dialog omits the (button-triggered) clip: the feed draws
+  // the clip directly under the item, so the play is already watchable there
+  // and a second copy in the box would be the same video twice.
   showVideo?: boolean;
 }) {
-  const [activePitch, setActivePitch] = useState<number | null>(null);
-  // Tap toggles a pin on touch/pen (no hover to rely on); tapping the same
-  // pitch again clears it.
-  const toggleActivePitch = (n: number) => setActivePitch((cur) => (cur === n ? null : n));
+  const [open, setOpen] = useState(false);
   const kind = outcomeKind(pa.event);
   const contact = contactHighlight(pa);
   const swingSpeed = finalSwingBatSpeed(pa);
 
-  // On expand, bring this at-bat to the top of the screen so its detail isn't
-  // left off-screen below the fold. Skipped when the caller owns the scroll.
-  const cardRef = useScrollIntoViewOnExpand<HTMLDivElement>(autoScroll && open);
-
   return (
-    <div ref={cardRef} className={`pa-card kind-${kind}${open ? ' expanded' : ''}`}>
+    <div className={`pa-card kind-${kind}`}>
       <button
         type="button"
         className="pa-summary-row"
+        aria-haspopup="dialog"
         aria-expanded={open}
-        onClick={onToggle}
+        onClick={() => setOpen(true)}
       >
         <PlaySituation
           inning={pa.inning}
@@ -248,49 +273,82 @@ export function PlateAppearanceCard({
       </button>
 
       {open && (
-        <div className="pa-detail">
-          {(pa.pitcherName || (pa.stand && pa.pThrows)) && (
-            <div className="pa-hand">
-              {pa.pitcherName
-                ? `${pa.stand ? `${pa.stand}HB ` : ''}vs ${pa.pitcherName}${
-                    pa.pThrows ? ` (${pa.pThrows}HP)` : ''
-                  }`
-                : `${pa.stand}HB vs ${pa.pThrows}HP`}
+        <Modal
+          title={paTitle(pa, name)}
+          titleId="pa-detail-title"
+          className="play-detail-box"
+          onClose={() => setOpen(false)}
+        >
+          <PlateAppearanceDetail pa={pa} gamePk={gamePk} showVideo={showVideo} />
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+/**
+ * What the card's accordion used to hold, unchanged: the handedness line, the
+ * description, the batted ball, the pitch table and the strike zone.
+ *
+ * Its own component rather than inlined into the dialog, because the pitch
+ * table and the zone share a hover/tap highlight and that state belongs to the
+ * detail rather than to the row that opened it — a dialog closed and reopened
+ * should not remember which pitch a finger was on last time.
+ */
+function PlateAppearanceDetail({
+  pa,
+  gamePk,
+  showVideo,
+}: {
+  pa: PlateAppearance;
+  gamePk: number;
+  showVideo: boolean;
+}) {
+  const [activePitch, setActivePitch] = useState<number | null>(null);
+  // Tap toggles a pin on touch/pen (no hover to rely on); tapping the same
+  // pitch again clears it.
+  const toggleActivePitch = (n: number) => setActivePitch((cur) => (cur === n ? null : n));
+  const contact = contactHighlight(pa);
+  return (
+    <div className="pa-detail">
+      {(pa.pitcherName || (pa.stand && pa.pThrows)) && (
+        <div className="pa-hand">
+          {pa.pitcherName
+            ? `${pa.stand ? `${pa.stand}HB ` : ''}vs ${pa.pitcherName}${
+                pa.pThrows ? ` (${pa.pThrows}HP)` : ''
+              }`
+            : `${pa.stand}HB vs ${pa.pThrows}HP`}
+        </div>
+      )}
+
+      <div className="pa-body">
+        <div className="pa-main">
+          <p className="pa-des">{pa.description || '—'}</p>
+
+          {contact && (
+            <div className="pa-contact">
+              <span className="pa-contact-main">{contact}</span>
+              {pa.bbType && <span className="pa-bbtype">{pa.bbType.replace(/_/g, ' ')}</span>}
+              {pa.xwoba !== null && <span className="pa-xwoba">xwOBA {pa.xwoba.toFixed(3)}</span>}
             </div>
           )}
 
-          <div className="pa-body">
-            <div className="pa-main">
-              <p className="pa-des">{pa.description || '—'}</p>
+          <PitchTable
+            pitches={pa.pitches}
+            activePitch={activePitch}
+            onHover={setActivePitch}
+            onTap={toggleActivePitch}
+          />
 
-              {contact && (
-                <div className="pa-contact">
-                  <span className="pa-contact-main">{contact}</span>
-                  {pa.bbType && <span className="pa-bbtype">{pa.bbType.replace(/_/g, ' ')}</span>}
-                  {pa.xwoba !== null && (
-                    <span className="pa-xwoba">xwOBA {pa.xwoba.toFixed(3)}</span>
-                  )}
-                </div>
-              )}
-
-              <PitchTable
-                pitches={pa.pitches}
-                activePitch={activePitch}
-                onHover={setActivePitch}
-                onTap={toggleActivePitch}
-              />
-
-              {showVideo && pa.playId && <VideoClip playId={pa.playId} gamePk={gamePk} />}
-            </div>
-            <StrikeZone
-              pitches={pa.pitches}
-              activePitch={activePitch}
-              onHoverPitch={setActivePitch}
-              onTapPitch={toggleActivePitch}
-            />
-          </div>
+          {showVideo && pa.playId && <VideoClip playId={pa.playId} gamePk={gamePk} />}
         </div>
-      )}
+        <StrikeZone
+          pitches={pa.pitches}
+          activePitch={activePitch}
+          onHoverPitch={setActivePitch}
+          onTapPitch={toggleActivePitch}
+        />
+      </div>
     </div>
   );
 }

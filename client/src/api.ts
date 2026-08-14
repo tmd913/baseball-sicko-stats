@@ -10,6 +10,7 @@ import type {
   PitcherSeasonStats,
   PlayerPercentiles,
   PlayerReport,
+  PlayerWindows,
   PlayerStatus,
   ResearchIncludeKey,
   ResearchRow,
@@ -335,7 +336,21 @@ export const api = {
   ): Promise<PlayerPercentiles> {
     return request(`/api/percentiles/${playerId}?type=${kind}`);
   },
-  // The season line plus the platoon splits — the details view's Season tab.
+  /**
+   * One player's row on each of the research board's five windows — the player
+   * page's **Stats** tab.
+   *
+   * It reads the board's own blobs rather than a per-player upstream of its
+   * own, which is what makes the numbers here and the numbers on the board the
+   * same numbers; see `getPlayerWindows` on the server for why that matters
+   * more than the request it saves. In practice it is five cache hits: the ten
+   * boards are pulled warm nightly.
+   */
+  async playerWindows(playerId: number, kind: PlayerKind): Promise<PlayerWindows> {
+    return request(`/api/players/${playerId}/windows?type=${kind}`);
+  },
+  // The season line plus the platoon splits — the platoon card at the foot of
+  // the details view's **Stats** tab. Still the only reader of that route.
   async splits(
     playerId: number,
   ): Promise<{
