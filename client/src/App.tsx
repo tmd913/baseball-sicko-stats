@@ -3315,8 +3315,23 @@ export default function App() {
           and nothing saved would otherwise get "Your roster is empty" sitting
           on top of a full page of his fantasy team's cards, over a button that
           opens a search which — ESPN owning the list — no longer adds to
-          anything. The mode's own empty case is the block below it. */}
-      {rosterLoaded && !usingFantasy && roster.length === 0 && !error && view !== 'research' && (
+          anything. The mode's own empty case is the block below it.
+
+          `!editMode` for the reason the two filter messages below carry it, and
+          more plainly: the edit screen takes the whole page — `.app.edit-mode`
+          hides the header cluster, the gear, the fantasy button, the view bar
+          and the date controls — so this is a prompt belonging to a view that
+          is not on screen. It is reachable because removing the last player is
+          exactly what that screen is *for*, and the card then landed over the
+          rows it had just emptied, offering a search the mode has hidden. The
+          screen says its own emptiness in its own words (`PlayerOrderEditor`),
+          and Done is in its head whether or not a row is left. */}
+      {rosterLoaded &&
+        !usingFantasy &&
+        roster.length === 0 &&
+        !error &&
+        view !== 'research' &&
+        !editMode && (
         <div className="empty-state">
           <p className="empty-title">Your roster is empty</p>
           <p>
@@ -3362,7 +3377,16 @@ export default function App() {
           the two things it can say are the two ways out: go and make the move,
           or read your own list instead. Held until the roster read has landed
           (`fantasyRoster !== null`), or the message would flash over every
-          fantasy page for as long as ESPN takes to answer. */}
+          fantasy page for as long as ESPN takes to answer.
+
+          No `!editMode` here, and that is deliberate rather than an omission:
+          the two cannot be true at once. The edit screen is only entered from
+          the settings menu, whose entry is gated on `!usingFantasy` — ESPN owns
+          that list and a screen offering to rearrange it would be offering
+          something it can't do — and every control that could flip the source
+          under it (the fantasy button and its popover) is hidden by
+          `.app.edit-mode`. A guard against a state nothing can reach is a guard
+          nobody can check. */}
       {usingFantasy &&
         fantasyRoster !== null &&
         rosterKeys.size === 0 &&
