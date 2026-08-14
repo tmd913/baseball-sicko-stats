@@ -5,7 +5,7 @@ Split out of `client.md`. `PlayerDetails` is the overlay that opens on **anybody
 which is the fact most of its design follows from. The dialog rules its tabs lean
 on are in `client-dialogs.md`.
 
-- **the player page and the editor** — what is left of the old **players / Games** view, which was one card per rostered player (`PlayerCard`, `PitcherCard`); the card became the feed's grouped reading and the grouping became this page's own **Overview** tab, so the card's job has ended up here. **Both card components survive in the tree and render nowhere**; their parts do the work instead — `PlateAppearanceCard`, `InningsList`, `OpponentSection`, `GameStatusBadge`, `PlatoonSplit` are all read by `LiveFeed` and, through it, by `PlayerDay.tsx`, which is why the files stay and why rollup drops only the two shells (442KB → 425). See **Pitchers on the roster** for the two things that went off screen with them and have not been rehomed. `PlayerDetails` overlays a tabbed view: **Overview** (his season line, his day and his last five games — see its own section below; first in the strip and the tab the page opens on), the percentile card, a **Charts** tab holding the rolling-xwOBA chart (`RollingXwoba.tsx` — a client-computed rolling average over a 50/100/250-PA window, lazily fetched only when its tab opens; see **The Charts tab** below for why the strip names the kind of reading rather than the one card in it, and for why the labels on that chart are sized in rendered pixels), a pitchers-only **Arsenal** tab (also lazy, `SeasonArsenalRow`, with its own Overall / vs RHB / vs LHB `SplitTabs`), a **Game Log** tab (`GameLog.tsx`, lazy too — and lazy for the **Overview** as well, which draws five of its rows off the same one read; the whole season's games, newest first, in the app's one plain stat table outside the summary view. The table itself is **`GameLogTable`**, factored out so the tab and the Overview's preview are one component with `shown` and `totals` set differently rather than two tables free to drift — see **the player page's Overview tab** below: the counting stats per game plus the running **Szn** line (below), a `<tfoot>` season row summing **every** game rather than the page on screen (pinned to the bottom of the box, but **only on that axis**: its label spans three columns and carries `.glog-date`, the class that pins the date column to the left edge, so scrolling right slid the label along over its own totals and swallowed the first two stat columns — `left: auto` leaves it constrained on the block axis alone), and the feed's Load-more paging at `PAGE_SIZE` 25 because a batter's season is 150 rows inside an overlay that already scrolls. Its header row sticks to the top and the date column to the left, both at once — which is why this tab alone gives the overlay `.gamelog-mode`: a sticky header can only stick to the box that scrolls, and the box that scrolls has to be the table's own (its columns overflow a phone, and an `overflow-x` container scrolls in both axes whether you want it to or not), so the overlay becomes a fixed-height flex column — the shape `.app.summary-mode` gives the summary view — with the head and tabs holding their place. Zeroes are dimmed so the eye lands on the games with something in them. **Every row is a press that opens that game as a feed**, and carries the hover tint and the pointer that say so — see **The Game Log's rows open the game** below, which also sets out why the rows deliberately carried no tint for as long as they did nothing. The zebra stripe is untouched: it is what keeps a fourteen-column row readable across, and it is the same device the other two wide tables use. The pitcher's SP/RP marker renders **only when the log holds both** — twenty rows of SP say nothing the IP column doesn't. The batter's line **leads on `H/AB`** — one cell where AB and H were two columns, the same shape the summary table's own `H/AB` uses. It spent a spell over **plate appearances** instead, on the argument that AB throws away the walk and the sacrifice, so a 2-for-4 night with a walk read `2/5` where the at-bat count alone calls it four trips. What that traded away is the thing this column is actually read for: **every other number on the line is over at-bats** — the `Szn AVG` three cells along, and the AVG and the SLG inside the OPS on the `<tfoot>` row underneath — so `H/PA` was the one cell on the row whose denominator nothing else on it shared, and a reader checking the .259 beside it found 117 over 524 rather than the 117 over 452 that made it. Over at-bats the cell and the average agree by construction, and the walk it was defending is not lost at all: it is the BB column four cells along, which is where a walk belongs. `2/4` with a `1` under BB is a five-trip night stated in the two places that own the two facts. **PA leaves the columns and not the row** — it rides the cell's tooltip (`0 hits in 4 at-bats · 5 PA`) and it is still what tells the two kinds of `0/0` apart, below. The `<tfoot>` follows the cell above it, being that column's sum: season hits over season **at-bats**, which is the very pair the AVG at the end of the same row divides. Checked in a browser against MLB's published season line, three batters end to end — Alonso `117/452` · .259 · .833, Soto `83/293` · .283 · .947, and Justin Dean `3/8` · .375 · 1.125 at the thin end of the scale — each identical to MLB's own; and league-wide, summing 9,023 game-log rows across 120 batters reproduces MLB's season AB and H for **all 120**, 0 mismatches. **What dims is `pa === 0`, not a bare `0/0`.** A man who appeared without coming to the plate — a pinch-runner, a defensive replacement — has nothing to read in this cell and dims whole, the way every other zero in this table does. Over at-bats a night that was one walk is *also* `0/0`, and it deliberately stays plain: he did come up and he did do something, and the cell can no longer tell those two apart where the row still can. That distinction is worth keeping rather than collapsing — in the same sample 309 rows are a genuine 0 PA against 97 that are `0/0` off a walk or a sacrifice, so dimming on at-bats would have quietly filed 97 real plate appearances as “not in the game”. Each says which of the two it is on hover, the plain one naming the trip it doesn't count (`1 PA, no official at-bat`). `decisionColor` moved from `PitcherCard.tsx` to `lib.ts` so the log's W/L/S/HLD chips take the same colours as the card's. **The Szn columns read in the order the two lines are read in.** A batter's are `Szn AVG · Szn OBP · Szn OPS` — slash-line order, so the eye takes them the way a slash line is taken, and OBP sits between the two rather than after them because a slash line with its middle term at the end is not a slash line. **SLG is the one part of it that gets no column**, and deliberately: `seasonSlg` is parsed and shipped by the route (it always has been), but it is exactly `OPS − OBP` off the two cells beside it, and this table is already sixteen columns wide on the pitcher tab. A pitcher's are `Szn ERA · Szn FIP · Szn WHIP` — **the estimator immediately after the number it estimates**, which is the rule the pitcher card's season line and the research board's `ERA · xERA · FIP · xFIP` both follow, and the reason the pair must not be split. **WHIP comes after the pair rather than between them**, because it answers a different question: ERA and FIP are two readings of the runs, one of them scrubbed of the fielding behind him, and a number counting the traffic he allows has no business standing in the middle of that comparison. FIP is **null under three innings** — `fipLike`'s own rule, applied to the season-to-date innings — and dashes there, which on a reliever's log is his first outing or two and nothing else.
+- **the player page and the editor** — what is left of the old **players / Games** view, which was one card per rostered player (`PlayerCard`, `PitcherCard`); the card became the feed's grouped reading and the grouping became this page's own **Overview** tab, so the card's job has ended up here. **Both card components survive in the tree and render nowhere**; their parts do the work instead — `PlateAppearanceCard`, `InningsList`, `OpponentSection`, `GameStatusBadge`, `PlatoonSplit` are all read by `LiveFeed` and, through it, by `PlayerDay.tsx`, which is why the files stay and why rollup drops only the two shells (442KB → 425). See **Pitchers on the roster** for the two things that went off screen with them and have not been rehomed. `PlayerDetails` overlays a tabbed view: **Overview** (his season line, his day and his last five games — see its own section below; first in the strip and the tab the page opens on), the percentile card, a **Charts** tab holding the rolling-xwOBA chart (`RollingXwoba.tsx` — a client-computed rolling average over a 50/100/250-PA window, lazily fetched only when its tab opens; see **The Charts tab** below for why the strip names the kind of reading rather than the one card in it, for why the labels on that chart are sized in rendered pixels, and for why the league average is named in a legend under the chart rather than written across the plot), a pitchers-only **Arsenal** tab (also lazy, `SeasonArsenalRow`, with its own Overall / vs RHB / vs LHB `SplitTabs`), a **Game Log** tab (`GameLog.tsx`, lazy too — and lazy for the **Overview** as well, which draws five of its rows off the same one read; the whole season's games, newest first, in the app's one plain stat table outside the summary view. The table itself is **`GameLogTable`**, factored out so the tab and the Overview's preview are one component with `shown` and `totals` set differently rather than two tables free to drift — see **the player page's Overview tab** below: the counting stats per game plus the running **Szn** line (below), a `<tfoot>` season row summing **every** game rather than the page on screen (pinned to the bottom of the box, but **only on that axis**: its label spans three columns and carries `.glog-date`, the class that pins the date column to the left edge, so scrolling right slid the label along over its own totals and swallowed the first two stat columns — `left: auto` leaves it constrained on the block axis alone), and the feed's Load-more paging at `PAGE_SIZE` 25 because a batter's season is 150 rows inside an overlay that already scrolls. Its header row sticks to the top and the date column to the left, both at once — which is why this tab alone gives the overlay `.gamelog-mode`: a sticky header can only stick to the box that scrolls, and the box that scrolls has to be the table's own (its columns overflow a phone, and an `overflow-x` container scrolls in both axes whether you want it to or not), so the overlay becomes a fixed-height flex column — the shape `.app.summary-mode` gives the summary view — with the head and tabs holding their place. Zeroes are dimmed so the eye lands on the games with something in them. **Every row is a press that opens that game as a feed**, and carries the hover tint and the pointer that say so — see **The Game Log's rows open the game** below, which also sets out why the rows deliberately carried no tint for as long as they did nothing. The zebra stripe is untouched: it is what keeps a fourteen-column row readable across, and it is the same device the other two wide tables use. The pitcher's SP/RP marker renders **only when the log holds both** — twenty rows of SP say nothing the IP column doesn't. The batter's line **leads on `H/AB`** — one cell where AB and H were two columns, the same shape the summary table's own `H/AB` uses. It spent a spell over **plate appearances** instead, on the argument that AB throws away the walk and the sacrifice, so a 2-for-4 night with a walk read `2/5` where the at-bat count alone calls it four trips. What that traded away is the thing this column is actually read for: **every other number on the line is over at-bats** — the `Szn AVG` three cells along, and the AVG and the SLG inside the OPS on the `<tfoot>` row underneath — so `H/PA` was the one cell on the row whose denominator nothing else on it shared, and a reader checking the .259 beside it found 117 over 524 rather than the 117 over 452 that made it. Over at-bats the cell and the average agree by construction, and the walk it was defending is not lost at all: it is the BB column four cells along, which is where a walk belongs. `2/4` with a `1` under BB is a five-trip night stated in the two places that own the two facts. **PA leaves the columns and not the row** — it rides the cell's tooltip (`0 hits in 4 at-bats · 5 PA`) and it is still what tells the two kinds of `0/0` apart, below. The `<tfoot>` follows the cell above it, being that column's sum: season hits over season **at-bats**, which is the very pair the AVG at the end of the same row divides. Checked in a browser against MLB's published season line, three batters end to end — Alonso `117/452` · .259 · .833, Soto `83/293` · .283 · .947, and Justin Dean `3/8` · .375 · 1.125 at the thin end of the scale — each identical to MLB's own; and league-wide, summing 9,023 game-log rows across 120 batters reproduces MLB's season AB and H for **all 120**, 0 mismatches. **What dims is `pa === 0`, not a bare `0/0`.** A man who appeared without coming to the plate — a pinch-runner, a defensive replacement — has nothing to read in this cell and dims whole, the way every other zero in this table does. Over at-bats a night that was one walk is *also* `0/0`, and it deliberately stays plain: he did come up and he did do something, and the cell can no longer tell those two apart where the row still can. That distinction is worth keeping rather than collapsing — in the same sample 309 rows are a genuine 0 PA against 97 that are `0/0` off a walk or a sacrifice, so dimming on at-bats would have quietly filed 97 real plate appearances as “not in the game”. Each says which of the two it is on hover, the plain one naming the trip it doesn't count (`1 PA, no official at-bat`). `decisionColor` moved from `PitcherCard.tsx` to `lib.ts` so the log's W/L/S/HLD chips take the same colours as the card's. **The Szn columns read in the order the two lines are read in.** A batter's are `Szn AVG · Szn OBP · Szn OPS` — slash-line order, so the eye takes them the way a slash line is taken, and OBP sits between the two rather than after them because a slash line with its middle term at the end is not a slash line. **SLG is the one part of it that gets no column**, and deliberately: `seasonSlg` is parsed and shipped by the route (it always has been), but it is exactly `OPS − OBP` off the two cells beside it, and this table is already sixteen columns wide on the pitcher tab. A pitcher's are `Szn ERA · Szn FIP · Szn WHIP` — **the estimator immediately after the number it estimates**, which is the rule the pitcher card's season line and the research board's `ERA · xERA · FIP · xFIP` both follow, and the reason the pair must not be split. **WHIP comes after the pair rather than between them**, because it answers a different question: ERA and FIP are two readings of the runs, one of them scrubbed of the fielding behind him, and a number counting the traffic he allows has no business standing in the middle of that comparison. FIP is **null under three innings** — `fipLike`'s own rule, applied to the season-to-date innings — and dashes there, which on a reliever's log is his first outing or two and nothing else.
 
 **The `<tfoot>` treats the two kinds differently, and the split is honest rather than tidy.** The batter's OBP is **recomputed from the totals** alongside the AVG and OPS already there, off the `hbp`/`sacFlies` the row has carried for exactly this since it was written — the three cells are then one arithmetic over one set of sums, and the OPS at the end of the row is that OBP plus a slugging over the same at-bats. The pitcher's FIP and WHIP are **not** recomputed and are **not summed** — a season-to-date rate is not a summable thing, and the newest row's running value *is* the season, the log running to the last game played. So the foot takes `games[0]`'s. That is right twice over: it keeps FIP's one definition on the server, where the constant behind it lives, rather than restating `FIP_CONSTANT` in a table; and it cannot disagree with the row directly above it. Checked against MLB's published season line end to end — **Alonso** `.259/.353/.833`, **Soto** `.283/.408/.947`, **Ohtani** `.290/.392/.930` and **Ke'Bryan Hayes** `.138/.191/.425` on the batting side (newest row and recomputed foot alike, save the one hundredth of Ohtani's foot OPS, which is the pre-existing rounding of an unrounded `obp + slg` against MLB's rounding of each half first), and **Sánchez** `2.54 / 2.68 / 1.19`, **Alcantara** `3.52 / 3.83 / 1.17`, **Gallen** `6.34 / 5.36 / 1.56` and **Vesia** `2.81 / 3.10 / 1.18` on the pitching side, each FIP identical to the one the Season tab prints for the same man.
 
@@ -1398,6 +1398,18 @@ while his season xwOBA is context for reading the line rather than a caveat abou
 it. So the whole caption goes behind the button, in the two paragraphs it always
 was.
 
+**One clause of that has since been overtaken and the conclusion has not.** The
+league average is no longer "drawn on the chart itself" — that inline label is
+gone and a **legend under the chart** names the figure instead (see *The league
+average is a legend, not a label inside the plot* below). What the sentence was
+really doing was justifying the caption's departure by showing that neither of
+its two figures was a caveat, and that is unchanged: the league average is on the
+card, more plainly than it was, and his season xwOBA is still the one number this
+key carries alone. What did have to move with it is the key's **wording** — its
+second paragraph named the league average and would now be saying, behind a
+button, a figure the legend says in the open, so it names only his own season
+xwOBA.
+
 **The panel is anchored to the card's head, not to the button**, which is this
 caller's own half of `InfoKey` (`.roll-key .info-key-panel`) and the one place it
 parts from the Splits key. That one hangs off a control at the card's right edge
@@ -1442,21 +1454,25 @@ the measured scale.** `RollingXwoba` observes its own chart box with a
 for the same reason: there is no one number to declare. The stylesheet keeps the
 rules saying *which* text is a label and reads the var for the size, with the old
 `11px` as the pre-measurement fallback. **Measured: `--roll-font` resolves to
-13.63px at 1200 and 26.02 at 390, and both the axis labels and the league-average
-label render at 12.00px at both** — against 9.69 and 5.07 before. Twelve is the
-app's own caption size (`.roll-caption` was 12px, `.roll-tip-sub` is 11).
+13.63px at 1200 and 26.02 at 390, and the axis labels render at 12.00px at
+both** — against 9.69 and 5.07 before. Twelve is the app's own caption size
+(`.roll-caption` was 12px, `.roll-tip-sub` is 11). *(That sentence read "both the
+axis labels and the league-average label" until the inline label was retired; it
+is one reader of the var now, and the measurement is unchanged.)*
 
 **The plot's padding follows the label, because the padding is what the label
 sits in.** The left pad holds the y labels and the bottom pad the x ticks, and
 both were flat numbers (48 and 30) that were right at exactly one width: at 390 a
 26-unit label would have run off the left edge of its own plot. They are
-`2.3em + 10` and `1.4em + 8` now, off the same derived font — 2.3em being the
+`2.3em + 10` and `1.6em + 8` now, off the same derived font — 2.3em being the
 widest y label with slack, `.200` measuring 2.21em in this face (21.41px of ink
 at an 11-unit font on a 0.8806 scale), and `formatRate` yielding four characters
 across xwOBA's whole range. The right pad takes `max(22, 1em)`, since half the
 last x tick's label hangs into it. Checked at both widths on a batter and a
 pitcher: **every y label sits inside the chart box** and the lowest x tick clears
-the SVG's own bottom edge.
+the SVG's own bottom edge. *(The bottom pad was `1.4em + 8` and the 1.6 is
+`X_TICK_BASELINE_EM`, which the pad now reads rather than carrying a number of
+its own — see the section below, which is why it moved.)*
 
 **The box is held in state rather than in a ref**, which is not a style
 preference: the chart is *conditional* — a player short of his window renders a
@@ -1488,3 +1504,139 @@ body and the overlay each overflow by **0**.
 104.75 KB of CSS** (18.69 → 18.72 gzipped) — 0.5KB and 0.1KB raw, and a third of
 a kilobyte over the wire, for a `ResizeObserver`, a popover and the paragraphs
 arguing them.
+
+### The x ticks clear the y labels, and the clearance is a derivation
+
+**The leftmost x tick collided with the bottom y label**, and it was not a near
+miss: measured ink against ink on the real chart, the `100` tick overlapped the
+`.200` label by **2.46 × 0.69px at 1200 and 6.59 × 0.69px at 390**. Two rules
+that were each right on their own put them in the same place. The lowest
+gridline is *always* exactly on the plot's bottom edge — `yMin` is floored to a
+step, so `sy(yMin)` is `PAD.top + PLOT_H` — and its label hangs `0.32em` below
+that line, which is the `dy` on the `<text>`. And an x tick is centred on its own
+tick, the first of which lands at or just past the plot's **left** edge, so half
+of it hangs back into the left pad where the y labels live. The horizontal figure
+differs between the two widths because that first tick's distance from the edge
+does; the vertical one does not, because both labels render at 12px whatever the
+width (see the section above).
+
+**The fix is a named constant the tick and the pad both read**, rather than a
+number nudged until it looked right. `X_TICK_BASELINE_EM` is how far below the
+plot the tick's baseline sits, in ems of its own size, and it is built from what
+it has to clear: `0.72` is where this face's digits start above their baseline
+(measured, 8.65px of ascent at a 12px rendered size), `0.34` is where the y
+label's ink ends below the gridline, and the rest is clearance. **1.6em leaves
+0.54em — 6.5px at the rendered size, at every width**, because the whole
+relationship is in ems of a label whose rendered size is fixed. The bottom pad is
+that same constant plus the 8 units that keep the baseline off the SVG's own edge
+(`fontU * X_TICK_BASELINE_EM + 8`, where it was a separate `1.4em + 8`), so the
+two cannot drift apart the next time either moves. **Nothing is reserved below
+the baseline**: an x tick is a plate-appearance count, and integers in this face
+have no descender.
+
+**Measured before → after, ink against ink, at 320 / 390 / 1200 / 1920.** The
+collision count over the whole chart goes **1 → 0** at every width; the gap
+between the lowest y label's ink and the top of the nearest x tick's goes
+**−0.69px → 6.50–6.51px**, the same number at all four. The x ticks still clear
+the SVG's own bottom edge (2.72 / 3.49 / 6.85 / 6.85px), every y label still sits
+inside the chart box, and the **page body and the overlay each overflow by 0** at
+all four. What it costs is 0.2em of plot height — the SVG's own box never moves
+(the viewBox is fixed at 720 × 300, and it renders 634 × 264.16 at 1200 and
+332 × 138.33 at 390, unchanged), so what shrinks is `PLOT_H` inside it, by 2.7
+viewBox units at 1200 and 5.2 at 390: under 2% of the plot, spent on the one
+thing that made its axis unreadable.
+
+### The league average is a legend, not a label inside the plot
+
+**The figure was in two places and neither of them was a legend.** It was painted
+*on the chart* as `.315 league avg`, anchored to the right end of the reference
+line at its own height; and it was a sentence inside the key behind the ⓘ, which
+is a place a reader has to press a button to reach. What a reference line wants
+is what every chart wants — a swatch of the mark and a word for it, under the
+picture, read once and then ignored — so that is what it has: a `.roll-legend`
+row below the chart reading `— — —  League average (.315)`.
+
+**The inline label goes, and the second reason is the one a reader meets.** It
+said the figure the legend now says, on a card whose whole content is one chart,
+which is the rule this app applies everywhere else (the Overview tab's game card
+dropped its matchup line because the status badge beside it already carried the
+clubs; the feed's Upcoming row dropped its `ProbablePitcher` line because the
+split's own head already named the hand). And it was drawn **inside the plot**,
+hard against the right edge at the reference line's own height — which is exactly
+where the rolling line of a league-average hitter runs, so the one mark this
+chart exists to show was the thing the text sat on. Measured on **Gunnar
+Henderson, whose season xwOBA is .315**: the label's ink spanned **16.2% of the
+plot at 1200 and 32.6% at 390**, and **8 of his 444 plotted points fell inside
+it** at both widths, with nothing in the drawing order keeping the line out from
+under the text.
+
+**The swatch is the guide line's own class**, which is the whole of "one
+definition rather than a copy": the legend's `<line>` carries `.roll-ref`, the
+same rule the chart's reference line is drawn by, so the colour and the dash
+pattern cannot come to be two of each the next time either moves. Checked in a
+browser at every width: the swatch and the guide both compute
+`stroke: rgb(92, 111, 151)`, `stroke-dasharray: 4px, 4px`, `stroke-width: 1.5px`.
+
+**What the swatch deliberately does not match is the *rendered* dash length**,
+and the phone is why. The chart's dashes are viewBox units scaled with the plot —
+4 units paints **3.52px at 1200 and 1.85px at 390** — so matching them here would
+mean scaling the swatch by the chart's own factor, and on a phone that is a
+1.85px dash inside a 24px swatch: six cycles of sub-2px marks, which reads as a
+grey smudge rather than as a dashed line. A legend owes the reader the *pattern*,
+at the size the words beside it are read at. The swatch is therefore 24 × 2 CSS
+px over a matching viewBox, so one unit is one pixel and `.roll-ref`'s `4 4`
+paints 4px dashes at a 1.5px stroke.
+
+**`.roll-legend` is folded onto `.summary-legend`'s rule rather than written
+again**, the economy this stylesheet applies to `.settings-toggle` /
+`.sim-toggle` and `.stats-table` / `.glog-table`: the app has one legend — a
+wrapping row of swatch-and-word items in 12px `--muted` under the thing it
+explains — and this is that object with a dashed line where the summary table's
+key has a tinted square. Only the swatch differs, so only the swatch has a rule
+of its own. The one caller-specific line is the padding: the shared rule's
+`10px 0 12px` is the **summary view's** bottom, where the legend is the last
+thing before the edge of the window, and inside a card the 24px of `.pct-card`
+padding is already under it — so `.pct-card .roll-legend` gives back the 12,
+written two classes deep to win wherever the shared rule sits in the file, the
+way `.roll-key .info-key-panel` already does for its own anchor.
+
+**The key's second paragraph was rewritten rather than left standing.** It read
+*"The dashed line is the MLB league average (.315). This player's season xwOBA is
+.417."*, and the first half of that is now the legend's job — repeating it behind
+a button would be the app stating one fact in two places with only one of them
+visible. What is left is the one number nothing else on the card carries: *his*
+season xwOBA, and what it is for (`the flat figure the line above wanders either
+side of`). Checked on the live page at both widths: **`.315` appears exactly once
+in the whole card**, in the legend, and there are **0 `.roll-ref-label`
+elements**.
+
+**Measured at 1200 and 390.** The legend is one **25px** row at every width
+tested (320, 390, 1200, 1920) with its swatch at 24 × 2, and the card grows by
+exactly that: **354.16 → 379.16px at 1200** and **262.33 → 287.33 at 390**, which
+is the row and nothing else — the SVG's own box is unchanged at 634 × 264.16 and
+332 × 138.33. The key still opens and closes on a press, its panel still measures
+**320 × 138.34** and still lands inside the viewport at 390 (x=29 against a card
+running to 374), and the tab's scroll still resets to 0. The **empty case draws
+neither**: a player short of his window (Michael Stefanic, 5 PA) renders the
+sentence alone, with no chart, no legend and 0 overflow at both widths.
+
+**The two gestures were re-measured, since this is the file that records losing
+one of them.** `touch-action` still computes `pan-y`, and at 390×390 — where the
+overlay has 170px of range — a vertical drag starting in the **middle of the
+chart** moves it **170px**, which is exactly what the same drag starting 60px
+above the chart moves it. The crosshair still tracks a horizontal drag: a pointer
+at a quarter and at three quarters of the chart's width reads `PA 128` and
+`PA 218` with the crosshair at 181.9 and 541.9 user units, and the tip clears
+when the pointer leaves.
+
+**The summary table's own legend is untouched**, which is the thing a shared
+selector list most easily breaks: measured at 1200 and 390 after the fold, a
+**37px** row with `padding: 10px 0px 12px`, 12px `rgb(142, 160, 196)`, a
+`6px 16px` gap, four items (`At bat · On deck · On base · On mound`), 14px
+swatches, and the summary pane's bottom still **37px** up from the window.
+
+**Bundle: 464.53 → 464.76 KB of JS** (137.79 → 137.85 gzipped) and **106.76 →
+106.79 KB of CSS** (19.06 → 19.09 gzipped) — 0.23KB and 0.03KB raw, 0.06KB and
+0.03KB over the wire, for a constant, a legend and the paragraphs arguing them.
+The JS figure is the legend's markup and the derived tick offset; every comment
+in this change, in both files, costs the bundle nothing.
