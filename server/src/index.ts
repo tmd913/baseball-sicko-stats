@@ -16,7 +16,7 @@ import { getResearch, getPlayerWindows } from './research.js';
 import type { Arsenal } from './pitcherArsenal.js';
 import { getLeaguePitchAverage } from './pitchLeague.js';
 import { RESEARCH_INCLUDE_KEYS, RESEARCH_WINDOWS } from './types.js';
-import type { ResearchIncludeKey, ResearchWindow, SeasonArsenalPitch } from './types.js';
+import type { PlayerKind, ResearchIncludeKey, ResearchWindow, SeasonArsenalPitch } from './types.js';
 import { getPitcherStats, getPlayerStats, getSeasonPlayers, resolveVideoUrl } from './mlbStats.js';
 import {
   addRosterPlayer,
@@ -38,6 +38,7 @@ import {
   setMuteAudio,
   setLeagueSharing,
   setResearchColumns,
+  setStatsColumns,
   setResearchInclude,
   setRosterSource,
   setWatchlisted,
@@ -329,30 +330,57 @@ app.get(
 const COLUMN_KEY_RE = /^[A-Za-z0-9]{1,40}$/;
 const MAX_COLUMNS = 100;
 
+/**
+ * `{ kind, keys }` for a table of columns, validated for shape alone — the two
+ * routes below take the identical body and differ only in which entry they
+ * write, so the check is written once rather than twice with a chance to
+ * diverge. Returns the narrowed pair, or null having already answered 400.
+ */
+function readColumnBody(
+  req: express.Request,
+  res: express.Response,
+): { kind: PlayerKind; keys: string[] | null } | null {
+  const { kind, keys } = (req.body ?? {}) as { kind?: unknown; keys?: unknown };
+  if (kind !== 'batter' && kind !== 'pitcher') {
+    res.status(400).json({ error: "kind must be 'batter' or 'pitcher'" });
+    return null;
+  }
+  // null is "back to the defaults", which is stored as the absence of an
+  // entry rather than as a copy of today's default list.
+  if (keys !== null && !Array.isArray(keys)) {
+    res.status(400).json({ error: 'keys must be an array of column keys, or null' });
+    return null;
+  }
+  if (
+    Array.isArray(keys) &&
+    (keys.length > MAX_COLUMNS ||
+      !keys.every((k) => typeof k === 'string' && COLUMN_KEY_RE.test(k)))
+  ) {
+    res.status(400).json({ error: 'keys must be up to 100 short alphanumeric column keys' });
+    return null;
+  }
+  return { kind, keys: keys as string[] | null };
+}
+
 app.put(
   '/api/prefs/research-columns',
   requireUser,
   asyncRoute(async (req, res) => {
-    const { kind, keys } = (req.body ?? {}) as { kind?: unknown; keys?: unknown };
-    if (kind !== 'batter' && kind !== 'pitcher') {
-      res.status(400).json({ error: "kind must be 'batter' or 'pitcher'" });
-      return;
-    }
-    // null is "back to the defaults", which is stored as the absence of an
-    // entry rather than as a copy of today's default list.
-    if (keys !== null && !Array.isArray(keys)) {
-      res.status(400).json({ error: 'keys must be an array of column keys, or null' });
-      return;
-    }
-    if (
-      Array.isArray(keys) &&
-      (keys.length > MAX_COLUMNS ||
-        !keys.every((k) => typeof k === 'string' && COLUMN_KEY_RE.test(k)))
-    ) {
-      res.status(400).json({ error: 'keys must be up to 100 short alphanumeric column keys' });
-      return;
-    }
-    res.json(await setResearchColumns(userId(req), kind, keys as string[] | null));
+    const body = readColumnBody(req, res);
+    if (!body) return;
+    res.json(await setResearchColumns(userId(req), body.kind, body.keys));
+  }),
+);
+
+/** The player page's Stats tab, which keeps its own set — see
+ *  `UserPrefs.statsColumns` for why it is not a share of the board's. */
+app.put(
+  '/api/prefs/stats-columns',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const body = readColumnBody(req, res);
+    if (!body) return;
+    res.json(await setStatsColumns(userId(req), body.kind, body.keys));
   }),
 );
 
