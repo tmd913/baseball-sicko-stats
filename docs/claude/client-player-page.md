@@ -470,24 +470,84 @@ the fold. A disclosure has to reveal something beside itself.
 
 **It is the app's own popover rather than a box that resembles one.**
 `.settings-popover` on the panel — literally the class the header's settings gear
-and fantasy button open — with `.spl-key` folded into `.settings-menu`'s own
-positioning rule, and only two things of its own: the opposite anchor (it hangs
-off a button at the card's right edge, so it opens leftward *into* the card) and
-prose rules, that box having only ever held controls. The button is
+and fantasy button open — with only two things of its own: the anchor (it opens
+leftward *into* the card, from the card's own right edge) and prose rules, that
+box having only ever held controls. The button is
 `.app-dialog-close`, the app's 30px icon button, so there is a real touch target
 rather than a bare glyph, and it fills with the accent while its panel is showing
 the way every other disclosure in the app does. **Measured: panel 320×138.3 at
 both widths, landing at x=597 at 1200 and x=41 at 390** — inside the viewport on a
 phone, which is what the width cap is for. It needs an explicit `width` where the
-gear's menu does not, and the reason is worth keeping: the containing block here
-is the **30px button**, so a shrink-to-fit resolved against 30px and the box fell
+gear's menu does not, and the reason is worth keeping: the containing block was
+the **30px button**, so a shrink-to-fit resolved against 30px and the box fell
 back to the shared `min-width: 180px`, turning two sentences into a 225px-tall
-column.
+column. (The containing block is `.spl-card-head` now — see below — which is a
+*wide* box, so a shrink-to-fit there would be wrong in the other direction. The
+explicit width answers both, and is part of why the panel's rect is identical
+either side of that move.)
+
+### The ⓘ sits beside the title, and its panel did not move at all
+
+**It was at the far right of the card, which is not where a key goes.** The
+button was `position: absolute; right: 0` on the card head, and what that bought
+was worth having — a title centred in the card with the control out of flow — at
+a price nobody had priced: **228px between the ⓘ and the words it belongs to at
+1200, and 77px at 390** (658.66 → 887 and 253.66 → 331, measured). At that
+distance the icon reads as a control over the
+*card* rather than as a key to the heading, and a reader looking for the key
+looks at the heading. So it is laid out immediately after the title instead.
+
+**The title still sits exactly where it did**, which is the half of the old rule
+worth keeping rather than trading: `.pct-card-head` is shared with the percentile
+card, whose title is centred by `text-align`, so one tab's heading sitting 19px
+off where every other tab's sits is a difference nothing on screen explains. The
+button is in flow after the title and **gives its own width back** — 4px on the
+left, 4 + its own 30 returned on the right, which is exactly 0 of the flex line's
+main size — so the line centres as though the button were not there and the
+button hangs to the right of it. Measured before → after, at 1200 and 390: the
+title's box is **byte-identical** (541.34 → 658.66, 117.31 wide at 1200; 136.34 →
+253.66 at 390), the head and the card are unchanged, and the only thing that
+moved is the button, 887 → **662.66** at 1200 and 331 → **257.66** at 390 — which
+is the title's right edge plus 4 in each case.
+
+**And the panel's own rect is unchanged, which is the neat part.** The obvious
+consequence of moving a button is that its popover moves with it, and at 390 that
+is fatal: anchored to a button that now spans 257.66 → 287.66, a 320px panel runs
+**257.7 → 577.7** opening rightward, or **287.7 → −32.3** opening leftward, i.e.
+off the screen either way. What the change actually does is **re-parent the
+containing block**
+rather than flip the side — `.spl-key` becomes `position: static`, so `right: 0`
+resolves against `.spl-card-head` instead of against the button, and 0 is now the
+card's own right edge, which is exactly where the button used to be. Measured
+before → after with the panel open: **597 → 917 at 1200 and 41 → 361 at 390,
+320 × 138.34 in both**, identical to the pixel. `left: 0` was the other option and
+is worse at the wide end — the panel would run 283 → 603 and stop **60px short of
+its own trigger**, which reads as a popover belonging to something else.
+
+**The stacking rule this key has always had to obey is kept, and `static` is a
+second guarantee of it.** The first version of the button used `transform:
+translateY(-50%)` to centre itself, which makes a stacking context and trapped the
+popover's `z-index: 40` inside a box that paints *before* the table — so the key
+opened underneath the very bars it explains. A static, untransformed box cannot
+make one at all. Checked rather than assumed: with the panel open,
+`elementFromPoint` at a point where the panel overlaps a `.spl-fill` returns the
+panel, at 1200 and at 390.
+
+**The rule is written two classes deep** (`.spl-card-head .spl-key`) because
+`InfoKey` is shared now and the `.info-key*` family is the *component's*, where
+the anchor is this caller's: a `position: relative` arriving on `.info-key` later
+would otherwise silently put the panel back on the button, which is the state the
+390 measurement above says is off the screen.
 
 **Real keyboard access and a real name, driven rather than assumed.** It is a
 `<button>` with `aria-label`, `aria-expanded` and `aria-controls`; driven in a
-browser, **Enter and Space both open it**, Escape closes it and leaves focus on
-the button, an outside press closes it, and the button itself toggles it shut.
+browser at **1200×900 and 390×844** after the move, seven presses in sequence:
+a click opens it (`aria-expanded` true, the panel in the viewport, painting over
+the bars) and a second click closes it; **Enter opens it**; **Escape closes the
+key and leaves the player page standing** (still on the Splits tab, focus back on
+the button); **Space opens it**; an outside press closes it and is spent on the
+dismissal, the tab behind it unchanged; and a final Escape — with nothing open —
+closes the player page. Page and overlay overflow are 0 throughout.
 
 **The sample-size caveat stays in the body, and the two are not the same kind of
 thing.** The key is *instructions* — true of every player, true of every chart on
@@ -571,7 +631,13 @@ makes it the rail's own pill inset by 3 — a radius-5 cap inside a radius-8 one
 the two concentric. The squared-off end was untouched by that fix and read
 better for it, a squared cap nested inside a rounded one being unmistakable beside
 the rounded cap of a bar that merely came close. It did not survive being looked
-at twice more; see below.
+at twice more; see below. (**"All four sides" is now three**: the two long ones
+and the *outer* end. The horizontal inset was only ever spent at the outer end —
+it is subtracted from the fill's length while the inner edge is pinned to the
+rail's centre — and the inner **cap** went flat in the fourth round, so there is
+nothing there to nest inside anything. The sentence is left as it was written
+because the nesting argument it makes is the outer end's and is still exactly
+right.)
 
 ### The clamped end is round, and the clamp moved inside the bar
 
@@ -707,17 +773,119 @@ are all unchanged. **Bundle: 451.11 → 451.23 KB of JS** (133.50 → 133.55 gzi
 and **102.73 → 102.84 KB of CSS** (18.35 → 18.37), which is 0.1KB each and nearly
 all of it the comments explaining the nesting.
 
-**Those two paragraphs are the first two of three rounds on this one geometry,
-and the third is above** — *The clamped end is round, and the clamp moved inside
-the bar*, which retires `--spl-inset-x` along with the square cap it was written
-for and carries the before → after for the move back to a single 3px inset. The
-figures here are kept as the record of how the fill came to be nested at all;
-where they name 5px at the ends, read the third round.
+**Those two paragraphs are the first two of four rounds on this one geometry.**
+The third is above — *The clamped end is round, and the clamp moved inside the
+bar*, which retires `--spl-inset-x` along with the square cap it was written for
+and carries the before → after for the move back to a single 3px inset. The
+fourth is below — *The inner end is flat* — and it is about the **other** end
+entirely, which is why it is not a reversal of the third however much it sounds
+like one. The figures here are kept as the record of how the fill came to be
+nested at all; where they name 5px at the ends, read the third round, and where
+they describe the fill as a pill, read the fourth.
 
 **Bundle over this round: 451.63 → 452.70 KB of JS** (133.68 → 133.86 gzipped)
 and **103.44 → 104.46 KB of CSS** (18.46 → 18.65), which is 1.1KB and 1.0KB raw
 for a disclosure, a popover, a chevron and its solid tip — and nearly all of the
 CSS half is the comments arguing them.
+
+### The inner end is flat, because the bar grows out of the zero
+
+**A bar anchored at a centre must look anchored at it, and a round cap there says
+the opposite.** Both ends of the fill were pills, so the ink pulled away from the
+rail's centre everywhere except one row through the fill's own middle: measured on
+Perez's card at 1200, **3px of recess** at the rows a reader takes the shape from,
+5px at the extreme rows in principle. What that draws is a lozenge sitting *near*
+the middle of the rail, which is a picture of a quantity that begins somewhere
+vague — where the whole device is a quantity measured **from zero**, and every
+diverging bar chart ever drawn meets its baseline square. So the inner end is
+flat and the outer one stays round: `.spl-fill--r` rounds its right end and
+squares its left, `.spl-fill--l` the reverse.
+
+**Round three took a square cap out and this puts one back, and the two are not in
+conflict — they are opposite ends of the bar.** That cap was the **clamp marker**
+on the *outer* end, and it went for three stated reasons; not one of them reaches
+this end, which is worth walking through rather than asserting.
+
+- It *"looked wrong at the end of a bar"* — and the outer end is where a bar
+  stops, where a squared-off tip reads as damage. The inner end is where a bar
+  **starts**, and a flat edge at an origin is the only thing that reads as an
+  origin at all.
+- It *"forced the ends onto an inset of their own"* (`--spl-inset-x`, 5px),
+  because a square corner sits at the fill's extreme height where the rail's own
+  cap has already receded 1.76px. **The inner end has no such problem and takes
+  no inset**: the horizontal inset is spent entirely at the outer end, by being
+  subtracted from the fill's *length*, while the inner edge is pinned to the
+  rail's centre by `left: 50%` / `right: 50%`. The rail is straight-sided there —
+  it is 217px from either cap — so there is nothing for a corner to run into. The
+  token stays a single 3px and `--spl-inset-x` stays retired.
+- It *"was never explained anywhere on the card"*, which is the sharpest of the
+  three and the one that decides this. A clamp marker is a **claim** — *this bar
+  is not the real number* — and a claim a reader cannot decode is worse than
+  none. A flat edge on the zero is not a claim, it is the shape of the
+  measurement, and it needs no key: the card already says the centre is zero,
+  with a dashed guide down it.
+
+**Nothing about the length moved**, which is the property the invariant rests on.
+The inline width is still `calc(frac × (50% − var(--spl-inset)))`, `railFraction`
+is untouched, and `max-width: calc(50% - var(--spl-inset))` still says the same
+thing at the last moment. Only `border-radius` changed, and only on which corners
+it lands.
+
+**Measured on the rendered pixels, before → after**, by walking each fill's ink
+row by row against the rail — the same scan the third round used, run on real
+screenshots at device-pixel resolution. On the six solid cards (Perez, Turang,
+Contreras, Sánchez, Betts, Sale) the worst inner recess goes **3 → 0.000 at
+1200**; at 390, where the rail's centre falls on a half-pixel, it goes 2.5–3.5 →
+−0.5–0.5, which is the sampling grid rather than a recess. `fillWidth − half`
+is unchanged on every row of every card and still **≤ 0** (−3.000 on a clamped
+row, −50.56 down to −189.17 on Perez's unclamped ones), and the outer clearance
+is identical before and after everywhere.
+
+**The hatched card had to be measured with its hatch off, and that is stated
+rather than glossed.** On Nick Allen the fill is accent stripes over transparent
+gaps, so "the leftmost accent pixel in this row" is decided by the stripes and
+not by the cap — the raw scan reads 7 → 5 and means nothing. Neutralising
+`.spl-fill--thin` to a solid **in the page, in both builds, on the same eight
+rows**: inner recess **3 → 0 on all eight**, with the widths byte-identical
+(214 / 211.61 / 183.08 / 214 / 214 / 197.23 / 214 / 108.5) and the outer clearance
+byte-identical too. Four of those eight rows are thin *and* clamped, which is the
+one row shape that has to survive every change to this bar.
+
+**The clamp mark is untouched, counted rather than eyeballed.** The chevron is a
+knock-out inside the fill's outer 14px tip, so it can be counted as non-accent
+pixels in that window: **22 per clamped row on a solid fill and 16 on a hatched
+one, identical before and after**, over Sánchez (4 clamped), Turang (3),
+Contreras (1) and Allen (4, all hatched), at 1200 and 390. The hatched rows are
+still hatched. `.spl-key-chevron` — the stub of bar in the key's popover —
+deliberately stays a full pill: it is a detached fragment of an **outer** end,
+which is the end that is still round.
+
+**The zero guide costs two device pixels, and nothing about it changed.**
+`.spl-track::before` is a 1px dashed border-left at the rail's centre, drawn
+6px proud of the rail top and bottom, so it is a ~28px column of which the fill
+can only ever reach 10. A **right**-pointing bar starts on that column and so
+covers a little of it; a **left**-pointing one stops at its edge and covers none.
+Measured over the same cards: a right-pointing row's tick ink goes **14 → 12**
+(covered 6 → 10) and a left-pointing row's is **18 → 18**. Raising the tick above
+the fills was considered and refused — a guide drawn *over* the data would say
+the line is in front of the bar, where the truth is that the bar begins at the
+line.
+
+**The two ends of the length range were forced onto a real row**, since the
+formulas did not move but the caps did. A width of `0` resolves to the **3px
+`min-width` nub** (a D of ink with its flat edge on the centre and its outer end
+rounded), `overHalf −214`, inner edge **0.000** off the centre; a width of
+`5000px` resolves to **214** against a half of 217, `overHalf −3`, inner edge
+0.000. Both directions, both radii sets, checked.
+
+**Everything else this card is measured against is unchanged** at 390 and 1200 on
+all six players: row height **34px**, rail width **173 / 434**, card width
+**358 / 680**, and page and overlay overflow **0 / 0**.
+
+**Bundle: JS unchanged at 454.23 KB** (134.39 gzipped) — the only change to a
+component was a comment — and **CSS 104.65 → 104.73 KB** (18.69 → 18.71), which
+is 80 bytes raw and 20 over the wire for two directional rules and the paragraphs
+above restated where they apply.
 
 **Sample size is on the card whatever it is, and changes how the bars are drawn
 twice.** The column heads carry it always — `vs LHP · 76 PA` — and two thresholds

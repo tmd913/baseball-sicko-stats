@@ -37,22 +37,36 @@ import type { PitcherSeasonStats, SeasonStats } from '../types';
  * bottom and nothing at all at the ends, so a bar drawn to the rail's *box* had
  * its outer corners outside the rail's own rounded cap — 2.47px of ink beyond
  * it on Willson Contreras's clamped K% row, where every unclamped row on the
- * card sat 2.25px inside. The fill is inset on all four sides for that reason —
- * **`--spl-inset` (3px), one number for all four**, which makes a radius-5 cap
- * concentric inside the rail's radius-8 one: both caps centre on the same point,
- * so the track shows exactly 3px of itself all the way around the end.
+ * card sat 2.25px inside. The fill is inset for that reason — **`--spl-inset`
+ * (3px), one number for the two long sides and the outer end** — which makes a
+ * radius-5 cap concentric inside the rail's radius-8 one: both caps centre on the
+ * same point, so the track shows exactly 3px of itself all the way around that
+ * end. The **inner** end takes none of it and never did: the horizontal inset is
+ * spent by being subtracted from the *length*, while the inner edge is pinned to
+ * the rail's centre by the inline `left: 50%` / `right: 50%`.
  *
- * **The ends took a bigger inset than the sides for a while** (`--spl-inset-x`,
- * 5px) and no longer do, because the thing it was written for is gone. That
- * token existed for the **square** outer end a clamped bar used to draw: a square
- * corner sits at the fill's extreme height, 5px off the rail's centre line, where
- * the cap's ink has already receded 1.76px, so at 3px it had 1.24px of rail
- * beside it against its own midline's 3px and read as a bar running out of its
- * rail with the corner cut off. **Every cap is round now** (see `over` below), and
- * a round cap is the case the 3px was chosen for in the first place — so the
- * exception is retired, the two tokens are one again, and every bar is 2px longer
- * than it was. The inset is the stylesheet's, so the geometry and the length
- * written here cannot drift apart.
+ * **The outer ends took a bigger inset than the sides for a while**
+ * (`--spl-inset-x`, 5px) and no longer do, because the thing it was written for
+ * is gone. That token existed for the **square** outer end a clamped bar used to
+ * draw: a square corner sits at the fill's extreme height, 5px off the rail's
+ * centre line, where the cap's ink has already receded 1.76px, so at 3px it had
+ * 1.24px of rail beside it against its own midline's 3px and read as a bar
+ * running out of its rail with the corner cut off. **Every outer cap is round
+ * now** (see `over` below), and a round cap is the case the 3px was chosen for in
+ * the first place — so the exception is retired, the two tokens are one again,
+ * and every bar is 2px longer than it was. The inset is the stylesheet's, so the
+ * geometry and the length written here cannot drift apart.
+ *
+ * **The inner end is flat**, which is a later round and the opposite end of the
+ * bar rather than a reversal of the one above. A bar anchored at a centre has to
+ * *look* anchored at it, and a round cap there pulled the ink up to 3px back from
+ * the zero at the rows a reader takes the shape from — a lozenge sitting near the
+ * middle of the rail instead of a quantity measured from it. It costs the clamp
+ * mark nothing (that is the outer end's), it costs the length nothing (only
+ * `border-radius` moved), and it needs no key, a flat edge on a zero being the
+ * shape of the measurement rather than a claim about it. `.spl-fill--r` /
+ * `.spl-fill--l` carry the two cap sets; see `docs/claude/client-player-page.md`,
+ * *The inner end is flat*, for the measurements.
  *
  * **Direction carries the polarity, and nothing else does.** A row where less is
  * better (`lowerBetter` — a pitcher's FIP, a batter's K%) is not drawn with a
@@ -399,13 +413,21 @@ const THIN_SAMPLE = 100;
  *
  * So: the app's **popover**, the shape the header's settings gear and fantasy
  * button already open — and literally that shape, `.settings-popover` on the
- * panel and `.spl-key` folded into `.settings-menu`'s own positioning rule,
- * rather than a second box that resembles it. `useDismissable` is the same hook
- * those two use, so it dismisses on an outside press and on Escape identically.
- * The button is a real `<button>` with a real accessible name, so it is reachable
- * and pressable from a keyboard, and it takes `.app-dialog-close`'s size and
- * shape — the app's 30px icon button — so a touch target exists rather than a
- * bare glyph nobody can tell is pressable.
+ * panel, rather than a second box that resembles it. `useDismissable` is the same
+ * hook those two use, so it dismisses on an outside press and on Escape
+ * identically. The button is a real `<button>` with a real accessible name, so it
+ * is reachable and pressable from a keyboard, and it takes `.app-dialog-close`'s
+ * size and shape — the app's 30px icon button — so a touch target exists rather
+ * than a bare glyph nobody can tell is pressable.
+ *
+ * **It sits immediately after the title**, where it once hung off the card's
+ * right edge, 228px from the words it belongs to at 1200px wide. The title still
+ * centres exactly where the percentile card's does — the button is in flow and
+ * gives its own width back in a negative margin — and the panel opens from the
+ * *card's* right edge rather than the button's, which is the only anchor that
+ * stays on screen at 390 now the button is near the middle. `.spl-card-head` owns
+ * both of those rules; see `docs/claude/client-player-page.md`, *The ⓘ sits
+ * beside the title*.
  *
  * **The sample-size caveat deliberately stays in the body**, and the two are not
  * the same kind of thing. This is a *key*: instructions for reading any chart on
@@ -469,13 +491,16 @@ function SplitRow<T>({
   // ran out of rail — and so an input `railFraction` refused cannot mark a bar
   // of no length. What the mark *is* changed: it used to be a squared-off outer
   // end, and is now a chevron knocked out of the fill just inside its tip. The
-  // cap stays round on every bar, which is what lets the inset go back to the
-  // sides' own — see the note at the top of this file.
+  // **outer** cap stays round on every bar, which is what lets the inset go back
+  // to the sides' own — see the note at the top of this file. (The *inner* cap is
+  // flat, and is no business of the clamp's: that end is the zero, not the tip.)
   const over = frac === 1 && gap > stat.full;
   // The rail's half, less the inset the fill is nested by: a full bar then lands
   // inside the rail's cap rather than on its box, which is a different place.
-  // One token for all four sides, which is only correct because every cap is
-  // round — a radius-5 cap 3px inside a radius-8 one is concentric with it.
+  // One token for the two long sides and the outer end, which is only correct
+  // because that cap is round — a radius-5 cap 3px inside a radius-8 one is
+  // concentric with it. The inner end takes none of it: it is pinned to the
+  // rail's centre by the `left`/`right` below and meets it flat.
   const width = `calc(${frac} * (50% - var(--spl-inset)))`;
   const strong = both && gap > 0;
 
@@ -558,10 +583,12 @@ function SplitCard<T>({
   const oneSided = smaller === 0;
   return (
     <div className="pct-card">
-      {/* `.spl-card-head` only adds a containing block for the key's popover;
-          the title stays centred in the card because the button is taken out of
-          flow rather than laid out beside it — which is also what keeps
-          `.pct-card-head` untouched for the percentile card that shares it. */}
+      {/* `.spl-card-head` adds the flex row and the containing block the key's
+          popover anchors to. The ⓘ is laid out **immediately after the title**,
+          where a key belongs — it sat at the far right of the card for a while,
+          240px from the words it explains — and gives its own width back in a
+          negative margin, so the title still centres exactly where the
+          percentile card's does. `.pct-card-head` is untouched for that card. */}
       <div className="pct-card-head spl-card-head">
         <span className="pct-card-title">Platoon splits</span>
         <SplitsKey />
