@@ -5023,7 +5023,7 @@ body {
 /* The panel is `.settings-popover` itself; what it needs of its own is prose
    rules, that box having only ever held controls before, and a width. **Which
    way it opens is the caller's**, since that is a fact about the caller's own
-   layout — see `.spl-key .info-key-panel` below. */
+   layout — see `.spl-card-head .info-key-panel` and `.roll-key .info-key-panel`. */
 .info-key-panel {
   /* An explicit width rather than `.settings-popover`'s shrink-to-fit, because
      the containing block here is the **30px button**, not a header row — so the

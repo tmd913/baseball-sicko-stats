@@ -577,6 +577,12 @@ const CHAPTERS: Chapter[] = [
           anyone on the season roster, on your list or not, and its tabs are:
         </p>
         <dl className="tut-defs">
+          <dt>Overview</dt>
+          <dd>
+            The tab it opens on: his season line, what he is doing today — or, on a day
+            his club isn't playing, the next game he has — and his last five games. Each
+            block links to the tab that holds the whole of it.
+          </dd>
           <dt>Percentile Rankings</dt>
           <dd>
             The Savant card — where he ranks in the league on each metric. Rows that
@@ -584,22 +590,29 @@ const CHAPTERS: Chapter[] = [
             as the expected number at rest; hover or tap one to reveal both ends and
             see how far over or under he's been running.
           </dd>
-          <dt>Season</dt>
+          <dt>Splits</dt>
           <dd>
-            The whole line, then the same line against left-handers and against
-            right-handers, stacked so each split reads column-for-column against the
-            overall row above it.
+            His season cut by the hand he faced, as one bar per stat running from the
+            centre toward the side he is <em>stronger</em> against — so the question a
+            platoon split is opened with is answered without any subtraction. A hatched
+            bar means one side is too thin to lean on.
+          </dd>
+          <dt>Stats</dt>
+          <dd>
+            The research board turned on its side: the same five spans down the page —
+            season, then the last 7, 15, 30 and 60 days — under the board's own columns,
+            so lately reads against the whole year in one glance.
           </dd>
           <dt>Game Log</dt>
           <dd>
             Every regular-season game, newest first, with a season total row at the
             bottom. Columns marked <strong>Szn</strong> are season-to-date{' '}
             <em>through</em> that game, not the game's own — that's what a game log
-            means by AVG.
+            means by AVG. Press any row to open that afternoon.
           </dd>
           <dt>Arsenal</dt>
           <dd>Pitchers only: the season's pitch mix, with its own platoon splits.</dd>
-          <dt>Rolling xwOBA</dt>
+          <dt>Charts</dt>
           <dd>
             A rolling average over the last 50, 100 or 250 plate appearances — the
             shape of a hot or cold stretch.

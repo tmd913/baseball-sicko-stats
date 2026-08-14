@@ -300,7 +300,7 @@ file below is one surface of the app.
   sort, the include buttons and the watchlist star, the position row and what a
   position means, the window tabs and the whole control bar.
 - **`client-player-page.md`** — `PlayerDetails` and its tabs (Overview, Percentile
-  Rankings, Stats, Splits, Game Log, Arsenal, Rolling xwOBA), plus the reorder
+  Rankings, Splits, Stats, Game Log, Arsenal, Charts), plus the reorder
   screen and the how-to page.
 - **`client-dialogs.md`** — the rules every popup in the app obeys: why details are
   popups rather than accordions, the layer ladder, what a popup has to cover, and
