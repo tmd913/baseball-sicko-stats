@@ -132,6 +132,35 @@ export interface ProbablePitcher {
 }
 
 /**
+ * A game a player has coming, for a day that holds none — the player page's
+ * Overview tab, where "there is no game today" is an answer that leaves the
+ * obvious next question unasked. See `nextGame.ts`.
+ */
+export interface NextGame {
+  gamePk: number;
+  date: string; // "2026-08-15" — the day it counts on
+  startTime: string | null; // ISO, for the local first-pitch time
+  home: boolean; // his club's side of it
+  opponent: string; // "TOR" — the abbreviation, as everywhere else
+  opponentId: number;
+  /** The **other** side's announced starter — who he would be facing, or on a
+   *  starting pitcher's own next start, his counterpart. Null until that club
+   *  names one. */
+  probablePitcher: ProbablePitcher | null;
+}
+
+/**
+ * The answer, and which question it answers. `start` is true when this is a
+ * starting pitcher's next **announced start** rather than his club's next game,
+ * so a null `game` beside it means "nobody has named his next turn yet" — which
+ * is a different sentence from "his club has nothing scheduled".
+ */
+export interface NextGameInfo {
+  start: boolean;
+  game: NextGame | null;
+}
+
+/**
  * What a base-running event was. The vocabulary is MLB's own runner
  * `details.eventType` collapsed to the distinctions worth a badge — measured
  * against 111 games, which is also what settled what is *not* here (see
@@ -367,6 +396,16 @@ export interface PitcherSeasonStats {
   inningsPitched: string; // "84.1"
   era: string;
   whip: string;
+  // His record and his credits, which are MLB's own tallies on this same line
+  // rather than anything derived. The player page's Overview summarises a
+  // pitcher's season as `IP · W-L · SV · HD · ERA · WHIP · K%`, and these four
+  // are the half of that no rate can express — a closer's year is his saves.
+  // The game log counts the same credits a game at a time (`decisionOf` there),
+  // which is a different question: what he got *that night*.
+  wins: number;
+  losses: number;
+  saves: number;
+  holds: number;
   strikeOuts: number;
   baseOnBalls: number;
   hits: number;
@@ -828,6 +867,26 @@ export type ResearchWindow = 'season' | 7 | 15 | 30 | 60;
 
 /** The tabs, in the order the Filters panel shows them. */
 export const RESEARCH_WINDOWS: ResearchWindow[] = ['season', 7, 15, 30, 60];
+
+/**
+ * One player's row on each of the research board's five windows — the player
+ * page's **Stats** tab, which is that board transposed.
+ *
+ * `row` is **null rather than a zeroed row** for a window he does not appear
+ * on, and the difference is real: a starter with no outing in the last seven
+ * days is absent from the 7d board, where a row of noughts would claim he
+ * pitched and did nothing.
+ */
+export interface PlayerWindowRow {
+  window: ResearchWindow;
+  row: ResearchRow | null;
+}
+
+export interface PlayerWindows {
+  season: number;
+  kind: PlayerKind;
+  windows: PlayerWindowRow[];
+}
 
 export interface ResearchRow {
   id: number;

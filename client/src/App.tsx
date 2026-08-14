@@ -1628,25 +1628,12 @@ export default function App() {
   // value lives in the component that grows it, and App only has to hand the
   // same number back when it mounts again.
   const feedShown = useRef(new Map<string, number>());
-  // Expanded at-bats / outings / upcoming rows in the feed, lifted here so
-  // "collapse all" can clear them. It is the feed's one level of collapsible
-  // again: the player groups above it went to the player page, and the day the
-  // Overview tab draws holds its own open keys, there being no cross-page
-  // control over an overlay that unmounts with them.
-  const [feedOpenKeys, setFeedOpenKeys] = useState<Set<string>>(() => new Set());
-  const toggleFeedKey = useCallback((key: string) => {
-    setFeedOpenKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }, []);
-  // Whether the current view has anything expanded to collapse — the feed
-  // alone; the summary table, the research board and the edit screen have no
-  // collapsibles.
-  const hasExpanded = view === 'feed' && !editMode && feedOpenKeys.size > 0;
-  const collapseAll = () => setFeedOpenKeys(new Set());
+  // `feedOpenKeys` used to live here — the set of expanded at-bats, outings and
+  // upcoming rows, lifted to App so a floating "collapse all" could clear them.
+  // All three open a dialog now rather than unrolling in place, so there is one
+  // open thing at a time, it is held by the item that opened it, and the button
+  // that undid a session's worth of them has nothing left to undo. The feed has
+  // no collapsibles at all, so App holds no expansion state for any view.
 
   const onAdd = async (p: WatchPlayer) => {
     setRoster(await api.addPlayer(p));
@@ -3214,36 +3201,17 @@ export default function App() {
             reports={filteredCards}
             kind={shownKind}
             onOpenDetails={setDetailsKey}
-            openKeys={feedOpenKeys}
-            onToggleKey={toggleFeedKey}
             shown={feedShown.current.get(feedKey) ?? FEED_PAGE_SIZE}
             onShowMore={(n) => feedShown.current.set(feedKey, n)}
           />
         )
       )}
 
-
-      <button
-        type="button"
-        className={`float-btn collapse-all${hasExpanded ? ' visible' : ''}${
-          showBackToTop ? ' raised' : ''
-        }`}
-        onClick={collapseAll}
-        aria-label="Collapse all"
-        title="Collapse all"
-      >
-        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-          <path
-            d="M7 6 12 10 17 6M7 18 12 14 17 18"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </button>
-
+      {/* The "collapse all" float button stood here and is gone with the
+          accordions it collapsed: the feed's three openable shapes each raise a
+          dialog now, so there is never more than one open and the thing that
+          closes it is the box itself. Back-to-top keeps its corner and, with
+          nothing to be raised above, its plain `bottom`. */}
       <button
         type="button"
         className={`float-btn back-to-top${showBackToTop ? ' visible' : ''}`}

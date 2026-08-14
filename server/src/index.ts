@@ -9,9 +9,10 @@ import type { HeldDays } from './savant.js';
 import { getPercentiles } from './percentiles.js';
 import { getXwobaSeries } from './xwoba.js';
 import { getBatterGameLog, getPitcherGameLog } from './gameLog.js';
+import { getNextGame } from './nextGame.js';
 import { getSeasonArsenal } from './pitcherArsenal.js';
 import { getPitcherXera } from './expectedStats.js';
-import { getResearch } from './research.js';
+import { getResearch, getPlayerWindows } from './research.js';
 import type { Arsenal } from './pitcherArsenal.js';
 import { getLeaguePitchAverage } from './pitchLeague.js';
 import { RESEARCH_INCLUDE_KEYS, RESEARCH_WINDOWS } from './types.js';
@@ -959,6 +960,28 @@ app.get(
   }),
 );
 
+// One player's row on each of the research board's five windows — the player
+// page's **Stats** tab, which is that board transposed: windows down the side,
+// the board's own stat columns across the top.
+//
+// It goes through `getResearch` rather than around it (see `getPlayerWindows`),
+// so the number on this tab and the number on the board are the same number and
+// cannot drift. That also makes it free in practice: the ten boards are pulled
+// warm nightly by `warmer.ts` and cached six hours, so this is five map lookups.
+app.get(
+  '/api/players/:playerId/windows',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const playerId = Number(req.params.playerId);
+    if (!Number.isInteger(playerId) || playerId <= 0) {
+      res.status(400).json({ error: 'invalid playerId' });
+      return;
+    }
+    const kind = req.query.type === 'pitcher' ? 'pitcher' : 'batter';
+    res.json(await getPlayerWindows(playerId, kind));
+  }),
+);
+
 // A player's season line and platoon splits (vs LHP / vs RHP), for the details
 // view. The report already carries these for watchlisted players; this serves the
 // details view when it's opened for a player who isn't on the watchlist.
@@ -1036,6 +1059,26 @@ app.get(
     const date =
       typeof asked === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(asked) ? asked : baseballToday();
     res.json({ date, kind, player: await getPlayerDay(playerId, kind, date) });
+  }),
+);
+
+// What a player has coming, for a day that holds no game of his — the other
+// half of the Overview tab's middle section. `?start=1` asks for his next
+// **announced start** rather than his club's next game, and that flag is the
+// client's to set: `lib.ts::isRotationStarter` is the app's one definition of
+// who works out of the rotation, and restating it here would be a second one
+// free to drift. The answer carries the flag back (`NextGameInfo.start`) so the
+// block can say "next start not yet scheduled" rather than nothing at all.
+app.get(
+  '/api/players/:playerId/next-game',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const playerId = Number(req.params.playerId);
+    if (!Number.isInteger(playerId) || playerId <= 0) {
+      res.status(400).json({ error: 'invalid playerId' });
+      return;
+    }
+    res.json(await getNextGame(playerId, req.query.start === '1'));
   }),
 );
 
