@@ -73,14 +73,23 @@ export function lineSummary(l: PitchingLine): string {
 }
 
 /**
- * One collapsible section of a pitcher card — Line, Innings, Opponent (once
- * there's an outing beneath it), Arsenal. The bar reuses the batter card's game
- * bar (`.game-sub-bar`) so the two cards' toggles share one format: a bare
- * label, no caret. Expanding scrolls it to the top, like every other
- * collapsible in the app.
+ * One section of a pitcher card — Line, Innings, Opponent (once there's an
+ * outing beneath it), Arsenal. The bar reuses the batter card's game bar
+ * (`.game-sub-bar`) so the two cards' toggles share one format: a bare label,
+ * no caret.
  *
- * Closed unless told otherwise: opening a pitcher's card should show the game
- * line and the bars for everything else, not four sections' worth of tables.
+ * **`defaultOpen` now means "not a toggle at all".** Every surviving render of
+ * this component is inside `OutingBreakdown`, a dialog opened *for* its three
+ * sections — and a bar that is open from the start, in a box whose whole
+ * purpose is what is under it, is a control asking a question that has already
+ * been answered. So the head is a plain label there and the scroll-on-expand
+ * goes with the expansion: a dialog has its own scroller and nothing to scroll
+ * *to*.
+ *
+ * The collapsible half is kept, unrendered, because `PitcherCard` still names
+ * it and that card is kept for its parts (see **Pitchers on the roster**);
+ * where a section is genuinely one of several on a long page, folding it away
+ * is still the right shape — which is the same judgment `InningBlock` records.
  */
 function CardSection({
   title,
@@ -92,9 +101,18 @@ function CardSection({
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
-  const secRef = useScrollIntoViewOnExpand<HTMLDivElement>(open);
+  if (defaultOpen) {
+    return (
+      <div className="card-section">
+        <div className="game-sub-bar section-bar static">
+          <span className="section-title">{title}</span>
+        </div>
+        {children}
+      </div>
+    );
+  }
   return (
-    <div ref={secRef} className="card-section">
+    <div className="card-section">
       <button
         type="button"
         className="game-sub-bar section-bar"

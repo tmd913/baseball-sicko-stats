@@ -9,6 +9,7 @@ import {
   FeedItem,
   LiveEntry,
   UpcomingRow,
+  byPlayOrder,
   entryKey,
   matchup,
   playerDayEntries,
@@ -38,6 +39,33 @@ import { Modal } from './Modal';
  * The items are drawn **grouped**, which drops their identity row — the page's
  * own head has said the headshot and the name once, and saying them per play is
  * what the grouping was always for.
+ *
+ * ### The day is a card per game, and the plays are behind it
+ *
+ * **It used to be the plays themselves, under a static header per game**, and
+ * that was the Overview tab spending its whole height on one thing. A day is
+ * one game almost every time, so what the tab opened on was a single date line
+ * and then four or five at-bat cards, a clip apiece — 3,000px of page on a
+ * phone before the reader had decided whether they wanted any of it. The tab is
+ * the *lead* of a player page: the first thing it should answer is "what did he
+ * do today", which is his line and how the game stands, and the plays are the
+ * follow-up question.
+ *
+ * So a game is a **card** — date, his line, the score and state — and a press
+ * opens the feed for it in a dialog (`GameFeedModal`). Everything the tab used
+ * to draw is one press away and nothing was cut; what changed is that a day now
+ * fits on a screen, and a doubleheader reads as two things rather than as one
+ * long scroll with a rule through the middle of it.
+ *
+ * **The live entry and a scheduled game keep their place on the page**, which
+ * is the line worth drawing. A card behind a press is right for what has
+ * already happened; "he is at the plate right now" and "he is starting at 7:05"
+ * are what a reader opened the page *for*, and putting either behind a press
+ * would be hiding the answer to the question being asked.
+ *
+ * **Narrowed to one game (`gamePk`) there is no card at all** — the Game Log's
+ * popup and a card's own dialog are already boxes about that game, so drawing a
+ * card inside one would be a press to reach the only thing on screen.
  */
 export function PlayerDay({
   report,
@@ -45,8 +73,9 @@ export function PlayerDay({
   onOpenDetails,
 }: {
   report: PlayerReport;
-  /** Narrow to one game — what a Game Log row means. Absent, the whole day is
-   *  drawn, which on a doubleheader is two sections. */
+  /** Narrow to one game — what a Game Log row means, and what a game card's own
+   *  dialog passes back in. Absent, the whole day is drawn as a card per game,
+   *  which on a doubleheader is two. */
   gamePk?: number;
   /** Opening another player's page from inside this one. Grouped items draw no
    *  identity row at all, so nothing here can actually reach it; the default
@@ -56,6 +85,7 @@ export function PlayerDay({
 }) {
   const open = onOpenDetails ?? (() => {});
   const isPitcher = report.kind === 'pitcher';
+  const oneGame = gamePk !== undefined;
   const day = playerDayEntries(report);
   const inGame = (g: PlayerGame) => gamePk === undefined || g.gamePk === gamePk;
   const live = day.live && inGame(day.live.game) ? day.live : null;
@@ -64,24 +94,16 @@ export function PlayerDay({
   const games = report.games.filter(inGame);
 
   // Which items belong to which game. A scheduled game he is actually in is an
-  // `UpcomingRow` instead of a section: that row *is* the game info before
-  // first pitch — matchup, the SP chip, the other side's announced starter,
-  // first pitch — and a section header over it would say the matchup twice.
+  // `UpcomingRow` instead of a card: that row *is* the game info before first
+  // pitch — matchup, the SP chip, the other side's announced starter, first
+  // pitch — and a card over it would say the matchup twice.
   const scheduled = new Set(upcoming.map((u) => u.game.gamePk));
   const sections = games
     .filter((g) => !scheduled.has(g.gamePk))
-    .map((game) => ({ game, items: entries.filter((e) => e.game.gamePk === game.gamePk) }));
-
-  // A section's own line: what he did in *that* game, in the vocabulary the
-  // feed's items already use — a batter's counting line, a pitcher's outing.
-  const lineFor = (game: PlayerGame): string | null => {
-    if (isPitcher) {
-      return game.pitching ? pitchingLineSummary(game.pitching.line) : null;
-    }
-    return game.plateAppearances.some((pa) => pa.event)
-      ? battingLineSummary(game.line)
-      : null;
-  };
+    // Read forwards: a day is one afternoon start to finish, so the first game
+    // of a doubleheader leads. See `byPlayOrder` for the same argument applied
+    // to the plays inside one.
+    .map((game) => ({ game, items: [...entries.filter((e) => e.game.gamePk === game.gamePk)].sort(byPlayOrder) }));
 
   const nothing = !live && sections.length === 0 && upcoming.length === 0;
   if (nothing) {
@@ -90,153 +112,169 @@ export function PlayerDay({
 
   return (
     <div className="player-day">
-      {/* The live entry sits above the sections rather than inside its own
-          game's: it is the "happening now" item and the most important row on
-          the page, where filing it under a date would bury it. The game it
-          belongs to still gets its section for the plays already completed. */}
+      {/* The live entry sits above the games rather than inside one: it is the
+          "happening now" item and the most important row on the page, where
+          filing it behind a card would bury it. The game it belongs to still
+          gets its card for the plays already completed. */}
       {live &&
         (isPitcher && live.game.pitching ? (
           <FeedItem
             entry={{ type: 'pitching', report, game: live.game }}
-            openKeys={new Set()}
-            onToggleKey={() => {}}
             onOpenDetails={open}
             grouped
           />
         ) : (
-          <PlayerDayLive report={report} role={live.role} game={live.game} onOpenDetails={open} />
+          <LiveEntry
+            report={report}
+            role={live.role}
+            game={live.game}
+            onOpenDetails={open}
+            grouped
+          />
         ))}
-      {sections.map(({ game, items }) => (
-        <PlayerDayGame
-          key={game.gamePk}
-          game={game}
-          line={lineFor(game)}
-          items={items}
-          onOpenDetails={open}
-        />
-      ))}
+      {sections.map(({ game, items }) =>
+        oneGame ? (
+          <PlayerDayGameFeed key={game.gamePk} game={game} items={items} onOpenDetails={open} />
+        ) : (
+          <PlayerDayGameCard
+            key={game.gamePk}
+            report={report}
+            game={game}
+            line={gameLine(report, game)}
+            items={items}
+            onOpenDetails={open}
+          />
+        ),
+      )}
       {upcoming.map(({ game }) => (
-        <PlayerDayUpcoming key={game.gamePk} report={report} game={game} onOpenDetails={open} />
+        <UpcomingRow key={game.gamePk} report={report} game={game} onOpenDetails={open} grouped />
       ))}
     </div>
   );
 }
 
-/** The live entry, holding its own open state — the page has no `collapse all`
- *  to lift it to, and one at-bat's caret is nobody else's business. */
-function PlayerDayLive({
-  report,
-  role,
-  game,
-  onOpenDetails,
-}: {
-  report: PlayerReport;
-  role: Parameters<typeof LiveEntry>[0]['role'];
-  game: PlayerGame;
-  onOpenDetails: (key: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <LiveEntry
-      report={report}
-      role={role}
-      game={game}
-      open={open}
-      onToggle={() => setOpen((v) => !v)}
-      onOpenDetails={onOpenDetails}
-      grouped
-    />
-  );
+/** What he did in *that* game, in the vocabulary the feed's items already use —
+ *  a batter's counting line, a pitcher's outing. */
+function gameLine(report: PlayerReport, game: PlayerGame): string | null {
+  if (report.kind === 'pitcher') {
+    return game.pitching ? pitchingLineSummary(game.pitching.line) : null;
+  }
+  return game.plateAppearances.some((pa) => pa.event) ? battingLineSummary(game.line) : null;
 }
 
-/** Same, for the scheduled game's row. */
-function PlayerDayUpcoming({
-  report,
-  game,
-  onOpenDetails,
-}: {
-  report: PlayerReport;
-  game: PlayerGame;
-  onOpenDetails: (key: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <UpcomingRow
-      report={report}
-      game={game}
-      open={open}
-      onToggle={() => setOpen((v) => !v)}
-      onOpenDetails={onOpenDetails}
-      grouped
-    />
-  );
+/** What a game with nothing in it says. Which of the three it is turns on the
+ *  state, and getting it wrong is the whole difference between a fact and a
+ *  wrong claim: a final says he never came up, a game still being played says
+ *  he hasn't *yet*. A postponement says neither — the badge already carries
+ *  it. */
+function nothingDoing(game: PlayerGame): string {
+  if (game.status.state === 'final') return 'Did not appear.';
+  if (game.status.state === 'live') return 'Not in the game yet.';
+  return 'Yet to play.';
 }
 
 /**
- * One game and the plays in it: a static header carrying the date, the matchup,
- * his line for that game and the score badge, over the items.
+ * One game as a card: the date, his line for it, and how the game stands.
  *
- * `.feed-game-section` and its head are the classes the grouped feed cut a
- * batter's card into games with — the same block, kept because it is the same
- * job, so the two never had to be drawn twice. Static rather than a collapsible
- * because the plays under it are the thing being read, and a tap to reach them
- * would be a tap spent on nothing.
+ * The badge carries `withMatchup`, which is the whole reason the card can drop
+ * the matchup line the old static header printed beside it. That badge already
+ * names both clubs the moment there is a score to put between them (`SEA 3–5
+ * LAD`), so the line was the same fact stated twice on one row; `withMatchup`
+ * fills exactly the gap it leaves — a game with no score yet — so the card says
+ * who was played in every state and says it once.
+ *
+ * A game he did nothing in is **not** a press: there is nothing behind it, so
+ * it draws the line the plays would have been under and stays static.
  */
-function PlayerDayGame({
+function PlayerDayGameCard({
+  report,
   game,
   line,
   items,
   onOpenDetails,
 }: {
+  report: PlayerReport;
   game: PlayerGame;
   line: string | null;
   items: FeedEntry[];
   onOpenDetails: (key: string) => void;
 }) {
-  // Held here rather than in App: this page has no "collapse all" and lives
-  // inside an overlay that unmounts with it, so the keys have nowhere else to
-  // belong.
-  const [openKeys, setOpenKeys] = useState<Set<string>>(() => new Set());
-  const toggle = (key: string) =>
-    setOpenKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
+  const [open, setOpen] = useState(false);
+  const body = (
+    <>
+      <span className="feed-game-date">{prettyGameDate(game.date)}</span>
+      {line ? (
+        <span className="feed-game-line">{line}</span>
+      ) : (
+        <span className="feed-game-line pday-none">{nothingDoing(game)}</span>
+      )}
+      <GameStatusBadge game={game} withMatchup />
+    </>
+  );
+  if (items.length === 0) {
+    return <div className="pday-game static">{body}</div>;
+  }
+  return (
+    <>
+      <button
+        type="button"
+        className="pday-game"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        title={`${report.name} — ${matchup(game)}`}
+        onClick={() => setOpen(true)}
+      >
+        {body}
+      </button>
+      {open && (
+        <Modal
+          title={`${report.name} — ${matchup(game)}`}
+          titleId="player-day-game-title"
+          className="player-day-box"
+          onClose={() => setOpen(false)}
+        >
+          <PlayerDayGameFeed game={game} items={items} onOpenDetails={onOpenDetails} />
+        </Modal>
+      )}
+    </>
+  );
+}
+
+/**
+ * The plays of one game, in play order — what a card's dialog holds and what
+ * the Game Log's popup draws directly.
+ *
+ * `.feed-game-section` is the class the grouped feed cut a batter's card into
+ * games with, kept because it is the same job: a column of the feed's own items
+ * at the feed's own spacing. What it no longer carries is a header — the box
+ * around it has a title, and a game named twice is a game named once too often.
+ */
+function PlayerDayGameFeed({
+  game,
+  items,
+  onOpenDetails,
+}: {
+  game: PlayerGame;
+  items: FeedEntry[];
+  onOpenDetails: (key: string) => void;
+}) {
   return (
     <div className="feed-game-section">
-      <div className="feed-game-head">
-        <span className="feed-game-date">{prettyGameDate(game.date)}</span>
-        <span className="feed-context">{matchup(game)}</span>
-        {line && <span className="feed-game-line">{line}</span>}
-        <GameStatusBadge game={game} />
-      </div>
       {items.length === 0 ? (
-        /* He is on this game's roster and has done nothing in it. Which of the
-           two that is turns on the state, and getting it wrong is the whole
-           difference between a fact and a wrong claim: a final says he never
-           came up, a game still being played says he hasn't *yet*. A
-           postponement says neither — the badge above already carries it. */
-        <p className="pday-none">
-          {game.status.state === 'final'
-            ? 'Did not appear.'
-            : game.status.state === 'live'
-              ? 'Not in the game yet.'
-              : 'Yet to play.'}
-        </p>
+        <p className="pday-none">{nothingDoing(game)}</p>
       ) : (
         items.map((entry) => (
           <FeedItem
             key={entryKey(entry)}
             entry={entry}
-            openKeys={openKeys}
-            onToggleKey={toggle}
             onOpenDetails={onOpenDetails}
             grouped
-            /* The header directly above names the game, so an item repeating
-               the matchup would be saying it twice. */
+            /* The box around this names the game, so an item repeating the
+               matchup would be saying it twice. */
             multiGame={false}
+            /* And a pitcher's outing is the whole of what this box is about, so
+               its innings read here rather than behind a second press. */
+            detailInline
           />
         ))
       )}

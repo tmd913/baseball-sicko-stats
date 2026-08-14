@@ -24,7 +24,7 @@ import type {
   PlayerKind,
   PlayerReport,
 } from '../types';
-import { useScrollIntoViewOnExpand } from '../hooks';
+import { Modal } from './Modal';
 import { BaseDiamond, PlaySituation } from './BaseDiamond';
 import { InlineVideoClip, PlateAppearanceCard } from './PlateAppearanceCard';
 import { GameStatusBadge, PlatoonSplit } from './PlayerCard';
@@ -222,8 +222,6 @@ export function LiveEntry({
   report,
   role,
   game,
-  open,
-  onToggle,
   onOpenDetails,
   grouped = false,
   multiGame = false,
@@ -231,8 +229,6 @@ export function LiveEntry({
   report: PlayerReport;
   role: LiveRole;
   game: PlayerGame;
-  open: boolean;
-  onToggle: () => void;
   onOpenDetails: (key: string) => void;
   /** Inside a player group: the group's own header carries the headshot, the
    * name and the matchup, so the item drops its identity row and keeps only
@@ -245,11 +241,8 @@ export function LiveEntry({
   multiGame?: boolean;
 }) {
   const pa = roleAtBat(role, game);
-  // Scroll the whole item (player header + at-bat) into view on expand, so the
-  // player info isn't cut off above the viewport — the card itself doesn't scroll.
-  const ref = useScrollIntoViewOnExpand<HTMLDivElement>(open);
   return (
-    <div className={`feed-item live-entry role-${role}`} ref={ref}>
+    <div className={`feed-item live-entry role-${role}`}>
       <div className="feed-item-head">
         {!grouped && (
           <FeedHeadshot
@@ -285,9 +278,7 @@ export function LiveEntry({
         <PlateAppearanceCard
           pa={pa}
           gamePk={game.gamePk}
-          open={open}
-          onToggle={onToggle}
-          autoScroll={false}
+          name={report.name}
           showVideo={false}
         />
       )}
@@ -301,8 +292,6 @@ function FeedAtBat({
   report,
   game,
   pa,
-  open,
-  onToggle,
   onOpenDetails,
   grouped = false,
   multiGame = false,
@@ -310,8 +299,6 @@ function FeedAtBat({
   report: PlayerReport;
   game: PlayerGame;
   pa: PlateAppearance;
-  open: boolean;
-  onToggle: () => void;
   onOpenDetails: (key: string) => void;
   /** Inside a player group: the group's own header carries the headshot, the
    * name and the matchup, so the item drops its identity row and keeps only
@@ -329,11 +316,10 @@ function FeedAtBat({
   // opens, and in this feed that is what a box means; it gives up only its own
   // coloured edge, which the rail outside it now carries (styles.css).
   //
-  // Expanding scrolls the whole item to the top so the player header stays in
-  // view above the at-bat detail (the card itself doesn't self-scroll).
-  const ref = useScrollIntoViewOnExpand<HTMLDivElement>(open);
+  // Nothing scrolls on open any more: the card raises a dialog rather than
+  // unrolling in place, so the item it sits in never moves.
   return (
-    <div className={`feed-item feed-at-bat kind-${outcomeKind(pa.event)}`} ref={ref}>
+    <div className={`feed-item feed-at-bat kind-${outcomeKind(pa.event)}`}>
       <div className="feed-item-head">
         {!grouped && (
           <FeedHeadshot id={report.id} name={report.name} onOpen={() => onOpenDetails(playerKey(report))} />
@@ -348,14 +334,7 @@ function FeedAtBat({
         )}
         <FeedScore game={game} away={pa.awayScore} home={pa.homeScore} />
       </div>
-      <PlateAppearanceCard
-        pa={pa}
-        gamePk={game.gamePk}
-        open={open}
-        onToggle={onToggle}
-        autoScroll={false}
-        showVideo={false}
-      />
+      <PlateAppearanceCard pa={pa} gamePk={game.gamePk} name={report.name} showVideo={false} />
       {pa.playId && <InlineVideoClip playId={pa.playId} gamePk={game.gamePk} />}
     </div>
   );
@@ -578,35 +557,37 @@ function FeedBaseEvent({
 
 /**
  * A watched pitcher's outing in the feed — one item per game, not a row per
- * batter faced. Collapsed it's the usual feed header plus his line; open it adds
- * his innings, grouped the way the players view groups them (`InningsList`),
- * each expandable to the batters faced and their pitch sequences. Newest inning
- * first, so the half he's throwing right now sits directly under his name, like
- * the stream around it. `role` is set only while he's on the mound, and tints
- * the header.
+ * batter faced. In the stream it is the usual feed header plus his line, and a
+ * press **opens a dialog** holding his innings (`InningsList`, first inning
+ * first, each one expandable to the batters faced and their pitch sequences)
+ * and the way to the full breakdown. `role` is set only while he's on the
+ * mound, and tints the header.
  *
- * The line bar under the header toggles the item — the header itself carries the
- * headshot and name links and is static, so a mistimed tap can't navigate off the
- * outing it meant to open. The scroll-on-expand is on the item, not the innings
- * inside it — the same shape as a batter's at-bat card, so opening one brings the
- * player it belongs to into view rather than a bare inning. No caret: nothing on
- * the pitcher side carries one (see styles.css).
+ * **It was the largest accordion in the app**, which is why the swap matters
+ * most here: a seven-inning start unrolled several screens of innings into the
+ * middle of a stream, so the item had to scroll itself to the top on expand
+ * (gone with it) and everything the reader had been reading was pushed out from
+ * under them. In a dialog the stream holds still and the outing gets a scroller
+ * of its own — and closing it puts the reader back exactly where they were,
+ * which no amount of scroll-restoration around an accordion ever managed.
+ *
+ * The line bar under the header is the control — the header itself carries the
+ * headshot and name links and is static, so a mistimed tap can't navigate off
+ * the outing it meant to open. No caret: nothing on the pitcher side carries one
+ * (see styles.css), and a control that raises a box is no different.
  */
 function FeedPitcherGame({
   report,
   game,
   role,
-  open,
-  onToggle,
   onOpenDetails,
   grouped = false,
   multiGame = false,
+  detailInline = false,
 }: {
   report: PlayerReport;
   game: PlayerGame;
   role?: LiveRole | null;
-  open: boolean;
-  onToggle: () => void;
   onOpenDetails: (key: string) => void;
   /** Inside a player group: the group's own header carries the headshot, the
    * name and the matchup, so the item drops its identity row and keeps only
@@ -617,9 +598,19 @@ function FeedPitcherGame({
    * it does, the matchup is the only thing saying which game a play belongs to
    * (the game blocks that used to say it went with the Games view). */
   multiGame?: boolean;
+  /** Draw the innings under the bar instead of behind a dialog.
+   *
+   * The dialog is right in the *stream*, where an outing is one item among
+   * dozens and its innings are several screens of them. It is wrong inside a
+   * box that is already about this one game — the player page's Overview tab
+   * and the Game Log's per-game popup — where a press would open a second
+   * dialog holding the only thing the first one had to show. Same reasoning as
+   * `grouped` one line up: a container that has already said something does
+   * not make its contents say it again. */
+  detailInline?: boolean;
 }) {
   const pg = game.pitching!;
-  const ref = useScrollIntoViewOnExpand<HTMLDivElement>(open);
+  const [open, setOpen] = useState(false);
   // The three sections the Games view's card carried and the feed's item never
   // has — the game line with its Results/Rates/Contact strips, the lineup he
   // faced, and his arsenal for the outing. They are a dialog rather than more
@@ -642,11 +633,41 @@ function FeedPitcherGame({
   // is what says a group is happening now, and a decision he hasn't got yet is
   // the lesser fact.
   const rail = role ? undefined : { borderLeftColor: decisionColor(pg.decision) };
+  // The innings and the way to the full read — drawn under the bar in a box
+  // that is already about this game, and inside a dialog everywhere else.
+  const body = (
+    <>
+      <InningsList game={game} pitcherId={report.id} />
+      {/* Below the innings rather than on the bar above them: the bar is the
+          toggle, every pixel of it, and a button inside a button is not a
+          thing. A reader who wants the full read has already opened the
+          outing, so this is where they are. */}
+      <button
+        type="button"
+        className="outing-breakdown-btn"
+        onClick={() => setBreakdown(true)}
+        title={`${report.name} — the full line, the lineup he faced and his arsenal for this outing`}
+      >
+        Full breakdown
+      </button>
+      {/* Rendered *here*, inside whatever box the innings are in, and that
+          placement is load-bearing rather than tidy: `DialogLayerContext` is a
+          React context, so a breakdown written as a sibling of the outing's own
+          `Modal` reads the *page's* layer and lands on 46 — the same rung as the
+          dialog it was opened from, which makes each invisible to the other's
+          `overlayAbove` test and closes both on one press of Escape (measured:
+          2 dialogs → 0). Inside the children it inherits 46 and takes 47, and
+          inside a game dialog at 51 it takes 52, so the ladder is right in
+          every place an outing is drawn. */}
+      {breakdown && (
+        <OutingBreakdown report={report} game={game} onClose={() => setBreakdown(false)} />
+      )}
+    </>
+  );
   return (
     <div
       className={`feed-item feed-pitcher${role ? ` live-entry role-${role}` : ' feed-outing'}`}
       style={rail}
-      ref={ref}
     >
       {/* Identity only, and deliberately NOT the toggle: the headshot and the
           name are links, and while they sat inside the expand target a thumb
@@ -677,48 +698,52 @@ function FeedPitcherGame({
         </div>
       )}
       {/* The card under that header: tags and the line, and the whole bar is the
-          toggle — the batter's `PlateAppearanceCard` in the same slot. It holds
-          no links, so every pixel of it expands the outing. */}
-      <button
-        type="button"
-        className="feed-item-toggle"
-        aria-expanded={open}
-        title={open ? 'Collapse outing' : 'Expand outing'}
-        onClick={onToggle}
-      >
-        <PitchingTag game={game} />
-        {pg.decision && (
-          <span className={`dec-tag dec-${pg.decision}`}>{creditLabel(pg.decision)}</span>
-        )}
-        {/* Collapsed, the line is what the item says. No caret — see the note on
-            `.feed-item-toggle` in styles.css. */}
-        <span className="feed-pitch-line">{lineSummary(pg.line)}</span>
-        {/* Score and state, the same badge closing the pitcher card's header —
-            and, while he's on the mound, the inning and the bases behind him.
-            It carries the live inning the context line used to spell out. */}
-        <GameStatusBadge game={game} />
-      </button>
-      {open && (
-        <>
-          {/* Below the innings rather than on the bar above them: the bar is the
-              toggle, every pixel of it, and a button inside a button is not a
-              thing. A reader who wants the full read has already opened the
-              outing, so this is where they are. */}
-          <InningsList game={game} pitcherId={report.id} newestFirst />
-          <button
-            type="button"
-            className="outing-breakdown-btn"
-            onClick={() => setBreakdown(true)}
-            title={`${report.name} — the full line, the lineup he faced and his arsenal for this outing`}
-          >
-            Full breakdown
-          </button>
-        </>
+          control — the batter's `PlateAppearanceCard` in the same slot. It holds
+          no links, so every pixel of it opens the outing. */}
+      {detailInline ? (
+        <div className="feed-item-toggle static">{outingBar(game, pg)}</div>
+      ) : (
+        <button
+          type="button"
+          className="feed-item-toggle"
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          title="Open outing"
+          onClick={() => setOpen(true)}
+        >
+          {outingBar(game, pg)}
+        </button>
       )}
-      {breakdown && (
-        <OutingBreakdown report={report} game={game} onClose={() => setBreakdown(false)} />
+      {detailInline ? body : null}
+      {open && !detailInline && (
+        <Modal
+          title={`${report.name} — ${matchup(game)}`}
+          titleId="feed-outing-title"
+          className="outing-box"
+          onClose={() => setOpen(false)}
+        >
+          {body}
+        </Modal>
       )}
     </div>
+  );
+}
+
+/** What the outing's bar says, whether or not it is a control: the role chip,
+ *  the credit, the line, and how the game stands. No caret — see the note on
+ *  `.feed-item-toggle` in styles.css. */
+function outingBar(game: PlayerGame, pg: NonNullable<PlayerGame['pitching']>) {
+  return (
+    <>
+      <PitchingTag game={game} />
+      {pg.decision && (
+        <span className={`dec-tag dec-${pg.decision}`}>{creditLabel(pg.decision)}</span>
+      )}
+      <span className="feed-pitch-line">{lineSummary(pg.line)}</span>
+      {/* Score and state, the same badge closing the pitcher card's header —
+          and, while he's on the mound, the inning and the bases behind him. */}
+      <GameStatusBadge game={game} />
+    </>
   );
 }
 
@@ -784,21 +809,18 @@ function isUpcomingFor(report: PlayerReport, game: PlayerGame): boolean {
 export function UpcomingRow({
   report,
   game,
-  open,
-  onToggle,
   onOpenDetails,
   grouped = false,
 }: {
   report: PlayerReport;
   game: PlayerGame;
-  open: boolean;
-  onToggle: () => void;
   onOpenDetails: (key: string) => void;
   /** Inside a player group: the group's own header carries the headshot, the
    * name and the matchup, so the item drops its identity row and keeps only
    * what is its own — the score, the role, the inning. */
   grouped?: boolean;
 }) {
+  const [open, setOpen] = useState(false);
   const time = formatStartTime(game.status.startTime);
   const isPitcher = report.kind === 'pitcher';
   const sp = game.probablePitcher;
@@ -808,9 +830,6 @@ export function UpcomingRow({
   const expandable = isPitcher
     ? !!game.opponentHitting
     : sp?.hand === 'R' || sp?.hand === 'L';
-  // On expand, bring the row to the top of the viewport (its scroll-margin-top
-  // clears the sticky nav), matching how the at-bat cards behave.
-  const ref = useScrollIntoViewOnExpand<HTMLDivElement>(expandable && open);
   // The bar under the name: matchup, the SP chip, the other side's announced
   // starter and first pitch. It is the whole of the row's interactive surface —
   // the headshot and name above it are links, and inside a tappable row a
@@ -841,7 +860,7 @@ export function UpcomingRow({
   // muted tone a game that hasn't been played has earned. Without it the
   // identity row, the bar and the detail read as three loose blocks.
   return (
-    <div className="feed-item upcoming-item" ref={ref}>
+    <div className="feed-item upcoming-item">
       {/* Grouped, the identity row is the group header's — the bar below still
           carries the matchup, which for a scheduled game is the whole point of
           the row rather than a repetition of anything. */}
@@ -855,9 +874,10 @@ export function UpcomingRow({
         <button
           type="button"
           className="upcoming-head"
+          aria-haspopup="dialog"
           aria-expanded={open}
-          title={open ? 'Collapse' : isPitcher ? 'Expand opponent' : 'Expand platoon split'}
-          onClick={onToggle}
+          title={isPitcher ? 'Open opponent' : 'Open platoon split'}
+          onClick={() => setOpen(true)}
         >
           {bar}
         </button>
@@ -865,16 +885,23 @@ export function UpcomingRow({
         <div className="upcoming-head static">{bar}</div>
       )}
       {expandable && open && (
-        <div className="upcoming-detail">
-          {isPitcher ? (
-            <OpponentSection game={game} throws={report.throws} />
-          ) : (
-            /* The batter's season line against the probable starter's hand — the
-               starter himself is named on the bar above, so this is only the
-               split (whose own head says which hand it's against). */
-            <PlatoonSplit report={report} game={game} />
-          )}
-        </div>
+        <Modal
+          title={`${report.name} — ${matchup(game)}`}
+          titleId="upcoming-detail-title"
+          className="play-detail-box"
+          onClose={() => setOpen(false)}
+        >
+          <div className="upcoming-detail">
+            {isPitcher ? (
+              <OpponentSection game={game} throws={report.throws} />
+            ) : (
+              /* The batter's season line against the probable starter's hand — the
+                 starter himself is named on the bar above, so this is only the
+                 split (whose own head says which hand it's against). */
+              <PlatoonSplit report={report} game={game} />
+            )}
+          </div>
+        </Modal>
       )}
     </div>
   );
@@ -883,10 +910,11 @@ export function UpcomingRow({
 
 
 /**
- * A stream item's key — its React key, and for the two shapes that open, the
- * key their open state is held under. A base event doesn't open, so it only
- * ever needs the first; it takes the `base-` prefix because a play's own id is
- * not unique against an at-bat's `player-game-atbat`.
+ * A stream item's React key. It used to be two things — the key an item's *open
+ * state* was held under as well — and the second job went with the accordions:
+ * every shape that opens now raises a dialog and holds its own flag, so nothing
+ * outside an item needs to name it. It takes the `base-` prefix because a
+ * play's own id is not unique against an at-bat's `player-game-atbat`.
  */
 export function entryKey(e: FeedEntry): string {
   if (e.type === 'base') return `base-${e.key}`;
@@ -902,20 +930,18 @@ export function entryKey(e: FeedEntry): string {
  */
 export function FeedItem({
   entry,
-  openKeys,
-  onToggleKey,
   onOpenDetails,
   grouped = false,
   multiGame = false,
+  detailInline = false,
 }: {
   entry: FeedEntry;
-  openKeys: Set<string>;
-  onToggleKey: (key: string) => void;
   onOpenDetails: (key: string) => void;
   grouped?: boolean;
   multiGame?: boolean;
+  /** Only a pitcher's outing reads it — see `FeedPitcherGame`. */
+  detailInline?: boolean;
 }) {
-  const key = entryKey(entry);
   if (entry.type === 'base') {
     return (
       <FeedBaseEvent
@@ -933,11 +959,10 @@ export function FeedItem({
       <FeedPitcherGame
         report={entry.report}
         game={entry.game}
-        open={openKeys.has(key)}
-        onToggle={() => onToggleKey(key)}
         onOpenDetails={onOpenDetails}
         grouped={grouped}
         multiGame={multiGame}
+        detailInline={detailInline}
       />
     );
   }
@@ -946,8 +971,6 @@ export function FeedItem({
       report={entry.report}
       game={entry.game}
       pa={entry.pa}
-      open={openKeys.has(key)}
-      onToggle={() => onToggleKey(key)}
       onOpenDetails={onOpenDetails}
       grouped={grouped}
       multiGame={multiGame}
@@ -1012,6 +1035,26 @@ function byRecency(a: FeedEntry, b: FeedEntry): number {
   return playOrder(b) - playOrder(a);
 }
 
+/**
+ * The same order read forwards — first play of the game first.
+ *
+ * The **stream** is newest-first because it is a stream: what just happened is
+ * what you opened it for, and a roster's day runs to hundreds of items you page
+ * *down* into the past. A **game** is not a stream. Opened from a card on the
+ * player page or a row of the Game Log, it is one afternoon read start to
+ * finish, so the first inning leads and the last at-bat closes it — the order a
+ * box score, a play-by-play and the innings inside a pitcher's outing all use,
+ * and now the one every "this game" surface in the app uses.
+ *
+ * It is `byRecency` negated rather than a second comparator written out, so the
+ * two can never disagree about ties — which matters most exactly where the
+ * timestamps are equal, a play's own grouped events being the case that has
+ * needed the tiebreak from the beginning.
+ */
+export function byPlayOrder(a: FeedEntry, b: FeedEntry): number {
+  return -byRecency(a, b);
+}
+
 export function playerDayEntries(report: PlayerReport): PlayerDayEntries {
   const lr = liveRoleGame(report);
   const live = lr ? { role: lr.role, game: lr.game } : null;
@@ -1061,8 +1104,6 @@ export function LiveFeed({
   reports,
   kind,
   onOpenDetails,
-  openKeys,
-  onToggleKey,
   shown: shownFromParent,
   onShowMore,
 }: {
@@ -1072,17 +1113,12 @@ export function LiveFeed({
   kind: PlayerKind;
   /** Open a player's page — what the headshot and the name both do now. */
   onOpenDetails: (key: string) => void;
-  // Which at-bats / upcoming rows are expanded, keyed by player + game + at-bat
-  // number. Lifted to the parent so a "collapse all" control can clear them.
-  openKeys: Set<string>;
-  onToggleKey: (key: string) => void;
   /** How much of the Recent section to open on, and where to report a "Load
    * more" back to. App holds the number for the same reason it holds the
    * scroll offset, and keyed the same way — see its `feedShown`. */
   shown: number;
   onShowMore: (shown: number) => void;
 }) {
-  const toggle = onToggleKey;
   // How much of the Recent section is on screen, grown a page at a time by the
   // "Load more" button. Deliberately not in the URL — it's a reading position,
   // not a view. It survives the 20s live poll (only the data changes, the
@@ -1136,18 +1172,15 @@ export function LiveFeed({
             Live
           </h2>
           <div className="live-rows">
-            {liveRows.map(({ report, role, game }) => {
-              const key = `live-${report.id}`;
+            {liveRows.map(({ report, role, game }) =>
               // A pitcher on the mound reads as his outing so far, innings and
               // all — the same item the stream below would carry, pinned here.
-              return report.kind === 'pitcher' && game.pitching ? (
+              report.kind === 'pitcher' && game.pitching ? (
                 <FeedPitcherGame
                   key={report.id}
                   report={report}
                   game={game}
                   role={role}
-                  open={openKeys.has(key)}
-                  onToggle={() => toggle(key)}
                   onOpenDetails={onOpenDetails}
                 />
               ) : (
@@ -1156,12 +1189,10 @@ export function LiveFeed({
                   report={report}
                   role={role}
                   game={game}
-                  open={openKeys.has(key)}
-                  onToggle={() => toggle(key)}
                   onOpenDetails={onOpenDetails}
                 />
-              );
-            })}
+              ),
+            )}
           </div>
         </section>
       )}
@@ -1173,13 +1204,7 @@ export function LiveFeed({
           </h2>
           <div className="feed-items">
             {recent.slice(0, shown).map((entry) => (
-              <FeedItem
-                key={entryKey(entry)}
-                entry={entry}
-                openKeys={openKeys}
-                onToggleKey={toggle}
-                onOpenDetails={onOpenDetails}
-              />
+              <FeedItem key={entryKey(entry)} entry={entry} onOpenDetails={onOpenDetails} />
             ))}
           </div>
           {recent.length > shown && (
@@ -1199,19 +1224,14 @@ export function LiveFeed({
         <section className="feed-section">
           <h2 className="feed-heading">Upcoming</h2>
           <div className="upcoming-rows">
-            {upcoming.map(({ report, game }) => {
-              const key = `up-${report.id}-${game.gamePk}`;
-              return (
-                <UpcomingRow
-                  key={key}
-                  report={report}
-                  game={game}
-                  open={openKeys.has(key)}
-                  onToggle={() => toggle(key)}
-                  onOpenDetails={onOpenDetails}
-                />
-              );
-            })}
+            {upcoming.map(({ report, game }) => (
+              <UpcomingRow
+                key={`up-${report.id}-${game.gamePk}`}
+                report={report}
+                game={game}
+                onOpenDetails={onOpenDetails}
+              />
+            ))}
           </div>
         </section>
       )}
