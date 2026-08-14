@@ -63,6 +63,26 @@ export interface UserPrefs {
    *  board's defaults; the client owns the column vocabulary and narrows
    *  anything it doesn't recognise, so nothing here is validated against it. */
   researchColumns?: Partial<Record<PlayerKind, string[]>>;
+  /**
+   * The **player page's Stats tab** columns, per kind — a separate entry from
+   * `researchColumns` although the two are drawn from one vocabulary.
+   *
+   * They could have been one key, and "the same columns in two places is one
+   * preference" is a real argument. What decides it is that the two tables do
+   * not have the same columns to offer: the Stats tab cuts `Opp`, `Ros%` and
+   * the five trend columns, which are facts about a player or about this
+   * afternoon rather than about a span (see `PlayerWindowTable.tsx`). Sharing
+   * the entry would therefore mean a write from the player page **silently
+   * dropping six columns from the board's saved set** — the very hazard
+   * `ColumnPicker`'s reorder threads around within one table — and the two are
+   * read for different things anyway: a board is scanned across six hundred
+   * names, a player page down five spans of one man.
+   *
+   * Absent means that kind's defaults, the same convention as everything else
+   * here. There is deliberately no URL parameter to go with it: `cols=` names
+   * the board `pos=` selects, and the open player-page tab is in no URL at all.
+   */
+  statsColumns?: Partial<Record<PlayerKind, string[]>>;
   /** Keep players on the IL off the players view (the settings-menu toggle).
    *  Absent means off, which is the default — see `setHideInjured`. */
   hideInjured?: boolean;
@@ -722,11 +742,34 @@ export async function setResearchColumns(
   kind: PlayerKind,
   keys: string[] | null,
 ): Promise<UserPrefs> {
+  return setColumnPrefs(userId, 'researchColumns', kind, keys);
+}
+
+/** The same, for the player page's Stats tab — see `UserPrefs.statsColumns`
+ *  for why it is its own entry rather than a share of the board's. */
+export async function setStatsColumns(
+  userId: string,
+  kind: PlayerKind,
+  keys: string[] | null,
+): Promise<UserPrefs> {
+  return setColumnPrefs(userId, 'statsColumns', kind, keys);
+}
+
+/** One read/modify/write for both, since the rule is the same one twice: a
+ *  per-kind slot, and `null` clearing the slot rather than storing a copy of
+ *  today's defaults. Written once so the two cannot come to disagree about
+ *  what "back to the defaults" stores. */
+async function setColumnPrefs(
+  userId: string,
+  field: 'researchColumns' | 'statsColumns',
+  kind: PlayerKind,
+  keys: string[] | null,
+): Promise<UserPrefs> {
   const next = await mutate(userId, (cur) => {
-    const columns = { ...(cur.prefs.researchColumns ?? {}) };
+    const columns = { ...(cur.prefs[field] ?? {}) };
     if (keys) columns[kind] = keys;
     else delete columns[kind];
-    return { prefs: { ...cur.prefs, researchColumns: columns } };
+    return { prefs: { ...cur.prefs, [field]: columns } };
   });
   return next.prefs;
 }

@@ -3768,11 +3768,25 @@ body {
    across. Measured, a batter's log goes 40.6px a row to 44.6 and 736 → 772px
    wide at 390 — the width being paid in a pane that already scrolls sideways at
    every phone width there is. */
+.glog-table,
+.stats-table {
+  /* Named rather than repeated, because two rules read it now: the cells
+     below, and the Stats tab's sort buttons, which zero the `th`'s padding and
+     have to re-apply exactly this gutter or a header would line up differently
+     from the numbers under it. The board keeps its own `--research-gutter` for
+     the same pair of readers, at its own narrower clamp. */
+  --row-gutter: clamp(5px, 1.9vw, 28px);
+  /* The header's own line, declared rather than emergent — the sort button and
+     `.research-arrow` both read it, so a header cannot change height by being
+     sorted whichever face the browser finds for U+25B2. The board declares the
+     same 15px for the same reason. */
+  --research-head-line: 15px;
+}
 .glog-table th,
 .glog-table td,
 .stats-table th,
 .stats-table td {
-  padding: 13px clamp(5px, 1.9vw, 28px);
+  padding: 13px var(--row-gutter);
   line-height: 1.35;
   white-space: nowrap;
   border-bottom: 1px solid var(--border);
@@ -3896,13 +3910,39 @@ body {
   color: var(--faint);
   font-weight: 500;
 }
-/* The table's caption. It keeps the overlay's gutters where the table gives
-   them back, exactly as the research board's count line sits inside the app's
-   while the board bleeds past them. */
-.stats-caption {
+/* The Columns button's row. It keeps the overlay's gutters where the table
+   gives them back, exactly as the research board's count line sits inside the
+   app's while the board bleeds past them — and it is where the table's caption
+   used to be, which is the slot a control belonging to *this table* wants: the
+   pinned head above is shared by every tab and says who is being read, not what
+   is shown about him.
+
+   Right-aligned, which is the one placement decision in it. The table bleeds to
+   the overlay's edges and this row does not, so a right-aligned button sits over
+   the stat columns it governs while the left edge — where the Span column and
+   the reader's eye both start — stays clear. It is also the order the board
+   reads its own run in, Columns last. */
+.stats-tools {
+  display: flex;
+  justify-content: flex-end;
   margin: 0 0 8px;
-  color: var(--muted);
-  font-size: 12px;
+}
+/* The span column's header parts from the numeric ones twice, and both follow
+   from its holding words rather than a number.
+
+   It is **left-aligned**, so the arrow's reserved box has to sit *after* the
+   label: the board puts it first precisely so the label's right edge lines up
+   with the right-aligned numbers below, and the same reasoning at this end of
+   the cell puts it last so the label's left edge lines up with the spans. And
+   it keeps `text-transform: none` from the rule above along with everything
+   else, the labels being written as they should read.
+
+   The `th` is `position: sticky` on both axes already (`.glog-date` pins it
+   left, `thead th` pins it top); zeroing its padding for the button leaves
+   both, since neither reads padding. */
+.stats-table th.stats-span.research-sort button {
+  justify-content: flex-start;
+  gap: 4px;
 }
 .glog-table .glog-opp {
   text-align: left;
@@ -7263,10 +7303,18 @@ body {
 }
 /* The whole header cell is the hit target, so the button fills it rather than
    sitting as a smaller shape inside a cell that also looks clickable. */
-.research-table th.research-sort {
+.research-table {
+  --sort-gutter: var(--research-gutter);
+}
+.stats-table {
+  --sort-gutter: var(--row-gutter);
+}
+.research-table th.research-sort,
+.stats-table th.research-sort {
   padding: 0;
 }
-.research-table th.research-sort button {
+.research-table th.research-sort button,
+.stats-table th.research-sort button {
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -7278,7 +7326,7 @@ body {
      body's: a header row is one short line where a body row is a headshot, and
      matching it would spend the height on a band of empty panel. It rose with
      the body's, 8 → 10, so the proportion is the one it always had. */
-  padding: 10px var(--research-gutter);
+  padding: 10px var(--sort-gutter);
   color: inherit;
   background: none;
   border: 0;
@@ -7308,16 +7356,20 @@ body {
    has to be re-applied here: that rule sets it on the `th`, and `th.research-sort`
    zeroes the th's padding so the sort button can own it. Without this the last
    header sat 19px inside its own numbers while every other one lined up. */
-.research-table th.research-sort:last-child button {
+.research-table th.research-sort:last-child button,
+.stats-table th.research-sort:last-child button {
   padding-right: clamp(10px, 3vw, 32px);
 }
-.research-table th.research-sort button:hover {
+.research-table th.research-sort button:hover,
+.stats-table th.research-sort button:hover {
   color: var(--text);
 }
-.research-table th.research-sort.active button {
+.research-table th.research-sort.active button,
+.stats-table th.research-sort.active button {
   color: var(--accent);
 }
-.research-table th.research-sort button:focus-visible {
+.research-table th.research-sort button:focus-visible,
+.stats-table th.research-sort button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }

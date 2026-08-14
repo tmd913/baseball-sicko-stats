@@ -456,10 +456,10 @@ And `starter` **stays on the row, for a reason that changed under it.** It was k
 
     It still **sorts alphabetically on the opponent**, which on this column means "group my players by tonight's game" (`Column.text`, the one column that holds words rather than a number — hence its absence from the filter builder, `Opp ≥ 4` being no question anyone asks). Everything the cell gained is a fact about that same game and so is constant within a group: sorting on the score or the starter would only reorder ties, and neither is a threshold anybody would type.
   - **H/AB is one cell where H and AB were two columns**, the shape the summary table and the game log's leading cell already use and the way a batting line is read. It **sorts on hits**, the numerator being what a counting column is asked for, and the average it implies is the AVG column along the same row, computed over this very pair. `hits` and `ab` join `DEFAULT_OFF` on the batting board with it: the two of them off is the same line in one column rather than a stat dropped from the board. Batting board only — a pitcher's row has no at-bats to divide by.
-  - **The Columns button opens a modal, where Search and Filters beside it stay inline panels** (`ColumnsDialog`, over the app's shared `Modal`). The three buttons are one run and this is the one that leaves the row, and the reason is volume rather than taste: Search is a field and Filters is a three-part sentence, one line of the wrapping tab row each, where this holds the whole order row **and** every column the board has in four labelled runs — measured on the pitching board, 29 order chips over 48 checkboxes, several hundred pixels of it. Inline that is a block of chips wedged into the pinned chrome, pushing the table it describes down the page and, on a phone, taking the screen outright while still pretending to be a strip of controls — a picker that costs you sight of the thing it is picking for. A dialog can carry a **scroller of its own**, which is the whole of the fix: measured at 390×844 the box holds 620px of a 854px picker and the board behind it does not move, where the panel grew the page by the difference. It takes the app's overlay conventions rather than inventing a second visual language — `.details-view`'s dimmed fixed box over a `--panel` card on `--control-radius` and `--shadow`, the body pinned by `useLockBodyScroll` and `overscroll-behavior: none` on the one thing that scrolls (it landed as `contain`, reasoning from the two overlays it copies, and went to `none` with them when the bounce was removed app-wide — see the passage above) — and it owes a modal's four ways out: the ✕, Escape, a press on the backdrop, and the Columns button itself. That last one is free, the state still being `ui.panels.columns` beside the other two disclosures, so the button keeps its `.active` fill and its count badge exactly as it had them. Two details are load-bearing. **The shell is `components/Modal.tsx`** — portal, body lock, Escape, backdrop, head, one scrolling body — extracted when a second dialog was needed (a pitcher's `OutingBreakdown`) and extracted rather than copied, on the rule that folds `.settings-toggle` into `.sim-toggle`'s selector lists: two modals that merely resemble each other are two modals that will one day differ. The stylesheet's `.research-columns-*` rules were renamed `.app-dialog-*` in place, so this dialog is unchanged by construction; it takes the default 720px and passes no width modifier, where the breakdown asks for 860 to hold an arsenal table. What is left in `ResearchTable.tsx` is the title and the contents.
+  - **The Columns button opens a modal, where Search and Filters beside it stay inline panels** (`ColumnPicker.tsx`, over the app's shared `Modal` — the whole picker lives there now rather than in this file, and **the board reads the extracted version**, the player page's Stats tab being its second caller; see **The Stats tab** below for why it moved and what each caller keeps). The three buttons are one run and this is the one that leaves the row, and the reason is volume rather than taste: Search is a field and Filters is a three-part sentence, one line of the wrapping tab row each, where this holds the whole order row **and** every column the board has in four labelled runs — measured on the pitching board, 29 order chips over 48 checkboxes, several hundred pixels of it. Inline that is a block of chips wedged into the pinned chrome, pushing the table it describes down the page and, on a phone, taking the screen outright while still pretending to be a strip of controls — a picker that costs you sight of the thing it is picking for. A dialog can carry a **scroller of its own**, which is the whole of the fix: measured at 390×844 the box holds 620px of a 854px picker and the board behind it does not move, where the panel grew the page by the difference. It takes the app's overlay conventions rather than inventing a second visual language — `.details-view`'s dimmed fixed box over a `--panel` card on `--control-radius` and `--shadow`, the body pinned by `useLockBodyScroll` and `overscroll-behavior: none` on the one thing that scrolls (it landed as `contain`, reasoning from the two overlays it copies, and went to `none` with them when the bounce was removed app-wide — see the passage above) — and it owes a modal's four ways out: the ✕, Escape, a press on the backdrop, and the Columns button itself. That last one is free, the state still being `ui.panels.columns` beside the other two disclosures, so the button keeps its `.active` fill and its count badge exactly as it had them. Two details are load-bearing. **The shell is `components/Modal.tsx`** — portal, body lock, Escape, backdrop, head, one scrolling body — extracted when a second dialog was needed (a pitcher's `OutingBreakdown`) and extracted rather than copied, on the rule that folds `.settings-toggle` into `.sim-toggle`'s selector lists: two modals that merely resemble each other are two modals that will one day differ. The stylesheet's `.research-columns-*` rules were renamed `.app-dialog-*` in place, so this dialog is unchanged by construction; it takes the default 720px and passes no width modifier, where the breakdown asks for 860 to hold an arsenal table. What is left in `ColumnPicker.tsx` is the title and the contents — and what is left in `ResearchTable.tsx` is neither: the board hands the picker its vocabulary and its selection and takes back a list of keys, which is the one thing the two callers answer differently (this one stores nothing when the list has come back to the defaults, so `cols=` stays out of a link that isn't saying anything).
 
 It is **portalled to the body**, not left in the chrome the rest of the control set is portalled into: that box is `position: sticky` with a `z-index`, so it opens a stacking context and a fixed child of it could never rise past its 41. And it takes **46** — over the chrome that opened it and over the full-page table box (45), under the player page (50) and the reel and how-to pages (60), which are pages where this is a control's panel; neither of those can be on screen with it in practice (the full-page mode covers the whole control set, and this backdrop swallows the click that would open a player), but Escape is written for the stacking anyway, the dialog declining the key while one of them is above it and joining the list `hooks.ts::overlayAbove` reads so they decline to it — one press, one thing undone, whichever way round. The backdrop dismisses on **`pointerdown`**, the rule `useDismissable` follows, which here also keeps a chip-drag that happens to *end* out on the backdrop — mouse down on a chip, up outside, whose click lands on their common ancestor — from closing the dialog on top of the reorder it just committed (checked again after the gesture changed: the dialog is still open either way). **Escape is the one key this dialog now shares**, since a picked-up column takes the first press and the box the second — see the order row below. Everything else inside is untouched: the group All/None, the last column that can't be turned off, the debounced `PUT /api/prefs/research-columns`, and the rule below that a tick of the picker deliberately does *not* put the table back at the top.
-  - **The columns can be rearranged** (`ColumnOrder`, the first block of the Columns dialog). It is a row of its own rather than a handle on the chips below, because those chips are **grouped** — Counting, Slash line, Rates, Statcast — which is the right shape for choosing columns and no shape at all for arranging them, an arrangement being one flat sequence that crosses every heading. So the picker answers its two questions in two blocks, each drawn the way its own question wants. Three things had to change under it. **`cols=` became order-bearing**: it was read into a `Set` on the explicit grounds that a hand-edited link had no business shuffling the table, and now the order is the reader's to set and the parameter carries it — with a dedupe on the way in, since a key named twice would render two identical columns under one React key. **`isDefaultColumns` compares position by position**, so the same columns rearranged is a change a link and the saved preference both keep. And a column switched **on** lands at its canonical place among the ones already there (`withColumn`) rather than at the end: someone ticking `2B` with the default set on screen wants it beside `H/AB`, not out past the Statcast group, and whatever custom order is in force is left alone either way.
+  - **The columns can be rearranged** (`ColumnOrder`, the first block of the Columns dialog, and in `ColumnPicker.tsx` with the rest of it since the player page's Stats tab became its second reader — one gesture rather than two, which matters most for the paragraphs below, where the touch half took three goes to get right). It is a row of its own rather than a handle on the chips below, because those chips are **grouped** — Counting, Slash line, Rates, Statcast — which is the right shape for choosing columns and no shape at all for arranging them, an arrangement being one flat sequence that crosses every heading. So the picker answers its two questions in two blocks, each drawn the way its own question wants. Three things had to change under it. **`cols=` became order-bearing**: it was read into a `Set` on the explicit grounds that a hand-edited link had no business shuffling the table, and now the order is the reader's to set and the parameter carries it — with a dedupe on the way in, since a key named twice would render two identical columns under one React key. **`isDefaultColumns` compares position by position**, so the same columns rearranged is a change a link and the saved preference both keep. And a column switched **on** lands at its canonical place among the ones already there (`withColumn`) rather than at the end: someone ticking `2B` with the default set on screen wants it beside `H/AB`, not out past the Statcast group, and whatever custom order is in force is left alone either way.
 
 **The gesture is a press and a press, and a drag is the mouse's shortcut for it.** Press a chip to pick a column up — it fills with the accent, the others dim, and the hint line above says whose it is and how to cancel — then press another to drop it there. A mouse may instead hold the press and drag, which is the same move with the release doing the placing. **On touch there is no drag at all**, and that is the whole of what was wrong here for two attempts running.
 
@@ -663,21 +663,118 @@ in the page's own head, which is where a fact about the player belongs. The
 **identity block** goes for the same reason one level up: the head has said the
 headshot, the name, the club and the position once.
 
-**It shows the board's *default* set rather than all forty-odd, and it has no
-column picker.** That picker is a board setting — saved per user, shared by a
-`cols=` link, and phrased as "which columns do I want against six hundred names"
-— and a reader who wants the long tail has the board itself, one tab strip away
-in the app's own chrome. Following the *saved* board selection was the other
-option and was rejected on the same ground: this page opens from everywhere,
-including places with no board on screen, and a player page that quietly
-reshaped itself because of something set on another view is the harder thing to
-explain. What is left is 23 columns for a batter and 25 for a pitcher, plus the
-span.
+**It has the board's column picker now, and it is the board's own rather than
+one that resembles it.** This paragraph used to read *"it shows the board's
+default set rather than all forty-odd, and it has no column picker"*, on the
+grounds that a picker is a board setting phrased as "which columns do I want
+against six hundred names", with the board itself one tab strip away for anyone
+who wants the long tail. Half of that is still exactly right and is why the two
+selections are **saved apart** (below). The other half was wrong in the way an
+argument from *where a control came from* usually is: the long tail is precisely
+what a single player's page is read for. A reader on the board is scanning for
+names and wants a legible width; a reader here has already chosen the man and is
+asking one question about him, so `ISO`, `BABIP`, `Chase%` and `Sprint` are more
+use over five spans of one player than over six hundred rows of everybody.
+Refusing them cost this tab the one thing it can offer that the board cannot.
 
-**No sort, either.** Five windows have exactly one order and it is time; putting
-"last 30 days" above "season" on the strength of one number would destroy the
-only structure the rows have. The header still carries the board's `title`, which
-is the whole of what a three-letter label leaves unsaid.
+**So the picker moved rather than being copied.** `ColumnsDialog` and
+`ColumnOrder` came out of `ResearchTable.tsx` into **`components/ColumnPicker.tsx`**
+— the dialog shell, the order row and its whole press-and-press gesture, the
+labelled runs of chips, the group All/None, the last-column guard and the reset —
+and **the board reads the extracted version**, so there is one implementation and
+not two that resemble each other. That is the same rule `researchColumns.tsx`
+already applies to the vocabulary, and it matters more here than it looks: the
+touch half of that gesture took three goes to get right (see **the columns can be
+rearranged** above), and a second picker would have had to get it right twice and
+then stay right twice. What each caller keeps is the **policy** — the picker
+hands back a list of keys and the caller decides what to store — because that is
+the half the two genuinely disagree about.
+
+**The picker offers the vocabulary this table has, which is six columns short of
+the board's.** `Opp`, `Ros%` and the five trend columns are cut from the
+*picker* as well as from the table, which is the honest version of a rule that
+used to be enforced by having no picker at all: the paragraph above says why five
+identical cells down a column are not worth a column, and a chip that let them
+back in would be that argument lost by default rather than answered. The three
+families sit at the head of both boards' arrays and each owns its group heading
+outright (`Today`, `Fantasy`), so cutting them leaves no orphaned run — the
+picker opens on `Counting` and holds **40 chips against the board's 44** on the
+batting side. Nothing else is withheld, and the default is unchanged: 23 columns
+for a batter and 25 for a pitcher, which is exactly what the tab showed before it
+had a picker, so nobody's tab changed shape on the day one arrived.
+
+**Where the button goes**, which is a layout decision rather than a default:
+a row of its own directly above the table (`.stats-tools`), in the slot the
+caption used to hold.
+
+Two other places were possible and both are wrong. The **pinned head**
+(`.details-chrome`) is shared by all seven tabs and says *who is being read and
+which reading of him*; a control belonging to one tab would either sit over the
+percentile card doing nothing or make the pinned box change height as the reader
+moved along the strip — and that height is measured at runtime and published as
+`--details-chrome-h` for everything inside the overlay to clear, so a per-tab
+control would move every scroll target on the page with it. A **second pinned
+band** inside the tab is the same objection one level down: the overlay already
+has one pinned box and a phone gives it 193px of 844. So it is the table's own
+caption slot, scrolling with the tab — which is where the research board keeps
+its count line for exactly this reason, that line being the table's caption
+rather than a control over it.
+
+**Right-aligned**, which is the one decision inside the row. The table bleeds to
+the overlay's edges (`--table-bleed`) and this row keeps the gutters, so a
+right-aligned button sits over the stat columns it governs while the left edge —
+where the Span column and the reader's eye both start — stays clear; it is also
+the order the board reads its own run of controls in, Columns last. It is
+`ColumnsButton`, shared, so it carries the same glyph, the same `.active` fill
+while the dialog is up, the same `.on` tint when the reader has a selection of
+their own, the same count badge, and the same phone rule — below 640px it drops
+its label to the icon and the badge, as the board's four disclosures do.
+
+**And the line of text above the table is gone.** It read *"The research board's
+own columns, one row per span"*, which named the page the columns came *from*
+rather than saying anything about the table under it: the spans are written out
+in the first column and the columns are the app's own, so it told a reader what
+they were already looking at. The row it occupied is the row the control now
+uses, so the tab is exactly as tall as it was — measured below.
+
+**Sorting is a click on any header, and what it means here is not what it means
+on the board.** A leaderboard has no order until you pick a column, which is why
+the board opens on PA and why "no sort" is not a state anybody wants there. These
+five rows *already have* an order, and it is time — so a sort on this table
+**destroys** something unless the way back is as cheap as the way out.
+
+Three answers were available. A **Reset** control beside the picker is a button
+whose only job is to undo another control, on a tab with room for one row of
+chrome. **Time order on a third click** of whichever header is sorted is
+unguessable — nothing on screen says a third press means anything, and it makes
+one header cycle through three states while every other has two. So the **span
+column sorts like any other column**, and time order is what sorting by it *is*:
+ascending, the board's own `Season · 7d · 15d · 30d · 60d`, which the table opens
+on with the ▲ showing. The way back is a press on the leftmost header, in the
+grammar the reader has just used to leave it, and the state the table starts in
+is visibly a sort rather than the absence of one.
+
+It sorts on the row's **position in the server's list** rather than on a number
+of days, because `season` is not a number of days and would have to be
+special-cased into one (0 sorts it first, ∞ last, and both are a claim about a
+span that has no length). Descending is then `60d → season`, the other order
+these rows can honestly be read in.
+
+Everything else is the board's rule, read off the same `Column`: **`ascFirst`**
+is honoured per column, so ERA, WHIP and a batter's K open on their good end
+(checked: one press of `ERA` gives ▲ and `2.01 · 2.16 · 2.20 · 2.25 · 4.50`,
+where `K` gives ▼); the ▲▼ span is `.research-arrow`, reserved in **both** axes
+whether or not its column is the sorted one, so pressing a header moves nothing;
+and `aria-sort` names the one sorted column. **Nulls sort to the bottom in both
+directions**, which on this table is the whole row rather than a cell — a span he
+did not appear on has no value in any column, and it keeps its place among the
+other absent spans. Checked on Cody Bellinger, who has no 7d or 15d row: `OPS`
+descending reads `30d · Season · 60d · [7d] · [15d]` and ascending
+`60d · Season · 30d · [7d] · [15d]`, the two sentences last both ways.
+
+**A hidden column must not leave the table ordered by it**, the same trap the
+board's `activeSortKey` exists for and worse here, since there would be no header
+left to press. It falls back to the span, which is to say to time order.
 
 **A window he does not appear on is absent, not zero**, and the server sends
 `row: null` rather than a zeroed row for it. The cell spans the stat columns and
@@ -722,9 +819,26 @@ column, inside the player overlay, read across rather than picked. What it adds
 under its own name is three rules: `text-transform: none` on the headers (these
 are the board's labels, and the board switched uppercase off for exactly this
 reason — right for AVG, wrong for xwOBA and Brl%), a 96px floor and left
-alignment on the span column, and the muted "no games" cell. Plus `.stats-caption`,
-which keeps the overlay's gutters where the table gives them back, the way the
-board's count line sits inside the app's while the board bleeds past them.
+alignment on the span column, and the muted "no games" cell. Plus
+`.stats-tools`, which keeps the overlay's gutters where the table gives them
+back, the way the board's count line sits inside the app's while the board
+bleeds past them — and one rule for the span column's **sort button**, which is
+left-aligned and therefore puts the arrow's reserved box *after* the label. That
+is the board's own rule read from the other end: it leads there precisely so the
+label's right edge lines up with the right-aligned numbers, and at this end of
+the cell it trails so the label's left edge lines up with the spans.
+
+**The board's sort-header rules are folded onto `.stats-table` rather than
+copied**, which took one variable. `.research-table th.research-sort button`
+zeroes the `th`'s padding and re-applies the gutter the cells use — the board's
+`--research-gutter` — and this table's gutter is a different clamp, so the shared
+rule reads **`--sort-gutter`** and each table declares its own (`.research-table`
+its `--research-gutter`, `.stats-table` the `--row-gutter` the cell padding above
+was already using, named here so the clamp is written once rather than twice).
+`--research-head-line` is declared on both for the reason it was declared at all:
+the reservation that stops a header changing height when it is sorted is a
+function of whichever installed face claims U+25B2, and 15px is that face's own
+line written down.
 
 **The span is written out where the board's tabs abbreviate.** `Season · 7d ·
 15d · 30d · 60d` is right for eleven pills sharing a phone's width in a row that
@@ -753,10 +867,75 @@ in the board's own order. Spot-checked against the boards themselves: Salvador
 Perez reads `113 G · 473 PA · 94/436 · .216` on the season row and `6 G · 24 PA
 · 5/21 · .238` on 7d; Chris Sale `21 G · 123.0 IP · 2.20 ERA` and `1 G · 6.0 IP`.
 
-**Bundle: 436.13 → 438.16 KB of JS** (129.23 → 129.72 gzipped) and **96.75 →
-97.24 KB of CSS** (17.33 → 17.42 gzipped) — 2.0KB and 0.5KB raw for a table, a
-route and a module extraction, most of the JS being the new component and none
-of it the columns, which only moved.
+**What the picker and the sort cost the table, re-measured on the same players
+the same afternoon, before → after.** The table widens by the arrow's
+reservation on every header — 8px and a 3px gap, on columns whose own numbers
+were often already wider than the label: **1818.39 → 1944.73 at 1200** and
+**1079.95 → 1201.38 at 390** on the batter, **1972.75 → 2124.56** and **1177.45
+→ 1319.64** on the pitcher, which is 121–152px on a pane that scrolls sideways
+at every width there is. The **header row gets shorter**, 37.84 → **36.00**,
+because the sort button's 10px of padding replaces the header cell's 11 — the
+same two-pixel discount the board's own sort headers take, and for the same
+reason: a header is one short line where a body row is not. Row height is
+**44.55px** either way, the page body and the overlay each overflow by **0** at
+both widths on both kinds, and the span column still pins at **0** with the pane
+scrolled to its far right (header row 1px inside it, which is the border).
+
+**And the tab is still one screen**, which is the number the platoon card's
+departure bought and this must not spend: content height **900px at 1200 and
+844 at 390** on both kinds, before and after — the caption's row and the
+button's row are the same row.
+
+**Driven in a browser for every state the two controls have.** The picker opens
+at `z-index` **51** (the overlay's 50 plus one, `DialogLayerContext`'s ladder
+doing its job with nothing written inline), titled `Columns`, holding
+`Order · Counting · Slash line · Rates · Statcast` and no `Fantasy` or `Today`,
+40 chips over 23 order chips, 720px wide at 1200 and **358 at 390 with a
+scroller of its own** (626px of picker in 620). Ticking `ISO` puts it beside
+`SLG` and takes the badge to 24; unticking `SB` takes it to 22 and the column
+off the table. **Escape undoes one thing**: the first press closes the picker
+and leaves the player page, the second closes the page. On a **touch** device at
+390 the press-and-press reorder works across rows — `PA` picked up from row one
+and dropped on `K` in row two moves it in the chips *and* in the table's header
+— the hint line reads `Moving PA — press a column to drop it there, or Esc to
+cancel`, and a vertical flick from the middle of a chip scrolls the picker and
+reorders nothing (`touch-action` computing `auto` on the chip and the grip
+alike, which is the fix that passage records).
+
+**The selection is saved, and saved apart from the board's.** It is
+`UserPrefs.statsColumns`, per kind, written by `PUT /api/prefs/stats-columns` on
+the same 600ms debounce and the same "absent means the defaults" rule as the
+board's, and held in App (`statsCols`) rather than in `PlayerDetails`, which is
+unmounted every time the overlay closes and would make the preference a per-open
+thing.
+
+**One entry could have served both and must not**, which is the decision worth
+recording. The economy is real — one vocabulary, one picker, and a reader who
+wants xwOBA probably wants it in both places — and it loses to a fact about the
+two tables: they do not have the same columns to offer. A write from this tab
+carries a list with `Opp`, `Ros%` and the five trend columns *absent*, so a
+shared entry would let a tick on a player page **silently drop six columns from
+the board's saved set** — precisely the hazard `ColumnPicker`'s reorder threads
+around inside one table, arriving between two. They are also read for different
+things, which is the same observation the first paragraph of this section makes
+from the other side. So: two entries, one shared `setColumnPrefs` on the server
+so the two cannot come to disagree about what "back to the defaults" stores, and
+`toStatsColumnKeys` narrowing on the way in exactly as `toColumnKeys` does — a
+key this table hasn't got is dropped, and a list with nothing left falls back to
+the defaults rather than to an empty table.
+
+**And it is deliberately not in the URL.** `cols=` names the board that `pos=`
+selects, and a second meaning on it would be two tables reading one parameter
+with nothing to say which; the open player-page tab is in no URL either, so
+there is no link that could carry this and mean anything. Checked end to end
+against the running server: ticking `ISO` and unticking `SB` writes
+`statsColumns.batter` with 22 keys, a reload draws those 22, and a reset stores
+no entry at all.
+
+**Bundle: 448.23 → 451.11 KB of JS** (132.72 → 133.50 gzipped) and **102.05 →
+102.54 KB of CSS** (18.20 → 18.30 gzipped) — 2.9KB and 0.5KB raw, 0.8KB and
+0.1KB over the wire, for a sort, a saved preference, a route and a picker
+*extraction* that left the board with less code than it had.
 
 ### The Splits tab: the two halves of the platoon, against each other
 

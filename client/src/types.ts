@@ -938,6 +938,13 @@ export interface ResearchRow {
  *  `{}` for a user who never has. Mirrors `UserPrefs` in the server's store. */
 export interface UserPrefs {
   researchColumns?: Partial<Record<PlayerKind, string[]>>;
+  /** The player page's **Stats** tab columns, per kind. A separate entry from
+   *  the board's although both are drawn from one vocabulary: the tab has six
+   *  fewer columns to offer (`Opp`, `Ros%` and the five trend columns are cut),
+   *  so one shared entry would let a write from the player page drop them from
+   *  the board's saved set. Absent means that kind's defaults; not in the URL,
+   *  where `cols=` names the board `pos=` selects. */
+  statsColumns?: Partial<Record<PlayerKind, string[]>>;
   /** Absent means off, the default — the server stores off as no entry. */
   hideInjured?: boolean;
   /** Play every video clip with the sound off. Absent means off. */

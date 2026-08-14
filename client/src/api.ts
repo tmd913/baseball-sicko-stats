@@ -181,6 +181,14 @@ export const api = {
       body: JSON.stringify({ kind, keys }),
     });
   },
+  // The player page's Stats tab keeps its own set — same body, its own entry.
+  async saveStatsColumns(kind: PlayerKind, keys: string[] | null): Promise<UserPrefs> {
+    return request('/api/prefs/stats-columns', {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ kind, keys }),
+    });
+  },
   async saveHideInjured(hide: boolean): Promise<UserPrefs> {
     return request('/api/prefs/hide-injured', {
       method: 'PUT',

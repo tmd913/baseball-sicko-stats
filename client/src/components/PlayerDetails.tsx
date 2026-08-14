@@ -364,6 +364,8 @@ export function PlayerDetails({
   eligible,
   onAdd,
   onRemove,
+  statsColumns,
+  onStatsColumnsChange,
   onClose,
 }: {
   playerId: number;
@@ -408,6 +410,13 @@ export function PlayerDetails({
   eligible?: string[] | null;
   onAdd: () => void;
   onRemove: () => void;
+  /** The **Stats** tab's chosen columns for this kind, or null for its
+   *  defaults. Held by App rather than here because this component is unmounted
+   *  every time the overlay closes, and a preference that reset per player
+   *  would not be one. */
+  statsColumns: string[] | null;
+  /** null means "back to the defaults", stored as the absence of an entry. */
+  onStatsColumnsChange: (keys: string[] | null) => void;
   onClose: () => void;
 }) {
   // This view covers the page but scrolls in its own box, so the list behind it
@@ -1152,18 +1161,26 @@ export function PlayerDetails({
           Couldn’t load stats: {windowsError}
         </div>
       )}
+      {/* The table is a direct child of the view, as the game log is, so
+          `--table-bleed` takes it out to the overlay's own edges rather than
+          leaving it inside a reading column's padding. Its Columns button sits
+          above it and keeps the gutters, the way the research board's count
+          line does.
+
+          **There is no line of explanation over it any more.** It read "The
+          research board's own columns, one row per span" — which named the page
+          the columns came *from* rather than saying anything about the table
+          under it, and did so on a tab whose whole job is five rows and a
+          header. The spans are written out in the first column and the columns
+          are the app's own, so the sentence was telling a reader what they were
+          already looking at, in the slot the control now uses. */}
       {tab === 'stats' && windows && !windowsLoading && (
-        <>
-          {/* The table is a direct child of the view, as the game log is, so
-              `--table-bleed` takes it out to the overlay's own edges rather
-              than leaving it inside a reading column's padding. Its caption
-              sits above it and keeps the gutters, the way the research board's
-              count line does. */}
-          <p className="stats-caption">
-            The research board&rsquo;s own columns, one row per span.
-          </p>
-          <PlayerWindowTable kind={kind} windows={windows.windows} />
-        </>
+        <PlayerWindowTable
+          kind={kind}
+          windows={windows.windows}
+          columnKeys={statsColumns}
+          onColumnsChange={onStatsColumnsChange}
+        />
       )}
 
       {/* **The Splits tab: the two halves of the platoon, against each other.**
