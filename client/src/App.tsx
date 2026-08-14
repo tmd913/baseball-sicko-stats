@@ -215,6 +215,39 @@ function readKeys(v: string | null): string[] {
     .filter((k) => /^(batter|pitcher)-\d+$/.test(k));
 }
 
+/**
+ * Did this status change **name a team where the connection had none**?
+ *
+ * That is the last step of joining a league — an invite link attaches you to
+ * one with no team, since a team id means nothing in a league you weren't in,
+ * and picking yours out of the list is the act that finishes it. It is what
+ * turns the roster views over to the fantasy team (see `onEspnStatusChange`),
+ * and every clause below is there to keep some *other* status change out of it:
+ *
+ * - **`prev.connected`** excludes the connect itself. Pasting cookies for a
+ *   private league derives the team from the SWID in the same round trip, so
+ *   the transition there is disconnected → connected-with-a-team; treating
+ *   that as a first pick would also fire on every *re*-connect, which is what
+ *   somebody does when the session cookie has expired and is no statement
+ *   about which roster they want to read.
+ * - **`prev.teamId === null`** excludes changing which of two teams is yours,
+ *   which is the case this must never fire on: someone who has deliberately
+ *   turned the fantasy roster off and is correcting the team would have it
+ *   turned back on under them.
+ * - **the same league** because a connection moved to a different league keeps
+ *   nothing of the old one, and comparing team ids across two of them compares
+ *   two different numbering systems.
+ */
+function firstTeamNamed(prev: EspnStatus | null, next: EspnStatus): boolean {
+  return (
+    prev?.connected === true &&
+    next.connected === true &&
+    prev.leagueId === next.leagueId &&
+    prev.teamId === null &&
+    next.teamId !== null
+  );
+}
+
 export default function App() {
   // Initial UI state is seeded from the URL query so a reload (or shared link)
   // restores the same date range, active preset, and collapsed cards.
@@ -494,9 +527,20 @@ export default function App() {
     initialParams.get('roster') === 'fantasy' ? 'fantasy' : 'saved',
   );
   const rosterSourceFromUrl = initialParams.get('roster') === 'fantasy';
-  const rosterSourceTouched = useRef(false);
+  /**
+   * Has this user **stated** which list they want — either by working the
+   * toggle in this session, or by having an answer in their record?
+   *
+   * The touched-ref every preference here carries, widened by one thing:
+   * `rosterSource` is the one entry stored for *both* of its values, so the
+   * presence of the key is itself a statement and this ref reports it. What
+   * reads it is the first-team-pick switch below, which fills in an
+   * **unspecified** preference and must never overwrite an answered one — the
+   * distinction absence-means-default cannot make on its own.
+   */
+  const rosterSourceStated = useRef(false);
   const setRosterSource = useCallback((next: RosterSource) => {
-    rosterSourceTouched.current = true;
+    rosterSourceStated.current = true;
     setRosterSourceState(next);
     api
       .saveRosterSource(next)
@@ -642,12 +686,18 @@ export default function App() {
         // silence there is unspecified rather than "watchlist", which is what
         // lets the saved value fill it in.
         if (
-          !rosterSourceTouched.current &&
+          !rosterSourceStated.current &&
           !rosterSourceFromUrl &&
           prefs.rosterSource === 'fantasy'
         ) {
           setRosterSourceState('fantasy');
         }
+        // ...and whichever of the two values it holds, the *presence* of the
+        // entry is this user having answered the question, which is what keeps
+        // the first-team-pick switch off their record. Deliberately after the
+        // branch above rather than before it: set first, a stored `fantasy`
+        // would read as "already stated" and never be applied.
+        if (prefs.rosterSource) rosterSourceStated.current = true;
         // The board's population settings, on the same rule: the URL wins
         // where it spoke, and a user who has already worked the buttons in the
         // second before this landed keeps what they pressed.
@@ -1325,13 +1375,50 @@ export default function App() {
 
   /** Stable, because the settings page has an effect that depends on it — an
    *  inline arrow would hand that effect a new identity on every render. */
-  const onEspnStatusChange = useCallback((s: EspnStatus) => {
-    setEspnStatus(s);
-    // A fresh connection (or a disconnect) makes whatever was read before
-    // wrong; the board re-reads when it next needs it.
-    setOwnership(null);
-    setEspnError(null);
-  }, []);
+  /**
+   * Every change the Fantasy league page makes to the connection lands here —
+   * a connect, a disconnect, a share toggle, and the team picker.
+   *
+   * **Naming a team for the first time turns the fantasy roster on**, which is
+   * what finishes an invite-link join: the link attaches you to the league,
+   * the page asks which team is yours, and until now that left the Roster and
+   * Feed views reporting on a saved roster that a brand-new user has nothing
+   * in. The two guards are the whole rule and each excludes a different way of
+   * getting this wrong — `firstTeamNamed` keeps it off a team *change* (see
+   * its own note), and `rosterSourceStated` keeps it off anyone who has said
+   * which list they want, in this session or in their record. It cannot fire
+   * twice for one user either: the write it makes is itself a stated source.
+   *
+   * `rosterSource === 'saved'` is not a third guard so much as the honest
+   * reading of "turn it on" — with it already on there is nothing to do, and
+   * writing it down would have a `roster=fantasy` link quietly overwriting the
+   * record it was only ever supposed to override for the one visit, which is
+   * the rule `cols=` follows.
+   *
+   * One write at a time, which the shape gives for free: the team PUT has
+   * resolved by the time this is called, so the preference PUT that follows
+   * cannot race it on the same user item — the hazard `queueUserWrite` exists
+   * for, and the reason this is not done optimistically inside the picker.
+   */
+  const onEspnStatusChange = useCallback(
+    (s: EspnStatus) => {
+      const prev = espnStatus;
+      setEspnStatus(s);
+      // A fresh connection (or a disconnect) makes whatever was read before
+      // wrong; the board re-reads when it next needs it.
+      setOwnership(null);
+      setEspnError(null);
+      if (rosterSource === 'saved' && !rosterSourceStated.current && firstTeamNamed(prev, s)) {
+        // Nothing else has to be told: this flips `usingFantasy`, which is
+        // what the report asks its source with, what the fantasy roster read
+        // and the report effect both depend on, what the URL sync writes
+        // `roster=fantasy` from, and what lights the fantasy button and takes
+        // the editing controls away. One state change, one render, one pass.
+        setRosterSource('fantasy');
+      }
+    },
+    [espnStatus, rosterSource, setRosterSource],
+  );
   // The settings popover (gear next to the title) — the hide-injured toggle
   // (and the simulate one, when it's shown), then the way into the how-to page.
   // Closes on outside click or Escape.
