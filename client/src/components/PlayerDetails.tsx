@@ -7,6 +7,7 @@ import type {
   PlayerPercentiles,
   PercentileMetric,
   PlayerKind,
+  PlayerNews,
   PlayerReport,
   PlayerWindows,
   ResearchRow,
@@ -24,6 +25,7 @@ import { LockMark } from './LockMark';
 import { RollingXwoba } from './RollingXwoba';
 import { GameLog } from './GameLog';
 import { PlayerWindowTable } from './PlayerWindowTable';
+import { NewsTab } from './PlayerNews';
 import { BatterSplitsTab, PitcherSplitsTab } from './PlatoonSplits';
 import { LoadingBlock } from './Loading';
 import {
@@ -272,6 +274,7 @@ type DetailsTab =
   | 'overview'
   | 'percentiles'
   | 'splits'
+  | 'news'
   | 'stats'
   | 'gamelog'
   | 'arsenal'
@@ -556,6 +559,18 @@ export function PlayerDetails({
   const [windowsError, setWindowsError] = useState<string | null>(null);
   const [windowsLoading, setWindowsLoading] = useState(false);
   const windowsReq = useRef<string | null>(null);
+  // His news. Lazy on first open like the tabs below it — and, like the game
+  // log, lazy for the **Overview** too, which previews the top three of the
+  // same list. One read serves both, which is what stops the preview and the
+  // tab ever showing different items.
+  //
+  // Keyed by **player alone**, where the day, the log and the window table are
+  // keyed by kind as well: news is a fact about a person, so a two-way player
+  // has one list rather than two.
+  const [news, setNews] = useState<PlayerNews | null>(null);
+  const [newsError, setNewsError] = useState<string | null>(null);
+  const [newsLoading, setNewsLoading] = useState(false);
+  const newsReq = useRef<number | null>(null);
   // The season xwOBA series backs the Charts tab's one chart. It's a heavier Savant
   // fetch, so it's loaded lazily — only once that tab is first opened.
   const [xwoba, setXwoba] = useState<XwobaSeries | null>(null);
@@ -704,6 +719,9 @@ export function PlayerDetails({
     windowsReq.current = null;
     setWindows(null);
     setWindowsError(null);
+    newsReq.current = null;
+    setNews(null);
+    setNewsError(null);
   }, [playerId]);
 
   // The Overview tab's day, lazily on first open (which for this tab is the
@@ -791,6 +809,34 @@ export function PlayerDetails({
       live = false;
     };
   }, [tab, playerId, isPitcher, kind]);
+
+  // The News tab's items, and the Overview's preview of them. One read for
+  // both, the rule the game log above it follows and for the same reason: the
+  // preview is the top of this very list, so two reads could show two lists.
+  useEffect(() => {
+    if ((tab !== 'news' && tab !== 'overview') || newsReq.current === playerId) return;
+    newsReq.current = playerId;
+    let live = true;
+    setNewsLoading(true);
+    setNewsError(null);
+    api
+      .playerNews(playerId)
+      .then((d) => {
+        if (live) setNews(d);
+      })
+      .catch((e: unknown) => {
+        if (live) {
+          setNewsError(e instanceof Error ? e.message : 'Failed to load');
+          newsReq.current = null; // allow a retry on re-open
+        }
+      })
+      .finally(() => {
+        if (live) setNewsLoading(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [tab, playerId]);
 
   // Same lazy load for the Arsenal tab.
   useEffect(() => {
@@ -1077,6 +1123,22 @@ export function PlayerDetails({
           >
             Splits
           </button>
+          {/* **News reads before Stats and the Game Log**, which is the same
+              order the Overview's blocks are in and for the same reason: the
+              news is what has happened to him *this week* — an IL placement, a
+              call-up, a report he is losing a job — where Stats and the Game
+              Log are the record of what he has done. A reader deciding about a
+              stranger wants to know he is hurt before reading his 30-day
+              xwOBA. */}
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'news'}
+            className={`details-tab${tab === 'news' ? ' is-active' : ''}`}
+            onClick={() => setTab('news')}
+          >
+            News
+          </button>
           <button
             type="button"
             role="tab"
@@ -1142,8 +1204,14 @@ export function PlayerDetails({
           seasonLoading={splitsLoading}
           gameLog={gameLog}
           gameLogLoading={gameLogLoading}
+          news={news}
+          newsLoading={newsLoading}
           onTab={setTab}
         />
+      )}
+
+      {tab === 'news' && (
+        <NewsTab news={news} loading={newsLoading} error={newsError} name={name} />
       )}
 
       {tab === 'arsenal' && arsenalWait && <LoadingBlock>Reading the season arsenal</LoadingBlock>}

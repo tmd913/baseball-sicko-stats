@@ -195,6 +195,22 @@ function statcastColumns(kind: PlayerKind): Column[] {
       format: (r) => pct(r.fbRate), value: (r) => r.fbRate,
     },
     {
+      key: 'pullAirRate', label: 'PulAir%',
+      // Phrase-shaped like `Hard-hit rate — 95+ mph` and `Sweet-spot rate —
+      // batted balls at 8-32°` rather than a sentence, so it needs no `pick`:
+      // the filter builder's select names every column by its `title`, and the
+      // one column that carries a short `pick` (Ros%) does so because its title
+      // is a sentence explaining which leagues it counts.
+      title: `Pull air rate — batted balls${allowed} that are pulled and in the air`,
+      format: (r) => pct(r.pullAirRate), value: (r) => r.pullAirRate,
+      // A **grade** rather than a profile, which is why it declares a direction
+      // where the three columns above it don't. GB/LD/FB say what kind of hitter
+      // he is and neither end is the good one; pulled air contact is the shape
+      // home runs come out of, so a batter wants more of it and a pitcher wants
+      // to allow less — the same way round as Brl% and HH% beside it.
+      ascFirst: p,
+    },
+    {
       key: 'whiffRate', label: 'Whiff%', title: 'Whiffs per swing',
       // The one metric whose good end flips: a pitcher wants swings and misses,
       // a batter wants not to be the one missing.

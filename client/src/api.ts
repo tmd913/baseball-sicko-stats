@@ -5,6 +5,7 @@ import type {
   EspnStatus,
   PitcherGameLog,
   NextGameInfo,
+  PlayerNews,
   SeasonArsenal,
   PlayerKind,
   PitcherSeasonStats,
@@ -430,6 +431,20 @@ export const api = {
    */
   async nextGame(playerId: number, start: boolean): Promise<NextGameInfo> {
     return request(`/api/players/${playerId}/next-game${start ? '?start=1' : ''}`);
+  },
+  /**
+   * His latest news — the News tab, and the section that previews it on the
+   * Overview. One read serves both, which is why it is hung on `PlayerDetails`
+   * rather than fetched inside either surface: the same rule the game log
+   * follows for its own preview, and the same guarantee — the two can never
+   * show different items.
+   *
+   * No `kind`: news is a fact about a *person*, so a two-way player's bat and
+   * his arm have one list between them, where his day, his log and his boards
+   * are two of each.
+   */
+  async playerNews(playerId: number): Promise<PlayerNews> {
+    return request(`/api/players/${playerId}/news`);
   },
   // Every game of the player's season, newest first — the Game Log tab.
   async gameLog(playerId: number): Promise<{ kind: 'batter'; games: BatterGameLog[] }> {

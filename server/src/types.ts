@@ -161,6 +161,46 @@ export interface NextGameInfo {
 }
 
 /**
+ * One thing that has been reported or recorded about a player, for the player
+ * page's **News** tab and the section that previews it.
+ *
+ * The two sources are genuinely different kinds of fact and the field says
+ * which, because a section labelled News that quietly mixes them would be
+ * lying about half its rows:
+ *
+ * - **`mlb`** — an official transaction. It has no link and no summary, because
+ *   MLB publishes neither: the whole of it is the one sentence in `headline`
+ *   ("Los Angeles Dodgers placed LHP Blake Snell on the 15-day injured list"),
+ *   and `kind` is MLB's own `typeDesc` ("Status Change", "Trade", "Assigned").
+ * - **`espn`** — a written article, with a link that opens it, a standfirst in
+ *   `summary` and ESPN's own `type` in `kind` ("HeadlineNews", "Recap").
+ *
+ * `date` is an **ISO instant for an article and a bare `YYYY-MM-DD` for a
+ * transaction**, which is not sloppiness but the resolution each upstream
+ * actually publishes; the client formats on the length and the sort compares on
+ * the day the two share (see `news.ts::cmpDate`).
+ */
+export interface NewsItem {
+  /** Stable across re-reads — the upstream's own id, prefixed by its source so
+   *  an MLB transaction and an ESPN article can never collide on one key. */
+  id: string;
+  source: 'mlb' | 'espn';
+  date: string;
+  headline: string;
+  summary: string | null;
+  /** Absent on a transaction, which is the whole reason a row's press is
+   *  conditional rather than universal. */
+  url: string | null;
+  kind: string | null;
+}
+
+/** Newest first, already narrowed to one player. Empty is a real answer and the
+ *  client says so in words rather than drawing an empty box. */
+export interface PlayerNews {
+  items: NewsItem[];
+}
+
+/**
  * What a base-running event was. The vocabulary is MLB's own runner
  * `details.eventType` collapsed to the distinctions worth a badge — measured
  * against 111 games, which is also what settled what is *not* here (see
@@ -1002,6 +1042,13 @@ export interface ResearchRow {
   gbRate: number | null;
   ldRate: number | null;
   fbRate: number | null;
+  // Batted balls that were both **pulled and in the air** — the shape of
+  // contact home runs come out of, and a share of the same balls-in-play
+  // denominator the three above use. Off Savant's batted-ball leaderboard
+  // rather than the custom one, which publishes the column and leaves it
+  // empty; **null on every window**, that board taking a year alone (see
+  // `research.ts`).
+  pullAirRate: number | null; // percent
   // Plate discipline. `chaseRate` is swings at pitches out of the zone;
   // `firstPitchStrikeRate` is 0-0 counts that went to strike one — read as
   // "how often he falls behind" for a batter and "gets ahead" for a pitcher.
