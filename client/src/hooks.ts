@@ -511,6 +511,55 @@ export function useOverlayFocus(
 }
 
 /**
+ * How long a dismissal keeps waiting for the click it expects, when nothing
+ * else has happened to say the gesture is over. A backstop rather than a
+ * timing rule: a press that produces a click produces it in the same gesture,
+ * and the *next* press disarms the guard regardless — see `swallowNextClick`.
+ */
+const CLICK_GRACE_MS = 700;
+
+/**
+ * Spend the click the gesture now in flight is still going to produce.
+ *
+ * `useDismissable` closes a popover on `pointerdown`, and a press has a second
+ * half: `click` follows on the way up and lands on whatever is under the
+ * pointer, which for a popover is a control that was visible and unobstructed
+ * the whole time. So the dismissal alone is not the whole of what one press
+ * did — measured, a press on the `Research` tab behind the open settings
+ * popover dismissed it *and* changed the view.
+ *
+ * **Capture on `window`, which is what makes it reach everything.** React
+ * attaches its own listeners to the root container, so a capture listener here
+ * runs first and `stopPropagation` keeps the event from ever descending to
+ * them; `preventDefault` is the other half, for the default actions no listener
+ * is involved in — following a link above all.
+ *
+ * **It disarms three ways, and the three are not redundant.** The click it was
+ * armed for takes it (the ordinary path); the *next* `pointerdown` takes it,
+ * so a gesture that never produced a click — a drag, a scroll, a finger lifted
+ * off the window — cannot leave a real press to be eaten a moment later; and a
+ * timer takes it if neither ever comes. Note the `pointerdown` listener cannot
+ * catch the press that armed it: that press is at `window` in the *bubble*
+ * phase when this runs, and the capture phase at `window` is already behind it.
+ */
+function swallowNextClick() {
+  let timer = 0;
+  const disarm = () => {
+    window.removeEventListener('click', kill, true);
+    window.removeEventListener('pointerdown', disarm, true);
+    window.clearTimeout(timer);
+  };
+  const kill = (e: MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    disarm();
+  };
+  window.addEventListener('click', kill, true);
+  window.addEventListener('pointerdown', disarm, true);
+  timer = window.setTimeout(disarm, CLICK_GRACE_MS);
+}
+
+/**
  * Close a popover on a press outside it or on Escape.
  *
  * The header has two of these — the settings gear and the fantasy button beside
@@ -518,6 +567,26 @@ export function useOverlayFocus(
  * or they read as three different kinds of control. `pointerdown` rather than
  * `click`, so a press that starts outside dismisses on the way down instead of
  * waiting for a mouse button that may come up somewhere else entirely.
+ *
+ * **And the press that dismisses does only that** (`swallowNextClick`), which
+ * is the popover's half of the fault `Modal`'s backdrop was fixed for: one
+ * press was doing two things, and the second of them was whatever happened to
+ * be under the finger. Measured at 1200×900 with the settings popover open, a
+ * single press on the `Research` tab behind it dismissed the popover **and
+ * switched the whole app to the research board**. It is not the modal's
+ * mechanism, and the difference is worth keeping straight. There the click
+ * reached the page because the backdrop was *torn out* mid-gesture, so holding
+ * that backdrop to the click was the whole fix and it was touch-only. Here
+ * there is no backdrop to hold: the thing under the finger was never covered,
+ * so the down and up targets are one element and the click lands on it under
+ * every pointer there is. What has to go is the click itself.
+ *
+ * The reason it *should* go is that the popover was in the reader's way. A
+ * press aimed past an open panel is aimed at getting rid of it; every other
+ * dismissable surface in the app spends that press on the dismissal, and a
+ * control that fires as a side effect of tidying up is one the reader never
+ * chose. The cost is that a control behind an open popover takes two presses,
+ * which is what a first press dismissing means and what every platform does.
  *
  * **Escape goes through `answersEscape` and is bound in the capture phase**, and
  * both halves were forced by the third caller: that popover opens **inside**
@@ -550,7 +619,10 @@ export function useDismissable(
   useEffect(() => {
     if (!open) return;
     const onDown = (e: PointerEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) close();
+      if (!ref.current || ref.current.contains(e.target as Node)) return;
+      close();
+      // This gesture has been spent on the dismissal — see the note above.
+      swallowNextClick();
     };
     const onKey = (e: KeyboardEvent) => {
       if (answersEscape(e, ref.current)) close();

@@ -2884,8 +2884,12 @@ export default function App() {
           </div>
           {/* Last of the three squares, after the two that open something. It
               is the only one that *does* something on the press, so it reads
-              last — and being outside `.fantasy-menu` it can't be caught by
-              that popover's outside-click dismissal. See `refreshButton`. */}
+              last. Being outside `.fantasy-menu` puts it outside that popover's
+              own subtree, so a press here with the popover open dismisses it —
+              and, since `useDismissable` spends that press on the dismissal,
+              dismisses it and nothing else. Refreshing then takes a second
+              press, which is what a first press dismissing means everywhere
+              else in the app. See `refreshButton`. */}
           {refreshButton}
         </div>
         {/* The icon cluster, in the header rather than over the list: these
