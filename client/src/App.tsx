@@ -965,6 +965,43 @@ export default function App() {
     return new Set(roster.map(playerKey));
   }, [roster, fantasyTeam]);
 
+  /**
+   * Who in the league is holding a player **you can't have** — MLB id to the
+   * name of the fantasy team that has him, or null with no league connected,
+   * which is what keeps the lock off every name in the app for a user with no
+   * ownership to read.
+   *
+   * This is `Other Rosters` as a *map* rather than as a set: the include button
+   * names a set to draw, where the lock makes a claim about one player, and a
+   * claim wants the owner's name in it — "somebody else has him" is the fact and
+   * "who" is the very next question. The names cost nothing, `EspnOwnership`
+   * carrying the league's teams beside the map of who holds whom.
+   *
+   * **Your own team is excluded here rather than at the draw site**, and that is
+   * the one place this deliberately parts from `boardRows`' partition. That
+   * partition approximates "yours" as `rosterKeys`, which is exact in fantasy
+   * mode and is the *saved* list in saved-roster mode — so a user who reads the
+   * saved roster with a league connected (the ordinary way to have one, since
+   * the board's free agents are the reason to connect at all) would have had a
+   * lock drawn on every one of his own ESPN players, the mark stating outright
+   * that somebody else held a man he holds himself. A set that is a little wide
+   * costs a row on a board; a label that is wrong costs the mark its meaning. So
+   * `espnTeamId` — the team the user picked, falling back to the one his SWID
+   * identified — is taken out first, and the draw sites then apply the roster
+   * test on top of it.
+   */
+  const ownedElsewhere = useMemo(() => {
+    if (!espnConnected || !ownership) return null;
+    const mine = espnTeamId ?? ownership.myTeamId;
+    const names = new Map(ownership.teams.map((t) => [t.id, t.name]));
+    const map = new Map<number, string>();
+    for (const [id, teamId] of Object.entries(ownership.owned)) {
+      if (teamId === mine) continue;
+      map.set(Number(id), names.get(teamId) ?? `Team ${teamId}`);
+    }
+    return map;
+  }, [espnConnected, ownership, espnTeamId]);
+
   /** ESPN's global rostered percentage by MLB id, or null with no league —
    *  which is also what turns the board's `Ros%` column on and off. */
   const rosterPct = useMemo(() => {
@@ -3111,6 +3148,7 @@ export default function App() {
           hasEligibility={eligibility !== null}
           trendWindows={rosterTrend}
           ownedIds={ownedIds}
+          ownedElsewhere={ownedElsewhere}
           espnConnected={espnConnected}
           espnError={espnError}
           onConnectEspn={openEspnSettings}
@@ -3223,6 +3261,7 @@ export default function App() {
           position={detailsPlayer.position}
           isPitcher={detailsPlayer.kind === 'pitcher'}
           isOnRoster={detailsRostered}
+          ownedBy={ownedElsewhere?.get(detailsPlayer.id) ?? null}
           rosterEditable={!usingFantasy}
           isWatchlisted={watchlistKeys.has(`${detailsPlayer.kind}-${detailsPlayer.id}`)}
           onWatchlistToggle={(on) =>

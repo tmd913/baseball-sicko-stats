@@ -18,6 +18,7 @@ import type { SplitKey } from './Arsenal';
 import { RemoveButton } from './RemoveButton';
 import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
 import { BaseballMark } from './BaseballMark';
+import { LockMark } from './LockMark';
 import { RollingXwoba } from './RollingXwoba';
 import { GameLog } from './GameLog';
 import { LoadingBlock } from './Loading';
@@ -565,6 +566,7 @@ export function PlayerDetails({
   position,
   isPitcher = false,
   isOnRoster,
+  ownedBy,
   rosterEditable = true,
   isWatchlisted,
   onWatchlistToggle,
@@ -584,6 +586,12 @@ export function PlayerDetails({
    *  research board's `My Roster` button selects on, so the baseball beside a
    *  row there and the one in this header always mean the same thing. */
   isOnRoster: boolean;
+  /** The fantasy team holding him, when it is somebody **else's** in the
+   *  connected league — which is what draws the padlock beside his name. Null
+   *  when nobody else holds him, and null with no league connected, since
+   *  without one there is no ownership to read and the mark is a claim rather
+   *  than a decoration. */
+  ownedBy?: string | null;
   /** Whether that roster is the app's own to change. False in fantasy mode,
    *  where ESPN owns the list: the add button and the Remove beside the badge
    *  both go, and the badge stays as the plain statement it is. */
@@ -993,6 +1001,23 @@ export function PlayerDetails({
                 {/* ESPN's eligibility where there is a league to read it from,
                     MLB's listed position otherwise — see `posChip`. */}
                 {posChip}
+                {/* The padlock: somebody else in the league already has him.
+                    It sits on the **name line** rather than out in the control
+                    cluster on the right, for the reason the Rostered line under
+                    it does — that cluster is things you *do* to him, where this
+                    is a fact *about* him, like the position chip it follows.
+
+                    It is the glyph alone, where the `Watch` button beside it
+                    keeps its word: that one is a verb naming what a press does,
+                    and this is a label whose words ("on another manager's team
+                    in your ESPN league") are longer than an `<h1>` can spare and
+                    are exactly what the tooltip already says.
+
+                    Suppressed when he is on the roster in view — the badge
+                    below is the answer then, and the two would be one question
+                    answered twice. In fantasy mode that case cannot even arise,
+                    the user's own team being excluded upstream. */}
+                {!isOnRoster && ownedBy && <LockMark name={name} team={ownedBy} size={15} />}
               </h1>
               {/* Under the name rather than out beside the watchlist button: it
                   is a fact *about the player*, like the position chip above it,

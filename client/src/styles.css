@@ -27,6 +27,28 @@
   --live-purple: #c084fc;
   --ball: #475569;
 
+  /* The four live-role grounds — at bat, on deck, on base, on the mound — as
+     tokens rather than as four `color-mix()` calls written out where they are
+     used. Two things draw them now and they must agree exactly: the summary
+     table's row tint, and the swatches in the legend under that table, whose
+     whole job is to say "this shade means this". A legend mixing its own
+     approximation of a row's colour is the one way a legend can lie.
+
+     The mix is against `--bg` rather than an alpha, because these back the
+     table's sticky cells and have to be opaque; the percentages are the ones
+     the row tints have carried since they were written (22 for at bat, 20 for
+     the rest — the red needs the extra two to read as the same weight).
+
+     On the mound shares the on-base purple, which is the app's own convention
+     everywhere else (`.live-role`, `.live-entry`, `.feed-photo-link` each fold
+     the two into one rule): a pitcher in the game and a runner on base are both
+     "this man is live right now". They never share a table — the kind tabs show
+     one at a time — so the legend never draws the two swatches together. */
+  --role-at-bat-bg: color-mix(in srgb, var(--strikeout) 22%, var(--bg));
+  --role-on-deck-bg: color-mix(in srgb, var(--hr) 20%, var(--bg));
+  --role-on-base-bg: color-mix(in srgb, var(--live-purple) 20%, var(--bg));
+  --role-pitching-bg: color-mix(in srgb, var(--live-purple) 20%, var(--bg));
+
   /* The soft edge that marks where a horizontally-pinned column ends and the
      scrolled ones pass underneath. One definition because four rules draw it —
      the summary table's headshot column, the research board's name column, both
@@ -4880,17 +4902,25 @@ body {
    bar, but no more. align-items:flex-start keeps the scroll box from being
    stretched to that full height, so with only a few rows it shrinks to its
    content instead of leaving dead space below the total row. */
+/* A **column**, so the legend can sit under the pane; it was a row with
+   `align-items: flex-start`, which is how it kept a short table from being
+   stretched to the full height of the column. That job moves onto the pane
+   itself as `flex: 0 1 auto` — basis the content's own height, no grow, shrink
+   only when there is more table than screen — which is the identical pair the
+   expanded box has carried since it was written, and it says the same thing on
+   the axis that is now the main one. `align-items: stretch` is what the pane's
+   old `flex: 1` was doing for it across the row, i.e. taking the full width. */
 .summary-view {
   flex: 1;
   min-height: 0;
   display: flex;
-  align-items: flex-start;
+  flex-direction: column;
+  align-items: stretch;
 }
 .summary-scroll {
-  flex: 1;
-  min-height: 0;
   /* Grow to content, but cap at the available height and scroll past that. */
-  max-height: 100%;
+  flex: 0 1 auto;
+  min-height: 0;
   overflow: auto;
   /* The table ends where its content does, on both axes: reaching the last row
      or the last column must not hand the scroll on to whatever is behind it —
@@ -5169,23 +5199,111 @@ body {
   --cell-bg: var(--panel-2);
 }
 /* A live player's whole row is tinted by their role (at bat / on deck / on
-   base) — the same colours as the headshot ring, blended into an opaque shade
-   so it also backs the sticky cells and overrides the zebra stripe. Defined
-   after the stripe rules so it wins the same-specificity tie. */
+   base / on the mound) — the same colours as the headshot ring, blended into an
+   opaque shade so it also backs the sticky cells and overrides the zebra
+   stripe. Defined after the stripe rules so it wins the same-specificity tie.
+   The four shades are `--role-*-bg` on `:root`, because the legend below the
+   table draws the same four and the two must not be able to drift.
+
+   **`role-pitching` was missing from this list and from the ring below it**,
+   and had been since the pitcher side was written: `tr.role-pitching` is set on
+   the pitcher tab exactly as the other three are on the batter tab, and nothing
+   here answered it — so a watched pitcher standing on the mound was the one
+   live role the summary table drew nothing for. It went unnoticed because the
+   tab most people read is the batter one and because nothing on the page named
+   the vocabulary; adding the legend is what made the gap a visible claim rather
+   than a quiet absence, since a legend naming a colour the table never paints
+   is worse than no legend at all. It is folded onto the on-base rules rather
+   than given its own, which is what the rest of the app already does with these
+   two (`.live-role`, `.live-entry`, `.feed-photo-link`). */
 .summary-table tbody tr.role-at-bat td,
 .summary-table tbody tr.role-at-bat .sum-img-col,
 .summary-table tbody tr.role-at-bat .sum-name-col {
-  --cell-bg: color-mix(in srgb, var(--strikeout) 22%, var(--bg));
+  --cell-bg: var(--role-at-bat-bg);
 }
 .summary-table tbody tr.role-on-deck td,
 .summary-table tbody tr.role-on-deck .sum-img-col,
 .summary-table tbody tr.role-on-deck .sum-name-col {
-  --cell-bg: color-mix(in srgb, var(--hr) 20%, var(--bg));
+  --cell-bg: var(--role-on-deck-bg);
 }
 .summary-table tbody tr.role-on-base td,
 .summary-table tbody tr.role-on-base .sum-img-col,
 .summary-table tbody tr.role-on-base .sum-name-col {
-  --cell-bg: color-mix(in srgb, var(--live-purple) 20%, var(--bg));
+  --cell-bg: var(--role-on-base-bg);
+}
+.summary-table tbody tr.role-pitching td,
+.summary-table tbody tr.role-pitching .sum-img-col,
+.summary-table tbody tr.role-pitching .sum-name-col {
+  --cell-bg: var(--role-pitching-bg);
+}
+
+/* The key to those four shades, under the table rather than over it: a caption
+   is read after the thing it captions, and putting it above would have cost the
+   pane a row of players to explain a colour nobody had seen yet.
+
+   **It is also the room at the bottom of this view**, and that is the whole of
+   how it squares with the passage above that took this column's vertical
+   margins away. What went then was a *pair of empty 14s* — `.app`'s own
+   `padding-bottom` and the chrome's `margin-bottom` — and the argument was
+   precisely that they were "a strip of background showing through where a
+   reader expects rows". Neither rule comes back and neither needs to: the room
+   this row occupies is taken off the pane by the flex column above, so the
+   table still runs from the bar to whatever is under it, and what is under it is
+   now content rather than background. When nothing is live there is no legend,
+   the row is not drawn, and the table meets the bottom of the window exactly as
+   that passage measured it — the old reasoning holding in exactly the case it
+   was written about.
+
+   Its own 12px below is what the *legend* needs to sit off the edge of the
+   screen, which is a different claim from a table needing it: a line of text
+   flush against the bottom of a window reads as clipped, where a bordered pane
+   whose last rule lands there reads as the edge. */
+.summary-legend {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  padding: 10px 0 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.summary-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+/* The fill is the row's own ground, read from the same token the row reads, so
+   the swatch and the row it explains are the same colour by construction. The
+   **border** is the role's pure hue — the very colour the headshot ring takes —
+   and it is there because the fill alone cannot carry this: a 22% mix over the
+   page reads across a 58px row and is close to invisible in a 14px square. So
+   the square states the ground and the outline names the family, which together
+   are exactly what the row shows (tinted cells, ringed headshot). */
+.summary-legend-swatch {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+}
+.summary-legend-swatch.role-at-bat {
+  background: var(--role-at-bat-bg);
+  border-color: var(--strikeout);
+}
+.summary-legend-swatch.role-on-deck {
+  background: var(--role-on-deck-bg);
+  border-color: var(--hr);
+}
+.summary-legend-swatch.role-on-base {
+  background: var(--role-on-base-bg);
+  border-color: var(--live-purple);
+}
+.summary-legend-swatch.role-pitching {
+  background: var(--role-pitching-bg);
+  border-color: var(--live-purple);
 }
 .sum-photo-wrap {
   position: relative;
@@ -5396,7 +5514,8 @@ body {
   border-color: var(--hr);
   box-shadow: 0 0 0 2px var(--hr);
 }
-.sum-photo.role-on-base {
+.sum-photo.role-on-base,
+.sum-photo.role-pitching {
   border-color: var(--live-purple);
   box-shadow: 0 0 0 2px var(--live-purple);
 }
@@ -6392,7 +6511,8 @@ body {
    reduced to the glyph, since a table row has no space for the words. Sits
    after the name and never pushes it: the name column is already the width it
    is. */
-.research-watched {
+.research-watched,
+.name-lock {
   display: inline-flex;
   align-items: center;
   margin-left: 6px;
@@ -6407,6 +6527,23 @@ body {
   vertical-align: middle;
   position: relative;
   top: -0.09em;
+}
+/* The **lock** is that same mark's opposite number — somebody else in the
+   league is holding him — and is folded onto the rule above rather than given
+   its own copy of the geometry, on the rule this stylesheet applies everywhere:
+   two marks that merely resemble each other are two marks that will one day
+   differ, and these two sit in the same slot on the same line and must never
+   part company by a pixel. One thing is deliberately its own, and it is the
+   only thing that should be: the **tone**. The baseball says "this one is
+   yours", which is the loudest thing a row on a board read for pickups can say;
+   the lock says "you can't have this one", which is the reader ruling a row
+   *out*, and a mark that shouted about unavailability would leave the board's
+   own answer — the unmarked free agents — the quietest thing on it.
+
+   It is unscoped, like `.row-id*` beside it, because it is drawn in two places
+   the same way: a research row's name line and the player page's own `<h1>`. */
+.name-lock {
+  color: var(--muted);
 }
 
 /* A link that lives inside a sentence in an empty state, rather than a control

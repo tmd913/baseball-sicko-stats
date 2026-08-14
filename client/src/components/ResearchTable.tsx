@@ -1,6 +1,7 @@
 import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { BaseballMark } from './BaseballMark';
+import { LockMark } from './LockMark';
 import { LoadingBlock, LoadingLine } from './Loading';
 import { ExpandButton } from './ExpandButton';
 import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
@@ -1127,6 +1128,14 @@ interface Props {
    *  while there is no league connected and nothing has been read. The free
    *  agents are the complement of this within the board — see `boardRows`. */
   ownedIds: Set<number> | null;
+  /** MLB id → the name of the fantasy team holding him, for the players held by
+   *  somebody **other than this user** — the same set `Other Rosters` selects,
+   *  minus anyone on the user's own ESPN team. Null with no league connected,
+   *  which is what keeps the lock off the board entirely. Built in App off the
+   *  same `/api/espn/ownership` payload `ownedIds` comes from, so it costs no
+   *  request of its own; see there for why the user's own team is excluded
+   *  upstream rather than at the draw site. */
+  ownedElsewhere: Map<number, string> | null;
   /** Whether a league is connected at all, which is what decides if the Free
    *  Agents pill is offered. Separate from `ownedIds` being null, since a
    *  connected league whose read is still in flight is a third state. */
@@ -1684,6 +1693,7 @@ export function ResearchTable({
   hasEligibility,
   trendWindows,
   ownedIds,
+  ownedElsewhere,
   espnConnected,
   espnError,
   onConnectEspn,
@@ -2242,6 +2252,16 @@ export function ResearchTable({
    *  a free agent on a board that is otherwise your roster, and then the mark
    *  distinguishes the two again rather than marking everything. */
   const onlyMine = include.mine && !include.others && !include.fa && !includeWatchlist;
+
+  /** The lock's mirror of the rule above: with **only** `Other Rosters` on,
+   *  every row on the board is by definition held by somebody else, so a
+   *  padlock on each of them marks nothing — it is the state of the board, not
+   *  a fact distinguishing one row from the next, and it is already said by the
+   *  lit button and by the badge in the expanded chrome. Any other combination
+   *  puts at least one unlocked row beside them and the mark does its job.
+   *  (The watchlist counts here as it does in `onlyMine`: unioned in, it can put
+   *  a free agent on a board that is otherwise other people's rosters.) */
+  const onlyOthers = include.others && !include.mine && !include.fa && !includeWatchlist;
 
   /**
    * Why the board is empty, and the way out.
@@ -2997,6 +3017,17 @@ export function ResearchTable({
                           <BaseballMark size={13} width={2.4} />
                           <span className="sr-only">On your roster</span>
                         </span>
+                      )}
+                      {/* And the **lock**, which is the baseball's opposite
+                          number: not yours, and not available to become yours.
+                          It is drawn on the same terms — only where a league
+                          says so, only where it distinguishes this row from the
+                          ones around it (`onlyOthers`), and never on a row
+                          already wearing the baseball, since the two answer the
+                          same question and a name carrying both would invite a
+                          reader to look for a difference that isn't there. */}
+                      {!onlyOthers && !rosterKeys.has(key) && ownedElsewhere?.has(r.id) && (
+                        <LockMark name={r.name} team={ownedElsewhere.get(r.id) as string} />
                       )}
                       <WatchStar
                         on={watchlistKeys.has(key)}
