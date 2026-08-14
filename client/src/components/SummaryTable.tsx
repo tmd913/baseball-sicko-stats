@@ -436,36 +436,50 @@ function PitcherTable({
 /**
  * The key to the row tints, drawn under the table.
  *
- * **It is drawn only when something on screen is actually live**, and that is
- * the same rule the app applies to every other mark of its kind: the research
- * board suppresses its roster baseball when every row would carry one, the kind
- * tabs render only when both kinds are watched, the `Starters` toggle is not
- * offered over a range that cannot contain a lineup. A key to colours nothing
- * on the page is wearing is chrome explaining a thing that isn't there — and on
- * this view it is not free, since the column is a fixed height and every pixel
- * under the pane is a row of players off the bottom of it. On a quiet Tuesday
- * morning it would be a row of words about nothing, bought with a row of rows.
+ * **It is always drawn, and it always names all four rules.** Both halves of
+ * that are a reversal, and both reversals are the same correction: this is a
+ * *key to the app's colour vocabulary*, not a report on what happens to be live
+ * this half-inning.
  *
- * **What it draws is the whole vocabulary of the kind on screen, not only the
- * roles currently held.** The alternative — an entry per role actually present
- * — is more literal and reads worse: at bat, on deck and on base turn over
- * every half-inning, and the 20-second live poll would rewrite the key under a
- * reader in the middle of using it, dropping "On deck" at the exact moment the
- * on-deck hitter stepped in. A key has to hold still to be a key. So the gate is
- * "is any of this in use" and the contents are the fixed set the tab can show:
- * the three batting roles on a batter table, the one pitching role on a pitcher
- * one. Neither can appear on the other's tab, which is also why the on-base and
- * on-mound swatches — the same purple, by the app's own convention — are never
- * drawn side by side.
+ * What stood here argued the opposite, and the argument reads well until you
+ * meet it on a page. It was gated on `anyLive` — something on screen actually
+ * at bat, on deck, on base or on the mound — by analogy with the marks the app
+ * suppresses when they would say nothing: the research board's roster baseball
+ * when every row carries one, the kind tabs when only one kind is watched. The
+ * analogy does not hold. Those are marks *on* the data, and a mark on every row
+ * distinguishes nothing; this is a **legend**, and a legend's whole job is to be
+ * there before you need it. The effect of the gate was that the one time a
+ * reader goes looking for it — a quiet morning, a tinted row they have not seen
+ * before, "what does the purple mean" — is precisely the time it was not on the
+ * page. And it made the key flicker: it appeared at first pitch and vanished at
+ * the last out, on a table the reader had not touched.
+ *
+ * The contents were per-kind for a related reason and cost the same thing: the
+ * batter tab drew the three batting roles and the pitcher tab the one pitching
+ * role, so **"On mound" could not be read from the Batters tab at all** — you
+ * had to already know the purple meant something in order to go and find out
+ * what. A vocabulary is not per-page. All four are drawn on both tabs, which
+ * also puts the on-base and on-mound swatches side by side for the first time:
+ * they are the same purple, deliberately and by the app's own convention (a man
+ * on base and a man on the mound are both *in the game right now*), and a key
+ * that shows them as one colour under two labels is stating that convention
+ * rather than hiding it.
+ *
+ * What the gate was really protecting is real and is kept: the row costs the
+ * pane its height, this view being a fixed-height column where every pixel
+ * under the table is a row of players off the bottom of it. That is a fixed
+ * ~36px now rather than a row that comes and goes, which is the cheaper thing
+ * to lay out and by far the easier thing to read.
  *
  * The labels are `liveRoleLabel`'s, the same strings the live tag on a feed row
- * and a player card carry, so the legend and the thing it explains cannot come
- * to call one role by two names.
+ * and a player card carry, and the swatches read the same `--role-*` tokens the
+ * row tints do, so the key and the thing it explains cannot come to call one
+ * role by two names or paint it in two colours.
  */
-function RoleLegend({ roles }: { roles: LiveRole[] }) {
+function RoleLegend() {
   return (
     <div className="summary-legend">
-      {roles.map((role) => (
+      {ALL_ROLES.map((role) => (
         <span key={role} className="summary-legend-item">
           <span className={`summary-legend-swatch role-${role}`} aria-hidden="true" />
           {liveRoleLabel(role)}
@@ -475,8 +489,9 @@ function RoleLegend({ roles }: { roles: LiveRole[] }) {
   );
 }
 
-const BATTER_ROLES: LiveRole[] = ['at-bat', 'on-deck', 'on-base'];
-const PITCHER_ROLES: LiveRole[] = ['pitching'];
+/** Every rule the row tints can express, in the order a half-inning runs
+ *  through them — at the plate, next up, aboard, and the man throwing. */
+const ALL_ROLES: LiveRole[] = ['at-bat', 'on-deck', 'on-base', 'pitching'];
 
 /**
  * A full-page stat table over the date range — batters and pitchers in separate
@@ -502,16 +517,6 @@ export function SummaryTable({
   const pitchers = reports.filter((r) => r.kind === 'pitcher');
   const { isFull, toggle, ref: fullRef } = useFullPage<HTMLDivElement>();
   const expand = { isFull, toggle };
-  // The legend's gate and its contents, and they are deliberately two different
-  // questions — see `RoleLegend`. The gate reads the rows (is anything live at
-  // all); the contents read which tables are being drawn, so the key names the
-  // vocabulary of the tab rather than the roles that happen to be held this
-  // half-inning.
-  const anyLive = reports.some((r) => liveRole(r) !== null);
-  const legendRoles = [
-    ...(batters.length > 0 ? BATTER_ROLES : []),
-    ...(pitchers.length > 0 ? PITCHER_ROLES : []),
-  ];
   return (
     /* Full page is a class on this box, not the Fullscreen API — see
        `hooks.ts::useFullPage`. The button that sets it is down in the table's
@@ -536,7 +541,9 @@ export function SummaryTable({
           )}
         </div>
       </div>
-      {anyLive && legendRoles.length > 0 && <RoleLegend roles={legendRoles} />}
+      {/* The key to the row tints — always, and the whole vocabulary, however
+          quiet the day is. See `RoleLegend`. */}
+      <RoleLegend />
     </div>
   );
 }

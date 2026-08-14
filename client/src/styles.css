@@ -3454,29 +3454,40 @@ body {
 .details-error {
   color: var(--strikeout);
 }
-/* The details view's **Overview** tab: this player's day, drawn from the feed's
-   own items. It takes `--card-column` rather than the 860px the tabs beside it
-   use, because what is in it is exactly what the feed holds — an at-bat card, a
-   clip, an outing's innings — and those were sized against that number (a
-   header with a name at one end and a line of stats at the other, with nothing
-   in the middle to fill). A day read here and the same day read on the stream
-   is then the same reading at the same width.
+/* The details view's **Overview** tab: a season strip, this player's day drawn
+   from the feed's own items, and the last five games off the Game Log's own
+   table.
 
-   `container-type` for the reason the arsenal box carries one: `.player-card`
-   and `.faced-batter` size themselves off their container, and inside an
-   overlay that is otherwise a plain block they would read the window instead. */
+   **The tab takes the tab's width and the reading column moves inside it**,
+   which is a reversal of what stood here. The box was capped at `--card-column`
+   and centred, on the sound argument that what is in it is exactly what the
+   feed holds — an at-bat card, a clip, an outing's innings — and those were
+   sized against that number. What that argument missed is that two of the three
+   blocks are not cards at all but **stat tables**, and a stat table is the one
+   thing in this app that is scanned rather than read: it takes the window,
+   which is why the Game Log tab beside it dropped its own cap for exactly this
+   reason. Measured at 1200px before the change, the Overview column was 800px
+   wide with 200px of empty overlay either side of it and the five-game table
+   1,174.92px inside it — a table scrolling sideways past K, RBI and the rest
+   with 368px of nothing to its right.
+
+   So the cap goes to `.player-day` below, where it was always about, and the
+   tables span the tab and bleed back out through the overlay's own 16px the way
+   the three wide tables bleed through `.app`'s 22 — `--table-bleed` is
+   inherited from `.details-view` now rather than being zeroed here, which is
+   the token doing what it was written to do rather than being opted out of. */
 .details-overview {
+  margin: 18px 0 0;
+}
+/* The day keeps the feed's reading column, and carries the container with it.
+   The cards inside size themselves off their container (`.player-card` and
+   `.faced-batter` both do), so containment belongs on the box that *is* the
+   card column rather than on a tab that is now as wide as the window — read off
+   the tab they would take the phone layout at one width and the wide one at the
+   next for reasons nothing on screen could explain. */
+.details-overview .player-day {
   max-width: var(--card-column);
-  margin: 18px auto 0;
   container-type: inline-size;
-  /* **This box gives nothing back**, unlike every other holder of a `.glog-scroll`.
-     `--table-bleed` is declared by whichever container the table sits in, and
-     the number is that container's own side padding — 22px on `.app`, 16 on the
-     overlay, 12 in the full-page box. This one has no padding of its own: it is
-     a centred reading column, and the 16px it inherits belongs to the overlay
-     rather than to it. Left at 16 the Overview's two tables would hang 16px out
-     of a column every other block in the tab lines up with. */
-  --table-bleed: 0px;
 }
 /* The Overview's three blocks — Season, Today, Last 5 games — each a heading
    with a door to the tab that holds it whole. The gap is the `.player-day`
@@ -6895,6 +6906,13 @@ body {
    moment either number moved. */
 .research-table {
   --research-gutter: clamp(5px, 1.6vw, 13px);
+  /* The header's own line, **declared rather than emergent** — see the sort
+     button and `.research-arrow` below, which both read it. 15px is what the
+     12px/800 header resolves to under `line-height: normal` in the face this
+     app actually loads; writing it down is the whole point, since `normal` is a
+     font metric and the header holds a glyph whose font is chosen by fallback
+     rather than by us. */
+  --research-head-line: 15px;
 }
 .research-table th,
 .research-table td {
@@ -7006,6 +7024,18 @@ body {
   border: 0;
   font: inherit;
   letter-spacing: inherit;
+  /* The height half of the reservation the arrow already made in width, and it
+     has to come **after `font: inherit`**, which is a shorthand and resets
+     `line-height` along with everything else — written above it the declaration
+     computes back to `normal` and does nothing at all (measured: the button's
+     computed line-height read `normal` with this rule seemingly in force).
+
+     The button's height is `padding + the tallest thing on its line`, and under
+     `normal` that "tallest thing" is whatever font metrics the two children
+     resolve to — the label's face for the label, and for the arrow whichever
+     installed font claims U+25B2. Declared, the line is 15px whatever lands in
+     it, so a header cannot change height by being sorted. */
+  line-height: var(--research-head-line);
   /* Not `inherit`: the shared header rule uppercases everything, which is right
      for AVG and RBI and wrong for every Statcast label — xwOBA, xBA, xERA and
      Brl% are mixed-case stat names, and the app writes them that way
@@ -7031,11 +7061,41 @@ body {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
-/* Reserved whether or not this column is the sorted one, so clicking a header
-   doesn't shove every column to its right along by the width of an arrow. */
+/* ---- The sort mark's box, reserved in **both** axes ----
+   Reserved whether or not this column is the sorted one, so clicking a header
+   doesn't shove every column to its right along by the width of an arrow — and
+   now so that it doesn't move anything up or down either. The two are the same
+   lesson twice, and the second half had been left to luck: the mark is a text
+   glyph in a box sized by its own content, so *both* dimensions of the header
+   were a function of which installed face claims ▲/▼ rather than of anything
+   declared here.
+
+   Measured on the real board at 1200px, the same span rendered in the faces the
+   glyph can plausibly fall back to: 7.08 × 11px in the app's own stack, 7.42 ×
+   9 in Apple Symbols, **9 × 14 in Hiragino Sans**, 8.92 × 10 in the default
+   serif. So a `min-width: 8px` reservation is a floor the glyph can walk over —
+   forced into the CJK face the sorted column went 72.36 → 76.73px wide and the
+   header beside it moved 4.37px right — and the height was never reserved at
+   all: the span is 0px tall unsorted and its own line box tall sorted, so the
+   button's height is `20px + max(label, arrow)`. Today the label's 15px line
+   wins and nothing moves (measured: button 35.00px and its top 208.5 in both
+   states, every width). That is four pixels of accidental slack in a box whose
+   contents we do not choose: at a 13px arrow the button goes to 36 and at 14px
+   to 37, and because a `th` centres its content the sorted header's label then
+   sits 0.5–1px above every unsorted one beside it — the report exactly.
+
+   So the box is fixed rather than floored, in both axes, and a glyph too big
+   for it **overflows visually instead of pushing**: `width`/`height` are the
+   layout, `overflow: visible` (the default, stated here as intent) is what
+   keeps a fallback face's larger triangle from being clipped while still
+   costing the table not one pixel. The width stays exactly the 8px the board
+   has been measured at, so no column moves. */
 .research-arrow {
-  display: inline-block;
-  min-width: 8px;
+  display: block;
+  flex: none;
+  width: 8px;
+  height: var(--research-head-line);
+  line-height: var(--research-head-line);
   font-size: 9px;
 }
 /* ---- Sticky player name, on a wide enough screen ----
