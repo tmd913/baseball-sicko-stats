@@ -39,6 +39,7 @@ import {
 import type { ResearchInclude, ResearchPos, ResearchUi } from './components/ResearchTable';
 import { simulateLiveDay } from './simulate';
 import { PlayerDetails } from './components/PlayerDetails';
+import { toStatsColumnKeys } from './components/PlayerWindowTable';
 import { DateRangePicker, numericRange, tightRange } from './components/DateRangePicker';
 import {
   EligibilityContext,
@@ -438,6 +439,27 @@ export default function App() {
   const [researchCols, setResearchCols] = useState<Partial<Record<PlayerKind, string[]>>>(
     () => (urlColumns ? { [urlColumns.kind]: urlColumns.keys } : {}),
   );
+  /**
+   * The **player page's Stats tab** columns, per kind, and its own entry rather
+   * than a share of the board's above.
+   *
+   * The obvious economy is to have one saved set — the same vocabulary, the
+   * same picker, and a reader who wants xwOBA probably wants it in both places.
+   * What decides against it is that the two tables do not offer the same
+   * columns: the Stats tab cuts `Opp`, `Ros%` and the five trend columns (see
+   * `PlayerWindowTable.tsx`), so a write from the player page would hand the
+   * board a list with those six missing and **silently drop them from a set the
+   * reader never touched** — exactly the hazard `ColumnPicker`'s reorder threads
+   * around inside one table. They are also read for different things: a board is
+   * scanned across six hundred names, a player page down five spans of one man.
+   *
+   * It is held here rather than in `PlayerDetails` because that component is
+   * unmounted every time the overlay closes, which would make the preference
+   * a per-open thing and re-read it on every player. **Not in the URL**: `cols=`
+   * names the board `pos=` selects, and putting a second meaning on it would be
+   * two tables reading one param; the open player-page tab is in no URL either.
+   */
+  const [statsCols, setStatsCols] = useState<Partial<Record<PlayerKind, string[]>>>({});
 
   /**
    * Which sets of players the board includes, and whether the watchlist is on
@@ -550,6 +572,19 @@ export default function App() {
           }
           return next;
         });
+        // The Stats tab's own set. No URL to defend it against — see the state
+        // above — so it is a plain "fill in what hasn't been touched", and it is
+        // narrowed to that table's vocabulary on the way in exactly as the
+        // board's is, which is what makes a `Ros%` in a crossed record harmless.
+        setStatsCols((prev) => {
+          const next = { ...prev };
+          for (const kind of ['batter', 'pitcher'] as const) {
+            if (next[kind]) continue;
+            const saved = toStatsColumnKeys(kind, prefs.statsColumns?.[kind]);
+            if (saved) next[kind] = saved;
+          }
+          return next;
+        });
       })
       // A preference is not worth an error banner over: the board opens on its
       // defaults, which is exactly what a user with nothing saved gets.
@@ -583,6 +618,35 @@ export default function App() {
     },
     [researchKind],
   );
+
+  /**
+   * The Stats tab's write, debounced on the same 600ms and for the same reason
+   * the board's is: turning a group on is one intent and a dozen state changes,
+   * each of which would otherwise be its own read/modify/write against the
+   * user's item. Its own timer, since the two sets are two entries and a shared
+   * one would let a board edit swallow a player-page edit made half a second
+   * later.
+   */
+  const saveStatsColsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (saveStatsColsTimer.current) clearTimeout(saveStatsColsTimer.current);
+  }, []);
+  const setStatsColumns = useCallback((kind: PlayerKind, keys: string[] | null) => {
+    setStatsCols((prev) => {
+      const next = { ...prev };
+      if (keys) next[kind] = keys;
+      else delete next[kind];
+      return next;
+    });
+    if (saveStatsColsTimer.current) clearTimeout(saveStatsColsTimer.current);
+    saveStatsColsTimer.current = setTimeout(() => {
+      api
+        .saveStatsColumns(kind, keys)
+        // A preference is not worth an error banner over: the tab opens on its
+        // defaults, which is what a user with nothing saved already sees.
+        .catch((e: Error) => console.error('saving stats columns failed:', e.message));
+    }, 600);
+  }, []);
 
   // Which slice of the season the board is reading. Shared across both boards
   // like the position and the include set, and for the same reason: "the last
@@ -3255,6 +3319,8 @@ export default function App() {
             })
           }
           onRemove={() => onRemove(detailsPlayer)}
+          statsColumns={statsCols[detailsPlayer.kind] ?? null}
+          onStatsColumnsChange={(keys) => setStatsColumns(detailsPlayer.kind, keys)}
           onClose={() => setDetailsKey(null)}
         />
       )}
