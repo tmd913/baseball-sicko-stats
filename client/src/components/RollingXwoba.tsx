@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { InfoKey } from './InfoKey';
 import { formatRate } from '../lib';
 import type { XwobaSeries } from '../types';
 
@@ -8,9 +9,50 @@ type Win = (typeof WINDOWS)[number];
 // SVG coordinate space; the element scales to the container width via CSS.
 const VBW = 720;
 const VBH = 300;
-const PAD = { top: 16, right: 22, bottom: 30, left: 48 };
-const PLOT_W = VBW - PAD.left - PAD.right;
-const PLOT_H = VBH - PAD.top - PAD.bottom;
+const PAD_TOP = 16;
+
+/**
+ * **The size of a label on this chart is a rendered size, not a viewBox one.**
+ *
+ * Everything in an SVG drawn at `width: 100%` scales with the box it is in, and
+ * a *label* is the one thing on a chart that must not: it is read at whatever
+ * size the screen gives it. This chart lives in the player page's card column,
+ * which is 634px wide on a desktop and 332 on a phone — a 1.9× range — so an
+ * 11-unit label rendered at **9.69px at 1200 and 5.07px at 390**, which is the
+ * report ("too small to read") and is a fact about the phone rather than about
+ * the number. Picking a bigger number cannot fix that: it moves both ends
+ * together and the two ends want different unit counts.
+ *
+ * So the label is declared in **rendered CSS pixels** and the unit count is
+ * derived from the box's measured scale — `--roll-font`, published on the `<svg>`
+ * from a `ResizeObserver` exactly as `useStickyChromeOffset` publishes
+ * `--chrome-h` and `ClipVideo` publishes `--clip-w`. There is no one number to
+ * declare, so it is measured; the stylesheet keeps the rule saying *which* text
+ * is a label and reads the var for its size, with the old 11px as the
+ * pre-measurement fallback.
+ */
+const LABEL_PX = 12;
+
+/**
+ * The plot's own padding follows the label, since the label is what the padding
+ * is *for*: the y labels sit in the left one and the x ticks in the bottom one.
+ * `2.3em` is the widest y label with a little slack — `.200` measures 2.21em in
+ * this face (21.41px of ink at an 11-unit font on a 0.8806 scale), and
+ * `formatRate` always yields four characters at xwOBA's range. Written this way
+ * the padding is right at every width for free, where the 48/30 it replaces was
+ * right at exactly one: at 390 a 26-unit label would have run off the left edge
+ * of its own plot.
+ */
+function padFor(fontU: number) {
+  return {
+    top: PAD_TOP,
+    // Half the last x tick's label hangs into the right pad, so it can never be
+    // narrower than the font itself; 22 was the old flat value and is the floor.
+    right: Math.max(22, fontU),
+    bottom: fontU * 1.4 + 8,
+    left: fontU * 2.3 + 10,
+  };
+}
 
 interface Pt {
   pa: number; // ending plate-appearance number of the window
@@ -70,10 +112,45 @@ function md(date: string): string {
   return m && d ? `${Number(m)}/${Number(d)}` : date;
 }
 
+/**
+ * **The rolling-xwOBA chart, and the whole of the Charts tab.**
+ *
+ * The tab is named for the shape rather than for this one chart: `Charts` is a
+ * place for a chart of the season to live, and the card inside it keeps its own
+ * name (`Rolling xwOBA · 2026`), which is what it *is*. So the strip says which
+ * kind of reading you are on and the card says which reading it is — the same
+ * split the Stats tab makes with the table inside it.
+ */
 export function RollingXwoba({ series, name }: { series: XwobaSeries; name: string }) {
   const [win, setWin] = useState<Win>(() => openingWin(series.pas.length));
   const [hover, setHover] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
+
+  // How many CSS pixels one viewBox unit is drawn at — see `LABEL_PX`. Measured
+  // in a *layout* effect so the first paint already has it, and kept true by a
+  // `ResizeObserver`: the card is 634px inside a desktop overlay and 332 on a
+  // phone, and nothing about the geometry below is honest without it. It cannot
+  // loop — the box is `width: 100%` of a column this value does not touch.
+  //
+  // The box is held in state rather than in a ref because it is **conditional**:
+  // a player short of the window renders a sentence instead of a chart, and a
+  // ref set on a later render would never re-run an effect with an empty
+  // dependency list — the labels would stay at the 11px fallback for the life of
+  // the card. A callback ref makes attaching the node the thing that measures it.
+  const [wrapEl, setWrapEl] = useState<HTMLDivElement | null>(null);
+  const [scale, setScale] = useState(0);
+  useLayoutEffect(() => {
+    if (!wrapEl) return;
+    const read = () => setScale(wrapEl.clientWidth / VBW);
+    read();
+    const ro = new ResizeObserver(read);
+    ro.observe(wrapEl);
+    return () => ro.disconnect();
+  }, [wrapEl]);
+  const fontU = scale > 0 ? LABEL_PX / scale : 11;
+  const PAD = padFor(fontU);
+  const PLOT_W = VBW - PAD.left - PAD.right;
+  const PLOT_H = VBH - PAD.top - PAD.bottom;
 
   // Each window is built the first time it's selected and kept for the life of the
   // series, so opening the tab costs one pass over the season rather than three, and
@@ -139,7 +216,30 @@ export function RollingXwoba({ series, name }: { series: XwobaSeries; name: stri
   return (
     <div className="pct-card">
       <div className="pct-card-head roll-head">
-        <span className="pct-card-title">Rolling xwOBA · {series.season}</span>
+        <span className="roll-title">
+          <span className="pct-card-title">Rolling xwOBA · {series.season}</span>
+          {/* The key to the chart, behind the app's own ⓘ — see `InfoKey`, which
+              carries the whole argument for a popover over a `title`, a modal or
+              an inline reveal. It was a four-line caption under the chart, which
+              is 36px on a desktop and 72 on a phone spent on a paragraph a
+              reader needs exactly once, on a tab whose whole content is one
+              chart. Nothing is left on the card the way the Splits tab leaves
+              its sample-size caveat, and the difference is that this caption
+              held no warning: its one player-specific number is context for
+              reading the line rather than a caveat about it, and the league
+              average beside it is drawn on the chart itself. */}
+          <InfoKey className="roll-key" label="How to read this chart">
+            <p>
+              Each point is his <strong>xwOBA over the previous {win} plate appearances</strong>,
+              plotted against the one it ends on — so the line is the shape of a hot or cold
+              stretch rather than any single night.
+            </p>
+            <p>
+              The dashed line is the MLB league average ({formatRate(series.leagueXwoba)}). This
+              player&rsquo;s season xwOBA is {formatRate(series.seasonXwoba)}.
+            </p>
+          </InfoKey>
+        </span>
         <div className="roll-windows" role="group" aria-label="Rolling window">
           {WINDOWS.map((w) => (
             <button
@@ -164,97 +264,97 @@ export function RollingXwoba({ series, name }: { series: XwobaSeries; name: stri
           season — not enough for a {win}-PA rolling window.
         </div>
       ) : (
-        <>
-          <div className="roll-chart-wrap">
-            <svg
-              ref={svgRef}
-              className="roll-chart"
-              viewBox={`0 0 ${VBW} ${VBH}`}
-              role="img"
-              aria-label={`Rolling ${win}-plate-appearance xwOBA over the ${series.season} season`}
-              onPointerMove={onMove}
-              onPointerLeave={() => setHover(null)}
-            >
-              {/* horizontal gridlines + y labels */}
-              {yLines.map((v) => (
-                <g key={v}>
-                  <line
-                    className="roll-grid"
-                    x1={PAD.left}
-                    x2={PAD.left + PLOT_W}
-                    y1={sy(v)}
-                    y2={sy(v)}
-                  />
-                  <text className="roll-axis-label" x={PAD.left - 8} y={sy(v)} dy="0.32em" textAnchor="end">
-                    {formatRate(v)}
-                  </text>
-                </g>
-              ))}
-              {/* x ticks */}
-              {xTicks.map((v) => (
+        <div className="roll-chart-wrap" ref={setWrapEl}>
+          <svg
+            ref={svgRef}
+            className="roll-chart"
+            style={{ '--roll-font': `${fontU.toFixed(2)}px` } as React.CSSProperties}
+            viewBox={`0 0 ${VBW} ${VBH}`}
+            role="img"
+            aria-label={`Rolling ${win}-plate-appearance xwOBA over the ${series.season} season`}
+            onPointerMove={onMove}
+            onPointerLeave={() => setHover(null)}
+          >
+            {/* horizontal gridlines + y labels */}
+            {yLines.map((v) => (
+              <g key={v}>
+                <line
+                  className="roll-grid"
+                  x1={PAD.left}
+                  x2={PAD.left + PLOT_W}
+                  y1={sy(v)}
+                  y2={sy(v)}
+                />
                 <text
-                  key={v}
                   className="roll-axis-label"
-                  x={sx(v)}
-                  y={PAD.top + PLOT_H + 20}
-                  textAnchor="middle"
+                  x={PAD.left - 8}
+                  y={sy(v)}
+                  dy="0.32em"
+                  textAnchor="end"
                 >
-                  {v}
+                  {formatRate(v)}
                 </text>
-              ))}
-              {/* league-average reference line */}
-              <line
-                className="roll-ref"
-                x1={PAD.left}
-                x2={PAD.left + PLOT_W}
-                y1={sy(series.leagueXwoba)}
-                y2={sy(series.leagueXwoba)}
-              />
+              </g>
+            ))}
+            {/* x ticks */}
+            {xTicks.map((v) => (
               <text
-                className="roll-ref-label"
-                x={PAD.left + PLOT_W}
-                y={sy(series.leagueXwoba) - 5}
-                textAnchor="end"
+                key={v}
+                className="roll-axis-label"
+                x={sx(v)}
+                y={PAD.top + PLOT_H + fontU}
+                textAnchor="middle"
               >
-                {formatRate(series.leagueXwoba)} league avg
+                {v}
               </text>
-              {/* the rolling line */}
-              <path className="roll-line" d={linePath} />
-              {/* hover crosshair + dot */}
-              {cur && (
-                <>
-                  <line
-                    className="roll-cross"
-                    x1={sx(cur.pa)}
-                    x2={sx(cur.pa)}
-                    y1={PAD.top}
-                    y2={PAD.top + PLOT_H}
-                  />
-                  <circle className="roll-dot" cx={sx(cur.pa)} cy={sy(cur.y)} r={4} />
-                </>
-              )}
-            </svg>
+            ))}
+            {/* league-average reference line */}
+            <line
+              className="roll-ref"
+              x1={PAD.left}
+              x2={PAD.left + PLOT_W}
+              y1={sy(series.leagueXwoba)}
+              y2={sy(series.leagueXwoba)}
+            />
+            <text
+              className="roll-ref-label"
+              x={PAD.left + PLOT_W}
+              y={sy(series.leagueXwoba) - fontU * 0.4}
+              textAnchor="end"
+            >
+              {formatRate(series.leagueXwoba)} league avg
+            </text>
+            {/* the rolling line */}
+            <path className="roll-line" d={linePath} />
+            {/* hover crosshair + dot */}
             {cur && (
-              <div
-                className="roll-tip"
-                style={{
-                  left: `${(sx(cur.pa) / VBW) * 100}%`,
-                  top: `${(sy(cur.y) / VBH) * 100}%`,
-                }}
-              >
-                <span className="roll-tip-val">{formatRate(cur.y)}</span>
-                <span className="roll-tip-sub">
-                  PA {cur.pa} · {md(cur.date)}
-                </span>
-              </div>
+              <>
+                <line
+                  className="roll-cross"
+                  x1={sx(cur.pa)}
+                  x2={sx(cur.pa)}
+                  y1={PAD.top}
+                  y2={PAD.top + PLOT_H}
+                />
+                <circle className="roll-dot" cx={sx(cur.pa)} cy={sy(cur.y)} r={4} />
+              </>
             )}
-          </div>
-          <p className="roll-caption">
-            xwOBA over the trailing {win} plate appearances, across the season (x-axis = plate
-            appearance). Dashed line = MLB league average ({formatRate(series.leagueXwoba)}); this
-            player&rsquo;s season xwOBA is {formatRate(series.seasonXwoba)}.
-          </p>
-        </>
+          </svg>
+          {cur && (
+            <div
+              className="roll-tip"
+              style={{
+                left: `${(sx(cur.pa) / VBW) * 100}%`,
+                top: `${(sy(cur.y) / VBH) * 100}%`,
+              }}
+            >
+              <span className="roll-tip-val">{formatRate(cur.y)}</span>
+              <span className="roll-tip-sub">
+                PA {cur.pa} · {md(cur.date)}
+              </span>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
