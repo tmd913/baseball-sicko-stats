@@ -440,6 +440,54 @@ while the dialog is up, the same `.on` tint when the reader has a selection of
 their own, the same count badge, and the same phone rule — below 640px it drops
 its label to the icon and the badge, as the board's four disclosures do.
 
+**And the space between the two buttons is the board's, because the row is now
+folded onto the board's own run.** `.stats-tools` declared a bare
+`display: flex` and its two placement rules and nothing else, so the pair sat
+**edge to edge** — measured 0px at 1200 and at 390, labelled and icon-only
+alike, `gap` computing `normal`. The number was never in doubt: the board puts
+these same two controls beside each other in `.research-tools` at **8px**, and
+every one of its five buttons is spaced by it (checked at both widths, all four
+gaps 8.00). What was in doubt was where to write it, and writing `gap: 8px` here
+would have been a second copy free to drift from the first the next time either
+run moved.
+
+So the selector is **folded onto `.research-tools`** — the stylesheet's standing
+rule, the one that puts `.kind-switch` on `.view-switch`'s list and
+`.settings-toggle` on `.sim-toggle`'s, so that two things which are the same
+object cannot come to look like two. They are the same object by the test that
+decides it: the same shared `ColumnsButton` and `RanksButton`, side by side,
+spaced the same. The shared rule holds `display: flex`, `flex-wrap: wrap`,
+`align-items: center` and the gap; what does **not** transfer is each row's
+place in a layout, so `flex: none` is split out under `.research-tools` alone —
+it is what makes that run travel whole inside a wrapping bar and it says nothing
+in a caption row that is nobody's flex item — and the right alignment and the
+8px below stay under `.stats-tools`, where the paragraph above argues for them.
+
+**The board was checked for the same fault and has not got it**, which was worth
+measuring rather than reading off the rule: 8.00px between all five of its
+buttons at 1200 and at 390, chrome 161px and 207px, page overflow 0 — identical
+before and after, the split of `flex: none` having changed nothing there.
+
+**Measured before → after on Salvador Perez's Stats tab, at 1200×900 and
+390×844.** The gap goes **0 → 8.00px** at both, and **the buttons do not
+change size**: Columns 131.94 and Ranks 86.34 at 1200, Columns 69.14 and Ranks
+41.00 at 390 (the icon-and-badge state, where Ranks is the bare glyph) — all
+four byte-identical, with only Columns' left edge moving by the 8 (965.72 →
+957.72 and 263.86 → 255.86). The row itself is **36.00px tall before and
+after**, and the tab is still **one screen**: content height 900 at 1200 and 844
+at 390, exactly the overlay's own client height in each, which is the number
+the platoon card's departure bought and which this must not spend. Page body
+overflow **0** and overlay overflow **0** at both widths, with Ranks off and on.
+The table's invariants are untouched at both: rows **44.55px** (**58.55** with
+Ranks on), the header row **36.00px**, the table 2340.20 / 1473.72px, and with
+the pane scrolled to its far right the span column pinned at **0** and the
+header row **1px** inside it, which is the border. A pitcher's tab reads the
+same (Sale at 390: gap 8.00, row 44.55, header 36.00, span pinned at 0).
+
+**Bundle: JS unchanged at 464.53 KB** (137.79 gzipped) and CSS **106.76 →
+106.78** (19.06 → 19.07) — 20 bytes raw and 10 over the wire, the comments
+arguing the fold being stripped by the minifier.
+
 **And the line of text above the table is gone.** It read *"The research board's
 own columns, one row per span"*, which named the page the columns came *from*
 rather than saying anything about the table under it: the spans are written out
@@ -532,7 +580,9 @@ reason — right for AVG, wrong for xwOBA and Brl%), a 96px floor and left
 alignment on the span column, and the muted "no games" cell. Plus
 `.stats-tools`, which keeps the overlay's gutters where the table gives them
 back, the way the board's count line sits inside the app's while the board
-bleeds past them — and one rule for the span column's **sort button**, which is
+bleeds past them — two declarations now, that row's flex layout and the 8px
+between its buttons having been folded onto the board's own `.research-tools`
+(above) — and one rule for the span column's **sort button**, which is
 left-aligned and therefore puts the arrow's reserved box *after* the label. That
 is the board's own rule read from the other end: it leads there precisely so the
 label's right edge lines up with the right-aligned numbers, and at this end of
