@@ -51,8 +51,18 @@ import type {
  * This is now only used to enrich the primary MLB Stats API model with the
  * handful of Statcast fields that have no public Stats API equivalent:
  * bat speed, swing length, expected BA/wOBA, and per-pitch run value.
+ *
+ * `direction` names Savant's **`hfPull`** filter — its own batted-ball
+ * direction, `Pull` / `Straightaway` / `Opposite`. Left off, the export is
+ * every pitch of the day, which is what everything but `statcastWindow.ts`
+ * reads. Named, it is exactly the batted balls Savant files in that bucket:
+ * checked on 2026-08-01, the three answer 320 + 266 + 195 = **781**, which is
+ * precisely the day's batted-ball count in the unfiltered export, disjoint by
+ * pitch key with 0 rows on one side and not the other, and every returned row
+ * carries a `bb_type`. That partition is the whole reason pull air rate is
+ * derivable on a window at all — see `statcastWindow.ts`.
  */
-function savantUrl(date: string): string {
+function savantUrl(date: string, direction?: string): string {
   const params = new URLSearchParams({
     hfGT: 'R|',
     hfSea: '2026|',
@@ -70,6 +80,7 @@ function savantUrl(date: string): string {
     minors: 'false',
     wbc: 'false',
   });
+  if (direction) params.set('hfPull', `${direction}|`);
   return `https://baseballsavant.mlb.com/statcast_search/csv?${params.toString()}`;
 }
 
@@ -176,14 +187,19 @@ function hasDataRows(csvText: string): boolean {
 
 /** Exported as `downloadDayCsv` below — `statcastWindow.ts` builds a windowed
  *  board by reducing these same per-date exports to per-player counts, and
- *  reuses this so a day already on disk for the report is never fetched twice. */
-async function downloadCsv(date: string): Promise<string> {
-  const cached = await readBlob(`${date}.csv`);
+ *  reuses this so a day already on disk for the report is never fetched twice.
+ *
+ *  `direction` picks the `hfPull`-filtered export and its own cache key; see
+ *  `savantUrl`. Everything else about the download is identical, including the
+ *  headers-only rule — a day nothing was played on is headers-only either way. */
+async function downloadCsv(date: string, direction?: string): Promise<string> {
+  const key = direction ? `${date}-${direction.toLowerCase()}.csv` : `${date}.csv`;
+  const cached = await readBlob(key);
   // Only trust a cached file that actually has data rows. A headers-only file
   // means the previous fetch ran before Statcast data posted; re-fetch so the
   // enrichment (bat speed, swing length, xBA/xwOBA) fills in once it's live.
   if (cached !== null && hasDataRows(cached)) return cached;
-  const res = await fetch(savantUrl(date), {
+  const res = await fetch(savantUrl(date, direction), {
     headers: { 'User-Agent': 'statcast-sicko/1.0' },
   });
   if (!res.ok) {
@@ -192,11 +208,17 @@ async function downloadCsv(date: string): Promise<string> {
   const text = await res.text();
   // Persist only complete exports; an empty (headers-only) result is transient,
   // so leave it uncached and let the next request try again.
-  if (hasDataRows(text)) await writeBlob(`${date}.csv`, text);
+  if (hasDataRows(text)) await writeBlob(key, text);
   return text;
 }
 
 export { downloadCsv as downloadDayCsv };
+
+/** The same day, filtered to the batted balls **Savant itself** calls pulled.
+ *  `statcastWindow.ts` is the only caller; see it for what the counts are for
+ *  and why the classification cannot be reproduced from the day export. */
+export const downloadPullCsv = (date: string): Promise<string> =>
+  downloadCsv(date, 'Pull');
 
 function classifyHit(event: string | null): {
   isAb: boolean;
