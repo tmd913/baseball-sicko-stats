@@ -1040,8 +1040,83 @@ looks like — .101 of OPS and 3.3 points of K% for a batter — so the typical 
 fills about a third of the rail and the end of it is a real place. A gap past
 `full` clamps and **squares off its outer end** to say it has, which about one
 qualified player in ten does on any given row by construction; Cristopher Sánchez
-is the league's most extreme case and clamps five of his seven (his `.317` OPS
-against lefties and `.762` against righties is a .445 gap, the largest of the 202).
+is among the league's most extreme cases and clamps four of his seven (his `.317`
+OPS against lefties and `.762` against righties is a .445 gap).
+
+**The fill can never exceed its half of the rail, and for a while it could — by
+1.43px, at the one place a reader would look.** This paragraph used to assert the
+clamp above and stop there, and the clamp was never the thing that was broken:
+`Math.min(1, gap / full)` was right, the width came out at exactly 50% of the
+track, and the DOM agreed the fill's *box* sat inside the rail's *box* — measured
+on Willson Contreras's clamped K% row, `fill.left − track.left` was **0.00px** at
+1200 and at 390 alike. **The rail is painted as a pill**, though, and the fill was
+inset 3px top and bottom and **nothing at all at the ends**, so a bar drawn to the
+box ran past the ink: a rail of height 16 caps at radius 8, whose edge has already
+receded **1.76px** by the fill's top row of pixels, and a clamped bar — whose
+outer end is squared off, which is exactly what makes it the bar you look at —
+put its corner out there. Walking the fill's painted boundary against the rail's
+pill in closed form, every clamped row in the league overhung by **+1.430px**
+while every unclamped row cleared it by 3px. That is the whole bug, and it is the
+third of the three shapes this kind of fault comes in: not a missing clamp, not a
+clamp a `NaN` escaped, but **the rail's own box and the fill's box disagreeing**.
+
+So the fill is inset by one `--spl-inset` on **all four sides**, which makes it
+the rail's own pill inset by 3 — a radius-5 cap inside a radius-8 one, the two
+concentric — and its width is `calc(frac × (50% − var(--spl-inset)))`, so a full
+bar lands on the rail's *inner* cap rather than on its box. The same token is
+written once, in the stylesheet, and the inline width reads it, so the length of a
+full bar and the nesting of its cap cannot drift apart. **The squared-off end is
+untouched and now reads better than it did**, a squared cap nested inside a
+rounded one being unmistakable beside the rounded cap of a bar that merely came
+close — Sánchez's four clamped rows against his FIP row, and Contreras's K%
+against the BB% directly under it (`.936` of the scale, so 46.8% against 50).
+
+**The invariant is held in two places and neither is decorative.**
+`railFraction(gap, full)` replaces the bare `Math.min`, and is **total**: it
+answers in [0,1] for every input, `NaN`/`±Infinity`/negative/zero-denominator
+included, where `Math.min(1, NaN)` is `NaN` — not a length, so the width would
+have been dropped as invalid and the bar left to size itself. Nothing upstream can
+hand it one today (`num` rejects every non-finite string and `share` refuses a zero
+denominator), and that is the argument for guarding rather than against it: it is
+the one function between a stat's arithmetic and a length in pixels, and the next
+stat added to either table gets checked whether or not its author thought to. The
+stylesheet says it again at the last moment — `max-width: calc(50% - var(--spl-inset))`
+on `.spl-fill`, with the `min-width` floor that draws a 3px nub for a gap of almost
+nothing taking that same cap as its own ceiling (`min(3px, 50% - …)`) so the floor
+can never breach it either.
+
+**The scale was checked rather than assumed, and it is not the fault.** Sweeping
+the league's own split leaderboards, **224 of the 414 batters** and **315 of the
+532 pitchers** whose thinner side clears `MIN_SAMPLE` have at least one clamped
+row — which is what a per-row 90th percentile *should* give over eight and seven
+rows (1 − 0.9⁸ is 57%), so `full` is calibrated where it was and none of it moved.
+What the sweep is for is the extremes, and they cluster exactly where a thin side
+meets a real one: on the batting board **Josh Smith** (27/148 PA) runs 44.4% K%
+against 16.9% — **3.24×** the scale — with McCutchen at 3.11×, **Drew Gilbert**
+(38/250 PA, .081 OBP against .357) at 3.07× and 7 of his 8 rows clamped, and
+James Outman at 3.04×; on the pitching board **Joe Ross** (30/27 BF) has a 2.90
+FIP against a 16.65 — **5.73×** — with Chris Roycroft's WHIP at 5.32× and Zach
+Maxwell at 5.13×. Below `MIN_SAMPLE` the ratios are farther out still (a 2-PA side
+gives a 1.000 AVG gap, 11× the scale) and no bar is drawn for them at all, which
+is the gate doing its job rather than the clamp doing it.
+
+**Measured before → after with the two builds driven back to back**, on
+Contreras, on the three worst drawn batters, on the two worst pitchers and on
+Sánchez, at 1200px and 390px, by walking each fill's painted boundary against its
+rail: worst overhang **+1.430px → −0.933px** (i.e. from ink outside the rail to
+clearance inside it) and worst `fillWidth − half` **0.000px → −3.000px**, with the
+clamped rows still flagged and squared in both. Driven again with the splits
+response stubbed to the hostile shapes — a 2.000 OPS against a .200 over 40 PA, a
+−4.00 FIP against an 18.00, a null / an empty string / the server's em-dash / the
+literal `NaN`, two identical halves, and a zero PA denominator — the worst
+overhang over every one of those at both widths is the same **−0.933px**, and each
+absence still reads as it should: the null rows dash with no bar, the dead-even
+rows draw the 3px nub at the centre, and the zero-PA card draws no bars and says
+`No plate appearances vs LHP this season`. Row height (34px), rail width (173 /
+434), card width (358 / 680) and page overflow (0 at both widths, on both kinds)
+are all unchanged. **Bundle: 451.11 → 451.23 KB of JS** (133.50 → 133.55 gzipped)
+and **102.73 → 102.84 KB of CSS** (18.35 → 18.37), which is 0.1KB each and nearly
+all of it the comments explaining the nesting.
 
 **Sample size is on the card whatever it is, and changes how the bars are drawn
 twice.** The column heads carry it always — `vs LHP · 76 PA` — and two thresholds

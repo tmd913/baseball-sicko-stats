@@ -4511,6 +4511,12 @@ body {
 .spl-table {
   --spl-label-w: 62px;
   --spl-val-w: 54px;
+  /* How far the fill is nested inside the rail, on all four sides. It is one
+     number rather than four because the rail is a pill and the fill is a pill,
+     and only an equal inset makes the two concentric — see `.spl-fill`. The
+     inline width `PlatoonSplits` writes reads this same token, so the length of
+     a full bar and the nesting of its cap cannot drift apart. */
+  --spl-inset: 3px;
 }
 .spl-heads,
 .spl-row {
@@ -4586,11 +4592,24 @@ body {
   bottom: -6px;
   border-left: 1px dashed var(--border);
 }
+/* The fill is the rail's own pill, inset by `--spl-inset` on **all four sides**.
+   That equal inset is the whole of the geometry: the rail is 16px tall and so
+   caps at radius 8, the fill is 10px tall and so caps at radius 5, and 8 − 3 = 5
+   means the two caps are concentric. Inset top and bottom only — which is what
+   this was — a bar drawn to the rail's *box* ends outside the rail's *ink*,
+   because a pill's edge has receded 1.76px by the fill's top row of pixels; a
+   clamped bar, whose outer end is squared off, then put 2.47px of accent past
+   the end of the rail on Contreras's K% row. `max-width` is the same invariant
+   said again at the last possible moment: whatever length arrives, the fill
+   cannot cover more than its half of the rail. `min-width` is the floor that
+   says "there is a bar here" for a gap of almost nothing, and takes the cap as
+   its own ceiling so the floor can never breach it on a narrow rail. */
 .spl-fill {
   position: absolute;
-  top: 3px;
-  bottom: 3px;
-  min-width: 3px;
+  top: var(--spl-inset);
+  bottom: var(--spl-inset);
+  min-width: min(3px, 50% - var(--spl-inset));
+  max-width: calc(50% - var(--spl-inset));
   border-radius: 999px;
   background: var(--accent);
   opacity: 0.8;
