@@ -137,6 +137,20 @@ const ESPN_TO_MLB_TEAM: Record<number, number> = {
 };
 
 /**
+ * The same table read the other way, MLB club id → ESPN club id.
+ *
+ * **ESPN's site API numbers its clubs identically to the fantasy game's
+ * `proTeamId`** — checked club by club against
+ * `site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams`, all 30 the same
+ * (1 BAL … 30 TB) — so the one table above answers for both and `news.ts` needs
+ * no second copy of a mapping neither numbering system derives from the other.
+ * Derived rather than written out, so the two can never come to disagree.
+ */
+export const ESPN_SITE_TEAM_BY_MLB: Record<number, number> = Object.fromEntries(
+  Object.entries(ESPN_TO_MLB_TEAM).map(([espn, mlb]) => [mlb, Number(espn)]),
+);
+
+/**
  * ESPN's `lineupSlotId` to the slot a fantasy manager would call it.
  *
  * This is a **different numbering system** from `defaultPositionId` (a player's

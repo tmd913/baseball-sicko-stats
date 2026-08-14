@@ -579,9 +579,10 @@ const CHAPTERS: Chapter[] = [
         <dl className="tut-defs">
           <dt>Overview</dt>
           <dd>
-            The tab it opens on: his season line, what he is doing today — or, on a day
-            his club isn't playing, the next game he has — and his last five games. Each
-            block links to the tab that holds the whole of it.
+            The tab it opens on, and it leads with what he is doing today — or, on a
+            day his club isn&rsquo;t playing, the next game he has. Under that: his
+            latest news, his season line and his last five games. Each block links to
+            the tab that holds the whole of it.
           </dd>
           <dt>Percentile Rankings</dt>
           <dd>
@@ -596,6 +597,14 @@ const CHAPTERS: Chapter[] = [
             centre toward the side he is <em>stronger</em> against — so the question a
             platoon split is opened with is answered without any subtraction. A hatched
             bar means one side is too thin to lean on.
+          </dd>
+          <dt>News</dt>
+          <dd>
+            What has happened to him lately, newest first: MLB&rsquo;s own transaction
+            log — the IL placements, rehab assignments, recalls and trades a fantasy
+            manager acts on — interleaved with the ESPN articles ESPN itself files
+            under his name. A story opens on ESPN; a transaction is the one line MLB
+            publishes and has nowhere to go.
           </dd>
           <dt>Stats</dt>
           <dd>

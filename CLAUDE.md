@@ -64,7 +64,7 @@ letting it grow past it.
 
 @docs/claude/client-research.md
 
-**Client — the player page** — `PlayerDetails` and its tabs (Overview, Percentile Rankings, Splits, Stats, Game Log, Arsenal, Charts), plus the reorder screen and the how-to page. It opens on **anybody**, which is the fact most of its design follows from.
+**Client — the player page** — `PlayerDetails` and its tabs (Overview, Percentile Rankings, Splits, News, Stats, Game Log, Arsenal, Charts), plus the reorder screen and the how-to page. It opens on **anybody**, which is the fact most of its design follows from.
 
 @docs/claude/client-player-page.md
 

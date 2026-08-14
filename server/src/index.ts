@@ -10,6 +10,7 @@ import { getPercentiles } from './percentiles.js';
 import { getXwobaSeries } from './xwoba.js';
 import { getBatterGameLog, getPitcherGameLog } from './gameLog.js';
 import { getNextGame } from './nextGame.js';
+import { getPlayerNews } from './news.js';
 import { getSeasonArsenal } from './pitcherArsenal.js';
 import { getPitcherXera } from './expectedStats.js';
 import { getResearch, getPlayerWindows } from './research.js';
@@ -1131,6 +1132,31 @@ app.get(
       return;
     }
     res.json(await getNextGame(playerId, req.query.start === '1'));
+  }),
+);
+
+// A player's latest news — the player page's **News** tab and the section that
+// previews it on the Overview. Assembled from two upstreams because there is no
+// per-player news API from anybody: `news.ts` opens with the five endpoints
+// that were tried and what each of them does instead, so nobody has to probe
+// them again.
+//
+// The player's **name is resolved here rather than taken from the query**, the
+// way `/day` resolves its own: the name is what the article join turns on, and
+// a name the caller supplied is a name the caller could get wrong. A failure in
+// either half costs that half and nothing else — the module catches per source,
+// so this route answers `{ items: [] }` rather than 502ing a page that has
+// every other tab already drawn.
+app.get(
+  '/api/players/:playerId/news',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const playerId = Number(req.params.playerId);
+    if (!Number.isInteger(playerId) || playerId <= 0) {
+      res.status(400).json({ error: 'invalid playerId' });
+      return;
+    }
+    res.json(await getPlayerNews(playerId));
   }),
 );
 

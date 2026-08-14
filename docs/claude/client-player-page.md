@@ -79,6 +79,103 @@ So a game is a **card** (`.pday-game`, **folded into `.feed-item-toggle`'s selec
 
 **Narrowed to one game there is no card at all.** `PlayerDay` takes a `gamePk` — what a Game Log row means, and what a card's own dialog passes back in — and in that mode draws the feed directly: the box is already about that game, so a card inside one would be a press to reach the only thing on screen.
 
+#### The day leads, and the scheduled game is the third state of it
+
+**This reverses the block order the section above sets out.** It read *Season →
+Today → Last 5 games*, on the argument that the three questions under a roster
+decision are *how good is he*, *what is he doing* and *how has he been going*.
+Two of those three still hold; the order was wrong about which one a player page
+is actually opened with. The tab's own next paragraph has always said so — *it is
+the default tab as well as the first … on a game day the question a player page
+is opened with is what he is doing* — and the block answering it was second.
+
+**So the day block leads**, and the order is now:
+
+1. **Today**, or the **next game** when the day holds none.
+2. **News** (below).
+3. **Season**, over to the Stats tab.
+4. **Last 5 games**, over to the Game Log.
+
+**The whole block moves, rather than the scheduled-game half of it.** What was
+asked for was that the *scheduled game* lead, and there are two ways to read
+that: hoist the block, or split `NextGameBlock` out so that only it sits at the
+top. The split is worse, and the test is what the page opens on in each of the
+three states it can be in:
+
+- **A game in progress.** `PlayerDay` draws the live entry — the man is at the
+  plate, or on the mound — which is the loudest thing this page can say and
+  belongs at the top of it by the same argument.
+- **A game today, played or scheduled.** The card, or the `UpcomingRow` with
+  first pitch and the opposing starter on it.
+- **No game at all.** `NextGameBlock`, which is the scheduled game the request
+  was about.
+
+Split, the leading block would be **present on a quiet morning and absent on a
+game day**, so the page would open on a different thing depending on the fixture
+list — and the two halves of one question ("what is he doing / when next") would
+sit in two places on one page. Hoisted, the leading block is the same block in
+all three states and is **never empty**, which is the property this had to have.
+
+**The heading names what the block holds, which is what makes the third state
+read.** It is `Today` where there are games and **`Next game` / `Next start`**
+where there aren't — and the label therefore comes *off* the line inside
+`NextGameBlock`, which used to print it in `.ovw-next-label`. Leading a page with
+a heading saying `Today` over a line saying `Next game` would be the same two
+words an inch apart. One definition of which of the two it is (`wantStart`,
+`isRotationStarter`'s answer) feeds the heading and the sentences below it, so
+they cannot come to disagree. The sentences still split three ways, because the
+distinctions are real: `Not yet scheduled.` for a starter nobody has named,
+`Nothing scheduled in the next two weeks.` for a club with nothing on, and
+`Couldn't read the schedule.` for a failed read.
+
+**Driven in a browser at 1200×900 and 390×844, in all three states, on the live
+2026 season.** *Live* — Kevin Gausman: `Today [68px at 1200, 91 at 390] | News |
+Season | Last 5 games`, the block carrying `STL 0–0 CHC · Bottom 3`. *A game
+today* — Blake Snell: `Today [68px] | News | Season | Last 2 games`. *No game* —
+Jeff Hoffman: **`Next game [61px]`** leading, `No game for Jeff Hoffman today.`
+over `Aug 15 · 7:10 PM · vs PHI · vs LHP Jesús Luzardo`, with the label printed
+**once**. And the starter's wording, with the day response stubbed to no games so
+`isRotationStarter` still reads his real season line — Logan Webb: **`Next
+start`**, `Aug 15 · 4:05 PM · vs COL · vs RHP Michael Lorenzen`. The page body
+and the overlay each overflow by **0** in every one of those, at both widths.
+
+#### The News section, and why it sits second
+
+**It is his latest transactions and articles, three of them, over to the News tab**
+(`NewsPreview` in this file, `NewsList` in `PlayerNews.tsx`).
+
+**Second, between the day and the season line**, which is the order the tab is
+already sorted by rather than an exception to it. The day says what he is doing;
+the news says what has *happened* to him — an IL placement, a call-up, a report
+that he is losing the closer's job — and both of those are this week, where the
+season line and the game log under them are the record. A manager who has just
+been told a man is hurt does not want to read a season line first.
+
+**`NewsList` with `shown={3}`, not a second list.** That is the rule
+`GameLogTable` sets for the Game Log and its own five-row preview, and it is
+worth restating because it is the whole reason there is one component: the row
+shapes, the two sources' different voices and the press that opens an article
+have one definition. The only two things this block decides are how many rows and
+whether the standfirst is drawn (`summaries`, off here — three two-line rows would
+be the whole of the block above the season line it introduces).
+
+**One read serves both**, hung on `PlayerDetails` and gated on `tab === 'news' ||
+tab === 'overview'` exactly as the game log's is, so the preview is literally the
+top of the list the tab draws and the two can never show different items.
+
+**The block is capped at `--card-column` as a whole** (`.ovw-news`), where the
+Season and Last-5 blocks let their tables take the window: those are stat tables
+and are *scanned*, this is prose and is *read*. Capping the section rather than
+only its list is what puts the `News →` door over the right edge of the rows it
+opens rather than out at the far side of a widened tab.
+
+**The empty case is a line, not a box.** `No recent news for Chad Patrick.` and
+the link beside it — a preview of nothing has no business spending an
+`.empty-state` on itself when the tab will say the whole of it, and the link is
+what takes a reader there. The door is drawn whether or not there is anything
+behind it, for that reason: the reader who wants to be sure nothing was missed is
+exactly the reader with an empty block in front of them.
+
 #### A day with no game names the next one
 
 **"No game today" is true and useless on its own**, and it is what a day whose report holds nothing used to be reduced to — a single line where the reader's actual question is *when, then*, which no other view in the app can answer, every one of them being about today or a range that has already been picked. So the block names the next one (`NextGameBlock`, off `/api/players/:id/next-game`).
@@ -95,9 +192,144 @@ So a game is a **card** (`.pday-game`, **folded into `.feed-item-toggle`'s selec
 
 **It is the default tab as well as the first**, which is the same argument as the ordering: the tabs beside it are readings of his *season*, and on a game day the question a player page is opened with is what he is doing. It costs one request on open — `api.playerDay`, lazy in the same `dayReq` shape the Game Log, Arsenal and Charts tabs use, which for the default tab means it loads with the page — and that request is the cheap half of the two the page already made, being one player over one date against a percentile scrape (see **Date handling and server routing** for why it adds no cache of its own and why the date is the server's rather than the client's).
 
-**The strip is six tabs now, and seven on a pitcher** — it was five and six when Overview joined it, and the Splits tab added the sixth. It needed nothing either time: `.details-tabs` already scrolls sideways and already scrolls the active tab into view with a 24px peek. Measured at 390px, the strip shows Overview · Percentile Rankings · Stats with the rest a swipe away, every tab lands fully inside the strip when it is selected (checked one by one on both kinds), the tab's own column is `--card-column` less the overlay's gutters (358px), and the page body overflows by 0.
+**The strip is seven tabs now, and eight on a pitcher** — five and six when Overview joined it, six and seven when Splits did, and seven and eight since **News** (below). It has needed nothing structural on any of the three occasions: `.details-tabs` already scrolls sideways and already scrolls the active tab into view with a 24px peek. Re-measured after News at **1200×900 and 390×844, on a batter and a pitcher, clicking every tab in turn**: all 7 and all 8 land **fully inside the strip** when selected, the tab's own column is `--card-column` less the overlay's gutters (358px), and the page body and the overlay each overflow by **0** at both widths.
 
 **The day takes `--card-column` rather than the 860px the tabs beside it use**, because what is in it is exactly what the feed holds — an at-bat card, a clip, an outing's innings — and those were sized against that number in the first place. A day read here and the same day read on the stream is then the same reading at the same width (measured: 800px at 1440, 358 at 390). The cap sits on `.details-overview .player-day` rather than on the tab, which spans the tab so its two tables can (see **the player page's Overview tab** above), and the `container-type` sits on the same box for the reason `.details-arsenal` carries one: the cards inside size themselves off their container, and read off a full-width tab they would answer a container query the card itself never satisfies.
+
+### The News tab, and the two feeds behind it
+
+**It is the eighth tab and it reads before Stats and the Game Log** — the strip
+is `Overview · Percentile Rankings · Splits · News · Stats · Game Log ·
+[Arsenal] · Charts` — which is the Overview's own block order one tier up and
+for the same reason. What has *happened* to a player this week is a different
+kind of fact from what he has *done* this season, and it is the one that changes
+a decision fastest: a reader deciding about a stranger wants to know he went on
+the IL this morning before reading his 30-day xwOBA.
+
+**Lazy on first open, keyed by player alone.** The day, the game log and the
+window table are all keyed by kind as well, because a two-way player's bat and
+his arm are two of each; **news is a fact about a person**, so Ohtani has one
+list rather than two. It takes the app's one loading discipline — `useDelayedFlag`
+behind `WAIT_DELAY`, the spinning baseball, `Reading the latest news` — like every
+other lazily-fetched tab.
+
+**A row is what its source makes it, and the list says which.** An **article**
+carries a link, opens ESPN in a new tab (`target="_blank"`,
+`rel="noopener noreferrer"` on every one) and shows its standfirst here where
+there is room for it. A **transaction** carries neither link nor summary, because
+MLB publishes neither — the whole of it is the one sentence — so it is a static
+row that is deliberately **not** a press, and carries neither the pointer nor the
+hover tint. A row that looked pressable and did nothing would be worse than one
+that plainly is not. The hover it does have is scoped to `@media (hover: hover)`,
+the app-wide rule for a full-width row in a list that scrolls.
+
+**The `kind` pill is the upstream's own word, in the reader's vocabulary where
+the two differ.** MLB's `typeDesc` is already English (`Status Change`, `Trade`,
+`Assigned`) and prints as it comes; ESPN's `type` is a CMS label, so
+`HeadlineNews` reads **`Report`** and `Media` reads `Video`, while `Story`,
+`Recap` and `Preview` keep their own word. Outlined and `--faint` rather than
+toned: this is a *label*, and the app's colour is spent on state.
+
+**A transaction is a day and an article is an instant**, and each is printed at
+the resolution it actually has — `Aug 11` against `Aug 14 · 7:23 AM`. The sort
+compares them on the day they share (`news.ts::cmpDate`); comparing the raw
+strings would work by accident and would file every one of a day's transactions
+under every one of its articles.
+
+**The empty state is the one this most had to get right**, because it is common:
+a healthy player mid-season has nothing written about him and no move on his
+record, which is an ordinary player rather than a failed read. So it names its
+cause the way every emptied view in the app does — `No recent news for Chad
+Patrick.` over a line saying that MLB's transaction log and ESPN's own
+attribution were both read and both were empty.
+
+### There is no per-player news API, and this is what was tried
+
+**Recorded so nobody probes them again.** Every one of these is a dead end, and
+the fifth is the dangerous one because it returns 200:
+
+| Endpoint | Result |
+| --- | --- |
+| `statsapi.mlb.com/api/v1/people/{id}/news` | **404** |
+| `site.web.api.espn.com/apis/common/v3/sports/baseball/mlb/athletes/{id}/news` | **404** |
+| `sports.core.api.espn.com/v2/sports/baseball/leagues/mlb/athletes/{id}/news` | **404** |
+| `lm-api-reads.fantasy.espn.com/apis/v3/games/flb/news/players?playerId=` | **404** |
+| `site.api.espn.com/…/mlb/news?athlete=` / `athleteId=` / `player=` | **200, parameter ignored** — the league-wide feed whatever you name |
+| `search-api.mlb.com` | does not resolve |
+
+So the list is **assembled** from two feeds that answer for something else, and
+both are here because they have opposite characters (`server/src/news.ts`).
+
+**MLB transactions are the spine** — `/api/v1/transactions?playerId=`, per
+player, official, dated, and needing **no matching of any kind**. They are also
+precisely what a fantasy manager acts on: IL placements and activations, rehab
+assignments, recalls, options, trades, DFAs. What they are not is *reporting* — a
+player having a bad month makes no transaction at all, which is why they are not
+the whole of it.
+
+**ESPN's team feed is the reporting, and the join is the interesting part.**
+`site.api.espn.com/…/mlb/news?team={id}` is scoped to a club, and the way back to
+one player is **not** a headline search: every article carries a `categories[]`
+array with entries of `type: "athlete"` naming whom ESPN itself says it is about.
+So the filter is a name comparison against **ESPN's own structured attribution**,
+folded through the same accent-stripping the rest of the codebase uses (which is
+what joins MLB's "Edwin Díaz" to ESPN's "Edwin Diaz").
+
+**An ambiguity that cannot be resolved is left out rather than guessed**, which
+is `espn.ts`'s rule applied to a join running the other way. There the club
+disambiguates; here the club is already fixed and what remains is that a club's
+feed carries league-wide stories too, so a `Max Muncy` tag in the Dodgers feed
+could in principle be the other Max Muncy. The set is **enumerated rather than
+feared**: over the 1,382 players on the 2026 season roster there are exactly
+**3 shared names and 6 players in them** (José Fermín, Luis García, Max Muncy),
+and a player whose folded name is shared is shown his transactions and **no
+articles at all**. It costs no upstream — `getSeasonPlayers` is the same
+1h-cached list the roster search reads. Checked in the running app: Max Muncy's
+page draws his one transaction and zero articles, where Blake Snell's draws 3
+articles and 9 transactions.
+
+**Recall is better than the club scoping suggests**, which was measured rather
+than assumed: a club's feed carries league-wide stories as well as its own, so
+Tarik Skubal is tagged 13 times in Detroit's feed and 8 times in the Dodgers'.
+A player's own club's feed is therefore the right scope and loses nothing.
+
+**`limit=100` is answered with 50** (measured), which is about ten days of a
+club's feed, and there is no paging past it.
+
+**The ESPN site API numbers its clubs identically to the fantasy `proTeamId`** —
+checked club by club against `site.api.espn.com/…/mlb/teams`, all 30 the same
+(1 BAL … 30 TB) — so `espn.ts::ESPN_SITE_TEAM_BY_MLB` is that one table derived
+in reverse rather than a second copy of a mapping neither numbering system
+derives from the other.
+
+**Two type codes are dropped and only two.** `NUM` (a uniform change) is 2 of
+12,235 league transactions over a checked six weeks, and on one day a year it is
+a uniform change for **every player in the league** — Jackie Robinson Day would
+put "changed number to 42" at the top of 1,300 news sections for a fortnight.
+Everything else stays, including the ones that look procedural: `ASG` is 5,147 of
+that sample and is where a **rehab assignment** lives, which is the most useful
+thing this list can say about a man on the IL. MLB also emits the same move twice
+under two ids often enough to matter (a rehab assignment came back as 863948 and
+863854 on a checked player, same date, same wording), so the dedupe is on what a
+row *says* rather than on its id.
+
+**Each source is fetched in its own `try` and each failure costs its own half** —
+a dead ESPN feed leaves the transactions standing and vice versa, and the route
+answers `{ items: [] }` rather than 502ing a page whose other seven tabs are
+already drawn.
+
+**Bundle: 456.51 → 460.14 KB of JS** (135.38 → 136.44 gzipped) and **105.18 →
+106.45 KB of CSS** (18.81 → 19.00 gzipped) — 3.6KB and 1.3KB raw, 1.1KB and
+0.2KB over the wire, for a tab, an Overview section, a route, a server module
+and the block reorder above.
+
+**Measured against the live 2026 season.** Blake Snell reads as a genuine injury
+narrative: `Dodgers' Blake Snell K's 10 in 6 innings in return from injury`
+(ESPN, Aug 12) directly above `Los Angeles Dodgers activated LHP Blake Snell from
+the 60-day injured list.` (MLB, Aug 11), with the rehab assignments and the
+original 15-day placement under them — which is the interleaving the two-source
+design exists for and neither feed could have given on its own. **12 items, 3.2KB,
+343ms genuinely cold and ~50ms once the club's feed is warm.**
 
 ### The Stats tab: the board, transposed
 
