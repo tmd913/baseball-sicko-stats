@@ -965,6 +965,43 @@ export default function App() {
     return new Set(roster.map(playerKey));
   }, [roster, fantasyTeam]);
 
+  /**
+   * Who in the league is holding a player **you can't have** — MLB id to the
+   * name of the fantasy team that has him, or null with no league connected,
+   * which is what keeps the lock off every name in the app for a user with no
+   * ownership to read.
+   *
+   * This is `Other Rosters` as a *map* rather than as a set: the include button
+   * names a set to draw, where the lock makes a claim about one player, and a
+   * claim wants the owner's name in it — "somebody else has him" is the fact and
+   * "who" is the very next question. The names cost nothing, `EspnOwnership`
+   * carrying the league's teams beside the map of who holds whom.
+   *
+   * **Your own team is excluded here rather than at the draw site**, and that is
+   * the one place this deliberately parts from `boardRows`' partition. That
+   * partition approximates "yours" as `rosterKeys`, which is exact in fantasy
+   * mode and is the *saved* list in saved-roster mode — so a user who reads the
+   * saved roster with a league connected (the ordinary way to have one, since
+   * the board's free agents are the reason to connect at all) would have had a
+   * lock drawn on every one of his own ESPN players, the mark stating outright
+   * that somebody else held a man he holds himself. A set that is a little wide
+   * costs a row on a board; a label that is wrong costs the mark its meaning. So
+   * `espnTeamId` — the team the user picked, falling back to the one his SWID
+   * identified — is taken out first, and the draw sites then apply the roster
+   * test on top of it.
+   */
+  const ownedElsewhere = useMemo(() => {
+    if (!espnConnected || !ownership) return null;
+    const mine = espnTeamId ?? ownership.myTeamId;
+    const names = new Map(ownership.teams.map((t) => [t.id, t.name]));
+    const map = new Map<number, string>();
+    for (const [id, teamId] of Object.entries(ownership.owned)) {
+      if (teamId === mine) continue;
+      map.set(Number(id), names.get(teamId) ?? `Team ${teamId}`);
+    }
+    return map;
+  }, [espnConnected, ownership, espnTeamId]);
+
   /** ESPN's global rostered percentage by MLB id, or null with no league —
    *  which is also what turns the board's `Ros%` column on and off. */
   const rosterPct = useMemo(() => {
@@ -1591,25 +1628,12 @@ export default function App() {
   // value lives in the component that grows it, and App only has to hand the
   // same number back when it mounts again.
   const feedShown = useRef(new Map<string, number>());
-  // Expanded at-bats / outings / upcoming rows in the feed, lifted here so
-  // "collapse all" can clear them. It is the feed's one level of collapsible
-  // again: the player groups above it went to the player page, and the day the
-  // Overview tab draws holds its own open keys, there being no cross-page
-  // control over an overlay that unmounts with them.
-  const [feedOpenKeys, setFeedOpenKeys] = useState<Set<string>>(() => new Set());
-  const toggleFeedKey = useCallback((key: string) => {
-    setFeedOpenKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }, []);
-  // Whether the current view has anything expanded to collapse — the feed
-  // alone; the summary table, the research board and the edit screen have no
-  // collapsibles.
-  const hasExpanded = view === 'feed' && !editMode && feedOpenKeys.size > 0;
-  const collapseAll = () => setFeedOpenKeys(new Set());
+  // `feedOpenKeys` used to live here — the set of expanded at-bats, outings and
+  // upcoming rows, lifted to App so a floating "collapse all" could clear them.
+  // All three open a dialog now rather than unrolling in place, so there is one
+  // open thing at a time, it is held by the item that opened it, and the button
+  // that undid a session's worth of them has nothing left to undo. The feed has
+  // no collapsibles at all, so App holds no expansion state for any view.
 
   const onAdd = async (p: WatchPlayer) => {
     setRoster(await api.addPlayer(p));
@@ -3111,6 +3135,7 @@ export default function App() {
           hasEligibility={eligibility !== null}
           trendWindows={rosterTrend}
           ownedIds={ownedIds}
+          ownedElsewhere={ownedElsewhere}
           espnConnected={espnConnected}
           espnError={espnError}
           onConnectEspn={openEspnSettings}
@@ -3176,36 +3201,17 @@ export default function App() {
             reports={filteredCards}
             kind={shownKind}
             onOpenDetails={setDetailsKey}
-            openKeys={feedOpenKeys}
-            onToggleKey={toggleFeedKey}
             shown={feedShown.current.get(feedKey) ?? FEED_PAGE_SIZE}
             onShowMore={(n) => feedShown.current.set(feedKey, n)}
           />
         )
       )}
 
-
-      <button
-        type="button"
-        className={`float-btn collapse-all${hasExpanded ? ' visible' : ''}${
-          showBackToTop ? ' raised' : ''
-        }`}
-        onClick={collapseAll}
-        aria-label="Collapse all"
-        title="Collapse all"
-      >
-        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-          <path
-            d="M7 6 12 10 17 6M7 18 12 14 17 18"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </button>
-
+      {/* The "collapse all" float button stood here and is gone with the
+          accordions it collapsed: the feed's three openable shapes each raise a
+          dialog now, so there is never more than one open and the thing that
+          closes it is the box itself. Back-to-top keeps its corner and, with
+          nothing to be raised above, its plain `bottom`. */}
       <button
         type="button"
         className={`float-btn back-to-top${showBackToTop ? ' visible' : ''}`}
@@ -3223,6 +3229,7 @@ export default function App() {
           position={detailsPlayer.position}
           isPitcher={detailsPlayer.kind === 'pitcher'}
           isOnRoster={detailsRostered}
+          ownedBy={ownedElsewhere?.get(detailsPlayer.id) ?? null}
           rosterEditable={!usingFantasy}
           isWatchlisted={watchlistKeys.has(`${detailsPlayer.kind}-${detailsPlayer.id}`)}
           onWatchlistToggle={(on) =>

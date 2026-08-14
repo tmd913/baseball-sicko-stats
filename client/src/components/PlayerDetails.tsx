@@ -8,6 +8,7 @@ import type {
   PercentileMetric,
   PlayerKind,
   PlayerReport,
+  PlayerWindows,
   SeasonArsenal,
   SeasonStats,
   XwobaSeries,
@@ -18,8 +19,10 @@ import type { SplitKey } from './Arsenal';
 import { RemoveButton } from './RemoveButton';
 import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
 import { BaseballMark } from './BaseballMark';
+import { LockMark } from './LockMark';
 import { RollingXwoba } from './RollingXwoba';
 import { GameLog } from './GameLog';
+import { PlayerWindowTable } from './PlayerWindowTable';
 import { LoadingBlock } from './Loading';
 import {
   useDelayedFlag,
@@ -28,7 +31,7 @@ import {
   useOverlayChromeOffset,
   usePlayerStatus,
 } from '../hooks';
-import { PlayerDay, playerDayLine } from './PlayerDay';
+import { OverviewTab } from './PlayerOverview';
 import { DialogLayerContext, OVERLAY_LAYER } from './Modal';
 
 /**
@@ -387,10 +390,27 @@ function PitcherBlock({
 }
 
 /**
- * The Season tab: the whole season and the two halves of it, as one card. They
- * are the same line cut three ways, so they read as one table of labelled blocks
- * rather than as separate cards — the overall row is the thing a split is a
- * split *of*, and the comparison only lands with them stacked together.
+ * **The platoon card**, at the foot of the Stats tab: the whole season and the
+ * two halves of it, as one card. They are the same line cut three ways, so they
+ * read as one table of labelled blocks rather than as separate cards — the
+ * overall row is the thing a split is a split *of*, and the comparison only
+ * lands with them stacked together.
+ *
+ * It was the whole of the tab when the tab was called **Season**, and it keeps
+ * its `Overall` block now that a window table sits above it carrying the same
+ * season line in twenty columns. That looks like the line stated twice and
+ * isn't quite: these are the seven or eight stats MLB actually splits, and the
+ * comparison a split invites is against the figure *directly above it* rather
+ * than against the same figure twenty columns along a table that scrolls
+ * sideways. Dropping it would have saved a row and cost the card the thing it
+ * is a card about.
+ *
+ * **This is the only reader `/api/players/:playerId/splits` has left**, and it
+ * is a real one: the window table above cannot answer for a platoon half at
+ * all. The research board's rows are cut by *time*, and MLB publishes no
+ * handedness split of them — nor does Savant, so a split has no Statcast half
+ * either. The two tables are cut along different axes of the same season and
+ * neither can stand in for the other.
  */
 function SeasonPanel({
   season,
@@ -404,7 +424,7 @@ function SeasonPanel({
   return (
     <div className="pct-card">
       <div className="pct-card-head">
-        <span className="pct-card-title">Season</span>
+        <span className="pct-card-title">Platoon splits</span>
       </div>
       <BatterBlock label="Overall" s={season} whole />
       <BatterBlock label="vs LHP" s={vsLeft} />
@@ -426,7 +446,7 @@ function PitcherSeasonPanel({
   return (
     <div className="pct-card">
       <div className="pct-card-head">
-        <span className="pct-card-title">Season</span>
+        <span className="pct-card-title">Platoon splits</span>
       </div>
       <PitcherBlock label="Overall" s={season} whole />
       <PitcherBlock label="vs LHB" s={vsLeft} />
@@ -436,47 +456,6 @@ function PitcherSeasonPanel({
 }
 
 type DetailsTab = 'overview' | 'percentiles' | 'splits' | 'gamelog' | 'rolling' | 'arsenal';
-
-/**
- * The **Overview** tab: this player's day, read whole — his game, his line for
- * it, and every play of it with its clip.
- *
- * It is the feed's grouped reading, which was the Games view before that, and
- * it has landed here because a card per player is a page *about a player* and
- * the app already had one. What that page could never do as a feed toggle it
- * does trivially now: it opens on **anybody**, rostered or not, which is
- * precisely the reader this view exists for — someone who came from a research
- * board row to decide whether a stranger is worth picking up, and whose first
- * question is what he did today.
- *
- * It leads the tab strip and is the default, for the same reason: the season
- * readings beside it answer "how good is he", where this answers "what is he
- * doing", and on a game day that is the question the page is opened with.
- *
- * The day comes from `/api/players/:id/day`, which is `getReport` for one man
- * over one date — the very report the feed reads — so the items here and the
- * items in the stream are the same objects drawn by the same components.
- */
-function OverviewTab({
-  report,
-  onOpenDetails,
-}: {
-  report: PlayerReport;
-  onOpenDetails?: (key: string) => void;
-}) {
-  // **The combined line only appears when there is something to combine.** A
-  // day is one game almost every time, and that game's own section header
-  // already carries his line for it — so on a single-game day the strip was the
-  // same string twice, an inch apart. On a doubleheader it is genuinely new,
-  // being the only place the two halves are added up.
-  const line = report.games.length > 1 ? playerDayLine(report) : null;
-  return (
-    <div className="details-overview">
-      {line && <p className="details-note details-day-line">{line}</p>}
-      <PlayerDay report={report} onOpenDetails={onOpenDetails} />
-    </div>
-  );
-}
 
 /**
  * The Arsenal tab: a pitcher's season pitch mix, overall or against one batter
@@ -565,6 +544,7 @@ export function PlayerDetails({
   position,
   isPitcher = false,
   isOnRoster,
+  ownedBy,
   rosterEditable = true,
   isWatchlisted,
   onWatchlistToggle,
@@ -584,6 +564,12 @@ export function PlayerDetails({
    *  research board's `My Roster` button selects on, so the baseball beside a
    *  row there and the one in this header always mean the same thing. */
   isOnRoster: boolean;
+  /** The fantasy team holding him, when it is somebody **else's** in the
+   *  connected league — which is what draws the padlock beside his name. Null
+   *  when nobody else holds him, and null with no league connected, since
+   *  without one there is no ownership to read and the mark is a claim rather
+   *  than a decoration. */
+  ownedBy?: string | null;
   /** Whether that roster is the app's own to change. False in fantasy mode,
    *  where ESPN owns the list: the add button and the Remove beside the badge
    *  both go, and the badge stays as the plain statement it is. */
@@ -708,6 +694,16 @@ export function PlayerDetails({
   } | null>(null);
   const [splitsError, setSplitsError] = useState<string | null>(null);
   const [splitsLoading, setSplitsLoading] = useState(true);
+  // The Stats tab's window table: this player's row on each of the research
+  // board's five windows. Lazy on first open like the three heavy tabs below —
+  // it is five reads of blobs the warmer already keeps hot, so the cost is a
+  // round trip rather than an upstream, but it is a round trip nobody who never
+  // opens the tab should pay. Keyed by kind as well as player, the way the game
+  // log's is: a two-way player's bat and his arm are two boards.
+  const [windows, setWindows] = useState<PlayerWindows | null>(null);
+  const [windowsError, setWindowsError] = useState<string | null>(null);
+  const [windowsLoading, setWindowsLoading] = useState(false);
+  const windowsReq = useRef<string | null>(null);
   // The season xwOBA series backs the Rolling xwOBA tab. It's a heavier Savant
   // fetch, so it's loaded lazily — only once that tab is first opened.
   const [xwoba, setXwoba] = useState<XwobaSeries | null>(null);
@@ -745,6 +741,7 @@ export function PlayerDetails({
    */
   const pctWait = useDelayedFlag(loading);
   const splitsWait = useDelayedFlag(splitsLoading);
+  const windowsWait = useDelayedFlag(windowsLoading);
   const xwobaWait = useDelayedFlag(xwobaLoading);
   const gameLogWait = useDelayedFlag(gameLogLoading);
   const arsenalWait = useDelayedFlag(arsenalLoading);
@@ -850,6 +847,9 @@ export function PlayerDetails({
     dayReq.current = null;
     setDay(null);
     setDayError(null);
+    windowsReq.current = null;
+    setWindows(null);
+    setWindowsError(null);
   }, [playerId]);
 
   // The Overview tab's day, lazily on first open (which for this tab is the
@@ -882,10 +882,40 @@ export function PlayerDetails({
     };
   }, [tab, playerId, kind]);
 
-  // Same lazy load for the Game Log tab.
+  // The Stats tab's five window rows, lazily on first open.
   useEffect(() => {
     const req = `${kind}-${playerId}`;
-    if (tab !== 'gamelog' || gameLogReq.current === req) return;
+    if (tab !== 'splits' || windowsReq.current === req) return;
+    windowsReq.current = req;
+    let live = true;
+    setWindowsLoading(true);
+    setWindowsError(null);
+    api
+      .playerWindows(playerId, kind)
+      .then((d) => {
+        if (live) setWindows(d);
+      })
+      .catch((e: unknown) => {
+        if (live) {
+          setWindowsError(e instanceof Error ? e.message : 'Failed to load');
+          windowsReq.current = null; // allow a retry on re-open
+        }
+      })
+      .finally(() => {
+        if (live) setWindowsLoading(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [tab, playerId, kind]);
+
+  // Same lazy load for the Game Log tab — and for the **Overview**, which draws
+  // the last five of its rows. One read serves both, which is the point of
+  // hanging it here rather than inside the preview: crossing from the summary to
+  // the full log is then free, and the two can never show different rows.
+  useEffect(() => {
+    const req = `${kind}-${playerId}`;
+    if ((tab !== 'gamelog' && tab !== 'overview') || gameLogReq.current === req) return;
     gameLogReq.current = req;
     let live = true;
     setGameLogLoading(true);
@@ -993,6 +1023,23 @@ export function PlayerDetails({
                 {/* ESPN's eligibility where there is a league to read it from,
                     MLB's listed position otherwise — see `posChip`. */}
                 {posChip}
+                {/* The padlock: somebody else in the league already has him.
+                    It sits on the **name line** rather than out in the control
+                    cluster on the right, for the reason the Rostered line under
+                    it does — that cluster is things you *do* to him, where this
+                    is a fact *about* him, like the position chip it follows.
+
+                    It is the glyph alone, where the `Watch` button beside it
+                    keeps its word: that one is a verb naming what a press does,
+                    and this is a label whose words ("on another manager's team
+                    in your ESPN league") are longer than an `<h1>` can spare and
+                    are exactly what the tooltip already says.
+
+                    Suppressed when he is on the roster in view — the badge
+                    below is the answer then, and the two would be one question
+                    answered twice. In fantasy mode that case cannot even arise,
+                    the user's own team being excluded upstream. */}
+                {!isOnRoster && ownedBy && <LockMark name={name} team={ownedBy} size={15} />}
               </h1>
               {/* Under the name rather than out beside the watchlist button: it
                   is a fact *about the player*, like the position chip above it,
@@ -1163,7 +1210,13 @@ export function PlayerDetails({
             className={`details-tab${tab === 'splits' ? ' is-active' : ''}`}
             onClick={() => setTab('splits')}
           >
-            Season
+            {/* **The key stays `splits` and only the word changed.** It is in
+                no URL — the open tab is component state — but it is named by
+                every `setTab` in this file and by anything that links to a tab
+                from elsewhere on the page, and renaming it would have been a
+                rename for the sake of matching a label. What the tab holds is
+                no longer the season alone, which is why the word had to go. */}
+            Stats
           </button>
           <button
             type="button"
@@ -1201,7 +1254,23 @@ export function PlayerDetails({
       {tab === 'overview' && dayError && !dayLoading && (
         <div className="details-status details-error">Couldn&rsquo;t load today: {dayError}</div>
       )}
-      {tab === 'overview' && day && !dayLoading && <OverviewTab report={day} />}
+      {tab === 'overview' && day && !dayLoading && (
+        <OverviewTab
+          report={day}
+          playerId={playerId}
+          name={name}
+          /* The season line and the game log are the page's own reads, handed
+             down rather than fetched again: the Stats tab and the Game Log tab
+             already hold them, and a second copy would be a second answer free
+             to disagree with the tab it summarises. */
+          season={splits?.season ?? null}
+          pitcherSeason={pitcherSplits?.season ?? null}
+          seasonLoading={splitsLoading}
+          gameLog={gameLog}
+          gameLogLoading={gameLogLoading}
+          onTab={setTab}
+        />
+      )}
 
       {tab === 'arsenal' && arsenalWait && <LoadingBlock>Reading the season arsenal</LoadingBlock>}
       {tab === 'arsenal' && arsenalError && !arsenalLoading && (
@@ -1248,10 +1317,36 @@ export function PlayerDetails({
         <RollingXwoba series={xwoba} name={name} />
       )}
 
-      {tab === 'splits' && splitsWait && <LoadingBlock>Reading the season line</LoadingBlock>}
+      {/* **The Stats tab: the research board, cut two ways.** Down the side of
+          the table, the five spans the board itself offers — so "how has he
+          been going lately, against his season" is one read rather than five
+          visits to a league table. Under it, the platoon card, which is the
+          same season cut along the *other* axis and is the only thing here the
+          board cannot answer for at all. */}
+      {tab === 'splits' && windowsWait && <LoadingBlock>Reading the stat lines</LoadingBlock>}
+      {tab === 'splits' && windowsError && !windowsLoading && (
+        <div className="details-status details-error">
+          Couldn’t load stats: {windowsError}
+        </div>
+      )}
+      {tab === 'splits' && windows && !windowsLoading && (
+        <>
+          {/* The table is a direct child of the view, as the game log is, so
+              `--table-bleed` takes it out to the overlay's own edges rather
+              than leaving it inside a reading column's padding. Its caption
+              sits above it and keeps the gutters, the way the research board's
+              count line does. */}
+          <p className="stats-caption">
+            The research board&rsquo;s own columns, one row per span.
+          </p>
+          <PlayerWindowTable kind={kind} windows={windows.windows} />
+        </>
+      )}
+
+      {tab === 'splits' && splitsWait && <LoadingBlock>Reading the platoon splits</LoadingBlock>}
       {tab === 'splits' && splitsError && !splitsLoading && (
         <div className="details-status details-error">
-          Couldn’t load season stats: {splitsError}
+          Couldn’t load platoon splits: {splitsError}
         </div>
       )}
       {tab === 'splits' && !splitsLoading && isPitcher && pitcherSplits && (
