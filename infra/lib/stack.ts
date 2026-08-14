@@ -308,6 +308,27 @@ export class SickoStack extends Stack {
         attributeMapping: {
           email: cognito.ProviderAttribute.GOOGLE_EMAIL,
           givenName: cognito.ProviderAttribute.GOOGLE_GIVEN_NAME,
+          // Google says whether it has verified the address and the pool has no
+          // other way to learn it: `autoVerify` sends a code, and a federated
+          // user is never asked for one, so without this mapping every Google
+          // account lands with `email_verified: false` — checked against the
+          // live pool, all three of them. It rides in the ID token, and it is
+          // what Cognito consults when an address arrives twice (someone who
+          // signed up with a password and later presses Continue with Google).
+          // `custom` is only how CDK spells a destination attribute it has no
+          // named field for; both of these are standard ones.
+          custom: {
+            email_verified: cognito.ProviderAttribute.other('email_verified'),
+            // Already what the live provider has (`username: sub`), added by
+            // Cognito rather than by this template — which is exactly why it is
+            // written out now. CloudFormation replaces `AttributeMapping`
+            // wholesale, so a template that names two attributes where the
+            // provider holds three is an update that could drop the third; and
+            // the third is the one that decides a federated user's username, so
+            // dropping it risks every existing Google account coming back as
+            // somebody new. Stating it makes the update a strict superset.
+            username: cognito.ProviderAttribute.other('sub'),
+          },
         },
       });
       providers.push(cognito.UserPoolClientIdentityProvider.GOOGLE);
