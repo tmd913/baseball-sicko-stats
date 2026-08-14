@@ -415,6 +415,12 @@ export interface PitcherSeasonStats {
   kRate: string; // K / batters faced, ".291"
   bbRate: string;
   avgAgainst: string; // batting average against, ".221"
+  /** OPS against — the one line MLB publishes on a pitching split that reads as
+   *  a single number, and the Splits tab's headline row for a pitcher. ERA is
+   *  unavailable on a split (earned runs aren't split by hand) and OPS-against
+   *  is the direct analogue of the batter tab's OPS row, so both kinds of player
+   *  lead on the same comparison. */
+  opsAgainst: string;
   hitBatsmen: number;
   homeRunsPer9: string;
   // ERA-scale estimators (leagueRates.ts). FIP is the pitcher's own three true
@@ -591,6 +597,13 @@ export interface SeasonStats {
   atBats: number;
   runs: number;
   sb: number;
+  /** The two three-true-outcome counts, which is what they are here for: the
+   *  Splits tab reads K% and BB% off them (`/pa`), and a hitter's swing-and-miss
+   *  against same-side breaking stuff is the classic platoon tell. Counts rather
+   *  than rates because a rate over a *split* has to be divided by that split's
+   *  own PA, which only this object knows. Nothing else reads them. */
+  strikeOuts: number;
+  baseOnBalls: number;
 }
 
 /**

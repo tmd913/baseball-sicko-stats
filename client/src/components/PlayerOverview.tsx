@@ -65,7 +65,7 @@ export function OverviewTab({
     | null;
   gameLogLoading: boolean;
   /** Switch the page to another tab — what each block's own link does. */
-  onTab: (tab: 'splits' | 'gamelog') => void;
+  onTab: (tab: 'stats' | 'gamelog') => void;
   onOpenDetails?: (key: string) => void;
 }) {
   const isPitcher = report.kind === 'pitcher';
@@ -82,7 +82,7 @@ export function OverviewTab({
         season={season}
         pitcherSeason={pitcherSeason}
         loading={seasonLoading}
-        onSeeAll={() => onTab('splits')}
+        onSeeAll={() => onTab('stats')}
       />
 
       <section className="ovw-block">

@@ -4361,6 +4361,163 @@ body {
   }
 }
 
+/* ---- The Splits tab: one platoon comparison per row ------------------------
+   It rides on `.pct-card` for the box, the head and the title — the same card
+   the percentile rankings and the platoon panel before it were drawn in, since
+   this is the same object: a titled column of labelled bars inside the player
+   overlay. What is under its own name here is the grid, the diverging rail and
+   the two states a thin sample puts the fill in. */
+.spl-intro {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: center;
+}
+.spl-intro strong {
+  color: var(--text);
+  font-weight: 700;
+}
+/* Label · left figure · rail · right figure. The two value columns are equal
+   and fixed so the rail is centred in the row as well as in itself — a rail
+   whose zero sat off the middle of the card would undo the whole device. */
+.spl-table {
+  --spl-label-w: 62px;
+  --spl-val-w: 54px;
+}
+.spl-heads,
+.spl-row {
+  display: grid;
+  grid-template-columns: var(--spl-label-w) var(--spl-val-w) 1fr var(--spl-val-w);
+  align-items: center;
+  column-gap: 10px;
+}
+.spl-row {
+  min-height: 34px;
+}
+.spl-heads {
+  padding-bottom: 6px;
+  margin-bottom: 4px;
+  border-bottom: 2px solid var(--border);
+}
+/* The sample size lives here, in the head, whatever it is — the two notes below
+   the table only fire when it is small enough to change how the bars read. */
+.spl-head-side {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  line-height: 1.2;
+}
+.spl-head-side small {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--faint);
+}
+.spl-label {
+  text-align: right;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+/* The stronger side is stated twice — by the direction of the fill and by the
+   weight of its own figure — so the row survives being read at a glance and
+   being read carefully. */
+.spl-val {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.spl-val--strong {
+  color: var(--accent);
+}
+.spl-val--weak {
+  color: var(--muted);
+  font-weight: 600;
+}
+/* The rail. Its ::before is the zero — a dashed guide at the middle that stacks
+   row to row into one continuous line down the card, exactly as the percentile
+   card's "average" guide does. */
+.spl-track {
+  position: relative;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+}
+.spl-track::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -6px;
+  bottom: -6px;
+  border-left: 1px dashed var(--border);
+}
+.spl-fill {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  min-width: 3px;
+  border-radius: 999px;
+  background: var(--accent);
+  opacity: 0.8;
+}
+/* Hatched rather than solid where a side is thin: this card's version of the
+   dotted percentile bubble one tab over, where a broken mark has meant "our
+   estimate, not a measurement" since it was written. */
+.spl-fill--thin {
+  background: repeating-linear-gradient(
+    115deg,
+    var(--accent) 0 3px,
+    transparent 3px 7px
+  );
+  opacity: 1;
+}
+/* A gap past the rail's own full scale is clamped, and squares off its outer
+   end to say it has been — the one thing a clamped bar must not do is read as
+   an exact measurement. */
+.spl-fill--l.spl-fill--over {
+  border-top-left-radius: 2px;
+  border-bottom-left-radius: 2px;
+}
+.spl-fill--r.spl-fill--over {
+  border-top-right-radius: 2px;
+  border-bottom-right-radius: 2px;
+}
+.spl-note {
+  margin: 12px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.spl-note--warn {
+  color: var(--hr);
+}
+/* Narrow: the label and the two figures give up what they can, and the rail
+   keeps whatever is left — it is the thing the tab is for. */
+@media (max-width: 560px) {
+  .spl-table {
+    --spl-label-w: 46px;
+    --spl-val-w: 46px;
+  }
+  .spl-heads,
+  .spl-row {
+    column-gap: 7px;
+  }
+  .spl-label {
+    font-size: 11px;
+  }
+  .spl-val {
+    font-size: 11px;
+  }
+}
+
 /* ---- View bar: Summary/Players/Feed tabs on the left, the player search (and
    its Edit toggle) on the right ---- */
 .view-bar {
