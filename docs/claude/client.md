@@ -434,7 +434,7 @@ The order is held locally during the drag and **committed on release**, unlike t
 
 **The `<tfoot>` treats the two kinds differently, and the split is honest rather than tidy.** The batter's OBP is **recomputed from the totals** alongside the AVG and OPS already there, off the `hbp`/`sacFlies` the row has carried for exactly this since it was written — the three cells are then one arithmetic over one set of sums, and the OPS at the end of the row is that OBP plus a slugging over the same at-bats. The pitcher's FIP and WHIP are **not** recomputed and are **not summed** — a season-to-date rate is not a summable thing, and the newest row's running value *is* the season, the log running to the last game played. So the foot takes `games[0]`'s. That is right twice over: it keeps FIP's one definition on the server, where the constant behind it lives, rather than restating `FIP_CONSTANT` in a table; and it cannot disagree with the row directly above it. Checked against MLB's published season line end to end — **Alonso** `.259/.353/.833`, **Soto** `.283/.408/.947`, **Ohtani** `.290/.392/.930` and **Ke'Bryan Hayes** `.138/.191/.425` on the batting side (newest row and recomputed foot alike, save the one hundredth of Ohtani's foot OPS, which is the pre-existing rounding of an unrounded `obp + slg` against MLB's rounding of each half first), and **Sánchez** `2.54 / 2.68 / 1.19`, **Alcantara** `3.52 / 3.83 / 1.17`, **Gallen** `6.34 / 5.36 / 1.56` and **Vesia** `2.81 / 3.10 / 1.18` on the pitching side, each FIP identical to the one the Season tab prints for the same man.
 
-**Measured at 390px on the real log**: the batting table goes **688px → 753** for one column and the pitching table **659 → 789** for two, against a 390px scrollport that was always going to scroll — and the page body overflows at **no** width (checked 320 / 390 / 640 / 1200 on both tabs, document overflow 0 at every one). The two sticky axes are untouched at every one of them: the date column pins at **0** from the scrollport's left edge with the table scrolled to its far right, and the header row at **1px**, which is the border.  It carries the same **full-page button** the other two wide tables do, inline in its Date header — the corner cell, pinned on both axes, so it is the way out as well as in; expanding now drops nothing but the app's own chrome, the log having stopped capping itself), and a **Season** tab — **one card** (`SeasonPanel` / `PitcherSeasonPanel`) holding three labelled `.split-block`s: Overall, then vs LHP/RHP (vs LHB/RHB for a pitcher). They're the same line cut three ways, so they stack inside a single card rather than splitting into a season card and a splits card — the overall row is the thing a split is a split *of*, and the comparison only lands with them together. Each block carries its own sample size in its head (`Overall · 80 G · 338 PA`). It's the one place in the app that shows the season whole rather than a slice of it — the cards no longer summarise it at all, their header line having become a read on the range in view (below), and the summary table only spans the report's range — so it carries what those leave out: R/SB/games for a batter, BAA/K%/BB%/HR-9 and the counting stats for a pitcher. **Overall and each half render the same row** — one `BatterStats` / `PitcherStats` component for all three blocks — so a split reads column-for-column against the line above it. Each ERA-scale estimator sits immediately after the number it estimates (ERA → xERA, FIP → xFIP), as on the collapsed card. What a slice genuinely doesn't have is **dropped rather than dashed or zeroed**, and the two failure modes need different handling: a stat MLB omits comes back as `str()`'s em-dash and is caught by `has()` (a split has no ERA — earned runs aren't split by hand), but MLB's platoon splits return **runs and steals as 0 for every player**, and 0 is a value a real split could have, so those two are gated on the block's `whole` flag instead. xERA/xFIP are season-wide for the same reason — the leaderboard doesn't split, and the fly-ball count behind xFIP is tallied over the whole CSV. Hits are shown nowhere here: AVG and AB already say it. It's a fixed full-screen overlay with its own scroller, so it pins the body (`hooks.ts::useLockBodyScroll`, restoring the scroll on close) and sets `overscroll-behavior: none` — without both, scrolling it chained through to the list behind and closing it landed the user somewhere they never scrolled to; `none` rather than the `contain` that stood here for a while, since that stops the chaining and keeps the overlay's own iOS bounce (see **A table stops when its rows do** above). `GameReel`'s `.reel-view` is the same shape and does the same. `PlayerAdder` searches the season roster; the settings menu's **Edit players** entry swaps the card list for `PlayerOrderEditor.tsx` — a drag-to-reorder screen showing only each player's number, headshot, name and a remove button. It drags via Pointer Events (mouse + touch). **On touch only the ⠿ grip starts a drag** — `touch-action: none` sits on `.order-grip` alone, so a finger anywhere else on the row scrolls the list as usual (with it on `.order-row` the whole page was unscrollable in edit mode); a mouse has no such conflict and can still grab the row anywhere (`startRowDrag` bails on non-mouse pointers, the grip stops propagation so one press starts one drag). It reorders the live list as the dragged row passes another (the row under the pointer is found with `elementFromPoint`; the dragged row sets `pointer-events: none` so it resolves to its drop target), auto-scrolls the page while a drag is held within `EDGE_ZONE` of the viewport top/bottom, and persists the order (`PUT /api/watchlist/order` — the roster's route, old name and all) once on release. Each row's ✕ removes that player: two taps, the first arming the button into a red "Remove?" (a row you drag shouldn't delete a player on one stray tap, and there's no undo), the second calling `App.tsx::removeFromEditor` — which drops him from `reports`/`reportsRef` immediately so the row goes before the roster-triggered refetch lands, and so a drag right after commits the order without him. The button stops `pointerdown` propagating, or the row's drag handler would `preventDefault` the click away. That button is **`RemoveButton.tsx`**, shared with `PlayerDetails`' header so the roster's one destructive control looks and behaves the same wherever it appears — controlled rather than self-arming, because the editor keeps a single armed row across the whole list. Edit mode is transient — deliberately **not** in the URL — and clears on a view switch. There is no longer a player-nav strip; a player can also be removed from `PlayerDetails`.
+**Measured at 390px on the real log**: the batting table goes **688px → 753** for one column and the pitching table **659 → 789** for two, against a 390px scrollport that was always going to scroll — and the page body overflows at **no** width (checked 320 / 390 / 640 / 1200 on both tabs, document overflow 0 at every one). The two sticky axes are untouched at every one of them: the date column pins at **0** from the scrollport's left edge with the table scrolled to its far right, and the header row at **1px**, which is the border.  It carries the same **full-page button** the other two wide tables do, inline in its Date header — the corner cell, pinned on both axes, so it is the way out as well as in; expanding now drops nothing but the app's own chrome, the log having stopped capping itself), and a **Stats** tab — the research board transposed onto one player, with the **platoon card** under it (`SeasonPanel` / `PitcherSeasonPanel`, **one card** holding three labelled `.split-block`s: Overall, then vs LHP/RHP (vs LHB/RHB for a pitcher)); see **The Stats tab: the board, transposed** below for the table above it and for why the two cuts of one season sit on one tab. They're the same line cut three ways, so they stack inside a single card rather than splitting into a season card and a splits card — the overall row is the thing a split is a split *of*, and the comparison only lands with them together. Each block carries its own sample size in its head (`Overall · 80 G · 338 PA`). It is the one place in the app that cuts a season **by handedness** — the window table above it cuts the same season by *time*, and neither can answer the other's question — so it carries what the rest of the app leaves out: R/SB/games for a batter, BAA/K%/BB%/HR-9 and the counting stats for a pitcher. **Overall and each half render the same row** — one `BatterStats` / `PitcherStats` component for all three blocks — so a split reads column-for-column against the line above it. Each ERA-scale estimator sits immediately after the number it estimates (ERA → xERA, FIP → xFIP), as on the collapsed card. What a slice genuinely doesn't have is **dropped rather than dashed or zeroed**, and the two failure modes need different handling: a stat MLB omits comes back as `str()`'s em-dash and is caught by `has()` (a split has no ERA — earned runs aren't split by hand), but MLB's platoon splits return **runs and steals as 0 for every player**, and 0 is a value a real split could have, so those two are gated on the block's `whole` flag instead. xERA/xFIP are season-wide for the same reason — the leaderboard doesn't split, and the fly-ball count behind xFIP is tallied over the whole CSV. Hits are shown nowhere here: AVG and AB already say it. It's a fixed full-screen overlay with its own scroller, so it pins the body (`hooks.ts::useLockBodyScroll`, restoring the scroll on close) and sets `overscroll-behavior: none` — without both, scrolling it chained through to the list behind and closing it landed the user somewhere they never scrolled to; `none` rather than the `contain` that stood here for a while, since that stops the chaining and keeps the overlay's own iOS bounce (see **A table stops when its rows do** above). `GameReel`'s `.reel-view` is the same shape and does the same. `PlayerAdder` searches the season roster; the settings menu's **Edit players** entry swaps the card list for `PlayerOrderEditor.tsx` — a drag-to-reorder screen showing only each player's number, headshot, name and a remove button. It drags via Pointer Events (mouse + touch). **On touch only the ⠿ grip starts a drag** — `touch-action: none` sits on `.order-grip` alone, so a finger anywhere else on the row scrolls the list as usual (with it on `.order-row` the whole page was unscrollable in edit mode); a mouse has no such conflict and can still grab the row anywhere (`startRowDrag` bails on non-mouse pointers, the grip stops propagation so one press starts one drag). It reorders the live list as the dragged row passes another (the row under the pointer is found with `elementFromPoint`; the dragged row sets `pointer-events: none` so it resolves to its drop target), auto-scrolls the page while a drag is held within `EDGE_ZONE` of the viewport top/bottom, and persists the order (`PUT /api/watchlist/order` — the roster's route, old name and all) once on release. Each row's ✕ removes that player: two taps, the first arming the button into a red "Remove?" (a row you drag shouldn't delete a player on one stray tap, and there's no undo), the second calling `App.tsx::removeFromEditor` — which drops him from `reports`/`reportsRef` immediately so the row goes before the roster-triggered refetch lands, and so a drag right after commits the order without him. The button stops `pointerdown` propagating, or the row's drag handler would `preventDefault` the click away. That button is **`RemoveButton.tsx`**, shared with `PlayerDetails`' header so the roster's one destructive control looks and behaves the same wherever it appears — controlled rather than self-arming, because the editor keeps a single armed row across the whole list. Edit mode is transient — deliberately **not** in the URL — and clears on a view switch. There is no longer a player-nav strip; a player can also be removed from `PlayerDetails`.
 
 **The chip beside a card's name is his ESPN eligibility**, whenever a league is connected — the same swap the research board's pills and Pos cell made, arriving on the cards for the same reason. MLB's one word is the wrong answer to the question a card in this app is read with: it is single-valued where a fantasy position is not, it is sometimes flatly different (Curtis Mead is listed at 2B and is eligible at 1B and 3B), and on a **pitcher's card it was `P`** — one letter, true of everybody on the tab, where `SP` and `RP` are the distinction a reader actually wants. Without a league, or for a player ESPN can't be joined to, it is MLB's listed position exactly as before, so nothing changes for a user without one. It costs no fetch: the map rides on the `/api/espn/ownership` response the board and the player page already read (see **ESPN fantasy league**, where the read losing its laziness is set out).
 
@@ -491,9 +491,134 @@ The order is held locally during the drag and **committed on release**, unlike t
 
 **It is the default tab as well as the first**, which is the same argument as the ordering: the five beside it are readings of his *season*, and on a game day the question a player page is opened with is what he is doing. It costs one request on open — `api.playerDay`, lazy in the same `dayReq` shape the Game Log, Arsenal and Rolling tabs use, which for the default tab means it loads with the page — and that request is the cheap half of the two the page already made, being one player over one date against a percentile scrape (see **Date handling and server routing** for why it adds no cache of its own and why the date is the server's rather than the client's).
 
-**A tab strip of five became six on a pitcher**, and needed nothing: `.details-tabs` already scrolls sideways and already scrolls the active tab into view with a 24px peek. Measured at 390px, the strip shows Overview · Percentile Rankings · Season with the rest a swipe away, the tab's own column is `--card-column` less the overlay's gutters (358px), and the page body overflows by 0.
+**A tab strip of five became six on a pitcher**, and needed nothing: `.details-tabs` already scrolls sideways and already scrolls the active tab into view with a 24px peek. Measured at 390px, the strip shows Overview · Percentile Rankings · Stats with the rest a swipe away, the tab's own column is `--card-column` less the overlay's gutters (358px), and the page body overflows by 0.
 
 **`.details-overview` takes `--card-column` rather than the 860px the tabs beside it use**, because what is in it is exactly what the feed holds — an at-bat card, a clip, an outing's innings — and those were sized against that number in the first place. A day read here and the same day read on the stream is then the same reading at the same width (measured: 800px at 1440, 358 at 390). It carries a `container-type` for the reason `.details-arsenal` does: the cards inside size themselves off their container, and in an otherwise plain block they would read the window.
+
+### The Stats tab: the board, transposed
+
+**The tab used to be called Season and was one card of platoon splits.** It is
+**Stats** now, and it leads with a table whose rows are the research board's own
+five windows — `Season · Last 7 days · Last 15 days · Last 30 days · Last 60
+days` — under the board's own columns for the player's kind.
+`PlayerWindowTable.tsx` draws it; `/api/players/:playerId/windows` feeds it.
+
+**The question is one the board already answered and could only answer six
+hundred people at a time.** "How has he been going lately, against his season"
+is a question about *one man*, and the only way to ask it of the board was to
+tap through five window tabs and hold four of the answers in your head — on a
+table of six hundred rows, having first found his. Transposed it is five rows,
+read down, and the comparison the reader came for is the vertical one.
+
+**Every number in it is the board's own, by construction rather than by care.**
+The column definitions moved out of `ResearchTable.tsx` into
+**`components/researchColumns.tsx`** — the `Column` type, the formatters, the
+derived rates, the two boards' arrays, `DEFAULT_OFF` and the `cols=` helpers —
+and both tables import them. A second copy of forty columns is exactly the drift
+this codebase spends its comments avoiding: one file would gain a column or fix
+a denominator and the other would go on printing the old answer, with nothing on
+screen to say which was which. What did **not** move is anything about *reading*
+the board — the sort, the filter builder, the position pills, the column picker
+and the table itself are phrased in that vocabulary rather than part of it, and
+they stayed. `ResearchTable` re-exports `defaultColumnKeys` / `toColumnKeys` /
+`isDefaultColumns` so App's import is untouched: the *selection* is a board
+setting, and the board is what App is configuring, even though the vocabulary
+behind it now lives next door.
+
+**Three of the board's columns are meaningless in this shape and are cut.**
+`Opp` is the one column on the board that is about *this afternoon* rather than
+about the window the rest of the row is drawn from — defensible where each row
+is a different player and indefensible where every row is the same man, since it
+would print the identical game five times; and what it says is on this very
+page, the Overview tab being his day. `Ros%` and the five `Δ`*n*`d` trend
+columns are facts about a *player* rather than about a span of his season, so
+they would repeat down the column too — and all six are already under his name
+in the page's own head, which is where a fact about the player belongs. The
+**identity block** goes for the same reason one level up: the head has said the
+headshot, the name, the club and the position once.
+
+**It shows the board's *default* set rather than all forty-odd, and it has no
+column picker.** That picker is a board setting — saved per user, shared by a
+`cols=` link, and phrased as "which columns do I want against six hundred names"
+— and a reader who wants the long tail has the board itself, one tab strip away
+in the app's own chrome. Following the *saved* board selection was the other
+option and was rejected on the same ground: this page opens from everywhere,
+including places with no board on screen, and a player page that quietly
+reshaped itself because of something set on another view is the harder thing to
+explain. What is left is 23 columns for a batter and 25 for a pitcher, plus the
+span.
+
+**No sort, either.** Five windows have exactly one order and it is time; putting
+"last 30 days" above "season" on the strength of one number would destroy the
+only structure the rows have. The header still carries the board's `title`, which
+is the whole of what a three-letter label leaves unsaid.
+
+**A window he does not appear on is absent, not zero**, and the server sends
+`row: null` rather than a zeroed row for it. The cell spans the stat columns and
+says `No games in this span` (`No outings` on a pitcher), because twenty
+em-dashes say "absent" far less clearly than one sentence does — and a row of
+noughts would say the opposite of the truth, claiming he played and did nothing.
+Checked on Matt Brash (IL15, 20 G on the season, nothing inside 60 days): the
+season row reads in full and all four windows carry the sentence.
+
+**The platoon card stays, under the table, and the splits route keeps its only
+reader.** The two are cuts of one season along different axes and neither can
+stand in for the other: the board's rows are cut by *time*, and MLB publishes no
+handedness split of them — nor does Savant, so a split has no Statcast half
+either. Mapping a `SeasonStats` onto a `ResearchRow` to make two more rows of
+the same table was the alternative and is worse than it looks: it would carry
+avg/obp/slg/ops/hr/rbi/ab and dash the other sixteen columns, and it would have
+to dash R and SB as well, since MLB's platoon splits return both as **0 for
+every player** and 0 is a value a real split could have. So the card keeps its
+own vocabulary, keeps its `Overall` block — the comparison a split invites is
+against the figure *directly above it*, not against the same figure twenty
+columns along a table that scrolls sideways — and is retitled **Platoon
+splits**, the tab having taken the word "Season".
+
+**The table rides on the game log's chrome rather than on a copy of it.**
+`.stats-scroll` and `.stats-table` are folded into `.glog-scroll` / `.glog-table`'s
+selector lists — one set of paddings, one gutter clamp, one zebra stripe, one
+`--table-bleed`, one pinned left column (`.glog-date`, here holding the span) —
+because the two are the same object: a wide stat table with a sticky first
+column, inside the player overlay, read across rather than picked. What it adds
+under its own name is three rules: `text-transform: none` on the headers (these
+are the board's labels, and the board switched uppercase off for exactly this
+reason — right for AVG, wrong for xwOBA and Brl%), a 96px floor and left
+alignment on the span column, and the muted "no games" cell. Plus `.stats-caption`,
+which keeps the overlay's gutters where the table gives them back, the way the
+board's count line sits inside the app's while the board bleeds past them.
+
+**The span is written out where the board's tabs abbreviate.** `Season · 7d ·
+15d · 30d · 60d` is right for eleven pills sharing a phone's width in a row that
+already scrolls; here they are five labels read *down* a column that holds
+nothing else, so the width is free — and `7d` beside a batting average could as
+easily be a stat as a span.
+
+**Lazy on first open**, like the Game Log, Arsenal and Rolling tabs and keyed by
+kind as well as player, since a two-way player's bat and his arm are two boards.
+The splits fetch beside it stays eager, as it always was.
+
+**Measured in a browser at 1200×900 and 390×844, on a batter and a pitcher.**
+The table is **1818px (batter) / 1973px (pitcher)** at 1200 and **1080 / 1177**
+at 390, in a scrollport of the window's width, and the **page body overflows by
+0 at both widths on both kinds** — the overlay's own scroller still scrolls
+(455px of range on the batter at 390, 719 on the pitcher) and `--table-bleed`
+puts the pane at **0 from both edges**. The span column pins at **0** from the
+scrollport's left edge with the table scrolled to its far right, on all four.
+Rows are **44.55px**, which is the game log's own row less its headshot — this
+table has none. The header reads `Span · G · PA · H/AB · R · 2B · 3B · HR · RBI
+· BB · K · SB · AVG · OBP · SLG · OPS · BB% · K% · xBA · xSLG · xwOBA · EV ·
+Brl% · HH%` on a batter and `Span · G · GS · IP · W · L · SVHD · H · ER · HR ·
+BB · K · ERA · xERA · FIP · xFIP · WHIP · K/9 · BB/9 · K% · BB% · xwOBA · EV ·
+Brl% · HH% · Whiff%` on a pitcher — the board's default set less the three cuts,
+in the board's own order. Spot-checked against the boards themselves: Salvador
+Perez reads `113 G · 473 PA · 94/436 · .216` on the season row and `6 G · 24 PA
+· 5/21 · .238` on 7d; Chris Sale `21 G · 123.0 IP · 2.20 ERA` and `1 G · 6.0 IP`.
+
+**Bundle: 436.13 → 438.16 KB of JS** (129.23 → 129.72 gzipped) and **96.75 →
+97.24 KB of CSS** (17.33 → 17.42 gzipped) — 2.0KB and 0.5KB raw for a table, a
+route and a module extraction, most of the JS being the new component and none
+of it the columns, which only moved.
 
 ### The Game Log's rows open the game
 

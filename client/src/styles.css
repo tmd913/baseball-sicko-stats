@@ -3488,7 +3488,14 @@ body {
      label, a bar and a number and still keeps its 860. */
   max-width: none;
 }
-.glog-scroll {
+/* The Stats tab's window table is the same object as the game log: a wide
+   stat table with a sticky first column, inside the player overlay, read across
+   rather than picked. So it is folded into the log's own selector lists rather
+   than restyled to resemble them — one set of paddings, one gutter clamp, one
+   zebra stripe, one pinned left edge. The only thing it adds under its own name
+   is a caption and the "no games in this span" cell (below). */
+.glog-scroll,
+.stats-scroll {
   overflow-x: auto;
   /* Both axes: this pane scrolls sideways always and vertically in
      `.details-view.gamelog-mode`, and what sits behind it there is the player
@@ -3501,7 +3508,8 @@ body {
   border-radius: var(--radius);
   background: var(--bg);
 }
-.glog-table {
+.glog-table,
+.stats-table {
   border-collapse: separate;
   border-spacing: 0;
   width: 100%;
@@ -3519,7 +3527,9 @@ body {
    wide at 390 — the width being paid in a pane that already scrolls sideways at
    every phone width there is. */
 .glog-table th,
-.glog-table td {
+.glog-table td,
+.stats-table th,
+.stats-table td {
   padding: 13px clamp(5px, 1.9vw, 28px);
   line-height: 1.35;
   white-space: nowrap;
@@ -3527,7 +3537,9 @@ body {
   background: var(--bg);
 }
 .glog-table tbody tr:nth-child(even) td,
-.glog-table tbody tr:nth-child(even) .glog-date {
+.glog-table tbody tr:nth-child(even) .glog-date,
+.stats-table tbody tr:nth-child(even) td,
+.stats-table tbody tr:nth-child(even) .glog-date {
   background: var(--panel);
 }
 /* **A row is a press now, so it looks like one.** It carried no hover tint for
@@ -3567,7 +3579,8 @@ body {
   background: var(--panel-2);
   box-shadow: inset 0 2px 0 var(--accent), inset 0 -2px 0 var(--accent);
 }
-.glog-table thead th {
+.glog-table thead th,
+.stats-table thead th {
   /* Sticky against .glog-scroll, which is the scroll container in both axes —
      which is the whole reason the Game Log tab reshapes the overlay below. */
   position: sticky;
@@ -3589,7 +3602,8 @@ body {
    is the game log's copy of: capped at 1%, fourteen columns of single digits
    sat in a huddle at the right of the overlay with the opponent column holding
    a third of the window and nothing in it. */
-.glog-table .glog-num {
+.glog-table .glog-num,
+.stats-table .glog-num {
   width: auto;
   min-width: clamp(28px, 4.4vw, 46px);
   text-align: right;
@@ -3598,7 +3612,8 @@ body {
 }
 /* The date column pins to the left edge as the stats scroll under it — without
    it a row a few columns in belongs to no game in particular. */
-.glog-table .glog-date {
+.glog-table .glog-date,
+.stats-table .glog-date {
   position: sticky;
   left: 0;
   z-index: 1;
@@ -3610,9 +3625,42 @@ body {
 }
 /* The top-left corner: above both the sticky header row and the sticky date
    column, so neither slides over it. */
-.glog-table thead .glog-date {
+.glog-table thead .glog-date,
+.stats-table thead .glog-date {
   z-index: 3;
   background: var(--panel-2);
+}
+/* **Uppercase off**, which is the one thing folding into the log's header rule
+   could not bring with it. These labels are the research board's, and that
+   board switched `text-transform` off for exactly this reason: it is right for
+   AVG and wrong for xwOBA, xBA, xERA and Brl%, mixed-case stat names the app
+   writes that way everywhere else. The log's own headers are all-caps words and
+   keep it. */
+.stats-table thead th {
+  text-transform: none;
+}
+/* The span column holds words rather than a date, so it is the one place this
+   table parts from the log: left-aligned and not tabular, and wide enough for
+   "Last 60 days" without the stat columns having to wait for it. */
+.stats-table .stats-span {
+  min-width: 96px;
+  font-weight: 600;
+}
+/* A span he does not appear on. It spans the stat columns rather than dashing
+   each of them, because twenty em-dashes say "absent" far less clearly than one
+   sentence does — and a row of noughts would say the opposite of the truth. */
+.stats-table .stats-none {
+  text-align: left;
+  color: var(--faint);
+  font-weight: 500;
+}
+/* The table's caption. It keeps the overlay's gutters where the table gives
+   them back, exactly as the research board's count line sits inside the app's
+   while the board bleeds past them. */
+.stats-caption {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 12px;
 }
 .glog-table .glog-opp {
   text-align: left;
@@ -5677,7 +5725,8 @@ body {
    padding edge, and the scrollport and its contents shift together. */
 .summary-scroll,
 .research-scroll,
-.glog-scroll {
+.glog-scroll,
+.stats-scroll {
   margin-left: calc(-1 * var(--table-bleed, 0px));
   margin-right: calc(-1 * var(--table-bleed, 0px));
   border-left: none;
