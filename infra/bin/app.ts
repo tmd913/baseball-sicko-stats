@@ -34,5 +34,14 @@ new SickoStack(app, ctx('stackName') ?? 'BaseballSicko', {
   // created and verified but Cognito keeps sending through its own shared
   // address. See SickoStackProps.sesFromEmail.
   sesFromEmail: ctx('sesFromEmail'),
+  // Built on one deploy, switched on by a later one — see the two props. The
+  // gap is where the Google OAuth client gets the new redirect URI, which is a
+  // manual change in someone else's console that nothing here can verify.
+  authDomainName: ctx('authDomainName'),
+  // `-c authDomainLive=true` arrives as the string "true"; the same key set in
+  // cdk.json arrives as a real boolean. Accept both, and treat anything else
+  // as off, so a typo reads as "not live" rather than as live.
+  authDomainLive: app.node.tryGetContext('authDomainLive') === true ||
+    ctx('authDomainLive') === 'true',
   description: 'Statcast Sicko — API, watchlists, cache and static site',
 });

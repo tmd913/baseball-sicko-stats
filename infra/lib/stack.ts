@@ -88,14 +88,81 @@ export interface SickoStackProps extends StackProps {
    * of the sandbox.
    */
   sesFromEmail?: string;
+  /**
+   * A subdomain to serve Cognito's own pages from, e.g.
+   * `auth.statcastsicko.com`. Omit to stay on the `amazoncognito.com` prefix
+   * domain.
+   *
+   * This exists for a bug rather than for the nicer address. Google sign-in
+   * fails intermittently **on iOS only** — reproduced in CloudTrail on
+   * 2026-08-14, where `OAuth2Response_GET` returned "Something went wrong"
+   * and left the user on a 401 `Login_GET`, and where the retry a few seconds
+   * later succeeded. All three recorded occurrences are iOS; no desktop
+   * attempt has ever failed. That is the shape a WebKit cross-site cookie
+   * mitigation produces on a hop through `*.amazoncognito.com` — a domain the
+   * `identity_provider=Google` short-circuit gives the user no interaction
+   * with, and which is third-party to the site throughout. Serving the same
+   * pages from a subdomain of the site makes the hop same-site.
+   *
+   * **The cause is inferred, not proven.** Cognito publishes no detail for
+   * that leg (the pool is on the ESSENTIALS tier, so `userAuthEvents` log
+   * delivery isn't available), and the failing leg could not be reproduced on
+   * demand. This is a cheap, reversible thing to try, not a diagnosis — which
+   * is exactly why it is two flags and why the prefix domain stays.
+   *
+   * Setting this **creates** the certificate, the domain and its DNS records
+   * and changes nothing about how anyone signs in. `authDomainLive` is what
+   * moves traffic onto it. The split is `sesFromEmail`'s, for the same class
+   * of reason: Cognito builds a CloudFront distribution for a custom domain
+   * and it takes time to propagate, and the Google OAuth client has to list
+   * the new `/oauth2/idpresponse` as an authorized redirect URI *before* any
+   * request is aimed at it — a manual step in someone else's console, which
+   * Google documents as taking anywhere from five minutes to a few hours, and
+   * which nothing here can verify. Flipping both at once would put an
+   * unverifiable third-party change on the critical path of a deploy.
+   *
+   * Requires `domainName`, since the certificate validates against its zone
+   * and the alias records are written into it.
+   */
+  authDomainName?: string;
+  /**
+   * Whether the app actually signs in through `authDomainName`.
+   *
+   * False (the default) means the domain is built and idle: `/config.json`
+   * still names the prefix domain, so every sign-in goes the way it goes
+   * today. True points the client, the server and the outputs at the custom
+   * domain.
+   *
+   * **Reversing it is one deploy and needs nothing else.** A user pool can
+   * hold a prefix domain and a custom domain at the same time (AWS: "You can
+   * have a custom domain and a prefix domain"), and this stack never stops
+   * declaring the prefix one — so the old address keeps serving throughout,
+   * and dropping this flag moves traffic straight back onto it without
+   * waiting for a domain to be torn down or a DNS record to expire.
+   *
+   * The one documented difference between the two is that Cognito serves
+   * `/.well-known/openid-configuration` for the custom domain only. Nothing
+   * here reads it: `client/src/cognito.ts` builds the authorize URL itself and
+   * posts to the Identity Provider endpoint directly, which is what dropping
+   * `oidc-client-ts` bought.
+   */
+  authDomainLive?: boolean;
 }
 
 export class SickoStack extends Stack {
   constructor(scope: Construct, id: string, props: SickoStackProps) {
     super(scope, id, props);
 
-    const { siteUrl, domainName, googleClientId, googleSecretName, cognitoPrefix, sesFromEmail } =
-      props;
+    const {
+      siteUrl,
+      domainName,
+      googleClientId,
+      googleSecretName,
+      cognitoPrefix,
+      sesFromEmail,
+      authDomainName,
+      authDomainLive,
+    } = props;
 
     // ---- Storage ------------------------------------------------------
 
@@ -290,6 +357,12 @@ export class SickoStack extends Stack {
     // verifying, or the pool update fails on an unverified source.
     if (sesIdentity && userPoolEmail) userPool.node.addDependency(sesIdentity);
 
+    // The prefix domain, and it is never removed — not even once a custom
+    // domain is serving. A pool may hold both, so keeping this one is what
+    // makes `authDomainLive` a one-deploy switch in either direction rather
+    // than a migration: the old address goes on working while traffic is on
+    // the new one, and moving back needs no domain to be torn down. It is also
+    // the fallback the app lands on if the custom domain is ever removed.
     const userPoolDomain = userPool.addDomain('Domain', {
       cognitoDomain: { domainPrefix: cognitoPrefix },
     });
@@ -395,7 +468,22 @@ export class SickoStack extends Stack {
     // dependency (and reports as a 19-resource cycle that hides the cause).
     if (googleIdp) userPoolClient.node.addDependency(googleIdp);
 
-    const cognitoDomain = `${cognitoPrefix}.auth.${this.region}.amazoncognito.com`;
+    const prefixDomain = `${cognitoPrefix}.auth.${this.region}.amazoncognito.com`;
+
+    // A custom domain is only built when `domainName` supplies a zone to
+    // validate a certificate against and write records into.
+    const authDomain = domainName && authDomainName ? authDomainName : undefined;
+
+    /**
+     * The host every sign-in actually goes through — what `/config.json` hands
+     * the client and what the server reports.
+     *
+     * Both branches are plain strings known at synth time rather than
+     * references to the domain resources, which is what lets this be decided
+     * here, high up, while the custom domain itself is created much further
+     * down (it has to be, so it can depend on the apex A record — see there).
+     */
+    const cognitoDomain = authDomain && authDomainLive ? authDomain : prefixDomain;
 
     // ---- Compute ------------------------------------------------------
 
@@ -551,6 +639,9 @@ export class SickoStack extends Stack {
     // its own alias records, cert SAN and distribution alias regardless —
     // without all three the redirect itself can't be reached over HTTPS, and
     // the visitor gets a certificate warning instead of a working site.
+    // Captured because Cognito refuses to create a custom domain unless the
+    // *parent* of that domain already resolves — see the block below.
+    let apexARecord: route53.ARecord | undefined;
     if (zone && domainName) {
       const target = route53.RecordTarget.fromAlias(
         new r53targets.CloudFrontTarget(distribution),
@@ -559,11 +650,70 @@ export class SickoStack extends Stack {
         ['Apex', undefined],
         ['Www', `www.${domainName}`],
       ] as const) {
-        new route53.ARecord(this, `Alias${id}`, { zone, recordName, target });
+        const a = new route53.ARecord(this, `Alias${id}`, { zone, recordName, target });
+        if (id === 'Apex') apexARecord = a;
         // CloudFront answers on IPv6 by default; without this record an
         // IPv6-only client can't resolve the site at all.
         new route53.AaaaRecord(this, `Alias${id}V6`, { zone, recordName, target });
       }
+    }
+
+    /**
+     * Cognito's own pages, served from a subdomain of the site.
+     *
+     * Built whenever `authDomainName` is set; *used* only when
+     * `authDomainLive` is too. See both props for why that is two flags, and
+     * for the iOS Google sign-in failure this is a candidate remedy for.
+     *
+     * Its own certificate rather than a SAN on `SiteCert`, deliberately.
+     * Adding a name to that certificate replaces it, and replacing it updates
+     * the distribution serving the whole site — so a change made to fix
+     * sign-in would put the site's own TLS in the blast radius. A separate
+     * certificate keeps the failure contained to the thing being changed, and
+     * costs nothing: ACM certificates are free and this one validates against
+     * the same zone.
+     */
+    if (zone && domainName && authDomain) {
+      const authCert = new acm.Certificate(this, 'AuthCert', {
+        domainName: authDomain,
+        validation: acm.CertificateValidation.fromDns(zone),
+      });
+
+      const authUserPoolDomain = userPool.addDomain('AuthDomain', {
+        customDomain: { domainName: authDomain, certificate: authCert },
+      });
+
+      // Cognito verifies that the parent domain resolves before it will create
+      // a custom domain — "to protect against accidental hijacking of
+      // production domains" — and an SOA record is explicitly not enough. On
+      // this account the apex has resolved for a long time, so nothing would
+      // race today; but a deploy into an empty account creates both in the
+      // same changeset, and without this the custom domain can be attempted
+      // first and fail on a parent that doesn't exist yet. Declaring it is
+      // what keeps a from-scratch deploy working.
+      if (apexARecord) authUserPoolDomain.node.addDependency(apexARecord);
+
+      const authTarget = route53.RecordTarget.fromAlias(
+        new r53targets.UserPoolDomainTarget(authUserPoolDomain),
+      );
+      new route53.ARecord(this, 'AuthAlias', {
+        zone,
+        recordName: authDomain,
+        target: authTarget,
+      });
+      // AWS's own walkthrough writes only the A record, and following it would
+      // have been a regression: the prefix domain this replaces *does* answer
+      // on IPv6 (measured — `baseball-sicko.auth.us-east-1.amazoncognito.com`
+      // returns three AAAA records), so an A-only alias would leave an
+      // IPv6-only client able to load the app and unable to sign in with
+      // Google. Cognito's distribution is managed and not ours to configure,
+      // so this is best-effort: if it ever has no IPv6, the alias answers
+      // NODATA and a dual-stack client falls back to the A record above.
+      new route53.AaaaRecord(this, 'AuthAliasV6', {
+        zone,
+        recordName: authDomain,
+        target: authTarget,
+      });
     }
 
     new s3deploy.BucketDeployment(this, 'DeploySite', {
@@ -630,9 +780,28 @@ export class SickoStack extends Stack {
           `-c sesFromEmail=no-reply@${domainName ?? 'example.com'}`,
       description: 'Where confirmation and password-reset emails come from',
     });
+    // Both, when there are two, and that is the point rather than tidiness:
+    // the Google OAuth client must list *every* host that can ever send it a
+    // request, and the prefix domain goes on being one for as long as
+    // `authDomainLive` can be turned back off. Listing only the live one would
+    // make the rollback the thing that breaks sign-in.
     new CfnOutput(this, 'GoogleRedirectUri', {
-      value: `https://${cognitoDomain}/oauth2/idpresponse`,
-      description: 'Add this as an authorized redirect URI on the Google OAuth client',
+      value: authDomain
+        ? [prefixDomain, authDomain].map((d) => `https://${d}/oauth2/idpresponse`).join(' , ')
+        : `https://${prefixDomain}/oauth2/idpresponse`,
+      description:
+        'Authorized redirect URI(s) on the Google OAuth client. Add, never replace: ' +
+        'every host listed here must stay listed while it can still serve a sign-in.',
+    });
+    new CfnOutput(this, 'AuthDomainStatus', {
+      value: !authDomain
+        ? `Sign-in goes through ${prefixDomain}. No custom auth domain configured.`
+        : authDomainLive
+          ? `Sign-in goes through ${authDomain}. Roll back by re-deploying without -c authDomainLive=true`
+          : `${authDomain} is built and idle; sign-in still goes through ${prefixDomain}. ` +
+            `Add https://${authDomain}/oauth2/idpresponse to the Google OAuth client, ` +
+            'then re-deploy with -c authDomainLive=true',
+      description: 'Which host Cognito serves sign-in from, and what the next step is',
     });
     // With a custom domain the site origin is known before anything is
     // created, so the callback URL is already right on the first pass.
