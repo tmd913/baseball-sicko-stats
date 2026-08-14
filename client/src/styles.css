@@ -4237,14 +4237,47 @@ body {
   margin-bottom: 6px;
 }
 
-/* ---- Rolling xwOBA chart ---- */
+/* ---- The Charts tab: the rolling-xwOBA chart, its key and its labels ---- */
+/* `position: relative` is the popover's business rather than the head's own:
+   see `.roll-key .info-key-panel` below, which anchors the key to this row
+   instead of to the 30px button inside it. */
 .roll-head {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 10px;
   text-align: left;
+}
+/* The title and its ⓘ are one item of the head's `space-between`, or the three
+   of them would spread and put the key in the middle of the row. */
+.roll-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+/* This caller's own half of `InfoKey` — the shared half is `.info-key-panel`.
+   Written out rather than folded onto `.settings-menu`'s rule, which the two
+   header popovers share: that rule is turned off (`position: static`) under
+   640px so the gear's menu can hang off the header's full width, and this
+   anchor wants the opposite at that width — see the panel rule below.
+   `.spl-key` is its own rule for its own reasons too, so the pattern here is
+   one anchor rule per caller and one panel rule shared. */
+.roll-key {
+  display: inline-flex;
+}
+/* **Anchored to the card's head, not to the button.** Every other key in the
+   app hangs off a control at one edge of its card and opens inward; this one
+   sits after a title in the middle of the row — at 390 the button lands at
+   x=221 of a 358px card, where a 320px panel fits from neither of its edges
+   (it would run to 531 opening right and to −109 opening left). The head is a
+   full-width row, so anchoring there gives the panel the card's own left edge,
+   which is where the reading starts anyway, and it drops clear of the window
+   buttons on the same line. */
+.roll-key .info-key-panel {
+  left: 0;
+  right: auto;
 }
 .roll-windows {
   display: inline-flex;
@@ -4303,9 +4336,16 @@ body {
   stroke: var(--border);
   stroke-width: 1;
 }
+/* **The one number here is measured, not declared** — `--roll-font` is published
+   on the `<svg>` from a `ResizeObserver` (see `RollingXwoba.tsx`), because a
+   viewBox unit is a different number of pixels in every box this chart is drawn
+   in: an 11-unit label rendered 9.69px on a desktop and **5.07px on a phone**,
+   which is the whole of "too small to read". The var carries the unit count
+   that renders at 12px whatever the width, and the 11px fallback is what the
+   first paint of an unmeasured box would draw. */
 .roll-axis-label {
   fill: var(--muted);
-  font-size: 11px;
+  font-size: var(--roll-font, 11px);
   font-variant-numeric: tabular-nums;
 }
 .roll-ref {
@@ -4313,9 +4353,12 @@ body {
   stroke-width: 1.5;
   stroke-dasharray: 4 4;
 }
+/* The league-average line's own label, sized off the same measured var as the
+   axis: it is read at a glance beside the dashed line it names, and at 5.07px it
+   was the least legible thing on the card. */
 .roll-ref-label {
   fill: var(--faint);
-  font-size: 11px;
+  font-size: var(--roll-font, 11px);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -4362,12 +4405,6 @@ body {
   font-weight: 600;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
-}
-.roll-caption {
-  margin: 12px 2px 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--muted);
 }
 .pct-card-title {
   font-size: 18px;

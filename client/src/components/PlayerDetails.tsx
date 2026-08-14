@@ -259,15 +259,22 @@ function renderMetricRows(metrics: PercentileMetric[], overlapPct: number): Reac
  * component state and appears in no URL, and `PlayerOverview`'s `Stats →` link
  * is the only caller (`onTab`), which is a compile error rather than a silent
  * change of behaviour if it is missed.
+ *
+ * **`rolling` became `charts` on the same reasoning**, and the same check was
+ * run rather than assumed: the key is named nowhere outside this file (the tab
+ * is state, not a URL param), so the label and the key move together and no
+ * link in the wild can be reading it. The tab is `Charts` because it is a place
+ * for a chart of the season rather than for one named chart — the card inside
+ * it still says `Rolling xwOBA`, which is what that chart *is*.
  */
 type DetailsTab =
   | 'overview'
   | 'percentiles'
-  | 'stats'
   | 'splits'
+  | 'stats'
   | 'gamelog'
-  | 'rolling'
-  | 'arsenal';
+  | 'arsenal'
+  | 'charts';
 
 /**
  * The Arsenal tab: a pitcher's season pitch mix, overall or against one batter
@@ -532,7 +539,7 @@ export function PlayerDetails({
   const [windowsError, setWindowsError] = useState<string | null>(null);
   const [windowsLoading, setWindowsLoading] = useState(false);
   const windowsReq = useRef<string | null>(null);
-  // The season xwOBA series backs the Rolling xwOBA tab. It's a heavier Savant
+  // The season xwOBA series backs the Charts tab's one chart. It's a heavier Savant
   // fetch, so it's loaded lazily — only once that tab is first opened.
   const [xwoba, setXwoba] = useState<XwobaSeries | null>(null);
   const [xwobaError, setXwobaError] = useState<string | null>(null);
@@ -794,10 +801,10 @@ export function PlayerDetails({
     };
   }, [tab, playerId]);
 
-  // Fetch the season xwOBA series the first time the Rolling tab is opened for
+  // Fetch the season xwOBA series the first time the Charts tab is opened for
   // this player (xwobaReq tracks which player we've already requested).
   useEffect(() => {
-    if (tab !== 'rolling' || xwobaReq.current === playerId) return;
+    if (tab !== 'charts' || xwobaReq.current === playerId) return;
     xwobaReq.current = playerId;
     let live = true;
     setXwobaLoading(true);
@@ -1033,21 +1040,17 @@ export function PlayerDetails({
           >
             Percentile Rankings
           </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'stats'}
-            className={`details-tab${tab === 'stats' ? ' is-active' : ''}`}
-            onClick={() => setTab('stats')}
-          >
-            Stats
-          </button>
-          {/* **Splits reads after Stats and before the Game Log**, which is the
-              order the season is cut in: the whole of it, then the same season
-              cut by handedness, then the games it is made of. It is its own tab
-              rather than the foot of the one before it because the two cuts are
-              read for different reasons and the platoon one is a *comparison*
-              rather than a table — see `PlatoonSplits.tsx`. */}
+          {/* **Splits reads directly after the percentile card, where it used
+              to read after Stats.** The old order was the order the season is
+              *cut* in — the whole of it, then the same season cut by handedness,
+              then the games it is made of — and this one is the order the two
+              are *read* in: the percentile card and the splits are both a
+              picture of what kind of player he is, where Stats and the Game Log
+              are the numbers. Putting the two pictures together means a reader
+              deciding about a stranger takes both without passing a table in
+              between. It is still its own tab rather than the foot of the one
+              beside it, because a platoon split is a *comparison* rather than a
+              table — see `PlatoonSplits.tsx`. */}
           <button
             type="button"
             role="tab"
@@ -1056,6 +1059,15 @@ export function PlayerDetails({
             onClick={() => setTab('splits')}
           >
             Splits
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'stats'}
+            className={`details-tab${tab === 'stats' ? ' is-active' : ''}`}
+            onClick={() => setTab('stats')}
+          >
+            Stats
           </button>
           <button
             type="button"
@@ -1077,14 +1089,20 @@ export function PlayerDetails({
               Arsenal
             </button>
           )}
+          {/* **`Charts`, where this read `Rolling xwOBA`.** The strip names the
+              *kind* of reading a tab holds — Overview, Splits, Stats, Game Log —
+              and this was the one entry naming a single card instead, which is
+              also the longest label on a strip a phone already scrolls. The card
+              inside it still says `Rolling xwOBA · 2026`, so nothing is lost:
+              the tab says which kind of reading, the card says which reading. */}
           <button
             type="button"
             role="tab"
-            aria-selected={tab === 'rolling'}
-            className={`details-tab${tab === 'rolling' ? ' is-active' : ''}`}
-            onClick={() => setTab('rolling')}
+            aria-selected={tab === 'charts'}
+            className={`details-tab${tab === 'charts' ? ' is-active' : ''}`}
+            onClick={() => setTab('charts')}
           >
-            Rolling xwOBA
+            Charts
           </button>
         </div>
       </div>
@@ -1146,13 +1164,13 @@ export function PlayerDetails({
         />
       )}
 
-      {tab === 'rolling' && xwobaWait && <LoadingBlock>Reading the season&rsquo;s plate appearances</LoadingBlock>}
-      {tab === 'rolling' && xwobaError && !xwobaLoading && (
+      {tab === 'charts' && xwobaWait && <LoadingBlock>Reading the season&rsquo;s plate appearances</LoadingBlock>}
+      {tab === 'charts' && xwobaError && !xwobaLoading && (
         <div className="details-status details-error">
           Couldn’t load xwOBA: {xwobaError}
         </div>
       )}
-      {tab === 'rolling' && xwoba && !xwobaLoading && (
+      {tab === 'charts' && xwoba && !xwobaLoading && (
         <RollingXwoba series={xwoba} name={name} />
       )}
 
