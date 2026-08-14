@@ -4558,6 +4558,24 @@ body {
      inline width `PlatoonSplits` writes reads this same token, so the length of
      a full bar and the nesting of its cap cannot drift apart. */
   --spl-inset: 3px;
+  /* And how far its *ends* are nested, which is a bigger number than the sides
+     for one reason: a **clamped** bar squares off its outer end, and a square
+     corner does not nest inside a round cap the way a round one does. The rail
+     caps at radius 8 and the fill's corners sit at its own extreme height, 5px
+     off the rail's centre line — where the cap's ink has already receded
+     `8 - sqrt(8^2 - 5^2)` = **1.76px**. So an end inset by the side's 3px left a
+     square corner 1.24px from the rail's edge while its own midline had 3px,
+     which is the "extends too far, sharp edges" this fixes: not ink outside the
+     rail, but a corner running into the curve with no margin left to read as
+     one. 5px puts that corner **3.24px** clear at its tightest and 5px clear at
+     the midline, so the track shows all the way around it.
+
+     It is one token for **every** fill rather than a bigger inset for the
+     clamped ones alone, and that is the load-bearing half: inset the squared
+     ends further and a bar just past full scale would draw *shorter* than one
+     exactly at it, so a bigger gap would read as a smaller one. Length has to
+     stay monotonic in the gap; only the cap's shape may say "clamped". */
+  --spl-inset-x: 5px;
 }
 .spl-heads,
 .spl-row {
@@ -4649,8 +4667,8 @@ body {
   position: absolute;
   top: var(--spl-inset);
   bottom: var(--spl-inset);
-  min-width: min(3px, 50% - var(--spl-inset));
-  max-width: calc(50% - var(--spl-inset));
+  min-width: min(3px, 50% - var(--spl-inset-x));
+  max-width: calc(50% - var(--spl-inset-x));
   border-radius: 999px;
   background: var(--accent);
   opacity: 0.8;
