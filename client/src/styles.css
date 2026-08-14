@@ -4875,6 +4875,27 @@ body {
   text-transform: none;
   color: var(--faint);
 }
+/* Which of the two halves the reader came about — drawn only when a caller names
+   one (the feed's Upcoming row does; the player page's Splits tab does not), and
+   then on **both** heads, the unmarked one hidden rather than blank, so a third
+   line can't push one column's label off the baseline the other sits on. It
+   wraps freely: the head column is `--spl-val-w` (54px, 46 inside a dialog on a
+   phone) and `this game` genuinely takes two lines there, which is exactly why
+   the reservation is the string itself and not a single blank line. Accent
+   because it marks a thing rather than labelling one. */
+.spl-head-mark {
+  color: var(--accent);
+  font-weight: 700;
+}
+/* The unmarked side's copy of the same phrase, laid out and hidden — see
+   `SplitHead`: it is what keeps the two heads on one baseline whether the
+   caller's phrase takes one line or two. */
+.spl-head-mark--ghost {
+  visibility: hidden;
+}
+.spl-head-side--on {
+  color: var(--accent);
+}
 .spl-label {
   text-align: right;
   font-size: 13px;
@@ -8573,6 +8594,31 @@ body {
   flex-direction: column;
   gap: 8px;
   padding-left: 4px;
+}
+/* The opposing starter, at the head of a batter's Upcoming dialog: his headshot
+   and his **full** name, both opening his own player page. The closed bar keeps
+   the surname — it has a matchup and a first-pitch time to hold on one phone
+   line — and this is where the room is. `.upcoming-id`'s own row would do, but
+   this one wants a sub-line under the name, so it borrows `.feed-item-id` for
+   the stack exactly as the Live section's header does. */
+.upcoming-sp {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  margin-bottom: 4px;
+}
+/* **The card has to be told to take the width, and the reason is a trap this
+   stylesheet already documents once.** `.pct-card` centres itself with `margin:
+   0 auto`, which is right in the block flow of the player page's Splits tab —
+   and an auto margin on the cross axis **suppresses a flex item's stretch**, so
+   inside the dialog's flex column it shrank to its own content: measured at
+   1200, a 246px card in a 774px body, its `1fr` bar track collapsed to nothing
+   and every fill 0px wide. The same sentence `.details-chrome` records for the
+   head and tabs it took out of a flex row. The 680px cap and the auto margins
+   still do their work above that width. */
+.upcoming-detail .pct-card {
+  width: 100%;
 }
 /* "Load more" under the Recent section — the stream shows a page at a time, so
    a long day doesn't mount hundreds of at-bat cards at once. The count is
