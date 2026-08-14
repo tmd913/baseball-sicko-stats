@@ -27,7 +27,8 @@ import type {
 import { Modal } from './Modal';
 import { BaseDiamond, PlaySituation } from './BaseDiamond';
 import { InlineVideoClip, PlateAppearanceCard } from './PlateAppearanceCard';
-import { GameStatusBadge, PlatoonSplit } from './PlayerCard';
+import { GameStatusBadge } from './PlayerCard';
+import { BatterSplitsTab } from './PlatoonSplits';
 import { OpponentSection, OutingBreakdown, PitchingTag, lineSummary } from './PitcherCard';
 import { InningsList } from './Innings';
 
@@ -789,17 +790,29 @@ function isUpcomingFor(report: PlayerReport, game: PlayerGame): boolean {
 /**
  * One not-yet-started game in the Upcoming section: player + matchup + the
  * announced starter on the other side + first pitch, expanding to what that
- * player wants to know about it. For a **batter** that's his own line against
- * the starter's hand; for a **pitcher** it's the lineup waiting for him (the
- * same `OpponentSection` his card carries).
+ * player wants to know about it. For a **batter** that's the platoon card with
+ * the announced starter's half marked; for a **pitcher** it's the lineup waiting
+ * for him (the same `OpponentSection` his card carries).
  *
  * The opposing starter reads on the closed bar rather than only inside the
  * detail: it's the one fact that decides whether a scheduled game is worth
  * opening, and the same thing the summary table's opponent cell shows pre-game
- * (surname only there and here — the bar wraps on a phone, and the matchup and
- * first pitch are what it must keep on one line). On a *pitcher's* row that's
+ * (**surname only there and here** — the bar wraps on a phone, and the matchup
+ * and first pitch are what it must keep on one line; his full name, his hand and
+ * his headshot are inside the dialog, which has the width for them and is the
+ * one place in this row a reader can go *to* him). On a *pitcher's* row that's
  * his counterpart, not someone he faces, which is why the detail below still
  * belongs to the lineup instead.
+ *
+ * **The batter's detail is the player page's own Splits card** — the
+ * diverging-bar comparison, drawn from `report.splitVsLeft`/`splitVsRight`,
+ * which are the very objects `/api/players/:id/splits` answers with (both come
+ * out of `getPlayerStats`). So the dialog fetches nothing and there is one
+ * definition of the number, which is the whole reason it is those fields rather
+ * than a read of that route. It replaces `PlayerCard`'s `PlatoonSplit`, six stat
+ * pills of his line against one hand — a line no reader could grade, an .800 OPS
+ * against lefties being a platoon edge for one hitter and a shortfall for
+ * another. See `docs/claude/client-feed.md`.
  *
  * The identity row (headshot + name, both links) sits above the bar rather than
  * inside it, so a tap meant for the row can't land on a link. The bar is static
@@ -824,12 +837,13 @@ export function UpcomingRow({
   const time = formatStartTime(game.status.startTime);
   const isPitcher = report.kind === 'pitcher';
   const sp = game.probablePitcher;
-  // A batter's detail is now the platoon split alone, so it opens on a starter
-  // of a known hand rather than on any announced starter: without one there is
-  // nothing under the bar to reveal, the name itself being on the bar.
-  const expandable = isPitcher
-    ? !!game.opponentHitting
-    : sp?.hand === 'R' || sp?.hand === 'L';
+  // A batter's detail is the platoon card with one half marked, so it opens on a
+  // starter of a *known hand* rather than on any announced starter: without one
+  // there is no half to mark, and the row's reason to open at all is the man who
+  // has been named for it.
+  const spHand = sp?.hand === 'L' ? 'L' : sp?.hand === 'R' ? 'R' : null;
+  const expandable = isPitcher ? !!game.opponentHitting : spHand !== null;
+  const spKey = sp ? playerKey({ id: sp.id, kind: 'pitcher' }) : null;
   // The bar under the name: matchup, the SP chip, the other side's announced
   // starter and first pitch. It is the whole of the row's interactive surface —
   // the headshot and name above it are links, and inside a tappable row a
@@ -876,7 +890,7 @@ export function UpcomingRow({
           className="upcoming-head"
           aria-haspopup="dialog"
           aria-expanded={open}
-          title={isPitcher ? 'Open opponent' : 'Open platoon split'}
+          title={isPitcher ? 'Open opponent' : 'Open platoon splits'}
           onClick={() => setOpen(true)}
         >
           {bar}
@@ -895,10 +909,45 @@ export function UpcomingRow({
             {isPitcher ? (
               <OpponentSection game={game} throws={report.throws} />
             ) : (
-              /* The batter's season line against the probable starter's hand — the
-                 starter himself is named on the bar above, so this is only the
-                 split (whose own head says which hand it's against). */
-              <PlatoonSplit report={report} game={game} />
+              <>
+                {/* Who he is facing, in full and with a way through to him. The
+                    bar above says `vs LHP Gasser`, which is what fits a phone
+                    line beside the matchup and first pitch; a dialog has the
+                    width for the whole name, and the headshot is the row's only
+                    route to the *pitcher's* page — a man nobody has rostered,
+                    which `PlayerDetails` opens on as a matter of course. Drawn
+                    with the feed's own `FeedHeadshot`/`FeedPlayerName` rather
+                    than a third headshot circle, so it is the same target with
+                    the same click behaviour as every other name in this stream.
+                    It carries **no lineup pip or status code**: those are
+                    `PhotoStatus`'s marks and read off `/api/statuses`, which the
+                    feed does not fetch — and both would only restate the bar
+                    (his pip is `SP`, and a man on the IL is not the announced
+                    starter). */}
+                <div className="upcoming-sp">
+                  <FeedHeadshot
+                    id={sp!.id}
+                    name={sp!.name}
+                    onOpen={() => onOpenDetails(spKey!)}
+                  />
+                  <div className="feed-item-id">
+                    <FeedPlayerName playerKey={spKey!} name={sp!.name} onOpen={onOpenDetails} />
+                    <span className="feed-context">
+                      {handThrows(sp!.hand)} · starting for {game.opponent}
+                    </span>
+                  </div>
+                </div>
+                {/* The whole platoon comparison with tonight's half marked,
+                    rather than that half alone — see the note on this component
+                    and `BatterSplitsTab`. */}
+                <BatterSplitsTab
+                  vsLeft={report.splitVsLeft}
+                  vsRight={report.splitVsRight}
+                  highlight={spHand === 'L' ? 'left' : 'right'}
+                  highlightNote="this game"
+                  highlightTitle={`${sp!.name} throws ${spHand === 'L' ? 'left' : 'right'}-handed, so this is the half that applies to this game.`}
+                />
+              </>
             )}
           </div>
         </Modal>
