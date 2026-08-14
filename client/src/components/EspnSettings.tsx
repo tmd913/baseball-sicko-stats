@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useLockBodyScroll } from '../hooks';
+import { useEffect, useRef, useState } from 'react';
+import { answersEscape, useLockBodyScroll } from '../hooks';
 import { api } from '../api';
 import type { EspnStatus, EspnTeam } from '../types';
 import { LoadingLine } from './Loading';
@@ -160,9 +160,14 @@ export function EspnSettings({
     };
   }, [status, onStatusChange]);
 
+  // The overlay box itself, read only to ask whether a press of Escape is ours.
+  const viewRef = useRef<HTMLDivElement | null>(null);
+
+  // Through the shared test, so this page claims the press rather than leaving
+  // it for anything under it — see `hooks.ts::answersEscape`.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (answersEscape(e, viewRef.current)) onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -338,7 +343,7 @@ export function EspnSettings({
   const ready = leagueId.trim() !== '' && (!cookiesGiven || cookiesComplete);
 
   return (
-    <div className="details-view espn-view">
+    <div className="details-view espn-view" ref={viewRef}>
       <div className="tut-head">
         <button type="button" className="details-back" onClick={onClose}>
           <svg

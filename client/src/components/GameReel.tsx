@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { PlateAppearance } from '../types';
 import { api } from '../api';
 import { eventLabel, outcomeKind } from '../lib';
-import { useLockBodyScroll } from '../hooks';
+import { answersEscape, useLockBodyScroll } from '../hooks';
 import { ClipVideo } from './ClipVideo';
 import { LoadingBlock, SpinningBaseball } from './Loading';
 
@@ -50,11 +50,16 @@ export function GameReel({
   const [attempted, setAttempted] = useState(0);
   const [loading, setLoading] = useState(true);
   const [index, setIndex] = useState(0);
+  // The overlay box itself, read only to ask whether this press of Escape is
+  // ours to answer.
+  const viewRef = useRef<HTMLDivElement | null>(null);
 
-  // Close on Escape, matching the details overlay.
+  // Close on Escape, matching the details overlay — and through the shared test,
+  // so the reel claims the press instead of leaving whatever it was opened over
+  // to answer the same one. See `hooks.ts::answersEscape`.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (answersEscape(e, viewRef.current)) onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -119,7 +124,7 @@ export function GameReel({
   const go = (i: number) => setIndex(Math.max(0, Math.min(i, clips.length - 1)));
 
   return (
-    <div className="reel-view" role="dialog" aria-modal="true" aria-label={`${title} — highlights`}>
+    <div className="reel-view" ref={viewRef} role="dialog" aria-modal="true" aria-label={`${title} — highlights`}>
       <div className="reel-head">
         <button type="button" className="details-back" onClick={onClose}>
           <svg

@@ -263,6 +263,11 @@ function toSeasonStats(stat: Record<string, unknown>): SeasonStats {
     atBats: n(stat.atBats),
     runs: n(stat.runs),
     sb: n(stat.stolenBases),
+    // Both are on the split as well as the season line, unlike runs and steals
+    // beside them — which is exactly why the Splits tab can draw K% and BB% for
+    // a platoon half and cannot draw R or SB at all.
+    strikeOuts: n(stat.strikeOuts),
+    baseOnBalls: n(stat.baseOnBalls),
   };
 }
 
@@ -378,6 +383,10 @@ function toPitcherSeasonStats(stat: Record<string, unknown>): PitcherSeasonStats
     kRate: perBf(k),
     bbRate: perBf(bb),
     avgAgainst: str(stat.avg),
+    // The pitching split carries the whole slash line against him; OPS is the
+    // one number of it worth a row, and it is the only single-figure summary a
+    // split has at all now that ERA is missing from one.
+    opsAgainst: str(stat.ops),
     hitBatsmen: hbp,
     homeRunsPer9: str(stat.homeRunsPer9),
     fip: fip === null ? null : fip.toFixed(2),
