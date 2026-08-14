@@ -4675,11 +4675,21 @@ body {
 .spl-table {
   --spl-label-w: 62px;
   --spl-val-w: 54px;
-  /* How far the fill is nested inside the rail, on all four sides. It is one
-     number rather than four because the rail is a pill and the fill is a pill,
-     and only an equal inset makes the two concentric — see `.spl-fill`. The
-     inline width `PlatoonSplits` writes reads this same token, so the length of
-     a full bar and the nesting of its cap cannot drift apart.
+  /* How far the fill is nested inside the rail: on both long sides, and at the
+     **outer** end only. It is one number rather than two because the rail is a
+     pill and the fill's outer end is a pill, and only an equal inset makes the
+     two concentric — see `.spl-fill`. The inline width `PlatoonSplits` writes
+     reads this same token, so the length of a full bar and the nesting of its
+     cap cannot drift apart.
+
+     **The inner end takes none of it, and never did.** The token is spent at
+     the outer end by being subtracted from the *length* (`calc(frac × (50% −
+     inset))`), while the inner edge is pinned to the rail's centre by the
+     inline `left: 50%` / `right: 50%` — so there is no gap at the zero to close
+     and none was closed. What changed with the flat cap is only which rows of
+     the fill reach that edge: a round cap put ink on the centre at the fill's
+     midline and receded up to 5px from it at the extreme rows, where a flat one
+     lands on it at every row (measured below).
 
      **The ends had a bigger token of their own for a while** (`--spl-inset-x`,
      5px) and it is gone with the thing it was written for. A **clamped** bar
@@ -4693,7 +4703,9 @@ body {
      the case 3px was chosen for: a radius-5 cap 3px inside a radius-8 one shares
      its centre, so the track shows exactly 3px of itself at **every** angle
      rather than 5px at the midline and 3.24 at the corner. Every bar is 2px
-     longer for it.
+     longer for it. (That argument is about the **outer** cap, which is still
+     round; the inner one is flat now and nests inside nothing, the rail being
+     straight-sided in its middle.)
 
      What the single token still buys is what it always did: length stays
      monotonic in the gap. Inset a clamped end further than an unclamped one and
@@ -4776,28 +4788,53 @@ body {
   bottom: -6px;
   border-left: 1px dashed var(--border);
 }
-/* The fill is the rail's own pill, inset by `--spl-inset` on **all four sides**.
-   That equal inset is the whole of the geometry: the rail is 16px tall and so
-   caps at radius 8, the fill is 10px tall and so caps at radius 5, and 8 − 3 = 5
-   means the two caps are concentric. Inset top and bottom only — which is what
-   this was — a bar drawn to the rail's *box* ends outside the rail's *ink*,
-   because a pill's edge has receded 1.76px by the fill's top row of pixels; a
-   clamped bar — the one you look at, being the one that reaches the end — then
-   put 2.47px of accent past the end of the rail on Contreras's K% row.
-   `max-width` is the same invariant
-   said again at the last possible moment: whatever length arrives, the fill
-   cannot cover more than its half of the rail. `min-width` is the floor that
-   says "there is a bar here" for a gap of almost nothing, and takes the cap as
-   its own ceiling so the floor can never breach it on a narrow rail. */
+/* The fill's **outer** end is the rail's own pill, inset by `--spl-inset` on it
+   and on both long sides. That equal inset is the whole of that end's geometry:
+   the rail is 16px tall and so caps at radius 8, the fill is 10px tall and so
+   caps at radius 5, and 8 − 3 = 5 means the two caps are concentric. Inset top
+   and bottom only — which is what this was — a bar drawn to the rail's *box*
+   ends outside the rail's *ink*, because a pill's edge has receded 1.76px by the
+   fill's top row of pixels; a clamped bar — the one you look at, being the one
+   that reaches the end — then put 2.47px of accent past the end of the rail on
+   Contreras's K% row. `max-width` is the same invariant said again at the last
+   possible moment: whatever length arrives, the fill cannot cover more than its
+   half of the rail. `min-width` is the floor that says "there is a bar here" for
+   a gap of almost nothing, and takes the cap as its own ceiling so the floor can
+   never breach it on a narrow rail.
+
+   **The inner end is flat**, and the two ends being different shapes is the
+   point rather than an oversight. This bar is anchored at a centre: it does not
+   *sit* near the zero, it **grows out of** it, and a round cap says the opposite
+   — it pulls the ink away from the zero everywhere except one row through the
+   fill's own middle, so the bar read as a detached pill floating beside the
+   guide rather than as a quantity measured from it. Measured on Perez's card at
+   1200: the inner ink was up to 3px short of the centre at the rows a reader
+   sees the shape by, and is 0.000 short at every row now. Nothing about the
+   length moved — the inline width and `max-width` are untouched — so the clamp,
+   the chevron, the hatch and `railFraction`'s invariant are all exactly as they
+   were; what moved is which rows of an unchanged box carry ink to its inner
+   edge. See `.spl-track::before` for what that edge does to the zero guide. */
 .spl-fill {
   position: absolute;
   top: var(--spl-inset);
   bottom: var(--spl-inset);
   min-width: min(3px, 50% - var(--spl-inset));
   max-width: calc(50% - var(--spl-inset));
-  border-radius: 999px;
   background: var(--accent);
   opacity: 0.8;
+}
+/* Which end is which is the direction the bar points, so the caps are declared
+   per direction rather than on `.spl-fill`: a right-pointing bar rounds its
+   right end and squares the left, a left-pointing one the reverse. Both are
+   `999px` rather than the 5px the geometry works out to, so the cap follows the
+   fill's height if the rail ever changes — and the browser's own clamping is
+   what makes the 3px `min-width` nub read as a nub with one rounded end rather
+   than as a lozenge. */
+.spl-fill--r {
+  border-radius: 0 999px 999px 0;
+}
+.spl-fill--l {
+  border-radius: 999px 0 0 999px;
 }
 /* Hatched rather than solid where a side is thin: this card's version of the
    dotted percentile bubble one tab over, where a broken mark has meant "our
@@ -4911,9 +4948,7 @@ body {
    height of the button, so a 30px control centred on a 22px title line cannot
    overhang into the table under it. The title is centred by the flex rather than
    by `.pct-card-head`'s `text-align`, which is the same result for one span and
-   is untouched on the percentile card that shares that class — and the button is
-   out of flow, so the title stays centred **in the card** rather than being
-   pushed off-centre by a control on one side of it. */
+   is untouched on the percentile card that shares that class. */
 .spl-card-head {
   position: relative;
   display: flex;
@@ -4921,35 +4956,61 @@ body {
   justify-content: center;
   min-height: 30px;
 }
-/* Folded onto `.settings-menu`'s own rule up in the header rather than restated:
-   a relatively-positioned host for a popover is exactly what that is. It is
-   deliberately **not** added to the `@media (max-width: 640px)` block that makes
-   those two `position: static` — that rule re-anchors a menu to the header's
-   full width because the gear sits 200px into a 390px header, where this one
-   hangs off a card that is 358px wide at that viewport and has room to its
-   left. */
-/* The splits key hangs off a button at the card's right edge, so its panel opens
-   **leftward into the card** rather than rightward off the edge of it. That is
-   this caller's own fact, which is why it lives here and not on `.info-key-panel`. */
-.spl-key .info-key-panel {
-  left: auto;
-  right: 0;
-}
-.spl-key {
-  position: absolute;
-  right: 0;
-  /* Stretched and re-centred rather than `top: 50%; transform: translateY(-50%)`,
-     and the reason is a stacking context rather than a preference. A `transform`
-     makes one, which would trap the popover's own `z-index: 40` *inside* this
-     box — and this box is a positioned `z-index: auto` element sitting **before**
-     the table in the DOM, so the rows' absolutely-positioned `.spl-fill`s paint
-     after it and the key opened underneath the very bars it explains (measured:
-     the fills showed straight through the panel). With no transform the popover
-     resolves against `.details-view` instead and lands above them. */
-  top: 0;
-  bottom: 0;
+/* **The key sits beside the title, not across the card from it.** It hung off
+   the head's right edge for a while — `position: absolute; right: 0` — and what
+   that bought was a title centred in the card with the button out of flow, at
+   the price of putting the ⓘ 228px from the words it belongs to at 1200 (77 at
+   390): the title ends at 658.66 and the button began at 887. An icon
+   that far from its own heading reads as a control over the *card*, and a reader
+   looking for the key looks at the heading.
+
+   **The title is still centred in the card**, which is the half of the old rule
+   worth keeping: `.pct-card-head` is shared with the percentile card, whose
+   title is centred by `text-align`, and one tab's heading sitting 19px off where
+   every other tab's sits is a difference nothing on screen explains. So the
+   button is in flow immediately after the title and gives its own width back:
+   4px on the left, 4 + its own 30 returned on the right, which is exactly 0 of
+   the flex line's main size — the title centres as though the button were not
+   there, and the button hangs to the right of it. Measured at 1200 and 390: the
+   title's box is byte-identical to where the absolute button left it.
+
+   **`position: static` is load-bearing twice over.** It is what re-parents the
+   panel's containing block from the 30px button up to `.spl-card-head`, which is
+   the whole of the anchoring fix below; and it is a second guarantee of the
+   stacking rule this rule has always had to obey. The first version used
+   `transform: translateY(-50%)` to centre the button, which makes a stacking
+   context and trapped the popover's own `z-index: 40` *inside* this box — a
+   `z-index: auto` box sitting **before** the table in the DOM, so the rows'
+   absolutely-positioned `.spl-fill`s painted after it and the key opened
+   underneath the very bars it explains (measured: the fills showed straight
+   through the panel). A static, untransformed box cannot make one at all, so the
+   panel resolves against `.details-view` and lands above them.
+
+   Written two classes deep so it beats any single-class rule a second `InfoKey`
+   caller adds to the shared `.info-key*` family: those are `.info-key`'s to set
+   and the anchor is this caller's, and a `position: relative` arriving there
+   later would silently put the panel back on the button. */
+.spl-card-head .spl-key {
+  position: static;
   display: flex;
   align-items: center;
+  margin-inline: 4px -34px;
+}
+/* **The panel opens leftward from the card's right edge, not from the button.**
+   `right: 0` is what it always said; what changed is what 0 is measured from,
+   the rule above having made `.spl-card-head` the containing block. That is what
+   keeps it on screen now the button is near the middle: anchored to the button
+   (257.66 → 287.66 at 390) a 320px panel would run 257.7 → 577.7 opening
+   rightward or 287.7 → −32.3 opening leftward, i.e. off the screen either way,
+   where the card's own right edge gives **41 → 361 inside a 390 viewport and
+   597 → 917 inside a 1200 one** — measured, and byte-identical to where the
+   panel sat when it hung off the button at the head's right edge, with the
+   button over the panel at both widths. `left: 0` was the other option and is
+   worse at the wide end: the panel would run 283 → 603 and stop 60px short of
+   its own trigger, which reads as a popover belonging to something else. */
+.spl-card-head .info-key-panel {
+  left: auto;
+  right: 0;
 }
 /* The button is `.app-dialog-close` — the app's 30px icon button — with only its
    open state added, which fills the way every other disclosure in the app fills
