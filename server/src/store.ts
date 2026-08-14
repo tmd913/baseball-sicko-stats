@@ -95,11 +95,23 @@ export interface UserPrefs {
    *  both tables rather than one each: they are the same column vocabulary, and
    *  this is a habit of reading rather than a setting on a table. */
   statRanks?: boolean;
-  /** Read the roster views off the user's **ESPN fantasy team** instead of the
-   *  list they built here. Absent means the saved roster, which is the default
-   *  and the only thing a user without a connected league can have — the same
-   *  absence-is-the-default convention as the two toggles above. */
-  rosterSource?: 'fantasy';
+  /**
+   * Read the roster views off the user's **ESPN fantasy team** instead of the
+   * list they built here.
+   *
+   * The one preference here that stores **both** of its values, and absence
+   * therefore means *unspecified* rather than off. That is a sharpening of the
+   * convention above rather than a departure from it: absent has always meant
+   * "the user has said nothing, so the default applies", and the reason to
+   * write `'saved'` down is that something now acts on the difference — naming
+   * a team for the first time turns this on **only for a user who has never
+   * stated a source** (see `App.tsx::firstTeamNamed`). A user who has worked
+   * the toggle either way has stated one, so their record says so and the app
+   * leaves it alone. Reading is unchanged in both workspaces (`=== 'fantasy'`
+   * is the only test anywhere), so a record written before this still reads as
+   * the saved roster; what it no longer claims is that its owner *chose* it.
+   */
+  rosterSource?: 'fantasy' | 'saved';
   /**
    * Which of the three **ownership** sets the research board includes. Absent
    * means the default — free agents alone — the same absence-is-the-default
@@ -940,21 +952,26 @@ export async function setEspnLeague(
 }
 
 /**
- * Which list the roster views read from. `'saved'` is stored as the absence of
- * the entry, as the toggles above are — so a user who switches back is
- * indistinguishable from one who never switched, and the default can change
- * without anyone's record needing revisiting.
+ * Which list the roster views read from.
+ *
+ * **`'saved'` is written down rather than stored as the absence of the entry**,
+ * which is where this parts from the toggles above and is the whole of what
+ * makes the auto-switch on a first team pick safe. Absence used to mean two
+ * things at once — "never asked" and "asked for the saved roster" — and with
+ * something now filling in the first of those, conflating them would have the
+ * app turning a preference back on for the one user who had turned it off.
+ * Recording the answer is what tells them apart; the default is still free to
+ * change, because a record that has never held this key still has no answer in
+ * it. Every reader tests `=== 'fantasy'`, so writing `'saved'` changes nothing
+ * anybody reads.
  */
 export async function setRosterSource(
   userId: string,
   source: 'saved' | 'fantasy',
 ): Promise<UserPrefs> {
-  const next = await mutate(userId, (cur) => {
-    const prefs = { ...cur.prefs };
-    if (source === 'fantasy') prefs.rosterSource = 'fantasy';
-    else delete prefs.rosterSource;
-    return { prefs };
-  });
+  const next = await mutate(userId, (cur) => ({
+    prefs: { ...cur.prefs, rosterSource: source },
+  }));
   return next.prefs;
 }
 

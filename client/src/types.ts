@@ -1000,8 +1000,13 @@ export interface UserPrefs {
    *  player page's Stats tab. Absent means off, the same convention. */
   statRanks?: boolean;
   /** Read the roster views off the ESPN fantasy team rather than the saved
-   *  list. Absent means the saved list, which is the default. */
-  rosterSource?: 'fantasy';
+   *  list. The one preference here that stores **both** its values, so absent
+   *  means *unspecified* rather than the saved list — which is still what an
+   *  absent entry resolves to, every reader testing `=== 'fantasy'`. What the
+   *  difference buys is that naming a fantasy team for the first time can turn
+   *  this on without overriding anyone who has said they want the saved
+   *  roster; see `App.tsx::firstTeamNamed`. */
+  rosterSource?: 'fantasy' | 'saved';
   /** Which ownership sets the research board includes. Absent means the
    *  default (free agents alone); `[]` is the real state of a user who has
    *  turned all three off. */

@@ -467,14 +467,23 @@ export function EspnSettings({
                 ))}
               </select>
             </label>
+            {/* Says what the pick *does* now that it does something. Picking a
+                team for the first time is the last step of joining a league,
+                so it turns the views over rather than leaving a new user to
+                find the toggle themselves — and the second sentence is the
+                other half of that promise, since somebody who has already
+                chosen a roster to read keeps it. See `App.tsx`'s
+                `onEspnStatusChange`, where the rule lives. */}
             <p className="espn-note">
-              With one chosen, the fantasy button in the header offers{' '}
+              Choosing one for the first time turns on{' '}
               <strong>Use my fantasy team</strong>: the Summary, Games and Feed
-              views then report on your fantasy team instead of the roster you built
-              here, and each player carries the slot he's in today — his position
-              if he's in the lineup, <code>BE</code> or <code>IL</code> if he
-              isn't. The roster you built here is untouched and comes back the moment
-              you switch off.
+              views switch to reading your fantasy team instead of the roster you
+              built here, and each player carries the slot he's in today — his
+              position if he's in the lineup, <code>BE</code> or <code>IL</code>{' '}
+              if he isn't. The roster you built here is untouched, and the
+              fantasy button in the header switches back to it whenever you
+              like — so if you've already told the app which of the two you
+              want, changing teams here leaves that alone.
             </p>
           </section>
         )}
