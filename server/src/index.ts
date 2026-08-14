@@ -36,6 +36,7 @@ import {
   setEspnTeam,
   setHideInjured,
   setMuteAudio,
+  setStatRanks,
   setRecentPlayer,
   setLeagueSharing,
   setResearchColumns,
@@ -412,6 +413,25 @@ app.put(
       return;
     }
     res.json(await setMuteAudio(userId(req), mute));
+  }),
+);
+
+/**
+ * Show a percentile rank under every value on the research board and the player
+ * page's Stats tab. A boolean like the two above, and a route of its own for the
+ * reason each of those is — and **one** entry for both tables, since it is a
+ * habit of reading rather than a setting on either of them.
+ */
+app.put(
+  '/api/prefs/stat-ranks',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const { on } = (req.body ?? {}) as { on?: unknown };
+    if (typeof on !== 'boolean') {
+      res.status(400).json({ error: 'on must be a boolean' });
+      return;
+    }
+    res.json(await setStatRanks(userId(req), on));
   }),
 );
 

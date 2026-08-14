@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api';
 import { SignOutButton } from './auth';
-import { playerKey } from './types';
+import { playerKey, RESEARCH_WINDOWS } from './types';
 import type {
   EspnOwnership,
   EspnRoster,
@@ -397,6 +397,31 @@ export default function App() {
       .catch((e: Error) => console.error('saving mute-audio failed:', e.message));
   }, []);
   /**
+   * **Draw a percentile rank under every value** on the research board and on
+   * the player page's Stats tab — one flag for both, because they are one
+   * vocabulary and this is a habit of reading rather than a setting on a table.
+   * See `columnRanks.tsx` for what a badge is ranked against.
+   *
+   * Saved per user and deliberately **not in the URL**, which is a line worth
+   * drawing carefully, since `cols=` *is* in the URL and is also presentation.
+   * The difference is what the two change: a column list decides **which
+   * numbers are on the page**, so a link that leaves it out is a link about a
+   * different table, where this leaves every number exactly where it was and
+   * adds a second reading of each. That is a fact about the reader rather than
+   * about the board — the line `muteAudio` is on — and there is then no param
+   * for the saved value to have to defend itself against, which is why the
+   * `Touched` ref below is the whole of the reconciliation.
+   */
+  const [showRanks, setShowRanksState] = useState(false);
+  const showRanksTouched = useRef(false);
+  const setShowRanks = useCallback((on: boolean) => {
+    showRanksTouched.current = true;
+    setShowRanksState(on);
+    api
+      .saveStatRanks(on)
+      .catch((e: Error) => console.error('saving stat-ranks failed:', e.message));
+  }, []);
+  /**
    * Writes to the user's own record, one at a time.
    *
    * One press of ＋ now writes to that record **twice** — the roster and the
@@ -598,6 +623,7 @@ export default function App() {
         // No URL param to reconcile against — the saved value is the only
         // source there is, so it applies unless the user has already spoken.
         if (!muteAudioTouched.current && prefs.muteAudio) setMuteAudioState(true);
+        if (!showRanksTouched.current && prefs.statRanks) setShowRanksState(true);
         // Merged rather than applied, which is why this needs no touched ref:
         // anyone picked in the second before this landed leads, and the saved
         // list fills in under him — which is the same list the server has
@@ -1454,6 +1480,47 @@ export default function App() {
     };
   }, [view, researchKind, researchWindow, researchCacheKey, research]);
 
+  /**
+   * **The five boards the Stats tab's percentile badges are ranked within.**
+   *
+   * A percentile needs a population and the player page has none of its own —
+   * `/api/players/:id/windows` is five boards reduced to one row each. Rather
+   * than a second, server-side ranking rule that could only reach the raw
+   * columns (better than half the board's are derived in `Column.value` and
+   * exist nowhere on `ResearchRow`), that tab reads the **same boards the
+   * research view reads**, through the very cache above: the rows it ranks are
+   * then literally the rows the board ranks, and the two cannot disagree.
+   *
+   * It is lazy twice over — only when the ranks toggle is on, and only from
+   * inside the Stats tab, which is the one place `PlayerWindowTable` mounts —
+   * and it is cached by **kind and window, not by player**, so twenty player
+   * pages in one tab pay for it once and a reader who has used the board has
+   * already paid for part of it. Nothing upstream is touched: each board is
+   * cached six hours on the server and pulled warm nightly by the warmer.
+   *
+   * The in-flight set is what stops five effects firing five duplicate reads of
+   * the same window while the first is out; a failure is simply not cached, so
+   * the next open tries again, and it is deliberately silent — a badge that
+   * doesn't appear is the honest cost of a board that couldn't be read, where a
+   * banner across a player page would be news about something else.
+   */
+  const rankPopulationsInFlight = useRef(new Set<string>());
+  const loadRankPopulations = useCallback(
+    (kind: PlayerKind) => {
+      for (const w of RESEARCH_WINDOWS) {
+        const key = `${kind}:${w}`;
+        if (research[key] || rankPopulationsInFlight.current.has(key)) continue;
+        rankPopulationsInFlight.current.add(key);
+        api
+          .research(kind, w)
+          .then((r) => setResearch((cur) => ({ ...cur, [`${r.kind}:${r.window}`]: r.rows })))
+          .catch((e: Error) => console.error('reading a board for ranks failed:', e.message))
+          .finally(() => rankPopulationsInFlight.current.delete(key));
+      }
+    },
+    [research],
+  );
+
   // Load the season's player list once, for search/autocomplete.
   useEffect(() => {
     let cancelled = false;
@@ -1883,6 +1950,27 @@ export default function App() {
     () => (detailsKey ? rosterKeys.has(detailsKey) : false),
     [detailsKey, rosterKeys],
   );
+
+  /** The boards the Stats tab's percentile badges are ranked within, for
+   *  whichever player's page is open — the same per-kind, per-window cache the
+   *  research view fills, keyed by window as a string because that is the
+   *  currency `PlayerWindowRow.window` deals in. Only the windows that have
+   *  landed are in it; a missing one draws no badges rather than an empty
+   *  set. */
+  const detailsRankPopulations = useMemo(() => {
+    const out: Partial<Record<string, ResearchRow[]>> = {};
+    if (!detailsPlayer) return out;
+    for (const w of RESEARCH_WINDOWS) {
+      const rows = research[`${detailsPlayer.kind}:${w}`];
+      if (rows) out[String(w)] = rows;
+    }
+    return out;
+  }, [detailsPlayer, research]);
+  /** …and the request for the ones that haven't. Bound to the open player's
+   *  kind here so the tab itself needs to know nothing about boards. */
+  const loadDetailsRankPopulations = useCallback(() => {
+    if (detailsPlayer) loadRankPopulations(detailsPlayer.kind);
+  }, [detailsPlayer, loadRankPopulations]);
 
   // The player list is one kind at a time, picked by its own tab row (each half
   // keeping the watchlist's order). The tabs only appear when both kinds are
@@ -3283,6 +3371,8 @@ export default function App() {
           onIncludeChange={setResearchInclude}
           includeWatchlist={researchWatchlist}
           onIncludeWatchlistChange={setResearchWatchlist}
+          showRanks={showRanks}
+          onShowRanksChange={setShowRanks}
           hasRosterPct={rosterPct !== null}
           hasEligibility={eligibility !== null}
           trendWindows={rosterTrend}
@@ -3409,6 +3499,14 @@ export default function App() {
           onRemove={() => onRemove(detailsPlayer)}
           statsColumns={statsCols[detailsPlayer.kind] ?? null}
           onStatsColumnsChange={(keys) => setStatsColumns(detailsPlayer.kind, keys)}
+          showRanks={showRanks}
+          onShowRanksChange={setShowRanks}
+          /* The Stats tab's percentile population — the same board rows the
+             research view is drawn from, out of the same cache. Only the
+             windows that have landed are in it; the rest simply have no badges
+             yet. */
+          rankPopulations={detailsRankPopulations}
+          onNeedRankPopulations={loadDetailsRankPopulations}
           onClose={() => setDetailsKey(null)}
         />
       )}

@@ -89,6 +89,12 @@ export interface UserPrefs {
   /** Play every video clip with the sound off (the settings-menu toggle).
    *  Absent means off, the same convention as `hideInjured`. */
   muteAudio?: boolean;
+  /** Draw a percentile rank under every value on the research board and the
+   *  player page's Stats tab. Absent means off, the same
+   *  absence-is-the-default convention as the two toggles above. One entry for
+   *  both tables rather than one each: they are the same column vocabulary, and
+   *  this is a habit of reading rather than a setting on a table. */
+  statRanks?: boolean;
   /** Read the roster views off the user's **ESPN fantasy team** instead of the
    *  list they built here. Absent means the saved roster, which is the default
    *  and the only thing a user without a connected league can have — the same
@@ -821,6 +827,24 @@ export async function setMuteAudio(userId: string, mute: boolean): Promise<UserP
     const prefs = { ...cur.prefs };
     if (mute) prefs.muteAudio = true;
     else delete prefs.muteAudio;
+    return { prefs };
+  });
+  return next.prefs;
+}
+
+/**
+ * Save the "show percentile ranks" toggle — the badges under every value on the
+ * research board and the player page's Stats tab. Off is the absence of the
+ * entry, as with the three above, and it is **one** entry for both tables: the
+ * two are drawn from one column vocabulary and the flag is a habit of reading
+ * rather than a property of either table, so a reader who turns it on for the
+ * board wants it on the Stats tab as well.
+ */
+export async function setStatRanks(userId: string, on: boolean): Promise<UserPrefs> {
+  const next = await mutate(userId, (cur) => {
+    const prefs = { ...cur.prefs };
+    if (on) prefs.statRanks = true;
+    else delete prefs.statRanks;
     return { prefs };
   });
   return next.prefs;

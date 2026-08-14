@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import type { PlayerKind, PlayerWindowRow, ResearchWindow } from '../types';
+import { useEffect, useMemo, useState } from 'react';
+import type { PlayerKind, PlayerWindowRow, ResearchRow, ResearchWindow } from '../types';
 import {
   allColumns,
   defaultColumnKeys,
@@ -9,6 +9,8 @@ import {
 } from './researchColumns';
 import type { Column } from './researchColumns';
 import { ColumnPicker, ColumnsButton } from './ColumnPicker';
+import { RankBadge, RanksButton, rankScales } from './columnRanks';
+import { boardPopulation } from './ResearchTable';
 
 /**
  * **The research board, transposed onto one player** — the windows down the
@@ -166,11 +168,58 @@ interface Sort {
   asc: boolean;
 }
 
+/**
+ * **The percentile badges here are the board's own, over the board's own
+ * population — which is why this table has to be handed the boards.**
+ *
+ * A percentile needs a population, and this table has none: it is one player's
+ * five rows off `/api/players/:id/windows`, which is five boards reduced to one
+ * row each. Three ways out were considered.
+ *
+ * - **Rank on the server** and ship a number per cell. It is by far the
+ *   cheapest and it fails constraint one: better than half the board's columns
+ *   are *derived* in `Column.value` and exist nowhere on `ResearchRow` — BB%,
+ *   K-BB%, ISO, PA/HR, SB%, K/BB, SVHD, Str%. Ranking them server-side means
+ *   writing every one of those denominators a second time, in a workspace that
+ *   cannot import the first, and then hoping the two stay level. It would also
+ *   silently leave those columns unbadged the day somebody forgot one.
+ * - **Ship a compressed distribution** — quantiles, or a numeric projection of
+ *   each board — and rank in the client. It cuts the payload by about half
+ *   (measured: 120KB gzipped against 276KB for a batter's five windows) and
+ *   buys it with a hand-written list of which fields a column reads: add a
+ *   column tomorrow that reads a field the projection does not carry and this
+ *   table ranks the whole league as null while the board ranks it fine. A
+ *   silent wrong answer is the one failure this app most avoids.
+ * - **Read the five boards**, which is what this does: the same
+ *   `/api/research` the research view reads, through the same per-kind,
+ *   per-window cache App already keeps for it, fetched only when the toggle is
+ *   on and the Stats tab is open. The rows are then *literally* the rows the
+ *   board ranks, `boardPopulation` cuts them to the same trade, and
+ *   `rankScales` is the same function — so the two surfaces agree by
+ *   construction rather than by measurement. It is the argument
+ *   `getPlayerWindows` already makes for going through `getResearch` rather
+ *   than around it.
+ *
+ * What it costs is bytes and nothing else: the boards are 6h-cached on the
+ * server and pulled warm nightly by the warmer, so no upstream is touched, and
+ * the client cache is keyed by kind and window rather than by player — twenty
+ * player pages in one tab pay for it once, and a reader who has used the
+ * research board has already paid for part of it. Measured, gzipped: 276KB for
+ * a batter's five windows and 381KB for a pitcher's.
+ *
+ * **A window whose board has not landed simply has no badges yet**, which is
+ * the app's own loading rule — never a wait over data, and nothing blanks while
+ * a read is in flight. They arrive a window at a time.
+ */
 export function PlayerWindowTable({
   kind,
   windows,
   columnKeys,
   onColumnsChange,
+  showRanks,
+  onShowRanksChange,
+  populations,
+  onNeedPopulations,
 }: {
   kind: PlayerKind;
   windows: PlayerWindowRow[];
@@ -178,6 +227,18 @@ export function PlayerWindowTable({
   columnKeys: string[] | null;
   /** null means "back to the defaults", stored as no entry at all. */
   onColumnsChange: (keys: string[] | null) => void;
+  /** Draw a percentile under every value. One saved preference shared with the
+   *  research board — see `columnRanks.tsx`. */
+  showRanks: boolean;
+  onShowRanksChange: (on: boolean) => void;
+  /** The research board's rows per window, as far as App has them — keyed by
+   *  `String(window)`. Missing entries are windows not read yet, which draw no
+   *  badges rather than an empty one. */
+  populations: Partial<Record<string, ResearchRow[]>>;
+  /** "I would like the five boards for this kind." Called only while the
+   *  toggle is on and this tab is mounted, which is the whole of the laziness:
+   *  a reader on the Overview tab, or one with ranks off, pays nothing. */
+  onNeedPopulations: () => void;
 }) {
   const vocabulary = useMemo(() => statsColumns(kind), [kind]);
   const orderedKeys = useMemo(
@@ -191,6 +252,29 @@ export function PlayerWindowTable({
 
   const [pickerOpen, setPickerOpen] = useState(false);
   const [sort, setSort] = useState<Sort>({ key: SPAN_KEY, asc: true });
+
+  // Ask for the boards the badges are ranked within, and only ever from here:
+  // this component is mounted by the Stats tab alone, so a reader who never
+  // opens it never sends the request. App dedupes and caches — see
+  // `loadRankPopulations` there.
+  useEffect(() => {
+    if (showRanks) onNeedPopulations();
+  }, [showRanks, onNeedPopulations]);
+
+  /** One set of yardsticks per window, from whichever boards have landed.
+   *  Keyed by window because each row is ranked within *its own* span: a
+   *  seven-day xwOBA against the seven-day board, which is the only comparison
+   *  that means anything (a week's PA against a season's would rank every
+   *  player last). */
+  const ranks = useMemo(() => {
+    if (!showRanks) return null;
+    const out = new Map<string, ReturnType<typeof rankScales>>();
+    for (const w of windows) {
+      const rows = populations[String(w.window)];
+      if (rows) out.set(String(w.window), rankScales(columns, boardPopulation(rows, kind)));
+    }
+    return out;
+  }, [showRanks, populations, columns, kind, windows]);
 
   // A hidden column must not leave the table ordered by it — the same trap the
   // board's `activeSortKey` exists for, and here there is no header left to
@@ -250,6 +334,14 @@ export function PlayerWindowTable({
           count={columns.length}
           customised={!!columnKeys}
           onToggle={() => setPickerOpen((v) => !v)}
+        />
+        {/* The same control the board carries, in this table's own caption
+            slot, and reading the same saved preference: one reading habit, not
+            a setting per table. */}
+        <RanksButton
+          on={showRanks}
+          onToggle={() => onShowRanksChange(!showRanks)}
+          population="the whole research board for that span"
         />
       </div>
       {pickerOpen && (
@@ -332,6 +424,19 @@ export function PlayerWindowTable({
                       className={`glog-num${c.cellClass ? ` ${c.cellClass(row) ?? ''}` : ''}`}
                     >
                       {c.format(row)}
+                      {ranks && (
+                        <RankBadge
+                          col={c}
+                          scale={ranks.get(String(window))?.get(c.key)}
+                          value={c.value(row)}
+                          kind={kind}
+                          population={
+                            window === 'season'
+                              ? 'the Season board'
+                              : `the ${window}-day board`
+                          }
+                        />
+                      )}
                     </td>
                   ))
                 ) : (

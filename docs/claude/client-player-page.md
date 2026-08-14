@@ -380,6 +380,92 @@ cancel`, and a vertical flick from the middle of a chip scrolls the picker and
 reorders nothing (`touch-action` computing `auto` on the chip and the grip
 alike, which is the fix that passage records).
 
+### The percentile badges, and the population a one-player page hasn't got
+
+**`Ranks` sits beside `Columns` in the caption row and draws the board's own
+percentile under every value** — the same toggle, the same badge and the same
+saved preference the research board reads, because the two are one column
+vocabulary and this is a habit of reading rather than a setting on either table.
+The whole of the rule — 0–100 with 100 always the good end, `ascFirst` read back
+for orientation, nulls out of the denominator and unbadged, the four profile
+columns and the Fantasy group left out for having no good end, the dashed credit
+cells left out for having no value on screen — is `components/columnRanks.tsx`
+and is argued under **the research board**. What is this tab's own is where the
+population comes from.
+
+**A percentile needs a population and this tab has none**: it is one player's
+five rows off `/api/players/:id/windows`, which is five boards reduced to one row
+each. Three ways out were weighed.
+
+- **Rank on the server** and ship a number per cell. Much the cheapest, and it
+  fails the one-definition test outright: better than half the board's columns
+  are *derived* in `Column.value` and exist nowhere on `ResearchRow` — BB%,
+  K-BB%, ISO, PA/HR, SB%, K/BB, SVHD, Str%. Ranking them server-side means
+  writing every one of those denominators a second time, in a workspace that
+  cannot import the first, and then hoping the two stay level; and it would
+  silently leave those columns unbadged the day somebody forgot one, on a table
+  where nothing on screen could say which columns had been forgotten.
+- **Ship a compressed distribution** — a numeric projection of each board, or
+  quantiles of it — and rank in the client. It halves the payload (measured:
+  **120KB gzipped against 276KB** for a batter's five windows) and buys that with
+  a hand-written list of which fields a column reads. Add a column tomorrow that
+  reads a field the projection does not carry and this tab ranks the whole league
+  as null while the board ranks it fine — a silent wrong answer, which is the one
+  failure this app most avoids.
+- **Read the five boards**, which is what it does: the same `/api/research` the
+  research view reads, through the same per-kind, per-window cache App already
+  keeps for it (`loadRankPopulations`), fetched only when the toggle is on *and*
+  the Stats tab is mounted. The rows are then literally the rows the board ranks,
+  `boardPopulation` cuts them to the same trade, and `rankScales` is the same
+  function — so the two surfaces agree **by construction** rather than by
+  measurement. It is the argument `getPlayerWindows` already makes for going
+  through `getResearch` rather than around it.
+
+**What it costs is bytes and nothing else.** The boards are cached six hours on
+the server and pulled warm nightly by the warmer, so no upstream is touched, and
+the client cache is keyed by kind and window rather than by player — twenty
+player pages in one tab pay for it once, and a reader who has used the research
+board has already paid for part of it. Measured, gzipped: **276KB for a batter's
+five windows and 381KB for a pitcher's** (76 / 40 / 46 / 53 / 61 and 115 / 46 /
+59 / 72 / 89). Against the page it sits on that is about three board loads, once
+per kind per tab, and only for a reader who asked for the badges. **A window
+whose board has not landed simply has no badges yet**, which is the app's own
+loading rule — never a wait over data, nothing blanks while a read is in flight —
+and they arrive a window at a time.
+
+**Each row is ranked within its own span's board**, keyed by window, which is the
+only comparison that means anything: a seven-day line against the season board
+would rank every player last on every counting column. Checked against an
+independent computation over the same blobs — Perez's 30-day `HR 5 → 92`, `OPS
+.784 → 70`, `K% 18.2% → 71`, `xwOBA .335 → 76` (population 482), and Sale's
+7-day `ERA 4.50 → 35`, `K 8 → 92`, `FIP 1.48 → 90`, `IP 6.0 → 83` (population
+415) — all exact. And the badge's tooltip names the span it used: `Games pitched:
+56th percentile of the 752 pitchers with a figure on the Season board.`
+
+**The board and this tab show the same number for the same player, window and
+column**, which is the test the design was arranged around. Driven back to back
+on the same afternoon: Perez's Season row here reads `G 113 → 85`, `PA 473 → 88`,
+`HR 16 → 87`, `AVG .216 → 35`, `OPS .631 → 36`, `BB% 3.8% → 16`, `K% 19.9% → 68`,
+`xwOBA .297 → 46`, `Brl% 9.5% → 71`, and the board's row for him reads the same
+nine; Sale's reads `G 21 → 56`, `GS 21 → 91`, `IP 123.0 → 93`, `W 12 → 99`,
+`L 7 → 9`, `K 151 → 98`, `ERA 2.20 → 90`, `FIP 2.47 → 95`, `WHIP 1.02 → 89`,
+`xwOBA .274 → 85`, `Whiff% 30.7% → 86`, and so does the board's.
+
+**Measured badges off → on, at 1200×900 and 390×844, on a batter, a starting
+pitcher and one with three empty windows.** The table is **byte-identical in
+width** in every case — 2340.20 / 1473.72 (batter), 2124.56 / 1319.64 (pitcher),
+2109.67 / 1304.75 (the absent case) — because the badge is never wider than the
+value above it on this table. What it costs is **row height, 44.55 → 58.55px**,
+which is the one place this tab pays where the board does not: its rows are the
+game log's 13px padding rather than a 42px headshot's 58, so there is no slack
+for a second line to spend. Five rows is 70px of a tab that already fits one
+screen. The header row is **36.00px** either way, the span column pins at **0**
+with the pane scrolled to its far right and the header row at **1px**, and the
+page body and the overlay each overflow by **0** at both widths in both states.
+**A window he did not appear on still draws its sentence** — the absent-case
+pitcher reads `No outings in this span` on three rows with the badges on exactly
+as with them off, and the two rows he does have carry 47 badges between them.
+
 **The selection is saved, and saved apart from the board's.** It is
 `UserPrefs.statsColumns`, per kind, written by `PUT /api/prefs/stats-columns` on
 the same 600ms debounce and the same "absent means the defaults" rule as the

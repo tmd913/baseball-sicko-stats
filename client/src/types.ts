@@ -949,6 +949,9 @@ export interface UserPrefs {
   hideInjured?: boolean;
   /** Play every video clip with the sound off. Absent means off. */
   muteAudio?: boolean;
+  /** Draw a percentile rank under every value on the research board and the
+   *  player page's Stats tab. Absent means off, the same convention. */
+  statRanks?: boolean;
   /** Read the roster views off the ESPN fantasy team rather than the saved
    *  list. Absent means the saved list, which is the default. */
   rosterSource?: 'fantasy';
