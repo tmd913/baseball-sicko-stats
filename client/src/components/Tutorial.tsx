@@ -646,7 +646,7 @@ const CHAPTERS: Chapter[] = [
       <>
         <p>
           Your roster keeps the order you put it in, and that order is what every
-          view reads down. Once you're watching more than one player,{' '}
+          view reads down. As soon as there is anybody on your roster,{' '}
           <Ui>
             <PencilIcon /> Edit players
           </Ui>{' '}
@@ -654,8 +654,10 @@ const CHAPTERS: Chapter[] = [
           <Ui>
             <GearIcon /> Settings
           </Ui>{' '}
-          menu beside the title. Press it from anywhere and it takes you to{' '}
-          <Ui>Games</Ui>, where the reordering happens.
+          menu beside the title — one player is enough, since removing him is as
+          much what this screen is for as putting two in an order. Press it from
+          anywhere and it takes you to{' '}
+          <Ui>Roster</Ui>, where the editing happens.
         </p>
         <ol className="tut-steps">
           <Step>
@@ -675,14 +677,16 @@ const CHAPTERS: Chapter[] = [
             takes two.
           </Step>
           <Step>
-            Tap <Ui>Done</Ui> beside the title to go back to the cards.
+            Tap <Ui>Done</Ui> beside the title to go back to the table.
           </Step>
         </ol>
         <p className="tut-note">
           Batters and pitchers are ordered independently — you're only ever reordering
           the tab you're on, and the other kind stays where it was, so the{' '}
           <Ui>Batters · Pitchers</Ui> switch comes along to the edit screen and sits
-          beside its title. A player can also be removed from their player page.
+          beside its title — and it counts your roster rather than what the views
+          are showing, so a player hidden by <Ui>Hide injured players</Ui> is still
+          here to be dropped. A player can also be removed from their player page.
         </p>
       </>
     ),

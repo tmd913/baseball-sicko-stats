@@ -2273,28 +2273,37 @@ export default function App() {
   }, [scrollKey]);
   // The second tier of tabs, in the view bar beside the view switch: every view
   // below shows a single kind at a time, so the pair reads as one control.
-  const kindTabs = showKindTabs ? (
-    <div className="kind-switch" role="tablist" aria-label="Batters or pitchers">
-      <button
-        type="button"
-        role="tab"
-        aria-selected={shownKind === 'batter'}
-        className={`kind-tab${shownKind === 'batter' ? ' active' : ''}`}
-        onClick={() => setPlayerKind('batter')}
-      >
-        Batters
-      </button>
-      <button
-        type="button"
-        role="tab"
-        aria-selected={shownKind === 'pitcher'}
-        className={`kind-tab${shownKind === 'pitcher' ? ' active' : ''}`}
-        onClick={() => setPlayerKind('pitcher')}
-      >
-        Pitchers
-      </button>
-    </div>
-  ) : null;
+  //
+  // **It is a function because the edit screen asks it a different question.**
+  // The view bar's tabs are drawn from `shownReports`, which is downstream of
+  // hide-injured; the reorder screen is deliberately upstream of that filter,
+  // so it has its own answer to which kinds are on the roster and which of them
+  // is showing (see `editPlayers` below). One factory called twice keeps the
+  // two rows the same control rather than two that resemble each other.
+  const kindSwitch = (show: boolean, kind: 'batter' | 'pitcher') =>
+    show ? (
+      <div className="kind-switch" role="tablist" aria-label="Batters or pitchers">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={kind === 'batter'}
+          className={`kind-tab${kind === 'batter' ? ' active' : ''}`}
+          onClick={() => setPlayerKind('batter')}
+        >
+          Batters
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={kind === 'pitcher'}
+          className={`kind-tab${kind === 'pitcher' ? ' active' : ''}`}
+          onClick={() => setPlayerKind('pitcher')}
+        >
+          Pitchers
+        </button>
+      </div>
+    ) : null;
+  const kindTabs = kindSwitch(showKindTabs, shownKind);
   // The header's cluster, at the top right: the roster search, and nothing
   // else. The calendar was once beside it and moved down to the roster row (see
   // `dateToggle`); Edit was the next and is now an entry in the settings menu;
@@ -2619,10 +2628,32 @@ export default function App() {
   // the research board's baseball and the player page's badge read, so "on the
   // roster" means one thing everywhere; in this mode that is always the saved
   // list, the screen being hidden while a fantasy team is in view.
-  const editPlayers = reports
-    .filter((r) => rosterKeys.has(playerKey(r)))
-    .filter((r) => (shownKind === 'pitcher' ? r.kind === 'pitcher' : r.kind !== 'pitcher'))
-    .map((r) => ({ id: r.id, key: playerKey(r), name: r.name }));
+  //
+  // **And its kind split is its own, not the view bar's.** `shownKind` and
+  // `showKindTabs` are computed off `shownReports`, which is downstream of
+  // hide-injured — so on a roster of one batter and one pitcher with the batter
+  // on the IL and the filter on, the view bar drops the Batters tab and this
+  // screen followed it: the injured man was unreachable in the one place that
+  // can drop him, which is the exact composition the comment above says this is
+  // upstream of. So the screen splits `editRoster` itself and gets its own tabs
+  // from the same factory, and the filters reach the views and stop there.
+  const editRoster = reports.filter((r) => rosterKeys.has(playerKey(r)));
+  const editBatters = editRoster.filter((r) => r.kind !== 'pitcher');
+  const editPitchers = editRoster.filter((r) => r.kind === 'pitcher');
+  // Same fallback the view bar makes, for the same reason: with one kind empty
+  // there are no tabs, so show whichever kind is left rather than leaving a
+  // stale `kind=` staring at an empty screen.
+  const editKind =
+    editPitchers.length === 0 && editBatters.length > 0
+      ? 'batter'
+      : editBatters.length === 0 && editPitchers.length > 0
+        ? 'pitcher'
+        : playerKind;
+  const editPlayers = (editKind === 'pitcher' ? editPitchers : editBatters).map((r) => ({
+    id: r.id,
+    key: playerKey(r),
+    name: r.name,
+  }));
 
   /* The edit screen. The chrome above is hidden entirely in this mode, so this
      is the whole of what's on screen and it carries its own heading rather than
@@ -2646,7 +2677,7 @@ export default function App() {
     <div className="edit-page">
       <div className="edit-page-head">
         <h2 className="edit-page-title">Edit players</h2>
-        {kindTabs}
+        {kindSwitch(editBatters.length > 0 && editPitchers.length > 0, editKind)}
         <button
           type="button"
           className="edit-order-btn active"
@@ -2800,10 +2831,41 @@ export default function App() {
                     `.settings-toggle` because it is that kind of entry: it
                     opens a screen instead of flipping a setting, so it reads
                     with "How to use" below it rather than with the two
-                    toggles above. Offered on the same terms it always was —
-                    something to put in an order, and a list of ours to put it
-                    in. */}
-                {reports.length > 1 && !usingFantasy && (
+                    toggles above.
+
+                    **Offered on one player, where it used to want two.** The
+                    test was `reports.length > 1`, which is a rule about
+                    *reordering* applied to a screen that also removes — and
+                    removing is the half a one-player roster most wants, that
+                    being the state you are in when you have just cleared the
+                    list and want the last man gone too. Clearing the roster
+                    therefore hid the way back into the screen, and adding one
+                    player back did not restore it.
+
+                    **And it counts `rosterKeys`, the live saved roster, rather
+                    than `reports`.** The report is the roster as it stood over
+                    the days in view, so over a range it carries the men dropped
+                    inside it — an entry counting that would have opened on the
+                    empty screen `editPlayers` draws, this morning's clear-out
+                    being invisible to it until the range moved past. Counting
+                    the set the screen itself edits is what makes the entry
+                    present exactly when there is something behind it. It is
+                    also upstream of hide-injured and of `Starters` by
+                    construction, which `reports` was only by accident: dropping
+                    an injured player is precisely what this screen is for, so
+                    the entry to it must not be filtered away with him.
+
+                    **Zero is still nothing**, and stays hidden: there is
+                    nothing to put in an order and nobody to remove, and the
+                    Roster view already meets that reader with `Your roster is
+                    empty` and a button opening the search — which is the errand
+                    they actually have. An entry leading to a screen with no rows
+                    on it would be a mode whose only content is its own way out.
+
+                    The other half of the test is unchanged and correct: ESPN
+                    owns the fantasy list, so a screen offering to rearrange it
+                    would be offering something it can't do. */}
+                {rosterKeys.size > 0 && !usingFantasy && (
                   <button
                     type="button"
                     className="help-btn"
