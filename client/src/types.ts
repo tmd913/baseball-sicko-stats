@@ -959,6 +959,13 @@ export interface UserPrefs {
   /** Put the watchlist on the research board **as well as** those sets — a
    *  union, not a narrowing. Absent means off. */
   researchWatchlist?: boolean;
+  /** The last few players picked out of the header search, most recent first —
+   *  what the field offers before anything is typed. **Player keys**, not
+   *  entries: the search is already holding the season roster it matches
+   *  against, so a saved name and club would be a staler copy of what is in
+   *  hand, and a player who has left that list is one the search cannot find
+   *  either. Absent means none, the same convention as everything above. */
+  recentPlayers?: string[];
   /** @deprecated The same flag under its old name, from when it narrowed the
    *  board rather than widening it. Read on the way in so a preference saved
    *  before the change survives; never written — a record migrates the first

@@ -36,6 +36,7 @@ import {
   setEspnTeam,
   setHideInjured,
   setMuteAudio,
+  setRecentPlayer,
   setLeagueSharing,
   setResearchColumns,
   setStatsColumns,
@@ -411,6 +412,29 @@ app.put(
       return;
     }
     res.json(await setMuteAudio(userId(req), mute));
+  }),
+);
+
+/**
+ * Remember a player picked out of the header search. A route of its own for the
+ * reason the four above are separate: its update semantics are its own again —
+ * not a boolean that is always set, nor a list that a null clears, but a single
+ * key **pushed onto** a list the server keeps and caps.
+ *
+ * The body is one player key, shape-validated against the same `WATCH_KEY_RE`
+ * the watchlist uses, since that is the whole of what is stored — see
+ * `UserPrefs.recentPlayers` for why a key rather than a name and a club.
+ */
+app.put(
+  '/api/prefs/recent-players',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const { key } = (req.body ?? {}) as { key?: unknown };
+    if (typeof key !== 'string' || !WATCH_KEY_RE.test(key)) {
+      res.status(400).json({ error: "key must be a player key, e.g. 'batter-660271'" });
+      return;
+    }
+    res.json(await setRecentPlayer(userId(req), key));
   }),
 );
 

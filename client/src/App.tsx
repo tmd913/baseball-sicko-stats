@@ -190,6 +190,13 @@ function datePresets(): DatePreset[] {
   ];
 }
 
+/** How many recently-picked players the header search offers back. Mirrors
+ *  `RECENT_PLAYERS` in the server's `store.ts`, the two workspaces being unable
+ *  to import from each other — this caps the optimistic copy, the server caps
+ *  what is stored, and the two agree by arithmetic rather than by one trusting
+ *  the other. */
+const RECENT_PLAYERS = 5;
+
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
@@ -390,6 +397,64 @@ export default function App() {
       .catch((e: Error) => console.error('saving mute-audio failed:', e.message));
   }, []);
   /**
+   * Writes to the user's own record, one at a time.
+   *
+   * One press of ＋ now writes to that record **twice** — the roster and the
+   * search history — and the two must not race. The deployed backend survives
+   * it (`store.ts::mutate` re-reads and replays a lost update against a
+   * version-conditional put), but the dev file backend has no version to check
+   * and the second writer simply overwrites the first: measured locally, an
+   * added player reached the roster and his pick vanished from the history on
+   * the very machine it was made on. A promise chain is the whole of the fix,
+   * and it costs nothing worth having — both writes are a few hundred bytes
+   * against one small item, and nothing on screen is waiting for the second.
+   *
+   * `then(run, run)` rather than `then(run)`: a failed write must not stop the
+   * queue, or one dropped request would silently swallow every later one.
+   */
+  const userWrites = useRef<Promise<unknown>>(Promise.resolve());
+  const queueUserWrite = useCallback(<T,>(run: () => Promise<T>): Promise<T> => {
+    const next = userWrites.current.then(run, run);
+    userWrites.current = next.catch(() => undefined);
+    return next;
+  }, []);
+
+  /**
+   * The players most recently picked out of the header search, newest first —
+   * what that field offers before anything is typed. Player keys, so a row is
+   * resolved against the season roster the search is already holding rather
+   * than out of a saved copy of a name and a club that could go stale (see
+   * `UserPrefs.recentPlayers`).
+   *
+   * Saved per user and deliberately **not** in the URL: it is a history of what
+   * this person has looked up, which says nothing about the view a link
+   * describes — the same line `muteAudio` is on, one step further from the
+   * data.
+   */
+  const [recentPlayers, setRecentPlayers] = useState<string[]>([]);
+  /**
+   * One pick, recorded. The list moves **here first** so the menu is right on
+   * the next render, and the write goes out with the one key rather than the
+   * whole list — the server owns the push-to-front and the cap, which is what
+   * makes a second tab's picks safe (see `store.ts::setRecentPlayer`). A key
+   * already in the list moves to the front rather than doubling, on both sides
+   * of the wire and by the same arithmetic.
+   *
+   * No touched-ref here, unlike the two toggles: the boot read **merges**
+   * rather than replaces (below), so a pick made in the second before the
+   * preferences land keeps its place at the front and the saved four fill in
+   * under it, which is exactly what the server will have stored anyway.
+   */
+  const recordRecentPlayer = useCallback(
+    (key: string) => {
+      setRecentPlayers((cur) => [key, ...cur.filter((k) => k !== key)].slice(0, RECENT_PLAYERS));
+      queueUserWrite(() => api.saveRecentPlayer(key)).catch((e: Error) =>
+        console.error('saving recent player failed:', e.message),
+      );
+    },
+    [queueUserWrite],
+  );
+  /**
    * Which set of players the three roster views describe: the list built here,
    * or the user's ESPN fantasy team.
    *
@@ -533,6 +598,19 @@ export default function App() {
         // No URL param to reconcile against — the saved value is the only
         // source there is, so it applies unless the user has already spoken.
         if (!muteAudioTouched.current && prefs.muteAudio) setMuteAudioState(true);
+        // Merged rather than applied, which is why this needs no touched ref:
+        // anyone picked in the second before this landed leads, and the saved
+        // list fills in under him — which is the same list the server has
+        // stored by then, since its own write pushed that key onto the front of
+        // these very keys.
+        if (prefs.recentPlayers?.length) {
+          setRecentPlayers((cur) =>
+            [...cur, ...prefs.recentPlayers!.filter((k) => !cur.includes(k))].slice(
+              0,
+              RECENT_PLAYERS,
+            ),
+          );
+        }
         // Same rule as hide-injured: the URL can only ever say `fantasy`, so
         // silence there is unspecified rather than "watchlist", which is what
         // lets the saved value fill it in.
@@ -1699,8 +1777,10 @@ export default function App() {
   // that undid a session's worth of them has nothing left to undo. The feed has
   // no collapsibles at all, so App holds no expansion state for any view.
 
+  // Queued behind whatever else is writing to the user's record — the pick this
+  // press also records, above all. See `queueUserWrite`.
   const onAdd = async (p: WatchPlayer) => {
-    setRoster(await api.addPlayer(p));
+    setRoster(await queueUserWrite(() => api.addPlayer(p)));
   };
   const onRemove = async (p: { id: number; kind: PlayerKind }) => {
     setRoster(await api.removePlayer(p.id, p.kind));
@@ -2201,9 +2281,11 @@ export default function App() {
         <PlayerAdder
           players={seasonPlayers}
           watchlist={roster}
+          recent={recentPlayers}
           canAdd={!usingFantasy}
           onAdd={onAdd}
           onOpenDetails={setDetailsKey}
+          onPick={recordRecentPlayer}
           loading={playersLoading}
         />
       </div>
@@ -2472,9 +2554,11 @@ export default function App() {
       <PlayerAdder
         players={seasonPlayers}
         watchlist={roster}
+        recent={recentPlayers}
         canAdd={!usingFantasy}
         onAdd={onAdd}
         onOpenDetails={setDetailsKey}
+        onPick={recordRecentPlayer}
         loading={playersLoading}
         autoFocus
         onClose={() => setSearchOpen(false)}
