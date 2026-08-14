@@ -107,6 +107,26 @@ export interface UserPrefs {
    *  means off. */
   researchWatchlist?: boolean;
   /**
+   * The last few players picked out of the header search, most recent first —
+   * what that field offers before a single character has been typed.
+   *
+   * **Keys, not entries**, which is the rule the watchlist already follows and
+   * for the same reason one step stronger: the client that renders these rows
+   * is holding the season roster anyway (`getSeasonPlayers`, the ~1,400-row
+   * list the search itself matches against), so a stored name, club and Savant
+   * spelling would only be a second and staler copy of what is already in
+   * hand — and a player who has left that list is one the search cannot find
+   * either, so a row for him would be a row that opens on nothing. It also
+   * means the app's `${kind}-${id}` key is what is stored, so a two-way player
+   * picked as a pitcher is a different entry from the same man picked as a
+   * batter, exactly as he is a different roster entry and a different star.
+   *
+   * Absent means none, the convention everything else here follows — a user
+   * who has never searched and one whose picks are all of players since gone
+   * from the season roster read the same.
+   */
+  recentPlayers?: string[];
+  /**
    * @deprecated The same flag under the name it carried when it *narrowed* the
    * board to the watchlist rather than adding the watchlist to it. Kept on the
    * type because `GET /api/prefs` hands the stored object straight to the
@@ -802,6 +822,37 @@ export async function setMuteAudio(userId: string, mute: boolean): Promise<UserP
     if (mute) prefs.muteAudio = true;
     else delete prefs.muteAudio;
     return { prefs };
+  });
+  return next.prefs;
+}
+
+/** How many recent picks are kept. Mirrored by hand in `client/src/App.tsx`,
+ *  the two workspaces being unable to import from each other — the client caps
+ *  its optimistic copy of the list and the server caps what is stored, and the
+ *  two agree by arithmetic rather than by one trusting the other. */
+export const RECENT_PLAYERS = 5;
+
+/**
+ * Record that a player was picked out of the search — the one act that
+ * *completes* a search here, so it is the one thing worth remembering about it.
+ *
+ * The server owns the push-to-front and the cap rather than taking a list from
+ * the client, which is what makes this safe to replay against a newer record
+ * the way `setWatchlisted` is: "put this key at the front" cannot lose anything
+ * a concurrent write added, where a whole list posted by a tab that has been
+ * open an hour would quietly overwrite it. A key already in the list **moves**
+ * rather than duplicating, which is why the filter is there and why the cap is
+ * applied after it rather than before.
+ *
+ * No debouncing, unlike the column preferences: picking a player is one
+ * deliberate act with one write behind it, where ticking a group of columns is
+ * one intent and a dozen state changes.
+ */
+export async function setRecentPlayer(userId: string, key: string): Promise<UserPrefs> {
+  const next = await mutate(userId, (cur) => {
+    const prev = cur.prefs.recentPlayers ?? [];
+    const recent = [key, ...prev.filter((k) => k !== key)].slice(0, RECENT_PLAYERS);
+    return { prefs: { ...cur.prefs, recentPlayers: recent } };
   });
   return next.prefs;
 }

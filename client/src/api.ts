@@ -217,6 +217,17 @@ export const api = {
       body: JSON.stringify({ include, watchlist }),
     });
   },
+  /** Remember a player picked out of the header search. The server owns the
+   *  push-to-front and the cap of five, so this posts the one key rather than a
+   *  list — a whole list from a tab that has been open an hour would overwrite
+   *  whatever another tab has picked since. */
+  async saveRecentPlayer(key: string): Promise<UserPrefs> {
+    return request('/api/prefs/recent-players', {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ key }),
+    });
+  },
   async saveMuteAudio(mute: boolean): Promise<UserPrefs> {
     return request('/api/prefs/mute-audio', {
       method: 'PUT',

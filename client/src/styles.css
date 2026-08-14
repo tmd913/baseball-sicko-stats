@@ -744,6 +744,22 @@ body {
   color: var(--muted);
   font-size: 13px;
 }
+/* The heading over the recently-picked players the search offers before
+   anything is typed. It says what the rows are, which a menu that appears on
+   focus alone could not — an unexplained list of five names under an empty box
+   reads as results for a query nobody typed. Small caps in the muted tone, the
+   app's own shape for a label over a list (the percentile card's section heads
+   and the player page's block headings), and no rule under it: the rows carry
+   their own hover ground and a line above the first of them would be a second
+   edge a few pixels inside the menu's own border. */
+.adder-head {
+  padding: 8px 12px 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
 .summary-chips {
   display: flex;
   gap: 8px;
