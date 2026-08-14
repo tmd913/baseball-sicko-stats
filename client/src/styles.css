@@ -3814,6 +3814,133 @@ body {
   color: var(--faint);
   font-weight: 600;
 }
+
+/* ---- News ------------------------------------------------------------
+   His latest transactions and articles, drawn by one component on two
+   surfaces — the Overview's section and the News tab — so there is one set of
+   rules here rather than two that resemble each other (`PlayerNews.tsx`).
+
+   **A reading column, not a table.** The Overview tab lost its own cap so its
+   two stat tables could take the window (see `.details-overview`), and this is
+   the other kind of content: headlines and standfirsts are *read* across a line
+   rather than scanned down a column, so the list caps itself at the same
+   `--card-column` the day's items beside it use. The tab's copy takes the 860
+   the Arsenal and the percentile card already read at. */
+.news-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-width: var(--card-column);
+}
+/* On the Overview the block caps as a whole rather than only its list, so the
+   `News →` door sits over the right edge of the rows it opens rather than out
+   at the far side of a tab the two stat tables below have widened to the
+   window. The Season and Last-5 blocks' own links line up with *their* tables
+   for the same reason; this one's table is a column of prose. */
+.ovw-news {
+  max-width: var(--card-column);
+}
+.news-tab {
+  max-width: 860px;
+  margin: 18px auto 0;
+}
+.news-tab .news-list {
+  max-width: none;
+}
+/* A hairline between rows rather than a card each: this is one list of one
+   player's week, and eight bordered boxes would read as eight unrelated things.
+   The last rule goes, so the block closes on its content and not on an edge
+   with nothing under it. */
+.news-item {
+  border-bottom: 1px solid var(--border);
+}
+.news-item:last-child {
+  border-bottom: none;
+}
+.news-link,
+.news-static {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 0;
+  text-decoration: none;
+  color: inherit;
+}
+/* Only an **article** is a press, and only because only an article has
+   somewhere to go: MLB publishes a transaction as one sentence and no link, so
+   that row is `.news-static` and carries neither the pointer nor the tint. A
+   row that looked pressable and did nothing is the thing this avoids. */
+.news-link {
+  cursor: pointer;
+}
+/* Scoped like every other pressable surface in the app — on touch `:hover` has
+   no way to end, so a finger dragged down this list would leave the last row it
+   crossed lit as though it were chosen. See the note at the top of this file. */
+@media (hover: hover) {
+  .news-link:hover .news-headline {
+    color: var(--accent);
+  }
+}
+.news-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: 6px;
+}
+.news-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+.news-date {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+/* What kind of thing the row is, in the upstream's own word. An outlined pill
+   rather than a filled one and in `--faint` rather than a tone, because this is
+   a *label* and not a state — the app's colour is spent on what is happening to
+   a player, and "Status Change" against "Report" is a fact about where the row
+   came from. */
+.news-kind {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--faint);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+.news-headline {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+  color: var(--text);
+}
+.news-summary {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--faint);
+}
+/* Nothing to show, which for a healthy player mid-season is the ordinary case
+   rather than a failure — so the tab says which two feeds were read and that
+   both were empty, the app's rule that an empty view names its cause. */
+.news-empty {
+  max-width: 680px;
+  margin: 18px auto 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.news-empty-note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--faint);
+}
 /* His combined line for the day, over the sections. A `.details-note` because
    that is what it is — a caption on what is under it — with the tabular figures
    every stat line in the app carries and a touch more presence than a note,
