@@ -20,6 +20,27 @@ import type { PitcherSeasonStats, SeasonStats } from '../types';
  * and two rows of different stats are readable against each other, which is the
  * whole reason the rail is not scaled to each player's own numbers.
  *
+ * ### The fill can never exceed its half of the rail
+ *
+ * That is the invariant, and it is held in two places because a gap has no upper
+ * bound at all: a .750 OPS against righties and a 1.900 against lefties over a
+ * dozen trips is a 1.15 gap against a `full` of .300, and the league has rows
+ * running to **five times** the scale. `railFraction` is what makes the length
+ * total — it answers in [0,1] for *every* input, the absurd ratios and the
+ * NaN/Infinity/negative/zero-denominator ones alike — and the stylesheet's
+ * `max-width` on `.spl-fill` says the same thing again in the one place a bad
+ * length could still arrive from.
+ *
+ * **The rail is a pill, so a full bar is measured against the rail's ink rather
+ * than its box**, which is where this went wrong: the fill was inset 3px top and
+ * bottom and nothing at all at the ends, so a bar drawn to the rail's *box* had
+ * its outer corners outside the rail's own rounded cap — 2.47px of ink beyond
+ * it on Willson Contreras's clamped K% row, where every unclamped row on the
+ * card sat 2.25px inside. The fill is now inset by that same `--spl-inset` on
+ * all four sides, which makes it exactly the rail's pill inset by 3 (a radius-5
+ * cap inside a radius-8 one, the two concentric), so a bar at full length lands
+ * on the rail's inner cap and cannot poke out of it at any fraction.
+ *
  * **Direction carries the polarity, and nothing else does.** A row where less is
  * better (`lowerBetter` — a pitcher's FIP, a batter's K%) is not drawn with a
  * reversed scale or a differently-coloured fill; it points at whichever side the
@@ -93,6 +114,30 @@ function num(v: string | null | undefined): number | null {
 /** A rate that exists only as a count over a denominator this object carries. */
 function share(count: number, of: number): number | null {
   return of > 0 ? (count / of) * 100 : null;
+}
+
+/**
+ * **How much of its half of the rail a gap fills — in [0,1], for any input.**
+ *
+ * A platoon gap has no upper bound: the sweep behind `full` turns up drawn rows
+ * at 3.2× the scale on the batting side (Josh Smith's 44.4% / 16.9% K% over 27
+ * PA) and 5.7× on the pitching one (Joe Ross's 2.90 / 16.65 FIP over 27 BF), and
+ * a side thin enough to be all noise is exactly where the huge ones live. So the
+ * length has to be clamped, and the clamp has to be **total** rather than a bare
+ * `Math.min(1, gap / full)`: that one is right for every ordinary number and
+ * returns `NaN` the moment its argument is one — and `NaN` is not a length, so
+ * the width would have been dropped as invalid and the bar would size itself.
+ *
+ * Nothing upstream can hand it one today — `num` rejects anything non-finite and
+ * `share` refuses a zero denominator, so every gap reaching here is a finite
+ * non-negative number — and that is the argument for guarding rather than
+ * against it: this is the one function standing between a stat's arithmetic and
+ * a length in pixels, and the next stat added to either table gets its
+ * denominator checked here whether or not its author thought to.
+ */
+function railFraction(gap: number, full: number): number {
+  if (!Number.isFinite(gap) || !Number.isFinite(full) || full <= 0) return 0;
+  return Math.max(0, Math.min(1, gap / full));
 }
 
 /**
@@ -338,9 +383,17 @@ function SplitRow<T>({
   // OPS row.
   const leftStronger = both ? (stat.lowerBetter ? l < r : l > r) : false;
   const gap = both ? Math.abs(l - r) : 0;
-  const frac = Math.min(1, gap / stat.full);
-  const over = gap > stat.full;
-  const width = `${frac * 50}%`;
+  const frac = railFraction(gap, stat.full);
+  // Clamped, and so drawn with a squared outer end. Read off `frac` rather than
+  // off `gap > stat.full` again, so the mark and the length can never disagree
+  // about whether the bar ran out of rail — and so an input `railFraction`
+  // refused cannot square off a bar of no length.
+  const over = frac === 1 && gap > stat.full;
+  // The rail's half, less the inset the fill is nested by: a full bar then lands
+  // exactly on the rail's inner cap rather than on its box, which is a different
+  // place — see the note at the top of this file. `--spl-inset` is the
+  // stylesheet's, so the four sides of that nesting are one number in one place.
+  const width = `calc(${frac} * (50% - var(--spl-inset)))`;
   const strong = both && gap > 0;
 
   const title = both

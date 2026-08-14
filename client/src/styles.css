@@ -4552,6 +4552,12 @@ body {
 .spl-table {
   --spl-label-w: 62px;
   --spl-val-w: 54px;
+  /* How far the fill is nested inside the rail, on all four sides. It is one
+     number rather than four because the rail is a pill and the fill is a pill,
+     and only an equal inset makes the two concentric — see `.spl-fill`. The
+     inline width `PlatoonSplits` writes reads this same token, so the length of
+     a full bar and the nesting of its cap cannot drift apart. */
+  --spl-inset: 3px;
 }
 .spl-heads,
 .spl-row {
@@ -4627,11 +4633,24 @@ body {
   bottom: -6px;
   border-left: 1px dashed var(--border);
 }
+/* The fill is the rail's own pill, inset by `--spl-inset` on **all four sides**.
+   That equal inset is the whole of the geometry: the rail is 16px tall and so
+   caps at radius 8, the fill is 10px tall and so caps at radius 5, and 8 − 3 = 5
+   means the two caps are concentric. Inset top and bottom only — which is what
+   this was — a bar drawn to the rail's *box* ends outside the rail's *ink*,
+   because a pill's edge has receded 1.76px by the fill's top row of pixels; a
+   clamped bar, whose outer end is squared off, then put 2.47px of accent past
+   the end of the rail on Contreras's K% row. `max-width` is the same invariant
+   said again at the last possible moment: whatever length arrives, the fill
+   cannot cover more than its half of the rail. `min-width` is the floor that
+   says "there is a bar here" for a gap of almost nothing, and takes the cap as
+   its own ceiling so the floor can never breach it on a narrow rail. */
 .spl-fill {
   position: absolute;
-  top: 3px;
-  bottom: 3px;
-  min-width: 3px;
+  top: var(--spl-inset);
+  bottom: var(--spl-inset);
+  min-width: min(3px, 50% - var(--spl-inset));
+  max-width: calc(50% - var(--spl-inset));
   border-radius: 999px;
   background: var(--accent);
   opacity: 0.8;
@@ -7014,12 +7033,23 @@ body {
   align-items: center;
   gap: 8px;
 }
-/* Long label on a desktop, short one on a phone — both rendered, swapped by the
-   query below, which is how every "one control, two widths" pair in this app is
-   built (the date presets, the window tabs, the position row). The labels can't
-   go the way the disclosure buttons' do, to an icon: "my roster", "other
-   rosters" and "free agents" have no glyphs anyone would read. */
-.research-inc-abbr {
+/* Long label on a desktop, short one on a phone, a mark on a narrow phone — all
+   three rendered and swapped by the queries below, which is how every "one
+   control, several widths" set in this app is built (the date presets, the
+   window tabs, the position row).
+
+   The paragraph here used to say the labels "can't go the way the disclosure
+   buttons' do, to an icon: my roster, other rosters and free agents have no
+   glyphs anyone would read", and it was wrong about two of the three. The app
+   draws a mark for each of those sets already, on the very rows these buttons
+   select: the accent baseball for a player on your roster, and the padlock for
+   one somebody else is holding. Reusing them is the point rather than a saving —
+   the control and the thing it selects end up in one vocabulary, so a lit lock
+   above a column of locked rows needs no explaining. Free agency is the set with
+   no mark, and it stays text (`FA`) in the same slot, which is what keeps the
+   three buttons one shape. */
+.research-inc-abbr,
+.research-inc-code {
   display: none;
 }
 /* On a phone the three go to their short labels — and to a tighter box with
@@ -7028,9 +7058,14 @@ body {
    group at its desktop padding came to 198 and pushed itself onto a line of its
    own. 8px of padding and a 6px gap take it to 170 — measured, and the margin
    is a few pixels: 159 + the row's 12px gap + 170 is 341 against the 346 a 390px
-   phone leaves inside the app's gutters. That is what keeps the two on one line
-   and the whole chrome at three rows rather than four, which is 48px, more than
-   a row of the table. */
+   phone leaves inside the app's gutters.
+
+   That arithmetic is a *two*-pill view switch, which is what a reader with
+   nothing on their roster gets. With the roster views showing it is three pills
+   and 216px, and 216 + 12 + 170 is 398 against 346 — so on the phone belonging
+   to somebody who actually uses the app, the group has been on a line of its own
+   all along, and the row this width class was tuned to save was already lost.
+   The block below is where it comes back. */
 @media (max-width: 640px) {
   .research-inc-full {
     display: none;
@@ -7043,6 +7078,87 @@ body {
   }
   .research-inc {
     padding: 0 8px;
+  }
+}
+
+/* Narrower still, the three go to their marks: the baseball, the padlock, `FA`.
+   The group is 116px where the short labels are 170, and what those 54px buy is
+   a row — 216 (the three view pills) + 12 + 116 is 344 against the 346 a 390px
+   phone leaves, so the include group rejoins the first row and the chrome goes
+   four rows to three. That is 48px, more than a row of the table, on the page
+   where every pixel of height is one.
+
+   **480 rather than 640**, and the reason is that the icons only *pay* below
+   about 440: measured at 480, 520, 560 and 640 the bar wraps identically with
+   the words and with the marks, so replacing them there would spend legibility
+   and buy nothing. Between 481 and 640 there is room for `Mine · Others · Free`
+   and three small glyphs would be the harder read; below it there is not. It is
+   also the app's other established narrow threshold — `.player-card`'s own phone
+   layout turns at the same width.
+
+   **A 4px gap, not 6.** The margin is measured and it is thin: 344.1 against
+   346, under two pixels, and at 6px the group is 120 and misses the row by two
+   instead. The failure mode of getting it wrong is benign — it wraps as it did
+   before — which is what makes a two-pixel margin worth taking here and would
+   not make it worth taking somewhere a miss showed as an overflow. Three 36px
+   squares 4px apart also read more plainly as one run than as three buttons,
+   which is what these are.
+
+   The label goes *visually* hidden rather than away, the rule
+   `.research-toggle-label` sets for the disclosure buttons at 640: a button
+   whose only content is an `aria-hidden` mark has no name at all. The full
+   label rather than the abbreviation, since with nothing on screen to read there
+   is no reason to give a screen reader the terser of the two. The `title` a
+   pointer gets is untouched and is still the sentence explaining the set. */
+@media (max-width: 480px) {
+  .research-inc-abbr {
+    display: none;
+  }
+  .research-inc-full {
+    /* `display` has to be restated, and that is the whole of what makes this
+       rule work: the 640px block above has already set `display: none` on this
+       span, and a visually-hidden box that is still `none` is not hidden — it is
+       *gone*, and the button then has no text at all. Measured before this line
+       existed: the accessible name of each button came back as the `title`,
+       which browsers fall back to only when there is nothing else, so the run
+       read as three buttons named by a tooltip rather than by a label. */
+    display: block;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .research-inc-code {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    /* The trap `.starters-toggle`'s clipboard already documents: an svg in a
+       flex row is a flex item, and its `width` is a basis it will shrink below
+       the moment the line is tight — on a button that is nothing but the glyph,
+       that is the whole of the button. */
+    flex: none;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+  }
+  .research-inc-code svg {
+    flex: none;
+  }
+  /* The app's own 36px square, the shape every icon button in the header and
+     both of the roster row's filters already take, so the run reads as chrome
+     rather than as three buttons that happen to be small. */
+  .research-inc {
+    width: var(--control-h);
+    padding: 0;
+    justify-content: center;
+  }
+  .research-include {
+    gap: 4px;
   }
 }
 
