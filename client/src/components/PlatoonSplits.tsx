@@ -422,15 +422,6 @@ function SplitCard<T>({
       <div className="pct-card-head">
         <span className="pct-card-title">Platoon splits</span>
       </div>
-      {/* The one sentence that keeps the bars honest. Every row is drawn the
-          same way round, the ones where the smaller number is the better one
-          included, and a reader who hasn't been told that reads the FIP row
-          backwards. */}
-      <p className="spl-intro">
-        Each bar runs from the centre toward the side he is <strong>stronger</strong> against — the
-        further it runs, the bigger the split. A full bar is a gap bigger than nine players in ten
-        have in that stat.
-      </p>
       <div className="spl-table">
         <div className="spl-heads">
           <span className="spl-label" />
@@ -461,9 +452,29 @@ function SplitCard<T>({
           />
         ))}
       </div>
+      {/* The one sentence that keeps the bars honest. Every row is drawn the
+          same way round, the ones where the smaller number is the better one
+          included, and a reader who hasn't been told that reads the FIP row
+          backwards.
+
+          **It is under the bars, where it used to be over them.** It is a key to
+          a chart, and a key read before the chart is a paragraph of instructions
+          for something the reader has not seen — spent on the top of a tab whose
+          whole content is the chart. Underneath, it is the same sentence
+          answering a question the reader now has. It takes `.spl-note`'s own
+          rules rather than a set of its own, which is what makes it read as the
+          second caption in a pair rather than as a new section. */}
+      <p className="spl-intro">
+        Each bar runs from the centre toward the side he is <strong>stronger</strong> against — the
+        further it runs, the bigger the split. A full bar is a gap bigger than nine players in ten
+        have in that stat.
+      </p>
       {/* The sample is on the card whatever it is — in the heads — and gets a
           sentence of its own the moment it is small enough to change how the
-          bars should be read. */}
+          bars should be read. It closes the card, below the key: the key is
+          about how any chart here is drawn, this is about this player's, and the
+          general note before the particular one is the order a footnote and its
+          caveat come in. */}
       {oneSided ? (
         <p className="spl-note spl-note--warn">
           No {sampleNoun} {leftSample === 0 ? leftLabel : rightLabel} this season, so there is

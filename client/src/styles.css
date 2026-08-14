@@ -22,9 +22,41 @@
   --foul: #fbbf24;
   --called: #a78bfa;
 
-  /* The live/on-base purple — the ring on an active player, and now the accent
-     on the inning a watched pitcher is currently throwing. */
+  /* The live/on-base purple — the ring, tag and rail on a batter who is at
+     large in a live game: at bat, on deck or aboard. It used to be the accent on
+     a watched pitcher's live inning as well; that meaning has its own colour
+     now, directly below. */
   --live-purple: #c084fc;
+
+  /* The on-the-mound teal — everything that means *this pitcher is working
+     right now*: his row tint, his headshot ring, his `On mound` tag, his rail in
+     the feed, and the accent on the half-inning he is throwing.
+
+     It exists because the two live meanings were **literally the same colour**.
+     `--role-pitching-bg` and `--role-on-base-bg` were the same `color-mix` of
+     the same purple, and the app folded `.role-pitching` onto `.role-on-base` in
+     five more rules, so a runner aboard and a pitcher on the mound were one
+     shade under two names. That was defensible while nothing drew the two
+     together — the kind tabs show one at a time — and stopped being defensible
+     the moment the legend under the summary table became unconditional: it draws
+     all four roles on both tabs, so `On base` and `On mound` sat side by side as
+     two labels over one swatch, which is a key stating that two things are the
+     same when the table's own vocabulary says they are not.
+
+     **The hue is measured rather than picked.** Teal is the risky family here
+     because it sits between the app's green (`--hit` #34d399) and its accent
+     blue (`--accent` #38bdf8), so the choice is a hue sweep at fixed
+     saturation/lightness maximising the smaller of the two ΔE2000 distances.
+     Tailwind's teal-400 (#2dd4bf, hue 172) is only **10.1** from `--hit` — the
+     wrong end of the gap — and cyan-400 (#22d3ee, hue 187) *is* `--accent-2`.
+     The sweep's plateau is hue 176–180; #2ddfd6 sits at 177 and measures
+     **14.6 from `--hit`, 22.8 from `--accent`, 12.3 from `--accent-2` and 44.4
+     from `--live-purple`**. The 12.3 is the tightest of those and is still wider
+     than the `--accent`/`--walk` pair (11.7) this stylesheet already relies on
+     to tell a link from a walk. On the dark ground it carries 11.27:1 against
+     `--bg` where the purple carries 7.09:1, so it is the *more* legible of the
+     two as a ring and a tag. */
+  --mound-teal: #2ddfd6;
   --ball: #475569;
 
   /* The four live-role grounds — at bat, on deck, on base, on the mound — as
@@ -39,15 +71,18 @@
      the row tints have carried since they were written (22 for at bat, 20 for
      the rest — the red needs the extra two to read as the same weight).
 
-     On the mound shares the on-base purple, which is the app's own convention
-     everywhere else (`.live-role`, `.live-entry`, `.feed-photo-link` each fold
-     the two into one rule): a pitcher in the game and a runner on base are both
-     "this man is live right now". They never share a table — the kind tabs show
-     one at a time — so the legend never draws the two swatches together. */
+     **On the mound is `--mound-teal` and used to be the on-base purple**, so
+     these last two lines were the same declaration twice and the legend drew two
+     swatches the eye could not tell apart. The four grounds as they now render,
+     measured off the page: at bat **#3f2732**, on deck **#3b3521**, on base
+     **#2f294c**, on the mound **#123b44**. The tightest pair of the six is at
+     bat against on base at ΔE2000 **12.1**, which the table has always relied on
+     and which nobody has reported; on base against on mound was **0.0** and is
+     now **22.1**, the second-widest pair on the list. */
   --role-at-bat-bg: color-mix(in srgb, var(--strikeout) 22%, var(--bg));
   --role-on-deck-bg: color-mix(in srgb, var(--hr) 20%, var(--bg));
   --role-on-base-bg: color-mix(in srgb, var(--live-purple) 20%, var(--bg));
-  --role-pitching-bg: color-mix(in srgb, var(--live-purple) 20%, var(--bg));
+  --role-pitching-bg: color-mix(in srgb, var(--mound-teal) 20%, var(--bg));
 
   /* The soft edge that marks where a horizontally-pinned column ends and the
      scrolled ones pass underneath. One definition because four rules draw it —
@@ -1453,10 +1488,18 @@ body {
   color: var(--hr);
   background: rgba(251, 191, 36, 0.15);
 }
-.live-role.role-on-base,
-.live-role.role-pitching {
+.live-role.role-on-base {
   color: var(--live-purple);
   background: rgba(192, 132, 252, 0.15);
+}
+/* Split off the on-base rule above, which it used to share. The ground is a
+   `color-mix` against `transparent` rather than a fourth hand-written rgba: the
+   three above it predate the token and are the same 15% wash, and a hex copied
+   out of `--mound-teal` here is exactly the drift this file spends its comments
+   avoiding. */
+.live-role.role-pitching {
+  color: var(--mound-teal);
+  background: color-mix(in srgb, var(--mound-teal) 15%, transparent);
 }
 
 /* ---- Game status chip (start time / live score+inning / final) ---- */
@@ -2191,17 +2234,19 @@ body {
 .inning-stat.is-p {
   color: var(--faint);
 }
-/* The half-inning this pitcher is throwing right now — the live purple the
-   at-bat/on-base rings use, so "active" reads the same everywhere. */
+/* The half-inning this pitcher is throwing right now — `--mound-teal`, the same
+   colour his row, his ring, his tag and his rail take, so "this man is working"
+   reads as one thing across the app. It was the on-base purple, which said the
+   same thing in the colour a *runner* wears. */
 .inning-block.active {
-  border-color: var(--live-purple);
+  border-color: var(--mound-teal);
 }
 .inning-block.active .inning-head {
-  background: color-mix(in srgb, var(--live-purple) 12%, var(--bg));
+  background: color-mix(in srgb, var(--mound-teal) 12%, var(--bg));
 }
 .inning-block.active .inning-label,
 .inning-block.active .inning-label .pa-inning-arrow {
-  color: var(--live-purple);
+  color: var(--mound-teal);
 }
 .inning-live {
   flex: none;
@@ -2209,8 +2254,8 @@ body {
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--live-purple);
-  border: 1px solid var(--live-purple);
+  color: var(--mound-teal);
+  border: 1px solid var(--mound-teal);
   border-radius: 5px;
   padding: 1px 5px;
 }
@@ -4420,17 +4465,6 @@ body {
    this is the same object: a titled column of labelled bars inside the player
    overlay. What is under its own name here is the grid, the diverging rail and
    the two states a thin sample puts the fill in. */
-.spl-intro {
-  margin: 0 0 12px;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.45;
-  text-align: center;
-}
-.spl-intro strong {
-  color: var(--text);
-  font-weight: 700;
-}
 /* Label · left figure · rail · right figure. The two value columns are equal
    and fixed so the rail is centred in the row as well as in itself — a rail
    whose zero sat off the middle of the card would undo the whole device. */
@@ -4543,11 +4577,27 @@ body {
   border-top-right-radius: 2px;
   border-bottom-right-radius: 2px;
 }
+/* The two captions under the bars — the key to how a bar is drawn, and the
+   sample-size caveat when there is one. Folded into one rule rather than the key
+   keeping a copy of its own: they are the same kind of thing in the same place,
+   and two rules would be two chances for one to drift a pixel from the other.
+
+   **The key was `.spl-intro`'s own rule and was centred**, which is what a
+   subtitle under a card title wants and not what a caption wants. Left-aligned
+   it matches the caveat that can follow it, so the foot of the card reads as one
+   block of small print; and it is the half that actually wraps — at 390px the
+   sentence is four lines, and a centred four-line paragraph is ragged down both
+   edges where a left-aligned one is ragged down one. */
+.spl-intro,
 .spl-note {
   margin: 12px 0 0;
   font-size: 12px;
   line-height: 1.45;
   color: var(--muted);
+}
+.spl-intro strong {
+  color: var(--text);
+  font-weight: 700;
 }
 .spl-note--warn {
   color: var(--hr);
@@ -5593,9 +5643,15 @@ body {
    tab most people read is the batter one and because nothing on the page named
    the vocabulary; adding the legend is what made the gap a visible claim rather
    than a quiet absence, since a legend naming a colour the table never paints
-   is worse than no legend at all. It is folded onto the on-base rules rather
-   than given its own, which is what the rest of the app already does with these
-   two (`.live-role`, `.live-entry`, `.feed-photo-link`). */
+   is worse than no legend at all.
+
+   **It landed folded onto the on-base rules and now has its own**, which is the
+   same correction made in five other places (`.live-role`, `.live-entry`,
+   `.sum-photo`, `.feed-photo-link`, `.summary-legend-swatch`): sharing the
+   purple meant the legend's `On base` and `On mound` swatches were one colour
+   under two labels, which is the one thing a key must not do. On the mound is
+   `--role-pitching-bg` off `--mound-teal` now — see that token's own note for
+   how the hue was chosen and what the four grounds measure. */
 .summary-table tbody tr.role-at-bat td,
 .summary-table tbody tr.role-at-bat .sum-img-col,
 .summary-table tbody tr.role-at-bat .sum-name-col {
@@ -5683,7 +5739,7 @@ body {
 }
 .summary-legend-swatch.role-pitching {
   background: var(--role-pitching-bg);
-  border-color: var(--live-purple);
+  border-color: var(--mound-teal);
 }
 .sum-photo-wrap {
   position: relative;
@@ -5894,10 +5950,13 @@ body {
   border-color: var(--hr);
   box-shadow: 0 0 0 2px var(--hr);
 }
-.sum-photo.role-on-base,
-.sum-photo.role-pitching {
+.sum-photo.role-on-base {
   border-color: var(--live-purple);
   box-shadow: 0 0 0 2px var(--live-purple);
+}
+.sum-photo.role-pitching {
+  border-color: var(--mound-teal);
+  box-shadow: 0 0 0 2px var(--mound-teal);
 }
 .sum-name {
   font-weight: 700;
@@ -7649,9 +7708,11 @@ body {
 .live-entry.role-on-deck {
   border-left-color: var(--hr);
 }
-.live-entry.role-on-base,
-.live-entry.role-pitching {
+.live-entry.role-on-base {
   border-left-color: var(--live-purple);
+}
+.live-entry.role-pitching {
+  border-left-color: var(--mound-teal);
 }
 /* Role tag sits at the right end of the header row. */
 .feed-item-head .live-role {
@@ -8253,10 +8314,13 @@ body {
   border-color: var(--hr);
   box-shadow: 0 0 0 2px var(--hr);
 }
-.feed-photo-link.role-on-base .feed-photo,
-.feed-photo-link.role-pitching .feed-photo {
+.feed-photo-link.role-on-base .feed-photo {
   border-color: var(--live-purple);
   box-shadow: 0 0 0 2px var(--live-purple);
+}
+.feed-photo-link.role-pitching .feed-photo {
+  border-color: var(--mound-teal);
+  box-shadow: 0 0 0 2px var(--mound-teal);
 }
 
 /* ---- Sign-in ---------------------------------------------------------- */

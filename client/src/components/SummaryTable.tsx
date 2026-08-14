@@ -459,11 +459,15 @@ function PitcherTable({
  * role, so **"On mound" could not be read from the Batters tab at all** — you
  * had to already know the purple meant something in order to go and find out
  * what. A vocabulary is not per-page. All four are drawn on both tabs, which
- * also puts the on-base and on-mound swatches side by side for the first time:
- * they are the same purple, deliberately and by the app's own convention (a man
- * on base and a man on the mound are both *in the game right now*), and a key
- * that shows them as one colour under two labels is stating that convention
- * rather than hiding it.
+ * also puts the on-base and on-mound swatches side by side for the first time —
+ * and that is what showed they were **literally the same colour**. It was
+ * argued for at the time as the app's own convention (a man on base and a man on
+ * the mound are both *in the game right now*), which reads well and is wrong
+ * where it matters: a key exists to tell one shade from another, so two labels
+ * over one swatch is the key saying these are the same row tint when the table
+ * calls them two roles. On the mound has its own colour now — `--mound-teal`,
+ * beside `--live-purple` in `styles.css`, where the hue and the measured gaps
+ * between all four grounds are set out.
  *
  * What the gate was really protecting is real and is kept: the row costs the
  * pane its height, this view being a fixed-height column where every pixel
