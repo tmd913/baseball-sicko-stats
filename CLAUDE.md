@@ -52,9 +52,29 @@ letting it grow past it.
 
 @docs/claude/server.md
 
-**Client** — player keys, the three views, chrome, the research board, summary table, the feed, and the player page (whose Overview tab is his season, his day and his last five games).
+**Client** — the shell every view sits in: the roster and the watchlist, player keys, the pinned chrome and the app's scroll behaviour, the loading system, the kind tabs, the header and its search, the date controls and the hide-injured filter. It was one 443KB file and is now six, split by the surface being described rather than by size; this one closes with a map of the other five.
 
 @docs/claude/client.md
+
+**Client — the Roster view** — the summary table, its identity block and colour legend, the `Starters` filter, and the full-page mode all three wide tables share.
+
+@docs/claude/client-summary.md
+
+**Client — the research board** — its columns and their picker, the sort, the include buttons and the watchlist star, the position row and what a position means, the window tabs and the control bar.
+
+@docs/claude/client-research.md
+
+**Client — the player page** — `PlayerDetails` and its tabs (Overview, Percentile Rankings, Stats, Splits, Game Log, Arsenal, Rolling xwOBA), plus the reorder screen and the how-to page. It opens on **anybody**, which is the fact most of its design follows from.
+
+@docs/claude/client-player-page.md
+
+**Client — popups** — the app-wide dialog rules: why details are popups rather than accordions, the layer ladder, what a popup has to cover, and why one press of Escape undoes exactly one thing.
+
+@docs/claude/client-dialogs.md
+
+**Client — the Feed view** — its three sections, the base-event vocabulary, and what the feed lost when its grouped reading became the player page's Overview tab.
+
+@docs/claude/client-feed.md
 
 **Pitchers on the roster** — the pitcher-side pipeline and cards.
 
