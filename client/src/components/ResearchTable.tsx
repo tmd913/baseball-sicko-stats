@@ -1346,11 +1346,10 @@ const EDGE_ZONE = 56;
 const MAX_SCROLL_STEP = 12;
 
 /**
- * How far a pointer has to travel from the grip before the press is read as a
- * drag rather than a tap — and, on touch, before its direction is allowed to
- * decide whether it is a drag at all. Four pixels is under the browser's own
- * scroll slop, so the axis test runs on the same first movement Chrome uses to
- * make the same decision, and the two cannot come to different answers.
+ * How far a **mouse** has to travel from a chip before the press is read as a
+ * drag rather than a press. Only a mouse drags these chips (see `ColumnOrder`),
+ * so this no longer arbitrates between a drag and a scroll — it separates the
+ * drag from the click that would otherwise pick the same chip up on release.
  */
 const DRAG_SLOP = 4;
 
@@ -1369,8 +1368,8 @@ function scrollingParent(el: HTMLElement | null): HTMLElement | null {
 }
 
 /**
- * The columns in the order they are drawn, draggable — the board's answer to
- * "I want ERA next to the name, not past nine counting stats".
+ * The columns in the order they are drawn, rearrangeable — the board's answer
+ * to "I want ERA next to the name, not past nine counting stats".
  *
  * It is a row of its own at the top of the Columns dialog rather than a handle
  * on the chips below, and the reason is that those chips are grouped: they are
@@ -1380,51 +1379,59 @@ function scrollingParent(el: HTMLElement | null): HTMLElement | null {
  * headings. So the picker answers its two questions in two blocks — what
  * order, then which columns — and each is drawn the way its own question wants.
  *
- * Reordering is by **Pointer Events** and the drop target is found with
- * `elementFromPoint`, which is `PlayerOrderEditor`'s method and is here for its
- * reasons: one code path for a mouse and a finger, where HTML5 drag-and-drop is
- * mouse-only.
+ * **The gesture is a press and a press, and a drag is the mouse's shortcut for
+ * it.** Press a chip to pick a column up, press another to drop it there; the
+ * picked chip is marked and the hint line above says whose it is and how to
+ * cancel. A mouse may instead hold the press and drag, which is the same move
+ * with the release doing the placing.
  *
- * **The grip is the only thing that starts a drag, for every pointer type, and
- * the axis is what separates the two gestures rather than the pixel.** This
- * block sits at the top of a box that scrolls, so a press on it is genuinely
- * ambiguous — reorder, or scroll the picker? It was answered by *place*
- * (`touch-action: none` on the grip, the browser scrolling everywhere else),
- * which is the answer `.order-grip` gives on the edit screen and is the wrong
- * one here: Chrome performs **touch adjustment**, snapping a touch that lands
- * near a small target onto it, so a finger up to ~10px outside a 9×13px glyph
- * was retargeted to the grip and its `none` then forbade the scroll. Measured
- * on a 390px phone, the swallowed band ran from x=58 to past the chip's right
- * edge on a chip spanning 29–84 — over half of it — and over the first six
- * chips **40 of 85 sample flicks moved the dialog 0px**. The same snap is what
- * made a sideways drag work at all from the chip body, so one landing point
- * meant "reorder" or "nothing" depending only on where the finger went next.
+ * That split is the third answer this block has had and the first that is
+ * measured against the thing it is *for*. The first was `touch-action: none` on
+ * a grip, which Chrome's **touch adjustment** — a touch landing near a small
+ * target is snapped onto it — widened over half the chip, so 40 of 85 sample
+ * flicks scrolled the picker 0px. The second was `pan-y` on that grip plus a
+ * matching axis test here: a move that was not predominantly sideways was the
+ * scroller's, everything else was a drag. That did fix the scrolling — 0 of 450
+ * flicks dead, re-measured — and it could not fix the reordering, because **the
+ * chips wrap**. Twenty-five of them come to six rows on a 390px phone and
+ * twenty-six to seven, so the commonest move there — pick a column off row one
+ * and drop it on row three — *is* a downward drag, and the axis test threw
+ * exactly those away: measured, **22 of 30** drags landed the chip where it was
+ * dragged on a six-row board and **10 of 30** on a seven-row one, and every
+ * single failure crossed a row. Press-and-press is 30 of 30 at both.
  *
- * So the grip declares **`pan-y`** instead: the block axis is the scroller's,
- * the inline axis is the drag's, and the snap band stops mattering because a
- * vertical flick scrolls wherever it lands. It is `.roll-chart`'s fix — scope
- * the property to the part of the gesture the element actually consumes — and
- * this handler mirrors it, so the two halves cannot disagree: a press arms,
- * the first move past `DRAG_SLOP` decides, and on anything but a mouse a move
- * that is not predominantly sideways abandons the drag rather than fighting
- * the scroll the browser has already begun. A mouse has no scroll to lose and
- * starts on any direction. The edit screen keeps `none` because there the drag
- * axis *is* the scroll axis, so only an element can separate them.
+ * There is no axis left to separate the two gestures with, and no element
+ * either: the drop target may be anywhere in a two-dimensional block inside a
+ * box that scrolls the same way. So the drag is not asked to fight the scroll
+ * at all — **on touch there is no drag**, `touch-action` is not declared
+ * anywhere in this block, and every pixel of the picker scrolls from every
+ * pixel of a chip. What is left for a finger is a press, which no scroller
+ * competes for. Touch adjustment stops mattering for a second reason as well:
+ * a snap can only move the press from one part of a chip to another, and every
+ * part of a chip now does the same thing.
  *
- * **Auto-scroll while dragging** (`EDGE_ZONE`) because the drop target is
- * whatever is under the pointer: a chip that has scrolled out of the box is
- * unreachable without it, and once a drag is under way the browser will not
- * scroll for us. It scrolls the **dialog's own scroller**, not the window —
+ * Reordering by mouse is by **Pointer Events**, with the drop target found
+ * using `elementFromPoint` — `PlayerOrderEditor`'s method, one code path for a
+ * press and a drag, where HTML5 drag-and-drop is mouse-only and gives no live
+ * reorder.
+ *
+ * **Auto-scroll while dragging** (`EDGE_ZONE`) because a mouse drag's drop
+ * target is whatever is under the pointer: a chip that has scrolled out of the
+ * box is unreachable without it, and once a drag is under way the browser will
+ * not scroll for us. It scrolls the **dialog's own scroller**, not the window —
  * the window is pinned by `useLockBodyScroll` while a modal is up — found by
  * walking up for the nearest scrolling ancestor rather than naming
- * `.app-dialog-body`, so the block would work in any box that holds it.
+ * `.app-dialog-body`, so the block would work in any box that holds it. A
+ * press-and-press needs none of it: the reader scrolls the picker with a
+ * finger, which is now unobstructed, and then presses.
  *
- * The order is held locally while the drag is live and **committed on
- * release**, unlike the editor's row list, which moves the real list as it
- * goes. The difference is what is downstream: there it is twenty rows, here it
- * is six hundred players by twenty-five columns, and re-rendering fifteen
- * thousand cells on every pointer move is a drag that stutters. The chips
- * themselves reorder live, which is the feedback the gesture actually needs.
+ * A drag's order is held locally while it is live and **committed on release**,
+ * unlike the editor's row list, which moves the real list as it goes. The
+ * difference is what is downstream: there it is twenty rows, here it is six
+ * hundred players by twenty-five columns, and re-rendering fifteen thousand
+ * cells on every pointer move is a drag that stutters. The chips themselves
+ * reorder live, which is the feedback the gesture actually needs. A press
+ * commits once, on the press that places.
  */
 function ColumnOrder({
   columns,
@@ -1437,6 +1444,8 @@ function ColumnOrder({
   const signature = keys.join(',');
   const [order, setOrder] = useState<string[]>(keys);
   const [draggingKey, setDraggingKey] = useState<string | null>(null);
+  /** The column that has been picked up and is waiting for somewhere to go. */
+  const [pickedKey, setPickedKey] = useState<string | null>(null);
   const dragKey = useRef<string | null>(null);
   // The order as the drag last left it — read by the release handler, which
   // cannot see the state it has been setting through a closure.
@@ -1450,20 +1459,58 @@ function ColumnOrder({
     liveOrder.current = signature.split(',');
   }, [signature]);
 
+  // A pick-up survives a *reorder* and not a change of membership. The two are
+  // one signature apart and the difference is load-bearing: every commit this
+  // block makes changes the order, so clearing on `signature` would drop the
+  // chip the reader is still holding — measured, the arrow keys moved it one
+  // place and then let go. A column ticked off, a board switch or a reset is a
+  // different list and there is nothing left to be holding.
+  const membership = [...keys].sort().join(',');
+  useEffect(() => {
+    setPickedKey(null);
+  }, [membership]);
+
   const labels = new Map(columns.map((c) => [c.key, c.label]));
+
+  const moved = (list: string[], from: string, to: string) => {
+    const i = list.indexOf(from);
+    const j = list.indexOf(to);
+    if (i === -1 || j === -1 || i === j) return list;
+    const next = [...list];
+    next.splice(i, 1);
+    next.splice(j, 0, from);
+    return next;
+  };
 
   const move = (from: string, to: string) => {
     if (from === to) return;
     setOrder((prev) => {
-      const i = prev.indexOf(from);
-      const j = prev.indexOf(to);
-      if (i === -1 || j === -1) return prev;
-      const next = [...prev];
-      next.splice(i, 1);
-      next.splice(j, 0, from);
+      const next = moved(prev, from, to);
       liveOrder.current = next;
       return next;
     });
+  };
+
+  /** Drop the picked-up column where the pressed one sits, and commit. */
+  const place = (to: string) => {
+    const from = pickedKey;
+    setPickedKey(null);
+    if (from === null || from === to) return;
+    const next = moved(order, from, to);
+    setOrder(next);
+    liveOrder.current = next;
+    onReorder(next);
+  };
+
+  /** One place along, for the arrow keys a picked-up chip answers. */
+  const nudge = (key: string, dir: 1 | -1) => {
+    const i = order.indexOf(key);
+    const j = i + dir;
+    if (i === -1 || j < 0 || j >= order.length) return;
+    const next = moved(order, key, order[j]);
+    setOrder(next);
+    liveOrder.current = next;
+    onReorder(next);
   };
 
   // Whatever the live drag has bound to the window, so an unmount mid-gesture
@@ -1472,6 +1519,22 @@ function ColumnOrder({
   const teardown = useRef<(() => void) | null>(null);
   useEffect(() => () => teardown.current?.(), []);
 
+  // Escape cancels a pick-up rather than closing the dialog, which is the app's
+  // standing rule that one press undoes one thing. `Modal` answers the key on
+  // `window` in the bubble phase, so this one is **capture** and stops the
+  // event there — the two listeners are on the same object and only the phase
+  // orders them.
+  useEffect(() => {
+    if (pickedKey === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      setPickedKey(null);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [pickedKey]);
+
   // The chips row, which is only ever read to find the box it scrolls inside.
   const chipsRef = useRef<HTMLDivElement | null>(null);
   // That box, and the latest pointer position — read by the hit test and by the
@@ -1479,6 +1542,12 @@ function ColumnOrder({
   const scroller = useRef<HTMLElement | null>(null);
   const point = useRef({ x: 0, y: 0 });
   const rafId = useRef<number | null>(null);
+  // A mouse drag ends in a `click` on whatever its two ends have in common, so
+  // a drag that begins and ends on one chip would otherwise pick that chip up
+  // on the way out. Set when a drag actually starts, read by the press that
+  // follows it, and cleared by the *next* `pointerdown` rather than by that
+  // read — see `armDrag`, where the difference is measured.
+  const dragged = useRef(false);
 
   // Reorder against whatever chip currently sits under the pointer. The dragged
   // chip has `pointer-events: none` (see `.research-order-chip.dragging`), so
@@ -1496,7 +1565,7 @@ function ColumnOrder({
 
   // Keep scrolling the picker toward a drag held inside its top/bottom edge
   // zone, and re-run the hit test after each step — that is what lets a
-  // stationary finger keep picking up the chips sliding past it.
+  // stationary pointer keep picking up the chips sliding past it.
   const autoScroll = () => {
     rafId.current = requestAnimationFrame(autoScroll);
     const box = scroller.current;
@@ -1520,22 +1589,29 @@ function ColumnOrder({
   };
 
   /**
-   * A press on the grip *arms* a drag; the first move past `DRAG_SLOP` decides
-   * whether it is one.
+   * A **mouse** press arms a drag; the first move past `DRAG_SLOP` starts it.
    *
-   * That deferral is the whole gesture rule. The grip declares `pan-y`, so
-   * until the pointer moves the browser has not decided either whether this is
-   * a scroll — and on anything but a mouse a move that is not predominantly
-   * sideways is the reader scrolling the picker, which the browser is already
-   * doing. Starting on the press instead would dim a chip and then hand the
-   * gesture back a frame later as a `pointercancel`.
+   * Nothing is bound for a finger or a pen, which is the whole of the fix
+   * above: with no listener and no `touch-action`, a swipe that starts on a
+   * chip is the scroller's without anything here having to decide that it is,
+   * and a press that stays put arrives as an ordinary `click`. The browser
+   * separates the two, which it is better at than any slop and axis test —
+   * there is nothing left here for the two halves to disagree about.
    */
   const armDrag = (e: React.PointerEvent, key: string) => {
-    // A mouse press is unambiguous and its default (a text/image drag) is worth
-    // cancelling; a touch may still belong to the browser at this instant, and
-    // cancelling its default would be claiming it before we know.
-    const mouse = e.pointerType === 'mouse';
-    if (mouse) e.preventDefault();
+    // Cleared here rather than by the press that reads it: a drag's trailing
+    // `click` lands on whatever the two ends have in common, which for any
+    // drag that actually moved the chip is the row and not the chip — so a
+    // flag cleared on read stayed set and swallowed the next genuine press.
+    // Measured: after seventeen drags, a click picked nothing up.
+    dragged.current = false;
+    if (e.pointerType !== 'mouse') return;
+    // Deliberately no `preventDefault()` here. It reads as the right thing —
+    // cancel the browser's own text drag — and it also **suppresses the
+    // `click`**, which is now how a press picks a column up: measured, a bare
+    // mouse click on a chip did nothing at all. The native drag is stopped by
+    // `onDragStart` instead, and `user-select: none` on the block is what
+    // keeps a drag from painting a selection across it.
     const from = { x: e.clientX, y: e.clientY };
     point.current = from;
     let started = false;
@@ -1546,14 +1622,11 @@ function ColumnOrder({
         const dx = ev.clientX - from.x;
         const dy = ev.clientY - from.y;
         if (Math.abs(dx) < DRAG_SLOP && Math.abs(dy) < DRAG_SLOP) return;
-        if (!mouse && Math.abs(dx) <= Math.abs(dy)) {
-          // Down the page: the scroller's gesture, not ours.
-          unbind();
-          return;
-        }
         started = true;
+        dragged.current = true;
         dragKey.current = key;
         setDraggingKey(key);
+        setPickedKey(null);
         scroller.current = scrollingParent(chipsRef.current);
         rafId.current = requestAnimationFrame(autoScroll);
       }
@@ -1569,7 +1642,7 @@ function ColumnOrder({
     };
     const end = () => {
       unbind();
-      if (!started) return; // a tap on the grip, or a scroll that began here
+      if (!started) return; // a plain click, which `press` answers
       dragKey.current = null;
       setDraggingKey(null);
       onReorder(liveOrder.current);
@@ -1580,36 +1653,77 @@ function ColumnOrder({
     teardown.current = unbind;
   };
 
+  /** Pick up, drop, or put back down — the whole gesture on a touch device. */
+  const press = (key: string) => {
+    // The click a mouse drag leaves behind on its way out. Not cleared here:
+    // `armDrag` clears it, because a drag that moved the chip leaves its click
+    // on the row rather than on any chip, so a flag cleared on read would stay
+    // set and swallow the next genuine press.
+    if (dragged.current) return;
+    if (pickedKey === null) setPickedKey(key);
+    else place(key);
+  };
+
+  const movingLabel = pickedKey === null ? null : (labels.get(pickedKey) ?? pickedKey);
+
   return (
     <div className="research-colgroup research-order">
       <div className="research-colgroup-head">
         <span>Order</span>
       </div>
-      <p className="research-order-hint">
-        Drag ⠿ to move a column. The table reads left to right in this order.
+      {/* The hint is the only thing on screen that says what a picked-up chip
+          is waiting for, so it is the live region as well as the instruction. */}
+      <p className="research-order-hint" aria-live="polite">
+        {movingLabel === null
+          ? 'Press a column to pick it up, then press where it should go. The table reads left to right in this order.'
+          : `Moving ${movingLabel} — press a column to drop it there, or Esc to cancel.`}
       </p>
       <div className="research-order-chips" ref={chipsRef}>
-        {order.map((k) => (
-          /* The chip itself starts nothing, with a mouse or a finger. It used
-             to be a mouse's grab target, which made one pixel mean "reorder"
-             to a pointer and "scroll" to a thumb; one answer for both is what
-             lets the hint above say where to press and be true. */
-          <span
-            key={k}
-            data-key={k}
-            className={`research-order-chip${draggingKey === k ? ' dragging' : ''}`}
-            title={`Drag ⠿ to move ${labels.get(k) ?? k}`}
-          >
-            {labels.get(k) ?? k}
-            <span
-              className="research-order-grip"
-              aria-hidden="true"
+        {order.map((k) => {
+          const label = labels.get(k) ?? k;
+          const picked = pickedKey === k;
+          const target = pickedKey !== null && !picked;
+          return (
+            /* A real button, so a press is the browser's own and the keyboard
+               and a screen reader get it for nothing. The whole chip is the
+               target rather than the grip alone: a 9×13 glyph is a fifth the
+               width of a fingertip, and with no `touch-action` to be snapped
+               into there is no longer any reason for the press to be aimed. */
+            <button
+              key={k}
+              type="button"
+              data-key={k}
+              className={`research-order-chip${picked ? ' picked' : ''}${
+                target ? ' target' : ''
+              }${draggingKey === k ? ' dragging' : ''}`}
+              aria-pressed={picked}
+              title={
+                target ? `Drop ${movingLabel} here` : picked ? `Put ${label} back` : `Move ${label}`
+              }
               onPointerDown={(e) => armDrag(e, k)}
+              onDragStart={(e) => e.preventDefault()}
+              onClick={() => press(k)}
+              onKeyDown={(e) => {
+                if (!picked) return;
+                if (e.key === 'ArrowLeft') {
+                  e.preventDefault();
+                  nudge(k, -1);
+                } else if (e.key === 'ArrowRight') {
+                  e.preventDefault();
+                  nudge(k, 1);
+                }
+              }}
             >
-              ⠿
-            </span>
-          </span>
-        ))}
+              {label}
+              {/* The mark that says a column can be moved, and a mouse's cue
+                  that it can be dragged. It starts nothing of its own — the
+                  chip around it answers the press. */}
+              <span className="research-order-grip" aria-hidden="true">
+                ⠿
+              </span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
