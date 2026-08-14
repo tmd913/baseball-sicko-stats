@@ -242,6 +242,7 @@ async function buildBase(kind: PlayerKind, window: ResearchWindow): Promise<Rese
       gbRate: null,
       ldRate: null,
       fbRate: null,
+      pullAirRate: null,
       whiffRate: null,
       chaseRate: null,
       firstPitchStrikeRate: null,
@@ -327,11 +328,11 @@ async function buildBase(kind: PlayerKind, window: ResearchWindow): Promise<Rese
 
 // ---- Savant enrichment ----------------------------------------------------
 //
-// Two league-wide CSVs, each fetched in its own try by the caller: expected
-// statistics (xBA/xSLG/xwOBA, and xERA on the pitcher board) and the custom
-// board (contact quality + whiff). A board that fails costs its own columns a
-// value on every row and nothing else — the same rule the percentile card's
-// leaderboards follow.
+// Three league-wide CSVs, each fetched in its own try by the caller: expected
+// statistics (xBA/xSLG/xwOBA, and xERA on the pitcher board), the custom board
+// (contact quality + whiff), and the batted-ball board (pull air rate). A board
+// that fails costs its own columns a value on every row and nothing else — the
+// same rule the percentile card's leaderboards follow.
 
 function csvRows(text: string): Record<string, string>[] {
   return parse(text, {
@@ -368,6 +369,14 @@ const expectedUrl = (kind: PlayerKind) =>
 // Every column verified to come back populated on both boards, bar
 // `sprint_speed`, which the pitching board leaves empty (and which `cell`
 // therefore resolves to null there without special-casing).
+//
+// **`pull_air_rate` and `air_rate` are deliberately not in this list**, and the
+// negative result is recorded so nobody repeats the probe: this board *accepts*
+// both as `selections` and returns them as **empty columns on every row**.
+// Measured on the batting board at `min=100` — 420 rows, `barrel_batted_rate`
+// populated 420/420 beside `pull_air_rate` and `air_rate` at 0/420 — so
+// appending them here compiles, fetches, joins, and yields a column of dashes.
+// Pull air rate comes off the batted-ball board below instead.
 const CUSTOM_COLUMNS = [
   'exit_velocity_avg',
   'launch_angle_avg',
@@ -400,16 +409,50 @@ const customUrl = (kind: PlayerKind) => {
   return `https://baseballsavant.mlb.com/leaderboard/custom?${params.toString()}`;
 };
 
+// The batted-ball board, which is where **pull air rate** actually lives — the
+// custom board above publishes the column and fills nothing into it. This is
+// the same URL `percentiles.ts` already fetches for its `RANK_FALLBACK`, and
+// the same units: a **proportion** (0.259…) where the column prints a percent,
+// hence the ×100 at the join. It answers for both kinds (`type=pitcher` checked
+// — 798 rows, `pull_air_rate` populated on every one), and it keys on **`id`**
+// rather than the `player_id` the other two boards use.
+const battedBallUrl = (kind: PlayerKind) =>
+  `https://baseballsavant.mlb.com/leaderboard/batted-ball?type=${kind}` +
+  `&year=${SEASON}&min=1&csv=true`;
+
 /**
  * The windowed Statcast half, computed from the per-date exports rather than
  * read off a leaderboard — Savant publishes none for a range (see
  * `statcastWindow.ts` for why, and for the 25,000-row cap that rules out the
  * obvious alternative).
  *
- * Two columns are **absent by nature** on a window and stay null: `sprintSpeed`
- * is never in a pitch row, and `xera` is Statcast's own model. The client dashes
- * them like any other missing value, which is the honest rendering — a window
- * has no sprint speed rather than a sprint speed of zero.
+ * **Three** columns are absent by nature on a window and stay null:
+ * `sprintSpeed` is never in a pitch row, `xera` is Statcast's own model, and
+ * `pullAirRate` is a batted-ball-board figure whose classification this file
+ * cannot reproduce. The client dashes all three like any other missing value,
+ * which is the honest rendering — a window has no sprint speed rather than a
+ * sprint speed of zero.
+ *
+ * The third of those was measured rather than assumed, and the result is worth
+ * keeping so it is not attempted again on a hunch. The day export carries
+ * `hc_x`/`hc_y`/`stand`, so a pulled air ball *looks* derivable: take the spray
+ * angle off the landing coordinates, flip its sign for a lefty, and count the
+ * batted balls past some boundary that are not ground balls. Reconstructing the
+ * whole season from the 138 cached daily CSVs reproduces Savant's own row set
+ * exactly (627 batters, 798 pitchers) and its `bbe` count on 606 of 627 — so
+ * the population and the denominator are right — and then **fails on the
+ * classification**. No boundary fits: sweeping it, pull *air* rate is closest
+ * at 16.1° (median error 0.585 points, p90 1.44, max 3.60 over the 359 batters
+ * with 100+ batted balls) while pull *ground-ball* rate wants 20.1° and bottoms
+ * out at 2.03 points, and `pull_rate` is exactly their sum on every row of the
+ * board — so one spray-angle rule provably cannot produce both. Fitting the
+ * coordinate origin as well (a 10 × 12 grid around the usual 125.42 / 198.27,
+ * threshold refitted at each point, scored on the two jointly) does no better:
+ * 0.985 + 1.261 at its best. Savant is not deriving these from the landing
+ * coordinates at all, and 0.6 points of error off a *fitted* constant — on the
+ * generous end of the sample, where a 7-day window would have twenty batted
+ * balls rather than a hundred — is not a number to print beside four columns
+ * measured to a median error of 0.000. An em dash is the truthful answer.
  */
 async function enrichWindow(
   rows: ResearchRow[],
@@ -517,6 +560,17 @@ async function enrich(rows: ResearchRow[], kind: PlayerKind): Promise<void> {
   } catch (err) {
     console.error(`Research: custom ${kind} leaderboard unavailable:`, err);
   }
+
+  try {
+    for (const r of await savantCsv(battedBallUrl(kind), `batted-ball ${kind} leaderboard`)) {
+      const row = byId.get(Number(r.id));
+      if (!row) continue;
+      const v = cell(r.pull_air_rate);
+      row.pullAirRate = v === null ? null : v * 100;
+    }
+  } catch (err) {
+    console.error(`Research: batted-ball ${kind} leaderboard unavailable:`, err);
+  }
 }
 
 // ---- Assembly + cache -----------------------------------------------------
@@ -535,11 +589,13 @@ const boardKey = (kind: PlayerKind, window: ResearchWindow): BoardKey => `${kind
 const mem = new Map<BoardKey, { data: Cached; fetchedAt: number }>();
 const inFlight = new Map<BoardKey, Promise<Cached>>();
 
-// -v7: a stored older blob deserializes with every field added since missing,
+// -v8: a stored older blob deserializes with every field added since missing,
 // and would quietly cost each row its estimators, its batted-ball profile or
-// its discipline columns for six hours. Bump this whenever a field is added.
+// its discipline columns for six hours. Bump this whenever a field is added —
+// v8 is `pullAirRate`, which a v7 blob would leave undefined on every row and
+// so dash for six hours on a board that has the column switched on.
 const storeKey = (kind: PlayerKind, window: ResearchWindow) =>
-  `research-${kind}-${window}-${SEASON}-v7.json`;
+  `research-${kind}-${window}-${SEASON}-v8.json`;
 
 async function build(kind: PlayerKind, window: ResearchWindow): Promise<Cached> {
   const rows = await buildBase(kind, window);

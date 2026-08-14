@@ -1002,6 +1002,13 @@ export interface ResearchRow {
   gbRate: number | null;
   ldRate: number | null;
   fbRate: number | null;
+  // Batted balls that were both **pulled and in the air** — the shape of
+  // contact home runs come out of, and a share of the same balls-in-play
+  // denominator the three above use. Off Savant's batted-ball leaderboard
+  // rather than the custom one, which publishes the column and leaves it
+  // empty; **null on every window**, that board taking a year alone (see
+  // `research.ts`).
+  pullAirRate: number | null; // percent
   // Plate discipline. `chaseRate` is swings at pitches out of the zone;
   // `firstPitchStrikeRate` is 0-0 counts that went to strike one — read as
   // "how often he falls behind" for a batter and "gets ahead" for a pitcher.
