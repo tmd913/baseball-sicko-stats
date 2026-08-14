@@ -103,9 +103,9 @@ export async function warm(event: WarmEvent = {}): Promise<{ mode: string; dates
     await getSeasonPlayers(new Date().getFullYear()).catch((err) =>
       console.error('season roster warm failed:', err),
     );
-    // The research board: a league-wide MLB leaderboard plus two Savant CSVs per
-    // kind, and the one page in the app that belongs to nobody's watchlist — so
-    // nothing else here would ever pull it warm.
+    // The research board: a league-wide MLB leaderboard plus three Savant CSVs
+    // per kind, and the one page in the app that belongs to nobody's watchlist
+    // — so nothing else here would ever pull it warm.
     //
     // Every window too, not just the season. A window's Statcast half is built
     // from the per-date exports (see `statcastWindow.ts`), and while a day's
