@@ -1001,6 +1001,47 @@ body {
 .app > .loading-block {
   margin-top: 54px;
 }
+/* And the *other* wait that sits directly under the pinned bar — the `Updating`
+   badge, which is what a re-read looks like once there are rows to protect. The
+   rule above fixed the block wait and left this one where it was, which is why
+   the gap was reported a second time: on the Roster view the badge was flush
+   against the bar at **0px**, and stretched the full width of the page besides.
+
+   Both halves are the one cause, and it is the same rule that took the block
+   wait's cushion: `.app.summary-mode` is a **flex column** (so the table can
+   scroll on its own) whose chrome is then given `margin-bottom: 0` (so the table
+   can meet the bar). A flex item is blockified and stretched, so this pill —
+   `inline-flex` everywhere else in the app — became a **full-width bar** with
+   nothing above it. Measured on the live roster at 1200 and 390: 1156px and
+   346px wide, 0px under the chrome, against the 106px pill sitting 14px down on
+   the Feed, which is ordinary block flow and keeps the chrome's own margin.
+
+   So `align-self` puts the pill back to its content width and the margin gives
+   back the 14 the chrome was told not to spend, landing both views on **14px**.
+   Fourteen rather than the block wait's 54, and the two are different numbers
+   for a reason: that one is a *page* with nothing behind it and takes a reading
+   block's generous 40 on top of the bar's 14, where this sits over rows somebody
+   is reading and must not shove them a third of an inch down the page every time
+   a preset changes. 14 is also exactly what it already gives *below* itself, so
+   the badge is evenly set between the bar and the table.
+
+   Scoped to summary mode rather than written onto `.refreshing`, which is the
+   one place this parts from the rule above and does so because the mechanism
+   there is unavailable here. That one lands on one number for both views by
+   **margin collapsing** — a block's 54 swallows the chrome's 14 on the Feed and
+   adds to the zeroed 0 on the Roster — and an inline-level box does not collapse,
+   so a bare `margin-top: 14px` would read 14 on the Roster and **28** on the
+   Feed, i.e. the very inconsistency that rule was written to avoid. This is
+   instead the counterpart of `.app.summary-mode .app-chrome { margin-bottom: 0 }`
+   — it hands back to the badge what that rule takes from everything under the
+   bar for the table's sake — and sits beside `.summary-view … { border-top: none }`
+   as the second consequence of that decision. And scoped to the *wait* rather
+   than given back to the chrome, for the reason stated above: a margin on the bar
+   would push the table down and undo the 0px the pane is measured at. */
+.app.summary-mode > .refreshing {
+  align-self: flex-start;
+  margin-top: 14px;
+}
 
 /* ---- Content layout (the player list / edit screen) ---- */
 .content-layout {
