@@ -29,6 +29,7 @@ import {
   useDelayedFlag,
   answersEscape,
   useLockBodyScroll,
+  useOverlayFocus,
   useOverlayChromeOffset,
   usePlayerStatus,
 } from '../hooks';
@@ -458,6 +459,13 @@ export function PlayerDetails({
   // change (below that), and written to by the offset hook, which publishes the
   // pinned head's height on it for everything inside to clear.
   const viewRef = useRef<HTMLDivElement | null>(null);
+  // The keyboard's half of covering the page. This overlay opens from a
+  // headshot, a name or a board row, and Tab used to walk from that control
+  // straight along the table it was in — measured before the fix, 12 of 12 tab
+  // stops behind this page — so a reader could work the roster underneath a
+  // player they had opened. Closing hands focus back to the row they pressed.
+  // See `hooks.ts::useOverlayFocus`.
+  useOverlayFocus(viewRef);
   const chromeRef = useOverlayChromeOffset<HTMLDivElement>(viewRef);
   // Switching tab puts the view back at the top. That is new with the pinned
   // head and is the same rule the research board's own reset follows: the tabs
@@ -823,7 +831,7 @@ export function PlayerDetails({
     // and so has no other way of knowing it must clear a page at 50. See
     // `Modal.tsx::DialogLayerContext`.
     <DialogLayerContext.Provider value={OVERLAY_LAYER}>
-    <div ref={viewRef} className={`details-view${tab === 'gamelog' ? ' gamelog-mode' : ''}`}>
+    <div ref={viewRef} tabIndex={-1} className={`details-view${tab === 'gamelog' ? ' gamelog-mode' : ''}`}>
       {/* The head and the tabs are one pinned box, held at the top of this
           overlay's own scroller — see `.details-chrome`. They are one statement
           of who is being read and which reading of him, which is the argument

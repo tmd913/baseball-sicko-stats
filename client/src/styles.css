@@ -6624,6 +6624,24 @@ body {
   box-shadow: var(--shadow);
   overflow: hidden;
 }
+/* The box every overlay lands focus on when it opens (`hooks.ts::useOverlayFocus`,
+   which is what stops Tab walking out into the page behind). It carries
+   `tabindex="-1"` for that, so it is a landing spot rather than a control — and
+   Chrome matches `:focus-visible` on a programmatic focus whenever the last
+   interaction was the keyboard, which is exactly how these are opened: measured,
+   a dialog reached by Tab and opened with Enter drew `outline: auto 1px
+   rgb(153, 200, 255)` around the whole card, and `.details-view` drew it around
+   the whole screen. Every control inside keeps its own `:focus-visible` rule —
+   this app draws those one by one and has no global ring — so nothing is lost
+   but a rectangle around a page. */
+.app-dialog-box:focus,
+.app-dialog-box:focus-visible,
+.details-view:focus,
+.details-view:focus-visible,
+.reel-view:focus,
+.reel-view:focus-visible {
+  outline: none;
+}
 .app-dialog-head {
   flex: none;
   display: flex;

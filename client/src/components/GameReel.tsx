@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { PlateAppearance } from '../types';
 import { api } from '../api';
 import { eventLabel, outcomeKind } from '../lib';
-import { answersEscape, useLockBodyScroll } from '../hooks';
+import { answersEscape, useLockBodyScroll, useOverlayFocus } from '../hooks';
 import { ClipVideo } from './ClipVideo';
 import { LoadingBlock, SpinningBaseball } from './Loading';
 
@@ -53,6 +53,10 @@ export function GameReel({
   // The overlay box itself, read only to ask whether this press of Escape is
   // ours to answer.
   const viewRef = useRef<HTMLDivElement | null>(null);
+  // The keyboard's half of covering the page — see `hooks.ts::useOverlayFocus`.
+  // Without it Tab left the reel for the feed behind it, on the one overlay
+  // whose own controls are a clip and two buttons and so runs out soonest.
+  useOverlayFocus(viewRef);
 
   // Close on Escape, matching the details overlay — and through the shared test,
   // so the reel claims the press instead of leaving whatever it was opened over
@@ -124,7 +128,7 @@ export function GameReel({
   const go = (i: number) => setIndex(Math.max(0, Math.min(i, clips.length - 1)));
 
   return (
-    <div className="reel-view" ref={viewRef} role="dialog" aria-modal="true" aria-label={`${title} — highlights`}>
+    <div className="reel-view" ref={viewRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`${title} — highlights`}>
       <div className="reel-head">
         <button type="button" className="details-back" onClick={onClose}>
           <svg
