@@ -10,6 +10,7 @@ import type {
   PlayerNews,
   PlayerReport,
   PlayerWindows,
+  ResearchRow,
   SeasonArsenal,
   SeasonStats,
   XwobaSeries,
@@ -377,6 +378,10 @@ export function PlayerDetails({
   onRemove,
   statsColumns,
   onStatsColumnsChange,
+  showRanks,
+  onShowRanksChange,
+  rankPopulations,
+  onNeedRankPopulations,
   onClose,
 }: {
   playerId: number;
@@ -428,6 +433,18 @@ export function PlayerDetails({
   statsColumns: string[] | null;
   /** null means "back to the defaults", stored as the absence of an entry. */
   onStatsColumnsChange: (keys: string[] | null) => void;
+  /** Draw a percentile rank under every value on the **Stats** tab. The same
+   *  saved preference the research board's own toggle reads — it is a reading
+   *  habit rather than a per-table setting, and the two tables are the one
+   *  vocabulary. Held by App for the reason `statsColumns` is. */
+  showRanks: boolean;
+  onShowRanksChange: (on: boolean) => void;
+  /** The research board's rows per window for this kind, as far as App has
+   *  them — the population those percentiles are ranked within. Passed through
+   *  rather than fetched here, since App is where the board's own cache lives
+   *  and this is the same cache. */
+  rankPopulations: Partial<Record<string, ResearchRow[]>>;
+  onNeedRankPopulations: () => void;
   onClose: () => void;
 }) {
   // This view covers the page but scrolls in its own box, so the list behind it
@@ -1274,6 +1291,10 @@ export function PlayerDetails({
           windows={windows.windows}
           columnKeys={statsColumns}
           onColumnsChange={onStatsColumnsChange}
+          showRanks={showRanks}
+          onShowRanksChange={onShowRanksChange}
+          populations={rankPopulations}
+          onNeedPopulations={onNeedRankPopulations}
         />
       )}
 

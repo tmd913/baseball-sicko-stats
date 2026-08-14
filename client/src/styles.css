@@ -10037,6 +10037,50 @@ body {
   color: var(--strikeout);
 }
 
+/* ---- The percentile badge under a value -------------------------------------
+
+   Drawn on both tables built from the shared column vocabulary — the research
+   board and the player page's Stats tab — when the `Ranks` toggle is on. See
+   `columnRanks.tsx` for what it is ranked against and why 100 is always good.
+
+   **A second line rather than something beside the value**, which is the whole
+   of why it is affordable. The board carries 23 to 44 columns, already overflows
+   a 1920px screen, and keeps its 13px gutter where the two other wide tables
+   grew theirs precisely because "a pixel a side is 54px of scroll on a
+   27-column board" — an inline badge is twenty-odd pixels a cell, which is five
+   hundred across a default board. Under the value it costs the table almost
+   nothing across, and on the board nothing down either: the row is 58px, set by
+   the 42px headshot, and the `Opp` cell already draws two lines inside the 34px
+   that leaves.
+
+   **Monochrome**, which is this table's standing rule rather than a shortcut —
+   "the stat columns are monochrome … colour is reserved for *state*" — so a
+   heat scale here would be a second colour system beside the live inning, the
+   postponement and the trend. `--faint` is the tone the board already gives the
+   quieter of two lines in a cell (`.research-opp-sp`).
+
+   `display: block` is what makes it its own line in a cell whose value is
+   whatever the formatter returned (a string, a `<span>`, two of them). It reads
+   `color` off itself rather than inheriting, which is what keeps it legible in
+   the **sorted** column, tinted accent down its whole length — the same trick,
+   and for the same reason, as the two rules directly above and the opponent
+   cell's own state spans. */
+.col-rank {
+  display: block;
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--faint);
+}
+/* Scoped to the two tables' own cells so it outranks the sorted column's accent
+   and the game log's zebra-striped `.glog-num`, neither of which should decide
+   what a rank reads like. */
+.research-table td .col-rank,
+.stats-table td .col-rank {
+  color: var(--faint);
+}
+
 /* ---- Fantasy lineup slot ----------------------------------------------------
    The chip beside a player's name while the views are reading a fantasy roster.
    Fully round, because the app reserves that shape for things you read; the

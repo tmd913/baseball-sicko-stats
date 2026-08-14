@@ -6,6 +6,7 @@ import { ExpandButton } from './ExpandButton';
 import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
 import { createPortal } from 'react-dom';
 import { ColumnPicker, ColumnsButton } from './ColumnPicker';
+import { RankBadge, RanksButton, rankScales } from './columnRanks';
 import {
   PlayerStatusContext,
   useFullPage,
@@ -110,6 +111,20 @@ function isPitcherByTrade(r: ResearchRow): boolean {
 function isBatterByTrade(r: ResearchRow): boolean {
   return r.positionType !== 'Pitcher';
 }
+
+/**
+ * **Everyone this board can show** — the leaderboard cut to its own trade, and
+ * nothing else. It is `boardRows` before the include buttons and the watchlist,
+ * which is to say the `M` in "455 of 622 batters" with all three of them on.
+ *
+ * Exported because it is also the **percentile population** (`columnRanks.tsx`),
+ * and the player page's Stats tab has to be able to reach exactly the same set
+ * from the same rows — a board and a transposed row of it ranking against two
+ * different populations would be two answers to one question. One definition,
+ * two callers, the rule this file already applies to the column vocabulary.
+ */
+export const boardPopulation = (rows: ResearchRow[], kind: PlayerKind): ResearchRow[] =>
+  rows.filter(kind === 'pitcher' ? isPitcherByTrade : isBatterByTrade);
 
 /**
  * **What a position pill matches, and why it is two different facts.**
@@ -551,6 +566,13 @@ interface Props {
    *  persisted alongside it, the two being one control set. */
   includeWatchlist: boolean;
   onIncludeWatchlistChange: (on: boolean) => void;
+  /** Draw a percentile rank under every value — see `columnRanks.tsx` for the
+   *  rule and for what it is ranked against. Lifted to App because the player
+   *  page's Stats tab reads the same flag: it is one reading habit rather than
+   *  a per-table setting, and the two tables are the same vocabulary. Saved per
+   *  user, and deliberately not in the URL. */
+  showRanks: boolean;
+  onShowRanksChange: (on: boolean) => void;
   /** Whether a fantasy league is connected, and so whether the board carries a
    *  roster-% column at all. The figure is ESPN's own and needs no credentials,
    *  so this gate is about relevance rather than access: to someone with no
@@ -795,6 +817,8 @@ export function ResearchTable({
   onIncludeChange,
   includeWatchlist,
   onIncludeWatchlistChange,
+  showRanks,
+  onShowRanksChange,
   hasRosterPct,
   hasEligibility,
   trendWindows,
@@ -987,8 +1011,13 @@ export function ResearchTable({
    * labelled free agents is not. The watchlist is exempt from that wait for the
    * same reason it is unioned — it needs no ownership to be known.
    */
+  /** The board's own population — everyone of this trade on this window's
+   *  leaderboard, before any pill or button. It is what `boardRows` narrows,
+   *  and it is what the percentile badges are ranked within; see
+   *  `boardPopulation` and `columnRanks.tsx`. */
+  const population = useMemo(() => boardPopulation(rows, kind), [rows, kind]);
   const boardRows = useMemo(() => {
-    const byTrade = rows.filter(kind === 'pitcher' ? isPitcherByTrade : isBatterByTrade);
+    const byTrade = population;
     return byTrade.filter((r) => {
       const key = `${r.kind}-${r.id}`;
       if (includeWatchlist && watchlistKeys.has(key)) return true;
@@ -997,7 +1026,24 @@ export function ResearchTable({
       if (!ownedIds) return false;
       return ownedIds.has(r.id) ? include.others : include.fa;
     });
-  }, [rows, kind, include, includeWatchlist, rosterKeys, watchlistKeys, ownedIds, espnConnected]);
+  }, [population, include, includeWatchlist, rosterKeys, watchlistKeys, ownedIds, espnConnected]);
+
+  /**
+   * One yardstick per rankable column, over that population.
+   *
+   * Memoised on the population and the visible columns alone — **not** on the
+   * pills, the search, the filters or the sort, which is the whole point of the
+   * population being the board rather than what the reader has narrowed it to:
+   * a badge must not change because somebody typed a letter. Null when the
+   * toggle is off, so the pass costs nothing at all to anyone not reading them.
+   */
+  const ranks = useMemo(
+    () => (showRanks ? rankScales(columns, population) : null),
+    [showRanks, columns, population],
+  );
+  /** What a badge says it is ranked against — the board and the span, in
+   *  words, since a 7-day percentile and a season one are different claims. */
+  const rankPopulationLabel = `the ${windowLabel(statWindow)} board`;
 
   /**
    * What the search box matches each row against, **folded once per row rather
@@ -1498,6 +1544,19 @@ export function ResearchTable({
             ))
           )}
           {includeWatchlist && <span className="research-badge">Watchlist</span>}
+          {/* The badges under the values are a setting like any other, and one
+              the reader most needs named here: expanded there is no toggle on
+              screen to explain a second number in every cell. */}
+          {showRanks && (
+            <span
+              className="research-badge"
+              title={`Every value carries its percentile against the whole ${windowLabel(
+                statWindow,
+              )} board — 100 is best`}
+            >
+              Ranks
+            </span>
+          )}
           <span className="research-badge">{windowLabel(statWindow)}</span>
           {search.trim() && <span className="research-badge">“{search.trim()}”</span>}
           {filters.map((f) => (
@@ -1766,6 +1825,19 @@ export function ResearchTable({
               count={columns.length}
               customised={!!columnKeys}
               onToggle={() => setPanel('columns', !columnsOpen)}
+            />
+            {/* And Ranks after it, which is the order the two are read in:
+                Columns decides which numbers are on screen, this decides
+                whether each of them carries a second reading. It is the run's
+                other panel-less toggle, so it takes `.on` and never `.active`,
+                exactly as Watchlist does. Shared with the Stats tab's caption
+                row (`RanksButton`), for the reason `ColumnsButton` is. */}
+            <RanksButton
+              on={showRanks}
+              onToggle={() => onShowRanksChange(!showRanks)}
+              population={`the whole ${windowLabel(statWindow)} board (${population.length} ${
+                kind === 'pitcher' ? 'pitchers' : 'batters'
+              }), whatever you have narrowed it to`}
             />
             </div>
           </div>
@@ -2075,6 +2147,19 @@ export function ResearchTable({
                         }`}
                       >
                         {c.format(r)}
+                        {/* …and the percentile under it, when the reader has
+                            asked for one. A second line rather than something
+                            beside the value, because this table cannot afford
+                            the width — see `RankBadge`. */}
+                        {ranks && (
+                          <RankBadge
+                            col={c}
+                            scale={ranks.get(c.key)}
+                            value={c.value(r)}
+                            kind={kind}
+                            population={rankPopulationLabel}
+                          />
+                        )}
                       </td>
                     ))}
                   </tr>

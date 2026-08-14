@@ -236,6 +236,16 @@ export const api = {
       body: JSON.stringify({ mute }),
     });
   },
+  /** Show a percentile rank under every value on the research board and the
+   *  player page's Stats tab. A boolean like the two above, and a route of its
+   *  own for the reason each of those is. */
+  async saveStatRanks(on: boolean): Promise<UserPrefs> {
+    return request('/api/prefs/stat-ranks', {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ on }),
+    });
+  },
   // ---- ESPN fantasy league ----
   // The credential (`espnS2`, an ESPN session cookie) travels one way: in
   // through `saveEspn` and never back out, so nothing in this app's memory or
