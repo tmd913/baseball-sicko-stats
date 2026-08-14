@@ -11,7 +11,9 @@
     "//siteUrl": "The origin the site used before statcastsicko.com. It still serves the app, so it stays a Cognito callback — pinned here because the distribution's own domain can't be read back into the user pool client without recreating the dependency cycle.",
     "siteUrl": "https://d18r33h6h98ev9.cloudfront.net",
     "googleClientId": "68383070545-5nldhf2aldbek680br28qe78h3f8s6on.apps.googleusercontent.com",
-    "// authDomain": "Serve Cognito's pages from auth.statcastsicko.com instead of the amazoncognito.com prefix domain, a candidate remedy for the iOS-only Google sign-in failure. Two steps, deliberately: deploy once with -c authDomainName=auth.statcastsicko.com to build the cert, the domain and its DNS records while nothing uses them; add https://auth.statcastsicko.com/oauth2/idpresponse to the Google OAuth client and let it propagate; then deploy with -c authDomainLive=true to move sign-in onto it. Roll back by dropping authDomainLive - the prefix domain is never removed. See SickoStackProps.",
+    "// authDomain": "Cognito serves sign-in from auth.statcastsicko.com rather than the amazoncognito.com prefix domain, a candidate remedy for the iOS-only Google sign-in failure (cause inferred, not proven - see SickoStackProps.authDomainName). Pinned here rather than passed with -c so a deploy that forgets the flags cannot silently revert the cutover. TO ROLL BACK: set authDomainLive to false and deploy - sign-in returns to the prefix domain, which is never removed and never stopped serving; then invalidate CloudFront so config.json refreshes at the edge. Removing authDomainName as well tears down the cert, the domain and its DNS records. Both redirect URIs must stay on the Google OAuth client while either host can serve a sign-in.",
+  "authDomainName": "auth.statcastsicko.com",
+  "authDomainLive": true,
   "googleSecretName": "baseball-sicko/google-oauth",
 
     "@aws-cdk/aws-lambda:recognizeLayerVersion": true,
