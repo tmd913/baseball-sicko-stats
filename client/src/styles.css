@@ -193,6 +193,46 @@ html {
   overscroll-behavior: none;
 }
 
+/* ---------------------------------------------------------------------------
+   A card doesn't highlight when you scroll past it.
+
+   `:hover` on a touch device has no way to end. There is no pointer to move
+   away, so the state **sticks to whatever was last touched** until something
+   else is — which on a list of cards means a finger dragged down the feed
+   leaves the last card it crossed tinted, and a card tapped to open a dialog is
+   still tinted when the dialog is dismissed. Either way the app then declines
+   to act on what looks exactly like a selection, and that is the confusing part:
+   the mark says *this one*, and nothing about it is true.
+
+   So **every hover on a pressable surface is scoped to `@media (hover: hover)`**.
+   With a pointer the tint is the truth — the cursor is over the thing and moving
+   the cursor off it undoes the mark — and on touch the press itself is the
+   affordance, which is what the app has always relied on anyway.
+
+   The rule was written for the Game Log's rows and is argued at length down
+   there (`.glog-table tbody tr`, which had it first); this is the same sentence
+   applied to the rest of the app, and the sites that take it each carry a
+   one-line back-reference to here rather than a copy of the argument.
+
+   **What is scoped is a *surface*, not a control.** The line is drawn on the
+   size of the thing and on whether a finger crosses it without meaning to:
+
+   - **Scoped** — the feed's at-bat rows, its outing and Upcoming bars, the
+     Overview tab's game cards, a pitcher's inning bars and faced-batter cards,
+     the card section bars, a search result row, and the Columns dialog's
+     reorder chips while one is picked up. Every one of them is a full-width row
+     or card in a list that scrolls, or (the chips) paints something a real
+     selection state also paints.
+   - **Left alone** — buttons, tabs, pills, icon squares, headshot circles and
+     text links. Their hover is a small affordance on a target you deliberately
+     aimed at, they mostly live in the pinned chrome rather than in anything you
+     scroll through, and a stuck tint on a 36px square reads as nothing at all
+     where a stuck band across a card reads as a choice.
+
+   `:active` and `:focus-visible` are untouched everywhere. A momentary press
+   state and a keyboard ring are wanted on every device, and neither can stick.
+   --------------------------------------------------------------------------- */
+
 body {
   margin: 0;
   background: radial-gradient(1200px 700px at 80% -10%, #16233f 0%, var(--bg) 55%);
@@ -708,8 +748,13 @@ body {
   cursor: pointer;
   text-align: left;
 }
-.adder-option:hover {
-  background: var(--panel);
+/* Scoped: the results menu is a list of full-width rows that scrolls, so a
+   finger run down eight names leaves the last one filled — and a filled row in
+   a menu is what a highlighted result looks like. See the top of the file. */
+@media (hover: hover) {
+  .adder-option:hover {
+    background: var(--panel);
+  }
 }
 /* The trailing add-to-watchlist button on each search result. */
 .adder-add {
@@ -1374,8 +1419,14 @@ body {
   border-radius: var(--radius);
   transition: background 0.14s ease;
 }
-.player-head-toggle:hover {
-  background: rgba(56, 189, 248, 0.06);
+/* Scoped with the rest of the card surfaces: this is the widest press in the
+   app, a whole card header. `PlayerCard` renders nowhere today and is kept for
+   its parts, so this is the rule being right for the day it is drawn again
+   rather than a fix anybody can see. See the top of the file. */
+@media (hover: hover) {
+  .player-head-toggle:hover {
+    background: rgba(56, 189, 248, 0.06);
+  }
 }
 .player-head-toggle:focus-visible {
   outline: 2px solid var(--accent);
@@ -1662,8 +1713,10 @@ body {
 .game-sub-bar.static {
   cursor: default;
 }
-.game-sub-bar.static:hover {
-  border-color: var(--border);
+@media (hover: hover) {
+  .game-sub-bar.static:hover {
+    border-color: var(--border);
+  }
 }
 /* On a narrow card the horizontal header sprawls: the photo gets orphaned on its
    own line and the batting-line summary wraps mid-phrase next to the game badge.
@@ -1804,8 +1857,15 @@ body {
   margin-bottom: 10px;
   cursor: pointer;
 }
-.game-sub-bar:hover {
-  border-color: var(--accent);
+/* Scoped: a full-width bar in a card's body — the same object the feed's item
+   bar is. See the top of the file. Its `.static` counterpart, which cancels
+   this for a bar that opens nothing, is scoped with it a few hundred lines up
+   so the pair states one condition rather than a rule and a reset that
+   disagree about when they apply. */
+@media (hover: hover) {
+  .game-sub-bar:hover {
+    border-color: var(--accent);
+  }
 }
 .game-sub-bar:focus-visible {
   outline: 2px solid var(--accent);
@@ -2433,10 +2493,16 @@ body {
 .faced-card .pa-video {
   margin: 0 12px 12px;
 }
-/* Same tint the batter at-bat rows use, on every expandable a pitcher card owns. */
-.inning-head:hover,
-.faced-summary:hover {
-  background: rgba(56, 189, 248, 0.06);
+/* Same tint the batter at-bat rows use, on every expandable a pitcher card owns
+   — and scoped with them: an inning bar and a faced-batter card are full-width
+   rows inside a dialog that scrolls, so a drag down a start leaves one lit and
+   a press leaves the one pressed lit behind the box it opened. See the top of
+   the file. */
+@media (hover: hover) {
+  .inning-head:hover,
+  .faced-summary:hover {
+    background: rgba(56, 189, 248, 0.06);
+  }
 }
 .inning-head:focus-visible,
 .faced-summary:focus-visible {
@@ -2557,8 +2623,12 @@ body {
 .pa-card {
   padding-bottom: 0;
 }
-.pa-summary-row:hover {
-  background: rgba(56, 189, 248, 0.06);
+/* Scoped: the at-bat row is the feed's commonest card and the one a finger
+   crosses most while scrolling a day. See the top of the file. */
+@media (hover: hover) {
+  .pa-summary-row:hover {
+    background: rgba(56, 189, 248, 0.06);
+  }
 }
 .pa-summary-row:focus-visible {
   outline: 2px solid var(--accent);
@@ -7117,9 +7187,20 @@ body {
   opacity: 0.7;
   cursor: pointer;
 }
-.research-order-chip.target:hover {
-  opacity: 1;
-  border-color: var(--accent);
+/* Scoped, and this is the one small target that takes the rule — because of
+   *what* it paints rather than how big it is. On touch the gesture here is a
+   press and a press, so a chip is left hovered by every step of it, and what
+   this draws on a drop target — full opacity and an accent border — is very
+   nearly what `.picked` draws on the chip actually being held. Scroll the
+   picker mid-reorder and the last chip your finger crossed says it is the one
+   you are moving, while the real one says so too. Two chips claiming one
+   gesture is the worst version of the fault this rule exists for. See the top
+   of the file. */
+@media (hover: hover) {
+  .research-order-chip.target:hover {
+    opacity: 1;
+    border-color: var(--accent);
+  }
 }
 /* The chip being dragged is lifted and made transparent to the pointer, which
    is what lets `elementFromPoint` resolve to the chip underneath it — the drop
@@ -7169,8 +7250,12 @@ body {
   font-size: 13px;
   line-height: 1;
 }
-.research-order-chip:hover .research-order-grip {
-  color: var(--accent);
+/* Scoped with the chip above: the grip lighting on the last chip a finger
+   crossed is the same claim in a quieter ink. */
+@media (hover: hover) {
+  .research-order-chip:hover .research-order-grip {
+    color: var(--accent);
+  }
 }
 
 /* ---- Active filters ---- */
@@ -8261,8 +8346,13 @@ body {
   cursor: pointer;
   transition: border-color 0.14s ease;
 }
-.upcoming-head:not(.static):hover {
-  border-color: var(--accent);
+/* Scoped: a full-width row in the feed, and the one this was reported against —
+   tap it, close the split it opens, and the accent border was still lit. See
+   *A card doesn't highlight when you scroll past it* at the top of the file. */
+@media (hover: hover) {
+  .upcoming-head:not(.static):hover {
+    border-color: var(--accent);
+  }
 }
 .upcoming-head:focus-visible {
   outline: 2px solid var(--accent);
@@ -8450,9 +8540,13 @@ body {
   cursor: pointer;
   transition: border-color 0.14s ease;
 }
-.feed-item-toggle:not(.static):hover,
-.pday-game:not(.static):hover {
-  border-color: var(--accent);
+/* Scoped: both are full-width cards in a list — the outing bar in the stream,
+   the game card on the player page's Overview. See the top of the file. */
+@media (hover: hover) {
+  .feed-item-toggle:not(.static):hover,
+  .pday-game:not(.static):hover {
+    border-color: var(--accent);
+  }
 }
 .feed-item-toggle:focus-visible,
 .pday-game:focus-visible {
