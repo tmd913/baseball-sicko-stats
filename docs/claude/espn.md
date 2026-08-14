@@ -188,6 +188,39 @@ The obvious design — recognise leaguemates by email and enrol them automatical
 
 An invite code is 12 random bytes base64url, with a **pointer record** (`invite#<code>` → `{ leagueId }`) so a join is one lookup rather than a scan. `leagueForInvite` requires the pointer *and* the league's own copy to agree, so a half-finished revoke can't leave a working link. Revoking stops **new** joins and deliberately does not detach existing members — "revoke the link" and "throw out my leaguemates" are different intentions. An invalid and a revoked code get the **same** message, since telling them apart tells a stranger holding a guessed code whether they are close. The link is `?league=<code>`; `App` redeems it once on load and **opens the Fantasy league page** rather than silently rewiring where the player list comes from — and they have to pick a team anyway. No cleanup of the param is needed: App's URL sync writes the query string from the view state and `league` isn't in it, so the first sync drops it, which also stops a reload redeeming twice.
 
+### The invite code is stored, not carried through the redirect
+
+**The sentence above is still true of the URL and used to be the whole of the story, which is what broke the one visitor an invite link is aimed at: somebody with no account.** Between arriving on `?league=<code>` and being able to redeem it there is an entire sign-up, and for the Google route that means leaving the site, visiting two other origins and coming back — the least reliable thing the app does, and one that demonstrably fails on iOS (see **Roster, watchlist, users and auth**, *The Google round trip fails at Cognito*). Every way that round trip can go wrong lost the code:
+
+- the federated leg fails at Cognito and never returns to the app at all, so the reader retries from Cognito's own page or comes back to the site by hand, and the `?league=` they clicked is long gone;
+- the redirect returns `?error=` rather than `?code=`, and the query the reader arrived on is replaced by it;
+- they give up on Google and sign in with an email and password, which restores no stashed query at all;
+- the tab is closed and the link reopened, or iOS restores the tab.
+
+**It was carried by `auth.tsx`'s `sicko:return-query`** — the whole query string, in **session**Storage, put back only on the *successful* federated path. That is exactly right for view state (a preset, an open player), which is worth restoring and costs nothing to lose, and exactly wrong for a one-shot credential that is the entire point of the visit. And it failed **silently**: the app came up signed in, on a page with no league connected, with nothing on screen to say a link had been dropped.
+
+**So the code is stored deliberately and on its own** (`client/src/invite.ts`), and the two choices are the whole of the design.
+
+- **localStorage, not sessionStorage.** sessionStorage is per tab and dies with it, which loses the code on exactly the paths above. The redemption is the reader's own act, minutes later at most, and has to survive a tab restore and a reopened link.
+- **An hour, and then it is stale** (`MAX_AGE_MS`). Redeeming a leaguemate's invite joins you to their ESPN connection, so a code left lying in storage should expire; an hour covers a sign-up, a confirmation email and two failed Google attempts, and does not cover coming back tomorrow on a shared machine.
+
+**It is captured at module load**, which it has to be: `App` rewrites the whole query string from its view state on its first sync, and `auth.tsx` navigates away to Cognito the moment the Google button is pressed. Both happen after the module graph has been evaluated. **`takeInvite()` spends it** — the read clears the entry and is memoised for the load, so it is safe to call from a render (React runs initialisers twice under StrictMode) and a reload cannot redeem twice, which is the property the old "the URL sync drops the param" argument bought. A browser that refuses storage falls back to the parameter read at load, so a link opened while already signed in still works; what that cannot do is survive the redirect, which is the honest limit of a fallback with nowhere to write. `sicko:return-query` is untouched and still restores the rest of the view state.
+
+**Measured against the built client, before → after, on a fresh browser profile each time**, with the app served beside a stub API that logs every request:
+
+| | before | after |
+| --- | --- | --- |
+| invite link, signed out — stored | `null` | `{"code":"INV123",…}` |
+| redirect returns `?error=` — error shown | *(none)* | `Google sign-in didn't finish. Try it again.` |
+| redirect returns `?error=` — URL | `?error=server_error&error_description=…` | `?league=INV123` |
+| `?code=` with no verifier — error shown | *(none)* | `Sign-in couldn't be completed in this tab.…` |
+| `?code=` with no verifier — URL | `?code=abc123&state=xyz` | *(cleaned)* |
+| invite still stored after both failures | — | yes |
+| **then signed in on a bare URL — `POST /api/espn/join`** | **0** | **1, `{"code":"INV123"}`** |
+| a reload after that | — | still 1 |
+
+That last row is the fix stated as a measurement: the join fires from a URL carrying no `?league=` at all, so the code came out of storage. Two further cases were driven the same way — pressing **Continue with Google** from an invite link (with the outgoing navigation intercepted so the tab keeps its storage) leaves the invite stored, the PKCE verifier stashed and `sicko:return-query` at `?league=INVGOOG`, with the authorize URL carrying `identity_provider=Google`, `response_type=code`, `code_challenge_method=S256` and `redirect_uri` at the app's own origin; and a **two-hour-old** stored invite is dropped on the next sign-in and sends no join.
+
 The status carries `inviteCode`, `memberCount` and **`credentialMine`** — the last of these exists for the negative case, telling someone their league is running on a leaguemate's session so a stale one reads as something anybody can fix rather than a fault of theirs.
 
 **Your own team as the roster.** `EspnLeague.teamId` is what makes this possible and is the reason the field is written rather than only displayed: it names which of the league's rosters is the user's. It is derived from the SWID at connect time — the team whose `owners` carry it — and **settable** (`PUT /api/espn/team`), because a public league read anonymously has no owner to match and a manager with two teams has to say which. The label beside the id is read back off the league rather than trusted from the client: the id is a choice, the name is a fact.

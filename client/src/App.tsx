@@ -17,6 +17,7 @@ import type {
   WatchPlayer,
 } from './types';
 import { isInjured, isStartingOn } from './lib';
+import { takeInvite } from './invite';
 import { BaseballMark } from './components/BaseballMark';
 import { PlayerAdder } from './components/PlayerAdder';
 import { PlayerOrderEditor } from './components/PlayerOrderEditor';
@@ -843,11 +844,19 @@ export default function App() {
    * changing state behind them: a link that silently rewires where your player
    * list comes from is a surprise, and they have to pick their team anyway.
    *
-   * The param needs no cleanup of its own: `App`'s URL sync writes the whole
-   * query string from the view state, and `league` isn't part of it, so the
-   * first sync drops it. That also means a reload can't redeem it twice.
+   * The code is **not** read off the URL here, and that is the fix rather than
+   * a refactor: this page mounts only once somebody is signed in, and for a new
+   * user the sign-in is a round trip through two other origins that can — and
+   * on iOS demonstrably does — come back somewhere other than the link they
+   * clicked. `invite.ts` captures it at module load, before anything can
+   * navigate or rewrite the query, and holds it in localStorage for an hour;
+   * `takeInvite` spends it, which is what keeps a reload from redeeming twice.
+   *
+   * The param still needs no cleanup of its own: `App`'s URL sync writes the
+   * whole query string from the view state, and `league` isn't part of it, so
+   * the first sync drops it.
    */
-  const inviteCode = initialParams.get('league');
+  const inviteCode = useMemo(takeInvite, []);
   useEffect(() => {
     if (!inviteCode) return;
     let cancelled = false;

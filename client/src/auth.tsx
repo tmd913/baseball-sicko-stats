@@ -11,6 +11,7 @@ import {
   forgotPassword,
   googleSignInUrl,
   logoutUrl,
+  oauthError,
   refresh as refreshTokens,
   resendCode,
   revokeToken,
@@ -90,6 +91,25 @@ const SESSION_KEY = 'sicko:session';
  * email/password screens never leave the page.
  */
 const RETURN_KEY = 'sicko:return-query';
+
+/**
+ * The returning redirect, exchanged exactly once per page load.
+ *
+ * An authorization code is single-use and `exchangeCode` consumes the PKCE
+ * verifier on the way in, so the boot effect must not be able to run it twice —
+ * and under StrictMode it runs twice by design. The first pass used to take the
+ * verifier and be cancelled, and the second found nothing stashed, answered
+ * "not a callback" and dropped the user on the sign-in screen: Google sign-in
+ * could not work at all under `npm run dev` against a real pool. A module-level
+ * promise makes both passes await the same exchange, so whichever of them is
+ * still live adopts the result.
+ */
+let bootExchange: Promise<Tokens | null> | null = null;
+
+function exchangeOnce(config: CognitoConfig): Promise<Tokens | null> {
+  bootExchange ??= exchangeCode(config);
+  return bootExchange;
+}
 
 interface StoredSession extends Tokens {
   /** Set for a user who signed in through an external provider. Sign-out has
@@ -241,21 +261,46 @@ function Gate({ config, children }: { config: CognitoConfig; children: ReactNode
    */
   useEffect(() => {
     let cancelled = false;
+
+    /**
+     * Strip the redirect's own `?code=`/`?error=` before App mounts and starts
+     * writing its own query string, and put back the query the user arrived
+     * with.
+     *
+     * Called on the failure paths as well as the success one, which it was not:
+     * a failed round trip used to be rewritten to a bare path, so a deep link —
+     * a date range, an open player, an invite — was thrown away by the very
+     * failure the user is about to retry from. (The ESPN invite no longer
+     * depends on this at all; see `invite.ts`.)
+     */
+    const restoreQuery = () => {
+      const stashed = sessionStorage.getItem(RETURN_KEY);
+      sessionStorage.removeItem(RETURN_KEY);
+      window.history.replaceState(null, '', stashed || window.location.pathname);
+    };
+
     void (async () => {
+      // A redirect that came back having failed carries no `code` at all, so
+      // the exchange below would call it an ordinary load and say nothing.
+      const failed = oauthError();
+      if (failed) {
+        restoreQuery();
+        if (!cancelled) {
+          setBootError(failed.message);
+          setPhase('out');
+        }
+        return;
+      }
       try {
-        const fromRedirect = await exchangeCode(config);
+        const fromRedirect = await exchangeOnce(config);
         if (fromRedirect) {
-          // Strip ?code=&state= before App mounts and starts writing its own
-          // query string, then put back the query the user arrived with.
-          const stashed = sessionStorage.getItem(RETURN_KEY);
-          sessionStorage.removeItem(RETURN_KEY);
-          window.history.replaceState(null, '', stashed || window.location.pathname);
+          restoreQuery();
           if (!cancelled) adopt(fromRedirect, true);
           return;
         }
       } catch (err) {
         if (!cancelled) {
-          window.history.replaceState(null, '', window.location.pathname);
+          restoreQuery();
           setBootError(err instanceof Error ? err.message : 'Sign-in failed.');
           setPhase('out');
         }

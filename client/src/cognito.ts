@@ -332,10 +332,53 @@ export async function googleSignInUrl(config: CognitoConfig): Promise<string> {
 }
 
 /**
+ * The `?error=` half of the redirect — a round trip that came back having
+ * failed rather than having succeeded.
+ *
+ * It is read *before* `exchangeCode`, and separately from it, because the two
+ * are different facts: this load carries no `code` at all, so an exchange has
+ * nothing to attempt and would report "not a callback" — which is how a failed
+ * federated sign-in used to arrive at the sign-in card with no message on it
+ * and `?error=…` still in the address bar. Pure: it consumes nothing, so the
+ * caller may ask twice.
+ */
+export function oauthError(): CognitoError | null {
+  const params = new URLSearchParams(window.location.search);
+  const error = params.get('error');
+  if (!error) return null;
+  return new CognitoError(error, friendlyOAuth(error, params.get('error_description') ?? ''));
+}
+
+/**
+ * OAuth's error codes are for a client library, not for a person, and Cognito's
+ * `error_description` is frequently its own "Something went wrong" — so the two
+ * that mean something specific are named and the rest say the one useful thing,
+ * which is that pressing the button again generally works.
+ */
+function friendlyOAuth(error: string, description: string): string {
+  switch (error) {
+    case 'access_denied':
+      return 'Google sign-in was cancelled.';
+    case 'invalid_request':
+    case 'server_error':
+    case 'temporarily_unavailable':
+      return "Google sign-in didn't finish. Try it again.";
+    default:
+      return description || "Google sign-in didn't finish. Try it again.";
+  }
+}
+
+/**
  * The `?code=` half of the redirect, exchanged for tokens.
  *
  * Returns null when this load isn't a callback at all, which is the usual
  * case — the caller runs it unconditionally at boot.
+ *
+ * A `code` with **no stashed verifier** is the one shape that is neither: it is
+ * a callback this tab cannot complete (the redirect began somewhere else, or a
+ * `?code=` was pasted or bookmarked). It throws rather than answering null,
+ * because null means "there was nothing here" and would leave the code sitting
+ * in the address bar under a sign-in card that says nothing happened.
  */
 export async function exchangeCode(config: CognitoConfig): Promise<Tokens | null> {
   const params = new URLSearchParams(window.location.search);
@@ -345,7 +388,12 @@ export async function exchangeCode(config: CognitoConfig): Promise<Tokens | null
 
   const stashed = sessionStorage.getItem(PKCE_KEY);
   sessionStorage.removeItem(PKCE_KEY);
-  if (!stashed) return null;
+  if (!stashed) {
+    throw new CognitoError(
+      'SignInInterrupted',
+      "Sign-in couldn't be completed in this tab. Try signing in again.",
+    );
+  }
   const { verifier, state: expected } = JSON.parse(stashed) as {
     verifier: string;
     state: string;
