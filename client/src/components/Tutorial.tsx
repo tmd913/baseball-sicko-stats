@@ -701,12 +701,12 @@ const CHAPTERS: Chapter[] = [
           When any watched player is in a game that's in progress, the app re-polls
           every 20 seconds on its own — no refreshing. That poll is only for live
           games, so anything else that changes during the day — a lineup posting, an
-          IL move, a trade on your fantasy league — waits for the{' '}
+          IL move — arrives the next time the page reads it. The one thing the app
+          can't see for itself is a move you make on ESPN, and{' '}
           <Ui>
-            <RefreshIcon /> Refresh
+            <RefreshIcon /> Refresh from ESPN
           </Ui>{' '}
-          button at the top right, which re-reads whatever the page you're on is made
-          of and leaves it on screen while it does.
+          in the fantasy menu is what sends it to go and look.
         </p>
         <ul className="tut-list">
           <li>

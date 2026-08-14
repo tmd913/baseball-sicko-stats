@@ -182,9 +182,8 @@
    couldn't take rubber-banded the whole app. Games and Feed were deliberately
    left out to keep their pull-to-refresh, and that is the one thing this costs:
    on those two views a pull at the top of the page no longer reloads the tab.
-   The header's Refresh button is the app's own re-read and does more than a
-   reload would — it re-reads every source the page in front of you is drawn
-   from — so the trade is worth taking to be rid of the bounce everywhere.
+   The gesture only ever reloaded, which the browser's own controls still do,
+   so the trade is worth taking to be rid of the bounce everywhere.
 
    On `html` alone: `body`'s value is only propagated when the root's is `auto`
    in both axes, and the body is not a scroll container here, so a second
@@ -5381,16 +5380,13 @@ body {
   flex: 1;
   min-width: 0;
 }
-/* One square icon button, six uses — the settings gear included, which was a
-   32px circle of its own until it was folded in here, and the refresh button,
-   which took the slot Edit left when it moved into the gear's menu. Folded into
-   one selector list rather than restyled to match, so every icon button in the
-   header stays identical by construction: square at --control-h and
-   --control-radius, the same height and corner as the date pills they share a
-   line with. */
+/* One square icon button, five uses — the settings gear included, which was a
+   32px circle of its own until it was folded in here. Folded into one selector
+   list rather than restyled to match, so every icon button in the header stays
+   identical by construction: square at --control-h and --control-radius, the
+   same height and corner as the date pills they share a line with. */
 .settings-btn,
 .fantasy-btn,
-.refresh-btn,
 .edit-order-btn,
 .search-toggle,
 .date-toggle {
@@ -5413,7 +5409,6 @@ body {
 }
 .settings-btn:hover,
 .fantasy-btn:hover,
-.refresh-btn:hover,
 .edit-order-btn:hover,
 .search-toggle:hover,
 .date-toggle:hover {
@@ -5422,7 +5417,6 @@ body {
 }
 .settings-btn:focus-visible,
 .fantasy-btn:focus-visible,
-.refresh-btn:focus-visible,
 .edit-order-btn:focus-visible,
 .search-toggle:focus-visible,
 .date-toggle:focus-visible {
@@ -5434,7 +5428,6 @@ body {
    than a mode you are in; one look for the row beats that distinction. */
 .settings-btn.active,
 .fantasy-btn.active,
-.refresh-btn.active,
 .edit-order-btn.active,
 .search-toggle.active,
 .date-toggle.active {
@@ -5464,27 +5457,6 @@ body {
 .fantasy-btn.on:hover {
   color: var(--bg);
   border-color: var(--accent);
-}
-/* Refreshing: the button holds its place and its size — the spinning baseball
-   swaps in for the 17px arrow inside a square that doesn't move, so nothing in
-   the header shifts while a read is in flight. Disabled rather than merely
-   ignored, so a second press is refused by the browser and says so; the muted
-   fill is the only thing that changes, since a ball turning is already the
-   loudest thing on the row. */
-.refresh-btn:disabled {
-  cursor: default;
-  border-color: var(--border);
-  color: var(--faint);
-}
-/* 16px rather than the inline 14: the arrow it replaces is a three-quarter
-   circle of radius 8 in a 17px box, and the ball's rim is radius 9 in its own
-   — so 16 is where the two silhouettes are the same size on the row, and the
-   swap reads as the arrow closing into the ball it was drawing rather than as
-   a smaller thing arriving. The slot states it, not the glyph, which is what
-   lets the same component be 14px in a line of text an inch away. */
-.refresh-btn .ball-spin {
-  width: 16px;
-  height: 16px;
 }
 .edit-order-icon {
   display: inline-flex;
@@ -5720,13 +5692,6 @@ body {
    stop telling someone the report failed. */
 .app.edit-mode .settings-menu,
 .app.edit-mode .fantasy-menu,
-/* Named on its own now that it sits in `.brand` rather than inside
-   `.header-tools`, which used to take it away with the rest of the cluster.
-   It goes for the same reason the other two do: this screen is a list of rows
-   and a control that re-reads every source behind the page has nothing to act
-   on here — and it would be the one square left in a header the mode has
-   otherwise emptied. */
-.app.edit-mode .refresh-btn,
 .app.edit-mode .view-bar,
 .app.edit-mode .header-tools,
 .app.edit-mode .refreshing {
@@ -6778,9 +6743,8 @@ body {
 
    The one thing it adds is a glyph slot that doesn't move: the baseball is
    14px inline and the arrow it replaces is 15, so without this the label steps
-   1px left the moment the read starts and back when it lands — the same reason
-   the header's refresh swaps its icon inside a square that holds its size.
-   Naming `svg` covers both, the ball being one. */
+   1px left the moment the read starts and back when it lands. Naming `svg`
+   covers both, the ball being one. */
 .fantasy-refresh > svg {
   flex: none;
   width: 15px;
