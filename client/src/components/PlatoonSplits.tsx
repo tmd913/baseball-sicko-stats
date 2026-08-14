@@ -1,5 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
-import { useDismissable } from '../hooks';
+import { InfoKey } from './InfoKey';
 import type { PitcherSeasonStats, SeasonStats } from '../types';
 
 /**
@@ -420,50 +419,18 @@ const THIN_SAMPLE = 100;
  * were already in when both were captions.
  */
 function SplitsKey() {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLSpanElement | null>(null);
-  const close = useCallback(() => setOpen(false), []);
-  useDismissable(open, ref, close);
   return (
-    <span className="spl-key" ref={ref}>
-      <button
-        type="button"
-        className={`app-dialog-close spl-key-btn${open ? ' active' : ''}`}
-        aria-expanded={open}
-        aria-controls="spl-key-panel"
-        aria-label="How to read these bars"
-        title="How to read these bars"
-        onClick={() => setOpen((v) => !v)}
-      >
-        <svg
-          viewBox="0 0 24 24"
-          width="16"
-          height="16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          aria-hidden="true"
-        >
-          <circle cx="12" cy="12" r="9" />
-          <path d="M12 11.5v4.5" />
-          <path d="M12 7.75h.01" />
-        </svg>
-      </button>
-      {open && (
-        <div className="settings-popover spl-key-panel" id="spl-key-panel">
-          <p>
-            Each bar runs from the centre toward the side he is <strong>stronger</strong> against —
-            the further it runs, the bigger the split.
-          </p>
-          <p>
-            A full bar is a gap bigger than nine players in ten have in that stat. It carries a
-            <span className="spl-key-chevron" aria-hidden="true" /> at its end when the real gap is
-            bigger still than the rail can draw.
-          </p>
-        </div>
-      )}
-    </span>
+    <InfoKey className="spl-key" label="How to read these bars">
+      <p>
+        Each bar runs from the centre toward the side he is <strong>stronger</strong> against — the
+        further it runs, the bigger the split.
+      </p>
+      <p>
+        A full bar is a gap bigger than nine players in ten have in that stat. It carries a
+        <span className="spl-key-chevron" aria-hidden="true" /> at its end when the real gap is
+        bigger still than the rail can draw.
+      </p>
+    </InfoKey>
   );
 }
 

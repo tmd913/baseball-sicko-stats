@@ -4805,6 +4805,13 @@ body {
    full width because the gear sits 200px into a 390px header, where this one
    hangs off a card that is 358px wide at that viewport and has room to its
    left. */
+/* The splits key hangs off a button at the card's right edge, so its panel opens
+   **leftward into the card** rather than rightward off the edge of it. That is
+   this caller's own fact, which is why it lives here and not on `.info-key-panel`. */
+.spl-key .info-key-panel {
+  left: auto;
+  right: 0;
+}
 .spl-key {
   position: absolute;
   right: 0;
@@ -4823,19 +4830,17 @@ body {
 }
 /* The button is `.app-dialog-close` — the app's 30px icon button — with only its
    open state added, which fills the way every other disclosure in the app fills
-   when its panel is showing. */
-.spl-key-btn.active {
+   when its panel is showing. Shared by every `InfoKey` in the app. */
+.info-key-btn.active {
   color: var(--bg);
   background: var(--accent);
   border-color: var(--accent);
 }
-/* The panel is `.settings-popover` itself; what it needs of its own is the
-   opposite anchor (it hangs off a button at the card's right edge, so it opens
-   leftward into the card rather than rightward off it) and prose rules, that
-   box having only ever held controls before. */
-.spl-key-panel {
-  left: auto;
-  right: 0;
+/* The panel is `.settings-popover` itself; what it needs of its own is prose
+   rules, that box having only ever held controls before, and a width. **Which
+   way it opens is the caller's**, since that is a fact about the caller's own
+   layout — see `.spl-key .info-key-panel` below. */
+.info-key-panel {
   /* An explicit width rather than `.settings-popover`'s shrink-to-fit, because
      the containing block here is the **30px button**, not a header row — so the
      available width a shrink-to-fit resolves against is 30px and the box fell
@@ -4852,10 +4857,10 @@ body {
   color: var(--muted);
   text-align: left;
 }
-.spl-key-panel p {
+.info-key-panel p {
   margin: 0;
 }
-.spl-key-panel strong {
+.info-key-panel strong {
   color: var(--text);
   font-weight: 700;
 }
