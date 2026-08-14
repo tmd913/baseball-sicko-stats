@@ -4556,26 +4556,28 @@ body {
      number rather than four because the rail is a pill and the fill is a pill,
      and only an equal inset makes the two concentric — see `.spl-fill`. The
      inline width `PlatoonSplits` writes reads this same token, so the length of
-     a full bar and the nesting of its cap cannot drift apart. */
-  --spl-inset: 3px;
-  /* And how far its *ends* are nested, which is a bigger number than the sides
-     for one reason: a **clamped** bar squares off its outer end, and a square
-     corner does not nest inside a round cap the way a round one does. The rail
-     caps at radius 8 and the fill's corners sit at its own extreme height, 5px
-     off the rail's centre line — where the cap's ink has already receded
-     `8 - sqrt(8^2 - 5^2)` = **1.76px**. So an end inset by the side's 3px left a
-     square corner 1.24px from the rail's edge while its own midline had 3px,
-     which is the "extends too far, sharp edges" this fixes: not ink outside the
-     rail, but a corner running into the curve with no margin left to read as
-     one. 5px puts that corner **3.24px** clear at its tightest and 5px clear at
-     the midline, so the track shows all the way around it.
+     a full bar and the nesting of its cap cannot drift apart.
 
-     It is one token for **every** fill rather than a bigger inset for the
-     clamped ones alone, and that is the load-bearing half: inset the squared
-     ends further and a bar just past full scale would draw *shorter* than one
-     exactly at it, so a bigger gap would read as a smaller one. Length has to
-     stay monotonic in the gap; only the cap's shape may say "clamped". */
-  --spl-inset-x: 5px;
+     **The ends had a bigger token of their own for a while** (`--spl-inset-x`,
+     5px) and it is gone with the thing it was written for. A **clamped** bar
+     used to square off its outer end, and a square corner does not nest inside a
+     round cap the way a round one does: the rail caps at radius 8 and the fill's
+     corners sat at its own extreme height, 5px off the centre line, where the
+     cap's ink has already receded `8 - sqrt(8^2 - 5^2)` = **1.76px** — so at 3px
+     that corner had 1.24px of rail beside it against its own midline's 3px, and
+     read as a bar running out of its rail with the corner cut off. The clamp is
+     a **chevron** now (see `.spl-fill--over`) and every cap is round, which is
+     the case 3px was chosen for: a radius-5 cap 3px inside a radius-8 one shares
+     its centre, so the track shows exactly 3px of itself at **every** angle
+     rather than 5px at the midline and 3.24 at the corner. Every bar is 2px
+     longer for it.
+
+     What the single token still buys is what it always did: length stays
+     monotonic in the gap. Inset a clamped end further than an unclamped one and
+     a bar just past full scale would draw *shorter* than one exactly at it, so a
+     bigger gap would read as a smaller one — which is why the clamp mark must
+     never be a change of length. */
+  --spl-inset: 3px;
 }
 .spl-heads,
 .spl-row {
@@ -4657,8 +4659,9 @@ body {
    means the two caps are concentric. Inset top and bottom only — which is what
    this was — a bar drawn to the rail's *box* ends outside the rail's *ink*,
    because a pill's edge has receded 1.76px by the fill's top row of pixels; a
-   clamped bar, whose outer end is squared off, then put 2.47px of accent past
-   the end of the rail on Contreras's K% row. `max-width` is the same invariant
+   clamped bar — the one you look at, being the one that reaches the end — then
+   put 2.47px of accent past the end of the rail on Contreras's K% row.
+   `max-width` is the same invariant
    said again at the last possible moment: whatever length arrives, the fill
    cannot cover more than its half of the rail. `min-width` is the floor that
    says "there is a bar here" for a gap of almost nothing, and takes the cap as
@@ -4667,8 +4670,8 @@ body {
   position: absolute;
   top: var(--spl-inset);
   bottom: var(--spl-inset);
-  min-width: min(3px, 50% - var(--spl-inset-x));
-  max-width: calc(50% - var(--spl-inset-x));
+  min-width: min(3px, 50% - var(--spl-inset));
+  max-width: calc(50% - var(--spl-inset));
   border-radius: 999px;
   background: var(--accent);
   opacity: 0.8;
@@ -4684,41 +4687,193 @@ body {
   );
   opacity: 1;
 }
-/* A gap past the rail's own full scale is clamped, and squares off its outer
-   end to say it has been — the one thing a clamped bar must not do is read as
-   an exact measurement. */
-.spl-fill--l.spl-fill--over {
-  border-top-left-radius: 2px;
-  border-bottom-left-radius: 2px;
-}
-.spl-fill--r.spl-fill--over {
-  border-top-right-radius: 2px;
-  border-bottom-right-radius: 2px;
-}
-/* The two captions under the bars — the key to how a bar is drawn, and the
-   sample-size caveat when there is one. Folded into one rule rather than the key
-   keeping a copy of its own: they are the same kind of thing in the same place,
-   and two rules would be two chances for one to drift a pixel from the other.
+/* A gap past the rail's own full scale is clamped, and says so with a **chevron
+   knocked out of the fill just inside its tip** — the one thing a clamped bar
+   must not do is read as an exact measurement, and 57% of batters have at least
+   one such row (1 − 0.9^8 over eight rows at a per-row 90th percentile), so the
+   signal is the common case rather than an exception and is worth keeping.
 
-   **The key was `.spl-intro`'s own rule and was centred**, which is what a
-   subtitle under a card title wants and not what a caption wants. Left-aligned
-   it matches the caveat that can follow it, so the foot of the card reads as one
-   block of small print; and it is the half that actually wraps — at 390px the
-   sentence is four lines, and a centred four-line paragraph is ragged down both
-   edges where a left-aligned one is ragged down one. */
-.spl-intro,
+   **It squared the outer end instead until now**, and that is what this
+   reverses: a square cap was complained about twice, it forced the ends onto a
+   larger inset of their own (see `--spl-inset`), and — the quieter fault — it
+   was never explained anywhere on the card, so a reader met a differently-shaped
+   bar end with nothing to tell them what it meant. The key behind the title's ⓘ
+   now has the room to say, which is what makes a mark worth drawing at all.
+
+   **Why a mark inside the fill rather than one beside it.** Past the end there
+   is nowhere to put anything: a full bar stops 3px short of the rail and the
+   figure beside it is one 10px column gap away (7px under 560), so a glyph out
+   there would sit in the gutter and collide at the widths this table is tightest
+   at. And it must not be a `background` treatment — `.spl-fill--thin` already
+   spends that on the hatch, and a row can be thin *and* clamped — so a
+   pseudo-element is the one layer that composes with both.
+
+   **It costs no length**, which is the invariant `--spl-inset` exists to
+   protect: the chevron is drawn *within* the fill, so a clamped bar is exactly
+   as long as one at full scale and length stays monotonic in the gap. Drawn in
+   `--panel`, i.e. knocked out to the card's own ground, so it reads as the rail
+   showing through the bar.
+
+   **The tip under it is painted solid, and that is not decoration.** A row can
+   be thin *and* clamped, and `.spl-fill--thin` is accent stripes over
+   transparent gaps showing the rail — which is `--panel` under a 6% wash, i.e.
+   the chevron's own colour. Drawn straight onto that the mark was one more gap
+   among ten: measured at 1× on Nick Allen (31 PA vs LHP, four rows both thin and
+   clamped) it was invisible, and darkening it to `--bg` barely helped, the hatch
+   being busy rather than merely similar. So `::before` lays 14px of solid accent
+   — two whole stripe periods — under the outer end, and the chevron is knocked
+   out of *that*. On a solid fill the tip is the same accent the bar already is
+   and changes nothing whatever; on a hatched one it gives the mark a ground to
+   be legible against. One rule, one mark, both fills.
+
+   Geometry: a 4px box with 1.8px borders on two sides, rotated 45°, is 5.66px on
+   its diagonal — 2.17px of clearance top and bottom inside a 10px fill — and its
+   outer point lands 2.17px inside the fill's own tip, so it never rides the cap.
+   `.spl-key-chevron` is the same mark on a stub of bar in the key's popover, so
+   what is explained there is drawn by the very rule that draws it here. */
+.spl-fill--over::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 14px;
+  background: var(--accent);
+}
+.spl-fill--r.spl-fill--over::before {
+  right: 0;
+  border-radius: 0 999px 999px 0;
+}
+.spl-fill--l.spl-fill--over::before {
+  left: 0;
+  border-radius: 999px 0 0 999px;
+}
+.spl-fill--over::after,
+.spl-key-chevron::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  border-top: 1.8px solid var(--panel);
+  border-right: 1.8px solid var(--panel);
+}
+.spl-fill--r.spl-fill--over::after,
+.spl-key-chevron::after {
+  right: 3px;
+  transform: translateY(-50%) rotate(45deg);
+}
+.spl-fill--l.spl-fill--over::after {
+  left: 3px;
+  transform: translateY(-50%) rotate(-135deg);
+}
+/* The one caption left under the bars: the sample-size caveat, when there is
+   one. **`.spl-intro` sat beside it in this rule and is gone** — that was the
+   key to how a bar is drawn, and it is behind the ⓘ on the title row now
+   (`.spl-key`), where it costs the tab no height at all. Which leaves the two
+   arguments this rule used to hold in an odd state worth stating plainly: they
+   were both right and neither applies any more. Folding the key into the
+   caveat's rule stopped one drifting a pixel from the other, and there is now
+   one of them; left-aligning the key matched it to the caveat under it, and it
+   is not under it. What is left is the caveat's own rule, unchanged. */
 .spl-note {
   margin: 12px 0 0;
   font-size: 12px;
   line-height: 1.45;
   color: var(--muted);
 }
-.spl-intro strong {
+.spl-note--warn {
+  color: var(--hr);
+}
+/* The card head gains a containing block for the key's popover and a floor the
+   height of the button, so a 30px control centred on a 22px title line cannot
+   overhang into the table under it. The title is centred by the flex rather than
+   by `.pct-card-head`'s `text-align`, which is the same result for one span and
+   is untouched on the percentile card that shares that class — and the button is
+   out of flow, so the title stays centred **in the card** rather than being
+   pushed off-centre by a control on one side of it. */
+.spl-card-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+}
+/* Folded onto `.settings-menu`'s own rule up in the header rather than restated:
+   a relatively-positioned host for a popover is exactly what that is. It is
+   deliberately **not** added to the `@media (max-width: 640px)` block that makes
+   those two `position: static` — that rule re-anchors a menu to the header's
+   full width because the gear sits 200px into a 390px header, where this one
+   hangs off a card that is 358px wide at that viewport and has room to its
+   left. */
+.spl-key {
+  position: absolute;
+  right: 0;
+  /* Stretched and re-centred rather than `top: 50%; transform: translateY(-50%)`,
+     and the reason is a stacking context rather than a preference. A `transform`
+     makes one, which would trap the popover's own `z-index: 40` *inside* this
+     box — and this box is a positioned `z-index: auto` element sitting **before**
+     the table in the DOM, so the rows' absolutely-positioned `.spl-fill`s paint
+     after it and the key opened underneath the very bars it explains (measured:
+     the fills showed straight through the panel). With no transform the popover
+     resolves against `.details-view` instead and lands above them. */
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+}
+/* The button is `.app-dialog-close` — the app's 30px icon button — with only its
+   open state added, which fills the way every other disclosure in the app fills
+   when its panel is showing. */
+.spl-key-btn.active {
+  color: var(--bg);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+/* The panel is `.settings-popover` itself; what it needs of its own is the
+   opposite anchor (it hangs off a button at the card's right edge, so it opens
+   leftward into the card rather than rightward off it) and prose rules, that
+   box having only ever held controls before. */
+.spl-key-panel {
+  left: auto;
+  right: 0;
+  /* An explicit width rather than `.settings-popover`'s shrink-to-fit, because
+     the containing block here is the **30px button**, not a header row — so the
+     available width a shrink-to-fit resolves against is 30px and the box fell
+     back to the shared `min-width: 180px`, which turned two sentences into a
+     225px-tall column. The gear's menu never hits this: it is sized by the
+     signed-in email inside it, which is why that rule caps rather than sets.
+     Capped against the viewport on the same reasoning the shared rule is, so a
+     panel hanging off the right of a 358px card at 390px still opens inside the
+     screen (measured: left edge 41px). */
+  width: min(320px, calc(100vw - 40px));
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+  text-align: left;
+}
+.spl-key-panel p {
+  margin: 0;
+}
+.spl-key-panel strong {
   color: var(--text);
   font-weight: 700;
 }
-.spl-note--warn {
-  color: var(--hr);
+/* The chevron in the key is drawn on a stub of the bar it marks — same accent,
+   same opacity, same pill, and the mark itself comes off `.spl-fill--over`'s own
+   rule above. A bare chevron in prose would be the inverse of what is on screen
+   (accent on panel, where the bar knocks panel out of accent) and would not read
+   as the same thing. */
+.spl-key-chevron {
+  position: relative;
+  display: inline-block;
+  width: 22px;
+  height: 10px;
+  vertical-align: -1px;
+  margin: 0 2px;
+  border-radius: 999px;
+  background: var(--accent);
+  opacity: 0.8;
 }
 /* Narrow: the label and the two figures give up what they can, and the rail
    keeps whatever is left — it is the thing the tab is for. */

@@ -513,11 +513,34 @@ export function useOverlayFocus(
 /**
  * Close a popover on a press outside it or on Escape.
  *
- * The header has two of these now — the settings gear and the fantasy button
- * beside it — and they have to dismiss identically or the pair reads as two
- * different kinds of control. `pointerdown` rather than `click`, so a press
- * that starts outside dismisses on the way down instead of waiting for a mouse
- * button that may come up somewhere else entirely.
+ * The header has two of these — the settings gear and the fantasy button beside
+ * it — and the Splits tab's key is a third, so they have to dismiss identically
+ * or they read as three different kinds of control. `pointerdown` rather than
+ * `click`, so a press that starts outside dismisses on the way down instead of
+ * waiting for a mouse button that may come up somewhere else entirely.
+ *
+ * **Escape goes through `answersEscape` and is bound in the capture phase**, and
+ * both halves were forced by the third caller: that popover opens **inside**
+ * `.details-view`, which answers Escape itself. Bare, one press closed the
+ * popover *and* the player page under it — two things undone by one key, which
+ * is the exact fault `answersEscape` exists to prevent and which the header's
+ * two callers never met, there being no overlay over the header to compete
+ * with.
+ *
+ * Marking the press is what stops the page answering. **Capture** is what makes
+ * the popover the one that answers first: the shared stacking test decides who
+ * is topmost by reading declared `z-index`es off the `OVERLAYS` list, and a
+ * popover is on none of them — it is not a page or a dialog, it is a panel
+ * hanging off a button that happens to be inside one. Registration order would
+ * otherwise decide it, and the overlay always registers first, being mounted
+ * first. Capture precedes every bubble listener whatever the order, so "the
+ * innermost thing goes first" holds by construction rather than by luck.
+ *
+ * A popover with an overlay genuinely **above** it still declines, `overlayAbove`
+ * being consulted as ever: the header's menu sits at `z-index: 40` under a player
+ * page at 50, so the page answers and the menu behind it does not — where before
+ * they both did. And a popover inside that page is excluded from its own test by
+ * containment, so it answers and the page waits for the next press.
  */
 export function useDismissable(
   open: boolean,
@@ -530,13 +553,13 @@ export function useDismissable(
       if (ref.current && !ref.current.contains(e.target as Node)) close();
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') close();
+      if (answersEscape(e, ref.current)) close();
     };
     window.addEventListener('pointerdown', onDown);
-    window.addEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKey, true);
     return () => {
       window.removeEventListener('pointerdown', onDown);
-      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keydown', onKey, true);
     };
   }, [open, ref, close]);
 }
