@@ -8,10 +8,9 @@ import {
   ordinal,
   outcomeKind,
 } from '../lib';
-import { useScrollIntoViewOnExpand } from '../hooks';
 import { BaseDiamond } from './BaseDiamond';
 import { Modal } from './Modal';
-import { VideoClip } from './PlateAppearanceCard';
+import { InlineVideoClip } from './PlateAppearanceCard';
 import { PitchSequence } from './PitchSequence';
 
 /** One row inside an inning: a batter he faced, or something that happened on
@@ -84,24 +83,22 @@ function groupByInning(faced: FacedBatter[], events: BaseEvent[]): InningGroup[]
  * steal that neither the glyph nor MLB's own line for the play ever says, and
  * it is what decides whether the bag was there to be taken.
  *
- * It **opens a dialog onto whatever is under it**, exactly as `FacedBatterCard`
- * does and on the same test — MLB's line for the play and the clip of it, where
- * a batter's card holds a description and a pitch sequence. It was a static row
- * with its description hidden in a `title` (which a phone cannot show at all)
- * for as long as the feed drew a second, watchable copy of every one of these
- * beside the outing; the pitcher stream no longer does (see `LiveFeed.tsx`), so
- * the outing has to be readable as the outing, video and all. An event with
- * neither a line nor a clip stays the static row it was, which is the same rule
- * the batter card above applies to a batter with no pitches recorded.
+ * **It opens nothing, and that is the change.** It was a press onto a dialog
+ * holding MLB's line for the play and the clip of it — which was right while
+ * these rows lived in an *inning block* squeezed into whatever box the outing
+ * was drawn in, where a video frame unrolled between two rows pushed the rest
+ * of the inning down the page. The inning is a dialog of its own now
+ * (`InningBlock`), and inside a box about one inning there is room to say the
+ * whole of what a base-running play is: a badge, a sentence and six seconds of
+ * video. A press onto a box holding one sentence would be a rung of the ladder
+ * spent on nothing — so the sentence and the clip read here, exactly as the
+ * feed's own `FeedBaseEvent` draws them, and this row is the terminus.
  *
- * **A popup rather than an accordion**, the swap `PlateAppearanceCard` records
- * in full: a play's detail is a detail about one play, and inserting a video
- * frame into the middle of an inning pushed every row under it down the page.
+ * An event with neither a line nor a clip is the bare row it always was.
  */
 function InningBaseEvent({ ev, gamePk }: { ev: BaseEvent; gamePk: number }) {
-  const [open, setOpen] = useState(false);
   const tone = baseEventTone(ev.kind);
-  const expandable = Boolean(ev.description || ev.playId);
+  const detailed = Boolean(ev.description || ev.playId);
   // The count only means something on an event the runner went on a pitch for:
   // a balk or a wild pitch is the pitcher's doing, and the count he was working
   // on says nothing about it.
@@ -123,36 +120,15 @@ function InningBaseEvent({ ev, gamePk }: { ev: BaseEvent; gamePk: number }) {
     </>
   );
 
-  if (!expandable) {
+  if (!detailed) {
     return <div className={`faced-row faced-event tone-${tone}`}>{summary}</div>;
   }
 
   return (
     <div className={`faced-card faced-event tone-${tone}`}>
-      <button
-        type="button"
-        className="faced-row faced-summary"
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        onClick={() => setOpen(true)}
-      >
-        {summary}
-      </button>
-      {open && (
-        <Modal
-          title={`${baseEventLabel(ev)} · ${ev.half === 'Top' ? 'Top' : 'Bot'} ${ev.inning}${
-            ev.runnerName ? ` · ${ev.runnerName}` : ''
-          }`}
-          titleId="inning-event-title"
-          className="play-detail-box"
-          onClose={() => setOpen(false)}
-        >
-          <div className="faced-detail">
-            {ev.description && <p className="pa-des">{ev.description}</p>}
-            {ev.playId && <VideoClip playId={ev.playId} gamePk={gamePk} />}
-          </div>
-        </Modal>
-      )}
+      <div className="faced-row faced-line">{summary}</div>
+      {ev.description && <p className="faced-des">{ev.description}</p>}
+      {ev.playId && <InlineVideoClip playId={ev.playId} gamePk={gamePk} />}
     </div>
   );
 }
@@ -178,14 +154,21 @@ function inningStats(batters: FacedBatter[]) {
 }
 
 /**
- * One batter faced — the result row, **opening a dialog** onto the description,
- * the batted ball, the full pitch sequence and the clip.
+ * One batter faced — the result row, its clip under it, and a press onto the
+ * description, the batted ball, the pitch sequence and the strike zone.
  *
- * It was an accordion, and is the pitcher-side twin of `PlateAppearanceCard`'s
- * own swap: one plate appearance is one thing, its detail is a pitch table and
- * a strike zone, and unrolling that inside an inning pushed the rest of the
- * outing down the page — which is why the row used to scroll itself to the top
- * on expand, an affordance a dialog does not need.
+ * It is **exactly the shape `FeedAtBat` gives a batter's plate appearance**, and
+ * that is the point rather than a coincidence: a summary row, the video of the
+ * play directly beneath it, and the pitch-by-pitch read a press away
+ * (`PlateAppearanceCard` with `showVideo={false}`, since the clip is already on
+ * the item). One at-bat drawn from the pitcher's side and the same at-bat drawn
+ * from the batter's now read as one thing in one app.
+ *
+ * **The clip used to be inside the dialog**, which was the right place while
+ * these rows were the contents of an accordion inside somebody else's box; in
+ * an inning's own dialog there is room for the video where the feed puts it,
+ * and the box behind the press keeps what genuinely needs the room — a pitch
+ * table and a strike-zone plot.
  */
 function FacedBatterCard({
   fb,
@@ -221,21 +204,26 @@ function FacedBatterCard({
     </>
   );
 
-  if (!expandable) {
+  if (!expandable && !fb.playId) {
     return <div className={`faced-row kind-${kind}`}>{summary}</div>;
   }
 
   return (
     <div className={`faced-card kind-${kind}`}>
-      <button
-        type="button"
-        className="faced-row faced-summary"
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        onClick={() => setOpen(true)}
-      >
-        {summary}
-      </button>
+      {expandable ? (
+        <button
+          type="button"
+          className="faced-row faced-summary"
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          onClick={() => setOpen(true)}
+        >
+          {summary}
+        </button>
+      ) : (
+        <div className="faced-row faced-line">{summary}</div>
+      )}
+      {fb.playId && <InlineVideoClip playId={fb.playId} gamePk={gamePk} />}
       {open && (
         <Modal
           title={`${fb.batterName} — ${eventLabel(fb.event)} · ${
@@ -254,8 +242,166 @@ function FacedBatterCard({
                 {fb.xwoba !== null && <span className="pa-xwoba">xwOBA {fb.xwoba.toFixed(3)}</span>}
               </div>
             )}
+            {/* No clip in here: the row that opened this box carries it, the
+                way `FeedAtBat` carries a batter's and passes `showVideo={false}`
+                into the card's own dialog. The same video twice is the same
+                video twice wherever it happens. */}
             <PitchSequence pitches={fb.pitches} />
-            {fb.playId && <VideoClip playId={fb.playId} gamePk={gamePk} />}
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+/** The inning's line, as the chips the bar carries and the dialog repeats. */
+function InningLine({ s, active }: { s: ReturnType<typeof inningStats>; active?: boolean }) {
+  return (
+    <span className="inning-stats">
+      {active && <span className="inning-live">Live</span>}
+      <span className="inning-stat">{s.bf} BF</span>
+      {s.h > 0 && <span className="inning-stat is-h">{s.h} H</span>}
+      {s.r > 0 && (
+        <span className="inning-stat is-r">
+          {s.r} R{s.er !== s.r ? ` (${s.er} ER)` : ''}
+        </span>
+      )}
+      {s.k > 0 && <span className="inning-stat is-k">{s.k} K</span>}
+      {s.bb > 0 && <span className="inning-stat is-bb">{s.bb} BB</span>}
+      <span className="inning-stat is-p">{s.pitches} P</span>
+    </span>
+  );
+}
+
+/** The rows of one inning, in encounter order — the batters he faced and what
+ *  happened on the bases between them. Its own component because it is what the
+ *  dialog holds, and a `.map` with a running counter inside JSX reads worse than
+ *  a named list. */
+function InningRows({ group, gamePk }: { group: InningGroup; gamePk: number }) {
+  // The batter number is the batter's, so it counts batters and skips the
+  // events between them — `.faced-seq` answers "which man of the inning is
+  // this", and a balk is not one of them.
+  let seq = 0;
+  return (
+    <>
+      {group.rows.map((row, i) =>
+        row.fb ? (
+          <FacedBatterCard
+            key={`b-${row.fb.batterId}-${i}`}
+            fb={row.fb}
+            seq={++seq}
+            gamePk={gamePk}
+          />
+        ) : (
+          <InningBaseEvent key={`e-${row.ev.kind}-${i}`} ev={row.ev} gamePk={gamePk} />
+        ),
+      )}
+    </>
+  );
+}
+
+/**
+ * One inning of an outing: a bar carrying its line, **opening a dialog** onto
+ * that inning read as a feed.
+ *
+ * ### This reverses a decision recorded here, and the reason it reverses is
+ *
+ * The note this replaces argued that the inning was the one thing in the
+ * accordion-to-popup sweep that should *stay* an accordion: everything else
+ * opened onto a **detail about one thing** — one at-bat, one steal, one outing —
+ * where an inning is a **grouping**, and popping it would make the pitch
+ * sequence a third dialog. Both halves of that are still true as stated. What
+ * they left out is what the reader actually gets from a batter's game and did
+ * not get from a pitcher's.
+ *
+ * A batter's game opens as a **feed**: a row per plate appearance with the clip
+ * of it underneath, and the pitch-by-pitch a press away. A pitcher's opened as
+ * a bar and a stack of closed accordions, and unrolling one grew the box it was
+ * in — pushing every inning under it down the dialog's own scroller, which is
+ * the exact complaint the sweep was written to answer everywhere else. The
+ * space argument the old note waved off ("what an open inning grows is that
+ * box's own scroller") is a scroller the reader is *reading*, and a seven-inning
+ * start with two innings open is 2,000px of it.
+ *
+ * So the inning takes a rung, and **the rung under it is given back**. The
+ * inning's dialog *is* the feed, so its rows carry what the feed's rows carry:
+ * MLB's line for the play and the clip of it, inline. A base event has nothing
+ * else to show, so it stops being a press at all (`InningBaseEvent`); a batter
+ * faced keeps one, because a pitch table and a strike zone genuinely want a box.
+ *
+ * ### What that costs, counted rather than waved at
+ *
+ * Presses to reach a pitch sequence from a Game Log row are **unchanged** — row,
+ * inning, batter, three either way. What moves is the Escape count on the very
+ * deepest path, from two to three: `PlayerDayModal` → this dialog → the batter's.
+ * From the feed's stream it is outing → inning → batter, also three; from the
+ * player page's Overview tab it is the overlay plus three, which is the four
+ * levels this app has measured before. `Modal`'s `DialogLayerContext` gives each
+ * rung its own z-index, so `overlayAbove` still lets exactly one of them answer
+ * a press — verified three and four deep, in both directions.
+ *
+ * What it buys is that a pitcher's game log now reaches his innings as readable
+ * feed items, at the same shape and weight as a batter's plays, and that the
+ * list of innings holds still: it is bars all the way down and a seven-inning
+ * start is 300px rather than a page.
+ */
+function InningBlock({
+  group,
+  gamePk,
+  pitcherName,
+  active,
+}: {
+  group: InningGroup;
+  gamePk: number;
+  /** Whose inning, for the dialog's heading — the bar sits under a header that
+   *  has already said it, and the box does not. Optional for the same reason
+   *  `paTitle`'s is: one call site has no name in scope. */
+  pitcherName?: string;
+  // The pitcher is on the mound right now, in this inning.
+  active: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const s = inningStats(group.batters);
+  const isTop = group.half === 'Top';
+  const half = isTop ? 'Top' : 'Bottom';
+  const when = `${half} of the ${ordinal(group.inning)}`;
+  return (
+    <div className={`inning-block${active ? ' active' : ''}`}>
+      <button
+        type="button"
+        className="inning-head"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        title={`${when} — the batters he faced`}
+        onClick={() => setOpen(true)}
+      >
+        <span className="inning-label">
+          <svg className="pa-inning-arrow" viewBox="0 0 12 10" aria-hidden="true" fill="currentColor">
+            <path d={isTop ? 'M6 0 12 10 0 10Z' : 'M0 0 12 0 6 10Z'} />
+          </svg>
+          {ordinal(group.inning)}
+        </span>
+        <InningLine s={s} active={active} />
+      </button>
+      {open && (
+        <Modal
+          title={`${pitcherName ? `${pitcherName} — ` : ''}${when}`}
+          titleId="inning-title"
+          className="inning-box"
+          onClose={() => setOpen(false)}
+        >
+          {/* The bar that opened this box is behind it, so the line it carries
+              leads the box — the same reason the Game Log's expanded head puts
+              back the name the details head would have said. */}
+          <div className="inning-box-line">
+            <InningLine s={s} active={active} />
+          </div>
+          {/* Wrapped rather than dropped straight into the dialog's body — see
+              `.inning-batters` in styles.css, where a flex item that clips its
+              own corners has an automatic minimum size of zero and the cards
+              cut their own clips in half. */}
+          <div className="inning-batters">
+            <InningRows group={group} gamePk={gamePk} />
           </div>
         </Modal>
       )}
@@ -264,96 +410,16 @@ function FacedBatterCard({
 }
 
 /**
- * A collapsible per-inning card: header with the inning's line, then the result
- * rows for each batter faced that inning.
+ * A pitcher's outing as a list of per-inning bars — the shape every place an
+ * outing is drawn reads it in: the feed's item, the player page's Overview tab
+ * and the Game Log's per-game popup.
  *
- * **This one stays an accordion, and it is the one place in this sweep that
- * did.** Everything else that opened in place opened onto a *detail about one
- * thing* — one at-bat, one steal, one outing — where an inning is a **grouping**:
- * what is under it is a list of rows, each of which is itself a thing you can
- * open. Popping it would make the pitch sequence a *third* dialog from the feed
- * (outing → inning → batter) and a fourth from the Game Log's own popup, which
- * is a ladder nobody wants to climb back down. And the space argument that
- * carried the others does not apply here: the innings are drawn inside a dialog
- * now, so what an open inning grows is that box's own scroller rather than the
- * page behind it — which is exactly what a modal's scroller is for.
- */
-function InningBlock({
-  group,
-  gamePk,
-  active,
-}: {
-  group: InningGroup;
-  gamePk: number;
-  // The pitcher is on the mound right now, in this inning.
-  active: boolean;
-}) {
-  const [collapsed, setCollapsed] = useState(true);
-  const s = inningStats(group.batters);
-  const isTop = group.half === 'Top';
-  // Expanding an inning brings it to the top of the screen, like a game block.
-  const blockRef = useScrollIntoViewOnExpand<HTMLDivElement>(!collapsed);
-  return (
-    <div
-      ref={blockRef}
-      className={`inning-block${collapsed ? ' collapsed' : ''}${active ? ' active' : ''}`}
-    >
-      <button
-        type="button"
-        className="inning-head"
-        aria-expanded={!collapsed}
-        onClick={() => setCollapsed((v) => !v)}
-      >
-        <span className="inning-label">
-          <svg className="pa-inning-arrow" viewBox="0 0 12 10" aria-hidden="true" fill="currentColor">
-            <path d={isTop ? 'M6 0 12 10 0 10Z' : 'M0 0 12 0 6 10Z'} />
-          </svg>
-          {ordinal(group.inning)}
-        </span>
-        {active && <span className="inning-live">Live</span>}
-        <span className="inning-stats">
-          <span className="inning-stat">{s.bf} BF</span>
-          {s.h > 0 && <span className="inning-stat is-h">{s.h} H</span>}
-          {s.r > 0 && (
-            <span className="inning-stat is-r">
-              {s.r} R{s.er !== s.r ? ` (${s.er} ER)` : ''}
-            </span>
-          )}
-          {s.k > 0 && <span className="inning-stat is-k">{s.k} K</span>}
-          {s.bb > 0 && <span className="inning-stat is-bb">{s.bb} BB</span>}
-          <span className="inning-stat is-p">{s.pitches} P</span>
-        </span>
-      </button>
-      {!collapsed && (
-        <div className="inning-batters">
-          {(() => {
-            // The batter number is the batter's, so it counts batters and skips
-            // the events between them — `.faced-seq` answers "which man of the
-            // inning is this", and a balk is not one of them.
-            let seq = 0;
-            return group.rows.map((row, i) =>
-              row.fb ? (
-                <FacedBatterCard
-                  key={`b-${row.fb.batterId}-${i}`}
-                  fb={row.fb}
-                  seq={++seq}
-                  gamePk={gamePk}
-                />
-              ) : (
-                <InningBaseEvent key={`e-${row.ev.kind}-${i}`} ev={row.ev} gamePk={gamePk} />
-              ),
-            );
-          })()}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/**
- * A pitcher's outing as a list of collapsed per-inning blocks — the shape every
- * place an outing is drawn reads it in: the feed's item, the player page's
- * Overview tab, the Game Log's per-game popup and the outing breakdown.
+ * **Bars all the way down**: each one opens its inning in a dialog rather than
+ * unrolling it in place (see `InningBlock`), so the list is the same height
+ * whatever the reader has open and a seven-inning start is a glance rather than
+ * a page. It is the pitcher-side answer to what a batter's game already reads
+ * as — a list you scan, with each thing on it a press away from the whole of
+ * itself.
  *
  * **The innings read first-to-last, everywhere.** The feed used to pass a
  * `newestFirst` that flipped them, so the half he was throwing sat under his
@@ -366,7 +432,16 @@ function InningBlock({
  * `.inning-block.active` accent says which one is being thrown — so nothing is
  * lost by leaving it where it belongs in the sequence.
  */
-export function InningsList({ game, pitcherId }: { game: PlayerGame; pitcherId: number }) {
+export function InningsList({
+  game,
+  pitcherId,
+  pitcherName,
+}: {
+  game: PlayerGame;
+  pitcherId: number;
+  /** Whose outing, for each inning dialog's heading. */
+  pitcherName?: string;
+}) {
   const groups = groupByInning(game.pitching?.facedBatters ?? [], game.baseEvents);
   // While this pitcher is the one on the mound, the half-inning he's throwing
   // gets a live accent. Null once the game is over or he's been pulled.
@@ -380,6 +455,7 @@ export function InningsList({ game, pitcherId }: { game: PlayerGame; pitcherId: 
           key={`${group.inning}-${group.half}`}
           group={group}
           gamePk={game.gamePk}
+          pitcherName={pitcherName}
           active={group.inning === activeInning && (group.half === 'Top') === st.isTopInning}
         />
       ))}

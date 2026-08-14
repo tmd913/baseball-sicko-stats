@@ -559,7 +559,7 @@ function FeedBaseEvent({
  * A watched pitcher's outing in the feed — one item per game, not a row per
  * batter faced. In the stream it is the usual feed header plus his line, and a
  * press **opens a dialog** holding his innings (`InningsList`, first inning
- * first, each one expandable to the batters faced and their pitch sequences)
+ * first, each a bar that opens that inning as a feed of the batters he faced)
  * and the way to the full breakdown. `role` is set only while he's on the
  * mound, and tints the header.
  *
@@ -637,7 +637,7 @@ function FeedPitcherGame({
   // that is already about this game, and inside a dialog everywhere else.
   const body = (
     <>
-      <InningsList game={game} pitcherId={report.id} />
+      <InningsList game={game} pitcherId={report.id} pitcherName={report.name} />
       {/* Below the innings rather than on the bar above them: the bar is the
           toggle, every pixel of it, and a button inside a button is not a
           thing. A reader who wants the full read has already opened the

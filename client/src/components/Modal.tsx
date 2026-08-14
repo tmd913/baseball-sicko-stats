@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { overlayAbove, useLockBodyScroll } from '../hooks';
+import { answersEscape, useLockBodyScroll } from '../hooks';
 
 /**
  * The z-index of the box a dialog opened *from here* would have to clear.
@@ -43,8 +43,12 @@ export const OVERLAY_LAYER = 50;
  * Columns picker takes the default width and passes no modifier at all.
  *
  * It owes a modal four ways out and has them: the ✕, Escape, a press on the
- * backdrop, and whatever control opened it. Escape is declined while something
- * is stacked *above* this box (`overlayAbove`), so one press undoes one thing.
+ * backdrop, and whatever control opened it. Escape goes through `answersEscape`,
+ * which asks both halves of "one press undoes one thing": is anything stacked
+ * *above* this box, and has this very press already been answered by somebody
+ * else. The second half is not belt-and-braces — see the hook, which records
+ * the measurement that the stacking test alone lets the whole ladder unwind on
+ * one key.
  *
  * **`pointerdown` on the backdrop, not a click** — the rule `useDismissable`
  * follows: a press that starts on the backdrop dismisses on the way down, and a
@@ -84,7 +88,7 @@ export function Modal({
   const boxRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !overlayAbove(boxRef.current)) onClose();
+      if (answersEscape(e, boxRef.current)) onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
