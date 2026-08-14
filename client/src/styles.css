@@ -4175,9 +4175,15 @@ body {
    the overlay's edges and this row does not, so a right-aligned button sits over
    the stat columns it governs while the left edge — where the Span column and
    the reader's eye both start — stays clear. It is also the order the board
-   reads its own run in, Columns last. */
+   reads its own run in, Columns last.
+
+   **Everything about how the two buttons sit beside each other is the board's**
+   — this selector is folded onto `.research-tools` further down the file, which
+   is the one place the 8px between two `.research-toggle`s is written. Only the
+   two things that are this row's own are here. Left to itself the row declared
+   a bare `display: flex` and the pair sat edge to edge at both widths (measured
+   0px at 1200 and at 390, labelled and icon-only alike). */
 .stats-tools {
-  display: flex;
   justify-content: flex-end;
   margin: 0 0 8px;
 }
@@ -6908,13 +6914,31 @@ body {
    fitted stranded at the end of the position row with the other three below it.
    `flex: none` keeps the run intact: it moves to the next line whole or not at
    all. It may wrap inside itself on a very narrow screen, which is the one case
-   where a second line of buttons is the lesser evil. */
-.research-tools {
-  flex: none;
+   where a second line of buttons is the lesser evil.
+
+   **`.stats-tools` is folded onto this rule**, which is where the gap between
+   two `.research-toggle`s is decided for the whole app. The player page's Stats
+   tab draws the same shared `ColumnsButton` and `RanksButton` in a caption row
+   of its own, and that row declared its own `display: flex` and nothing else —
+   so the two buttons sat edge to edge at every width. A second `gap: 8px`
+   written next to it would have been a lookalike free to drift from this one
+   the next time either moved; folding is the rule this stylesheet applies to
+   `.kind-switch` over `.view-switch` and `.settings-toggle` over `.sim-toggle`,
+   and the two runs are the same object by the test that matters — the same
+   controls, side by side, spaced the same. What each row does *not* share is
+   its place in a layout, so `flex: none` is declared under this run's own name
+   alone (it is what makes it travel whole inside a wrapping bar, and it has no
+   meaning in a caption row that is nobody's flex item), and the caption row's
+   right alignment and its margin stay under its own name, some way above. */
+.research-tools,
+.stats-tools {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+}
+.research-tools {
+  flex: none;
 }
 .research-positions {
   flex: 0 1 auto;
