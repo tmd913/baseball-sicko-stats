@@ -119,6 +119,35 @@ export interface ProbablePitcher {
 }
 
 /**
+ * A game a player has coming, for a day that holds none — the player page's
+ * Overview tab, where "no game today" leaves the obvious next question unasked.
+ * Mirrors `server/src/types.ts`; see `nextGame.ts` there for where it comes
+ * from and why the window is a fortnight.
+ */
+export interface NextGame {
+  gamePk: number;
+  date: string;
+  startTime: string | null;
+  home: boolean;
+  opponent: string;
+  opponentId: number;
+  /** The **other** side's announced starter — who he would face, or on a
+   *  starter's own next start, his counterpart. Null until that club names one. */
+  probablePitcher: ProbablePitcher | null;
+}
+
+/**
+ * The answer, and which question it answers. `start` is true when this is a
+ * starting pitcher's next **announced start** rather than his club's next game,
+ * so a null `game` beside it means "nobody has named his next turn yet" — a
+ * different sentence from "his club has nothing scheduled".
+ */
+export interface NextGameInfo {
+  start: boolean;
+  game: NextGame | null;
+}
+
+/**
  * What a base-running event was — MLB's own runner `details.eventType`
  * collapsed to the distinctions worth a badge (see `baseEventKind` on the
  * server for what is in it, and for the two things measurement kept out).
@@ -347,6 +376,14 @@ export interface PitcherSeasonStats {
   inningsPitched: string;
   era: string;
   whip: string;
+  // His record and his credits — MLB's own tallies on this same line. The
+  // Overview tab's season strip reads `IP · W-L · SV · HD · ERA · WHIP · K%`,
+  // and these four are the half of it no rate can express. Zeroed on a split,
+  // which nothing reads them off.
+  wins: number;
+  losses: number;
+  saves: number;
+  holds: number;
   strikeOuts: number;
   baseOnBalls: number;
   hits: number;

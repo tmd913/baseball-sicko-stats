@@ -30,7 +30,7 @@ import {
   useOverlayChromeOffset,
   usePlayerStatus,
 } from '../hooks';
-import { PlayerDay, playerDayLine } from './PlayerDay';
+import { OverviewTab } from './PlayerOverview';
 import { DialogLayerContext, OVERLAY_LAYER } from './Modal';
 
 /**
@@ -455,47 +455,6 @@ function PitcherSeasonPanel({
 }
 
 type DetailsTab = 'overview' | 'percentiles' | 'splits' | 'gamelog' | 'rolling' | 'arsenal';
-
-/**
- * The **Overview** tab: this player's day, read whole — his game, his line for
- * it, and every play of it with its clip.
- *
- * It is the feed's grouped reading, which was the Games view before that, and
- * it has landed here because a card per player is a page *about a player* and
- * the app already had one. What that page could never do as a feed toggle it
- * does trivially now: it opens on **anybody**, rostered or not, which is
- * precisely the reader this view exists for — someone who came from a research
- * board row to decide whether a stranger is worth picking up, and whose first
- * question is what he did today.
- *
- * It leads the tab strip and is the default, for the same reason: the season
- * readings beside it answer "how good is he", where this answers "what is he
- * doing", and on a game day that is the question the page is opened with.
- *
- * The day comes from `/api/players/:id/day`, which is `getReport` for one man
- * over one date — the very report the feed reads — so the items here and the
- * items in the stream are the same objects drawn by the same components.
- */
-function OverviewTab({
-  report,
-  onOpenDetails,
-}: {
-  report: PlayerReport;
-  onOpenDetails?: (key: string) => void;
-}) {
-  // **The combined line only appears when there is something to combine.** A
-  // day is one game almost every time, and that game's own section header
-  // already carries his line for it — so on a single-game day the strip was the
-  // same string twice, an inch apart. On a doubleheader it is genuinely new,
-  // being the only place the two halves are added up.
-  const line = report.games.length > 1 ? playerDayLine(report) : null;
-  return (
-    <div className="details-overview">
-      {line && <p className="details-note details-day-line">{line}</p>}
-      <PlayerDay report={report} onOpenDetails={onOpenDetails} />
-    </div>
-  );
-}
 
 /**
  * The Arsenal tab: a pitcher's season pitch mix, overall or against one batter
@@ -942,10 +901,13 @@ export function PlayerDetails({
     };
   }, [tab, playerId, kind]);
 
-  // Same lazy load for the Game Log tab.
+  // Same lazy load for the Game Log tab — and for the **Overview**, which draws
+  // the last five of its rows. One read serves both, which is the point of
+  // hanging it here rather than inside the preview: crossing from the summary to
+  // the full log is then free, and the two can never show different rows.
   useEffect(() => {
     const req = `${kind}-${playerId}`;
-    if (tab !== 'gamelog' || gameLogReq.current === req) return;
+    if ((tab !== 'gamelog' && tab !== 'overview') || gameLogReq.current === req) return;
     gameLogReq.current = req;
     let live = true;
     setGameLogLoading(true);
@@ -1267,7 +1229,23 @@ export function PlayerDetails({
       {tab === 'overview' && dayError && !dayLoading && (
         <div className="details-status details-error">Couldn&rsquo;t load today: {dayError}</div>
       )}
-      {tab === 'overview' && day && !dayLoading && <OverviewTab report={day} />}
+      {tab === 'overview' && day && !dayLoading && (
+        <OverviewTab
+          report={day}
+          playerId={playerId}
+          name={name}
+          /* The season line and the game log are the page's own reads, handed
+             down rather than fetched again: the Stats tab and the Game Log tab
+             already hold them, and a second copy would be a second answer free
+             to disagree with the tab it summarises. */
+          season={splits?.season ?? null}
+          pitcherSeason={pitcherSplits?.season ?? null}
+          seasonLoading={splitsLoading}
+          gameLog={gameLog}
+          gameLogLoading={gameLogLoading}
+          onTab={setTab}
+        />
+      )}
 
       {tab === 'arsenal' && arsenalWait && <LoadingBlock>Reading the season arsenal</LoadingBlock>}
       {tab === 'arsenal' && arsenalError && !arsenalLoading && (

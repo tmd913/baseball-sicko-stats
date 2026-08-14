@@ -3447,6 +3447,125 @@ body {
   max-width: var(--card-column);
   margin: 18px auto 0;
   container-type: inline-size;
+  /* **This box gives nothing back**, unlike every other holder of a `.glog-scroll`.
+     `--table-bleed` is declared by whichever container the table sits in, and
+     the number is that container's own side padding — 22px on `.app`, 16 on the
+     overlay, 12 in the full-page box. This one has no padding of its own: it is
+     a centred reading column, and the 16px it inherits belongs to the overlay
+     rather than to it. Left at 16 the Overview's two tables would hang 16px out
+     of a column every other block in the tab lines up with. */
+  --table-bleed: 0px;
+}
+/* The Overview's three blocks — Season, Today, Last 5 games — each a heading
+   with a door to the tab that holds it whole. The gap is the `.player-day`
+   items' own 16 plus a step, since these are sections rather than siblings. */
+.ovw-block {
+  margin: 0 0 24px;
+}
+.ovw-block:last-child {
+  margin-bottom: 0;
+}
+.ovw-head-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 8px;
+}
+/* The same small caps the percentile card's section titles use, minus the rule
+   under them: a block here closes on a table with its own border, so a second
+   line above it would be two edges a few pixels apart. */
+.ovw-head {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.ovw-head-row .ovw-head {
+  margin-bottom: 0;
+}
+/* "Stats →" / "Game Log →". A link rather than a control: it changes which tab
+   is on screen, which is exactly what the strip above does, so it reads as text
+   in the accent and not as a button competing with the tab it points at. */
+.ovw-link {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ovw-link:hover {
+  text-decoration: underline;
+}
+/* What a block says when it has nothing — the `.pday-none` voice, which is the
+   same kind of sentence one level up. */
+.ovw-none {
+  margin: 0;
+  color: var(--faint);
+  font-size: 12px;
+  font-weight: 600;
+}
+/* The season strip **is** `.glog-table`, class and all, rather than a second
+   plain stat table styled to resemble one — the app has one of those and this
+   is a one-row instance of it, so the type, the sticky-ish header, the gutters
+   and the cell rules are shared by construction. Three things a single row
+   doesn't want come back off: the pointer and the hover tint, which say a row
+   is a press (it isn't — the game log's rows open a game, this one is a line),
+   and the body row's bottom border, which under one row is a rule sitting a
+   pixel above the box's own. */
+.glog-table.ovw-table tbody tr {
+  cursor: default;
+}
+@media (hover: hover) {
+  .glog-table.ovw-table tbody tr:hover td {
+    background: var(--bg);
+  }
+}
+.glog-table.ovw-table tbody td {
+  border-bottom: none;
+}
+/* Nothing today, and what he has instead. One line that wraps rather than a
+   grid: the parts are a label, a when, a matchup and an opposing starter, and on
+   a phone they read as a sentence broken over two lines rather than as a table
+   of four things. */
+.ovw-next {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ovw-next-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin: 0;
+  font-size: 13px;
+}
+.ovw-next-label {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.ovw-next-when {
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.ovw-next-opp {
+  font-weight: 700;
+  color: var(--text);
+}
+.ovw-next-vs {
+  color: var(--faint);
+  font-weight: 600;
 }
 /* His combined line for the day, over the sections. A `.details-note` because
    that is what it is — a caption on what is under it — with the tabular figures
