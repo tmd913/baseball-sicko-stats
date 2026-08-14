@@ -59,11 +59,34 @@ export const OVERLAY_LAYER = 50;
  * the measurement that the stacking test alone lets the whole ladder unwind on
  * one key.
  *
- * **`pointerdown` on the backdrop, not a click** — the rule `useDismissable`
- * follows: a press that starts on the backdrop dismisses on the way down, and a
- * drag that merely *ends* out there (down on a grip, up on the backdrop, whose
- * click lands on their common ancestor) cannot close the box out from under the
- * thing it just did.
+ * **The backdrop is armed on `pointerdown` and dismisses on the `click`**, and
+ * that pair is one rule rather than two: the press decides *whether* this
+ * gesture may dismiss, the click decides *when*. Each half answers a bug the
+ * other cannot.
+ *
+ * Arming is what keeps a drag that merely *ends* out here from closing the box
+ * out from under the thing it just did — down on a Columns chip, up on the
+ * backdrop, whose click lands on their common ancestor, which **is** this
+ * element. Judged on the click alone that reads as a press on the backdrop; the
+ * press says it was not one. (A press that starts here and releases inside the
+ * box still closes, the click still targeting this element, which is what
+ * dismissing on the way down already did.)
+ *
+ * Dismissing on the click rather than on the press is what stops the gesture
+ * reaching the page underneath. **On a touch device the compatibility mouse
+ * events and the `click` are dispatched at `touchend` and hit-test the document
+ * as it stands then** — so a backdrop torn out at `pointerdown` left the click
+ * to land on whatever the box had been covering, one tap both dismissing this
+ * dialog and pressing something behind it. Measured at 390×844 with the
+ * Overview tab's `Today` dialog open and a tap on the backdrop over the
+ * `Last 5 games` table: the dialog closed at `touchStart` and a game-log row's
+ * own popup (`Salvador Perez — Aug 11`) opened at `touchEnd`. Holding the
+ * backdrop to the click means the click is spent *on* it — `inert` having
+ * already taken the page out of hit-testing for as long as the box is there, so
+ * the two together leave no instant at which a press can reach behind. It is
+ * a touch-only fault: with a mouse the click is dispatched to the common
+ * ancestor of the down and up targets, so a detached backdrop yields nothing
+ * (measured at 1200×900 — no popup opened either way).
  *
  * `z-index` lives in the stylesheet, at **46** — over the pinned chrome that
  * opens these (41) and the full-page table box (45), under the player page (50)
@@ -95,6 +118,10 @@ export function Modal({
   const host = useContext(DialogLayerContext);
   const layer = host === null ? BASE_LAYER : host + 1;
   const boxRef = useRef<HTMLDivElement | null>(null);
+  // Did *this* gesture start on the backdrop? See the note above: the click is
+  // what dismisses, and this is what says the click belongs to a press out here
+  // rather than to a drag that wandered out of the box.
+  const fromBackdrop = useRef(false);
   // The card, not the backdrop: it carries `role="dialog"` and the title, so a
   // screen reader opens on what this box *is*. The backdrop is what stays live
   // (it is the portal's root, and the press that dismisses lands on it), which
@@ -115,7 +142,10 @@ export function Modal({
       style={layer === BASE_LAYER ? undefined : { zIndex: layer }}
       ref={boxRef}
       onPointerDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        fromBackdrop.current = e.target === e.currentTarget;
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget && fromBackdrop.current) onClose();
       }}
     >
       <div
