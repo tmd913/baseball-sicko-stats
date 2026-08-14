@@ -1038,7 +1038,24 @@ export function liveRole(report: PlayerReport): LiveRole | null {
   return liveRoleGame(report)?.role ?? null;
 }
 
-/** Short label for a live role, shown as a nav tag. */
+/**
+ * Short label for a live role — the live tag on a feed row and a player card,
+ * and the four entries in the summary table's legend.
+ *
+ * **`pitching` reads `On mound` and used to read `Pitching`.** The four are one
+ * vocabulary and were three prepositional phrases and a verb: at bat, on deck,
+ * on base, and then *Pitching*, which is the only one that says what he is
+ * doing rather than where he is. That was invisible while nothing put the four
+ * in a row — the tag is drawn one at a time, and the batter and pitcher tabs
+ * never share a table — and it stopped being invisible the moment the legend
+ * gave them a shared home.
+ *
+ * It costs the live tag **8.09px** (measured on a real feed row: the pill goes
+ * 78.05 → 86.14), which is the one place the string is drawn inside a laid-out
+ * row rather than in a legend that wraps; the tag sits in a feed item's header
+ * beside a name and a matchup with room to spare, and no width in the app moved
+ * as a result (checked at 390 and 1200, page overflow 0 at both).
+ */
 export function liveRoleLabel(role: LiveRole): string {
   return role === 'at-bat'
     ? 'At bat'
@@ -1046,7 +1063,7 @@ export function liveRoleLabel(role: LiveRole): string {
       ? 'On deck'
       : role === 'on-base'
         ? 'On base'
-        : 'Pitching';
+        : 'On mound';
 }
 
 /**

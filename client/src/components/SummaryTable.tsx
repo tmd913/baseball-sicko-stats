@@ -20,6 +20,7 @@ import {
   isRotationStarter,
   lineupCorner,
   liveRole,
+  liveRoleLabel,
   lineOps,
   mostRecentGameFirst,
   pitchingCorner,
@@ -433,6 +434,51 @@ function PitcherTable({
 }
 
 /**
+ * The key to the row tints, drawn under the table.
+ *
+ * **It is drawn only when something on screen is actually live**, and that is
+ * the same rule the app applies to every other mark of its kind: the research
+ * board suppresses its roster baseball when every row would carry one, the kind
+ * tabs render only when both kinds are watched, the `Starters` toggle is not
+ * offered over a range that cannot contain a lineup. A key to colours nothing
+ * on the page is wearing is chrome explaining a thing that isn't there — and on
+ * this view it is not free, since the column is a fixed height and every pixel
+ * under the pane is a row of players off the bottom of it. On a quiet Tuesday
+ * morning it would be a row of words about nothing, bought with a row of rows.
+ *
+ * **What it draws is the whole vocabulary of the kind on screen, not only the
+ * roles currently held.** The alternative — an entry per role actually present
+ * — is more literal and reads worse: at bat, on deck and on base turn over
+ * every half-inning, and the 20-second live poll would rewrite the key under a
+ * reader in the middle of using it, dropping "On deck" at the exact moment the
+ * on-deck hitter stepped in. A key has to hold still to be a key. So the gate is
+ * "is any of this in use" and the contents are the fixed set the tab can show:
+ * the three batting roles on a batter table, the one pitching role on a pitcher
+ * one. Neither can appear on the other's tab, which is also why the on-base and
+ * on-mound swatches — the same purple, by the app's own convention — are never
+ * drawn side by side.
+ *
+ * The labels are `liveRoleLabel`'s, the same strings the live tag on a feed row
+ * and a player card carry, so the legend and the thing it explains cannot come
+ * to call one role by two names.
+ */
+function RoleLegend({ roles }: { roles: LiveRole[] }) {
+  return (
+    <div className="summary-legend">
+      {roles.map((role) => (
+        <span key={role} className="summary-legend-item">
+          <span className={`summary-legend-swatch role-${role}`} aria-hidden="true" />
+          {liveRoleLabel(role)}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+const BATTER_ROLES: LiveRole[] = ['at-bat', 'on-deck', 'on-base'];
+const PITCHER_ROLES: LiveRole[] = ['pitching'];
+
+/**
  * A full-page stat table over the date range — batters and pitchers in separate
  * stacked tables (each with its own columns + total row). The header/total rows
  * stick vertically and the headshot column sticks horizontally.
@@ -456,6 +502,16 @@ export function SummaryTable({
   const pitchers = reports.filter((r) => r.kind === 'pitcher');
   const { isFull, toggle, ref: fullRef } = useFullPage<HTMLDivElement>();
   const expand = { isFull, toggle };
+  // The legend's gate and its contents, and they are deliberately two different
+  // questions — see `RoleLegend`. The gate reads the rows (is anything live at
+  // all); the contents read which tables are being drawn, so the key names the
+  // vocabulary of the tab rather than the roles that happen to be held this
+  // half-inning.
+  const anyLive = reports.some((r) => liveRole(r) !== null);
+  const legendRoles = [
+    ...(batters.length > 0 ? BATTER_ROLES : []),
+    ...(pitchers.length > 0 ? PITCHER_ROLES : []),
+  ];
   return (
     /* Full page is a class on this box, not the Fullscreen API — see
        `hooks.ts::useFullPage`. The button that sets it is down in the table's
@@ -480,6 +536,7 @@ export function SummaryTable({
           )}
         </div>
       </div>
+      {anyLive && legendRoles.length > 0 && <RoleLegend roles={legendRoles} />}
     </div>
   );
 }
