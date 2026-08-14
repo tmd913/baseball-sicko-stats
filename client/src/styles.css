@@ -1103,6 +1103,43 @@ body {
   align-self: flex-start;
   margin-top: 14px;
 }
+/* And the *third* thing directly under the pinned bar that the same rule caught:
+   the `.empty-state` box — "Your roster is empty", "Your fantasy team is empty",
+   the hide-injured one and the `Starters` one, all four of them children of
+   `.app` on the Roster and Feed views. On the Roster view every one of them sat
+   flush against the chrome at **0px**, for the same reason the two above did:
+   `.app.summary-mode .app-chrome { margin-bottom: 0 }`, written so the *table*
+   can meet the bar, takes the cushion from whatever is under it, and here what
+   is under it is a bordered card rather than a table.
+
+   **Fourteen, and the research board is what settles it.** The box is drawn in
+   three places and only one of them is reached by that rule: on the Feed it sits
+   at 14 (ordinary block flow, the chrome's own margin) and on the research view —
+   a flex column whose chrome keeps its 14 — at 14 as well, measured at 390 and
+   1200 alike. So 14 is already this box's answer everywhere the chrome rule
+   cannot reach, and the Roster view was the sole outlier. It is deliberately not
+   the block wait's 54: that number is `.loading-block`'s own reading-block
+   `margin: 40px auto` *plus* the bar's 14, and `.empty-state` has never had a
+   margin of its own to add — it is a full-width card, not a centred column of
+   prose. Making it 54 would have put the same box at two heights depending on
+   which view emptied, which is the inconsistency these rules exist to remove.
+
+   Unscoped `.app > …` rather than summary-mode only, which is where this parts
+   from the badge above and does so because the mechanism that rule could not use
+   is available here: `.empty-state` is a **block**, so on the Feed its 14
+   collapses with the chrome's 14 and the declaration is a no-op there, exactly as
+   `.app > .loading-block`'s 54 swallows the same 14. The badge needed the scope
+   only because an inline-level box does not collapse. It needs no `align-self`
+   either, and that was measured rather than assumed: a block in a stretch flex
+   column is already the width it is in block flow, and the box measures 346 at
+   390 and 1156 at 1200 on *both* views, before and after.
+
+   And scoped to the box rather than given back to the chrome, for the reason the
+   two rules above state: a margin on the bar would push the table down and undo
+   the 0px the Roster view's pane is measured at. */
+.app > .empty-state {
+  margin-top: 14px;
+}
 
 /* ---- Content layout (the player list / edit screen) ---- */
 .content-layout {
