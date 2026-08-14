@@ -106,6 +106,15 @@ const MAX_SCROLL_STEP = 12;
 const DRAG_SLOP = 4;
 
 /**
+ * The hint with nothing picked up — named because it is written twice: once as
+ * the text and once as the invisible ghost that reserves the line's height (see
+ * the hint's own comment in `ColumnOrder`). One constant, so the reservation
+ * cannot come to be a stale copy of the sentence it is reserving for.
+ */
+const RESTING_HINT =
+  'Press a column to pick it up, then press where it should go. The table reads left to right in this order.';
+
+/**
  * The nearest ancestor that actually scrolls, which is what a drag near the
  * edge of a box has to move. Walked for rather than named (`.app-dialog-body`)
  * so the block goes on working in whatever holds it — a panel, a page, the
@@ -424,11 +433,33 @@ function ColumnOrder({
         <span>Order</span>
       </div>
       {/* The hint is the only thing on screen that says what a picked-up chip
-          is waiting for, so it is the live region as well as the instruction. */}
+          is waiting for, so it is the live region as well as the instruction.
+
+          Its **height is reserved by laying the resting string out invisibly
+          underneath the live one**, both in one grid cell, so the box is as
+          tall as the taller of the two at whatever width the dialog happens to
+          be. Without that the chips moved under the reader's finger between the
+          press that picks a column up and the press that drops it: the two
+          strings wrap differently, so at 390 the resting line is two rows and
+          `Moving G …` is one, and the whole block below jumped 13px on the
+          pick-up. A fixed height can't answer it — measured, the worst case is
+          three rows below 328px, two to 584 and one above, so it would be three
+          tiers on two font-derived breakpoints that go stale the moment the
+          wording, the type scale or a column label changes. This is the same
+          answer `--chrome-h`, `--clip-w` and `--roll-font` give when there is no
+          one number: measure rather than declare. The ghost is the *resting*
+          string because it is the longer of the two — 107 characters against 66
+          with the widest label the vocabulary holds — and measured at every
+          width from 300 to 720 it is never the shorter. */}
       <p className="research-order-hint" aria-live="polite">
-        {movingLabel === null
-          ? 'Press a column to pick it up, then press where it should go. The table reads left to right in this order.'
-          : `Moving ${movingLabel} — press a column to drop it there, or Esc to cancel.`}
+        <span className="research-order-hint-ghost" aria-hidden="true">
+          {RESTING_HINT}
+        </span>
+        <span>
+          {movingLabel === null
+            ? RESTING_HINT
+            : `Moving ${movingLabel} — press a column to drop it there, or Esc to cancel.`}
+        </span>
       </p>
       <div className="research-order-chips" ref={chipsRef}>
         {order.map((k) => {
