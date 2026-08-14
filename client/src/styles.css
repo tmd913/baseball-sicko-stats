@@ -4561,19 +4561,45 @@ body {
   font-size: var(--roll-font, 11px);
   font-variant-numeric: tabular-nums;
 }
+/* **One definition of the guide line, read by the chart and by its legend.**
+   The swatch in `.roll-legend` is a `<line>` carrying this same class rather
+   than a second `stroke`/`stroke-dasharray` written out beside it, so the mark
+   the reader is shown and the mark it explains cannot come to be two colours or
+   two dash patterns — the fold-don't-copy rule this stylesheet applies to
+   `.settings-toggle`/`.sim-toggle` and to `.stats-table`/`.glog-table`.
+
+   The line *had* a label of its own painted at the right end of the plot
+   (`.roll-ref-label`, `--faint` at the same measured font as the axis). It is
+   gone with the legend's arrival, and `RollingXwoba.tsx` carries the whole of
+   that argument beside the `<line>`: it stated the figure the legend now states,
+   and it stated it inside the plot, over the very stretch of the rolling line a
+   near-average player spends his season on. */
 .roll-ref {
   stroke: var(--faint);
   stroke-width: 1.5;
   stroke-dasharray: 4 4;
 }
-/* The league-average line's own label, sized off the same measured var as the
-   axis: it is read at a glance beside the dashed line it names, and at 5.07px it
-   was the least legible thing on the card. */
-.roll-ref-label {
-  fill: var(--faint);
-  font-size: var(--roll-font, 11px);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
+/* The swatch is 24 × 2 CSS px over a matching viewBox, so one unit is one pixel
+   and `.roll-ref` above paints its `4 4` as 4px dashes at a 1.5px stroke. The
+   chart's own dashes are those same units *scaled with the plot* (3.52px at
+   1200, 1.85px at 390), and matching that here was rejected on the phone case:
+   a 1.85px dash inside a 24px swatch reads as a grey smudge rather than as a
+   dashed line, where a legend's job is to show the pattern at the size the
+   words beside it are read at. */
+.roll-legend-swatch {
+  flex: none;
+  width: 24px;
+  height: 2px;
+  overflow: visible;
+}
+/* The shared rule's `padding: 10px 0 12px` is the *summary view's* bottom — there
+   the legend is the last thing before the edge of the window and a line of text
+   flush against it reads as clipped. Inside a card the 24px of `.pct-card`
+   padding is already under it, so all this legend owes is the gap above the
+   chart. Written two classes deep so it wins wherever the shared rule sits in
+   the file, the way `.roll-key .info-key-panel` does for its own anchor. */
+.pct-card .roll-legend {
+  padding: 10px 0 0;
 }
 .roll-line {
   fill: none;
@@ -6304,7 +6330,15 @@ body {
    screen, which is a different claim from a table needing it: a line of text
    flush against the bottom of a window reads as clipped, where a bordered pane
    whose last rule lands there reads as the edge. */
-.summary-legend {
+/* **`.roll-legend` is folded onto this rule rather than written again**, which
+   is the stylesheet's standing economy (`.settings-toggle` onto `.sim-toggle`,
+   `.stats-table` onto `.glog-table`): the app has one legend — a wrapping row of
+   swatch-and-word items in 12px `--muted` under the thing it explains — and the
+   Charts tab's league-average key is that object with a dashed line where the
+   summary table's has a tinted square. Only the swatch differs, so only the
+   swatch has a rule of its own (`.roll-legend-swatch`, up with the chart). */
+.summary-legend,
+.roll-legend {
   flex: none;
   display: flex;
   flex-wrap: wrap;
@@ -6314,7 +6348,8 @@ body {
   font-size: 12px;
   color: var(--muted);
 }
-.summary-legend-item {
+.summary-legend-item,
+.roll-legend-item {
   display: inline-flex;
   align-items: center;
   gap: 7px;

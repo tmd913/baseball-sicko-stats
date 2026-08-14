@@ -34,6 +34,38 @@ const PAD_TOP = 16;
 const LABEL_PX = 12;
 
 /**
+ * **How far below the plot an x tick's baseline sits, in ems of its own size** —
+ * and it is a derivation rather than a number picked to look right, because the
+ * thing it has to clear is another label whose position is also stated in ems.
+ *
+ * The **leftmost x tick collided with the bottom y label**, which is the report.
+ * Two facts put them in the same place. The lowest gridline is always exactly on
+ * the plot's bottom edge (`yMin` is floored to a step, so `sy(yMin)` *is*
+ * `PAD.top + PLOT_H`), and its label hangs `0.32em` below that line — the `dy`
+ * on the `<text>`. And an x tick is centred on its own tick, the first of which
+ * lands at or just past the plot's left edge, so half of it hangs back into the
+ * left pad where the y labels live. Measured on the real chart, ink against ink:
+ * the `100` tick overlapped the `.200` label by **2.46 × 0.69px at 1200 and
+ * 6.59 × 0.69px at 390**, the horizontal figure differing because the tick's
+ * distance from the plot edge does and the vertical one not because both
+ * labels render at 12px whatever the width (see `LABEL_PX`).
+ *
+ * So the baseline has to clear the y label's ink by its own cap height plus a
+ * gap: `0.72` is where this face's digits start above their baseline (measured:
+ * 8.65px of ascent at a 12px rendered size), `0.34` is where the y label's ink
+ * ends below the gridline, and the rest is the clearance. **1.6em leaves
+ * 0.54em — 6.5px at the rendered size, at every width**, since the whole
+ * relationship is in ems of a label whose rendered size is fixed.
+ *
+ * The bottom pad reads the same constant rather than a second number, so the
+ * two cannot drift: the pad is the baseline plus the 8 units that keep it off
+ * the bottom edge of the SVG. Nothing has to be reserved *below* the baseline
+ * because an x tick is a plate-appearance count — integers, which in this face
+ * have no descender at all.
+ */
+const X_TICK_BASELINE_EM = 1.6;
+
+/**
  * The plot's own padding follows the label, since the label is what the padding
  * is *for*: the y labels sit in the left one and the x ticks in the bottom one.
  * `2.3em` is the widest y label with a little slack — `.200` measures 2.21em in
@@ -49,7 +81,7 @@ function padFor(fontU: number) {
     // Half the last x tick's label hangs into the right pad, so it can never be
     // narrower than the font itself; 22 was the old flat value and is the floor.
     right: Math.max(22, fontU),
-    bottom: fontU * 1.4 + 8,
+    bottom: fontU * X_TICK_BASELINE_EM + 8,
     left: fontU * 2.3 + 10,
   };
 }
@@ -227,7 +259,15 @@ export function RollingXwoba({ series, name }: { series: XwobaSeries; name: stri
               its sample-size caveat, and the difference is that this caption
               held no warning: its one player-specific number is context for
               reading the line rather than a caveat about it, and the league
-              average beside it is drawn on the chart itself. */}
+              average beside it is drawn on the chart itself.
+
+              **The league-average sentence has since left this key**, which is
+              the same rule one level in: the legend under the chart names that
+              figure now, so repeating it behind a button would be the app
+              stating one fact in two places and only one of them visible. What
+              is left here is the one number nothing else on the card carries —
+              *his* season xwOBA, which is what the line is wandering either
+              side of. */}
           <InfoKey className="roll-key" label="How to read this chart">
             <p>
               Each point is his <strong>xwOBA over the previous {win} plate appearances</strong>,
@@ -235,8 +275,8 @@ export function RollingXwoba({ series, name }: { series: XwobaSeries; name: stri
               stretch rather than any single night.
             </p>
             <p>
-              The dashed line is the MLB league average ({formatRate(series.leagueXwoba)}). This
-              player&rsquo;s season xwOBA is {formatRate(series.seasonXwoba)}.
+              This player&rsquo;s season xwOBA is {formatRate(series.seasonXwoba)} — the flat
+              figure the line above wanders either side of.
             </p>
           </InfoKey>
         </span>
@@ -264,97 +304,134 @@ export function RollingXwoba({ series, name }: { series: XwobaSeries; name: stri
           season — not enough for a {win}-PA rolling window.
         </div>
       ) : (
-        <div className="roll-chart-wrap" ref={setWrapEl}>
-          <svg
-            ref={svgRef}
-            className="roll-chart"
-            style={{ '--roll-font': `${fontU.toFixed(2)}px` } as React.CSSProperties}
-            viewBox={`0 0 ${VBW} ${VBH}`}
-            role="img"
-            aria-label={`Rolling ${win}-plate-appearance xwOBA over the ${series.season} season`}
-            onPointerMove={onMove}
-            onPointerLeave={() => setHover(null)}
-          >
-            {/* horizontal gridlines + y labels */}
-            {yLines.map((v) => (
-              <g key={v}>
-                <line
-                  className="roll-grid"
-                  x1={PAD.left}
-                  x2={PAD.left + PLOT_W}
-                  y1={sy(v)}
-                  y2={sy(v)}
-                />
+        <>
+          <div className="roll-chart-wrap" ref={setWrapEl}>
+            <svg
+              ref={svgRef}
+              className="roll-chart"
+              style={{ '--roll-font': `${fontU.toFixed(2)}px` } as React.CSSProperties}
+              viewBox={`0 0 ${VBW} ${VBH}`}
+              role="img"
+              aria-label={`Rolling ${win}-plate-appearance xwOBA over the ${series.season} season`}
+              onPointerMove={onMove}
+              onPointerLeave={() => setHover(null)}
+            >
+              {/* horizontal gridlines + y labels */}
+              {yLines.map((v) => (
+                <g key={v}>
+                  <line
+                    className="roll-grid"
+                    x1={PAD.left}
+                    x2={PAD.left + PLOT_W}
+                    y1={sy(v)}
+                    y2={sy(v)}
+                  />
+                  <text
+                    className="roll-axis-label"
+                    x={PAD.left - 8}
+                    y={sy(v)}
+                    dy="0.32em"
+                    textAnchor="end"
+                  >
+                    {formatRate(v)}
+                  </text>
+                </g>
+              ))}
+              {/* x ticks */}
+              {xTicks.map((v) => (
                 <text
+                  key={v}
                   className="roll-axis-label"
-                  x={PAD.left - 8}
-                  y={sy(v)}
-                  dy="0.32em"
-                  textAnchor="end"
+                  x={sx(v)}
+                  y={PAD.top + PLOT_H + fontU * X_TICK_BASELINE_EM}
+                  textAnchor="middle"
                 >
-                  {formatRate(v)}
+                  {v}
                 </text>
-              </g>
-            ))}
-            {/* x ticks */}
-            {xTicks.map((v) => (
-              <text
-                key={v}
-                className="roll-axis-label"
-                x={sx(v)}
-                y={PAD.top + PLOT_H + fontU}
-                textAnchor="middle"
-              >
-                {v}
-              </text>
-            ))}
-            {/* league-average reference line */}
-            <line
-              className="roll-ref"
-              x1={PAD.left}
-              x2={PAD.left + PLOT_W}
-              y1={sy(series.leagueXwoba)}
-              y2={sy(series.leagueXwoba)}
-            />
-            <text
-              className="roll-ref-label"
-              x={PAD.left + PLOT_W}
-              y={sy(series.leagueXwoba) - fontU * 0.4}
-              textAnchor="end"
-            >
-              {formatRate(series.leagueXwoba)} league avg
-            </text>
-            {/* the rolling line */}
-            <path className="roll-line" d={linePath} />
-            {/* hover crosshair + dot */}
+              ))}
+              {/* **The league-average reference line, and nothing written on it.**
+                  It carried its own label — `.315 league avg`, anchored to the right
+                  end of the line at its own height — and that label is gone, named by
+                  the legend below the chart instead. Two reasons, and the second is
+                  the one a reader meets. It said the same figure the legend now says,
+                  on a card whose whole content is one chart, which is the rule this
+                  app applies everywhere else (the Overview tab's game card dropped its
+                  matchup line because the status badge beside it already carried the
+                  clubs). And it was drawn **inside the plot**, hard against the right
+                  edge at the reference line's own height — which is exactly where the
+                  rolling line of a league-average hitter runs, so the one mark this
+                  chart exists to show was the thing it sat on. Measured on Gunnar
+                  Henderson, whose season xwOBA *is* .315: the label's ink spanned
+                  **16.2% of the plot at 1200 and 32.6% at 390**, and **8 of his 444
+                  plotted points fell inside it** at both widths, with nothing in the
+                  drawing order keeping the line out from under the text. */}
+              <line
+                className="roll-ref"
+                x1={PAD.left}
+                x2={PAD.left + PLOT_W}
+                y1={sy(series.leagueXwoba)}
+                y2={sy(series.leagueXwoba)}
+              />
+              {/* the rolling line */}
+              <path className="roll-line" d={linePath} />
+              {/* hover crosshair + dot */}
+              {cur && (
+                <>
+                  <line
+                    className="roll-cross"
+                    x1={sx(cur.pa)}
+                    x2={sx(cur.pa)}
+                    y1={PAD.top}
+                    y2={PAD.top + PLOT_H}
+                  />
+                  <circle className="roll-dot" cx={sx(cur.pa)} cy={sy(cur.y)} r={4} />
+                </>
+              )}
+            </svg>
             {cur && (
-              <>
-                <line
-                  className="roll-cross"
-                  x1={sx(cur.pa)}
-                  x2={sx(cur.pa)}
-                  y1={PAD.top}
-                  y2={PAD.top + PLOT_H}
-                />
-                <circle className="roll-dot" cx={sx(cur.pa)} cy={sy(cur.y)} r={4} />
-              </>
+              <div
+                className="roll-tip"
+                style={{
+                  left: `${(sx(cur.pa) / VBW) * 100}%`,
+                  top: `${(sy(cur.y) / VBH) * 100}%`,
+                }}
+              >
+                <span className="roll-tip-val">{formatRate(cur.y)}</span>
+                <span className="roll-tip-sub">
+                  PA {cur.pa} · {md(cur.date)}
+                </span>
+              </div>
             )}
-          </svg>
-          {cur && (
-            <div
-              className="roll-tip"
-              style={{
-                left: `${(sx(cur.pa) / VBW) * 100}%`,
-                top: `${(sy(cur.y) / VBH) * 100}%`,
-              }}
-            >
-              <span className="roll-tip-val">{formatRate(cur.y)}</span>
-              <span className="roll-tip-sub">
-                PA {cur.pa} · {md(cur.date)}
-              </span>
-            </div>
-          )}
-        </div>
+          </div>
+          {/* **The legend, which is where the league average is named.** It was a
+              figure in two places and neither was a legend: a label painted inside
+              the plot on the line itself, and a sentence in the key behind the ⓘ
+              that a reader has to press to reach. A reference line wants the thing
+              every chart wants — a swatch of the mark and a word for it, under the
+              picture, read once and then ignored.
+
+              **The swatch is the guide line's own class**, so the colour and the
+              dash pattern have one definition in the stylesheet rather than a
+              hand-written copy that drifts the next time either moves; the swatch's
+              `<svg>` is 24 × 2 over a matching viewBox, so a unit is a pixel and
+              `.roll-ref`'s `4 4` paints 4px dashes at 1.5px.
+
+              That is deliberately **not** the same *rendered* length as the chart's
+              own dashes, which are viewBox units scaled with the plot — 3.52px at
+              1200 and 1.85px at 390. Matching those would mean scaling the swatch by
+              the chart's factor, and on a phone that is a 1.85px dash in a 24px
+              swatch: six cycles of sub-2px marks, which reads as a grey smudge
+              rather than as a dashed line. A legend owes the reader the *pattern*,
+              at the size the label beside it is read at. */}
+          <div className="roll-legend">
+            <span className="roll-legend-item">
+              <svg className="roll-legend-swatch" viewBox="0 0 24 2" width="24" height="2" aria-hidden="true">
+                <line className="roll-ref" x1="0" y1="1" x2="24" y2="1" />
+              </svg>
+              League average ({formatRate(series.leagueXwoba)})
+            </span>
+          </div>
+        </>
       )}
     </div>
   );
