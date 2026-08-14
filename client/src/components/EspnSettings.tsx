@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { answersEscape, useLockBodyScroll } from '../hooks';
+import { answersEscape, useLockBodyScroll, useOverlayFocus } from '../hooks';
 import { api } from '../api';
 import type { EspnStatus, EspnTeam } from '../types';
 import { LoadingLine } from './Loading';
@@ -162,6 +162,10 @@ export function EspnSettings({
 
   // The overlay box itself, read only to ask whether a press of Escape is ours.
   const viewRef = useRef<HTMLDivElement | null>(null);
+  // See `hooks.ts::useOverlayFocus`. It matters most here of the four: this
+  // page is a form, so a Tab that left it put the caret in the roster search
+  // behind while the reader was half-way through pasting a cookie.
+  useOverlayFocus(viewRef);
 
   // Through the shared test, so this page claims the press rather than leaving
   // it for anything under it — see `hooks.ts::answersEscape`.
@@ -343,7 +347,7 @@ export function EspnSettings({
   const ready = leagueId.trim() !== '' && (!cookiesGiven || cookiesComplete);
 
   return (
-    <div className="details-view espn-view" ref={viewRef}>
+    <div className="details-view espn-view" ref={viewRef} tabIndex={-1}>
       <div className="tut-head">
         <button type="button" className="details-back" onClick={onClose}>
           <svg

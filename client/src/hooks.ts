@@ -321,6 +321,196 @@ export function useLockBodyScroll() {
 }
 
 /**
+ * How many overlays are currently holding each element inert.
+ *
+ * A count rather than a flag, and the counting is what makes stacking work:
+ * the Game Log's expanded box inside the player page holds `.app-chrome`
+ * inert, and so does the player page itself, so collapsing the log must take
+ * the hold to one rather than to none. Two dialogs deep, both hold `#root`.
+ * Nothing in this app sets `inert` in markup, so a count of zero means the
+ * attribute goes.
+ */
+const inertHolds = new WeakMap<Element, number>();
+
+function holdInert(el: Element) {
+  const n = inertHolds.get(el) ?? 0;
+  inertHolds.set(el, n + 1);
+  if (n === 0) el.setAttribute('inert', '');
+}
+
+function releaseInert(el: Element) {
+  const n = inertHolds.get(el) ?? 0;
+  if (n > 1) {
+    inertHolds.set(el, n - 1);
+    return;
+  }
+  inertHolds.delete(el);
+  el.removeAttribute('inert');
+}
+
+/**
+ * Make everything outside `box` inert — the walk this app's overlays need, run
+ * once when one of them opens.
+ *
+ * **The bug this fixes is the plainest kind: the popups let you work the page
+ * behind them.** `Modal` set `aria-modal="true"` and pinned the body, and that
+ * was all — `aria-modal` is a hint to assistive technology and does nothing
+ * whatever about the keyboard, so Tab walked straight out of every dialog into
+ * whatever was underneath and Enter then pressed it. Measured on the live app
+ * at 1200×900 with the research board's Columns picker open: **14 of 14 tab
+ * stops landed outside the dialog** — the expand button, then the board's sort
+ * headers one after another — and one press of Enter re-sorted the board behind
+ * the dialog from Ros% to OPS. Fourteen more tabs reach the rows themselves,
+ * where the stops are each row's headshot, its name link and its watchlist
+ * star: Enter on those opens a player page *under* the dialog, or silently
+ * stars somebody. Nothing was focused when a dialog opened either, so the first
+ * Tab started from wherever focus happened to be, which for every one of these
+ * is the control that opened it — outside the box, and one Tab from the page.
+ *
+ * **`inert` rather than a focus trap**, which is the modern answer and the
+ * cheaper one: it takes the subtree out of the tab order, out of hit-testing
+ * and out of the accessibility tree in one attribute, where a trap is a keydown
+ * listener that has to know what is focusable and would be a second thing
+ * reading Escape beside `answersEscape`. It also wraps Tab for free — with
+ * everything else inert the only focusable things in the document are inside
+ * the box, so the browser's own cycle is the trap.
+ *
+ * **The walk is siblings up the tree, not `#root`**, because "outside the
+ * dialog" means a different set of nodes for each of the shapes this app has,
+ * and only one rule gets all of them right. A `Modal` is portalled to the body,
+ * so its siblings there are `#root` and any dialog below it — both of which go,
+ * which is what makes the player page behind a Game Log popup inert while the
+ * popup itself, being nobody's descendant, is untouched. The player page is a
+ * child of `.app`, so its siblings are the pinned chrome and the view beside
+ * it. The game log's full-page box is deeper still. Every one falls out of the
+ * same loop rather than out of a list of cases.
+ *
+ * **A sibling that arrives later is marked too, and that is not a refinement —
+ * it is the case this app hits most.** The first version captured the siblings
+ * once, on the reasoning that in every stack here the box on top is the one that
+ * mounted last, so whatever exists when the effect runs is what is behind it.
+ * True of *overlays* and false of the page: a deep link like `?player=…` opens
+ * the player page while the report is still in flight, so `.summary-view` does
+ * not exist yet and `.app`'s children at that moment are the pinned chrome, the
+ * float button and a loading block. Measured at 390×844 on exactly that link:
+ * the chrome and the float button went inert, the summary table arrived a second
+ * later, and **12 of 12 tab stops** then walked its headshots and name links
+ * behind an open player page — the bug this whole hook is for, reintroduced by
+ * the optimisation. So each parent on the path is watched (`childList`, not
+ * subtree: four observers at the very deepest, firing only when children
+ * actually change).
+ *
+ * **What is skipped is a box stacked *above* this one, and the test is the app's
+ * own layer** (`layerOf`, which `overlayAbove` already reads for Escape) rather
+ * than "is it an overlay". Two things forced that. `?player=…&help=1` mounts the
+ * player page and the how-to page in **one commit**, so neither is "later" —
+ * measured on that link, the player page's effect ran first and marked the
+ * how-to page `inert`, leaving the keyboard trapped in the page *underneath* the
+ * one on screen, with all 8 tab stops on the player page and none on the guide
+ * covering it. And an "is it an overlay" test cannot be applied to the initial
+ * pass at all: a `Modal` portalled to the body sees `#root`, which *contains*
+ * every overlay in the app, so skipping it would inert nothing. A layer answers
+ * both without a special case — `#root` declares no `z-index` and reads 0, the
+ * how-to page reads 60 against the player page's 50 — and it is the same number
+ * that decides which box answers Escape, so the two cannot come to disagree
+ * about which of a pair is on top.
+ */
+export function useInertBackground(ref: RefObject<HTMLElement | null>, active = true) {
+  useEffect(() => {
+    if (!active) return;
+    return markBackgroundInert(ref.current);
+  }, [ref, active]);
+}
+
+/**
+ * The walk itself. Returns its own release, so `useOverlayFocus` can order that
+ * against giving focus back — and so the observers are disconnected by the same
+ * call that drops the holds.
+ */
+function markBackgroundInert(box: HTMLElement | null): () => void {
+  const held = new Set<Element>();
+  const watchers: MutationObserver[] = [];
+  if (!box) return () => {};
+  const mine = layerOf(box);
+  const hold = (sib: Element) => {
+    // Once per overlay: an element removed and re-added would otherwise be held
+    // twice and released once, and would stay inert for the life of the page.
+    if (held.has(sib)) return;
+    // Above us in the stack, so not behind us — see the note on the hook.
+    if (layerOf(sib) > mine) return;
+    held.add(sib);
+    holdInert(sib);
+  };
+  let node: Element | null = box;
+  while (node && node !== document.body) {
+    const parent: HTMLElement | null = node.parentElement;
+    if (!parent) break;
+    const onPath: Element = node;
+    for (const sib of Array.from(parent.children)) {
+      if (sib !== onPath) hold(sib);
+    }
+    const watcher = new MutationObserver((records) => {
+      for (const record of records) {
+        for (const added of Array.from(record.addedNodes)) {
+          if (added instanceof Element && added !== onPath) hold(added);
+        }
+      }
+    });
+    watcher.observe(parent, { childList: true });
+    watchers.push(watcher);
+    node = parent;
+  }
+  return () => {
+    for (const watcher of watchers) watcher.disconnect();
+    for (const el of held) releaseInert(el);
+  };
+}
+
+/**
+ * What an overlay owes the keyboard: the background inert, focus landed inside
+ * the box, and focus handed back to whatever opened it on the way out.
+ *
+ * The three are one effect rather than three because the **order** is the whole
+ * of the correctness and effect order is the only thing that expresses it.
+ * Going in: the opener is read *before* the background goes inert, since
+ * marking an ancestor of the focused element inert blurs it to the body and the
+ * chance to know where the reader came from is gone. Coming out: the background
+ * is released *before* focus is handed back, because an element inside an inert
+ * subtree cannot take focus and `focus()` on one is a silent no-op — the way
+ * this would fail is a reader landing at the top of the document with nothing on
+ * screen to say why.
+ *
+ * **`preventScroll` on both**, and for two different reasons. On the way in,
+ * focusing the box must not scroll the page it is covering. On the way out,
+ * `useLockBodyScroll` has already put the window back exactly where it was —
+ * its cleanup runs first, being declared first in every caller — so a focus
+ * that scrolled would be fighting it over a target that is already in view.
+ *
+ * **The box takes focus, not the first control in it.** A screen reader then
+ * reads the dialog and its title rather than opening on whatever button
+ * happened to be first, and the first Tab goes to that button anyway. Each
+ * caller carries `tabIndex={-1}` on the element named here for that reason.
+ */
+export function useOverlayFocus(
+  boxRef: RefObject<HTMLElement | null>,
+  focusRef?: RefObject<HTMLElement | null>,
+) {
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    const release = markBackgroundInert(boxRef.current);
+    (focusRef?.current ?? boxRef.current)?.focus({ preventScroll: true });
+    return () => {
+      release();
+      if (opener?.isConnected) opener.focus?.({ preventScroll: true });
+    };
+    // Once per open. The refs are stable and the box is the box for the life of
+    // the overlay; re-running would re-mark a background that has since gained
+    // a box *above* this one.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+}
+
+/**
  * Close a popover on a press outside it or on Escape.
  *
  * The header has two of these — the settings gear and the fantasy button beside
@@ -406,6 +596,19 @@ export function useDismissable(
 export function useFullPage<T extends HTMLElement = HTMLDivElement>() {
   const [isFull, setFull] = useState(false);
   const ref = useRef<T | null>(null);
+  // The same background this box covers, taken out of the tab order while it is
+  // covered — the rule every overlay in the app now follows. It is the mildest
+  // of the cases and it is still the same one: the box holds a whole table, so
+  // Tab has hundreds of stops to spend before it reaches the chrome behind
+  // (measured, 0 of the first 10 escaped), but the pinned bar, the roster
+  // search and the view tabs are all under there and all reachable in the end.
+  //
+  // **Focus is not moved and nothing is restored**, unlike `useOverlayFocus`,
+  // and the reason is that this is a mode rather than a page: the button that
+  // sets it is the table's own corner cell, so it is *inside* the box both
+  // ways round and focus never had to leave. Taking the box's focus on expand
+  // would only throw away the reader's place in the header row.
+  useInertBackground(ref, isFull);
   useEffect(() => {
     if (!isFull) return;
     const onKey = (e: KeyboardEvent) => {
