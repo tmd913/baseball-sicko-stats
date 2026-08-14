@@ -983,36 +983,78 @@ twice and the exact numbers are never hidden behind the picture. Each row's
 tooltip spells the whole thing out in a sentence, gap and all (`On-base plus
 slugging — .750 vs LHP, .587 vs RHP: .163 better vs LHP.`).
 
-**The sentence that says how to read a bar sits *under* the bars, and it used to
-sit over them.** It is a key to a chart — *"Each bar runs from the centre toward
-the side he is **stronger** against — the further it runs, the bigger the split.
-A full bar is a gap bigger than nine players in ten have in that stat."* — and a
-key read before the chart is a paragraph of instructions for something the reader
-has not seen, spent on the top of a tab whose whole content is that chart. It is
-also where it costs the most: at 390 the sentence wraps to **four lines, 70px**,
-so a phone opened on this tab met 70px of prose before the first stat. Underneath
-it is the same sentence answering a question the reader now has. The title stays
-where it is — the card has to say what it is before it says anything else.
+### The key is behind an ⓘ, and the caveat is not
 
-**It takes `.spl-note`'s own rules rather than a set of its own**, which is the
-fold-don't-copy rule the stylesheet applies everywhere: the key and the
-sample-size caveat are the same kind of thing in the same place, so the foot of
-the card is one block of small print with 12px between the two, and there are not
-two rules for one pixel to drift between. **It stopped being centred** on the way,
-which is the one visual change: centred is what a subtitle under a card title
-wants and not what a caption wants, and it is the half that actually wraps — a
-four-line paragraph centred is ragged down *both* edges where a left-aligned one
-is ragged down one, and it now matches the caveat that can follow it. `.spl-intro`
-keeps only its `strong` rule, which is what marks the word the sentence turns on.
+**The sentence that says how to read a bar has been over the bars and under
+them, and is now behind an icon on the card's title row.** It is a key to a chart
+— *"Each bar runs from the centre toward the side he is **stronger** against — the
+further it runs, the bigger the split. A full bar is a gap bigger than nine
+players in ten have in that stat."* — and moving it from the top of the card to
+the foot of it fixed the half that was wrong (a key read *before* the chart is a
+paragraph of instructions for something the reader has not seen) while leaving the
+half that was expensive. It is **four lines, 70px** at 390 wherever it sits, spent
+on a tab whose whole content is eight bars, to say a thing a reader needs **once**.
+The second time anybody opens this tab it is 70px of something they have read.
 
-**Order under the bars is key, then caveat**: the key is about how any chart here
-is drawn and the caveat about this player's, and the general note before the
-particular one is how a footnote and its exception come. Measured on the real
-tab, before → after: at 1200 the key goes from 12px above the table to **12px
-below it** (title 174–195, table 201–510, key 522–557), and at 390 from a 70px
-block above a 309px table to the same 70px below it (key 574–644). With a
-thin-sample player the pair stacks as one foot — Dylan Lee at 77 BF vs LHB, key
-540–610 and the amber caveat 622–657, both left-aligned at 12px, 12px apart.
+So it is a disclosure now: an ⓘ at the right of the title, opening a popover
+holding the key. **Measured on the real card, before → after**: at 1200 the card
+goes **427 → 389.2px** and at 390 **455.8 → 383.2px**, i.e. the key costs the tab
+**37.8px on a desktop and 72.6px on a phone** and now costs it nothing. The same
+saving on every card checked — Sale 393 → 355.2 and 421.8 → 349.2, the thin-sample
+Nick Allen 456.4 → 418.6 and 502.5 → 430.
+
+**Why a popover, and not the three things it could have been.** A bare `title`
+attribute is **invisible on a phone**, and roughly half this app's traffic has no
+hover to give — the rule the research board's `WatchStar` already follows by
+drawing on every row rather than on hover — so the tooltip rides along on the
+button for a pointer and is not the answer on its own. A **`Modal`** is the wrong
+size, and the app has already written down why: the Columns dialog left the
+board's control row for one stated reason, *volume*, holding an order row and 48
+checkboxes; two sentences are the other end of that scale, and dimming the page,
+pinning the body and portalling out to a dialog layer to deliver them is ceremony
+the content cannot pay for. And an **inline reveal in the card body** is what the
+key already was with a switch on it — it fails on distance, the control being at
+the top of the card and the text appearing 300px below it and, on a phone, under
+the fold. A disclosure has to reveal something beside itself.
+
+**It is the app's own popover rather than a box that resembles one.**
+`.settings-popover` on the panel — literally the class the header's settings gear
+and fantasy button open — with `.spl-key` folded into `.settings-menu`'s own
+positioning rule, and only two things of its own: the opposite anchor (it hangs
+off a button at the card's right edge, so it opens leftward *into* the card) and
+prose rules, that box having only ever held controls. The button is
+`.app-dialog-close`, the app's 30px icon button, so there is a real touch target
+rather than a bare glyph, and it fills with the accent while its panel is showing
+the way every other disclosure in the app does. **Measured: panel 320×138.3 at
+both widths, landing at x=597 at 1200 and x=41 at 390** — inside the viewport on a
+phone, which is what the width cap is for. It needs an explicit `width` where the
+gear's menu does not, and the reason is worth keeping: the containing block here
+is the **30px button**, so a shrink-to-fit resolved against 30px and the box fell
+back to the shared `min-width: 180px`, turning two sentences into a 225px-tall
+column.
+
+**Real keyboard access and a real name, driven rather than assumed.** It is a
+`<button>` with `aria-label`, `aria-expanded` and `aria-controls`; driven in a
+browser, **Enter and Space both open it**, Escape closes it and leaves focus on
+the button, an outside press closes it, and the button itself toggles it shut.
+
+**The sample-size caveat stays in the body, and the two are not the same kind of
+thing.** The key is *instructions* — true of every player, true of every chart on
+the tab, read once. The amber line is a *caveat about this player's numbers*: it
+fires only when a side is thin, it is `--hr` amber precisely to be caught sight
+of, and it changes how the bars **on screen** should be read. Hiding a conditional
+warning behind an icon that gives no hint it is holding one is how a warning goes
+unread — and a reader who has not pressed the ⓘ has no way to learn there was
+anything to press it for. So the general note is behind the button and the
+particular one is on the card, which is the order the two were already in when
+both were captions. Checked on Nick Allen (31 PA vs LHP) at 390: the amber line
+sits under the bars and the key opens over them, both reachable at once.
+
+**`.spl-intro` is gone from the stylesheet**, and with it the two arguments its
+rule used to carry — both of which were right and neither of which applies any
+more. Folding the key into `.spl-note`'s rule stopped one drifting a pixel from
+the other, and there is now one of them; left-aligning it matched it to the caveat
+under it, and it is not under it.
 
 **Direction carries the polarity and nothing else does**, which is the decision
 the whole shape was chosen for. A row where less is better — a pitcher's FIP and
@@ -1048,10 +1090,13 @@ hitter's OPS): a platoon gap is measured against the population it was drawn
 from. The medians are worth stating too, since they are what an ordinary row
 looks like — .101 of OPS and 3.3 points of K% for a batter — so the typical split
 fills about a third of the rail and the end of it is a real place. A gap past
-`full` clamps and **squares off its outer end** to say it has, which about one
-qualified player in ten does on any given row by construction; Cristopher Sánchez
-is among the league's most extreme cases and clamps four of his seven (his `.317`
-OPS against lefties and `.762` against righties is a .445 gap).
+`full` clamps and **carries a chevron just inside its tip** to say it has, which
+about one qualified player in ten does on any given row by construction;
+Cristopher Sánchez is among the league's most extreme cases and clamps four of his
+seven (his `.317` OPS against lefties and `.762` against righties is a .445 gap).
+That mark **squared the bar's outer end off** until now — see *The clamped end is
+round, and the clamp moved inside the bar* below, which is where the reversal and
+what it cost are set out.
 
 **The fill can never exceed its half of the rail, and for a while it could — by
 1.43px, at the one place a reader would look.** This paragraph used to assert the
@@ -1062,9 +1107,9 @@ on Willson Contreras's clamped K% row, `fill.left − track.left` was **0.00px**
 1200 and at 390 alike. **The rail is painted as a pill**, though, and the fill was
 inset 3px top and bottom and **nothing at all at the ends**, so a bar drawn to the
 box ran past the ink: a rail of height 16 caps at radius 8, whose edge has already
-receded **1.76px** by the fill's top row of pixels, and a clamped bar — whose
-outer end is squared off, which is exactly what makes it the bar you look at —
-put its corner out there. Walking the fill's painted boundary against the rail's
+receded **1.76px** by the fill's top row of pixels, and a clamped bar — which is the
+bar you look at, being the one that reaches the end, and whose outer end was
+squared off at the time — put its corner out there. Walking the fill's painted boundary against the rail's
 pill in closed form, every clamped row in the league overhung by **+1.430px**
 while every unclamped row cleared it by 3px. That is the whole bug, and it is the
 third of the three shapes this kind of fault comes in: not a missing clamp, not a
@@ -1072,41 +1117,97 @@ clamp a `NaN` escaped, but **the rail's own box and the fill's box disagreeing**
 
 So the fill is inset on all four sides: `--spl-inset` (3px) top and bottom, which
 makes it the rail's own pill inset by 3 — a radius-5 cap inside a radius-8 one,
-the two concentric. **The squared-off end is untouched and now reads better than
-it did**, a squared cap nested inside a rounded one being unmistakable beside the
-rounded cap of a bar that merely came close — Sánchez's four clamped rows against
-his FIP row, and Contreras's K% against the BB% directly under it (`.936` of the
-scale, so 46.8% against 50).
+the two concentric. The squared-off end was untouched by that fix and read
+better for it, a squared cap nested inside a rounded one being unmistakable beside
+the rounded cap of a bar that merely came close. It did not survive being looked
+at twice more; see below.
 
-**The ends needed a bigger inset than the sides, and the concentric argument is
-why.** It holds for a *round* cap and says nothing about a **square** one, which
-is what a clamped bar draws — so putting the ends on the sides' 3px fixed the ink
-(nothing was outside the rail any more) and left the thing a reader actually sees.
-A square corner sits at the fill's extreme height, 5px off the rail's centre line,
-where the cap's ink has already receded `8 − √(8² − 5²)` = **1.76px**; at a 3px
-inset that corner had **1.24px** of rail beside it against its own midline's 3px.
-Measured on the rendered pixels rather than in closed form — walking each fill row
-and asking how much track is left past it — a clamped bar's tightest row cleared
-by **1px** where its middle cleared by 3, so the corner ran into the curve with no
-margin left to read as one, and the bar read as overrunning its rail with its end
-cut off. **Brice Turang's OPS, SLG and ISO rows are that case**, and are what this
-paragraph was written for; the closed-form check that passed them (−0.933px, i.e.
-inside) was asking whether ink was outside the rail, which is a different question
-from whether a margin is visible.
+### The clamped end is round, and the clamp moved inside the bar
 
-So the ends take **`--spl-inset-x` (5px)**, which puts that corner **3px** clear at
-its tightest and 5px clear at the midline, and the width is
-`calc(frac × (50% − var(--spl-inset-x)))`. Both tokens are written once, in the
-stylesheet, and the inline width reads the second, so the length of a full bar and
-the nesting of its cap cannot drift apart.
+**This reverses the decision the two paragraphs above were written for, and it
+takes a token with it.** What stood here was that *the ends need a bigger inset
+than the sides, and the concentric argument is why*: the concentric nesting holds
+for a *round* cap and says nothing about a **square** one, which is what a clamped
+bar drew. A square corner sits at the fill's extreme height, 5px off the rail's
+centre line, where the cap's ink has already receded `8 − √(8² − 5²)` = **1.76px**;
+at a 3px inset that corner had **1.24px** of rail beside it against its own
+midline's 3px, so it ran into the curve with no margin left to read as one, and
+`--spl-inset-x` (5px) was the answer. Every word of that is still true of a square
+cap. **The square cap is gone**, so none of it applies.
 
-**It is one inset for every fill, not a bigger one for the clamped ends alone**,
-and that is the load-bearing half rather than a simplification: inset a squared end
-further than a rounded one and a bar just past full scale would draw *shorter* than
-one exactly at it, so a bigger gap would read as a smaller one on the two rows most
-likely to be compared. Length stays monotonic in the gap and only the cap's shape
-says "clamped" — checked on the four cards below, where the shortest clamped bar is
-never shorter than the longest unclamped one.
+**It went because it was complained about twice and defended once too often.**
+The squared end was the clamp marker — *this is not an exact measurement, the real
+gap is bigger* — and it paid for that in three ways: it looked wrong at the end of
+a bar, it forced the ends onto an inset of their own, and, the quietest fault,
+**nothing on the card ever said what it meant**. A reader met a differently-shaped
+bar end with no key to it. That third one is what makes the reversal an
+improvement rather than a trade: the key now has a home behind the ⓘ (above) and
+the room to explain a mark, which a permanently-visible caption never had.
+
+**So every cap is round, and the clamp is a chevron knocked out of the fill just
+inside its tip.** Where the mark could go was decided by measuring rather than by
+taste. **Past the end there is nowhere to put anything**: a full bar stops 3px
+short of the rail and the figure beside it is one 10px column gap away (7px under
+560), so a glyph out there would sit in the gutter and collide at exactly the
+widths this table is tightest at. And it must not be a `background` treatment —
+`.spl-fill--thin` already spends that on the hatch, and a row can be thin *and*
+clamped — so a pseudo-element is the one layer that composes with both. It **costs
+no length**, which is the invariant that had to survive: the chevron is drawn
+*within* the fill, so a clamped bar is exactly as long as one at full scale.
+
+**The hatched-and-clamped row is where the first attempt failed, and it is worth
+recording.** The chevron was knocked out in `--panel`, on the tidy reasoning that
+the card's own ground reads as the rail showing through the bar. It does, on a
+solid fill. On a hatched one it **disappeared**: the hatch is accent stripes over
+transparent gaps, the gaps show the rail, and the rail is `--panel` under a 6%
+wash — so the mark was one more gap among ten. Measured at 1× on Nick Allen (31 PA
+vs LHP, four rows both thin and clamped) it was invisible, and darkening it to
+`--bg` barely helped, the hatch being busy rather than merely similar. So a
+`::before` lays **14px of solid accent — two whole stripe periods** — under the
+outer end and the chevron is knocked out of *that*. On a solid fill the tip is the
+accent the bar already is and changes nothing whatever; on a hatched one it gives
+the mark a ground. One rule, one mark, both fills.
+
+**And with the square corner gone the two tokens are one again.**
+`--spl-inset-x` is retired and the width is `calc(frac × (50% − var(--spl-inset)))`
+— 3px on all four sides, which is the case that number was chosen for in the first
+place. A radius-5 cap 3px inside a radius-8 one **shares its centre**, so the
+track shows exactly 3px of itself at *every* angle rather than 5px at the midline
+and less at the corner, and every bar is **2px longer** than it was.
+
+**Measured on the rendered pixels, before → after**, by walking each fill row and
+asking how much track is left past it — the check the closed-form pass missed, and
+the one the 5px was bought with. A clamped bar's **tightest** row goes **4.196px →
+3.000px** and its midline **5px → 3.000px**: the clearance is now the *same number
+at every row*, where before it varied by 0.8px around a hard corner. That is the
+whole of the trade, and it is worth stating plainly rather than as a win — the
+tightest clearance **falls by 1.196px**. It is the right trade because 3px is the
+margin the fill's long sides have carried since the first fix and nobody has ever
+complained about those; a constant margin reads as a margin where a varying one
+reads as a corner running out of room. `fillWidth − half` goes **−5.000px →
+−3.000px**, so every fill is still strictly inside its half and is 2px longer.
+
+(Note the 4.196px: the previous round recorded "3.24px clear at its tightest",
+which is the figure for a **truly square** corner. The rule that shipped was
+`border-radius: 2px`, not 0, and a probe that models both caps' real painted radii
+finds the minimum at `dy = −4` rather than at the extreme row. The 5px inset was
+therefore buying a little more than it was credited with — and it is still 1.2px
+more than the round cap needs.)
+
+**Swept over Turang (3 clamped rows), Contreras (1), Betts (0), Sale (0) and Nick
+Allen (4 clamped and all 8 hatched), at 1200px and 390px**: every clamped end
+clears by **3.000px at both widths on every card**, the widest fill is 214 of a
+217px half at 1200 and 83.5 of 86.5 at 390 (212 and 81.5 before), row height is
+**34px** and the page and the overlay overflow by **0** at both widths, all
+unchanged.
+
+**Length stays monotonic in the gap**, which is what the single inset exists to
+preserve and what a mark inside the bar cannot threaten: checked on all five
+cards, the **shortest clamped bar is never shorter than the longest unclamped
+one** (tightest case Nick Allen at 390, 83.5 against 82.56). A clamped row also
+says so **in words** — the row's own tooltip gains *"Bigger than the rail's full
+scale, so the bar stops at the end."* — which is the belt to the chevron's braces
+and reaches a reader who has met the mark before finding the key.
 
 **The invariant is held in two places and neither is decorative.**
 `railFraction(gap, full)` replaces the bare `Math.min`, and is **total**: it
@@ -1117,7 +1218,7 @@ hand it one today (`num` rejects every non-finite string and `share` refuses a z
 denominator), and that is the argument for guarding rather than against it: it is
 the one function between a stat's arithmetic and a length in pixels, and the next
 stat added to either table gets checked whether or not its author thought to. The
-stylesheet says it again at the last moment — `max-width: calc(50% - var(--spl-inset-x))`
+stylesheet says it again at the last moment — `max-width: calc(50% - var(--spl-inset))`
 on `.spl-fill`, with the `min-width` floor that draws a 3px nub for a gap of almost
 nothing taking that same cap as its own ceiling (`min(3px, 50% - …)`) so the floor
 can never breach it either.
@@ -1142,7 +1243,7 @@ Contreras, on the three worst drawn batters, on the two worst pitchers and on
 Sánchez, at 1200px and 390px, by walking each fill's painted boundary against its
 rail: worst overhang **+1.430px → −0.933px** (i.e. from ink outside the rail to
 clearance inside it) and worst `fillWidth − half` **0.000px → −3.000px**, with the
-clamped rows still flagged and squared in both. Driven again with the splits
+clamped rows still flagged and marked in both. Driven again with the splits
 response stubbed to the hostile shapes — a 2.000 OPS against a .200 over 40 PA, a
 −4.00 FIP against an 18.00, a null / an empty string / the server's em-dash / the
 literal `NaN`, two identical halves, and a zero PA denominator — the worst
@@ -1155,17 +1256,17 @@ are all unchanged. **Bundle: 451.11 → 451.23 KB of JS** (133.50 → 133.55 gzi
 and **102.73 → 102.84 KB of CSS** (18.35 → 18.37), which is 0.1KB each and nearly
 all of it the comments explaining the nesting.
 
-**And measured again on the rendered pixels when the ends moved to
-`--spl-inset-x`**, which is the check the closed-form pass above did not make.
-Per fill row, how much track is left past the fill: a clamped bar's tightest row
-goes **1px → 3px** and its midline 3px → 5px, so the margin now reads as one all
-the way around a square corner. `fillWidth − half` goes **−3.000px → −5.000px**,
-i.e. every fill is further inside its half than before and none can reach it.
-Swept over Turang (3 clamped rows), Contreras (1), Betts (0) and Sale (0) at
-**1200px and 390px**: every clamped end clears by **5px** at both widths, the
-widest fill is 212 of a 217px half at 1200 and 81.5 of 86.5 at 390, and the
-**shortest clamped bar is never shorter than the longest unclamped one** on any
-card, which is the monotonicity the single inset exists to preserve.
+**Those two paragraphs are the first two of three rounds on this one geometry,
+and the third is above** — *The clamped end is round, and the clamp moved inside
+the bar*, which retires `--spl-inset-x` along with the square cap it was written
+for and carries the before → after for the move back to a single 3px inset. The
+figures here are kept as the record of how the fill came to be nested at all;
+where they name 5px at the ends, read the third round.
+
+**Bundle over this round: 451.63 → 452.70 KB of JS** (133.68 → 133.86 gzipped)
+and **103.44 → 104.46 KB of CSS** (18.46 → 18.65), which is 1.1KB and 1.0KB raw
+for a disclosure, a popover, a chevron and its solid tip — and nearly all of the
+CSS half is the comments arguing them.
 
 **Sample size is on the card whatever it is, and changes how the bars are drawn
 twice.** The column heads carry it always — `vs LHP · 76 PA` — and two thresholds
@@ -1333,6 +1434,12 @@ Checked in a browser, three and four levels deep and in both directions: with th
 **So the press itself is marked** (`hooks.ts::answersEscape`). `overlayAbove` still decides **who** answers — the topmost, whatever order the handlers run in, since nothing has moved yet when the first of them looks — and a `WeakSet` of already-answered events decides **how many**: one. The two are complementary rather than redundant and either alone is wrong: without the stacking test the first-registered box answers instead of the top one, and without the mark every box under the top one answers as well. Every overlay in the stack goes through it — `Modal`, `PlayerDetails`, `useFullPage`, `Tutorial`, `EspnSettings` and `GameReel`, the last three of which had answered the key unconditionally and so could take a press a page under them was also taking. A caller with a further reason to decline tests that **before** the claim, which is why `PlayerDetails` checks its own subtree for an expanded table first.
 
 **Measured after, at every depth the app reaches**, each press closing exactly one thing: player page → Game Log popup (51) → inning (52) → batter (53) unwinds `3 → 2 → 1 → 0` dialogs and then the page, four presses; the batter's own path `2 → 1 → 0` and then the page, three; the feed's outing (46) → inning (47) → batter (48) `3 → 2 → 1 → 0`; and the outing → breakdown pair `2 → 1 → 0`. The ✕ on an outer dialog still takes its children with it and leaves the player page standing.
+
+**A popover is on that ladder too now, and it took a capture listener to put it there.** `useDismissable` — the header's settings gear, the fantasy button, and the Splits tab's key (see **The key is behind an ⓘ**) — answered Escape with a bare `e.key === 'Escape'` and closed on it unconditionally. That was harmless for the two in the header, there being no overlay over the header to compete with; the third opens **inside `.details-view`**, which answers the key itself, so one press closed the popover *and* the player page under it — the exact fault this section exists to prevent, arrived at from a direction it had not been asked about.
+
+Marking the press (`answersEscape`) is half the fix. The other half is that the popover has to answer **first**, and the stacking test cannot see it: `overlayAbove` reads declared `z-index`es off `OVERLAYS`, and a popover is on none of them — it is not a page or a dialog, it is a panel hanging off a button that happens to be inside one. Left to registration order the overlay always wins, being mounted first. So the hook binds its keydown in the **capture phase**, which precedes every bubble listener whatever the order, and "the innermost thing goes first" holds by construction rather than by luck. A popover with an overlay genuinely above it still declines, `overlayAbove` being consulted as ever — the header's menu sits at `z-index: 40` under a player page at 50, so the page answers and the menu behind it does not, where before they both did.
+
+**Driven in a browser on all three callers.** With the key open over a player page, Escape closes the key and leaves the page (twice over, once from Enter and once from Space), a second press closes the page, and focus stays on the button throughout. The settings gear and the fantasy popover close on Escape, on an outside press and on a second press of their own button exactly as before.
 
 ### What the feed lost with the grouping
 

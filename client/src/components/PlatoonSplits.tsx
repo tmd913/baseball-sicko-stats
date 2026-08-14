@@ -1,3 +1,5 @@
+import { useCallback, useRef, useState } from 'react';
+import { useDismissable } from '../hooks';
 import type { PitcherSeasonStats, SeasonStats } from '../types';
 
 /**
@@ -37,17 +39,20 @@ import type { PitcherSeasonStats, SeasonStats } from '../types';
  * its outer corners outside the rail's own rounded cap — 2.47px of ink beyond
  * it on Willson Contreras's clamped K% row, where every unclamped row on the
  * card sat 2.25px inside. The fill is inset on all four sides for that reason —
- * `--spl-inset` (3px) top and bottom, which makes a radius-5 cap concentric
- * inside the rail's radius-8 one.
+ * **`--spl-inset` (3px), one number for all four**, which makes a radius-5 cap
+ * concentric inside the rail's radius-8 one: both caps centre on the same point,
+ * so the track shows exactly 3px of itself all the way around the end.
  *
- * **The ends take a bigger inset than the sides** (`--spl-inset-x`, 5px), and
- * the concentric argument is exactly why: it holds for a *round* cap and not for
- * a **square** one, which is what a clamped bar draws. A square corner sits at
- * the fill's extreme height, 5px off the rail's centre line, where the cap's ink
- * has already receded 1.76px — so at the sides' 3px that corner had 1.24px of
- * rail left beside it against its own midline's 3px, and read as a bar running
- * out of its rail with the corner cut off. Brice Turang's OPS, SLG and ISO rows
- * are the case. Both insets are the stylesheet's, so the geometry and the length
+ * **The ends took a bigger inset than the sides for a while** (`--spl-inset-x`,
+ * 5px) and no longer do, because the thing it was written for is gone. That
+ * token existed for the **square** outer end a clamped bar used to draw: a square
+ * corner sits at the fill's extreme height, 5px off the rail's centre line, where
+ * the cap's ink has already receded 1.76px, so at 3px it had 1.24px of rail
+ * beside it against its own midline's 3px and read as a bar running out of its
+ * rail with the corner cut off. **Every cap is round now** (see `over` below), and
+ * a round cap is the case the 3px was chosen for in the first place — so the
+ * exception is retired, the two tokens are one again, and every bar is 2px longer
+ * than it was. The inset is the stylesheet's, so the geometry and the length
  * written here cannot drift apart.
  *
  * **Direction carries the polarity, and nothing else does.** A row where less is
@@ -363,6 +368,105 @@ const PITCHER_STATS: SplitStat<PitcherSeasonStats>[] = [
 const MIN_SAMPLE = 25;
 const THIN_SAMPLE = 100;
 
+/**
+ * **The key to how a bar is drawn, behind an ⓘ on the card's title row.**
+ *
+ * It was a paragraph in the card body — over the bars first, then under them —
+ * and both placements were paying the same rent: at 390 the sentence wraps to
+ * **four lines, 70px**, spent on a tab whose whole content is eight bars, to say
+ * something a reader needs **once** and then never again. A key is the definition
+ * of a thing you can already see; the second time you open this tab it is 70px of
+ * something you have read.
+ *
+ * ### Why a popover rather than a `title`, a modal, or an inline reveal
+ *
+ * **A bare `title` is invisible on a phone**, and roughly half of this app's
+ * traffic has no hover to give — the rule the research board's `WatchStar`
+ * already follows by drawing on every row rather than on hover. So the tooltip
+ * is not the whole answer; it rides along on the button for a pointer, and the
+ * press is what everybody else gets.
+ *
+ * **A `Modal` is the wrong size**, and the app has already recorded why. The
+ * Columns dialog left the research board's control row for one stated reason —
+ * *volume*: it holds an order row and 48 checkboxes, several hundred pixels, and
+ * a strip of chrome could not carry it. Two sentences is the other end of that
+ * scale, and dimming the page, pinning the body and portalling a box out to a
+ * dialog layer to deliver them would be ceremony the content cannot pay for.
+ *
+ * **An inline reveal in the card body** is what this used to be with a switch on
+ * it, and it fails on distance: the control is at the top of the card and the key
+ * would appear at the foot of it, a press whose effect is 300px away and, on a
+ * phone, below the fold. A disclosure has to reveal something beside itself.
+ *
+ * So: the app's **popover**, the shape the header's settings gear and fantasy
+ * button already open — and literally that shape, `.settings-popover` on the
+ * panel and `.spl-key` folded into `.settings-menu`'s own positioning rule,
+ * rather than a second box that resembles it. `useDismissable` is the same hook
+ * those two use, so it dismisses on an outside press and on Escape identically.
+ * The button is a real `<button>` with a real accessible name, so it is reachable
+ * and pressable from a keyboard, and it takes `.app-dialog-close`'s size and
+ * shape — the app's 30px icon button — so a touch target exists rather than a
+ * bare glyph nobody can tell is pressable.
+ *
+ * **The sample-size caveat deliberately stays in the body**, and the two are not
+ * the same kind of thing. This is a *key*: instructions for reading any chart on
+ * this tab, true of every player, read once. That one is a *caveat about this
+ * player's numbers* — it fires only when a side is thin, it is amber precisely to
+ * be caught sight of, and it changes how the bars **on screen** should be read.
+ * Hiding a conditional warning behind an icon that gives no hint it is holding
+ * one is how a warning goes unread; and a reader who has not pressed the ⓘ has no
+ * way to learn there was anything to press it for. So the general note is behind
+ * the button and the particular one is on the card, which is also the order they
+ * were already in when both were captions.
+ */
+function SplitsKey() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLSpanElement | null>(null);
+  const close = useCallback(() => setOpen(false), []);
+  useDismissable(open, ref, close);
+  return (
+    <span className="spl-key" ref={ref}>
+      <button
+        type="button"
+        className={`app-dialog-close spl-key-btn${open ? ' active' : ''}`}
+        aria-expanded={open}
+        aria-controls="spl-key-panel"
+        aria-label="How to read these bars"
+        title="How to read these bars"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <svg
+          viewBox="0 0 24 24"
+          width="16"
+          height="16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 11.5v4.5" />
+          <path d="M12 7.75h.01" />
+        </svg>
+      </button>
+      {open && (
+        <div className="settings-popover spl-key-panel" id="spl-key-panel">
+          <p>
+            Each bar runs from the centre toward the side he is <strong>stronger</strong> against —
+            the further it runs, the bigger the split.
+          </p>
+          <p>
+            A full bar is a gap bigger than nine players in ten have in that stat. It carries a
+            <span className="spl-key-chevron" aria-hidden="true" /> at its end when the real gap is
+            bigger still than the rail can draw.
+          </p>
+        </div>
+      )}
+    </span>
+  );
+}
+
 /** One row: the label, the two figures, and the bar between them. */
 function SplitRow<T>({
   stat,
@@ -393,19 +497,19 @@ function SplitRow<T>({
   const leftStronger = both ? (stat.lowerBetter ? l < r : l > r) : false;
   const gap = both ? Math.abs(l - r) : 0;
   const frac = railFraction(gap, stat.full);
-  // Clamped, and so drawn with a squared outer end. Read off `frac` rather than
-  // off `gap > stat.full` again, so the mark and the length can never disagree
-  // about whether the bar ran out of rail — and so an input `railFraction`
-  // refused cannot square off a bar of no length.
+  // Clamped, and so marked. Read off `frac` rather than off `gap > stat.full`
+  // again, so the mark and the length can never disagree about whether the bar
+  // ran out of rail — and so an input `railFraction` refused cannot mark a bar
+  // of no length. What the mark *is* changed: it used to be a squared-off outer
+  // end, and is now a chevron knocked out of the fill just inside its tip. The
+  // cap stays round on every bar, which is what lets the inset go back to the
+  // sides' own — see the note at the top of this file.
   const over = frac === 1 && gap > stat.full;
-  // The rail's half, less the inset the fill's *ends* are nested by: a full bar
-  // then lands inside the rail's cap rather than on its box, which is a
-  // different place — see the note at the top of this file. It is
-  // `--spl-inset-x` rather than the sides' `--spl-inset` because the end of a
-  // clamped bar is square and a square corner needs the clearance a round one
-  // does not, and it is the *same* token for a clamped bar and an unclamped one
-  // so that length stays monotonic in the gap.
-  const width = `calc(${frac} * (50% - var(--spl-inset-x)))`;
+  // The rail's half, less the inset the fill is nested by: a full bar then lands
+  // inside the rail's cap rather than on its box, which is a different place.
+  // One token for all four sides, which is only correct because every cap is
+  // round — a radius-5 cap 3px inside a radius-8 one is concentric with it.
+  const width = `calc(${frac} * (50% - var(--spl-inset)))`;
   const strong = both && gap > 0;
 
   const title = both
@@ -414,6 +518,9 @@ function SplitRow<T>({
         ? ': dead even.'
         : `: ${stat.gapText(gap)} better ${leftStronger ? leftLabel : rightLabel}` +
           (stat.lowerBetter ? ' (lower is better).' : '.')) +
+      // A clamped row says so in words as well as with the chevron, which is a
+      // mark a reader meets before they have read the key behind the ⓘ.
+      (bars && over ? " Bigger than the rail's full scale, so the bar stops at the end." : '') +
       (bars ? (thin ? ' Sample too thin to lean on.' : '') : ' Sample too thin to draw a bar.')
     : // Two different absences, and the row says which. A side with no split
       // object at all is a man who has not faced that hand; a side that has one
@@ -484,8 +591,13 @@ function SplitCard<T>({
   const oneSided = smaller === 0;
   return (
     <div className="pct-card">
-      <div className="pct-card-head">
+      {/* `.spl-card-head` only adds a containing block for the key's popover;
+          the title stays centred in the card because the button is taken out of
+          flow rather than laid out beside it — which is also what keeps
+          `.pct-card-head` untouched for the percentile card that shares it. */}
+      <div className="pct-card-head spl-card-head">
         <span className="pct-card-title">Platoon splits</span>
+        <SplitsKey />
       </div>
       <div className="spl-table">
         <div className="spl-heads">
@@ -517,29 +629,14 @@ function SplitCard<T>({
           />
         ))}
       </div>
-      {/* The one sentence that keeps the bars honest. Every row is drawn the
-          same way round, the ones where the smaller number is the better one
-          included, and a reader who hasn't been told that reads the FIP row
-          backwards.
-
-          **It is under the bars, where it used to be over them.** It is a key to
-          a chart, and a key read before the chart is a paragraph of instructions
-          for something the reader has not seen — spent on the top of a tab whose
-          whole content is the chart. Underneath, it is the same sentence
-          answering a question the reader now has. It takes `.spl-note`'s own
-          rules rather than a set of its own, which is what makes it read as the
-          second caption in a pair rather than as a new section. */}
-      <p className="spl-intro">
-        Each bar runs from the centre toward the side he is <strong>stronger</strong> against — the
-        further it runs, the bigger the split. A full bar is a gap bigger than nine players in ten
-        have in that stat.
-      </p>
       {/* The sample is on the card whatever it is — in the heads — and gets a
           sentence of its own the moment it is small enough to change how the
-          bars should be read. It closes the card, below the key: the key is
-          about how any chart here is drawn, this is about this player's, and the
-          general note before the particular one is the order a footnote and its
-          caveat come in. */}
+          bars should be read. **It is the one caption left in the body**, the key
+          above it having moved behind the ⓘ on the title row (see `SplitsKey`,
+          which argues why this one did not follow it): a key is instructions,
+          true of every player and read once, where this is a caveat about *these*
+          numbers that fires only when a side is thin — and a warning nobody can
+          see they could have asked for is a warning nobody reads. */}
       {oneSided ? (
         <p className="spl-note spl-note--warn">
           No {sampleNoun} {leftSample === 0 ? leftLabel : rightLabel} this season, so there is
