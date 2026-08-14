@@ -1070,16 +1070,43 @@ while every unclamped row cleared it by 3px. That is the whole bug, and it is th
 third of the three shapes this kind of fault comes in: not a missing clamp, not a
 clamp a `NaN` escaped, but **the rail's own box and the fill's box disagreeing**.
 
-So the fill is inset by one `--spl-inset` on **all four sides**, which makes it
-the rail's own pill inset by 3 — a radius-5 cap inside a radius-8 one, the two
-concentric — and its width is `calc(frac × (50% − var(--spl-inset)))`, so a full
-bar lands on the rail's *inner* cap rather than on its box. The same token is
-written once, in the stylesheet, and the inline width reads it, so the length of a
-full bar and the nesting of its cap cannot drift apart. **The squared-off end is
-untouched and now reads better than it did**, a squared cap nested inside a
-rounded one being unmistakable beside the rounded cap of a bar that merely came
-close — Sánchez's four clamped rows against his FIP row, and Contreras's K%
-against the BB% directly under it (`.936` of the scale, so 46.8% against 50).
+So the fill is inset on all four sides: `--spl-inset` (3px) top and bottom, which
+makes it the rail's own pill inset by 3 — a radius-5 cap inside a radius-8 one,
+the two concentric. **The squared-off end is untouched and now reads better than
+it did**, a squared cap nested inside a rounded one being unmistakable beside the
+rounded cap of a bar that merely came close — Sánchez's four clamped rows against
+his FIP row, and Contreras's K% against the BB% directly under it (`.936` of the
+scale, so 46.8% against 50).
+
+**The ends needed a bigger inset than the sides, and the concentric argument is
+why.** It holds for a *round* cap and says nothing about a **square** one, which
+is what a clamped bar draws — so putting the ends on the sides' 3px fixed the ink
+(nothing was outside the rail any more) and left the thing a reader actually sees.
+A square corner sits at the fill's extreme height, 5px off the rail's centre line,
+where the cap's ink has already receded `8 − √(8² − 5²)` = **1.76px**; at a 3px
+inset that corner had **1.24px** of rail beside it against its own midline's 3px.
+Measured on the rendered pixels rather than in closed form — walking each fill row
+and asking how much track is left past it — a clamped bar's tightest row cleared
+by **1px** where its middle cleared by 3, so the corner ran into the curve with no
+margin left to read as one, and the bar read as overrunning its rail with its end
+cut off. **Brice Turang's OPS, SLG and ISO rows are that case**, and are what this
+paragraph was written for; the closed-form check that passed them (−0.933px, i.e.
+inside) was asking whether ink was outside the rail, which is a different question
+from whether a margin is visible.
+
+So the ends take **`--spl-inset-x` (5px)**, which puts that corner **3px** clear at
+its tightest and 5px clear at the midline, and the width is
+`calc(frac × (50% − var(--spl-inset-x)))`. Both tokens are written once, in the
+stylesheet, and the inline width reads the second, so the length of a full bar and
+the nesting of its cap cannot drift apart.
+
+**It is one inset for every fill, not a bigger one for the clamped ends alone**,
+and that is the load-bearing half rather than a simplification: inset a squared end
+further than a rounded one and a bar just past full scale would draw *shorter* than
+one exactly at it, so a bigger gap would read as a smaller one on the two rows most
+likely to be compared. Length stays monotonic in the gap and only the cap's shape
+says "clamped" — checked on the four cards below, where the shortest clamped bar is
+never shorter than the longest unclamped one.
 
 **The invariant is held in two places and neither is decorative.**
 `railFraction(gap, full)` replaces the bare `Math.min`, and is **total**: it
@@ -1090,7 +1117,7 @@ hand it one today (`num` rejects every non-finite string and `share` refuses a z
 denominator), and that is the argument for guarding rather than against it: it is
 the one function between a stat's arithmetic and a length in pixels, and the next
 stat added to either table gets checked whether or not its author thought to. The
-stylesheet says it again at the last moment — `max-width: calc(50% - var(--spl-inset))`
+stylesheet says it again at the last moment — `max-width: calc(50% - var(--spl-inset-x))`
 on `.spl-fill`, with the `min-width` floor that draws a 3px nub for a gap of almost
 nothing taking that same cap as its own ceiling (`min(3px, 50% - …)`) so the floor
 can never breach it either.
@@ -1127,6 +1154,18 @@ rows draw the 3px nub at the centre, and the zero-PA card draws no bars and says
 are all unchanged. **Bundle: 451.11 → 451.23 KB of JS** (133.50 → 133.55 gzipped)
 and **102.73 → 102.84 KB of CSS** (18.35 → 18.37), which is 0.1KB each and nearly
 all of it the comments explaining the nesting.
+
+**And measured again on the rendered pixels when the ends moved to
+`--spl-inset-x`**, which is the check the closed-form pass above did not make.
+Per fill row, how much track is left past the fill: a clamped bar's tightest row
+goes **1px → 3px** and its midline 3px → 5px, so the margin now reads as one all
+the way around a square corner. `fillWidth − half` goes **−3.000px → −5.000px**,
+i.e. every fill is further inside its half than before and none can reach it.
+Swept over Turang (3 clamped rows), Contreras (1), Betts (0) and Sale (0) at
+**1200px and 390px**: every clamped end clears by **5px** at both widths, the
+widest fill is 212 of a 217px half at 1200 and 81.5 of 86.5 at 390, and the
+**shortest clamped bar is never shorter than the longest unclamped one** on any
+card, which is the monotonicity the single inset exists to preserve.
 
 **Sample size is on the card whatever it is, and changes how the bars are drawn
 twice.** The column heads carry it always — `vs LHP · 76 PA` — and two thresholds

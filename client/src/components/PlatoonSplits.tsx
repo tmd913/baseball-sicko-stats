@@ -36,10 +36,19 @@ import type { PitcherSeasonStats, SeasonStats } from '../types';
  * bottom and nothing at all at the ends, so a bar drawn to the rail's *box* had
  * its outer corners outside the rail's own rounded cap — 2.47px of ink beyond
  * it on Willson Contreras's clamped K% row, where every unclamped row on the
- * card sat 2.25px inside. The fill is now inset by that same `--spl-inset` on
- * all four sides, which makes it exactly the rail's pill inset by 3 (a radius-5
- * cap inside a radius-8 one, the two concentric), so a bar at full length lands
- * on the rail's inner cap and cannot poke out of it at any fraction.
+ * card sat 2.25px inside. The fill is inset on all four sides for that reason —
+ * `--spl-inset` (3px) top and bottom, which makes a radius-5 cap concentric
+ * inside the rail's radius-8 one.
+ *
+ * **The ends take a bigger inset than the sides** (`--spl-inset-x`, 5px), and
+ * the concentric argument is exactly why: it holds for a *round* cap and not for
+ * a **square** one, which is what a clamped bar draws. A square corner sits at
+ * the fill's extreme height, 5px off the rail's centre line, where the cap's ink
+ * has already receded 1.76px — so at the sides' 3px that corner had 1.24px of
+ * rail left beside it against its own midline's 3px, and read as a bar running
+ * out of its rail with the corner cut off. Brice Turang's OPS, SLG and ISO rows
+ * are the case. Both insets are the stylesheet's, so the geometry and the length
+ * written here cannot drift apart.
  *
  * **Direction carries the polarity, and nothing else does.** A row where less is
  * better (`lowerBetter` — a pitcher's FIP, a batter's K%) is not drawn with a
@@ -389,11 +398,14 @@ function SplitRow<T>({
   // about whether the bar ran out of rail — and so an input `railFraction`
   // refused cannot square off a bar of no length.
   const over = frac === 1 && gap > stat.full;
-  // The rail's half, less the inset the fill is nested by: a full bar then lands
-  // exactly on the rail's inner cap rather than on its box, which is a different
-  // place — see the note at the top of this file. `--spl-inset` is the
-  // stylesheet's, so the four sides of that nesting are one number in one place.
-  const width = `calc(${frac} * (50% - var(--spl-inset)))`;
+  // The rail's half, less the inset the fill's *ends* are nested by: a full bar
+  // then lands inside the rail's cap rather than on its box, which is a
+  // different place — see the note at the top of this file. It is
+  // `--spl-inset-x` rather than the sides' `--spl-inset` because the end of a
+  // clamped bar is square and a square corner needs the clearance a round one
+  // does not, and it is the *same* token for a clamped bar and an unclamped one
+  // so that length stays monotonic in the gap.
+  const width = `calc(${frac} * (50% - var(--spl-inset-x)))`;
   const strong = both && gap > 0;
 
   const title = both
