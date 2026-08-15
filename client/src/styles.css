@@ -10700,6 +10700,30 @@ body {
   color: var(--faint);
   text-transform: none;
 }
+/* **One block per side of the ball**, each with its own head and its own two
+   rows. The league's own category order interleaves bats and arms
+   (`R HR RBI W ERA SB WHIP K OPS SVHD`), so a reader wanting "how are my
+   pitchers doing" had to pick four columns out of ten by eye; split, each half
+   is five columns — which is also what stops the line overflowing a phone, a
+   ten-column run having scrolled sideways inside the card. Each block's own
+   `border-top` is the break between the two, so the split costs no rule of its
+   own. */
+.lg-cat-groups {
+  display: contents;
+}
+/* The group's name, over its own head row rather than beside it. A leading
+   *column* was the alternative and costs the card ~52px of width on a phone
+   where a line costs it 14px of height — and this card is width-bound (ten
+   categories overflowed it) rather than height-bound. Small caps in `--faint`,
+   the app's own label-over-a-block shape. */
+.lg-cat-side {
+  margin-bottom: 3px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
 /* Green marks the side taking the category and the loser goes muted — the
    green/red pair this app uses for a delta would put ten red cells on the
    losing side of every card, which is the whole row shouting rather than the
@@ -10742,6 +10766,17 @@ body {
 .league-table {
   --row-gutter: clamp(5px, 1.9vw, 28px);
   --sort-gutter: var(--row-gutter);
+  /* The group header row's own height, declared because the sort headers below
+     it have to pin at exactly that offset — the one number in this table that
+     two rules share, so it is named rather than written twice. It is the row's
+     own box: 5px + a 16px line + 5px, with no bottom border (the sort row under
+     it carries the one that closes the head). */
+  --lg-group-h: 26px;
+  /* The two ends of the rank scale. Table-local rather than on `:root`: this is
+     the one surface in the app that reads a diverging scale, and a palette entry
+     would invite a second reader to import the argument with the colour. */
+  --rank-hot: #f87171;
+  --rank-cold: #60a5fa;
   /* The header's own line, declared for the reason the board and the Stats tab
      declare it: a header must not change height by being sorted, whichever face
      the browser finds for U+25B2. */
@@ -10795,6 +10830,42 @@ body {
   letter-spacing: 0.03em;
   color: var(--muted);
 }
+/* **The sections: a spanning header row over each run of categories.** A wide
+   stat table says which run is which by naming it, where a bare rule between
+   two columns says only that there is a seam. It is a second sticky row, so the
+   two have to be told apart: this one holds the top and the sort headers below
+   it hold `--lg-group-h`, which is what makes the pair pin as one head rather
+   than over each other. */
+.league-table thead .lg-group-row th {
+  top: 0;
+  z-index: 2;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  line-height: 16px;
+  border-bottom: none;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+  text-align: left;
+}
+.league-table thead .lg-group-row .lg-logo-col,
+.league-table thead .lg-group-row .lg-name-col {
+  z-index: 3;
+}
+/* The sort headers sit under the group row rather than at the top of the pane. */
+.league-table thead tr:last-child th {
+  top: var(--lg-group-h);
+}
+/* And one hairline where the runs meet, so the sections still read as sections
+   with the head scrolled past on a phone. An **inset shadow rather than a
+   border**, because every cell in this table paints an opaque `--cell-bg` and a
+   border would add a pixel to the column: the shadow costs the layout nothing
+   and paints over the ground the cell has already resolved. */
+.league-table .lg-group-start {
+  box-shadow: inset 1px 0 0 var(--border);
+}
+
 /* The team column pins to the left edge as the categories scroll under it —
    without it a row six categories in belongs to no team in particular, which is
    the same argument the board makes for pinning the player's name. */
@@ -10868,6 +10939,16 @@ body {
   font-variant-numeric: tabular-nums;
   font-weight: 600;
 }
+/* **The rank's wash, as a background *image* over the cell's own ground.** The
+   colour is computed per cell (see `rankTint`) and arrives as `--rank-tint`; a
+   flat gradient is what turns a colour into a layer, and a layer is what lets
+   the zebra stripe and the reader's accent-washed row show through rather than
+   being painted out — `background-color` is still `var(--cell-bg)`, resolved on
+   this cell as it is on every other. Absent, `transparent` paints nothing and
+   the cell is exactly what it was. */
+.league-table td.lg-num {
+  background-image: linear-gradient(var(--rank-tint, transparent), var(--rank-tint, transparent));
+}
 
 /* ---- The three tabs, and the Rankings span --------------------------------
    Both strips are **folded onto `.view-switch` / `.view-tab`** up beside the
@@ -10930,8 +11011,15 @@ body {
    and the loser goes quiet, because ten red cells down one side of a card would
    be the row shouting where the job is to mark a winner. A twelve-row table of
    ranks is that same picture turned on its side. */
+/* `--muted` rather than the board's `--faint`, and the wash is why: `--faint`
+   reads 3.0–3.7:1 on this table's three grounds untinted and 2.0–2.7 under the
+   scale at its strongest, which is a legibility loss on the very badge the
+   colour is a picture of. `--muted` reads 3.9–5.2 tinted — better than the old
+   badge was on a bare cell — so the second line gains rather than losing.
+   `--faint` is right on the research board, where the badge annotates a number
+   in a six-hundred-row scan; here it is half the cell's content. */
 .league-table td .col-rank {
-  color: var(--faint);
+  color: var(--muted);
 }
 .league-table td .col-rank.lg-rank-best {
   color: var(--hit);
