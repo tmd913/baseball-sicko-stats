@@ -14,8 +14,11 @@ import { LoadingBlock } from './Loading';
  * **What a row is** turns on where it came from, and the list says so rather
  * than levelling the two into one voice:
  *
- * - An **article** (`espn`) is a press that opens ESPN in a new tab. It carries
- *   a standfirst on the tab, where there is room for it.
+ * - A **report** (`rotowire`) is a press that opens RotoWire's page for that
+ *   player in a new tab — which is where the note was read from and where
+ *   RotoWire's own analysis of it lives, the one thing this section
+ *   deliberately does not ship. It carries the note itself as a standfirst on
+ *   the tab, where there is room for it.
  * - A **transaction** (`mlb`) is a fact with nowhere to go — MLB publishes one
  *   sentence and no link — so it is a static row and deliberately not a press.
  *   A row that looked like a link and did nothing would be worse than a row
@@ -57,7 +60,8 @@ function NewsRow({ item, summary }: { item: NewsItem; summary: boolean }) {
     </>
   );
   // `noopener noreferrer` on every one of them: these are third-party links and
-  // the app has no business handing ESPN a handle on the window it opened from.
+  // the app has no business handing RotoWire a handle on the window it opened
+  // from.
   return (
     <li className={`news-item news-${item.source}`}>
       {item.url ? (
@@ -72,12 +76,14 @@ function NewsRow({ item, summary }: { item: NewsItem; summary: boolean }) {
 }
 
 /**
- * A transaction is a **day** and an article is an **instant**, and the two are
- * printed at the resolution each of them actually has: `Aug 11` for a move
- * nobody timed, `Aug 14 · 7:23 AM` for a story that was filed at one. Reading a
- * bare date as an instant is what would go wrong on its own — `new Date('2026-08-11')`
- * is UTC midnight, which in ET is the 10th — so the length of the string is what
- * picks the branch.
+ * Both sources date to the **day** — MLB publishes no time with a transaction
+ * and RotoWire stamps a note `August 14, 2026` — so every row reads `Aug 11`
+ * today. The instant branch is kept rather than cut, and it is doing the work
+ * that matters either way: reading a bare date as an instant is what goes
+ * wrong on its own, `new Date('2026-08-11')` being UTC midnight, which in ET is
+ * the 10th. So the length of the string picks the branch, a day is pinned to
+ * noon before it is formatted, and a source that starts publishing an instant
+ * draws as one without this being touched.
  */
 function formatDate(raw: string): string {
   const dayOnly = raw.length <= 10;
@@ -89,31 +95,24 @@ function formatDate(raw: string): string {
 }
 
 /**
- * The upstream's own word for what a row is, in the reader's vocabulary where
- * the two differ.
+ * The upstream's own word for what a row is, and **both upstreams already
+ * write English**, which is why this is one line rather than a table.
  *
- * MLB's `typeDesc` is already English ("Status Change", "Trade", "Assigned")
- * and is printed as it comes. ESPN's `type` is a CMS label — `HeadlineNews`,
- * `TeamNotes` — which is a fact about ESPN's publishing system rather than
- * about the article, so the ones that say nothing to a reader collapse to
- * `Report`; `Story`, `Recap` and `Preview` already read as English and keep
- * their own word.
+ * MLB's `typeDesc` is already a reader's phrase ("Status Change", "Trade",
+ * "Assigned") and is printed as it comes. RotoWire's is the **body part** it
+ * files an injury note under — `Elbow`, `Hamstring`, `Head` — which says more
+ * in four characters than any label this app could invent, with `Report` on
+ * the notes it files under nothing; the server fills that, so the pill is
+ * RotoWire's own word rather than a mapping of it. (ESPN's `type` was the one
+ * that needed translating, being a CMS label — `HeadlineNews`, `TeamNotes` —
+ * and it went with the feed.)
  */
-const ESPN_KIND: Record<string, string> = {
-  HeadlineNews: 'Report',
-  Story: 'Story',
-  Recap: 'Recap',
-  Preview: 'Preview',
-  Media: 'Video',
-};
-
 function prettyKind(item: NewsItem): string {
-  if (item.source === 'mlb') return item.kind ?? 'Transaction';
-  return (item.kind && ESPN_KIND[item.kind]) ?? 'Report';
+  return item.kind ?? (item.source === 'mlb' ? 'Transaction' : 'Report');
 }
 
 /**
- * The News tab: everything the two feeds have on him, newest first.
+ * The News tab: everything the two sources have on him, newest first.
  *
  * The wait and the two absences are all here rather than in `PlayerDetails`,
  * because the *content* of each is about news rather than about tabs — and
@@ -143,9 +142,10 @@ export function NewsTab({
       <div className="news-empty">
         <p className="ovw-none">No recent news for {name}.</p>
         <p className="news-empty-note">
-          This reads MLB&rsquo;s own transaction log and the ESPN articles ESPN itself files
-          under his name. Nothing has landed in either lately, which for a healthy player in
-          the middle of a season is the ordinary case.
+          This reads RotoWire&rsquo;s notes on him and MLB&rsquo;s own transaction log.
+          Nothing has landed in either lately &mdash; which for a man RotoWire has never
+          written up, or one nobody has moved in four months, is the ordinary case rather
+          than a read that broke.
         </p>
       </div>
     );

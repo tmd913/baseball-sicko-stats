@@ -168,23 +168,32 @@ export interface NextGameInfo {
  * which, because a section labelled News that quietly mixes them would be
  * lying about half its rows:
  *
+ * - **`rotowire`** — a **report**. A short dated note from RotoWire's baseball
+ *   desk about this one player: a `headline` written to be scanned ("Lands on
+ *   IL with forearm strain"), the note itself in `summary`, the body part in
+ *   `kind` where RotoWire files one (`Elbow`, `Hamstring`) and `Report` where
+ *   it doesn't, and a `url` onto his RotoWire page, which is where the note and
+ *   RotoWire's own analysis of it live.
  * - **`mlb`** — an official transaction. It has no link and no summary, because
  *   MLB publishes neither: the whole of it is the one sentence in `headline`
  *   ("Los Angeles Dodgers placed LHP Blake Snell on the 15-day injured list"),
  *   and `kind` is MLB's own `typeDesc` ("Status Change", "Trade", "Assigned").
- * - **`espn`** — a written article, with a link that opens it, a standfirst in
- *   `summary` and ESPN's own `type` in `kind` ("HeadlineNews", "Recap").
  *
- * `date` is an **ISO instant for an article and a bare `YYYY-MM-DD` for a
- * transaction**, which is not sloppiness but the resolution each upstream
- * actually publishes; the client formats on the length and the sort compares on
- * the day the two share (see `news.ts::cmpDate`).
+ * `date` is a bare **`YYYY-MM-DD` on both**, because that is the resolution
+ * each upstream actually publishes — MLB dates a transaction to a day and
+ * RotoWire stamps a note `August 14, 2026`. The client still formats on the
+ * length of the string rather than assuming, so an instant would draw as one if
+ * either ever started publishing them (see `news.ts::cmpDate`, which sorts on
+ * the day for the same reason).
  */
 export interface NewsItem {
-  /** Stable across re-reads — the upstream's own id, prefixed by its source so
-   *  an MLB transaction and an ESPN article can never collide on one key. */
+  /** Stable across re-reads. MLB's own id where there is one; on a RotoWire
+   *  note there is none to have — the news ids exist on RotoWire's league-wide
+   *  feed and not on a player page — so it is the player, the day and the
+   *  headline, which is the same "what the row says" rule the transaction
+   *  dedupe runs on. Prefixed by source, so the two can never collide. */
   id: string;
-  source: 'mlb' | 'espn';
+  source: 'mlb' | 'rotowire';
   date: string;
   headline: string;
   summary: string | null;

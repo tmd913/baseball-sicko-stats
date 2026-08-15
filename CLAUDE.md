@@ -24,7 +24,7 @@ Two npm workspaces — `server/` (Express 5 + TypeScript, ESM, run via `tsx`) an
 
 ### Season is hardcoded
 
-The current season is pinned in **eight places** that must stay in sync: `hfSea=2026` in `savant.ts`, `CURRENT_SEASON` in `percentiles.ts`, and `SEASON` in `xwoba.ts`, `pitcherArsenal.ts`, `teamStats.ts`, `expectedStats.ts`, `research.ts` and `espn.ts` (which uses it for both the ESPN league endpoint's season segment and the MLB name index it matches against — a mismatch there matches nobody and quietly makes the whole league free agents). Update all eight (and check date-default logic, plus the league constants in `leagueRates.ts`) when the season rolls over.
+The current season is pinned in **nine places** that must stay in sync: `hfSea=2026` in `savant.ts`, `CURRENT_SEASON` in `percentiles.ts`, and `SEASON` in `xwoba.ts`, `pitcherArsenal.ts`, `teamStats.ts`, `expectedStats.ts`, `research.ts`, `espn.ts` (which uses it for both the ESPN league endpoint's season segment and the MLB name index it matches against — a mismatch there matches nobody and quietly makes the whole league free agents) and `rotowire.ts` (RotoWire's own player tables, which **reject the request** without it rather than defaulting to the current year, so this one fails loudly — and it is in the blob key, so a stale season leaves last year's index on disk under its own name). Update all nine (and check date-default logic, plus the league constants in `leagueRates.ts`) when the season rolls over.
 
 ### The rest of the architecture
 
