@@ -316,6 +316,16 @@ export default function App() {
      start this one, so it owes the reader nothing until it is slow enough to
      be worth saying. The same hook now guards every block wait in the app. */
   const showLoading = useDelayedFlag(reportLoading);
+  /* Whether the very first report read has settled — read or failed, and set
+     once in `loadReport`'s `finally` and never back to false. This is not the
+     same question `reportLoading` answers: that one re-arms on every later
+     load (a date change, a roster edit), and gating the tab pills on
+     `!reportLoading` would blank the whole row again each time. What the pills
+     need is "has an answer come back at all" — settled either way, so a
+     failed first read still gets its tabs rather than losing them for the
+     session, and a genuinely empty roster still lands on the lone Research
+     pill once the answer is in. See `initialLoadSettled` below. */
+  const [reportSettled, setReportSettled] = useState(false);
   const [rosterLoaded, setRosterLoaded] = useState(false);
   /**
    * The **watchlist** — `${kind}-${id}` keys the user is following on the
@@ -1984,6 +1994,11 @@ export default function App() {
         .catch((e: Error) => setError(e.message))
         .finally(() => {
           if (!quiet) setReportLoading(false);
+          // Settled either way — a failed read still counts as an answer, so
+          // the tab pills below don't wait forever for one that isn't coming.
+          // Setting this to `true` on every call (quiet ones included) is a
+          // no-op once it already is, which is the whole of "at least once".
+          setReportSettled(true);
         });
     },
     [start, end, usingFantasy],
@@ -2124,6 +2139,25 @@ export default function App() {
   // one tab a new user can actually use.
   const showRosterViews = displayReports.length > 0;
   const showViewToggle = true;
+  /* That "lone Research pill" rule is right for a genuinely empty roster and
+     was wrong for the half-second before the first report has even answered:
+     `displayReports.length > 0` is false in both cases, so the bar drew
+     Research alone on every load and only gained Roster/Feed (and League,
+     below) once the read came back — a tab row that looked broken rather than
+     one that was deliberately saying "nothing watched yet".
+
+     `reportSettled` is what tells the two apart, and `espnStatusSettled` is
+     folded into the same gate rather than left on its own: `espnConnected`
+     alone would have the pills settle in two waves — three, then a fourth a
+     beat later for League — which is the same flicker moved one request
+     later. Both settle on their own schedule (independent GET requests fired
+     on mount) and either can be the slower of the two, so the pills wait on
+     whichever finishes last. Nothing about the ordinary loading state pays
+     for it: the block wait and the `Updating` badge below are gated on
+     `showLoading`/`reportLoading` and `isRosterView(view)`, not on this, so a
+     slow read still shows its own "Reading your roster's games" regardless of
+     where the pills stand. */
+  const initialLoadSettled = reportSettled && espnStatusSettled;
   useEffect(() => {
     if (!hasRealLiveGame) return;
     const t = setInterval(() => loadReport(true), 20_000);
@@ -3457,6 +3491,16 @@ export default function App() {
         <div className="view-bar">
           <div className="view-bar-tabs">
             <div className="view-switch" role="tablist" aria-label="Page">
+              {/* The pills themselves wait on `initialLoadSettled` — see where
+                  it's computed. Before that, this tablist is empty rather than
+                  showing Research alone: Research needs no roster and so has
+                  nothing else gating it, and drawing it a beat before its
+                  siblings is exactly the flicker this waits out. Everything
+                  else in `.view-bar-tabs` (the kind tabs, the roster row's own
+                  controls, the research board's own chrome) is untouched,
+                  since none of it depends on the report either. */}
+              {initialLoadSettled && (
+              <>
               {/* Nothing watched, nothing to put on either roster page — so
                   these two pills only appear once there is something to read. */}
               {showRosterViews && (
@@ -3522,6 +3566,8 @@ export default function App() {
                 >
                   League
                 </button>
+              )}
+              </>
               )}
             </div>
             {/* Batters / Pitchers. */}
