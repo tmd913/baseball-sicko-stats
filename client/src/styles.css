@@ -10770,10 +10770,14 @@ body {
    The one thing each adds is the row it sits in: the League strip leads the
    view and the span strip leads its table, both left-aligned rather than
    centred, because the page under them starts at the left edge. */
-.lg-tabs {
-  margin: 0 auto 14px;
+/* The strip hugs its own pills and sits at the left edge of the reading column
+   the header under it uses, which needs a block row of its own: the shell is
+   `inline-flex` (it is `.view-switch`), and an auto margin does not centre an
+   inline-level box — left to itself it would sit at the far left of the window
+   while the scoreboard's own header sat 200px in. */
+.lg-tabs-row {
   max-width: var(--card-column);
-  display: flex;
+  margin: 0 auto 14px;
 }
 .lg-span-head {
   max-width: var(--card-column);
@@ -10782,6 +10786,20 @@ body {
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+}
+/* Both strips break **between** two pills rather than inside one, which is the
+   rule `.view-bar-tabs` states one tier up. Without it `Current matchup` wraps
+   inside its own button on a phone — a two-line pill in a row of one-line ones,
+   which `align-items: center` then leaves at a different top from its
+   neighbours — and the shell overhangs the column it is centred in (measured at
+   320: 288.56px of switch in a 276px column, 6.28px into each gutter). */
+.lg-tabs,
+.lg-span-row {
+  flex-wrap: wrap;
+}
+.lg-tab,
+.lg-span-tab {
+  white-space: nowrap;
 }
 /* What the span covers, beside the tabs rather than under them — it is a
    caption on the control rather than on the table, the way the scoreboard's

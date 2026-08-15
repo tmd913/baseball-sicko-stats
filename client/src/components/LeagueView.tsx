@@ -435,6 +435,7 @@ export default function LeagueView({
       {/* The strip. Folded onto `.view-switch` / `.view-tab` in the stylesheet
           rather than restyled to resemble the app's other tab rows, so this is
           the same object as the view switch above it by construction. */}
+      <div className="lg-tabs-row">
       <div className="lg-tabs" role="tablist" aria-label="League">
         {TABS.map((t) => (
           <button
@@ -449,6 +450,7 @@ export default function LeagueView({
             {t.label}
           </button>
         ))}
+      </div>
       </div>
 
       {tab === 'rankings' ? (
