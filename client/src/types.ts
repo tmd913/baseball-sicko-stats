@@ -1203,6 +1203,50 @@ export interface EspnRoster {
   lineups?: Record<string, number[]> | null;
 }
 
+// ---- The Schedule view -----------------------------------------------------
+// Mirrors `server/src/types.ts` by hand, as every type here does.
+
+/**
+ * One scheduled game, as the Schedule view reads it — the next fortnight of
+ * every club, over the wire once and joined to a row by its player's club.
+ *
+ * Deliberately thin: the view draws an opponent abbreviation and, on a
+ * pitcher's own row, whether he is the man his club has announced, which needs
+ * the two ids and nothing else.
+ */
+export interface ScheduleGame {
+  gamePk: number;
+  /** The ET baseball day the game counts on, `YYYY-MM-DD`. */
+  date: string;
+  /** ISO first pitch, or null where the schedule gives none. */
+  startTime: string | null;
+  homeId: number;
+  awayId: number;
+  /** Club abbreviations — "MIL". Empty where the teams table couldn't be read. */
+  home: string;
+  away: string;
+  /** MLB's own state. A postponement is not a game he gets and is not counted. */
+  state: 'scheduled' | 'live' | 'final' | 'postponed';
+  /**
+   * Whom each side has *announced*, and nothing more — clubs name a starter
+   * about three days out, so a start mark is a fact about the front of the
+   * window and an absence past it is the schedule rather than the view.
+   */
+  homeProbableId: number | null;
+  awayProbableId: number | null;
+}
+
+/** The whole window, as `/api/schedule` answers it. */
+export interface ScheduleWindow {
+  /** First ET day, inclusive — the server's own `baseballToday()`. */
+  start: string;
+  /** Last ET day, inclusive. */
+  end: string;
+  /** How many days that is, so a client can tell a short answer from a full one. */
+  days: number;
+  games: ScheduleGame[];
+}
+
 /**
  * The league scoreboard — one matchup period's matchups, and every team's
  * season-to-date total in each of the league's own scoring categories.

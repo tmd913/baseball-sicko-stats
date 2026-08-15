@@ -17,6 +17,7 @@ import type {
   ResearchIncludeKey,
   ResearchRow,
   RosterSource,
+  ScheduleWindow,
   SeasonPlayer,
   SeasonStats,
   UserPrefs,
@@ -97,6 +98,18 @@ const JSON_HEADERS = { 'Content-Type': 'application/json' };
 export const api = {
   async players(): Promise<{ season: number; players: SeasonPlayer[] }> {
     return request('/api/players');
+  },
+  /**
+   * Every club's next fortnight, with whoever each side has announced — what
+   * the Schedule view draws on both wide tables.
+   *
+   * No parameters: the server names the window off its own `baseballToday()`
+   * and the client slices it to the span on screen, so one answer serves every
+   * user, every row and both spans. Fetched once per session and kept, the way
+   * the research blob is.
+   */
+  async schedule(): Promise<ScheduleWindow> {
+    return request('/api/schedule');
   },
   /** The user's **roster** — the saved list the three roster views report on.
    *  The path is still `/api/watchlist` and stays that way: renaming a route

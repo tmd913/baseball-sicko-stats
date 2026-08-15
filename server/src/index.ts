@@ -14,6 +14,7 @@ import { getPlayerNews } from './news.js';
 import { getSeasonArsenal } from './pitcherArsenal.js';
 import { getPitcherXera } from './expectedStats.js';
 import { getResearch, getPlayerWindows } from './research.js';
+import { getScheduleWindow } from './schedule.js';
 import type { Arsenal } from './pitcherArsenal.js';
 import { getLeaguePitchAverage } from './pitchLeague.js';
 import { RESEARCH_INCLUDE_KEYS, RESEARCH_WINDOWS } from './types.js';
@@ -145,6 +146,28 @@ app.get(
     const season = new Date().getFullYear();
     const players = await getSeasonPlayers(season);
     res.json({ season, players });
+  }),
+);
+
+/**
+ * Every club's next fortnight, with whoever each side has announced — what the
+ * Schedule view on the summary table and the research board both draw.
+ *
+ * **No parameters at all, which is the point.** The window is the server's own
+ * `baseballToday()` plus `SCHEDULE_DAYS`, so there is exactly one answer for
+ * the whole app on a given day and exactly one cache entry behind it; the
+ * client picks 7 or 14 and slices what it was given. A `days=` parameter would
+ * buy nothing a slice doesn't and cost a second entry of the same upstream —
+ * the same reasoning `getPlayerPool` follows for its cookie-free player list.
+ *
+ * A failed read is a 502 through `asyncRoute`, which is right here and not the
+ * usual "cost the column its value": this answer *is* the table.
+ */
+app.get(
+  '/api/schedule',
+  requireUser,
+  asyncRoute(async (_req, res) => {
+    res.json(await getScheduleWindow());
   }),
 );
 
