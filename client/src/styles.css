@@ -10802,9 +10802,11 @@ body {
      own box: 5px + a 16px line + 5px, with no bottom border (the sort row under
      it carries the one that closes the head). */
   --lg-group-h: 26px;
-  /* The two ends of the rank scale. Table-local rather than on `:root`: this is
-     the one surface in the app that reads a diverging scale, and a palette entry
-     would invite a second reader to import the argument with the colour. */
+  /* The two ends of the rank scale, which the **badge** is filled from — it
+     washed the whole cell until the scale moved onto the chip. Table-local
+     rather than on `:root`: this is the one surface in the app that reads a
+     diverging scale, and a palette entry would invite a second reader to
+     import the argument with the colour. */
   --rank-hot: #f87171;
   --rank-cold: #60a5fa;
   /* The header's own line, declared for the reason the board and the Stats tab
@@ -10949,16 +10951,23 @@ body {
   font-weight: 500;
   color: var(--muted);
 }
-/* The reader's own row. **`--cell-bg`, not `background`** — set as a paint it
-   would win on the team cell and lose to the zebra stripe elsewhere, which is
-   how the wash came to be a rectangle in one column rather than a tint across a
-   row. Named, it resolves on every cell of the row including the pinned one. */
-.league-table tbody tr.lg-row-mine th,
-.league-table tbody tr.lg-row-mine td {
-  /* The same 12% accent wash the pitcher card's live inning takes — enough to
-     find your own row down a column of twelve and not enough to read as a
-     selection you could act on. */
-  --cell-bg: color-mix(in srgb, var(--accent) 12%, var(--bg));
+/* **The reader's own row is marked on its badge, not by washing the row.** It
+   was a 12% accent `--cell-bg` across all twelve cells, which is one wash too
+   many now that every rank cell carries a colour of its own: a row tinted
+   accent-blue under a column of blue-to-red badges is two scales competing for
+   one reading, and on the cold end of a category the two were very nearly the
+   same ink. The team's badge is where the row says who it is anyway — the logo,
+   the name and the record are all in those two cells — so the mark goes there
+   and the numbers are left to mean one thing.
+
+   A **ring rather than a border**, which is this app's own idiom for exactly
+   this (the live-role ring is a 2px `box-shadow` outside a 1px border): every
+   image in the app is `border-box`, so a real border would eat 2px out of a
+   26px badge and shrink the picture, where a shadow is drawn outside it and
+   costs the layout nothing. It composes with `.lg-logo-none`'s own hairline, so
+   a team with no logo is marked as plainly as one with. */
+.league-table tbody tr.lg-row-mine .lg-logo {
+  box-shadow: 0 0 0 2px var(--accent);
 }
 /* The category cells: a share of the slack rather than content width, right
    aligned and tabular, as every stat column in the app is. */
@@ -10968,16 +10977,6 @@ body {
   text-align: right;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
-}
-/* **The rank's wash, as a background *image* over the cell's own ground.** The
-   colour is computed per cell (see `rankTint`) and arrives as `--rank-tint`; a
-   flat gradient is what turns a colour into a layer, and a layer is what lets
-   the zebra stripe and the reader's accent-washed row show through rather than
-   being painted out — `background-color` is still `var(--cell-bg)`, resolved on
-   this cell as it is on every other. Absent, `transparent` paints nothing and
-   the cell is exactly what it was. */
-.league-table td.lg-num {
-  background-image: linear-gradient(var(--rank-tint, transparent), var(--rank-tint, transparent));
 }
 
 /* ---- The three tabs, and the Rankings span --------------------------------
@@ -11036,24 +11035,44 @@ body {
    percentile badge takes — `.col-rank`, folded onto rather than restyled, so a
    second line under a number is one object in this app.
 
-   **First place is marked and nothing else is**, which is the League page's own
-   rule arriving from the scoreboard: the winning side of a category is green
-   and the loser goes quiet, because ten red cells down one side of a card would
-   be the row shouting where the job is to mark a winner. A twelve-row table of
-   ranks is that same picture turned on its side. */
-/* `--muted` rather than the board's `--faint`, and the wash is why: `--faint`
-   reads 3.0–3.7:1 on this table's three grounds untinted and 2.0–2.7 under the
-   scale at its strongest, which is a legibility loss on the very badge the
-   colour is a picture of. `--muted` reads 3.9–5.2 tinted — better than the old
-   badge was on a bare cell — so the second line gains rather than losing.
-   `--faint` is right on the research board, where the badge annotates a number
-   in a six-hundred-row scan; here it is half the cell's content. */
+   **Every rank is coloured and first place is not marked apart**, which is a
+   reversal of the rule this table borrowed from the scoreboard (there the
+   winning side of a category is green and the loser goes quiet). That rule is
+   right for a card showing one matchup, where the job is to mark a *winner*;
+   this is twelve teams ranked in one category, where the job is to say **where
+   each of them stands**, and a green `1st` inside a red-to-blue scale would be
+   a third colour system saying what the reddest chip already says. The scale
+   marks first place by being at its own end. */
+/* **Here the rank is a filled pill and the scale is its fill**, where the board
+   and the Stats tab draw the same class as a bare second line. The cells used
+   to carry the colour and the badge was `--muted` text on top of it; the wash
+   is gone (see `.lg-row-mine` above) and the colour has come down onto the chip
+   it was always describing.
+
+   **The fill carries the scale and the text does not**, which is what makes it
+   legible at every rank: `--text` on the tinted grounds measures 5.1–5.7:1 at
+   the ends of the scale and 12.8:1 at its neutral middle, where colouring the
+   *text* instead put a mid-luminance red on a mid-luminance ground at 3.1:1 —
+   under the 4.5 a 11px label owes a reader. `--panel-2` is the base the tone is
+   mixed into, so a team in the middle of a category gets a plain neutral chip
+   and the scale passes through grey rather than through nothing.
+
+   Opaque rather than a `color-mix(…, transparent)` layer, unlike the wash it
+   replaces: that one had to let the zebra stripe through because it covered a
+   whole cell, where a badge is a discrete object and reads as one ink. */
 .league-table td .col-rank {
-  color: var(--muted);
-}
-.league-table td .col-rank.lg-rank-best {
-  color: var(--hit);
-  font-weight: 700;
+  /* Block so it takes its own line under the value, `fit-content` so it hugs
+     its ordinal, and `margin-left: auto` so it lands on the same right edge the
+     number above it is set to. */
+  display: block;
+  width: fit-content;
+  margin: 3px 0 0 auto;
+  padding: 1px 7px;
+  /* Fully round: the app reserves that shape for things you read, and the
+     control radius for things you press. */
+  border-radius: 999px;
+  color: var(--text);
+  background: var(--rank-bg, var(--panel-2));
 }
 
 /* ---- Transactions ---------------------------------------------------------

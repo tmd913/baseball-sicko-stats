@@ -45,14 +45,14 @@ function ordinal(n: number): string {
 }
 
 /**
- * The wash behind a cell, from its rank.
+ * The badge's own fill, from its rank.
  *
  * **A diverging scale over the teams in one category — red at the top, blue at
- * the bottom, nothing in the middle.** It is a departure from a rule this
- * codebase states at length, so it is worth stating why here rather than
- * leaving a reader to find the contradiction: the research board's stat columns
- * are deliberately **monochrome** and its percentile badges deliberately
- * `--faint`, on the grounds that "colour is reserved for *state*" (see
+ * the bottom, grey in the middle.** It is a departure from a rule this codebase
+ * states at length, so it is worth stating why here rather than leaving a
+ * reader to find the contradiction: the research board's stat columns are
+ * deliberately **monochrome** and its percentile badges deliberately `--faint`,
+ * on the grounds that "colour is reserved for *state*" (see
  * `client-research.md`). That rule is right for a six-hundred-row leaderboard
  * whose job is to be *scanned* for names, where a heat map would be a second
  * colour system beside the live inning, the postponement and the trend. This
@@ -62,6 +62,14 @@ function ordinal(n: number): string {
  * on a table this small it is the difference between finding your weak category
  * at a glance and reading twelve ordinals.
  *
+ * **It is on the badge, where it used to wash the whole cell.** A cell wash had
+ * to be a translucent layer over whatever ground the row resolved, so it could
+ * only ever be faint (22% at its strongest) and it painted a colour across the
+ * *value* as well as the rank — a figure tinted by its own standing, which is
+ * the one thing a raw number on this page is there to avoid. On the chip the
+ * scale can be strong enough to read at a glance and it stops where the claim
+ * stops: `1st` is red, the figure beside it is just the figure.
+ *
  * **It colours the rank, never the value**, which is what makes it right for a
  * `lowerBetter` category with no special case at all: the server has already
  * computed the rank with the direction baked in (`rankBy`, `1` is best whichever
@@ -69,23 +77,32 @@ function ordinal(n: number): string {
  * both take the same red. **Ties share a rank and so share a colour** by the
  * same construction.
  *
+ * **The fill carries the scale and the text does not.** `--text` on these
+ * grounds measures 5.1–5.7:1 at the ends and 12.8:1 in the middle, where
+ * colouring the *text* instead — the obvious first move, and the one the old
+ * badge made against the cell wash — puts a mid-luminance red on a
+ * mid-luminance ground at 3.1:1, under the 4.5 an 11px label owes a reader.
+ *
  * **`n` is the teams *ranked in that category*, not the twelve rows**, matching
  * the badge's own denominator: a team with no figure is out of the ranking
- * rather than at the bottom of it, so it takes no wash either.
+ * rather than at the bottom of it, so it gets no badge either.
  */
-const TINT_MAX = 22;
+const BADGE_MAX = 48;
 
-function rankTint(rank: number | undefined, n: number): string | undefined {
+function rankBadge(rank: number | undefined, n: number): React.CSSProperties | undefined {
   if (typeof rank !== 'number' || !Number.isFinite(rank) || n < 2) return undefined;
   // 0 at the best rank, 1 at the worst; `d` is the distance from the middle, so
-  // the scale fades to nothing where a team is neither.
+  // the scale passes through the neutral chip where a team is neither.
   const t = Math.min(1, Math.max(0, (rank - 1) / (n - 1)));
   const d = Math.abs(t - 0.5) * 2;
-  if (d <= 0) return undefined;
-  const pct = Math.round(d * TINT_MAX * 10) / 10;
+  const pct = Math.round(d * BADGE_MAX * 10) / 10;
   // The two ends are tokens on `.league-table` rather than hexes written here,
-  // so the scale is one definition and the alpha is the only thing computed.
-  return `color-mix(in srgb, var(${t < 0.5 ? '--rank-hot' : '--rank-cold'}) ${pct}%, transparent)`;
+  // so the scale is one definition and the strength is the only thing computed;
+  // `--panel-2` is the base they are mixed into, which is what makes the middle
+  // of a category a plain neutral chip rather than no chip at all.
+  return {
+    '--rank-bg': `color-mix(in srgb, var(${t < 0.5 ? '--rank-hot' : '--rank-cold'}) ${pct}%, var(--panel-2))`,
+  } as React.CSSProperties;
 }
 
 /**
@@ -299,7 +316,18 @@ function RankTable({
                     phone: what has to stay is the least that identifies the
                     row, and 168px of team name is paid for out of the
                     categories beside it. */}
-                <td className="lg-logo-col" title={t ? `${t.name} — ${record(t)}` : undefined}>
+                {/* The badge is where the reader's own row is marked, the accent
+                    ring having replaced the wash that used to run across all
+                    twelve cells — so the title names it too, a ring being a
+                    thing you see rather than a thing you can read. */}
+                <td
+                  className="lg-logo-col"
+                  title={
+                    t
+                      ? `${t.name} — ${record(t)}${r.teamId === rankings.myTeamId ? ' — your team' : ''}`
+                      : undefined
+                  }
+                >
                   <TeamLogo team={t} />
                 </td>
                 <th scope="row" className="lg-name-col">
@@ -312,26 +340,25 @@ function RankTable({
                   const v = r.values[c.statId];
                   const rank = r.ranks[c.statId];
                   const n = ranked.get(c.statId) ?? 0;
-                  const tint = rankTint(rank, n);
+                  const badge = rankBadge(rank, n);
                   return (
                     <td
                       key={c.statId}
                       className={`lg-num${starts.has(i) ? ' lg-group-start' : ''}`}
-                      // The wash rides as a custom property rather than as a
-                      // `background`, so it composites *over* whatever
-                      // `--cell-bg` the row resolved — the zebra stripe and the
-                      // reader's own accent row both show through it rather than
-                      // being painted out. See `.league-table td.lg-num`.
-                      style={tint ? ({ '--rank-tint': tint } as React.CSSProperties) : undefined}
                     >
                       {fmtValue(v, c)}
-                      {/* The rank under the value, in the slot and the type the
-                          research board's own percentile badge takes — folded
-                          onto `.col-rank` rather than restyled, so a second
-                          line under a number is one object in this app. */}
+                      {/* The rank under the value, in the slot the research
+                          board's own percentile badge takes — `.col-rank`,
+                          folded onto rather than restyled, so a second line
+                          under a number is one object in this app. What this
+                          table adds is the fill: the scale rides as a custom
+                          property, so the colour is computed here (where the
+                          rank and its population are) and painted there (where
+                          the chip's shape and its contrast rule live). */}
                       {typeof rank === 'number' && (
                         <span
-                          className={`col-rank${rank === 1 ? ' lg-rank-best' : ''}`}
+                          className="col-rank"
+                          style={badge}
                           title={`${c.name}: ${ordinal(rank)} of ${n} — ${spanWords}`}
                         >
                           {ordinal(rank)}

@@ -618,11 +618,11 @@ cells match, 0 wrong, with 73 tied cells among them.**
 
 **And the rank is what the client colours**, which is the whole reason the
 direction can be baked in here and needs no special case there: a `lowerBetter`
-category's `1st` is its lowest figure, so the reddest cell on the ERA column and
-the reddest cell on the HR column mean the same thing. Ties share a rank and so
-share a colour by the same construction. See **Client — the League view**, *The
-cells are washed by rank*, which is also where the departure from the research
-board's monochrome rule is argued.
+category's `1st` is its lowest figure, so the reddest badge on the ERA column
+and the reddest badge on the HR column mean the same thing. Ties share a rank
+and so share a colour by the same construction. See **Client — the League
+view**, *The rank is a badge and the badge is the scale*, which is also where
+the departure from the research board's monochrome rule is argued.
 
 **Caching is this file's own two rules.** A span whose last matchup period is
 **over** cannot change, so it takes a storage blob read with no freshness test —
