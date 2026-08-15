@@ -375,11 +375,38 @@ export async function getProjectedStarts(playerId: number): Promise<ProjectedSta
     .filter((p): p is number => p !== undefined)
     .sort((a, b) => a - b);
 
-  // Everything his club has already named him for. These are facts and they are
-  // in the answer whatever the projection can or cannot do around them.
-  const announcedAt = games
-    .map((g, i) => (g.date > today && mine(g) === playerId ? i : -1))
+  // **Everything his club has named him for, today's start included** — which
+  // is a wider set than the rows, and the distinction is the whole of it.
+  //
+  // This was one list read `g.date > today`, doing two jobs with one test: it
+  // seeded the rows *and* it was the anchor the projection stepped forward
+  // from. The `> today` is right for the rows (see `announcedAt` below) and
+  // wrong for the anchor, because **a start today is the most recent thing
+  // known about his rotation slot and the one the anchor most needs.** It is
+  // also invisible everywhere else: `positions` comes off his game log, which
+  // has no row for a game he has not finished pitching, so on the afternoon of
+  // a start there was nothing at all to see it by.
+  //
+  // What that cost, measured on the live season: Logan Webb, announced for
+  // 2026-08-15 and last logged on 08-09, anchored on 08-09 instead. His cadence
+  // (5 club games) then landed the next turn on today's own game, which the
+  // loop skips as past; the game after it is Tidwell's, which it counts as a
+  // slip; and it settled on **08-18, three days after a start he is making
+  // today** — a rotation nobody pitches. Anchored on today it steps five club
+  // games on to 08-21, which is where a five-man turn lands once the 08-17 off
+  // day is counted.
+  //
+  // `>= today` rather than `> today` is the whole fix, and it is idempotent
+  // where the two sources agree: once his game log catches up, today's index is
+  // in `positions` as well and the anchor is the same either way.
+  const namedAt = games
+    .map((g, i) => (g.date >= today && mine(g) === playerId ? i : -1))
     .filter((i) => i >= 0);
+  // **The rows are the future ones alone.** A start today is the day block's
+  // own business directly above this one on the page, and printing it twice is
+  // what the `> today` test was really written for — it is kept here, where it
+  // is about what to draw, and dropped above, where it was about what to know.
+  const announcedAt = namedAt.filter((i) => games[i].date > today);
 
   const cadence = cadenceOf(positions);
   const lastPlayed = games.reduce((acc, g, i) => (g.date <= today ? i : acc), -1);
@@ -402,9 +429,14 @@ export async function getProjectedStarts(playerId: number): Promise<ProjectedSta
   } else {
     // The latest start we know of. An announcement outranks his own history: it
     // is his club saying where he is in the rotation *now*, which is the very
-    // thing the cadence is being used to infer.
-    const anchor = announcedAt.length ? announcedAt[announcedAt.length - 1] : positions[positions.length - 1];
-    const missed = announcedAt.length ? 0 : Math.max(0, lastPlayed - anchor) / cadence;
+    // thing the cadence is being used to infer — and `namedAt` rather than
+    // `announcedAt`, so **today's start anchors him**, which is the fix set out
+    // above. A man his club has named for a game is by that fact in the
+    // rotation, so a name of any date clears the missed-turns guard too: it is
+    // there for a pitcher nobody has named at all, whose last start is the only
+    // evidence there is.
+    const anchor = namedAt.length ? namedAt[namedAt.length - 1] : positions[positions.length - 1];
+    const missed = namedAt.length ? 0 : Math.max(0, lastPlayed - anchor) / cadence;
     if (missed > MAX_TURNS_MISSED) {
       refusal = 'out-of-rotation';
     } else {

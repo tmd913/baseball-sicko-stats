@@ -339,6 +339,62 @@ projection wanted, that slot is not his — it is skipped and the rest re-phased
 from wherever he lands, up to `MAX_SLIP` (3) consecutive skips, past which the
 rotation has clearly been re-ordered and a shorter list beats a longer wrong one.
 
+### A start today is the anchor, and for a while nothing could see it
+
+**Reported as "the projected starts look wrong for pitchers starting today":
+Logan Webb, taking the ball on 2026-08-15, was projected next for 08-18 — three
+days later, which is not a rotation anybody pitches.**
+
+**One test was doing two jobs.** The list of games his club had named him for
+was read `g.date > today`, and it both seeded the announced **rows** and
+supplied the **anchor** the projection steps forward from. The `> today` is
+right for the rows and wrong for the anchor: a start today is the most recent
+thing known about his slot and the one an anchor most wants. It is also
+invisible everywhere else, which is why nothing caught it — `positions` comes
+off his **game log**, which has no row for a game he has not finished pitching,
+so on the afternoon of a start there was no evidence of it in either input.
+
+**What that produced, traced on Webb's own schedule.** His last logged start was
+08-09 and his cadence is 5 club games. Anchored on 08-09, five club games on is
+08-15 — today's game, his own start — which the loop skips as past and steps one
+game past; 08-16 is Tidwell's, counted as a slip; 08-17 is an off day; and it
+settled on **08-18**. The reported symptom is the anchor being a turn behind and
+then landing in the middle of the next man's.
+
+**`>= today` on the anchor is the whole fix**, with the rows keeping `> today`
+under a name of their own. It is idempotent where the two inputs agree: once the
+game log catches up, today's index is in `positions` as well and the anchor is
+the same either way.
+
+**It fixes a refusal too, which was the same blindness one branch over.** A
+pitcher whose last *logged* start is more than `MAX_TURNS_MISSED` turns back is
+refused as `out-of-rotation` — correctly, when nobody has named him for
+anything. A man his club has named for **today** is by that fact in the
+rotation, and he was being refused: Braydon Fisher goes from `out-of-rotation`
+to a five-row projection on his cadence of 7.
+
+**Measured against an independent recompute of both rules, over every announced
+starter in the league on 2026-08-15** — 29 pitchers, each one's club schedule and
+game log fetched raw and both variants run against them:
+
+- the route matches the recompute on **29 of 29**;
+- **24 of the 29 changed**, and the old answers were wrong by two to four days
+  rather than marginally: Michael Lorenzen, Sonny Gray, Jesús Luzardo, Ryan
+  Gusto and eight more were projected for **08-17, two days after a start they
+  were making that afternoon**;
+- the five that did not change are the five that could not: four were already
+  anchored correctly by a *future* announcement beside today's, and Brad Lord is
+  `too-few-starts` either way.
+
+**And nothing moves for a pitcher who is not starting today**, which is the
+regression that mattered and is provable as well as measured: with no game today
+naming him the two lists are the same list, so the anchor is the same index.
+Checked on a random 25 pitchers with eight or more starts and no start that day —
+**0 changed**, and the route matched the recompute on 24 of them (the 25th was
+the script feeding Kris Bubic his leaderboard *stint* club instead of his
+current one; against LAD the two agree on `new-club`, which is the answer this
+file already records for him).
+
 **What it refuses to guess**, which is four different facts about the pitcher and
 so four different sentences (`ProjectionRefusal`). `not-a-starter` — he has
 started nothing. `too-few-starts` — under three, too thin a median to read a
