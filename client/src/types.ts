@@ -148,6 +148,65 @@ export interface NextGameInfo {
 }
 
 /**
+ * One start on a pitcher's next month — the player page's **Projected Starts**
+ * block.
+ *
+ * **`announced` is the field the whole thing turns on.** A club names its
+ * probables a few days out and that is a fact; everything past it is
+ * `projectedStarts.ts` placing him on his club's remaining schedule at the
+ * cadence his own season has been pitched at, which is a guess. The two ride on
+ * one list because they answer one question, and the flag is what stops them
+ * reading as one kind of thing — the client draws a projected row differently,
+ * the app's standing rule that an estimate is marked as one.
+ */
+export interface ProjectedStart {
+  gamePk: number;
+  date: string; // "2026-08-15" — the day it counts on
+  startTime: string | null; // ISO, null until the club posts one
+  home: boolean; // his club's side of it
+  opponent: string; // "TOR" — the abbreviation, as everywhere else
+  opponentId: number;
+  /** True where MLB has named him for this game, false where we have placed
+   *  him. Never a shade in between: a row is a fact or it is a guess. */
+  announced: boolean;
+  /** The **other** side's announced starter — his counterpart. Null until that
+   *  club names one, which on a projected row it never has. */
+  probablePitcher: ProbablePitcher | null;
+}
+
+/**
+ * Why nothing was projected past what has been announced. Each is a different
+ * sentence on screen, because they are different facts about the pitcher:
+ *
+ * - `not-a-starter` — he has started nothing this season, so there is no slot.
+ * - `too-few-starts` — under three, which is too thin a median to read a
+ *   cadence off.
+ * - `new-club` — he has started this season and every one of them was for the
+ *   club that has since traded him, so he holds no slot in this one yet.
+ * - `out-of-rotation` — his last start was more than two turns ago, so whatever
+ *   slot he held is not his to be projected into now.
+ * - `no-schedule` — his club couldn't be placed, or its schedule couldn't be
+ *   read. The only one of the four that is our failure rather than his.
+ */
+export type ProjectionRefusal =
+  | 'not-a-starter'
+  | 'too-few-starts'
+  | 'new-club'
+  | 'out-of-rotation'
+  | 'no-schedule';
+
+export interface ProjectedStarts {
+  /** Announced first where they exist, then projected, in date order. */
+  starts: ProjectedStart[];
+  /** How many of his club's games a turn takes — 5 for an ordinary five-man
+   *  rotation. Null whenever nothing was projected, which is what `refusal`
+   *  then says the reason for. */
+  cadence: number | null;
+  /** Null when the projection ran. */
+  refusal: ProjectionRefusal | null;
+}
+
+/**
  * One thing that has been reported or recorded about a player, for the player
  * page's **News** tab and the section that previews it.
  *
@@ -155,23 +214,32 @@ export interface NextGameInfo {
  * which, because a section labelled News that quietly mixes them would be
  * lying about half its rows:
  *
+ * - **`rotowire`** — a **report**. A short dated note from RotoWire's baseball
+ *   desk about this one player: a `headline` written to be scanned ("Lands on
+ *   IL with forearm strain"), the note itself in `summary`, the body part in
+ *   `kind` where RotoWire files one (`Elbow`, `Hamstring`) and `Report` where
+ *   it doesn't, and a `url` onto his RotoWire page, which is where the note and
+ *   RotoWire's own analysis of it live.
  * - **`mlb`** — an official transaction. It has no link and no summary, because
  *   MLB publishes neither: the whole of it is the one sentence in `headline`
  *   ("Los Angeles Dodgers placed LHP Blake Snell on the 15-day injured list"),
  *   and `kind` is MLB's own `typeDesc` ("Status Change", "Trade", "Assigned").
- * - **`espn`** — a written article, with a link that opens it, a standfirst in
- *   `summary` and ESPN's own `type` in `kind` ("HeadlineNews", "Recap").
  *
- * `date` is an **ISO instant for an article and a bare `YYYY-MM-DD` for a
- * transaction**, which is not sloppiness but the resolution each upstream
- * actually publishes; the client formats on the length and the sort compares on
- * the day the two share (see `news.ts::cmpDate`).
+ * `date` is a bare **`YYYY-MM-DD` on both**, because that is the resolution
+ * each upstream actually publishes — MLB dates a transaction to a day and
+ * RotoWire stamps a note `August 14, 2026`. The client still formats on the
+ * length of the string rather than assuming, so an instant would draw as one if
+ * either ever started publishing them (see `news.ts::cmpDate`, which sorts on
+ * the day for the same reason).
  */
 export interface NewsItem {
-  /** Stable across re-reads — the upstream's own id, prefixed by its source so
-   *  an MLB transaction and an ESPN article can never collide on one key. */
+  /** Stable across re-reads. MLB's own id where there is one; on a RotoWire
+   *  note there is none to have — the news ids exist on RotoWire's league-wide
+   *  feed and not on a player page — so it is the player, the day and the
+   *  headline, which is the same "what the row says" rule the transaction
+   *  dedupe runs on. Prefixed by source, so the two can never collide. */
   id: string;
-  source: 'mlb' | 'espn';
+  source: 'mlb' | 'rotowire';
   date: string;
   headline: string;
   summary: string | null;
@@ -1201,4 +1269,118 @@ export interface EspnRoster {
    * did before this existed.
    */
   lineups?: Record<string, number[]> | null;
+}
+
+// ---- The Schedule view -----------------------------------------------------
+// Mirrors `server/src/types.ts` by hand, as every type here does.
+
+/**
+ * One scheduled game, as the Schedule view reads it — the next fortnight of
+ * every club, over the wire once and joined to a row by its player's club.
+ *
+ * Deliberately thin: the view draws an opponent abbreviation and, on a
+ * pitcher's own row, whether he is the man his club has announced, which needs
+ * the two ids and nothing else.
+ */
+export interface ScheduleGame {
+  gamePk: number;
+  /** The ET baseball day the game counts on, `YYYY-MM-DD`. */
+  date: string;
+  /** ISO first pitch, or null where the schedule gives none. */
+  startTime: string | null;
+  homeId: number;
+  awayId: number;
+  /** Club abbreviations — "MIL". Empty where the teams table couldn't be read. */
+  home: string;
+  away: string;
+  /** MLB's own state. A postponement is not a game he gets and is not counted. */
+  state: 'scheduled' | 'live' | 'final' | 'postponed';
+  /**
+   * Whom each side has *announced*, and nothing more — clubs name a starter
+   * about three days out, so a start mark is a fact about the front of the
+   * window and an absence past it is the schedule rather than the view.
+   */
+  homeProbableId: number | null;
+  awayProbableId: number | null;
+}
+
+/** The whole window, as `/api/schedule` answers it. */
+export interface ScheduleWindow {
+  /** First ET day, inclusive — the server's own `baseballToday()`. */
+  start: string;
+  /** Last ET day, inclusive. */
+  end: string;
+  /** How many days that is, so a client can tell a short answer from a full one. */
+  days: number;
+  games: ScheduleGame[];
+}
+
+/**
+ * The league scoreboard — one matchup period's matchups, and every team's
+ * season-to-date total in each of the league's own scoring categories.
+ *
+ * Mirrors `EspnScoreboard` and its parts in the server's `espn.ts` by hand,
+ * the way every other type in this file mirrors its server twin.
+ */
+export type EspnScoringFormat = 'h2h-categories' | 'h2h-points' | 'standings' | 'unknown';
+
+export interface EspnCategory {
+  statId: number;
+  label: string;
+  name: string;
+  /** ERA and WHIP: the smaller number takes the category. */
+  lowerBetter: boolean;
+  format: 'count' | 'avg' | 'rate';
+}
+
+export interface EspnMatchupSide {
+  teamId: number;
+  scores: Record<number, number>;
+  wins: number;
+  losses: number;
+  ties: number;
+  points: number | null;
+}
+
+export interface EspnMatchup {
+  id: number;
+  home: EspnMatchupSide;
+  /** Null is a bye — a real shape in a playoff round, not a failed read. */
+  away: EspnMatchupSide | null;
+  winner: 'home' | 'away' | 'tie' | null;
+}
+
+export interface EspnStandingsTeam {
+  id: number;
+  name: string;
+  abbrev: string;
+  logo: string | null;
+  wins: number;
+  losses: number;
+  ties: number;
+  gamesBack: number;
+  streak: string | null;
+  seed: number;
+  points: number;
+  values: Record<number, number>;
+}
+
+export interface EspnScoreboard {
+  format: EspnScoringFormat;
+  /** ESPN's own word, so an unsupported format can be named rather than
+   *  described. */
+  scoringType: string;
+  matchupPeriod: number;
+  prevPeriod: number | null;
+  nextPeriod: number | null;
+  /** The days the totals cover — for a live matchup, the days played so far. */
+  start: string | null;
+  end: string | null;
+  live: boolean;
+  categories: EspnCategory[];
+  matchups: EspnMatchup[];
+  teams: EspnStandingsTeam[];
+  myTeamId: number | null;
+  leagueName: string;
+  fetchedAt: number;
 }

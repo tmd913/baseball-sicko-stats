@@ -10,10 +10,12 @@ import { getPercentiles } from './percentiles.js';
 import { getXwobaSeries } from './xwoba.js';
 import { getBatterGameLog, getPitcherGameLog } from './gameLog.js';
 import { getNextGame } from './nextGame.js';
+import { getProjectedStarts } from './projectedStarts.js';
 import { getPlayerNews } from './news.js';
 import { getSeasonArsenal } from './pitcherArsenal.js';
 import { getPitcherXera } from './expectedStats.js';
 import { getResearch, getPlayerWindows } from './research.js';
+import { getScheduleWindow } from './schedule.js';
 import type { Arsenal } from './pitcherArsenal.js';
 import { getLeaguePitchAverage } from './pitchLeague.js';
 import { RESEARCH_INCLUDE_KEYS, RESEARCH_WINDOWS } from './types.js';
@@ -53,6 +55,7 @@ import {
   EspnAuthError,
   getLeagueInfo,
   getOwnership,
+  getScoreboard,
   lineupsFrom,
   getTeamRosters,
   normalizeS2,
@@ -144,6 +147,28 @@ app.get(
     const season = new Date().getFullYear();
     const players = await getSeasonPlayers(season);
     res.json({ season, players });
+  }),
+);
+
+/**
+ * Every club's next fortnight, with whoever each side has announced — what the
+ * Schedule view on the summary table and the research board both draw.
+ *
+ * **No parameters at all, which is the point.** The window is the server's own
+ * `baseballToday()` plus `SCHEDULE_DAYS`, so there is exactly one answer for
+ * the whole app on a given day and exactly one cache entry behind it; the
+ * client picks 7 or 14 and slices what it was given. A `days=` parameter would
+ * buy nothing a slice doesn't and cost a second entry of the same upstream —
+ * the same reasoning `getPlayerPool` follows for its cookie-free player list.
+ *
+ * A failed read is a 502 through `asyncRoute`, which is right here and not the
+ * usual "cost the column its value": this answer *is* the table.
+ */
+app.get(
+  '/api/schedule',
+  requireUser,
+  asyncRoute(async (_req, res) => {
+    res.json(await getScheduleWindow());
   }),
 );
 
@@ -964,6 +989,38 @@ app.get(
   }),
 );
 
+// The league's own scoreboard: one matchup period's matchups, and every team's
+// season-to-date total in each of the league's scoring categories.
+//
+// `?period=` names a matchup period — absent, the one being played; a period
+// this league has no row for falls back to the current one rather than
+// answering with an empty board the reader could not explain. `?refresh=1`
+// skips the ten-minute cache, the same escape hatch the ownership and roster
+// routes carry and for the same person, and reaches only the **live** period:
+// a settled week is a fact and reads back off its blob.
+//
+// The response names the league's `format` in its own vocabulary, so a roto or
+// a points league gets what it actually has rather than an empty category
+// grid — see `espn.ts`, **The league scoreboard**.
+app.get(
+  '/api/espn/scoreboard',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const raw = req.query.period;
+    const period = typeof raw === 'string' && /^\d{1,3}$/.test(raw) ? Number(raw) : null;
+    try {
+      const creds = await getEspnCreds(userId(req));
+      if (!creds) {
+        res.status(409).json({ error: 'No ESPN league connected', code: 'espn-missing' });
+        return;
+      }
+      res.json(await getScoreboard(creds, period, req.query.refresh === '1'));
+    } catch (err) {
+      if (!espnError(err, res)) throw err;
+    }
+  }),
+);
+
 // Which list the roster views read from. A route of its own like the three
 // above; the saved roster is stored as the absence of an entry. **`'watchlist'`
 // is accepted as a synonym for `'saved'`** — it is what the client called this
@@ -1152,6 +1209,33 @@ app.get(
       return;
     }
     res.json(await getNextGame(playerId, req.query.start === '1'));
+  }),
+);
+
+// A pitcher's next several starts — the ones his club has named him for, and,
+// past those, the ones his own rotation slot puts him in. The player page's
+// **Projected Starts** block, which is the sentence `next-game` above could only
+// answer with "not yet scheduled": a rotation turn is named a few days out, so
+// for most of the month the honest answer to "when does he pitch next" is one
+// nobody has published and everybody can work out.
+//
+// **No `?type=`**, unlike its neighbours: a rotation slot is a fact about a
+// pitcher, so there is no batting half of this question to ask for. Whether the
+// player *is* a rotation starter is still not decided here — `projectedStarts.ts`
+// answers honestly for whoever is asked and says `not-a-starter` when there are
+// no starts to read a cadence off, and the client draws the block only for a man
+// `lib.ts::isRotationStarter` places in the rotation, which is the app's one
+// definition of that and has no business being restated on the server.
+app.get(
+  '/api/players/:playerId/projected-starts',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const playerId = Number(req.params.playerId);
+    if (!Number.isInteger(playerId) || playerId <= 0) {
+      res.status(400).json({ error: 'invalid playerId' });
+      return;
+    }
+    res.json(await getProjectedStarts(playerId));
   }),
 );
 

@@ -600,11 +600,13 @@ const CHAPTERS: Chapter[] = [
           </dd>
           <dt>News</dt>
           <dd>
-            What has happened to him lately, newest first: MLB&rsquo;s own transaction
-            log — the IL placements, rehab assignments, recalls and trades a fantasy
-            manager acts on — interleaved with the ESPN articles ESPN itself files
-            under his name. A story opens on ESPN; a transaction is the one line MLB
-            publishes and has nowhere to go.
+            What has happened to him lately, newest first: RotoWire&rsquo;s notes on
+            him — a lineup he is out of, a bullpen session, a save, the closer&rsquo;s
+            job changing hands — interleaved with MLB&rsquo;s own transaction log, the
+            IL placements, rehab assignments, recalls and trades a fantasy manager acts
+            on. A report opens his RotoWire page; a transaction is the one line MLB
+            publishes and has nowhere to go. Where the two describe the same move on
+            the same day, the report is the row you get.
           </dd>
           <dt>Stats</dt>
           <dd>

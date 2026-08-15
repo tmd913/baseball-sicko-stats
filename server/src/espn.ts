@@ -136,19 +136,16 @@ const ESPN_TO_MLB_TEAM: Record<number, number> = {
   30: 139, // TB
 };
 
-/**
- * The same table read the other way, MLB club id → ESPN club id.
- *
- * **ESPN's site API numbers its clubs identically to the fantasy game's
- * `proTeamId`** — checked club by club against
- * `site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams`, all 30 the same
- * (1 BAL … 30 TB) — so the one table above answers for both and `news.ts` needs
- * no second copy of a mapping neither numbering system derives from the other.
- * Derived rather than written out, so the two can never come to disagree.
- */
-export const ESPN_SITE_TEAM_BY_MLB: Record<number, number> = Object.fromEntries(
-  Object.entries(ESPN_TO_MLB_TEAM).map(([espn, mlb]) => [mlb, Number(espn)]),
-);
+// The reverse of that table — MLB club id → ESPN club id — used to live here
+// for `news.ts`, which read ESPN's per-club article feed. That feed is gone
+// (RotoWire's per-player notes replaced it, see `rotowire.ts`) and with it the
+// only reader, so the export went too rather than being left as a derivation
+// nothing derives anything from. The measurement it carried is worth keeping
+// even so: **ESPN's site API numbers its clubs identically to the fantasy
+// game's `proTeamId`**, checked club by club against
+// `site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams` — all 30 the same,
+// 1 BAL … 30 TB — so if anything ever needs the site API again, the table above
+// answers for it and no second copy is warranted.
 
 /**
  * ESPN's `lineupSlotId` to the slot a fantasy manager would call it.
@@ -252,7 +249,7 @@ function eligiblePositions(slots: number[] | undefined): string[] {
  * writes "Luis Garcia Jr." where MLB writes "Luis García Jr.", and either may
  * carry the period or not.
  */
-function normalizeName(raw: string): string {
+export function normalizeName(raw: string): string {
   return stripAccents(raw)
     .toLowerCase()
     .replace(/[.'’]/g, ' ')
@@ -262,7 +259,7 @@ function normalizeName(raw: string): string {
     .trim();
 }
 
-interface IndexEntry {
+export interface IndexEntry {
   id: number;
   name: string;
   teamId: number | null;
@@ -273,7 +270,7 @@ interface IndexEntry {
   kinds: PlayerKind[];
 }
 
-interface MlbIndex {
+export interface MlbIndex {
   /** Normalised name to every MLB player who has it — a list, because the
    *  season roster really does hold three collisions of its own. */
   byName: Map<string, IndexEntry[]>;
@@ -287,7 +284,7 @@ let indexCache: { index: MlbIndex; fetchedAt: number } | null = null;
  * name — this needs the **team id**, since that is the currency the ESPN team
  * table above is written in and a name is one rename away from breaking.
  */
-async function getMlbIndex(): Promise<MlbIndex> {
+export async function getMlbIndex(): Promise<MlbIndex> {
   if (indexCache && Date.now() - indexCache.fetchedAt < INDEX_TTL_MS) {
     return indexCache.index;
   }
@@ -321,26 +318,44 @@ async function getMlbIndex(): Promise<MlbIndex> {
 }
 
 /**
- * The MLB id for one ESPN player, or null if he isn't a major leaguer this
- * season (most of ESPN's universe isn't).
+ * The MLB player one *outside* source is naming, or null if he isn't a major
+ * leaguer this season (most of ESPN's universe isn't).
  *
  * Team first, name second: a club match is decisive, and falling back to the
  * name alone covers the player ESPN still has on his old team the morning after
  * a trade. An ambiguity neither test resolves is left unmatched rather than
  * guessed — marking the wrong Wilmer Flores as owned is worse than marking
  * neither.
+ *
+ * **Exported because `rotowire.ts` runs the identical join** and a second
+ * normalisation beside this one is exactly the drift this codebase spends its
+ * comments avoiding: one fold, one index, one tie-break rule, two upstreams.
  */
+export function matchMlbPlayer(
+  index: MlbIndex,
+  name: string,
+  mlbTeamId: number | undefined,
+): IndexEntry | null {
+  const candidates = index.byName.get(normalizeName(name));
+  if (!candidates || candidates.length === 0) return null;
+  if (candidates.length === 1) return candidates[0];
+  const onTeam = candidates.filter((c) => c.teamId === mlbTeamId);
+  return onTeam.length === 1 ? onTeam[0] : null;
+}
+
+/** The same match phrased in ESPN's own club numbering, which is the currency
+ *  every caller in this file has. `rotowire.ts` asks the exported form above
+ *  with an MLB club id, since that is the currency *it* can reach. */
 function matchPlayer(
   index: MlbIndex,
   name: string,
   espnTeamId: number | undefined,
 ): IndexEntry | null {
-  const candidates = index.byName.get(normalizeName(name));
-  if (!candidates || candidates.length === 0) return null;
-  if (candidates.length === 1) return candidates[0];
-  const mlbTeam = espnTeamId === undefined ? undefined : ESPN_TO_MLB_TEAM[espnTeamId];
-  const onTeam = candidates.filter((c) => c.teamId === mlbTeam);
-  return onTeam.length === 1 ? onTeam[0] : null;
+  return matchMlbPlayer(
+    index,
+    name,
+    espnTeamId === undefined ? undefined : ESPN_TO_MLB_TEAM[espnTeamId],
+  );
 }
 
 // ---- The season-wide player pool: roster % and eligibility ---------------
@@ -657,11 +672,16 @@ interface EspnRosterResponse {
   }[];
 }
 
-async function leagueGet(
+async function leagueGet<T = EspnRosterResponse>(
   creds: EspnCreds,
   views: string[],
   scoringPeriodId?: number | null,
-): Promise<EspnRosterResponse> {
+  // ESPN's own server-side narrowing, sent as a header rather than a query
+  // param. Only the scoreboard uses it, and it earns its place there: asking
+  // for one matchup period rather than the season's 118 takes the read from
+  // 524KB to 24KB, and ESPN does the filtering rather than the wire.
+  filter?: unknown,
+): Promise<T> {
   const url =
     `${FANTASY_BASE}/${SEASON}/segments/0/leagues/${creds.leagueId}` +
     `?${views.map((v) => `view=${v}`).join('&')}` +
@@ -679,6 +699,7 @@ async function leagueGet(
       // Sent as a raw Cookie header, exactly as a browser would: `espn_s2` is
       // already percent-encoded by ESPN and must not be encoded again.
       ...(authed ? { Cookie: `SWID=${creds.swid}; espn_s2=${creds.espnS2}` } : {}),
+      ...(filter === undefined ? {} : { 'X-Fantasy-Filter': JSON.stringify(filter) }),
     },
   });
   if (res.status === 401 || res.status === 403) {
@@ -700,7 +721,7 @@ async function leagueGet(
     );
   }
   if (!res.ok) throw new Error(`ESPN fantasy API returned ${res.status}`);
-  const body = (await res.json()) as EspnRosterResponse | EspnRosterResponse[];
+  const body = (await res.json()) as T | T[];
   // The `leagueHistory` shape returns an array of one; the current-season
   // endpoint returns the object. Both are worth surviving.
   return Array.isArray(body) ? body[0] : body;
@@ -1672,4 +1693,685 @@ export function rosterToWatchlist(roster: EspnRosterPlayer[]): WatchPlayer[] {
           kind,
         })),
   );
+}
+
+// ---- The league scoreboard -----------------------------------------------
+//
+// **What the roster views cannot answer: how is my team doing against the
+// league.** Everything this file did until now was about *players* — who owns
+// whom, who is eligible where, what each manager has in his lineup — and the
+// one thing a fantasy manager actually opens ESPN for is the thing it could
+// not say: the matchups, and where he stands in each category.
+//
+// **Which ESPN views carry what**, measured against a live 12-team league
+// rather than assumed, because three of them look interchangeable and are not:
+//
+//  - **`mScoreboard`** is the only one that carries `cumulativeScore
+//    .scoreByStat` — the per-category total for each side of a matchup, plus
+//    ESPN's own `result` (WIN/LOSS/TIE) once the matchup is over. It is what
+//    the scoreboard is made of, and nothing else has it.
+//  - **`mMatchupScore`** carries `matchupPeriodId` and `pointsByScoringPeriod`
+//    and *not* `scoreByStat` — its `statBySlot` is null on every row. What it
+//    is worth reading for is the **date span**: the keys of
+//    `pointsByScoringPeriod` are the scoring periods a matchup period covers,
+//    which is the only published statement of which days a scoreboard's
+//    numbers are drawn from.
+//  - **`mTeam`** carries `valuesByStat` — every team's **season** total in each
+//    category — beside its record, seed and logo. That is the whole standings
+//    table in one 46KB read, and it is the read this file already makes to
+//    identify the connecting user's own team.
+//
+// **`scoringPeriodId=0` is what makes the scoreboard affordable, and it is the
+// measurement worth keeping.** `mScoreboard` embeds two whole rosters per side
+// — `rosterForCurrentScoringPeriod` and `rosterForMatchupPeriod`, ~43KB a team
+// — which is the entire payload: one matchup period comes to **524,565 bytes**.
+// Naming a scoring period that is not a day empties both of them while leaving
+// `cumulativeScore` untouched, because that is a fact about the *matchup*
+// period rather than about a day: **23,759 bytes**, and the category scores are
+// **byte-identical** (checked field by field over all 10 matchups of a period,
+// both sides — 18,102 bytes of scores, `IDENTICAL: true`). A 22x reduction for
+// naming a day that does not exist.
+//
+// **`X-Fantasy-Filter` does the narrowing server-side.** `{"schedule":
+// {"filterMatchupPeriodIds":{"value":[19]}}}` returns that period's matchups
+// alone; without it the season's 118 come back. `filterCurrentMatchupPeriod`
+// answers identically and is *not* used, for the reason the whole of this file
+// distrusts ESPN's own pointers — see the period note below.
+//
+// **The category winner is computed here, not read.** ESPN fills `result` and
+// the wins/losses/ties tally only once a matchup is **over**: a live one comes
+// back with `result: null`, `wins/losses/ties: 0` and `winner: 'UNDECIDED'`, so
+// a scoreboard that only reported ESPN's answer would say nothing at all about
+// the week being played — which is the week anybody is looking at. So the
+// comparison is done here for every matchup, live and final alike, honouring
+// `isReverseItem` (ERA and WHIP, where the smaller number wins).
+//
+// **Checked against ESPN's own answer rather than reasoned about**: over all 18
+// completed matchup periods of the live league — **108 matchups and 1,080
+// category comparisons** — the computed per-category result matched ESPN's
+// `result` **1,080 times out of 1,080**, the computed matchup winner matched
+// ESPN's `winner` on all 108, and the computed win/loss/tie tally matched
+// ESPN's `cumulativeScore` on all 108. So a live matchup and a final one are
+// drawn by the same arithmetic, and the final one is drawn by arithmetic known
+// to reproduce ESPN's. `ineligible` was scanned for over the same 5,244
+// score cells and is false on every one; it is nonetheless honoured, since a
+// category a team cannot score in is not a category it is losing.
+
+/** How a league decides who wins — and therefore what this view can honestly
+ *  draw. `unknown` is a real answer and is rendered as one. */
+export type EspnScoringFormat = 'h2h-categories' | 'h2h-points' | 'standings' | 'unknown';
+
+/**
+ * ESPN publishes **no dictionary of stat ids anywhere** — checked against the
+ * game-level `seasons/{year}`, `kona_game_state` and every league view, none of
+ * which names a single stat — so this is a curated table, the same shape
+ * `pitchLeague.ts` takes for its league averages, and the honest failure is a
+ * header reading `Stat 62` rather than a wrong one.
+ *
+ * **Twenty-three of these were confirmed arithmetically against the live
+ * league** rather than taken on trust, by checking the identities the numbers
+ * themselves have to satisfy: `41` is `(37 + 39) / (34 / 3)` to eight places
+ * (1.24968711 from 1440 hits and 557 walks over 1598 innings), `47` is
+ * `45 * 9 / (34 / 3)` (3.92553191 from 697 earned runs), and `83` is `57 + 60`
+ * (2 = 1 + 1). Those are 0, 1, 3, 4, 5, 10, 12, 13, 18, 20, 21, 23, 34, 37, 39,
+ * 41, 45, 47, 48, 53, 57, 60 and 83. The rest are the community mapping
+ * `cwendt94/espn-api` uses and are **unconfirmed** — a league scoring quality
+ * starts or complete games is a league this table has never been read against.
+ */
+interface StatMeta {
+  /** The column header — ESPN's own abbreviation. */
+  label: string;
+  /** The tooltip, and what the matchup card names the category by. */
+  name: string;
+  /** `count` prints an integer; `avg` a three-place figure with no leading zero
+   *  (`.759`, the way a slash line is written); `rate` two places with one
+   *  (`3.93`). Getting this wrong is the difference between an ERA and an OPS. */
+  format: 'count' | 'avg' | 'rate';
+}
+
+const STAT_META: Record<number, StatMeta> = {
+  // Batting.
+  0: { label: 'AB', name: 'At bats', format: 'count' },
+  1: { label: 'H', name: 'Hits', format: 'count' },
+  2: { label: 'AVG', name: 'Batting average', format: 'avg' },
+  3: { label: '2B', name: 'Doubles', format: 'count' },
+  4: { label: '3B', name: 'Triples', format: 'count' },
+  5: { label: 'HR', name: 'Home runs', format: 'count' },
+  6: { label: 'XBH', name: 'Extra-base hits', format: 'count' },
+  7: { label: '1B', name: 'Singles', format: 'count' },
+  8: { label: 'TB', name: 'Total bases', format: 'count' },
+  9: { label: 'SLG', name: 'Slugging', format: 'avg' },
+  10: { label: 'BB', name: 'Walks', format: 'count' },
+  11: { label: 'IBB', name: 'Intentional walks', format: 'count' },
+  12: { label: 'HBP', name: 'Hit by pitch', format: 'count' },
+  13: { label: 'SF', name: 'Sacrifice flies', format: 'count' },
+  14: { label: 'SH', name: 'Sacrifice hits', format: 'count' },
+  15: { label: 'SAC', name: 'Sacrifices', format: 'count' },
+  16: { label: 'PA', name: 'Plate appearances', format: 'count' },
+  17: { label: 'OBP', name: 'On-base percentage', format: 'avg' },
+  18: { label: 'OPS', name: 'On-base plus slugging', format: 'avg' },
+  19: { label: 'RC', name: 'Runs created', format: 'rate' },
+  20: { label: 'R', name: 'Runs', format: 'count' },
+  21: { label: 'RBI', name: 'Runs batted in', format: 'count' },
+  23: { label: 'SB', name: 'Stolen bases', format: 'count' },
+  24: { label: 'CS', name: 'Caught stealing', format: 'count' },
+  25: { label: 'SB-CS', name: 'Net stolen bases', format: 'count' },
+  26: { label: 'GIDP', name: 'Grounded into double plays', format: 'count' },
+  27: { label: 'GIDPO', name: 'Double-play opportunities', format: 'count' },
+  31: { label: 'K', name: 'Strikeouts (batting)', format: 'count' },
+  // Pitching.
+  32: { label: 'GP', name: 'Games pitched', format: 'count' },
+  33: { label: 'GS', name: 'Games started', format: 'count' },
+  34: { label: 'OUTS', name: 'Outs recorded', format: 'count' },
+  35: { label: 'TBF', name: 'Batters faced', format: 'count' },
+  36: { label: 'P', name: 'Pitches', format: 'count' },
+  37: { label: 'H', name: 'Hits allowed', format: 'count' },
+  38: { label: 'OBA', name: 'Opponent batting average', format: 'avg' },
+  39: { label: 'BB', name: 'Walks allowed', format: 'count' },
+  40: { label: 'IBB', name: 'Intentional walks allowed', format: 'count' },
+  41: { label: 'WHIP', name: 'Walks and hits per inning', format: 'rate' },
+  42: { label: 'HBP', name: 'Batters hit', format: 'count' },
+  44: { label: 'R', name: 'Runs allowed', format: 'count' },
+  45: { label: 'ER', name: 'Earned runs', format: 'count' },
+  46: { label: 'HR', name: 'Home runs allowed', format: 'count' },
+  47: { label: 'ERA', name: 'Earned run average', format: 'rate' },
+  48: { label: 'K', name: 'Strikeouts', format: 'count' },
+  49: { label: 'K/9', name: 'Strikeouts per nine', format: 'rate' },
+  50: { label: 'WP', name: 'Wild pitches', format: 'count' },
+  51: { label: 'BLK', name: 'Balks', format: 'count' },
+  52: { label: 'PK', name: 'Pickoffs', format: 'count' },
+  53: { label: 'W', name: 'Wins', format: 'count' },
+  54: { label: 'L', name: 'Losses', format: 'count' },
+  55: { label: 'WPCT', name: 'Winning percentage', format: 'avg' },
+  56: { label: 'SVO', name: 'Save opportunities', format: 'count' },
+  57: { label: 'SV', name: 'Saves', format: 'count' },
+  58: { label: 'BS', name: 'Blown saves', format: 'count' },
+  59: { label: 'SV%', name: 'Save percentage', format: 'avg' },
+  60: { label: 'HD', name: 'Holds', format: 'count' },
+  61: { label: 'CG', name: 'Complete games', format: 'count' },
+  62: { label: 'QS', name: 'Quality starts', format: 'count' },
+  63: { label: 'NH', name: 'No-hitters', format: 'count' },
+  64: { label: 'PG', name: 'Perfect games', format: 'count' },
+  83: { label: 'SVHD', name: 'Saves plus holds', format: 'count' },
+};
+
+/** One of the league's own scoring categories, in the league's own order. */
+export interface EspnCategory {
+  statId: number;
+  label: string;
+  name: string;
+  /** ESPN's `isReverseItem` — ERA and WHIP, where the smaller number wins. */
+  lowerBetter: boolean;
+  format: 'count' | 'avg' | 'rate';
+}
+
+/** One side of one matchup. */
+export interface EspnMatchupSide {
+  teamId: number;
+  /** The team's total in each scoring category, keyed by stat id. A category
+   *  ESPN reports the side as ineligible for is absent rather than zero. */
+  scores: Record<number, number>;
+  /** Categories won, lost and tied — computed here for a live matchup and
+   *  checked against ESPN's own tally on 108 finished ones. */
+  wins: number;
+  losses: number;
+  ties: number;
+  /** A points league's one number. Null in a category league. */
+  points: number | null;
+}
+
+export interface EspnMatchup {
+  id: number;
+  home: EspnMatchupSide;
+  /** Null is a **bye**, which is a real shape rather than a failure: a 12-team
+   *  league's first playoff round had 2 matchups and 8 of them. */
+  away: EspnMatchupSide | null;
+  /** Null while the matchup is still being played. */
+  winner: 'home' | 'away' | 'tie' | null;
+}
+
+/** One row of the standings table — the league's own season-to-date totals. */
+export interface EspnStandingsTeam {
+  id: number;
+  name: string;
+  abbrev: string;
+  /** ESPN lets a manager upload any URL, so this is an arbitrary third-party
+   *  image and the client is written to survive one that doesn't load. */
+  logo: string | null;
+  wins: number;
+  losses: number;
+  ties: number;
+  gamesBack: number;
+  /** ESPN's own `streakLength` + `streakType`, as `W3` / `L1`. */
+  streak: string | null;
+  seed: number;
+  /** A points league's season total. */
+  points: number;
+  /** Season-to-date total in each scoring category, keyed by stat id. */
+  values: Record<number, number>;
+}
+
+export interface EspnScoreboard {
+  format: EspnScoringFormat;
+  /** ESPN's own word for the format, so an unsupported one can be named on
+   *  screen rather than described. */
+  scoringType: string;
+  /** Which matchup period is being shown, and the ones either side of it that
+   *  actually exist — ESPN materialises no future periods, so `next` is null on
+   *  the current one and the client's forward arrow is simply absent. */
+  matchupPeriod: number;
+  prevPeriod: number | null;
+  nextPeriod: number | null;
+  /** The ET calendar days this period's totals cover. For a **live** matchup
+   *  that is the days played *so far*, which is what the numbers on screen
+   *  actually are: `pointsByScoringPeriod` truncates at ESPN's own current day.
+   *  Null where the period anchor could not be read. */
+  start: string | null;
+  end: string | null;
+  /** Whether this is the period being played — nothing on it is final. */
+  live: boolean;
+  categories: EspnCategory[];
+  matchups: EspnMatchup[];
+  teams: EspnStandingsTeam[];
+  myTeamId: number | null;
+  leagueName: string;
+  fetchedAt: number;
+}
+
+function formatOf(scoringType: string | undefined): EspnScoringFormat {
+  switch (scoringType) {
+    // Both of ESPN's category spellings. `H2H_CATEGORY` awards a point per
+    // category and `H2H_MOST_CATEGORIES` a single win to whoever takes the
+    // most; the scoreboard is the same object either way, which is why they
+    // share a bucket — what differs is only how the league's standings are
+    // kept, and those are read rather than computed.
+    case 'H2H_CATEGORY':
+    case 'H2H_MOST_CATEGORIES':
+      return 'h2h-categories';
+    case 'H2H_POINTS':
+      return 'h2h-points';
+    // No matchups at all: the season table *is* the league. Drawing an empty
+    // scoreboard over it would be the view claiming a shape the league hasn't.
+    case 'ROTO':
+    case 'TOTAL_POINTS':
+      return 'standings';
+    default:
+      return 'unknown';
+  }
+}
+
+/** The shape of the reads below — declared here rather than widened onto
+ *  `EspnRosterResponse`, which is the roster's shape and has no business
+ *  growing a schedule. */
+interface EspnScoreboardResponse {
+  settings?: {
+    name?: string;
+    scoringSettings?: {
+      scoringType?: string;
+      scoringItems?: { statId?: number; isReverseItem?: boolean }[];
+    };
+  };
+  status?: { currentMatchupPeriod?: number };
+  teams?: {
+    id: number;
+    name?: string;
+    abbrev?: string;
+    logo?: string | null;
+    owners?: string[] | null;
+    primaryOwner?: string | null;
+    playoffSeed?: number;
+    points?: number;
+    valuesByStat?: Record<string, number> | null;
+    record?: {
+      overall?: {
+        wins?: number;
+        losses?: number;
+        ties?: number;
+        gamesBack?: number;
+        streakLength?: number;
+        streakType?: string;
+      };
+    };
+  }[];
+  schedule?: {
+    id?: number;
+    matchupPeriodId?: number;
+    winner?: string;
+    home?: EspnScheduleSide;
+    away?: EspnScheduleSide;
+  }[];
+}
+
+interface EspnScheduleSide {
+  teamId?: number;
+  totalPoints?: number;
+  totalPointsLive?: number;
+  pointsByScoringPeriod?: Record<string, number> | null;
+  cumulativeScore?: {
+    wins?: number;
+    losses?: number;
+    ties?: number;
+    scoreByStat?: Record<string, { score?: number; ineligible?: boolean }> | null;
+  } | null;
+}
+
+/**
+ * The league's teams, its categories and the span of every matchup period it
+ * has — everything about the league that is not one period's scores.
+ *
+ * Two reads, and each is the cheapest thing that answers its half:
+ *
+ *  - `mTeam` + `mSettings`, **49,749 bytes**, for the standings table and the
+ *    scoring categories. This is the read `getLeagueInfo` already makes with
+ *    one view added.
+ *  - `mMatchupScore` at `scoringPeriodId=0`, **70,794 bytes**, for the whole
+ *    season's matchup-period → scoring-period spans. Unfiltered, because the
+ *    point of it is the season: it is what dates every period and what makes
+ *    the arrows below know which periods exist.
+ *
+ * **Which period is the current one is read off the schedule, not off ESPN's
+ * pointer** — the rule the whole of this file follows since the scoring-period
+ * anchor. ESPN materialises **no future matchup periods at all** (checked: the
+ * schedule's highest is exactly the one being played, 19 of a 21-period
+ * season), so the highest period the schedule carries *is* the current one, as
+ * a fact about the data rather than a claim about a clock. `status
+ * .currentMatchupPeriod` is kept as the fallback and agrees today.
+ *
+ * **What that cannot fix, and does not pretend to**: between our 3am rollover
+ * and ESPN's own nightly batch — the ~90-minute window `The anchor is derived
+ * from ESPN's calendar` measures at 03:39–05:19 ET — ESPN has not yet opened
+ * the new matchup period, so on a Monday morning the highest period it carries
+ * is the week that has just ended. There is nothing to read for the new one.
+ * That is shown as what it is: the period's own dates, and `Final` rather than
+ * `Live`, with the arrows to move. A wrong week silently labelled "this week"
+ * is the failure being avoided, and dates are what avoid it.
+ */
+interface LeagueMeta {
+  leagueName: string;
+  format: EspnScoringFormat;
+  scoringType: string;
+  categories: EspnCategory[];
+  teams: EspnStandingsTeam[];
+  myTeamId: number | null;
+  /** Every matchup period the schedule carries, with the scoring periods it
+   *  covers, ascending. */
+  periods: { period: number; first: number; last: number }[];
+  fetchedAt: number;
+}
+
+const metaCache = new Map<number, LeagueMeta>();
+const metaInFlight = new Map<number, Promise<LeagueMeta>>();
+
+async function leagueMeta(creds: EspnCreds, force = false): Promise<LeagueMeta> {
+  const hit = metaCache.get(creds.leagueId);
+  if (!force && hit && Date.now() - hit.fetchedAt < OWNERSHIP_TTL_MS) return hit;
+  const running = metaInFlight.get(creds.leagueId);
+  if (running && !force) return running;
+
+  const job = (async () => {
+    const [info, sched] = await Promise.all([
+      leagueGet<EspnScoreboardResponse>(creds, ['mTeam', 'mSettings']),
+      // `scoringPeriodId=0` for the same reason the scoreboard read uses it:
+      // it names no day, so the per-day rosters come back empty while the
+      // matchup-level fields — which are what this is for — are untouched.
+      leagueGet<EspnScoreboardResponse>(creds, ['mMatchupScore'], 0),
+    ]);
+
+    const scoring = info.settings?.scoringSettings;
+    const categories: EspnCategory[] = (scoring?.scoringItems ?? []).flatMap((item) => {
+      if (typeof item.statId !== 'number') return [];
+      const meta = STAT_META[item.statId];
+      return [
+        {
+          statId: item.statId,
+          label: meta?.label ?? `Stat ${item.statId}`,
+          name: meta?.name ?? `ESPN stat ${item.statId}`,
+          lowerBetter: item.isReverseItem === true,
+          format: meta?.format ?? ('count' as const),
+        },
+      ];
+    });
+
+    const swid = creds.swid?.toUpperCase() ?? null;
+    let myTeamId: number | null = null;
+    const teams: EspnStandingsTeam[] = (info.teams ?? []).map((t) => {
+      const o = t.record?.overall ?? {};
+      if (
+        swid &&
+        [...(t.owners ?? []), t.primaryOwner].some((x) => (x ?? '').toUpperCase() === swid)
+      ) {
+        myTeamId = t.id;
+      }
+      const values: Record<number, number> = {};
+      for (const [id, v] of Object.entries(t.valuesByStat ?? {})) {
+        if (typeof v === 'number' && Number.isFinite(v)) values[Number(id)] = v;
+      }
+      const streakLength = o.streakLength ?? 0;
+      return {
+        id: t.id,
+        name: t.name?.trim() || `Team ${t.id}`,
+        abbrev: t.abbrev?.trim() || `T${t.id}`,
+        logo: t.logo?.trim() || null,
+        wins: o.wins ?? 0,
+        losses: o.losses ?? 0,
+        ties: o.ties ?? 0,
+        gamesBack: o.gamesBack ?? 0,
+        streak:
+          streakLength > 0 && o.streakType
+            ? `${o.streakType === 'WIN' ? 'W' : o.streakType === 'LOSS' ? 'L' : 'T'}${streakLength}`
+            : null,
+        seed: t.playoffSeed ?? 0,
+        points: t.points ?? 0,
+        values,
+      };
+    });
+
+    // Period → the scoring periods it covers. Both sides of every matchup are
+    // read rather than the home one alone: a bye has only a home side, and the
+    // period's span is the union either way.
+    const span = new Map<number, { first: number; last: number }>();
+    for (const m of sched.schedule ?? []) {
+      const period = m.matchupPeriodId;
+      if (typeof period !== 'number') continue;
+      for (const side of [m.home, m.away]) {
+        for (const key of Object.keys(side?.pointsByScoringPeriod ?? {})) {
+          const sp = Number(key);
+          if (!Number.isInteger(sp)) continue;
+          const at = span.get(period);
+          if (!at) span.set(period, { first: sp, last: sp });
+          else {
+            at.first = Math.min(at.first, sp);
+            at.last = Math.max(at.last, sp);
+          }
+        }
+      }
+      // A period with no scoring periods recorded at all still exists as a
+      // period — the schedule carries it — so it is kept with an empty span
+      // rather than dropped, and simply has no dates to show.
+      if (!span.has(period)) span.set(period, { first: 0, last: 0 });
+    }
+    const periods = [...span.entries()]
+      .map(([period, s]) => ({ period, ...s }))
+      .sort((a, b) => a.period - b.period);
+    // The fallback, and only the fallback: if the schedule carried nothing at
+    // all there is no data to derive a period from and ESPN's pointer is
+    // better than nothing.
+    if (periods.length === 0 && typeof info.status?.currentMatchupPeriod === 'number') {
+      periods.push({ period: info.status.currentMatchupPeriod, first: 0, last: 0 });
+    }
+
+    const meta: LeagueMeta = {
+      leagueName: info.settings?.name?.trim() || `League ${creds.leagueId}`,
+      format: formatOf(scoring?.scoringType),
+      scoringType: scoring?.scoringType ?? 'UNKNOWN',
+      categories,
+      teams,
+      myTeamId,
+      periods,
+      fetchedAt: Date.now(),
+    };
+    metaCache.set(creds.leagueId, meta);
+    return meta;
+  })().finally(() => {
+    metaInFlight.delete(creds.leagueId);
+  });
+
+  metaInFlight.set(creds.leagueId, job);
+  return job;
+}
+
+/**
+ * One matchup period's matchups.
+ *
+ * **A finished matchup period is a fact**, so it takes a storage blob read with
+ * no freshness test — the rule `getTeamRoster` already follows for a finished
+ * day's lineup, and for the same reason: you cannot retroactively score a run
+ * in a week that is over. The period being played is memory-only on the same
+ * ten minutes the rosters take, and `force` — the header's `Refresh from ESPN`
+ * — reaches it and leaves the frozen ones alone, since re-reading a settled
+ * week spends an ESPN request to be told what the blob already says.
+ */
+const scoreboardBlobKey = (leagueId: number, period: number) =>
+  `espn-scoreboard-${leagueId}-${period}-v1.json`;
+
+const scoreboardCache = new Map<string, { matchups: EspnMatchup[]; fetchedAt: number }>();
+const scoreboardInFlight = new Map<string, Promise<EspnMatchup[]>>();
+
+function sideFrom(
+  raw: EspnScheduleSide | undefined,
+  live: boolean,
+): { teamId: number; scores: Record<number, number>; points: number | null } | null {
+  if (!raw || typeof raw.teamId !== 'number') return null;
+  const scores: Record<number, number> = {};
+  for (const [id, cell] of Object.entries(raw.cumulativeScore?.scoreByStat ?? {})) {
+    // A category the side is ineligible for is left out rather than sent as a
+    // zero, which in a `lowerBetter` category would otherwise read as the best
+    // score in the league.
+    if (!cell || cell.ineligible === true || typeof cell.score !== 'number') continue;
+    scores[Number(id)] = cell.score;
+  }
+  const points = live ? raw.totalPointsLive ?? raw.totalPoints : raw.totalPoints;
+  return { teamId: raw.teamId, scores, points: typeof points === 'number' ? points : null };
+}
+
+async function fetchMatchups(
+  creds: EspnCreds,
+  period: number,
+  categories: EspnCategory[],
+  live: boolean,
+): Promise<EspnMatchup[]> {
+  const data = await leagueGet<EspnScoreboardResponse>(creds, ['mScoreboard'], 0, {
+    schedule: { filterMatchupPeriodIds: { value: [period] } },
+  });
+
+  const out: EspnMatchup[] = [];
+  for (const m of data.schedule ?? []) {
+    const home = sideFrom(m.home, live);
+    if (!home) continue;
+    const away = sideFrom(m.away, live);
+
+    let hw = 0;
+    let aw = 0;
+    let tie = 0;
+    if (away) {
+      for (const cat of categories) {
+        const h = home.scores[cat.statId];
+        const a = away.scores[cat.statId];
+        if (typeof h !== 'number' || typeof a !== 'number') continue;
+        if (h === a) tie++;
+        else if (cat.lowerBetter ? h < a : h > a) hw++;
+        else aw++;
+      }
+    }
+
+    // ESPN's own word where it has one; ours where it doesn't, so a live
+    // matchup reads the same way a final one does. Both are the same
+    // comparison — see the 108-matchup check above.
+    let winner: 'home' | 'away' | 'tie' | null;
+    if (away === null) winner = 'home';
+    else if (m.winner === 'HOME') winner = 'home';
+    else if (m.winner === 'AWAY') winner = 'away';
+    else if (m.winner === 'TIE') winner = 'tie';
+    else if (live) winner = null;
+    else winner = hw > aw ? 'home' : aw > hw ? 'away' : 'tie';
+
+    out.push({
+      id: m.id ?? 0,
+      home: { ...home, wins: hw, losses: aw, ties: tie },
+      away: away === null ? null : { ...away, wins: aw, losses: hw, ties: tie },
+      winner,
+    });
+  }
+  return out;
+}
+
+async function getMatchups(
+  creds: EspnCreds,
+  period: number,
+  categories: EspnCategory[],
+  live: boolean,
+  force = false,
+): Promise<EspnMatchup[]> {
+  const key = `${creds.leagueId}:${period}`;
+  const frozen = !live;
+  const stale = force && !frozen;
+  const hit = scoreboardCache.get(key);
+  if (!stale && hit && (frozen || Date.now() - hit.fetchedAt < OWNERSHIP_TTL_MS)) {
+    return hit.matchups;
+  }
+  const running = scoreboardInFlight.get(key);
+  if (running && !stale) return running;
+
+  const job = (async () => {
+    if (frozen) {
+      // No freshness test: the week is over and what happened in it is a fact.
+      const stored = await readJsonBlob<EspnMatchup[]>(
+        scoreboardBlobKey(creds.leagueId, period),
+        () => true,
+      );
+      if (Array.isArray(stored)) {
+        scoreboardCache.set(key, { matchups: stored, fetchedAt: Date.now() });
+        return stored;
+      }
+    }
+    const matchups = await fetchMatchups(creds, period, categories, live);
+    scoreboardCache.set(key, { matchups, fetchedAt: Date.now() });
+    if (frozen) await writeJsonBlob(scoreboardBlobKey(creds.leagueId, period), matchups);
+    return matchups;
+  })().finally(() => {
+    scoreboardInFlight.delete(key);
+  });
+
+  scoreboardInFlight.set(key, job);
+  return job;
+}
+
+/** A scoring period as an ET calendar date — the anchor's arithmetic run the
+ *  other way round. Null when the schedule could not be read, which costs the
+ *  header its dates and nothing else. */
+async function dateForPeriod(period: number): Promise<string | null> {
+  if (!Number.isInteger(period) || period < 1) return null;
+  const anchor = await getPeriodAnchor();
+  return anchor ? addDays(anchor.date, period - anchor.period) : null;
+}
+
+/**
+ * The whole view: one matchup period's scoreboard and the league's standings.
+ *
+ * `period` names a matchup period to look at; absent it is the one being
+ * played. `force` is `Refresh from ESPN` reaching this far, and it drops
+ * **every** period of the league from memory — the rule `getOwnership` states,
+ * since "read my league again" is about the league rather than about a week —
+ * while the frozen blobs stand, because a settled week cannot have changed.
+ */
+export async function getScoreboard(
+  creds: EspnCreds,
+  period?: number | null,
+  force = false,
+): Promise<EspnScoreboard> {
+  if (force) {
+    const prefix = `${creds.leagueId}:`;
+    for (const k of [...scoreboardCache.keys()]) {
+      if (k.startsWith(prefix)) scoreboardCache.delete(k);
+    }
+  }
+  const meta = await leagueMeta(creds, force);
+  const current = meta.periods.length > 0 ? meta.periods[meta.periods.length - 1].period : null;
+  // A period the schedule has no row for is not a period this league has, so
+  // it falls back to the current one rather than answering with an empty
+  // scoreboard the reader has no way to explain.
+  const asked = period != null && meta.periods.some((p) => p.period === period) ? period : current;
+
+  const at = meta.periods.findIndex((p) => p.period === asked);
+  const span = at >= 0 ? meta.periods[at] : null;
+  const live = asked !== null && asked === current;
+
+  const [start, end] = await Promise.all([
+    span && span.first ? dateForPeriod(span.first) : Promise.resolve(null),
+    span && span.last ? dateForPeriod(span.last) : Promise.resolve(null),
+  ]);
+
+  // A league with no matchups at all is not a league whose matchups failed to
+  // read: `standings` and `unknown` are both answered with the table alone.
+  const matchups =
+    asked === null || meta.format === 'standings' || meta.format === 'unknown'
+      ? []
+      : await getMatchups(creds, asked, meta.categories, live, force);
+
+  return {
+    format: meta.format,
+    scoringType: meta.scoringType,
+    matchupPeriod: asked ?? 0,
+    prevPeriod: at > 0 ? meta.periods[at - 1].period : null,
+    nextPeriod: at >= 0 && at < meta.periods.length - 1 ? meta.periods[at + 1].period : null,
+    start,
+    end,
+    live,
+    categories: meta.categories,
+    matchups,
+    teams: meta.teams,
+    myTeamId: meta.myTeamId,
+    leagueName: meta.leagueName,
+    fetchedAt: Date.now(),
+  };
 }

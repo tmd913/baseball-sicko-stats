@@ -24,7 +24,7 @@ Two npm workspaces — `server/` (Express 5 + TypeScript, ESM, run via `tsx`) an
 
 ### Season is hardcoded
 
-The current season is pinned in **eight places** that must stay in sync: `hfSea=2026` in `savant.ts`, `CURRENT_SEASON` in `percentiles.ts`, and `SEASON` in `xwoba.ts`, `pitcherArsenal.ts`, `teamStats.ts`, `expectedStats.ts`, `research.ts` and `espn.ts` (which uses it for both the ESPN league endpoint's season segment and the MLB name index it matches against — a mismatch there matches nobody and quietly makes the whole league free agents). Update all eight (and check date-default logic, plus the league constants in `leagueRates.ts`) when the season rolls over.
+The current season is pinned in **nine places** that must stay in sync: `hfSea=2026` in `savant.ts`, `CURRENT_SEASON` in `percentiles.ts`, and `SEASON` in `xwoba.ts`, `pitcherArsenal.ts`, `teamStats.ts`, `expectedStats.ts`, `research.ts`, `espn.ts` (which uses it for both the ESPN league endpoint's season segment and the MLB name index it matches against — a mismatch there matches nobody and quietly makes the whole league free agents) and `rotowire.ts` (RotoWire's own player tables, which **reject the request** without it rather than defaulting to the current year, so this one fails loudly — and it is in the blob key, so a stale season leaves last year's index on disk under its own name). Update all nine (and check date-default logic, plus the league constants in `leagueRates.ts`) when the season rolls over.
 
 ### The rest of the architecture
 
@@ -67,6 +67,10 @@ letting it grow past it.
 **Client — the player page** — `PlayerDetails` and its tabs (Overview, Percentile Rankings, Splits, News, Stats, Game Log, Arsenal, Charts), plus the reorder screen and the how-to page. It opens on **anybody**, which is the fact most of its design follows from.
 
 @docs/claude/client-player-page.md
+
+**Client — the League view** — the fantasy league's own page: the matchup scoreboard, the season table, the four ESPN league formats and which two of them it refuses to guess at.
+
+@docs/claude/client-league.md
 
 **Client — popups** — the app-wide dialog rules: why details are popups rather than accordions, the layer ladder, what a popup has to cover, and why one press of Escape undoes exactly one thing.
 

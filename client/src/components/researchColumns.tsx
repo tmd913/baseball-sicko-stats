@@ -69,6 +69,17 @@ export interface Column {
   // `columnGroups` — a group per column would be forty lines of the same
   // string, and the arrays are already written in those runs.
   group?: string;
+  /**
+   * What the header draws, where a string won't do it.
+   *
+   * Only the Schedule view's day columns have one, and they need it for the
+   * reason the opponent cell needs a `ReactNode` formatter: a day's header is
+   * two lines — `Fri` over `8/15` — so that the column is as narrow as the
+   * matchup under it rather than as wide as its own label. The header renderer
+   * reads this where a column has one and `label` where it hasn't, so every
+   * other column in the app is untouched.
+   */
+  headNode?: ReactNode;
 }
 
 /** The column list cut into the picker's labelled sections. */
