@@ -71,28 +71,44 @@ narrowing hides the thing that makes the half readable: Guerrero's `.788 vs LHP`
 only means something beside his `.657 vs RHP`.
 
 So `SplitCard` takes an optional **`highlight`** (`'left' | 'right' | null`) with
-a `highlightNote` and a `highlightTitle`, and the marked column reads
-`vs LHP / 135 PA / this game` in the accent with the pitcher named in the head's
-tooltip (`Andrew Alvarez throws left-handed, so this is the half that applies to
-this game.`). Three details:
+a `highlightTitle`, and the marked column reads `vs LHP / 135 PA` in the accent
+with the pitcher named in the head's tooltip (`Andrew Alvarez throws left-handed,
+so this is the half that applies to this game.`).
 
-- **The marker line is rendered on both heads whenever it is rendered at all**,
-  hidden on the unmarked one (`.spl-head-mark--ghost`, `visibility: hidden`)
-  rather than blanked with a `&nbsp;`. The heads are one grid row on
-  `align-items: center`, so a third line on one side alone pushes its label off
-  the baseline its twin sits on — and at 390 the column is **46px** and
-  `this game` genuinely wraps to two lines, which a one-line `&nbsp;` could not
-  have reserved for. It is the Columns hint's own ghost: lay the worst case out
-  rather than declare a height. Measured with the mark on, at 390: both heads
-  **49.19px tall with their tops at the same 323.91**; at 1200 both **37.19** at
-  **356.91**.
-- **`this game` rather than `tonight`**, because Upcoming reaches future days —
-  the `Tomorrow` preset and any hand-picked range — and a marker naming a time
-  the row is not about would be wrong on exactly the days the section exists for.
-- **The player page's Splits tab names no half and is untouched**, the marker
-  being drawn only when a caller asks for one: measured on that tab before and
-  after, **0 marks**, heads **25.19px**, card **680 / 358**, row **34px**, rail
-  **434 / 173** — every figure that passage records, unmoved.
+**The marked column used to carry a third line saying `this game`, and it's
+gone — the accent colour and the tooltip were already the whole of the mark,
+and the words were repeating what the colour already says.** That line had a
+real cost: it was reserved on **both** heads whenever it rendered at all,
+hidden rather than blanked on the unmarked one (`.spl-head-mark--ghost`,
+`visibility: hidden`), because the heads are one grid row on
+`align-items: center` and a third line on one side alone would push its label
+off the baseline its twin sits on. Reserving it meant laying out the *worst*
+case rather than declaring a height — `this game` wraps to two lines in the
+46px column a phone gives it — which is real machinery for four words nobody
+needed spelled out: a reader who has just been told which pitcher is on the
+mound doesn't need the accent-blue column told to them a second time in prose.
+`highlightNote` is gone from `SplitCard`, `SplitHead` and `BatterSplitsTab`
+along with it, and `.spl-head-mark`/`.spl-head-mark--ghost` are gone from the
+stylesheet — the mark is `.spl-head-side--on`'s colour alone now, which was
+already carrying the fact and costing the head nothing to hold it.
+
+**Measured on the same matchup, before → after, on the built client.** At 1200
+the head goes **37.19px → 25.19px** and the card **401.19px → 389.19px** — a
+flat 12px, one line of the reservation. At 390, where the old line wrapped to
+two, the head goes **49.19px → 25.19px** and the card **407.19px → 383.19px** —
+24px, both lines of it. The marked column is still unmistakable at either width:
+`.spl-head-side--on` still carries the accent, and the tooltip still names the
+pitcher and his hand.
+
+**The player page's Splits tab names no half and is untouched**, the marker
+being drawn only when a caller asks for one: measured on that tab before and
+after, **0 marks**, heads **25.19px**, card **680 / 358**, row **34px**, rail
+**434 / 173** — every figure that passage records, unmoved, `highlightTitle`
+being the only prop this tab never passed.
+
+**Bundle: 466.09 → 465.88 KB of JS** (138.60 → 138.54 gzipped) and **106.85 →
+106.76 KB of CSS** (19.09 → 19.08 gzipped) — a net loss of both, for a prop, a
+CSS ground rule and a paragraph removed.
 
 **`.upcoming-detail .pct-card { width: 100% }` is one rule and it is a trap this
 stylesheet already documents once.** `.pct-card` centres itself with

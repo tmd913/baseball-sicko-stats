@@ -1361,14 +1361,14 @@ and the error line moved across with the card.
 feed's **Upcoming** row draws `BatterSplitsTab` in its dialog with the announced
 starter's half marked — the same component, the same `SeasonStats` objects (the
 report's `splitVsLeft`/`splitVsRight` are what `getPlayerStats` puts on the
-splits route as well), and one extra column head line saying which of the two
-halves the reader came about. This tab passes no `highlight`, so the marker is
-not rendered at all here and every figure this section records is unmoved
-(re-measured: 0 marks, heads 25.19px, card 680 / 358, row 34px, rail 434 / 173).
-The whole of that argument — why the row shows the comparison rather than the one
-half, why the marker is drawn on both heads, and why it reads `this game` rather
-than `tonight` — is in **Client — the Feed view**, *The Upcoming dialog is the
-Splits card*.
+splits route as well), the marked column taking `.spl-head-side--on`'s accent
+colour and the pitcher's hand and name on the head's own tooltip. This tab
+passes no `highlight`, so neither is rendered at all here and every figure this
+section records is unmoved (re-measured: heads 25.19px, card 680 / 358, row
+34px, rail 434 / 173). The whole of that argument — why the row shows the
+comparison rather than the one half, and why the mark used to carry a third
+line and doesn't any more — is in **Client — the Feed view**, *The Upcoming
+dialog is the Splits card*.
 
 **Where it sits**: directly after **Percentile Rankings**, so the strip reads
 `Overview · Percentile Rankings · Splits · Stats · Game Log · [Arsenal] ·
