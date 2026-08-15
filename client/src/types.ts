@@ -1246,3 +1246,73 @@ export interface ScheduleWindow {
   days: number;
   games: ScheduleGame[];
 }
+
+/**
+ * The league scoreboard — one matchup period's matchups, and every team's
+ * season-to-date total in each of the league's own scoring categories.
+ *
+ * Mirrors `EspnScoreboard` and its parts in the server's `espn.ts` by hand,
+ * the way every other type in this file mirrors its server twin.
+ */
+export type EspnScoringFormat = 'h2h-categories' | 'h2h-points' | 'standings' | 'unknown';
+
+export interface EspnCategory {
+  statId: number;
+  label: string;
+  name: string;
+  /** ERA and WHIP: the smaller number takes the category. */
+  lowerBetter: boolean;
+  format: 'count' | 'avg' | 'rate';
+}
+
+export interface EspnMatchupSide {
+  teamId: number;
+  scores: Record<number, number>;
+  wins: number;
+  losses: number;
+  ties: number;
+  points: number | null;
+}
+
+export interface EspnMatchup {
+  id: number;
+  home: EspnMatchupSide;
+  /** Null is a bye — a real shape in a playoff round, not a failed read. */
+  away: EspnMatchupSide | null;
+  winner: 'home' | 'away' | 'tie' | null;
+}
+
+export interface EspnStandingsTeam {
+  id: number;
+  name: string;
+  abbrev: string;
+  logo: string | null;
+  wins: number;
+  losses: number;
+  ties: number;
+  gamesBack: number;
+  streak: string | null;
+  seed: number;
+  points: number;
+  values: Record<number, number>;
+}
+
+export interface EspnScoreboard {
+  format: EspnScoringFormat;
+  /** ESPN's own word, so an unsupported format can be named rather than
+   *  described. */
+  scoringType: string;
+  matchupPeriod: number;
+  prevPeriod: number | null;
+  nextPeriod: number | null;
+  /** The days the totals cover — for a live matchup, the days played so far. */
+  start: string | null;
+  end: string | null;
+  live: boolean;
+  categories: EspnCategory[];
+  matchups: EspnMatchup[];
+  teams: EspnStandingsTeam[];
+  myTeamId: number | null;
+  leagueName: string;
+  fetchedAt: number;
+}

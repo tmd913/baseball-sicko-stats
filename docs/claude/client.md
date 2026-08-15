@@ -308,6 +308,10 @@ file below is one surface of the app.
 - **`client-feed.md`** — the Feed view: its three sections, the base-event
   vocabulary, and what the feed lost when its grouped reading became the player
   page's Overview tab.
+- **`client-league.md`** — the League view: the matchup scoreboard, the season
+  table and its sort, why it earns a pill rather than an entry in the fantasy
+  popover, and the four ESPN league formats it has to be honest about. It is
+  the seventh of these and the first added since the split.
 
 A passage that moved kept its wording; nothing was rewritten to fit its new file,
 so a claim that reads oddly against its neighbours is a seam rather than a change

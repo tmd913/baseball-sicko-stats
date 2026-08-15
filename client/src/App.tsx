@@ -5,6 +5,7 @@ import { playerKey, RESEARCH_WINDOWS } from './types';
 import type {
   EspnOwnership,
   EspnRoster,
+  EspnScoreboard,
   EspnStatus,
   PlayerKind,
   PlayerReport,
@@ -58,6 +59,7 @@ import type { FantasySlot } from './hooks';
 import { LoadingBlock, LoadingLine, SpinningBaseball } from './components/Loading';
 import { Tutorial } from './components/Tutorial';
 import { EspnSettings } from './components/EspnSettings';
+import LeagueView from './components/LeagueView';
 
 // How long a press-triggered mark keeps spinning at a minimum — the fantasy
 // popover's `Refresh from ESPN`, and the league page's own Refresh through it.
@@ -89,7 +91,15 @@ const MIN_SPIN = 450;
  * `summary` rather than `roster` because that is the name `view=` has always
  * used for it, and it is the default every link in the wild omits.
  */
-type View = 'summary' | 'feed' | 'research';
+type View = 'summary' | 'feed' | 'research' | 'league';
+
+/** The two pages that report on a roster over a range — the ones the kind tabs,
+ *  the date controls, the `Starters` filter and the report itself belong to.
+ *  Research and League are each about something else (the whole league's season
+ *  and the fantasy league's week), and neither has a kind or a date. */
+function isRosterView(v: View): boolean {
+  return v === 'summary' || v === 'feed';
+}
 
 // Whether the settings menu offers the "Simulate live" toggle. Off: the overlay
 // is a developer/demo tool, not something a user of the site should be handed a
@@ -336,6 +346,12 @@ export default function App() {
   const [view, setView] = useState<View>(() => {
     const v = initialParams.get('view');
     if (v === 'research') return 'research';
+    // Only reachable with a league connected — the pill is not drawn without
+    // one — but a link is read here before the status has landed, so it opens
+    // and the view's own empty state says why if there is no league. The
+    // alternative, silently dropping to Roster, would leave a reader who was
+    // handed a link with nothing on screen to explain where it went.
+    if (v === 'league') return 'league';
     // **Three dead view names, all meaning the feed.** `games` was the
     // card-per-player page and `players` its own older name; both became the
     // feed's grouping, and the grouping has since become the player page's
@@ -934,6 +950,21 @@ export default function App() {
   // decides whether the research board offers its Free Agents pill, which is a
   // thing the first render would otherwise get wrong and then correct.
   // Deliberately not in the URL — a connection is an account fact, not a view.
+  // The league scoreboard, and which matchup period is being looked at.
+  // `null` is "the one being played", which is a **rule rather than a value**:
+  // the same reasoning that keeps a date preset in the URL as its label rather
+  // than as two dates, so a link saved this week opens on next week's matchup
+  // rather than on a frozen one.
+  const [scoreboard, setScoreboard] = useState<EspnScoreboard | null>(null);
+  const [scoreboardLoading, setScoreboardLoading] = useState(false);
+  const [scoreboardError, setScoreboardError] = useState<string | null>(null);
+  const [matchupPeriod, setMatchupPeriod] = useState<number | null>(() => {
+    const raw = initialParams.get('mp');
+    return raw && /^\d{1,3}$/.test(raw) ? Number(raw) : null;
+  });
+
+  const showScoreboardWait = useDelayedFlag(scoreboardLoading);
+
   const [espnOpen, setEspnOpen] = useState(false);
   const [espnStatus, setEspnStatus] = useState<EspnStatus | null>(null);
   const [ownership, setOwnership] = useState<EspnOwnership | null>(null);
@@ -1065,6 +1096,40 @@ export default function App() {
     setOwnership(null);
     setEspnError(null);
   }, [espnLeagueId]);
+
+  /**
+   * The scoreboard, read on entry to the League view and whenever the period
+   * changes — which is the same laziness the ownership map takes, and for the
+   * same reason: nobody who never opens the page should pay for it.
+   *
+   * **The previous board is left standing while the next is in flight**, which
+   * is rule 1 of the app's loading discipline: a re-read must never blank a
+   * pane that has rows. So `setScoreboard` is called on success alone and the
+   * view's block wait is gated on there being nothing to show yet.
+   */
+  useEffect(() => {
+    if (view !== 'league' || !espnConnected) return;
+    let cancelled = false;
+    setScoreboardLoading(true);
+    setScoreboardError(null);
+    api
+      .espnScoreboard(matchupPeriod)
+      .then((b) => {
+        if (!cancelled) setScoreboard(b);
+      })
+      .catch((e: Error) => {
+        if (!cancelled) setScoreboardError(e.message);
+      })
+      .finally(() => {
+        if (!cancelled) setScoreboardLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // Deliberately not `scoreboard` or `scoreboardLoading`, either of which
+    // would re-run the effect on its own result and spin — the same dependency
+    // rule the ownership read follows.
+  }, [view, espnConnected, matchupPeriod, espnLeagueId]);
 
   const ownedIds = useMemo(
     () => (ownership ? new Set(Object.keys(ownership.owned).map(Number)) : null),
@@ -1594,6 +1659,10 @@ export default function App() {
     if (view === 'research' && cols && !isDefaultColumns(researchKind, cols)) {
       p.set('cols', cols.join(','));
     }
+    // Only once the reader has navigated off the period being played. Absent
+    // means "current", which is a rule and not a value — so a link shared this
+    // week opens on the week the recipient is in rather than on a frozen one.
+    if (view === 'league' && matchupPeriod != null) p.set('mp', String(matchupPeriod));
     if (simulate) p.set('sim', '1');
     if (hideInjured) p.set('hideil', '1');
     // Only while it is actually narrowing something — see `startersActive`.
@@ -1618,6 +1687,7 @@ export default function App() {
     researchWatchlist,
     researchCols,
     researchKind,
+    matchupPeriod,
     simulate,
     hideInjured,
     startersActive,
@@ -2217,7 +2287,10 @@ export default function App() {
   // which changes the numbers in the rows rather than which rows they are —
   // the row being read is still on screen. A page not yet visited opens at the
   // top, which is what the old reset did for every page.
-  const scrollKey = view === 'research' ? 'research' : `${view}:${shownKind}`;
+  // The league page has no kind — it is one board about one league — so it
+  // keys on the view alone, exactly as the research board does.
+  const scrollKey =
+    view === 'research' || view === 'league' ? view : `${view}:${shownKind}`;
   // The feed's own key — see `feedShown` above, which is keyed by it.
   const feedKey = `${shownKind}-${start}-${end}`;
   // Read by the scroll listener, which is bound once and would otherwise close
@@ -3277,9 +3350,30 @@ export default function App() {
               >
                 Research
               </button>
+              {/* Where Research needs no roster and is therefore always
+                  present, this one needs a **league** — there is no scoreboard
+                  without one, and a pill leading to a page that could only ever
+                  say "connect a league" is chrome for a feature the reader
+                  hasn't got. Drawn the moment one is connected, in either
+                  roster mode: the league's matchups are a fact about the league
+                  rather than about which list the roster views are reading. */}
+              {espnConnected && (
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={view === 'league'}
+                  className={`view-tab${view === 'league' ? ' active' : ''}`}
+                  onClick={() => {
+                    setEditMode(false);
+                    setView('league');
+                  }}
+                >
+                  League
+                </button>
+              )}
             </div>
             {/* Batters / Pitchers. */}
-            {view !== 'research' && kindTabs}
+            {isRosterView(view) && kindTabs}
             {/* The feed's grouping, the starters filter and the calendar that
                 says which days they cover. All of it in the one wrapping row:
                 each group is `flex: none`, so the row fits as many whole groups
@@ -3292,7 +3386,7 @@ export default function App() {
                 Where the Summary / Games / Feed switch used to be: those three
                 became two pages and a toggle, so what stood here as a tab group
                 now stands here as the toggle that replaced the third of them. */}
-            {view !== 'research' && showRosterViews && (
+            {isRosterView(view) && showRosterViews && (
               <>
               {/* Which reading of these players — the stats over the range, or
                   the days ahead. See `scheduleControl`. */}
@@ -3329,7 +3423,7 @@ export default function App() {
             {view === 'research' && <div className="research-chrome" ref={setResearchChrome} />}
           </div>
           {/* The disclosure's own row, under the tabs — see `dateControl`. */}
-          {view !== 'research' && dateControl}
+          {isRosterView(view) && dateControl}
         </div>
       )}
       </div>
@@ -3369,7 +3463,7 @@ export default function App() {
         !usingFantasy &&
         roster.length === 0 &&
         !error &&
-        view !== 'research' &&
+        isRosterView(view) &&
         !editMode && (
         <div className="empty-state">
           <p className="empty-title">Your roster is empty</p>
@@ -3430,7 +3524,7 @@ export default function App() {
         fantasyRoster !== null &&
         rosterKeys.size === 0 &&
         !error &&
-        view !== 'research' && (
+        isRosterView(view) && (
           <div className="empty-state">
             <p className="empty-title">Your fantasy team is empty</p>
             <p>
@@ -3444,11 +3538,11 @@ export default function App() {
           there is anything on screen to protect. With nothing yet, the wait
           takes the page and names what it is reading; with cards already up it
           is a badge beside them and the cards stay exactly as they are. */}
-      {showLoading && reports.length === 0 && view !== 'research' && (
+      {showLoading && reports.length === 0 && isRosterView(view) && (
         <LoadingBlock>Reading your roster&rsquo;s games</LoadingBlock>
       )}
 
-      {showLoading && reports.length > 0 && view !== 'research' && (
+      {showLoading && reports.length > 0 && isRosterView(view) && (
         <LoadingLine className="refreshing">Updating</LoadingLine>
       )}
 
@@ -3458,7 +3552,7 @@ export default function App() {
           either that a setting is doing it. One message for every view now: the
           toggle is the only thing that can empty a view this way, where the
           summary table used to drop them whatever it said. */}
-      {view !== 'research' && displayReports.length > 0 && kindCards.length === 0 && !editMode && (
+      {isRosterView(view) && displayReports.length > 0 && kindCards.length === 0 && !editMode && (
         <div className="empty-state">
           <p className="empty-title">Nothing to show — everyone here is on the IL</p>
           <p>Turn off “Hide injured players” in settings (the gear by the title) to see them.</p>
@@ -3471,7 +3565,7 @@ export default function App() {
           a button on the tab row. On all three now, the filter having stopped
           being the summary's alone — and off the edit screen, which the filter
           never touches. */}
-      {view !== 'research' &&
+      {isRosterView(view) &&
         kindCards.length > 0 &&
         filteredCards.length === 0 &&
         !editMode && (
@@ -3505,7 +3599,16 @@ export default function App() {
           </div>
         )}
 
-      {view === 'research' ? (
+      {view === 'league' ? (
+        <LeagueView
+          board={scoreboard}
+          loading={showScoreboardWait}
+          error={scoreboardError}
+          onPeriod={setMatchupPeriod}
+          connected={espnConnected}
+          onConnect={openEspnSettings}
+        />
+      ) : view === 'research' ? (
         <ResearchTable
           /* Deliberately **not** keyed on the board. It was, so that crossing
              from OF to SP remounted the table rather than carrying a batter's

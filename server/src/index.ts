@@ -54,6 +54,7 @@ import {
   EspnAuthError,
   getLeagueInfo,
   getOwnership,
+  getScoreboard,
   lineupsFrom,
   getTeamRosters,
   normalizeS2,
@@ -981,6 +982,38 @@ app.get(
       }
       const own = await getOwnership(creds, req.query.refresh === '1');
       res.json(own);
+    } catch (err) {
+      if (!espnError(err, res)) throw err;
+    }
+  }),
+);
+
+// The league's own scoreboard: one matchup period's matchups, and every team's
+// season-to-date total in each of the league's scoring categories.
+//
+// `?period=` names a matchup period — absent, the one being played; a period
+// this league has no row for falls back to the current one rather than
+// answering with an empty board the reader could not explain. `?refresh=1`
+// skips the ten-minute cache, the same escape hatch the ownership and roster
+// routes carry and for the same person, and reaches only the **live** period:
+// a settled week is a fact and reads back off its blob.
+//
+// The response names the league's `format` in its own vocabulary, so a roto or
+// a points league gets what it actually has rather than an empty category
+// grid — see `espn.ts`, **The league scoreboard**.
+app.get(
+  '/api/espn/scoreboard',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const raw = req.query.period;
+    const period = typeof raw === 'string' && /^\d{1,3}$/.test(raw) ? Number(raw) : null;
+    try {
+      const creds = await getEspnCreds(userId(req));
+      if (!creds) {
+        res.status(409).json({ error: 'No ESPN league connected', code: 'espn-missing' });
+        return;
+      }
+      res.json(await getScoreboard(creds, period, req.query.refresh === '1'));
     } catch (err) {
       if (!espnError(err, res)) throw err;
     }

@@ -4027,7 +4027,8 @@ body {
    zebra stripe, one pinned left edge. The only thing it adds under its own name
    is a caption and the "no games in this span" cell (below). */
 .glog-scroll,
-.stats-scroll {
+.stats-scroll,
+.league-scroll {
   overflow-x: auto;
   /* Both axes: this pane scrolls sideways always and vertically in
      `.details-view.gamelog-mode`, and what sits behind it there is the player
@@ -4041,7 +4042,8 @@ body {
   background: var(--bg);
 }
 .glog-table,
-.stats-table {
+.stats-table,
+.league-table {
   border-collapse: separate;
   border-spacing: 0;
   width: 100%;
@@ -4182,7 +4184,8 @@ body {
    AVG and wrong for xwOBA, xBA, xERA and Brl%, mixed-case stat names the app
    writes that way everywhere else. The log's own headers are all-caps words and
    keep it. */
-.stats-table thead th {
+.stats-table thead th,
+.league-table thead th {
   text-transform: none;
 }
 /* The span column holds words rather than a date, so it is the one place this
@@ -6889,7 +6892,8 @@ body {
 .summary-scroll,
 .research-scroll,
 .glog-scroll,
-.stats-scroll {
+.stats-scroll,
+.league-scroll {
   margin-left: calc(-1 * var(--table-bleed, 0px));
   margin-right: calc(-1 * var(--table-bleed, 0px));
   border-left: none;
@@ -8120,11 +8124,13 @@ body {
   --sort-gutter: var(--row-gutter);
 }
 .research-table th.research-sort,
-.stats-table th.research-sort {
+.stats-table th.research-sort,
+.league-table th.research-sort {
   padding: 0;
 }
 .research-table th.research-sort button,
-.stats-table th.research-sort button {
+.stats-table th.research-sort button,
+.league-table th.research-sort button {
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -8167,19 +8173,23 @@ body {
    zeroes the th's padding so the sort button can own it. Without this the last
    header sat 19px inside its own numbers while every other one lined up. */
 .research-table th.research-sort:last-child button,
-.stats-table th.research-sort:last-child button {
+.stats-table th.research-sort:last-child button,
+.league-table th.research-sort:last-child button {
   padding-right: clamp(10px, 3vw, 32px);
 }
 .research-table th.research-sort button:hover,
-.stats-table th.research-sort button:hover {
+.stats-table th.research-sort button:hover,
+.league-table th.research-sort button:hover {
   color: var(--text);
 }
 .research-table th.research-sort.active button,
-.stats-table th.research-sort.active button {
+.stats-table th.research-sort.active button,
+.league-table th.research-sort.active button {
   color: var(--accent);
 }
 .research-table th.research-sort button:focus-visible,
-.stats-table th.research-sort button:focus-visible {
+.stats-table th.research-sort button:focus-visible,
+.league-table th.research-sort button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
@@ -10362,6 +10372,298 @@ body {
    One value for all of them instead. Last in the file on purpose: a media
    query adds no specificity, so these have to come after the base rules they
    override. */
+/* ---- The League view -----------------------------------------------------
+   The one page in this app about the fantasy league rather than about players:
+   a scoreboard of the period's matchups, and the league's season table under
+   it. See `docs/claude/client-league.md`.
+
+   The column is `--card-column` for the scoreboard's half and the window for
+   the table's, which is the same split the player page's Overview tab already
+   makes and for the same reason: a matchup card is *read*, and a stat table
+   spanning twelve teams by ten categories is *scanned*. */
+.league-view {
+  padding-bottom: 8px;
+}
+.lg-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  max-width: var(--card-column);
+  margin: 0 auto 14px;
+}
+.lg-period {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+/* The two arrows are the app's icon square, so they read as chrome rather than
+   as text: the same `--control-h` box every button on the header's control line
+   takes. Disabled rather than hidden at the ends of the season — a control that
+   comes and goes is harder to aim at than one that dims, and ESPN materialises
+   no future matchup period at all, so the forward arrow is disabled on the
+   week being played and stays that way until ESPN opens the next. */
+.lg-nav {
+  width: var(--control-h);
+  height: var(--control-h);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.lg-nav:disabled {
+  color: var(--faint);
+  cursor: default;
+}
+@media (hover: hover) {
+  .lg-nav:not(:disabled):hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+}
+.lg-nav:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.lg-period-label {
+  display: inline-flex;
+  flex-direction: column;
+  line-height: 1.25;
+  padding: 0 6px;
+  min-width: 108px;
+}
+.lg-period-n {
+  font-size: 15px;
+  font-weight: 700;
+}
+/* The dates are not decoration: a **live** period's totals cover the days
+   played so far, so the span and the Live tag beside it have to be read
+   together or the numbers claim a whole week they haven't had. */
+.lg-period-dates {
+  font-size: 12px;
+  color: var(--muted);
+}
+/* A label rather than a control, so it takes the app's round pill — the shape
+   this app reserves for a thing you read. */
+.lg-state {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.lg-state-live {
+  border-color: color-mix(in srgb, var(--hit) 55%, transparent);
+  color: var(--hit);
+}
+
+/* ---- One matchup -------------------------------------------------------- */
+.lg-board {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: var(--card-column);
+  margin: 0 auto;
+}
+.lg-matchup {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, var(--panel), var(--bg-2));
+  padding: 10px 12px;
+}
+/* The reader's own matchup. It is *also* sorted to the front, which is what
+   actually gets it on screen on a phone; the accent border is what says which
+   one it is once several are in view. */
+.lg-matchup.lg-mine {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+}
+.lg-mine-tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+.lg-side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  min-width: 0;
+}
+.lg-logo {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: 6px;
+  object-fit: cover;
+  background: var(--bg);
+}
+/* The fallback for a logo that is a dead third-party URL, which on a real
+   league is the ordinary case rather than the exception. */
+.lg-logo-none {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--faint);
+  border: 1px solid var(--border);
+  letter-spacing: 0.02em;
+}
+.lg-team-name {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.lg-team-rec {
+  font-size: 12px;
+  color: var(--muted);
+  flex: none;
+}
+/* `margin-left: auto` rather than a grid: the name is the only elastic thing
+   on the row and this is what lets it take the slack and ellipsize into it. */
+.lg-side-score {
+  margin-left: auto;
+  flex: none;
+  font-size: 18px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.lg-side.lg-leading .lg-team-name,
+.lg-side.lg-leading .lg-side-score {
+  color: var(--text);
+}
+.lg-side.lg-leading .lg-side-score {
+  color: var(--accent);
+}
+.lg-bye-tag {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+/* ---- The category line --------------------------------------------------
+   A grid of equal columns rather than a table, because the two rows are read
+   *down* — R against R — and a header plus two values is the whole of it.
+   `overflow-x: auto` with `overscroll-behavior-x: none` for the inline axis
+   alone: a ten-category league overflows a phone, and naming the block axis
+   would swallow a vertical swipe that belongs to the page (see the rule at the
+   top of this file). */
+.lg-cats {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  overflow-x: auto;
+  overscroll-behavior-x: none;
+}
+.lg-cat-row {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(42px, 1fr);
+  gap: 2px;
+  min-width: min-content;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.lg-cat-row > * {
+  padding: 3px 2px;
+  white-space: nowrap;
+}
+.lg-cat-head {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--faint);
+  text-transform: none;
+}
+/* Green marks the side taking the category and the loser goes muted — the
+   green/red pair this app uses for a delta would put ten red cells on the
+   losing side of every card, which is the whole row shouting rather than the
+   winner being marked. A tie is neither. */
+.lg-cat-win {
+  color: var(--hit);
+  font-weight: 700;
+}
+.lg-cat-loss {
+  color: var(--muted);
+}
+.lg-cat-tie {
+  color: var(--faint);
+}
+
+/* ---- The season table ---------------------------------------------------
+   Folded onto `.glog-table` / `.glog-scroll` rather than restyled to resemble
+   them — the same economy `.stats-table` makes, and for the same reason: this
+   is the app's plain wide stat table with a sticky first column. What it adds
+   under its own name is the team cell (a logo over two lines, where the log has
+   a date) and the reader's own row. */
+.lg-section {
+  max-width: var(--card-column);
+  margin: 22px auto 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.league-table {
+  --row-gutter: clamp(5px, 1.9vw, 28px);
+  --sort-gutter: var(--row-gutter);
+  /* The header's own line, declared for the reason the board and the Stats tab
+     declare it: a header must not change height by being sorted, whichever face
+     the browser finds for U+25B2. */
+  --research-head-line: 15px;
+}
+.league-table .lg-team-col {
+  min-width: 168px;
+  text-align: left;
+}
+.league-table tbody .lg-team-col {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.lg-row-name {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+  min-width: 0;
+  font-weight: 600;
+}
+.lg-row-sub {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.league-table tbody tr.lg-row-mine th,
+.league-table tbody tr.lg-row-mine td {
+  /* The same 12% accent wash the pitcher card's live inning takes — enough to
+     find your own row down a column of twelve and not enough to read as a
+     selection you could act on. */
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg));
+}
+
 @media (max-width: 640px) {
   .app-header {
     gap: var(--stack-gap);
