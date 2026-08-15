@@ -13,6 +13,7 @@ import type {
   PlayerKind,
   PlayerReport,
   PlayerStatus,
+  RecentNews,
   ResearchRow,
   ResearchWindow,
   RosterSource,
@@ -54,6 +55,7 @@ import {
   FantasyRosterContext,
   MutedContext,
   PlayerStatusContext,
+  RecentNewsContext,
   useDelayedFlag,
   useDismissable,
   useStickyChromeOffset,
@@ -1586,6 +1588,38 @@ export default function App() {
     if (view !== 'research' && detailsKey === null) return;
     loadStatuses();
   }, [view, detailsKey, loadStatuses]);
+
+  /**
+   * Who in the league has been in the news today or yesterday — the mark beside
+   * a player's name on the two roster tables and on his own page.
+   *
+   * **Once on mount, and unconditionally**, which is where this parts from the
+   * statuses read above and from the ownership one: those are re-read on every
+   * entry because a lineup posts in the afternoon and a roster moves by the
+   * hour, where both of this map's upstreams date to a *day* (MLB stamps a
+   * transaction with a date and RotoWire stamps a note `August 14, 2026`), so
+   * asking again inside one page-load can only be told what it was told the
+   * first time. The server's thirty minutes — the same TTL the News tab itself
+   * runs on, so the mark and the tab cannot disagree — is where freshness is
+   * decided.
+   *
+   * Unconditional because the default view draws it: the summary table is the
+   * page the app opens on. Gating it on the view would save a reader who goes
+   * straight to the feed one 6.5KB response and cost every other reader a mark
+   * that arrives late on the page they are already reading.
+   *
+   * A failure is swallowed, like the statuses read: this decorates a name, and
+   * the table under it is what the reader came for.
+   */
+  const [recentNews, setRecentNews] = useState<Map<number, RecentNews> | null>(null);
+  useEffect(() => {
+    api
+      .recentNews()
+      .then((byId) =>
+        setRecentNews(new Map(Object.entries(byId).map(([id, n]) => [Number(id), n]))),
+      )
+      .catch((e: Error) => console.error('recent news unavailable:', e.message));
+  }, []);
 
   /** How each roster % has moved, one entry per span the server found a
    *  baseline for. Null without a league, and also when it has no history at
@@ -3173,6 +3207,11 @@ export default function App() {
         and is the only leaf that wants it. Null with no league, which is what
         makes that block fall back to MLB's own listed position. */}
     <EligibilityContext.Provider value={eligibility}>
+    {/* Who has been in the news today or yesterday — read by the mark beside
+        a name on both roster tables and on the player page's own heading. Null
+        until the one request that fills it lands, and every reader draws
+        nothing for a null. */}
+    <RecentNewsContext.Provider value={recentNews}>
     <div
       /* `summary-mode` is the fixed-height flex column the table needs, and
          the edit screen is a long scrolling list that must not be trapped in
@@ -4104,6 +4143,7 @@ export default function App() {
         />
       )}
     </div>
+    </RecentNewsContext.Provider>
     </EligibilityContext.Provider>
     </PlayerStatusContext.Provider>
     </FantasyRosterContext.Provider>

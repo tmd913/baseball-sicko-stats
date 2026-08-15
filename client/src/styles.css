@@ -7901,6 +7901,7 @@ body {
    after the name and never pushes it: the name column is already the width it
    is. */
 .research-watched,
+.name-news,
 .name-lock {
   display: inline-flex;
   align-items: center;
@@ -7933,6 +7934,31 @@ body {
    the same way: a research row's name line and the player page's own `<h1>`. */
 .name-lock {
   color: var(--muted);
+}
+
+/* The **newspaper** — he has been in the news, and how recently — folded onto
+   that same rule for the identical reason the lock is: three marks that sit in
+   the same slot on the same line must not be able to part company by a pixel,
+   and the geometry (the inline-flex box, the 6px gap, the cap-band nudge) is
+   the one thing all three genuinely share. What is its own is the **tone**, and
+   here that tone carries the whole of the meaning rather than a rank among the
+   marks: this is *recency*, so news filed today has to catch the eye and news
+   filed yesterday has to not.
+
+   `--strikeout` is the app's red — the same token the arsenal tables spend on
+   a delta going the wrong way, and the summary table's own answer for a
+   postponement. `--faint` is a step quieter than the lock's `--muted`, which
+   is right: a day-old note is a smaller fact than a man being unavailable.
+
+   There is deliberately **no third tone**. Anything older than yesterday is not
+   in the map at all (`recentNews.ts`), so no row can carry a mark that says
+   nothing — which is the rule the roster baseball follows when it suppresses
+   itself on a board that is nothing but your own roster. */
+.name-news.level-today {
+  color: var(--strikeout);
+}
+.name-news.level-yesterday {
+  color: var(--faint);
 }
 
 /* A link that lives inside a sentence in an empty state, rather than a control

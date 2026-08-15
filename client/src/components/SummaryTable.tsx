@@ -4,6 +4,7 @@ import { FantasySlotTag } from './FantasySlot';
 import { ExpandButton } from './ExpandButton';
 import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
 import { PlayerIdentity } from './PlayerIdentity';
+import { PlayerNewsMark } from './NewsMark';
 import { DayHead, ScheduleCell, gameCount, gamesOn, startCount } from './schedule';
 import type { ScheduleIndex } from './schedule';
 import { useEligible, useFullPage } from '../hooks';
@@ -428,6 +429,14 @@ function LeadCells({
           >
             {r.name}
           </button>
+          {/* And the newspaper, on the same terms it takes on the research
+              board: a fact about the player rather than about the row's
+              numbers, after the name and before the sub-line. This is the one
+              table read *as a roster*, so "he was in the news this morning" is
+              the IL placement a manager most needs to be told about — and the
+              name column is the one column here with slack to absorb it (see
+              `PlayerIdentity`). */}
+          <PlayerNewsMark id={r.id} name={r.name} />
           {/* The status is on the headshot (`PhotoStatus`), not here: an injured
               player is on this table whenever the hide-injured toggle is off, so
               the row must say why its stats are dashes — but it can say it in

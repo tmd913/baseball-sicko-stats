@@ -269,6 +269,37 @@ export interface PlayerNews {
 }
 
 /**
+ * How recently a player was in the news — the two states the mark beside his
+ * name has, and the only two.
+ *
+ * A **day** rather than an hour, because a day is the resolution both upstreams
+ * publish (see `recentNews.ts`): `'today'` is the app's own `baseballToday()`,
+ * `'yesterday'` the day before it, and there is no third value because anything
+ * older is not shipped at all.
+ */
+export type NewsRecency = 'today' | 'yesterday';
+
+/**
+ * The newest thing said about one player, for the mark beside his name.
+ *
+ * Deliberately not a `NewsItem`: the mark is a mark and needs the day, the
+ * level and something to say in its tooltip, where a news *row* needs a source,
+ * a summary, a link and a stable id. Shipping the item would put six hundred of
+ * them on the wire to draw six hundred dots.
+ */
+export interface RecentNews {
+  /** `YYYY-MM-DD`, the day the newest item is stamped — the one the tooltip
+   *  names, so the reader can check the colour against a date. */
+  date: string;
+  level: NewsRecency;
+  /** The headline of that newest item, which is what turns the mark from "go
+   *  and look" into "he is on the IL". RotoWire's wording where both halves
+   *  spoke on the same day, which is the precedence `getPlayerNews` gives them,
+   *  so this is the headline at the top of the tab it points at. */
+  headline: string;
+}
+
+/**
  * What a base-running event was. The vocabulary is MLB's own runner
  * `details.eventType` collapsed to the distinctions worth a badge — measured
  * against 111 games, which is also what settled what is *not* here (see
