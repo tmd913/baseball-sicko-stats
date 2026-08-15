@@ -625,15 +625,40 @@ function baselineOrder(window: TrendWindow): number[] {
   return order;
 }
 
-/** Today's map less a baseline, for the players in both.
+/** Today's map less a baseline, for every player on today's.
  *
  *  Rounded to a tenth, which is the precision the figure is published at;
  *  without it floating-point noise gives half the league a "trend". Zeroes are
  *  dropped, so the client reads "absent but has a roster %" as flat rather than
- *  unknown. A player missing from the baseline is **excluded rather than
- *  treated as rising from zero**, which would put every newly-added prospect at
- *  the top of the risers — and does so per window, so a call-up is missing from
- *  30D while appearing in 1D, which is exactly right. */
+ *  unknown.
+ *
+ *  **A player missing from the baseline rose from nothing**, and his whole
+ *  current percentage is the delta. That reverses what this did — he used to be
+ *  excluded outright, on the reasoning that treating him as rising from zero
+ *  "would put every newly-added prospect at the top of the risers". The
+ *  reasoning was wrong twice. It is wrong about the *fact*: ESPN's list is the
+ *  active major-league population, so a man who is on today's and not on
+ *  yesterday's genuinely was rostered nowhere yesterday, and his whole
+ *  percentage is the movement — Joshua Baez played his first game on
+ *  2026-08-15 and went to **24.1%** by the evening, and the board drew him a
+ *  blank cell in every one of the five windows. And it is wrong about the
+ *  *volume*, measured through this function against the live map rather than
+ *  feared: the players on it and not on a baseline's are **7 / 10 / 16** over
+ *  the 1d, 3d and 5d spans the local history can serve, of which **3 / 5 / 8**
+ *  carry a percentage that rounds to anything at all — the rest are 0.00 to
+ *  0.02 and are dropped as flat — and the largest of them is Baez himself.
+ *  There is no flood to guard against, and the two or three men there are, are
+ *  exactly the ones a reader opens this column for.
+ *
+ *  A player at 0% today who is missing from the baseline is a change of 0 and
+ *  is dropped like any other flat row, so nothing is added to the wire for the
+ *  arrivals nobody has picked up.
+ *
+ *  What it still cannot do is tell "he was rostered nowhere" from "ESPN had not
+ *  listed him yet", and it does not need to: both are the same claim about the
+ *  same man. A baseline that were somehow *truncated* would invent a rise for
+ *  everybody it lost — but a truncated blob is a malformed one, which
+ *  `readSnapshot` fails to parse and skips the day for entirely. */
 function diffAgainst(
   current: Record<number, number>,
   base: Record<number, number>,
@@ -641,8 +666,7 @@ function diffAgainst(
   const delta: Record<number, number> = {};
   for (const [id, pct] of Object.entries(current)) {
     const was = base[id as unknown as number];
-    if (typeof was !== 'number') continue;
-    const change = Math.round((pct - was) * 10) / 10;
+    const change = Math.round((pct - (typeof was === 'number' ? was : 0)) * 10) / 10;
     if (change !== 0) delta[Number(id)] = change;
   }
   return delta;
