@@ -34,7 +34,7 @@ import { PlayerDay, playerDayLine } from './PlayerDay';
  * 4. **Last 5 games** — the Game Log's own table, five rows of it.
  *
  * **A rotation starter gets a fifth, and it goes second**: `Projected Starts`,
- * his next five turns — announced where his club has named him, projected from
+ * his next three turns — announced where his club has named him, projected from
  * his own rotation slot past that. It is second because "when does he pitch
  * next" is the forward half of *what is he doing*, and the paragraph below is
  * about not splitting those two halves across a page. It is the only block here
@@ -135,7 +135,7 @@ export function OverviewTab({
              of the month is nothing — clubs name a rotation three or four days
              out — so what it mostly said was `Not yet scheduled.`: a true
              sentence, and a useless one over a question the club's own schedule
-             and his own cadence can answer in five rows. So he gets the line
+             and his own cadence can answer in three rows. So he gets the line
              saying today is empty, and Projected Starts says when. */
           <p className="ovw-none">No game for {name} today.</p>
         ) : (
@@ -183,13 +183,32 @@ export function OverviewTab({
 }
 
 /**
- * The News block: his three latest items, over to the tab that holds them all.
+ * The News block: his **latest item, whole**, over to the tab that holds them all.
  *
  * **`NewsList` with `shown` set small**, not a second list — the same rule the
  * five-game preview follows against the Game Log tab, and for the same reason:
  * the row shapes, the two sources' different voices and the press that opens an
  * article have one definition. The only things this block decides are how many
  * rows and whether the standfirst is drawn.
+ *
+ * **One row with its standfirst, where it was three rows without.** Three
+ * headlines is a list of things that have happened and answers none of them: a
+ * manager who reads `Lands on IL with forearm strain` still has to press through
+ * to learn how long for. The latest item is the one that changes a decision, and
+ * with only one row on the block there is room to show the whole of what the
+ * item actually carries — the date, the source's own word for the kind of thing
+ * it is, the headline and RotoWire's note under it. Measured on a real report,
+ * that is a **93px** block against the 88 three bare headlines took, so the
+ * whole trade costs five pixels.
+ *
+ * **A transaction has no standfirst and leaves no gap.** MLB publishes one
+ * sentence and no summary (see `types.ts::NewsItem`), so a row whose latest item
+ * is a transaction draws headline and meta and stops — `NewsRow` guards on the
+ * field and the row is a `gap`-spaced flex column, so an absent child costs
+ * nothing rather than leaving a hole where prose should be. The one further body
+ * text either upstream has is RotoWire's own analysis, which is **paywalled and
+ * deliberately not taken** (`rotowire.ts`, *What is deliberately not taken*);
+ * the row links to the page it was read from, which is where that lives.
  *
  * It sits **second**, between the day and the season line. That is where it
  * belongs on the question the tab is ordered by: the day says what he is doing,
@@ -229,7 +248,7 @@ function NewsPreview({
         </button>
       </div>
       {items.length > 0 ? (
-        <NewsList items={items} shown={3} />
+        <NewsList items={items} shown={1} summaries />
       ) : wait ? (
         <LoadingLine>Reading the latest news</LoadingLine>
       ) : loading ? null : (
@@ -358,8 +377,8 @@ function SeasonSummary({
  *
  * **It asks for his club's next game and nothing else now**, where it used to
  * take a `wantStart` and ask for his next *announced* start instead. That half
- * belongs to `ProjectedStartsBlock`, which answers the same question in five
- * rows and can answer it for the four turns nobody has named yet — so this block
+ * belongs to `ProjectedStartsBlock`, which answers the same question in three
+ * rows and can answer it for the turns nobody has named yet — so this block
  * is not drawn for a rotation starter at all, and the flag it would have needed
  * has gone with the branch. **The server route keeps its `?start=1`**, which is
  * the rule `/api/watchlist` follows for its own name: a tab open at the moment
@@ -441,7 +460,7 @@ function NextGameBlock({ playerId, name }: { playerId: number; name: string }) {
 }
 
 /**
- * The Projected Starts block: his next five turns, announced where his club has
+ * The Projected Starts block: his next three turns, announced where his club has
  * named him and projected from his own rotation slot past that.
  *
  * **It sits second, directly under the day**, and that is the tab's own ordering
@@ -465,7 +484,7 @@ function NextGameBlock({ playerId, name }: { playerId: number; name: string }) {
  * is true for most of the month and useless: clubs name a rotation three or four
  * days out, so the honest answer is the one nobody has published and everybody
  * can work out. So for a rotation starter that block is not drawn at all — the
- * day says `Today` and the block under it says when, in five rows instead of a
+ * day says `Today` and the block under it says when, in three rows instead of a
  * sentence.
  *
  * Its own read, lazily and once per player, in the shape every other lazily
@@ -502,10 +521,29 @@ function ProjectedStartsBlock({ playerId, name }: { playerId: number; name: stri
   }, [playerId]);
 
   const starts = info?.starts ?? [];
-  const projected = starts.filter((s) => !s.announced).length;
+  const note = headNote(info, starts, name);
   return (
     <section className="ovw-block ovw-starts">
-      <h2 className="ovw-head">Projected Starts</h2>
+      {/* **The block's own note rides in the heading row**, where it used to be
+          a paragraph under the list. Two of them, in fact — the cadence caveat
+          and, on a list that stopped short, the reason it did — and a block of
+          three rows closing on two sentences of small print was more apparatus
+          than the rows it qualified. What each said is not lost, only shortened
+          to the phrase that carries it and moved to the one line on the block
+          that is always drawn and always read: `a turn every 5 club games` says
+          how much to trust the muted rows, exactly as the sentence did, and
+          `nothing past what his club has named` says why a list is one row long.
+          The sentence itself is the note's `title`, so the reasoning is a hover
+          away rather than gone — and it is a *supplement* here rather than the
+          only copy, which is the rule a `title` may be used under. */}
+      <div className="ovw-head-row">
+        <h2 className="ovw-head">Projected Starts</h2>
+        {note && (
+          <span className="start-note" title={note.title}>
+            {note.text}
+          </span>
+        )}
+      </div>
       {starts.length > 0 ? (
         <ol className="start-list">
           {starts.map((s) => (
@@ -517,33 +555,52 @@ function ProjectedStartsBlock({ playerId, name }: { playerId: number; name: stri
       ) : loading ? null : (
         <p className="ovw-none">{refusalText(info, failed, name)}</p>
       )}
-      {/* **The caveat stays on the card**, where the general key behind an ⓘ on
-          the Splits and Charts cards does not — and the split is that one's own:
-          instructions are read once and belong behind a button, where a caveat
-          about *these rows* changes how what is on screen should be read. It
-          names his own cadence rather than saying "estimated", because the
-          number is what tells a reader how much to trust the dashed rows: one
-          turn every five club games is a settled rotation, and the same
-          sentence saying six is a club running a six-man. Drawn only when
-          something on screen is actually a guess. */}
-      {projected > 0 && info?.cadence != null && (
-        <p className="start-note">
-          {projected === 1 ? 'One start is' : `${projected} starts are`} projected from his last
-          one, at a turn every {info.cadence} club {info.cadence === 1 ? 'game' : 'games'} — his
-          own pace this season. Nobody has named them yet.
-        </p>
-      )}
-      {/* **A refusal with rows above it still owes the reader a sentence.** A
-          pitcher can have an announced start and no cadence to project past it
-          — a call-up his club has named for Sunday is exactly that — and a
-          block that showed the one row and stopped would leave him wondering
-          where the other four went. The refusal branch below only speaks when
-          there is nothing at all, so this says the same thing under a list. */}
-      {starts.length > 0 && info?.refusal && (
-        <p className="start-note">{refusalText(info, false, name)}</p>
-      )}
     </section>
   );
+}
+
+/**
+ * The phrase beside the heading, and the sentence behind it. Two states, one
+ * slot, and they cannot both hold: a refusal is the projection declining to run,
+ * so there is no cadence when there is a refusal and nothing projected when
+ * there is no cadence.
+ *
+ * - **A cadence**, whenever something on screen is actually a guess. It names
+ *   *his own pace* rather than saying "estimated", because the number is what
+ *   tells a reader how much to trust the muted rows — one turn every five club
+ *   games is a settled rotation, and the same phrase saying six is a club
+ *   running a six-man.
+ * - **A refusal with rows above it.** A pitcher can have an announced start and
+ *   no cadence to project past it — a call-up his club has named for Sunday is
+ *   exactly that — and a block that showed the one row and stopped would leave
+ *   a reader wondering where the other two went. The refusal *branch* below
+ *   only speaks when there is nothing at all, so this says it over a list.
+ *
+ * Nothing at all in the ordinary announced-only case, and nothing while the read
+ * is out: a heading that grew a phrase as the rows landed would move the list
+ * under the reader's eye.
+ */
+function headNote(
+  info: ProjectedStarts | null,
+  starts: ProjectedStart[],
+  name: string,
+): { text: string; title: string } | null {
+  if (!info || starts.length === 0) return null;
+  if (info.refusal) {
+    return {
+      text: 'nothing past what his club has named',
+      title: refusalText(info, false, name),
+    };
+  }
+  const projected = starts.filter((s) => !s.announced).length;
+  if (projected === 0 || info.cadence == null) return null;
+  const games = `${info.cadence} club ${info.cadence === 1 ? 'game' : 'games'}`;
+  return {
+    text: `a turn every ${games}`,
+    title:
+      `${projected === 1 ? 'One start is' : `${projected} starts are`} projected from his last ` +
+      `one, at a turn every ${games} — his own pace this season. Nobody has named them yet.`,
+  };
 }
 
 /** What the block says when it has nothing to show, which is four different
@@ -576,15 +633,18 @@ function refusalText(info: ProjectedStarts | null, failed: boolean, name: string
  * **A projected row is drawn as a guess and an announced one is not**, which is
  * the app's standing rule that an estimate is marked as one — the percentile
  * card's dotted bubble and the Splits card's hatched fill are the same rule on
- * two other surfaces. It is said three ways over, because one of them is bound
- * to be the one a given reader takes it from: the row's text goes muted, its
- * rail goes dashed, and the tag says the word.
+ * two other surfaces. It used to be said **three** ways and is now said two:
+ * the row's text goes muted and the tag says the word. The third was a dashed
+ * left rail against the announced row's solid accent one, and it went with that
+ * one — see the stylesheet, where dropping the pair together is argued: the two
+ * that are left are the clearer two, and a rail on one kind of row alone would
+ * have left the list indented in two places for no reason a reader could see.
  *
  * The opposing starter is by **surname**, where the single next-game line above
- * prints the whole name: this is a list of five rows scanned down rather than
- * one sentence read across, which is the same reason the summary table's
- * opponent cell and the feed's Upcoming bar cut theirs. The full name is on the
- * row's tooltip.
+ * prints the whole name: this is a list of rows scanned down rather than one
+ * sentence read across, which is the same reason the summary table's opponent
+ * cell and the feed's Upcoming bar cut theirs. The full name is on the row's
+ * tooltip.
  */
 function StartRow({ start }: { start: ProjectedStart }) {
   const when = prettyGameDate(start.date);

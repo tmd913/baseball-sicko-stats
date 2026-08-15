@@ -18,7 +18,8 @@ import { LoadingBlock } from './Loading';
  *   player in a new tab — which is where the note was read from and where
  *   RotoWire's own analysis of it lives, the one thing this section
  *   deliberately does not ship. It carries the note itself as a standfirst on
- *   the tab, where there is room for it.
+ *   both surfaces: the tab has room for it down the list, and the Overview's
+ *   preview has room for it because that block is one row.
  * - A **transaction** (`mlb`) is a fact with nowhere to go — MLB publishes one
  *   sentence and no link — so it is a static row and deliberately not a press.
  *   A row that looked like a link and did nothing would be worse than a row
@@ -30,12 +31,16 @@ export function NewsList({
   summaries,
 }: {
   items: NewsItem[];
-  /** How many rows to draw. The preview takes 3 — enough that a move and the
-   *  story about it both show, few enough that it stays a glance — and the tab
-   *  takes them all. */
+  /** How many rows to draw. The preview takes 1 — the latest item is the one
+   *  that changes a decision, and one row leaves room to draw the whole of it —
+   *  and the tab takes them all. */
   shown?: number;
-  /** The article standfirst. Off on the preview, where three two-line rows
-   *  would be the whole of the block above the season line it introduces. */
+  /** The standfirst: RotoWire's note itself, which is the only body text either
+   *  upstream publishes. On now for both surfaces — it was off on the preview
+   *  while that drew three rows, where three two-line ones would have been the
+   *  whole of the block above the season line it introduces. A transaction
+   *  carries none and the guard below is what keeps that an absent child rather
+   *  than an empty one. */
   summaries?: boolean;
 }) {
   const rows = shown === undefined ? items : items.slice(0, shown);

@@ -120,7 +120,7 @@ is opened with is what he is doing* — and the block answering it was second.
 1. **Today**, or the **next game** when the day holds none.
 2. **Projected Starts** — a rotation starter only, and see its own section
    below, which is also where the third state of the block above it went.
-3. **News** (below).
+3. **News** (below) — the latest item, whole.
 4. **Season**, over to the Stats tab.
 5. **Last 5 games**, over to the Game Log.
 
@@ -175,8 +175,8 @@ and the overlay each overflow by **0** in every one of those, at both widths.
 
 #### The News section, and why it sits second
 
-**It is his latest reports and transactions, three of them, over to the News tab**
-(`NewsPreview` in this file, `NewsList` in `PlayerNews.tsx`).
+**It is his latest report or transaction — one of them, whole — over to the News
+tab** (`NewsPreview` in this file, `NewsList` in `PlayerNews.tsx`).
 
 **Second, between the day and the season line**, which is the order the tab is
 already sorted by rather than an exception to it. The day says what he is doing;
@@ -185,13 +185,59 @@ that he is losing the closer's job — and both of those are this week, where th
 season line and the game log under them are the record. A manager who has just
 been told a man is hurt does not want to read a season line first.
 
-**`NewsList` with `shown={3}`, not a second list.** That is the rule
+**`NewsList` with `shown={1}`, not a second list.** That is the rule
 `GameLogTable` sets for the Game Log and its own five-row preview, and it is
 worth restating because it is the whole reason there is one component: the row
 shapes, the two sources' different voices and the press that opens a report
 have one definition. The only two things this block decides are how many rows and
-whether the standfirst is drawn (`summaries`, off here — three two-line rows would
-be the whole of the block above the season line it introduces).
+whether the standfirst is drawn.
+
+**One row with its standfirst, where it was three rows without.** Three headlines
+is a list of things that have happened and answers none of them: a manager who
+reads `Lands on IL with forearm strain` still has to press through to learn how
+long for. The latest item is the one that changes a decision, and with one row on
+the block there is room to draw the whole of what the item actually carries — the
+date, the source's own word for the kind of thing it is, the headline, and
+RotoWire's note under it. `summaries` was off here for a stated reason — *three
+two-line rows would be the whole of the block above the season line it
+introduces* — and that reason goes with the two rows it was about.
+
+**And the block gets shorter rather than longer**, which is the half worth
+measuring: two rows are worth more than one standfirst. Measured at 1200 on the
+live 2026 season, `.ovw-news` goes **202.53 → 122.84px** on a RotoWire-led player
+(Webb, Sánchez, Skubal), **→ 104.84** where the note is one line shorter (Hader,
+Trout, Ohtani) and **→ 82.84** on a transaction (Amador). At 390: **202.53 →
+140.84 / 122.84**, and **259.06 → 101.69** on the transaction.
+
+**A transaction has no standfirst and leaves no gap.** MLB publishes one sentence
+and no summary (`types.ts::NewsItem`), so a player whose latest item is a
+transaction gets the date, the kind and the headline and stops — `NewsRow` guards
+on the field and the row is a `gap`-spaced flex column, so the child is *absent*
+rather than empty. Measured on Amador, whose latest is `Recalled`: the row's inner
+box ends **10px** below the headline, which is exactly `.news-static`'s own
+bottom padding, against **32px at 1200 and 50 at 390** on a row that does carry
+one. It is also `.news-static` rather than `.news-link`, MLB publishing no URL,
+which is unchanged.
+
+**Driven in a browser at 1200×900 and 390×844 against the live 2026 season**, on
+a player of each source: **Blake Snell / Logan Webb / Mike Trout** draw one
+`.news-rotowire` row — `Aug 9 · Report · Tosses eight innings in no-decision`
+over `Webb did not factor into the decision Sunday against the Tigers, …` — as a
+press that opens RotoWire in a new tab, and **Adael Amador** draws one
+`.news-mlb` row — `Aug 12 · Recalled · Colorado Rockies recalled 2B Adael Amador
+from Albuquerque Isotopes.` — as a static row with **0** `.news-summary`
+elements. `News →` is drawn on both, the block caps at `--card-column`
+(800 / 358), and the page and the overlay each overflow by **0**.
+
+**There is no further body text to reach for, and this is where that was
+checked.** `NewsItem` carries `date`, `kind`, `headline`, `summary` and `url` and
+nothing else, and `summary` is RotoWire's note itself — so "the whole item" is
+the whole item. The one thing either upstream has beyond it is RotoWire's own
+**analysis** block, which is **paywalled** and deliberately not scraped
+(`rotowire.ts`, *What is deliberately not taken*: 1 of 7 items on a checked player
+carried it and the other six read "Subscribe now to instantly reveal our take on
+this news"). Nothing was added to the scrape for this change, so the HTML shape
+`rotowire.ts` depends on is exactly the shape it depended on before.
 
 **One read serves both**, hung on `PlayerDetails` and gated on `tab === 'news' ||
 tab === 'overview'` exactly as the game log's is, so the preview is literally the
@@ -237,7 +283,7 @@ and the one the app could least often say.** The block above answered it with
 `/api/players/:id/next-game?start=1` — his next *announced* start — and clubs
 name a rotation three or four days out, so for most of the month the honest
 answer was `Not yet scheduled.`: true, useless, and a thing anybody with the
-fixture list could have worked out. `ProjectedStartsBlock` works it out, five
+fixture list could have worked out. `ProjectedStartsBlock` works it out, three
 turns ahead.
 
 **It is second in the tab, directly under the day**, which is that tab's own
@@ -255,7 +301,7 @@ every fifth day.
 **So the day block defers to it, and `Not yet scheduled.` is gone.** For a
 rotation starter with no game today the day says `Today` / `No game for
 Cristopher Sánchez today.` and nothing else, and the block under it says when —
-in five rows rather than a sentence. `NextGameBlock` therefore keeps only the
+in three rows rather than a sentence. `NextGameBlock` therefore keeps only the
 club's-next-game half, loses its `wantStart` prop and passes `false` at its one
 call site; **the server route keeps its `?start=1`**, which is the rule
 `/api/watchlist` follows for its own name — a tab open at the moment of a deploy
@@ -314,32 +360,65 @@ minor-league club — checked: Edward Cabrera's is the Knoxville Smokies — so 
 schedule read came back empty and the block said `Couldn't read his club's
 schedule`, which is true of the id and a lie about him. `parentOrgOf` is the
 fallback, fired only when the schedule is empty and cached for a day; with it he
-reads his announced start and four projections off it, which is exactly the
+reads his announced start and the projections off it, which is exactly the
 pitcher this block is most worth drawing for.
 
 **Announced and projected are never drawn alike**, which is the app's standing
 rule that an estimate is marked as one — the percentile card's dotted bubble and
-the Splits card's hatched fill are the same rule on two other surfaces. It is
-said three ways over, because one of them is bound to be the one a given reader
-takes it from: the row's rail goes from solid accent to **dashed** `--faint`, its
-text goes muted, and the tag says the word. The rail is a left border rather than
-the feed's 3px/11px gradient — that device groups a header, a card and a clip into
-one item, where this is one line and wants a mark beside it rather than a bracket
-around it. The row itself is **folded onto `.ovw-next-line`'s rule**: the block
-above draws exactly this sentence for exactly this kind of fact, so the two are
-one object. And the opposing starter is by **surname**, where that single line
-prints the whole name — this is a list of five scanned down rather than one
-sentence read across, which is the same reason the summary table's opponent cell
-and the feed's Upcoming bar cut theirs.
+the Splits card's hatched fill are the same rule on two other surfaces. It used
+to be **said three ways over** and is now said two: the row's text goes muted,
+and the tag says the word. The row itself is **folded onto `.ovw-next-line`'s
+rule**: the block above draws exactly this sentence for exactly this kind of
+fact, so the two are one object. And the opposing starter is by **surname**,
+where that single line prints the whole name — this is a list scanned down rather
+than one sentence read across, which is the same reason the summary table's
+opponent cell and the feed's Upcoming bar cut theirs.
 
-**The caveat stays on the card where the Splits and Charts keys went behind an
-ⓘ**, and that is those cards' own split rather than an exception to it:
-instructions are read once and belong behind a button, where a caveat about
-*these rows* changes how what is on screen should be read. It names **his own
-cadence** rather than saying "estimated", because the number is what tells a
-reader how much to trust the dashed rows — one turn every five club games is a
-settled rotation, and the same sentence saying six is a club running a six-man —
-and it is drawn only when something on screen is actually a guess.
+**The third way was a left rail and it is gone, with the announced one beside
+it.** The paragraph above used to read *"the row's rail goes from solid accent to
+**dashed** `--faint`"*, over a stylesheet comment that admitted in as many words
+to saying one thing three times. The rail was the weakest of the three: the tag
+prints the word `Projected` at the end of the same line, and every cell on a
+projected row is already `--muted` beside an announced row's `--text`.
+
+**The pair went together rather than the dashed one alone**, and that is the only
+way it reads. Each rail was `3px` of border over `10px` of padding, so a row's
+text sat **13px** in from the block's own edge — measured, `29px` against the
+block's `16` at both widths, on both kinds of row. Dropping it from the projected
+rows only would have left the announced ones alone at 29 with everything under
+them at 16: a list whose left edge steps in and out by which rows a club happens
+to have named, on a block that is one announced row and two projected ones most
+of the time. With neither, every row's text starts at **16** and the hairline
+between rows is what groups the list — which is the `.news-item` device this
+block already borrows for its rows.
+
+**The two `.start-note` paragraphs under the list are gone too, and what each
+said is in the heading row instead.** They were the block's small print — a
+caveat naming his cadence, and, on a list that stopped short, the reason it did —
+and three rows closing on two sentences of it was more apparatus than the rows it
+qualified. Neither fact is lost; each is shortened to the phrase that carries it
+and moved to the one line on the block that is always drawn and always read, with
+the **whole sentence as that phrase's `title`**:
+
+- **The cadence** → `a turn every 5 club games`, which is exactly what the
+  sentence was for. It names *his own pace* rather than saying "estimated",
+  because the number is what tells a reader how much to trust the muted rows —
+  five club games is a settled rotation and six is a club running a six-man — and
+  it is still drawn only when something on screen is actually a guess.
+- **A refusal with rows above it** → `nothing past what his club has named`. That
+  one is not decoration: a pitcher can have an announced start and no cadence to
+  project past it (Skubal today, `too-few-starts`), and a block that showed the
+  one row and stopped would leave a reader wondering where the other two went.
+  The refusal *branch* only speaks when there is nothing at all.
+
+The two can never both hold — a refusal is the projection declining to run, so
+there is no cadence when there is a refusal and nothing projected when there is
+no cadence — which is why it is one slot rather than two (`headNote`). It is
+`.start-note` still, **folded onto `.ovw-none`'s rule** now that it wants no
+margin of its own, and `.ovw-starts .ovw-head-row` overrides that row's
+`space-between`: the phrase reads *beside* the heading, where the justification
+written for the `News →` / `Stats →` doors would push it 800px away and make it
+read as a link. It wraps under the heading on a phone where the two don't fit.
 
 **Validated three ways, and the honest one is the middle number.**
 
@@ -364,8 +443,37 @@ and it is drawn only when something on screen is actually a guess.
   start, then 57.0/78.7, 46.6/69.8, 39.1/62.4 and **33.5/56.1** for the fifth.
   Over the 40 busiest starters alone it is 81.0/95.4 down to 45.4/70.3. The tail
   decays because an IL stint is unpredictable by construction — 11.3% of fifth
-  starts miss by more than eight days — which is why the block says five and not
-  ten, and why the note names the cadence rather than claiming a date.
+  starts miss by more than eight days — which is why the note names the cadence
+  rather than claiming a date, and which is now also why the block says
+  **three**.
+
+### Three turns, not five, and the trim is on the server
+
+**The number that argued for five is the number that argues for three.** The run
+above is 73.0% exact on the next start, 57.0 on the second and 46.6 on the third,
+then **39.1 and 33.5** on the fourth and fifth (81.0 down to 45.4 over the 40
+busiest starters). A third row is still better than a coin; the two under it were
+a heading's worth of authority over a guess that is wrong more often than it is
+right — and the fifth, at a third exact, is the row a reader is most likely to
+have planned a week around. Three turns is also a fortnight, which is far enough
+out to see a two-start week coming.
+
+**Trimmed on the server (`WANT`), not sliced in the client**, although the client
+is the route's only reader. The walk down the club's schedule is free either
+way — it is an index into a list already in memory — but the **opposing starters'
+hands are not**: `getRosterInfo` reads one 40-man roster per *distinct club* of
+the ids it is handed, so a fourth or fifth row that happens to carry a named
+probable is an upstream read for a row nothing draws. It is rare (MLB probables
+reach about three days out) and it is not nothing, and the other half decides it
+anyway: a route whose own comment argues for a span the page does not show is a
+second answer waiting to drift from the first. `WANT` gates all three places at
+once — the announced slice, the projection loop and the final `rows` — so one
+constant is the whole change.
+
+**Measured on the live 2026 season through the route**: Logan Webb **5 → 3**
+starts (1 announced + 4 projected → 1 + 2), cadence 5 either way; Cristopher
+Sánchez 5 → 3, all projected. Nothing else about the answer moves — the same
+`gamePk`s, the same announced flags, the same `cadence` and the same `refusal`.
 
 **Driven in a browser at 1200×900 and 390×844 against the live 2026 season**, in
 all six states. *Announced + projected* — Logan Webb: `Today · Projected Starts ·
@@ -385,10 +493,42 @@ game and the opposing starter. **Page and overlay overflow 0 in every one of
 those, at both widths**; the block caps at `--card-column` (800 / 358), and at 390
 only the announced row wraps, to 50px.
 
+**Re-driven end to end after the three changes above** — the trim to three, the
+two `.start-note` paragraphs, and the rails — on the built client and server at
+**1200×900 and 390×844**, before → after on the same afternoon:
+
+| state | `.ovw-starts` at 1200 | at 390 |
+| --- | --- | --- |
+| Webb (1 announced + projected) | **218.39 → 123** | **272.17 → 142** |
+| Sánchez (all projected) | **218.39 → 123** | **253.17 → 123** |
+| Skubal (1 announced, `too-few-starts`) | **82.39 → 55** | **118.78 → 99** |
+| Ohtani P (refused, no rows) | 39 → 39 | 69 → 69 |
+| Hader (a reliever) | no block → no block | no block → no block |
+
+Rows go **5 → 3** on the first two and stay at 1 and 0 on the rest; every row's
+`border-left` goes `3px solid` / `3px dashed` → **`0px none`** with `padding-left`
+`10px` → **`0px`**, and its text's left edge **29 → 16** on both kinds at both
+widths. There is **one `.start-note`** in every state that had one and it is now
+a `<span>` inside `.ovw-head-row` (`inHead: true`) — `a turn every 5 club games`
+on Webb and Sánchez, `nothing past what his club has named` on Skubal, each with
+the full old sentence as its `title` — and **none at all** on Ohtani, whose
+refusal branch still prints the whole sentence in the block (`Shohei Ohtani has
+missed more than a turn, …`). The heading row is 16px at 1200 and wraps to 41 on
+Skubal at 390, which is the note dropping under the heading. **Page and overlay
+overflow are 0 in all 14 states**, the block still caps at `--card-column`
+(800 / 358), the tab strip is still 8 tabs on a pitcher and 7 on a batter, and
+the block order is unchanged (`Today · Projected Starts · News · Season · Last 5
+games`).
+
 **Bundle: 466.09 → 468.73 KB of JS** (138.60 → 139.32 gzipped) and **106.85 →
 107.84 KB of CSS** (19.09 → 19.27) — 2.6KB and 1.0KB raw, 0.7KB and 0.2KB over
 the wire, for a block, a route, a server module and the rules above restated
 where they are.
+
+**And over the three changes above: 485.25 → 485.47 KB of JS** (143.98 → 144.03
+gzipped) and **112.93 → 112.78 KB of CSS** (20.12 → 20.09) — 0.22KB of JS raw and
+0.05 over the wire for `headNote` and its two sentences, against a **net loss** of
+CSS, two rule blocks having gone where one was added.
 
 #### The scheduled game's pitcher link opened nothing
 

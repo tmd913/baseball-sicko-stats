@@ -3787,8 +3787,13 @@ body {
   text-decoration: underline;
 }
 /* What a block says when it has nothing — the `.pday-none` voice, which is the
-   same kind of sentence one level up. */
-.ovw-none {
+   same kind of sentence one level up. **`.start-note` is folded onto it** rather
+   than restyled to resemble it: the Projected Starts block's note is the same
+   voice in the same tab, and it now sits *in the heading row* rather than under
+   the list, so the only thing it ever needed of its own was a top margin it no
+   longer has. */
+.ovw-none,
+.start-note {
   margin: 0;
   color: var(--faint);
   font-size: 12px;
@@ -3862,6 +3867,16 @@ body {
 .ovw-starts {
   max-width: var(--card-column);
 }
+/* The block's note reads **beside** its heading rather than out at the right
+   edge, which is what `.ovw-head-row`'s `space-between` would give it — that
+   justification is for the three blocks whose second item is a `News →` /
+   `Stats →` door, and a phrase pushed 800px away from the words it qualifies
+   reads as a link rather than as a note. `flex-start` and a wrap, so on a phone
+   it drops under the heading instead of squeezing it. */
+.ovw-starts .ovw-head-row {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
 .start-list {
   list-style: none;
   margin: 0;
@@ -3886,23 +3901,25 @@ body {
 }
 /* **A projection is drawn as a guess**, which is the app's standing rule —
    the percentile card's dotted bubble and the Splits card's hatched fill are
-   the same rule on two other surfaces. It is said three ways, because one of
-   them is bound to be the one a given reader takes it from: the row's text goes
-   muted, its rail goes dashed, and the tag says the word.
+   the same rule on two other surfaces. It is said **two** ways: the row's text
+   goes muted, and the tag says the word.
 
-   The rail is a **left border** rather than the feed's 3px/11px gradient: that
-   device groups a header, a card and a clip into one item, where this is one
-   line and wants a mark beside it rather than a bracket around it. Announced
-   takes the accent solid, projected `--faint` dashed — and the dash is not
-   decoration, it is the same broken-mark vocabulary `.pct-bubble--est` uses to
-   say "our estimate, not a measurement". */
-.start-row--announced {
-  border-left: 3px solid var(--accent);
-  padding-left: 10px;
-}
+   **It used to be three, and the third was a left rail** — 3px solid accent on
+   an announced row, 3px dashed `--faint` on a projected one, each with 10px of
+   padding behind it. Three ways of saying one thing is what the comment here
+   admitted to, and the rail was the weakest of them: the tag already prints the
+   word `Projected` at the end of the same line, and every cell on the row is
+   already muted beside an announced row's `--text`.
+
+   **The pair went together rather than the dashed one alone**, which is the
+   only way that reads. Dropping it from projected rows only would have left the
+   announced ones indented 13px with everything under them flush — a list whose
+   left edge steps in and out by which rows a club happens to have named, on a
+   block that is one announced row and two projected ones most of the time. With
+   neither, the rows share one left edge and the hairline between them is what
+   groups the list, which is the `.news-item` device this block already borrows
+   for its rows. */
 .start-row--projected {
-  border-left: 3px dashed var(--faint);
-  padding-left: 10px;
   color: var(--muted);
 }
 /* The muted row's own cells have to give up their colours, or the three ways of
@@ -3937,17 +3954,6 @@ body {
 }
 .start-row--projected .start-tag {
   border-style: dashed;
-}
-/* The caveat, on the card rather than behind an ⓘ — see the component, where
-   the split between a general key and a caveat about *these rows* is argued.
-   `.ovw-none`'s voice, which is what every other sentence-under-a-block on this
-   tab takes. */
-.start-note {
-  margin: 10px 0 0;
-  color: var(--faint);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.45;
 }
 
 /* ---- News ------------------------------------------------------------

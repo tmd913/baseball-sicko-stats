@@ -6,14 +6,25 @@ import { getRosterInfo, getTeamAbbrevs } from './mlbStats.js';
 const UA = { 'User-Agent': 'statcast-sicko/1.0' };
 
 /**
- * How many starts to answer with. Five turns is about a month, which is the span
- * a fantasy manager actually plans over — long enough to see a two-start week
- * coming, short enough that the tail is still worth printing. It is also about
- * where the guess stops being worth much: measured over the 2026 season the
- * fifth projected start lands on the right game 45% of the time against the
- * first one's 81%, so a sixth would be mostly noise under a heading.
+ * How many starts to answer with. **Three, where this said five**, and the
+ * measurement that argued for five is the one that argues for three: walking the
+ * 2026 season and projecting each pitcher's next turns off only what was known
+ * then, the run is **73.0% exact for the next start, 57.0% for the second and
+ * 46.6% for the third**, then 39.1% and 33.5% for the fourth and fifth (81.0%
+ * down to 45.4% over the 40 busiest starters). A third row is still better than
+ * a coin; the two under it were a heading's worth of authority over a guess that
+ * is wrong more often than it is right. Three turns is also a fortnight, which
+ * is far enough out to see a two-start week coming.
+ *
+ * **Trimmed here rather than sliced in the client**, although the client is the
+ * only reader. The walk down the club's schedule is free either way, but the
+ * opposing starters' hands are not: `getRosterInfo` reads one 40-man roster per
+ * distinct club of the ids it is handed, so a fourth or fifth row that carries a
+ * named probable is an upstream read for a row nothing draws. And a route whose
+ * own comment argues for a span the page does not show is a second answer
+ * waiting to drift from the first.
  */
-const WANT = 5;
+const WANT = 3;
 
 /**
  * The fewest starts we will read a cadence off. Two consecutive gaps is a thin
