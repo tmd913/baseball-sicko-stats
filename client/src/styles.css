@@ -10640,20 +10640,34 @@ body {
   padding: 4px 0;
   min-width: 0;
 }
-/* **A circle, not a rounded square.** Every other picture of a person or a
-   thing in this app is round — the headshot on three tables, the portrait on
-   the player page — and a fantasy team's badge is the same kind of object, so
-   a 6px corner made it the one mark in the app that wasn't. `contain` rather
-   than `cover` because these are arbitrary third-party images at arbitrary
-   aspect ratios: `cover` crops a wide badge to its middle, where `contain`
-   fits the whole of it inside the circle. */
+/* **A rounded rectangle, where this was a circle** — and the reversal is about
+   what the picture *is* rather than about the app's idiom. The circle was
+   argued from the headshot and the player-page portrait, which are photographs
+   of a person and are cropped to a face; a fantasy team's badge is a picture
+   somebody uploaded, at whatever aspect ratio they had, and `object-fit:
+   contain` (which stays — `cover` would crop a wide badge to its middle) then
+   fits it inside the *inscribed* box. A landscape badge in a circle is
+   therefore drawn at a fraction of the room the row is already giving it. A
+   wider box at the same height spends the row's slack rather than the badge's,
+   and the corner says "an image" where the circle said "a face".
+
+   The size is a pair of variables because two places draw it at two sizes: the
+   card's own rows and the badge on each category row, which is a mark inside a
+   12px line and has to be smaller. `--lg-logo-glyph` sizes the fallback mark
+   with it, so the default badge shrinks with the real one rather than
+   overflowing the small box (the SVG's own `width`/`height` are presentation
+   attributes and lose to this). */
 .lg-logo {
-  width: 26px;
-  height: 26px;
+  width: var(--lg-logo-w, 34px);
+  height: var(--lg-logo-h, 26px);
   flex: none;
-  border-radius: 50%;
+  border-radius: 5px;
   object-fit: contain;
   background: var(--bg);
+}
+.lg-logo-none > svg {
+  width: var(--lg-logo-glyph, 15px);
+  height: var(--lg-logo-glyph, 15px);
 }
 /* The fallback for a logo that is a dead third-party URL, which on a real
    league is the ordinary case rather than the exception. */
@@ -10667,6 +10681,20 @@ body {
   color: var(--faint);
   border: 1px solid var(--border);
 }
+/* The name over the record. It is the one elastic thing on the row — hence the
+   `min-width: 0`, which is what lets the name ellipsize into the slack rather
+   than pushing the score off the end — and stacking the two is what gives the
+   name the whole of that width back: the record used to sit *between* the name
+   and the score, so a long name and a long record competed for one line. Same
+   shape as the Rankings table's team cell (`.lg-row-name` over `.lg-row-sub`),
+   so a manager reads the same two lines on both tabs. */
+.lg-side-id {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  line-height: 1.2;
+  min-width: 0;
+}
 .lg-team-name {
   font-size: 14px;
   font-weight: 600;
@@ -10676,9 +10704,9 @@ body {
   min-width: 0;
 }
 .lg-team-rec {
-  font-size: 12px;
+  font-size: 11px;
+  font-weight: 500;
   color: var(--muted);
-  flex: none;
 }
 /* `margin-left: auto` rather than a grid: the name is the only elastic thing
    on the row and this is what lets it take the slack and ellipsize into it. */
@@ -10720,10 +10748,25 @@ body {
   overflow-x: auto;
   overscroll-behavior-x: none;
 }
+/* `grid-template-columns` names the *first* column and `grid-auto-columns`
+   sizes every implicit one after it, so the leading column is fixed and the
+   categories go on sharing the slack however many of them there are — which is
+   the whole reason this is a grid with an auto flow rather than a template
+   built per league.
+
+   That column holds two things: the side-of-the-ball label in the head row and
+   each team's badge in the two rows under it, which is what sizes it — 58px is
+   `PITCHERS` at this type with a pixel to spare, against the badge's 24. The
+   category floor comes down 42 → 36 to pay for it, which is what keeps a
+   320px phone from scrolling; 36 is still above what any cell in this block
+   actually needs (the widest header is `SVHD` at ~30px and the widest value a
+   four-character rate), and the row's `min-width: min-content` is what stops a
+   longer-labelled league clipping rather than scrolling. */
 .lg-cat-row {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: minmax(42px, 1fr);
+  grid-template-columns: var(--lg-cat-lead, 58px);
+  grid-auto-columns: minmax(36px, 1fr);
   gap: 2px;
   min-width: min-content;
   font-size: 12px;
@@ -10733,6 +10776,20 @@ body {
 .lg-cat-row > * {
   padding: 3px 2px;
   white-space: nowrap;
+}
+/* The badge cell. The two variables shrink `.lg-logo` to a mark that sits
+   inside a 12px line without setting the row's height (18px against the row's
+   own ~19px of text and padding), and it is left-aligned in the leading column
+   so it sits under the label above it and on the same edge as the matchup
+   row's own badge. */
+.lg-cat-mark {
+  --lg-logo-w: 24px;
+  --lg-logo-h: 18px;
+  --lg-logo-glyph: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 1px 0;
 }
 .lg-cat-head {
   font-size: 10px;
@@ -10752,18 +10809,28 @@ body {
 .lg-cat-groups {
   display: contents;
 }
-/* The group's name, over its own head row rather than beside it. A leading
-   *column* was the alternative and costs the card ~52px of width on a phone
-   where a line costs it 14px of height — and this card is width-bound (ten
-   categories overflowed it) rather than height-bound. Small caps in `--faint`,
-   the app's own label-over-a-block shape. */
+/* The group's name, **in the head row's leading column rather than on a line of
+   its own above it** — which is where it started, on the reasoning that a
+   leading column "costs the card ~52px of width on a phone where a line costs
+   it 14px of height, and this card is width-bound rather than height-bound".
+   Both halves of that were true when the line held ten categories; the block
+   has since been cut in two, so the categories carry 15px of slack a side at
+   390 and the column is free there. What it buys is 15px a block and **30px a
+   card**, on a card that draws two of them and is read as a list of ten.
+   Left-aligned, over the badges it now shares a column with, where the
+   categories beside it are centred. Small caps in `--faint`, unchanged. */
 .lg-cat-side {
-  margin-bottom: 3px;
   font-size: 10px;
   font-weight: 800;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--faint);
+  text-align: left;
+  /* No side padding, unlike every other cell in the row: it puts the word's
+     left edge on the badges' below it and on the matchup row's own badge above
+     (x=35 at 390, 213 at 1200), and it is the 4px `PITCHERS` needs to fit the
+     column at this type rather than clip by a pixel. */
+  padding-inline: 0;
 }
 /* Green marks the side taking the category and the loser goes muted — the
    green/red pair this app uses for a delta would put ten red cells on the

@@ -209,6 +209,33 @@ export function TeamLogo({ team }: { team: EspnStandingsTeam | undefined }) {
   );
 }
 
+/**
+ * A team's name with its record under it.
+ *
+ * **Stacked rather than side by side**, which is where the record used to sit.
+ * The two are not the same kind of fact — the name is who this is and the
+ * record is how their season has gone — and on one line they read as a single
+ * run of text competing for the same slack the name needs to ellipsize into;
+ * the shorter of them also sat between the name and the headline score, so a
+ * long team name pushed the record about the row. Under it, the name has the
+ * whole width and the record is a caption on it. It is the shape the Rankings
+ * table's own team cell already has (`.lg-row-name` over `.lg-row-sub`).
+ */
+function SideIdentity({
+  team,
+  teamId,
+}: {
+  team: EspnStandingsTeam | undefined;
+  teamId: number;
+}) {
+  return (
+    <span className="lg-side-id">
+      <span className="lg-team-name">{team?.name ?? `Team ${teamId}`}</span>
+      {team && <span className="lg-team-rec">{record(team)}</span>}
+    </span>
+  );
+}
+
 /* ---- The scoreboard ----------------------------------------------------- */
 
 /**
@@ -258,7 +285,7 @@ function MatchupCard({
         {mine && <div className="lg-mine-tag">Your matchup</div>}
         <div className="lg-side">
           <TeamLogo team={teams.get(home.teamId)} />
-          <span className="lg-team-name">{teams.get(home.teamId)?.name ?? `Team ${home.teamId}`}</span>
+          <SideIdentity team={teams.get(home.teamId)} teamId={home.teamId} />
           <span className="lg-bye-tag">Bye</span>
         </div>
       </div>
@@ -286,8 +313,7 @@ function MatchupCard({
             className={`lg-side${leading === side.teamId ? ' lg-leading' : ''}`}
           >
             <TeamLogo team={team} />
-            <span className="lg-team-name">{team?.name ?? `Team ${side.teamId}`}</span>
-            {team && <span className="lg-team-rec">{record(team)}</span>}
+            <SideIdentity team={team} teamId={side.teamId} />
             <span className="lg-side-score">{score(side)}</span>
           </div>
         );
@@ -306,8 +332,14 @@ function MatchupCard({
         <div className="lg-cat-groups">
           {groups.map((g) => (
             <div className="lg-cats" role="table" aria-label={`${g.label} categories`} key={g.side}>
-              <div className="lg-cat-side">{g.label}</div>
               <div className="lg-cat-row lg-cat-head" role="row">
+                {/* Which side of the ball this block is, in the column the two
+                    rows below carry their badge in — the head row's first cell
+                    rather than a line of its own above it, which is 15px of a
+                    card that draws two of these blocks. */}
+                <span className="lg-cat-side" role="columnheader">
+                  {g.label}
+                </span>
                 {g.categories.map((c) => (
                   <span key={c.statId} role="columnheader" title={c.name}>
                     {c.label}
@@ -316,8 +348,21 @@ function MatchupCard({
               </div>
               {[away, home].map((side, i) => {
                 const other = i === 0 ? home : away;
+                const team = teams.get(side.teamId);
                 return (
                   <div className="lg-cat-row" role="row" key={side.teamId}>
+                    {/* Whose row this is. The two rows are in the same order as
+                        the two names above them, which is a thing a reader has
+                        to hold in their head — and has to hold twice over on a
+                        card carrying a batting block and a pitching one. The
+                        badge says it on the row. */}
+                    <span
+                      className="lg-cat-mark"
+                      role="rowheader"
+                      title={team?.name ?? `Team ${side.teamId}`}
+                    >
+                      <TeamLogo team={team} />
+                    </span>
                     {g.categories.map((c) => {
                       const v = side.scores[c.statId];
                       const state = outcome(v, other.scores[c.statId], c);

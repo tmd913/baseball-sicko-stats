@@ -58,9 +58,10 @@ page is worth having twice: the scoreboard answers *am I winning*, the table
 answers *why*.
 
 **The scoreboard** is a card per matchup — `.lg-matchup`, the app's own panel
-gradient on `--radius` — with both teams named, their logo and record beside
-them, the headline number at the right end of each row, and the category line
-under both. **The reader's own matchup leads**, which is a sort rather than a
+gradient on `--radius` — with both teams named, their badge beside them and
+their record under the name, the headline number at the right end of each row,
+and the category line under both, each side's row of it carrying that side's
+badge and its head row naming the side of the ball in the same column. **The reader's own matchup leads**, which is a sort rather than a
 mark and is what actually gets it on screen without scrolling on a phone; the
 accent border and the `Your matchup` label are what say *which* one it is once
 several are in view. Both were needed: on a 12-team league the board is ten
@@ -132,11 +133,16 @@ measured before the change, the category line **overflowed its own card by
 Each block's own `border-top` is the rule between the two, so the split costs no
 new mark.
 
-**A label line above each block rather than a leading column.** A left-hand
-label column costs the card about 52px of *width* where a line costs it 14px of
-*height*, and this card is width-bound rather than height-bound — the whole
-reason the split was worth making. The card is 800px at 1200 and 346 at 390,
-unchanged.
+**The label was a line above each block and is now the head row's leading
+column**, which reverses the paragraph that stood here: *a left-hand label
+column costs the card about 52px of width where a line costs it 14px of height,
+and this card is width-bound rather than height-bound.* The arithmetic was
+right and it was the arithmetic of the **ten-column** line this very section
+splits in two. Split, each block is five columns with 15px of slack apiece at
+390 — so the column is free there, and paid for at 320 by taking the category
+floor from 42px to 36 (still above the ~30px the widest header in it needs).
+See *The name over the record* below for the measurement. The card is 800px at
+1200 and 346 at 390, unchanged.
 
 ### Which side a category is on is the server's answer
 
@@ -230,6 +236,68 @@ with it: **`ascFirst` per column**, so ERA and WHIP open on their good end
 (checked: one press of `ERA` gives ▲ and `3.29 · 3.45 · 3.61` down from the top,
 where `HR` gives ▼ and `232 · 223 · 221`), and **nulls to the bottom in both
 directions**, a team with no figure not having a bad one.
+
+### The name over the record, a badge on every category row, and the label beside them
+
+**The record was beside the name and is under it.** The two are not the same
+kind of fact — the name is who this is, the record is how their season has gone
+— and on one line they read as a single run of text: the record sat *between*
+the name and the headline score, so it competed for the very slack the name
+needs to ellipsize into and it moved about the row as the name grew. Stacked
+(`.lg-side-id`), the name has the whole width and the record is a caption on
+it, which is the shape the Rankings table's own team cell has had all along
+(`.lg-row-name` over `.lg-row-sub`) — so a manager reads the same two lines on
+both tabs.
+
+**It gives the name width rather than costing it.** The row is logo, identity,
+score; taking the record out of the line hands the name about 40px and the
+wider badge takes 8 of it back. Measured at 320 — the width where this card
+first truncates — **2 of 12 names ellipsize**, against a row that had the
+record in the middle of it. Height is unchanged: the two lines are 30px inside
+a `.lg-side` that is **37.98px** at every width, the row having been set by its
+26px badge and its padding rather than by one line of text.
+
+**And each side's category row carries that side's badge.** The two rows under
+`BATTERS` are in the same order as the two names above them — which is a thing
+the reader has to hold in their head, and has to hold **twice** on a card that
+draws a batting block and a pitching one. The badge says it on the row.
+
+It is a **column of the same grid** rather than anything laid beside it:
+`grid-template-columns` names the first column and `grid-auto-columns` goes on
+sizing every implicit one after it, so the categories share the slack however
+many of them a league scores. That is the whole of the change to a block whose
+column count is the league's rather than ours.
+
+**And the `BATTERS` / `PITCHERS` label is what that column holds in the head
+row**, where it was a line of its own above the block — 15px a block and **30px
+a card**, on a card that is read as a list of ten. The head row had to hold a
+cell there anyway (a grid row whose first cell is missing puts every label a
+column left of its own numbers), so what was an empty spacer now carries the
+word, and the word sits directly over the badges it names. It is
+**left-aligned** with no side padding where every other cell in the row is
+centred, which puts its left edge on the badges below it and on the matchup
+row's own badge above — one edge down the card.
+
+**The column is 58px and the category floor pays for it.** 58 is `PITCHERS` at
+this type with a pixel to spare (against the badge's 24), and the floor comes
+down `minmax(42px, 1fr)` → `minmax(36px, 1fr)`, which is what keeps a 320px
+phone from scrolling: 58 + 5×36 + 10 of gaps is 248 against the 250 the card
+has there. 36 is still above what any cell in this block needs — the widest
+header is `SVHD` at ~30px and the widest value a four-character rate — and the
+row's own `min-width: min-content` is what makes a longer-labelled league
+scroll rather than clip.
+
+**It costs the block no scroll**, which is the measurement that mattered: the
+split into a batting block and a pitching one is what stopped this line
+overflowing a phone by 118px, and spending that back on a leading column would
+have undone it. Measured on the live 12-team league, `scrollWidth -
+clientWidth` is **0 on all four blocks at 320, 375, 390, 640 and 1200**, with
+the page body overflowing by 0 at each and **no cell clipped at any of them**
+(the label included, which clipped by exactly 1px until its side padding went).
+The badge lands at the same x as the matchup row's own (35 at 390, 213 at
+1200), the value rows are **21px** against the head's 18 — an 18px mark inside
+a line that was already 19px of text and padding — and the block itself is
+**84 → 69px**, taking a matchup card from **281.97 → 251.97**.
 
 ### The four league formats, and the two it refuses to guess at
 
@@ -842,7 +910,7 @@ assumed: `HR` sorts to the leaders and reverses, `First half` loads and writes
 `lspan=first` with `Weeks 1–15 · Mar 25 – Jul 19` under the strip, and switching
 to Transactions from the navbar drops the fixed-height mode and draws 302 rows.
 
-### Only the badge pins, and it is a circle
+### Only the badge pins, and it is a rounded rectangle
 
 **The pinned column was the whole identity block** — logo, name and record — and
 a pinned column is paid for out of the categories beside it. Uncapped, the
@@ -855,20 +923,38 @@ screen. So the cell is two cells here — a `.lg-logo-col` holding the badge
 alone, pinned, and a `.lg-name-col` holding the name over its record, which
 scrolls away with the stats it is being compared against.
 
-Measured: the pinned column is **49px at 1200 and 33px at 390** (one 26px circle
-in its own gutters) against the 318/257 it was; after scrolling right the badge
+Measured: the pinned column is one badge in its own gutters — **79.6px at 1200
+and 48.8 at 390**, and 49/33 when the badge was a 26px circle with one gutter — against the 318/257 it was; after scrolling right the badge
 sits at **0** from the pane's left edge while the name column has gone to
 **−267**, which is the whole point of the split. The sort that belonged to the
 team's identity stays on the **name** header — a badge column carries no label
 and nothing to sort by — and the club's name and record are the badge cell's
 `title`, so the row is still identifiable from the pinned part alone.
 
-**The badges are circles**, which is what every other picture of a person or a
-thing in this app already is: the headshot on three tables, the portrait on the
-player page. A 6px corner made this the one mark in the app that wasn't.
-`object-fit: contain` rather than `cover`, because these are arbitrary
-third-party images at arbitrary aspect ratios and `cover` crops a wide badge to
-its middle.
+**The badges were circles and are rounded rectangles**, and the reversal is
+about what the picture *is* rather than about the app's idiom. The circle was
+argued from the headshot on three tables and the portrait on the player page —
+*"a 6px corner made this the one mark in the app that wasn't"* — and those are
+photographs of a **person**, cropped to a face. A fantasy badge is a picture
+somebody uploaded at whatever aspect ratio they had, and `object-fit: contain`
+(which stays, for the reason it always had: `cover` crops a wide badge to its
+middle) then fits it inside the circle's *inscribed* box, so a landscape badge
+is drawn at a fraction of the room the row is already giving it. **34 × 26 on a
+5px radius**, so the height — which is what every row this sits in was measured
+against — does not move and only the width grows.
+
+**What that width costs is 8px, in one place.** The pinned column of the
+Rankings table is the badge in its own gutters, so it goes **71.6 → 79.6px at
+1200 and 40.8 → 48.8 at 390**; the row is **61.55px** either way, since it is
+the rank badge that sets it, and the page overflows by 0 at both. Nothing else
+pays: the scoreboard's own rows and the Transactions feed both hold the badge
+in a flex line the name is the elastic member of.
+
+**The size is `--lg-logo-w` / `--lg-logo-h` rather than two numbers**, because
+the scoreboard now draws the badge at two sizes — 34 × 26 on a matchup row and
+**24 × 18** on a category row, where it is a mark inside a 12px line — and
+`--lg-logo-glyph` shrinks the fallback baseball with it, the SVG's own
+`width`/`height` being presentation attributes that lose to a rule.
 
 **A team with no logo gets a default image rather than its initials.** Three
 letters in a circle read as a *broken* logo — the eye takes it as text that
