@@ -717,16 +717,16 @@ a press on the leftmost header is that way in the grammar the reader has just
 used to leave it.
 
 **The span strip is drawn from what the server says it can serve**, not from a
-list held here — so a season with no All-Star break in ESPN's calendar has no
-halves at all, and April has no second half, rather than either being offered and
+list held here — so a league that publishes no matchup count has no halves at
+all, and April has no second half, rather than either being offered and
 answering with an empty table. It is folded onto `.view-switch` / `.view-tab`
 alongside the League strip itself, which is this stylesheet's standing rule: the
 League tabs are the view switch one tier down and the span tabs are the research
 board's window tabs asking the same shape of question about a different thing, so
 both are that control and only their placement is their own.
 
-**What each span covers is printed beside the tabs** — `Weeks 1–15 · Mar 25 –
-Jul 19`, `Week 19 · Aug 10 – Aug 15 · so far`, `ESPN's own season line` — and it
+**What each span covers is printed beside the tabs** — `Weeks 1–9 · Mar 25 –
+May 31`, `Week 19 · Aug 10 – Aug 15 · so far`, `ESPN's own season line` — and it
 is not decoration. `First half` is a phrase, and which weeks and which days it is
 made of is the whole of what makes the numbers under it readable, which is the
 same argument the scoreboard's header makes for printing its dates beside `Week
@@ -939,13 +939,13 @@ screen at once. Measured at 1200 the pills are `flex` and the select `none`; at
 390 the reverse.
 
 It is drawn from **`rankings.spans`** — the spans the server says it can serve
-honestly — rather than from a list in the client, so a season whose All-Star
-break ESPN's calendar does not show has no halves and April has no second half,
-instead of either being offered and coming back empty. It renders only on the
+honestly — rather than from a list in the client, so a league that publishes no
+matchup count has no halves and April has no second half, instead of either
+being offered and coming back empty. It renders only on the
 Rankings tab, so the Scoreboard and Transactions carry no empty slot for it
 (checked: absent on both).
 
-**The caption** — `Weeks 1–15 · Mar 25 – Jul 19`, and `· so far` where the span
+**The caption** — `Weeks 1–9 · Mar 25 – May 31`, and `· so far` where the span
 reaches into the week being played — sat beside the strip, on the reasoning that
 it was a caption on the *control*. With the strip a tier away in the tab row
 that would have stranded it up among the buttons, describing something two boxes
@@ -955,8 +955,8 @@ the one thing between the controls and the rows describes what is under them.
 Measured 16px above the pane at both widths.
 
 Driven rather than assumed: the desktop pill and the phone `<select>` each write
-`lspan=` and redraw the caption (`First half` → `Weeks 1–15 · Mar 25 – Jul 19`,
-`Second half` → `Weeks 16–19 · Jul 20 – Aug 15 · so far`), the select keeps its
+`lspan=` and redraw the caption (`First half` → `Weeks 1–9 · Mar 25 – May 31`,
+`Second half` → `Weeks 10–18 · Jun 1 – Aug 9`), the select keeps its
 value across the reload, and sorting is untouched.
 
 ### The three tabs are in the app's tab row
@@ -1127,9 +1127,12 @@ Driven against the built client and the live 2026 league at **390×844 and
   the team column pins at **0** with the pane scrolled to its far right; rows are
   **58.55px** and the header row **36.00** at every width.
 - **The five spans read**: `Season` (`ESPN's own season line`), `Current matchup`
-  (`Week 19 · Aug 10 – Aug 15 · so far`), `First half` (`Weeks 1–15 · Mar 25 –
-  Jul 19`) and `Second half` (`Weeks 16–19 · Jul 20 – Aug 15 · so far`), each
-  writing its own `lspan=`.
+  (`Week 19 · Aug 10 – Aug 15 · so far`), `First half` (`Weeks 1–9 · Mar 25 –
+  May 31`) and `Second half` (`Weeks 10–18 · Jun 1 – Aug 9`), each writing its
+  own `lspan=`. **The halves are an even division of the regular season by
+  matchup period** — nine weeks each of an eighteen-week season, where they were
+  cut on the All-Star break and ran 15 and 3; see **ESPN fantasy league**, *The
+  halves are an even division*.
 - **The ranks were recomputed independently** from the values the route ships,
   over all five spans: **600 of 600 cells match, 0 wrong, 73 of them tied.**
 - **Transactions**: 25 rows on the first page of 250, the Load-more button

@@ -899,58 +899,45 @@ function ownershipDay(date: string | null | undefined): string {
 // If the schedule can't be read the old rule stands as the fallback, logged: a
 // failed derivation must cost accuracy in the small hours, never the feature.
 
-/** One point on the line: this period held that ET calendar date. */
+/**
+ * One point on the line: this period held that ET calendar date. It is what the
+ * whole 0.81MB schedule reduces to, and it is one fact again.
+ *
+ * It carried a second for a while — the **All-Star break**, the longest run of
+ * gameless scoring periods in the season, which the Rankings tab's two halves
+ * used to be cut on. Those halves are an even division by matchup period now
+ * (`halvesOf`), so nothing reads the break and nothing derives it: a field
+ * nobody reads is a field nobody misses, the rule `teamProbablePitcher`'s
+ * removal already sets.
+ */
 interface PeriodAnchor {
   period: number;
   date: string;
 }
 
 /**
- * What the pro schedule reduces to, which is now two facts rather than one.
- *
- * The **anchor** dates every scoring period of the season. The **All-Star
- * break** is the run of scoring periods on which no club plays at all, and it
- * is what the Rankings tab's `First half` / `Second half` are cut on — derived
- * from ESPN's own calendar rather than hardcoded, because a date written down
- * here is a date that is wrong next season with nothing on screen to say so.
- *
- * Checked on 2026: of the 187 scoring periods the schedule carries, exactly
- * **three are gameless — 111, 112 and 113 — and they are the only run of them
- * in the season** (110 carries 30 games, 114 carries 2, 115 carries 30). So
- * "the longest gameless run" is not a heuristic that happens to work here, it
- * is the only candidate there is. Null when the schedule carries no such run,
- * which is what a season with no break, or an unreadable schedule, looks like —
- * and the two halves are then simply not offered.
- */
-interface SeasonCalendar extends PeriodAnchor {
-  /** First and last **scoring** period of the break, inclusive. */
-  breakFirst: number | null;
-  breakLast: number | null;
-}
-
-/**
  * The pro schedule is **static for the season and takes no cookies at all** —
  * checked, 200 with no `Cookie` header, 850,891 bytes — so this is one read
  * shared by every league and every user, exactly as `getPlayerPool` is. It is
- * the 0.81MB that is not worth holding: what gets cached is the handful of
- * numbers it reduces to — a **67-byte** blob when it held the pair alone, and
- * a hundred-odd now that the break rides with it — which is why the storage
- * key is by season and the freshness window is measured in weeks rather than
- * hours.
+ * the 0.81MB that is not worth holding: what gets cached is the **67-byte**
+ * pair it reduces to, which is why the storage key is by season and the
+ * freshness window is measured in weeks rather than hours.
  *
- * **`-v2` is the break joining the pair**, which is exactly the bump the `-v1`
- * note asked for: a stored v1 blob carries no break at all and would come back
- * deserializing as a season with none, quietly costing the Rankings tab its two
- * halves for a month. A v1 blob is simply not read and the 850KB is paid once.
+ * **The key stays at `-v2` although the shape has shrunk back to the pair.**
+ * That bump was the All-Star break joining it, and the break has since gone
+ * (`PeriodAnchor`); a stored v2 blob carrying the two extra numbers
+ * deserializes into this shape with them ignored, where the hazard a version
+ * guards against is the opposite one — a field arriving *missing*. Bumping
+ * would only spend the 850KB again to learn the same pair.
  */
 const anchorBlobKey = (season: number) => `espn-period-anchor-${season}-v2.json`;
 const ANCHOR_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
-let anchorCache: { anchor: SeasonCalendar; fetchedAt: number } | null = null;
+let anchorCache: { anchor: PeriodAnchor; fetchedAt: number } | null = null;
 /** A cold container answering three tabs should send one upstream read — the
  *  rule `inFlight` follows for the ownership blob and `poolInFlight` for the
  *  player pool. */
-let anchorInFlight: Promise<SeasonCalendar> | null = null;
+let anchorInFlight: Promise<PeriodAnchor> | null = null;
 
 /**
  * Reduce ESPN's whole season schedule to one `{ period, date }` pair.
@@ -969,7 +956,7 @@ let anchorInFlight: Promise<SeasonCalendar> | null = null;
  * shifting the entire season by a day. With 0 violations today the vote is
  * unanimous; it is there for the day it isn't.
  */
-async function fetchPeriodAnchor(): Promise<SeasonCalendar> {
+async function fetchPeriodAnchor(): Promise<PeriodAnchor> {
   const url = `${FANTASY_BASE}/${SEASON}?view=proTeamSchedules_wl`;
   const res = await fetch(url, { headers: UA });
   if (!res.ok) throw new Error(`ESPN pro schedule returned ${res.status}`);
@@ -982,15 +969,10 @@ async function fetchPeriodAnchor(): Promise<SeasonCalendar> {
   // Period → the ET dates its games fall on. A period with more than one is a
   // period this can't speak for and is dropped rather than guessed at.
   const dates = new Map<number, Set<string>>();
-  // Period → how many games the whole league plays in it. The *second*
-  // reduction of this same payload, and the one the All-Star break falls out
-  // of: a period with no games at all is a day nobody plays.
-  const games = new Map<number, number>();
   for (const team of data.settings?.proTeams ?? []) {
     for (const [id, list] of Object.entries(team.proGamesByScoringPeriod ?? {})) {
       const period = Number(id);
       if (!Number.isInteger(period) || period < 1) continue;
-      games.set(period, (games.get(period) ?? 0) + (list?.length ?? 0));
       for (const game of list ?? []) {
         if (typeof game.date !== 'number') continue;
         const day = easternDate(new Date(game.date));
@@ -1024,33 +1006,7 @@ async function fetchPeriodAnchor(): Promise<SeasonCalendar> {
     }
   }
 
-  // The break: the longest run of consecutive gameless periods *inside* the
-  // span the schedule covers. Bounded by the first and last period that carry
-  // a game, so the empty stretch before opening day and after the last one are
-  // not candidates — those are not a break in the season, they are outside it.
-  const played = [...games.entries()].filter(([, n]) => n > 0).map(([p]) => p);
-  let breakFirst: number | null = null;
-  let breakLast: number | null = null;
-  if (played.length > 0) {
-    const lo = Math.min(...played);
-    const hi = Math.max(...played);
-    let runStart: number | null = null;
-    for (let p = lo; p <= hi + 1; p++) {
-      const empty = p <= hi && !(games.get(p) ?? 0);
-      if (empty) {
-        if (runStart === null) runStart = p;
-      } else if (runStart !== null) {
-        const len = p - runStart;
-        if (breakFirst === null || len > breakLast! - breakFirst + 1) {
-          breakFirst = runStart;
-          breakLast = p - 1;
-        }
-        runStart = null;
-      }
-    }
-  }
-
-  return { period, date: base.date, breakFirst, breakLast };
+  return { period, date: base.date };
 }
 
 /** How long a failed derivation is remembered before it is tried again. */
@@ -1073,14 +1029,14 @@ let anchorFailedAt = 0;
  * it, a 62-day range against a dead upstream would retry an 850KB fetch once
  * per wave of the fan-out rather than once.
  */
-async function getPeriodAnchor(): Promise<SeasonCalendar | null> {
+async function getPeriodAnchor(): Promise<PeriodAnchor | null> {
   if (anchorCache && Date.now() - anchorCache.fetchedAt < ANCHOR_TTL_MS) return anchorCache.anchor;
   if (anchorFailedAt && Date.now() - anchorFailedAt < ANCHOR_RETRY_MS) return null;
 
   if (!anchorInFlight) {
     anchorInFlight = (async () => {
       const key = anchorBlobKey(SEASON);
-      const stored = await readJsonBlob<SeasonCalendar>(
+      const stored = await readJsonBlob<PeriodAnchor>(
         key,
         (_value, cachedAt) => Date.now() - cachedAt < ANCHOR_TTL_MS,
       );
@@ -2844,8 +2800,8 @@ export interface EspnRankings {
   span: EspnRankSpan;
   /** Every span this league can actually be asked for, in reading order. A
    *  half with no matchup period in it — the second half in April, either of
-   *  them in a season whose break ESPN's calendar does not show — is **absent
-   *  from this list rather than served empty**, which is the same rule the
+   *  them in a league that publishes no matchup count — is **absent from this
+   *  list rather than served empty**, which is the same rule the
    *  scoreboard's forward arrow follows for a period ESPN has not opened. */
   spans: EspnRankSpanInfo[];
   format: EspnScoringFormat;
@@ -3027,48 +2983,54 @@ async function getSpanTotals(
 }
 
 /**
- * Which matchup periods make up each half of the season.
+ * Which matchup periods make up each half of the regular season.
  *
- * The divider is the **All-Star break**, read off ESPN's own calendar as the
- * run of scoring periods on which no club plays (`SeasonCalendar`), so nothing
- * here is a date somebody typed. A matchup period that *straddles* the break —
- * the live league's period 15 spans scoring periods 104–117, seven game days
- * before the break and four after — belongs to the half holding more of its
- * **game** days, the gameless ones counting for neither. That is a rule rather
- * than a convention, and the alternative is worse in a way worth naming:
- * dropping a straddling period outright would have taken a fortnight's play out
- * of both halves with nothing on screen to explain the gap.
+ * **An even division by matchups, not by the calendar.** The divider used to be
+ * the All-Star break, read off ESPN's own schedule as its longest run of
+ * gameless scoring periods — a true fact about the season and the wrong cut for
+ * this table, because the break does not fall halfway. On the live league it
+ * lands inside matchup period 15 of an 18-period regular season, so `First
+ * half` was fifteen weeks of play against `Second half`'s three and the two
+ * columns could not be read against each other at all: every counting stat in
+ * the first was five times the second for no reason a reader could see. A half
+ * is a half.
  *
- * Null when there is no break to cut on, which is what an unreadable schedule
- * looks like — and the halves are then not offered at all.
- */
-/** The two halves of the **regular season**, split at the All-Star break.
+ * **The boundary is `regularPeriods`, not the periods the schedule happens to
+ * carry**, and that is what keeps it still. A league's matchup count is settled
+ * before opening day, so `ceil(N / 2)` names the same week in April as in
+ * September, where halving the list of periods played so far would move the
+ * line every week — a span whose meaning changed under the reader between two
+ * visits. In April the second half is therefore empty, and a half with nothing
+ * in it is simply not offered, which is the rule a playoff round nobody has
+ * reached already follows.
  *
- * `regularPeriods` is what keeps the playoffs out of them, and leaving it out
- * was a real error rather than a tidiness one: on the checked league the
+ * The odd period goes to the **first** half (19 → 10 and 9), one of them having
+ * to take it.
+ *
+ * `regularPeriods` is also what keeps the playoffs out, which was a real error
+ * rather than a tidiness one when it was missing: on the checked league the
  * regular season is 18 periods and the schedule runs to 19, so period 19 — the
- * first playoff round, already being played — was landing in "Second half" and
- * being counted as regular-season play. */
+ * first playoff round, already being played — was landing in `Second half` and
+ * being counted as regular-season play.
+ *
+ * Null when the league publishes no matchup count, which is the one thing this
+ * cut cannot be made without — and the halves are then not offered at all,
+ * exactly as they were not when the break could not be read.
+ */
 function halvesOf(
   periods: { period: number; first: number; last: number }[],
-  breakFirst: number | null,
-  breakLast: number | null,
   regularPeriods: number | null,
 ): { first: number[]; second: number[] } | null {
-  if (breakFirst == null || breakLast == null) return null;
-  if (regularPeriods != null) periods = periods.filter((p) => p.period <= regularPeriods);
+  if (regularPeriods == null || regularPeriods < 2) return null;
+  const mid = Math.ceil(regularPeriods / 2);
   const first: number[] = [];
   const second: number[] = [];
   for (const p of periods) {
+    // A matchup period ESPN has filed no scoring periods under is a week with
+    // no days in it; it can be dated by nothing and belongs to neither half.
     if (!p.first || !p.last) continue;
-    if (p.last < breakFirst) first.push(p.period);
-    else if (p.first > breakLast) second.push(p.period);
-    else {
-      // Straddling: count the game days either side of the break.
-      const before = Math.max(0, Math.min(p.last, breakFirst - 1) - p.first + 1);
-      const after = Math.max(0, p.last - Math.max(p.first, breakLast + 1) + 1);
-      (before >= after ? first : second).push(p.period);
-    }
+    if (p.period > regularPeriods) continue;
+    (p.period <= mid ? first : second).push(p.period);
   }
   return { first, second };
 }
@@ -3121,7 +3083,6 @@ export async function getRankings(
     for (const k of [...spanCache.keys()]) if (k.startsWith(prefix)) spanCache.delete(k);
   }
   const meta = await leagueMeta(creds, force);
-  const calendar = await getPeriodAnchor();
   const current =
     meta.currentPeriod ??
     (meta.periods.length > 0 ? meta.periods[meta.periods.length - 1].period : null);
@@ -3133,12 +3094,7 @@ export async function getRankings(
     meta.regularPeriods == null
       ? []
       : meta.periods.filter((p) => p.period > meta.regularPeriods!).map((p) => p.period);
-  const halves = halvesOf(
-    meta.periods,
-    calendar?.breakFirst ?? null,
-    calendar?.breakLast ?? null,
-    meta.regularPeriods,
-  );
+  const halves = halvesOf(meta.periods, meta.regularPeriods);
 
   const dated = async (first: number, last: number) => {
     const a = meta.periods.find((p) => p.period === first);
