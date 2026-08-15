@@ -8,7 +8,7 @@ import {
   useState,
 } from 'react';
 import type { RefObject } from 'react';
-import type { PlayerStatus } from './types';
+import type { PlayerStatus, RecentNews } from './types';
 
 /**
  * Whether clips play with the sound off — the settings menu's "Mute clip
@@ -141,6 +141,30 @@ export const EligibilityContext = createContext<Map<number, string[]> | null>(nu
 
 export function useEligible(id: number): string[] | null {
   return useContext(EligibilityContext)?.get(id) ?? null;
+}
+
+/**
+ * Who in the league has news today or yesterday, by MLB id — or null before
+ * the one request that fills it has landed, and for a reader whose page has
+ * not asked for it.
+ *
+ * A context for the reason the three above are: the mark is drawn by leaves —
+ * the summary table's name cell is three components below App, and the details
+ * view's header is inside an overlay — and what they want is one league-wide
+ * map that none of them should be fetching for itself. Keyed by **id** rather
+ * than by the app's `${kind}-${id}` player key, exactly as the two above
+ * are and for the same reason: news is a fact about a *person*, so a two-way
+ * player has one entry where he has two of everything else — which is the same
+ * decision `/api/players/:id/news` makes by taking no `?type=`.
+ *
+ * **Absent means no recent news**, not unknown: the server ships only the
+ * players inside the window, the rule `/api/statuses` follows. A null *map*
+ * is the unknown, and every reader draws nothing for it.
+ */
+export const RecentNewsContext = createContext<Map<number, RecentNews> | null>(null);
+
+export function useRecentNews(id: number): RecentNews | null {
+  return useContext(RecentNewsContext)?.get(id) ?? null;
 }
 
 /**

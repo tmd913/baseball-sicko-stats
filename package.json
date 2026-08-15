@@ -19,7 +19,8 @@
     "start": "npm run start --workspace server",
     "docs": "npx --yes serve docs -l 4001",
     "cdk": "npm run cdk --workspace infra --",
-    "deploy": "npm run build && npm run cdk -- deploy"
+    "deploy": "npm run build && npm run cdk -- deploy",
+    "invalidate": "aws cloudfront create-invalidation --distribution-id E3EAGWVOLAMP1T --paths '/*'"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

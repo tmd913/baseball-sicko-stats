@@ -35,6 +35,10 @@ import type { PlayerKind, WatchPlayer } from './types.js';
 import { readBlob, readJsonBlob, writeBlob, writeJsonBlob } from './storage.js';
 import { addDays, baseballToday, daysBetween, easternDate } from './etDate.js';
 import { mapLimit } from './limit.js';
+// The 30-club table every abbreviation in the app is drawn from — 24h cached
+// and already fetched for a player's own club badge, so a transactions row's
+// `MIL` costs nothing new.
+import { getTeamAbbrevs } from './mlbStats.js';
 
 // Keep in sync with hfSea in savant.ts, CURRENT_SEASON in percentiles.ts, and
 // SEASON in xwoba.ts / pitcherArsenal.ts / teamStats.ts / expectedStats.ts /
@@ -408,7 +412,8 @@ export interface EspnPlayerPool {
    *  meaning is what keeps that rule single. */
   eligible: Record<number, string[]>;
   /**
-   * **ESPN's own player id → his name and the MLB id he joined to.**
+   * **ESPN's own player id → his name, the MLB id he joined to, and the club
+   * that join found him on.**
    *
    * The third reading of the same row, and it exists because the league's
    * activity feed names a player by ESPN's id and by nothing else — no name, no
@@ -418,10 +423,17 @@ export interface EspnPlayerPool {
    * row is kept, matched or not, since a name is worth having for a player MLB
    * has never listed; `mlbId` is null for him and the row simply is not a link.
    *
+   * `teamId` rides along because the join has it in hand — `matchMlbPlayer`
+   * answers with the whole `IndexEntry`, whose club is the very field the tie
+   * is broken on — and because a transactions row draws the identity block the
+   * summary table and the research board draw, which is a cap logo and MLB
+   * serves one by id and by nothing else. Null for a player who did not join,
+   * which is the same row that has no `mlbId` and so draws no block at all.
+   *
    * Checked against a whole season of this league's activity: **376 of 376**
    * distinct ESPN player ids named in it are on this list.
    */
-  byEspnId: Record<number, { name: string; mlbId: number | null }>;
+  byEspnId: Record<number, { name: string; mlbId: number | null; teamId: number | null }>;
 }
 
 const ROSTER_PCT_TTL_MS = 6 * 60 * 60 * 1000;
@@ -450,7 +462,8 @@ export async function getPlayerPool(): Promise<EspnPlayerPool> {
     const index = await getMlbIndex();
     const pct: Record<number, number> = {};
     const eligible: Record<number, string[]> = {};
-    const byEspnId: Record<number, { name: string; mlbId: number | null }> = {};
+    const byEspnId: Record<number, { name: string; mlbId: number | null; teamId: number | null }> =
+      {};
     for (const row of rows) {
       if (!row.fullName) continue;
       // The join first, once, and the three readings of the row after it: they
@@ -461,7 +474,11 @@ export async function getPlayerPool(): Promise<EspnPlayerPool> {
       // ESPN's id alone, and a transaction is worth printing for a man MLB has
       // never listed. `mlbId` null is what makes his row not a link.
       if (typeof row.id === 'number') {
-        byEspnId[row.id] = { name: row.fullName, mlbId: found?.id ?? null };
+        byEspnId[row.id] = {
+          name: row.fullName,
+          mlbId: found?.id ?? null,
+          teamId: found?.teamId ?? null,
+        };
       }
       if (!found) continue;
       const owned = row.ownership?.percentOwned;
@@ -1876,72 +1893,94 @@ interface StatMeta {
    *  (`.759`, the way a slash line is written); `rate` two places with one
    *  (`3.93`). Getting this wrong is the difference between an ERA and an OPS. */
   format: 'count' | 'avg' | 'rate';
+  /** Which side of the ball the category is scored on, and where it reads
+   *  within that side. Both are declared here rather than inferred from the
+   *  label, because a label cannot say it: `H` is a hit and a hit allowed, `K`
+   *  is a strikeout taken and a strikeout thrown, and `BB`, `HR`, `HBP` and
+   *  `IBB` are each two categories in this table under one abbreviation.
+   *
+   *  The **order** is a reading order rather than the league's own, and each
+   *  side's is a rule rather than a taste. Batting: the counting stats in the
+   *  order a box score lists them, then the rates in slash-line order. Pitching:
+   *  the starter's line first — its counting stats, then its rates — with the
+   *  **relief categories trailing everything**, a save or a hold being a role
+   *  a manager fills a slot for rather than something a season accrues. On the
+   *  live league those two rules give `R · HR · RBI · SB · OPS` and
+   *  `K · W · ERA · WHIP · SVHD`, which is how a 5x5 is written. */
+  side: EspnCategorySide;
+  order: number;
 }
+
+/** Which side of the ball a scoring category belongs to. `other` is a real
+ *  answer rather than a failure bucket: it is what an id this table has never
+ *  been read against gets, and filing such a one under Batters would be a
+ *  claim where `Stat 62` is an admission. */
+export type EspnCategorySide = 'batting' | 'pitching' | 'other';
 
 const STAT_META: Record<number, StatMeta> = {
   // Batting.
-  0: { label: 'AB', name: 'At bats', format: 'count' },
-  1: { label: 'H', name: 'Hits', format: 'count' },
-  2: { label: 'AVG', name: 'Batting average', format: 'avg' },
-  3: { label: '2B', name: 'Doubles', format: 'count' },
-  4: { label: '3B', name: 'Triples', format: 'count' },
-  5: { label: 'HR', name: 'Home runs', format: 'count' },
-  6: { label: 'XBH', name: 'Extra-base hits', format: 'count' },
-  7: { label: '1B', name: 'Singles', format: 'count' },
-  8: { label: 'TB', name: 'Total bases', format: 'count' },
-  9: { label: 'SLG', name: 'Slugging', format: 'avg' },
-  10: { label: 'BB', name: 'Walks', format: 'count' },
-  11: { label: 'IBB', name: 'Intentional walks', format: 'count' },
-  12: { label: 'HBP', name: 'Hit by pitch', format: 'count' },
-  13: { label: 'SF', name: 'Sacrifice flies', format: 'count' },
-  14: { label: 'SH', name: 'Sacrifice hits', format: 'count' },
-  15: { label: 'SAC', name: 'Sacrifices', format: 'count' },
-  16: { label: 'PA', name: 'Plate appearances', format: 'count' },
-  17: { label: 'OBP', name: 'On-base percentage', format: 'avg' },
-  18: { label: 'OPS', name: 'On-base plus slugging', format: 'avg' },
-  19: { label: 'RC', name: 'Runs created', format: 'rate' },
-  20: { label: 'R', name: 'Runs', format: 'count' },
-  21: { label: 'RBI', name: 'Runs batted in', format: 'count' },
-  23: { label: 'SB', name: 'Stolen bases', format: 'count' },
-  24: { label: 'CS', name: 'Caught stealing', format: 'count' },
-  25: { label: 'SB-CS', name: 'Net stolen bases', format: 'count' },
-  26: { label: 'GIDP', name: 'Grounded into double plays', format: 'count' },
-  27: { label: 'GIDPO', name: 'Double-play opportunities', format: 'count' },
-  31: { label: 'K', name: 'Strikeouts (batting)', format: 'count' },
+  0: { label: 'AB', name: 'At bats', format: 'count', side: 'batting', order: 31 },
+  1: { label: 'H', name: 'Hits', format: 'count', side: 'batting', order: 11 },
+  2: { label: 'AVG', name: 'Batting average', format: 'avg', side: 'batting', order: 40 },
+  3: { label: '2B', name: 'Doubles', format: 'count', side: 'batting', order: 13 },
+  4: { label: '3B', name: 'Triples', format: 'count', side: 'batting', order: 14 },
+  5: { label: 'HR', name: 'Home runs', format: 'count', side: 'batting', order: 15 },
+  6: { label: 'XBH', name: 'Extra-base hits', format: 'count', side: 'batting', order: 16 },
+  7: { label: '1B', name: 'Singles', format: 'count', side: 'batting', order: 12 },
+  8: { label: 'TB', name: 'Total bases', format: 'count', side: 'batting', order: 17 },
+  9: { label: 'SLG', name: 'Slugging', format: 'avg', side: 'batting', order: 42 },
+  10: { label: 'BB', name: 'Walks', format: 'count', side: 'batting', order: 22 },
+  11: { label: 'IBB', name: 'Intentional walks', format: 'count', side: 'batting', order: 23 },
+  12: { label: 'HBP', name: 'Hit by pitch', format: 'count', side: 'batting', order: 24 },
+  13: { label: 'SF', name: 'Sacrifice flies', format: 'count', side: 'batting', order: 26 },
+  14: { label: 'SH', name: 'Sacrifice hits', format: 'count', side: 'batting', order: 27 },
+  15: { label: 'SAC', name: 'Sacrifices', format: 'count', side: 'batting', order: 28 },
+  16: { label: 'PA', name: 'Plate appearances', format: 'count', side: 'batting', order: 32 },
+  17: { label: 'OBP', name: 'On-base percentage', format: 'avg', side: 'batting', order: 41 },
+  18: { label: 'OPS', name: 'On-base plus slugging', format: 'avg', side: 'batting', order: 43 },
+  19: { label: 'RC', name: 'Runs created', format: 'rate', side: 'batting', order: 44 },
+  20: { label: 'R', name: 'Runs', format: 'count', side: 'batting', order: 10 },
+  21: { label: 'RBI', name: 'Runs batted in', format: 'count', side: 'batting', order: 18 },
+  23: { label: 'SB', name: 'Stolen bases', format: 'count', side: 'batting', order: 19 },
+  24: { label: 'CS', name: 'Caught stealing', format: 'count', side: 'batting', order: 20 },
+  25: { label: 'SB-CS', name: 'Net stolen bases', format: 'count', side: 'batting', order: 21 },
+  26: { label: 'GIDP', name: 'Grounded into double plays', format: 'count', side: 'batting', order: 29 },
+  27: { label: 'GIDPO', name: 'Double-play opportunities', format: 'count', side: 'batting', order: 30 },
+  31: { label: 'K', name: 'Strikeouts (batting)', format: 'count', side: 'batting', order: 25 },
   // Pitching.
-  32: { label: 'GP', name: 'Games pitched', format: 'count' },
-  33: { label: 'GS', name: 'Games started', format: 'count' },
-  34: { label: 'OUTS', name: 'Outs recorded', format: 'count' },
-  35: { label: 'TBF', name: 'Batters faced', format: 'count' },
-  36: { label: 'P', name: 'Pitches', format: 'count' },
-  37: { label: 'H', name: 'Hits allowed', format: 'count' },
-  38: { label: 'OBA', name: 'Opponent batting average', format: 'avg' },
-  39: { label: 'BB', name: 'Walks allowed', format: 'count' },
-  40: { label: 'IBB', name: 'Intentional walks allowed', format: 'count' },
-  41: { label: 'WHIP', name: 'Walks and hits per inning', format: 'rate' },
-  42: { label: 'HBP', name: 'Batters hit', format: 'count' },
-  44: { label: 'R', name: 'Runs allowed', format: 'count' },
-  45: { label: 'ER', name: 'Earned runs', format: 'count' },
-  46: { label: 'HR', name: 'Home runs allowed', format: 'count' },
-  47: { label: 'ERA', name: 'Earned run average', format: 'rate' },
-  48: { label: 'K', name: 'Strikeouts', format: 'count' },
-  49: { label: 'K/9', name: 'Strikeouts per nine', format: 'rate' },
-  50: { label: 'WP', name: 'Wild pitches', format: 'count' },
-  51: { label: 'BLK', name: 'Balks', format: 'count' },
-  52: { label: 'PK', name: 'Pickoffs', format: 'count' },
-  53: { label: 'W', name: 'Wins', format: 'count' },
-  54: { label: 'L', name: 'Losses', format: 'count' },
-  55: { label: 'WPCT', name: 'Winning percentage', format: 'avg' },
-  56: { label: 'SVO', name: 'Save opportunities', format: 'count' },
-  57: { label: 'SV', name: 'Saves', format: 'count' },
-  58: { label: 'BS', name: 'Blown saves', format: 'count' },
-  59: { label: 'SV%', name: 'Save percentage', format: 'avg' },
-  60: { label: 'HD', name: 'Holds', format: 'count' },
-  61: { label: 'CG', name: 'Complete games', format: 'count' },
-  62: { label: 'QS', name: 'Quality starts', format: 'count' },
-  63: { label: 'NH', name: 'No-hitters', format: 'count' },
-  64: { label: 'PG', name: 'Perfect games', format: 'count' },
-  83: { label: 'SVHD', name: 'Saves plus holds', format: 'count' },
+  32: { label: 'GP', name: 'Games pitched', format: 'count', side: 'pitching', order: 18 },
+  33: { label: 'GS', name: 'Games started', format: 'count', side: 'pitching', order: 19 },
+  34: { label: 'OUTS', name: 'Outs recorded', format: 'count', side: 'pitching', order: 17 },
+  35: { label: 'TBF', name: 'Batters faced', format: 'count', side: 'pitching', order: 20 },
+  36: { label: 'P', name: 'Pitches', format: 'count', side: 'pitching', order: 21 },
+  37: { label: 'H', name: 'Hits allowed', format: 'count', side: 'pitching', order: 22 },
+  38: { label: 'OBA', name: 'Opponent batting average', format: 'avg', side: 'pitching', order: 43 },
+  39: { label: 'BB', name: 'Walks allowed', format: 'count', side: 'pitching', order: 26 },
+  40: { label: 'IBB', name: 'Intentional walks allowed', format: 'count', side: 'pitching', order: 27 },
+  41: { label: 'WHIP', name: 'Walks and hits per inning', format: 'rate', side: 'pitching', order: 41 },
+  42: { label: 'HBP', name: 'Batters hit', format: 'count', side: 'pitching', order: 28 },
+  44: { label: 'R', name: 'Runs allowed', format: 'count', side: 'pitching', order: 23 },
+  45: { label: 'ER', name: 'Earned runs', format: 'count', side: 'pitching', order: 24 },
+  46: { label: 'HR', name: 'Home runs allowed', format: 'count', side: 'pitching', order: 25 },
+  47: { label: 'ERA', name: 'Earned run average', format: 'rate', side: 'pitching', order: 40 },
+  48: { label: 'K', name: 'Strikeouts', format: 'count', side: 'pitching', order: 10 },
+  49: { label: 'K/9', name: 'Strikeouts per nine', format: 'rate', side: 'pitching', order: 42 },
+  50: { label: 'WP', name: 'Wild pitches', format: 'count', side: 'pitching', order: 29 },
+  51: { label: 'BLK', name: 'Balks', format: 'count', side: 'pitching', order: 30 },
+  52: { label: 'PK', name: 'Pickoffs', format: 'count', side: 'pitching', order: 31 },
+  53: { label: 'W', name: 'Wins', format: 'count', side: 'pitching', order: 11 },
+  54: { label: 'L', name: 'Losses', format: 'count', side: 'pitching', order: 12 },
+  55: { label: 'WPCT', name: 'Winning percentage', format: 'avg', side: 'pitching', order: 44 },
+  56: { label: 'SVO', name: 'Save opportunities', format: 'count', side: 'pitching', order: 53 },
+  57: { label: 'SV', name: 'Saves', format: 'count', side: 'pitching', order: 50 },
+  58: { label: 'BS', name: 'Blown saves', format: 'count', side: 'pitching', order: 54 },
+  59: { label: 'SV%', name: 'Save percentage', format: 'avg', side: 'pitching', order: 55 },
+  60: { label: 'HD', name: 'Holds', format: 'count', side: 'pitching', order: 51 },
+  61: { label: 'CG', name: 'Complete games', format: 'count', side: 'pitching', order: 14 },
+  62: { label: 'QS', name: 'Quality starts', format: 'count', side: 'pitching', order: 13 },
+  63: { label: 'NH', name: 'No-hitters', format: 'count', side: 'pitching', order: 15 },
+  64: { label: 'PG', name: 'Perfect games', format: 'count', side: 'pitching', order: 16 },
+  83: { label: 'SVHD', name: 'Saves plus holds', format: 'count', side: 'pitching', order: 52 },
 };
 
 /** One of the league's own scoring categories, in the league's own order. */
@@ -1952,6 +1991,14 @@ export interface EspnCategory {
   /** ESPN's `isReverseItem` — ERA and WHIP, where the smaller number wins. */
   lowerBetter: boolean;
   format: 'count' | 'avg' | 'rate';
+  /** Which side of the ball scores it, and where it reads within that side —
+   *  `STAT_META`'s own, shipped per category so the client can group the
+   *  scoreboard's line and the Rankings table without a second table of stat
+   *  ids to keep in step with this one. **The array stays in the league's own
+   *  order**: it is a faithful record of what the league scores, and grouping
+   *  is presentation. */
+  side: EspnCategorySide;
+  order: number;
 }
 
 /** One side of one matchup. */
@@ -2186,6 +2233,11 @@ async function leagueMeta(creds: EspnCreds, force = false): Promise<LeagueMeta> 
           name: meta?.name ?? `ESPN stat ${item.statId}`,
           lowerBetter: item.isReverseItem === true,
           format: meta?.format ?? ('count' as const),
+          // A stat id this table has never been read against is `other` and is
+          // ordered by its own id, so it draws in a group of its own rather
+          // than being filed under a side nothing establishes it is on.
+          side: meta?.side ?? ('other' as const),
+          order: meta?.order ?? item.statId,
         },
       ];
     });
@@ -3032,6 +3084,14 @@ export interface EspnTransactionPlayer {
    *  an ambiguity neither name nor club resolves is left unmatched rather than
    *  guessed. The row still draws; it simply is not a link. */
   mlbId: number | null;
+  /** His MLB club, for the cap logo the row's identity block draws — the id the
+   *  mark is served by, and the abbreviation that is its `alt`, its tooltip and
+   *  what the block prints when there is no mark to draw. Both come off the
+   *  join that found `mlbId` (`IndexEntry.teamId`) and the 24h team table every
+   *  other abbreviation in the app comes from, so neither is a request of its
+   *  own; both are null on the row that did not join. */
+  mlbTeamId: number | null;
+  team: string | null;
   move: 'add' | 'drop';
   via: 'free-agent' | 'waiver' | 'trade';
   /** The team that took him, and the one that gave him up. A free-agent pickup
@@ -3107,7 +3167,7 @@ export async function getTransactions(
   if (running && !force) return running;
 
   const job = (async () => {
-    const [meta, data, pool] = await Promise.all([
+    const [meta, data, pool, abbrevs] = await Promise.all([
       leagueMeta(creds, force),
       leagueGet<EspnTopicResponse>(creds, ['kona_league_communication'], null, {
         topics: {
@@ -3129,6 +3189,13 @@ export async function getTransactions(
       // distinct ESPN player ids named in 2026's transactions are on it.
       getPlayerPool().catch((err: Error) => {
         console.error('ESPN player pool unavailable for transactions:', err.message);
+        return null;
+      }),
+      // The 30-club abbreviation table, 24h-cached and already fetched for every
+      // roster badge in the app — so a row's `MIL` is a `Map` lookup rather than
+      // a request. A failure costs the cap logo its `alt` and nothing else.
+      getTeamAbbrevs().catch((err: Error) => {
+        console.error('MLB team table unavailable for transactions:', err.message);
         return null;
       }),
     ]);
@@ -3162,6 +3229,8 @@ export async function getTransactions(
           // is a fact even where his name is not to hand.
           name: entry?.name ?? `ESPN player ${m.targetId}`,
           mlbId: entry?.mlbId ?? null,
+          mlbTeamId: entry?.teamId ?? null,
+          team: entry?.teamId != null ? abbrevs?.get(entry.teamId) ?? null : null,
           move: rule.move,
           via: rule.via,
           toTeamId,

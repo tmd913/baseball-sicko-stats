@@ -371,6 +371,15 @@ since a category a team cannot score in is not a category it is losing, and a
 zero in a `lowerBetter` category would otherwise read as the best score in the
 league.
 
+**That tally is what the scoreboard's headline now prints** — `wins`/`losses`/
+`ties` per side, as `6-3-1` rather than the bare wins the card used to show, so
+the one number on the card is the one number this file has measured against
+ESPN. Re-checked end to end through the route over all 18 settled periods: the
+triple **sums to the ten categories on 216 of 216 sides** and **matches ESPN's
+own `cumulativeScore` on 216 of 216**, with the winner it implies agreeing with
+ESPN's `winner` on 108 of 108. See **Client — the League view**, *The headline is
+a triple*.
+
 **A bye is a real shape.** A matchup with a `home` and no `away` is what a
 playoff round looks like — period 19 of the live league is 2 matchups and **8
 byes**, all 12 teams accounted for — so `EspnMatchup.away` is nullable rather
@@ -404,6 +413,45 @@ where WPCT's does not. It is left as `avg` on the convention, and it is
 nothing here has ever drawn either cell. ESPN sends every `avg` category as a
 proportion (measured: OPS arrives as `0.75955848`), so a future `pct` format
 would need the ×100 rather than only the suffix.
+
+### `STAT_META` says which side of the ball, and in what order
+
+**Each entry carries a `side` (`batting` / `pitching`) and an `order`**, and
+both ride out on every `EspnCategory` — which is what lets the client draw the
+scoreboard's line and the Rankings table as **Batters** over **Pitchers** (see
+**Client — the League view**). It has to be declared here rather than inferred
+from the label, because **a label cannot say it**: `H` is a hit and a hit
+allowed, `K` a strikeout taken and a strikeout thrown, and `BB`, `HR`, `HBP` and
+`IBB` are each *two* entries in this table under one abbreviation. Any rule
+written against the labels gets four of them wrong on a league that scores both
+sides.
+
+**The order is a reading order rather than the league's own**, and each side's
+is a rule rather than a taste:
+
+- **Batting** — the counting stats in the order a box score lists them (R, hits,
+  the extra-base ladder, HR, RBI, the steals, the walks and strikeouts), then
+  the rates in slash-line order (AVG, OBP, SLG, OPS).
+- **Pitching** — the **starter's line first**, its counting stats before its
+  rates, with the **relief categories trailing everything**: a save or a hold is
+  a role a manager fills a slot for rather than something a season accrues, so
+  SV, HD, SVHD, SVO, BS and SV% come after the ERA and the WHIP.
+
+On the live league those two rules give **`R · HR · RBI · SB · OPS`** and
+**`K · W · ERA · WHIP · SVHD`**, which is how a 5x5 is written.
+
+**`other` is a real third answer rather than a failure bucket.** A stat id this
+table has never been read against — the same one whose header already reads
+`Stat 62` — gets `side: 'other'` and an order of its own id, and the client
+draws it in a group of its own rather than filing it under a side nothing
+establishes it is on. That is the same honesty the label already has.
+
+**The wire keeps the league's own order.** `categories` is a faithful record of
+what the league scores and nothing server-side reads the array's order — every
+consumer indexes by `statId` — so the grouping is the client's and the payload
+is unchanged apart from the two fields. **No blob key moved**: nothing in
+`espn-scoreboard-…` or `espn-span-…` holds a category, and a stored blob
+therefore cannot deserialize with either field missing.
 
 **Four formats, and only two of them have matchups** (`formatOf`).
 `H2H_CATEGORY` and `H2H_MOST_CATEGORIES` share a bucket, the scoreboard being
@@ -567,6 +615,14 @@ no figure is **out of the ranking entirely** rather than at the bottom of it,
 the rule `sideFrom` already follows for a category a side is ineligible for.
 Checked against an independent recompute over all **five** spans: **600 of 600
 cells match, 0 wrong, with 73 tied cells among them.**
+
+**And the rank is what the client colours**, which is the whole reason the
+direction can be baked in here and needs no special case there: a `lowerBetter`
+category's `1st` is its lowest figure, so the reddest cell on the ERA column and
+the reddest cell on the HR column mean the same thing. Ties share a rank and so
+share a colour by the same construction. See **Client — the League view**, *The
+cells are washed by rank*, which is also where the departure from the research
+board's monochrome rule is argued.
 
 **Caching is this file's own two rules.** A span whose last matchup period is
 **over** cannot change, so it takes a storage blob read with no freshness test —

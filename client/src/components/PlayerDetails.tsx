@@ -22,6 +22,7 @@ import { RemoveButton } from './RemoveButton';
 import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
 import { BaseballMark } from './BaseballMark';
 import { LockMark } from './LockMark';
+import { PlayerNewsMark } from './NewsMark';
 import { RollingXwoba } from './RollingXwoba';
 import { GameLog } from './GameLog';
 import { PlayerWindowTable } from './PlayerWindowTable';
@@ -984,6 +985,14 @@ export function PlayerDetails({
                     answered twice. In fantasy mode that case cannot even arise,
                     the user's own team being excluded upstream. */}
                 {!isOnRoster && ownedBy && <LockMark name={name} team={ownedBy} size={15} />}
+                {/* And the newspaper, on the name line for the reason the lock
+                    is: a fact *about* him, where the cluster on the right is
+                    things you do to him. This is the page the News tab is on,
+                    so the mark is the door-knocker — and it is drawn whether or
+                    not he is on the roster, having nothing to do with whose he
+                    is. 15px, matching the star and the lock beside it rather
+                    than the 13 a table row gives them. */}
+                <PlayerNewsMark id={playerId} name={name} size={15} />
               </h1>
               {/* Under the name rather than out beside the watchlist button: it
                   is a fact *about the player*, like the position chip above it,

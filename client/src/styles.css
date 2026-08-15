@@ -7901,6 +7901,7 @@ body {
    after the name and never pushes it: the name column is already the width it
    is. */
 .research-watched,
+.name-news,
 .name-lock {
   display: inline-flex;
   align-items: center;
@@ -7933,6 +7934,31 @@ body {
    the same way: a research row's name line and the player page's own `<h1>`. */
 .name-lock {
   color: var(--muted);
+}
+
+/* The **newspaper** — he has been in the news, and how recently — folded onto
+   that same rule for the identical reason the lock is: three marks that sit in
+   the same slot on the same line must not be able to part company by a pixel,
+   and the geometry (the inline-flex box, the 6px gap, the cap-band nudge) is
+   the one thing all three genuinely share. What is its own is the **tone**, and
+   here that tone carries the whole of the meaning rather than a rank among the
+   marks: this is *recency*, so news filed today has to catch the eye and news
+   filed yesterday has to not.
+
+   `--strikeout` is the app's red — the same token the arsenal tables spend on
+   a delta going the wrong way, and the summary table's own answer for a
+   postponement. `--faint` is a step quieter than the lock's `--muted`, which
+   is right: a day-old note is a smaller fact than a man being unavailable.
+
+   There is deliberately **no third tone**. Anything older than yesterday is not
+   in the map at all (`recentNews.ts`), so no row can carry a mark that says
+   nothing — which is the rule the roster baseball follows when it suppresses
+   itself on a board that is nothing but your own roster. */
+.name-news.level-today {
+  color: var(--strikeout);
+}
+.name-news.level-yesterday {
+  color: var(--faint);
 }
 
 /* A link that lives inside a sentence in an empty state, rather than a control
@@ -8778,7 +8804,8 @@ body {
 /* "Load more" under the Recent section — the stream shows a page at a time, so
    a long day doesn't mount hundreds of at-bat cards at once. The count is
    what's still below it. */
-.feed-more {
+.feed-more,
+.lg-tx-more {
   align-self: center;
   display: inline-flex;
   align-items: center;
@@ -8795,15 +8822,18 @@ body {
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
 }
-.feed-more:hover {
+.feed-more:hover,
+.lg-tx-more:hover {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 10%, var(--bg-2));
 }
-.feed-more:focus-visible {
+.feed-more:focus-visible,
+.lg-tx-more:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-.feed-more-count {
+.feed-more-count,
+.lg-tx-more-count {
   background: rgba(56, 189, 248, 0.18);
   color: var(--accent);
   border-radius: 999px;
@@ -10700,6 +10730,30 @@ body {
   color: var(--faint);
   text-transform: none;
 }
+/* **One block per side of the ball**, each with its own head and its own two
+   rows. The league's own category order interleaves bats and arms
+   (`R HR RBI W ERA SB WHIP K OPS SVHD`), so a reader wanting "how are my
+   pitchers doing" had to pick four columns out of ten by eye; split, each half
+   is five columns — which is also what stops the line overflowing a phone, a
+   ten-column run having scrolled sideways inside the card. Each block's own
+   `border-top` is the break between the two, so the split costs no rule of its
+   own. */
+.lg-cat-groups {
+  display: contents;
+}
+/* The group's name, over its own head row rather than beside it. A leading
+   *column* was the alternative and costs the card ~52px of width on a phone
+   where a line costs it 14px of height — and this card is width-bound (ten
+   categories overflowed it) rather than height-bound. Small caps in `--faint`,
+   the app's own label-over-a-block shape. */
+.lg-cat-side {
+  margin-bottom: 3px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
 /* Green marks the side taking the category and the loser goes muted — the
    green/red pair this app uses for a delta would put ten red cells on the
    losing side of every card, which is the whole row shouting rather than the
@@ -10742,6 +10796,17 @@ body {
 .league-table {
   --row-gutter: clamp(5px, 1.9vw, 28px);
   --sort-gutter: var(--row-gutter);
+  /* The group header row's own height, declared because the sort headers below
+     it have to pin at exactly that offset — the one number in this table that
+     two rules share, so it is named rather than written twice. It is the row's
+     own box: 5px + a 16px line + 5px, with no bottom border (the sort row under
+     it carries the one that closes the head). */
+  --lg-group-h: 26px;
+  /* The two ends of the rank scale. Table-local rather than on `:root`: this is
+     the one surface in the app that reads a diverging scale, and a palette entry
+     would invite a second reader to import the argument with the colour. */
+  --rank-hot: #f87171;
+  --rank-cold: #60a5fa;
   /* The header's own line, declared for the reason the board and the Stats tab
      declare it: a header must not change height by being sorted, whichever face
      the browser finds for U+25B2. */
@@ -10795,6 +10860,42 @@ body {
   letter-spacing: 0.03em;
   color: var(--muted);
 }
+/* **The sections: a spanning header row over each run of categories.** A wide
+   stat table says which run is which by naming it, where a bare rule between
+   two columns says only that there is a seam. It is a second sticky row, so the
+   two have to be told apart: this one holds the top and the sort headers below
+   it hold `--lg-group-h`, which is what makes the pair pin as one head rather
+   than over each other. */
+.league-table thead .lg-group-row th {
+  top: 0;
+  z-index: 2;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  line-height: 16px;
+  border-bottom: none;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+  text-align: left;
+}
+.league-table thead .lg-group-row .lg-logo-col,
+.league-table thead .lg-group-row .lg-name-col {
+  z-index: 3;
+}
+/* The sort headers sit under the group row rather than at the top of the pane. */
+.league-table thead tr:last-child th {
+  top: var(--lg-group-h);
+}
+/* And one hairline where the runs meet, so the sections still read as sections
+   with the head scrolled past on a phone. An **inset shadow rather than a
+   border**, because every cell in this table paints an opaque `--cell-bg` and a
+   border would add a pixel to the column: the shadow costs the layout nothing
+   and paints over the ground the cell has already resolved. */
+.league-table .lg-group-start {
+  box-shadow: inset 1px 0 0 var(--border);
+}
+
 /* The team column pins to the left edge as the categories scroll under it —
    without it a row six categories in belongs to no team in particular, which is
    the same argument the board makes for pinning the player's name. */
@@ -10868,6 +10969,16 @@ body {
   font-variant-numeric: tabular-nums;
   font-weight: 600;
 }
+/* **The rank's wash, as a background *image* over the cell's own ground.** The
+   colour is computed per cell (see `rankTint`) and arrives as `--rank-tint`; a
+   flat gradient is what turns a colour into a layer, and a layer is what lets
+   the zebra stripe and the reader's accent-washed row show through rather than
+   being painted out — `background-color` is still `var(--cell-bg)`, resolved on
+   this cell as it is on every other. Absent, `transparent` paints nothing and
+   the cell is exactly what it was. */
+.league-table td.lg-num {
+  background-image: linear-gradient(var(--rank-tint, transparent), var(--rank-tint, transparent));
+}
 
 /* ---- The three tabs, and the Rankings span --------------------------------
    Both strips are **folded onto `.view-switch` / `.view-tab`** up beside the
@@ -10930,8 +11041,15 @@ body {
    and the loser goes quiet, because ten red cells down one side of a card would
    be the row shouting where the job is to mark a winner. A twelve-row table of
    ranks is that same picture turned on its side. */
+/* `--muted` rather than the board's `--faint`, and the wash is why: `--faint`
+   reads 3.0–3.7:1 on this table's three grounds untinted and 2.0–2.7 under the
+   scale at its strongest, which is a legibility loss on the very badge the
+   colour is a picture of. `--muted` reads 3.9–5.2 tinted — better than the old
+   badge was on a bare cell — so the second line gains rather than losing.
+   `--faint` is right on the research board, where the badge annotates a number
+   in a six-hundred-row scan; here it is half the cell's content. */
 .league-table td .col-rank {
-  color: var(--faint);
+  color: var(--muted);
 }
 .league-table td .col-rank.lg-rank-best {
   color: var(--hit);
@@ -10945,6 +11063,12 @@ body {
 .lg-transactions {
   max-width: var(--card-column);
   margin: 0 auto;
+  /* A column so the Load-more button's `align-self: center` resolves against
+     something — the same shape `.feed-section` gives the stream this tab
+     borrows its paging idiom from. */
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 .lg-tx-list {
   list-style: none;
@@ -11015,13 +11139,73 @@ body {
   flex-direction: column;
   gap: 4px;
 }
+/* A player row is the move, his face, the identity block every other table in
+   the app draws him with, and his roster % at the far end. It does **not**
+   wrap: the block ellipsizes instead, which is what keeps a nine-player trade a
+   list of nine rows rather than of nine paragraphs. */
 .lg-tx-player {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
   font-size: 13px;
   min-width: 0;
+}
+/* The block is `PlayerIdentity`'s, unscoped and shared with the summary table
+   and the research board — see `components/PlayerIdentity.tsx`. What this
+   caller adds is the two things a *row in a feed* needs of it: room to shrink,
+   and a name line that carries the trade direction and the waiver bid beside
+   the name without any of the three pushing the others out of the row. */
+.lg-tx-player .row-id {
+  min-width: 0;
+}
+.lg-tx-player .row-id-name,
+.lg-tx-bare {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  /* It wraps, and only a trade can make it: `to Ookie Rookie` beside a name is
+     more than a 390px row has, and the name is the half that must not be the
+     one to give. Measured on the live league's 415 rows — 23 of them trades —
+     the name was ellipsized on every one of the 23 at 390 and on none at 1200;
+     wrapping puts the destination on its own line there and leaves every other
+     row at its 32px. */
+  flex-wrap: wrap;
+}
+/* The headshot: 32px against the wide tables' 42, this being a list of events
+   read down rather than a roster read across, and the block beside it is 31px
+   tall — so the circle and the two lines are the same height and the row is as
+   short as its contents allow. */
+.lg-tx-photo {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: top center;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+}
+.lg-tx-photo-empty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--faint);
+}
+/* ESPN's global rostered percentage — how big a deal the move is. Muted and
+   right-aligned, so it is there to be read off a row rather than in the way of
+   scanning the names. */
+.lg-tx-pct {
+  margin-left: auto;
+  flex: none;
+  padding-left: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 /* The word for the move, in a fixed-width slot so the names under one another
    start at one x — the same arithmetic the summary table's fantasy slot chip
@@ -11071,10 +11255,12 @@ body {
   text-decoration: none;
 }
 .lg-tx-to {
+  flex: none;
   font-size: 12px;
   color: var(--muted);
 }
 .lg-tx-bid {
+  flex: none;
   font-size: 11px;
   font-weight: 700;
   color: var(--faint);

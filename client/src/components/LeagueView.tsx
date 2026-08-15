@@ -36,12 +36,14 @@
 import { useMemo, useState } from 'react';
 import type {
   EspnCategory,
+  EspnCategorySide,
   EspnMatchup,
   EspnRankSpan,
   EspnRankings,
   EspnScoreboard,
   EspnStandingsTeam,
   EspnTransactions,
+  SeasonPlayer,
 } from '../types';
 import { LoadingBlock } from './Loading';
 import LeagueRankings from './LeagueRankings';
@@ -71,6 +73,87 @@ export function fmtValue(value: number | undefined, cat: EspnCategory): string {
 /** `7-7-4`, or `7-7` where the league has no ties to report. */
 export function record(t: { wins: number; losses: number; ties: number }): string {
   return t.ties > 0 ? `${t.wins}-${t.losses}-${t.ties}` : `${t.wins}-${t.losses}`;
+}
+
+/**
+ * A matchup score, which in a categories league is **not one number**.
+ *
+ * A head-to-head categories matchup is won category by category, so what a
+ * side *has* is how many it is winning, losing and tied in: a team up in six,
+ * down in three and level in one reads `6-3-1`. Printing the wins alone — which
+ * is what this did — said `6` beside a `3` and left the reader to work out how
+ * many of the ten were still level, or whether the other seven had even been
+ * played.
+ *
+ * **The triple is the server's own tally, not a second count**, which matters
+ * because that tally is the thing that has been checked: ESPN fills its
+ * `cumulativeScore` only once a matchup is over, so `espn.ts` computes it for
+ * every matchup live and final alike — and the computed answer matched ESPN's
+ * on all 1,080 category comparisons of the league's 18 completed periods. A
+ * second count here would be a second definition of who is winning a category,
+ * free to drift from the one that was measured.
+ *
+ * **All three terms, always**, where the season record beside it drops a zero
+ * tie count: the three are a partition of the categories and the sum is a fact
+ * a reader can check against the header above it, which `6-3` cannot be. It
+ * also keeps the two numbers on the row telling apart — `7-7` as a season
+ * record and `7-7` as this week's categories would be the same string meaning
+ * two different things an inch apart.
+ */
+export function catScore(side: { wins: number; losses: number; ties: number }): string {
+  return `${side.wins}-${side.losses}-${side.ties}`;
+}
+
+/** The two sides of the ball, in the order a fantasy line is read, plus the
+ *  bucket for a category the server's stat table cannot place. */
+const SIDE_LABEL: Record<EspnCategorySide, string> = {
+  batting: 'Batters',
+  pitching: 'Pitchers',
+  other: 'Other',
+};
+const SIDE_ORDER: EspnCategorySide[] = ['batting', 'pitching', 'other'];
+
+export interface CategoryGroup {
+  side: EspnCategorySide;
+  label: string;
+  categories: EspnCategory[];
+}
+
+/**
+ * The league's categories, split into batters and pitchers.
+ *
+ * **Ten categories in one run is a list, not a line.** A manager reads a
+ * category league as two halves — his bats and his arms are two rosters doing
+ * two jobs — and `R HR RBI W ERA SB WHIP K OPS SVHD`, which is the live
+ * league's own order, interleaves them: the eye has to sort the row before it
+ * can read either half of it. Split, each half is five columns, which is also
+ * what stops the scoreboard's category line overflowing a phone.
+ *
+ * **Which side a category is on is the server's answer, not a guess made
+ * here.** `STAT_META` names every stat id the app knows and now names the side
+ * and the reading order with it, which is the only place that can: a label
+ * cannot say it — `H` is a hit and a hit allowed, `K` a strikeout taken and a
+ * strikeout thrown, and `BB`, `HR`, `HBP` and `IBB` are each two categories
+ * under one abbreviation. Pattern-matching the labels here would get four of
+ * them wrong on a league that scores both.
+ *
+ * **A category it cannot place is drawn rather than dropped**, in a third
+ * group called `Other` — which is the honest bucket for an ESPN stat id the
+ * server's table has never been read against, the same one that already draws
+ * its header as `Stat 62`. Filing it under Batters would be a claim; a group of
+ * its own is an admission. A group with nothing in it is not drawn at all, so
+ * the ordinary league sees two.
+ *
+ * The order within a group is the server's `order`, `statId` breaking a tie so
+ * the result is stable whatever the league's own order was.
+ */
+export function categoryGroups(categories: EspnCategory[]): CategoryGroup[] {
+  return SIDE_ORDER.flatMap((side) => {
+    const list = categories
+      .filter((c) => c.side === side)
+      .sort((a, b) => a.order - b.order || a.statId - b.statId);
+    return list.length > 0 ? [{ side, label: SIDE_LABEL[side], categories: list }] : [];
+  });
 }
 
 /**
@@ -160,6 +243,7 @@ function MatchupCard({
 }) {
   const { home, away } = matchup;
   const mine = myTeamId != null && (home.teamId === myTeamId || away?.teamId === myTeamId);
+  const groups = useMemo(() => categoryGroups(categories), [categories]);
 
   // A bye is a real shape rather than a failed read — a 12-team league's first
   // playoff round had two matchups and eight of them — so it says so plainly
@@ -177,10 +261,12 @@ function MatchupCard({
     );
   }
 
-  /** The headline number beside each name: categories taken in a category
-   *  league, the points total in a points one. */
+  /** The headline beside each name — and in a categories league it is a
+   *  **triple rather than a number**: won, lost and tied, which is what a side
+   *  of a category matchup actually has. See `catScore`. A points league has
+   *  one number a side and takes it. */
   const score = (side: typeof home) =>
-    format === 'h2h-points' ? fmtPoints(side.points) : String(side.wins);
+    format === 'h2h-points' ? fmtPoints(side.points) : catScore(side);
 
   const leading =
     matchup.winner === 'home' ? home.teamId : matchup.winner === 'away' ? away.teamId : null;
@@ -204,45 +290,57 @@ function MatchupCard({
       })}
 
       {/* A points league has one number a side and no category line to draw;
-          saying so is the whole of what its card holds. */}
-      {format === 'h2h-categories' && categories.length > 0 && (
-        <div className="lg-cats" role="table" aria-label="Category line">
-          <div className="lg-cat-row lg-cat-head" role="row">
-            {categories.map((c) => (
-              <span key={c.statId} role="columnheader" title={c.name}>
-                {c.label}
-              </span>
-            ))}
-          </div>
-          {[away, home].map((side, i) => {
-            const other = i === 0 ? home : away;
-            return (
-              <div className="lg-cat-row" role="row" key={side.teamId}>
-                {categories.map((c) => {
-                  const v = side.scores[c.statId];
-                  const state = outcome(v, other.scores[c.statId], c);
-                  return (
-                    <span
-                      key={c.statId}
-                      role="cell"
-                      className={state ? `lg-cat-${state}` : undefined}
-                      title={`${c.name}: ${fmtValue(v, c)}${
-                        state === 'win'
-                          ? ' — winning'
-                          : state === 'loss'
-                            ? ' — losing'
-                            : state === 'tie'
-                              ? ' — tied'
-                              : ''
-                      }${live ? ' so far' : ''}`}
-                    >
-                      {fmtValue(v, c)}
-                    </span>
-                  );
-                })}
+          saying so is the whole of what its card holds.
+
+          **One block per side of the ball**, each with its own head and its own
+          two rows, rather than one ten-column run: the league's own order
+          interleaves bats and arms, so a reader wanting "how are my pitchers
+          doing" had to pick four columns out of ten by eye. Five columns is
+          also what fits a phone — the single run overflowed one and scrolled.
+          Each block's own `border-top` is the break between the two. */}
+      {format === 'h2h-categories' && groups.length > 0 && (
+        <div className="lg-cat-groups">
+          {groups.map((g) => (
+            <div className="lg-cats" role="table" aria-label={`${g.label} categories`} key={g.side}>
+              <div className="lg-cat-side">{g.label}</div>
+              <div className="lg-cat-row lg-cat-head" role="row">
+                {g.categories.map((c) => (
+                  <span key={c.statId} role="columnheader" title={c.name}>
+                    {c.label}
+                  </span>
+                ))}
               </div>
-            );
-          })}
+              {[away, home].map((side, i) => {
+                const other = i === 0 ? home : away;
+                return (
+                  <div className="lg-cat-row" role="row" key={side.teamId}>
+                    {g.categories.map((c) => {
+                      const v = side.scores[c.statId];
+                      const state = outcome(v, other.scores[c.statId], c);
+                      return (
+                        <span
+                          key={c.statId}
+                          role="cell"
+                          className={state ? `lg-cat-${state}` : undefined}
+                          title={`${c.name}: ${fmtValue(v, c)}${
+                            state === 'win'
+                              ? ' — winning'
+                              : state === 'loss'
+                                ? ' — losing'
+                                : state === 'tie'
+                                  ? ' — tied'
+                                  : ''
+                          }${live ? ' so far' : ''}`}
+                        >
+                          {fmtValue(v, c)}
+                        </span>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -414,6 +512,9 @@ export default function LeagueView({
   transactions,
   transactionsLoading,
   transactionsError,
+  players,
+  rosterPct,
+  eligibility,
   onOpenPlayer,
   connected,
   onConnect,
@@ -430,6 +531,12 @@ export default function LeagueView({
   transactions: EspnTransactions | null;
   transactionsLoading: boolean;
   transactionsError: string | null;
+  /** Threaded through to the Transactions tab alone — the season roster and the
+   *  two maps off the ownership read, which are what a player row draws his
+   *  club, his positions and his roster % from. */
+  players: SeasonPlayer[];
+  rosterPct: Map<number, number> | null;
+  eligibility: Map<number, string[]> | null;
   onOpenPlayer: (mlbId: number) => void;
   connected: boolean;
   onConnect: () => void;
@@ -469,6 +576,9 @@ export default function LeagueView({
           data={transactions}
           loading={transactionsLoading}
           error={transactionsError}
+          players={players}
+          rosterPct={rosterPct}
+          eligibility={eligibility}
           onOpenPlayer={onOpenPlayer}
         />
       ) : error && !board ? (

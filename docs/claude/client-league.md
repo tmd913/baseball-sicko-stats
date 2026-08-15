@@ -74,6 +74,102 @@ is spent on **state** is honoured by marking one state and letting the other go
 quiet. A tie is `--faint`, neither. Each cell's `title` spells it out in words
 (`Runs: 32 — winning so far`), the `so far` appearing on a live period alone.
 
+### The headline is a triple, because a categories matchup has no single score
+
+**A head-to-head categories matchup is won category by category**, so what a
+side *has* is not one number: it is how many categories it is winning, losing
+and tied in. A team up in six, down in three and level in one reads **`6-3-1`**.
+The card printed the wins alone — a `6` beside a `3` — which left the reader to
+work out how many of the ten were still level, or whether the other seven had
+even been played.
+
+**The triple is the server's own tally rather than a second count**, and that
+matters because the tally is the thing that has been *checked*: ESPN fills its
+`cumulativeScore` only once a matchup is over, so `espn.ts` computes it for
+every matchup live and final alike, and the computed answer matched ESPN's on
+all 1,080 category comparisons of the league's eighteen completed periods (see
+**ESPN fantasy league**, *The category winner is computed here, not read*). The
+client's own `outcome()` still decides the *cell* colours, which is a per-cell
+question the tally cannot answer; what it does not do is add itself up into a
+second definition of who is winning a category.
+
+**All three terms, always**, where the season record beside it drops a zero tie
+count (`record()` — `7-7` rather than `7-7-0`). Two reasons and the second is
+the load-bearing one: the three are a partition of the categories, so the sum is
+a fact a reader can check against the header above, which `6-3` cannot be; and
+`7-7` as a season record and `7-7` as this week's categories would be the same
+string meaning two different things an inch apart on one row.
+
+**Only a categories league has this shape.** A points league has one number a
+side and `score()` still prints `fmtPoints(side.points)`; a roto league has no
+matchups at all and draws its own empty state. Both were driven with the
+response stubbed rather than reasoned about — the points card reads `812.5` /
+`774.25` with **no category grid at all**, and the roto one reads `No matchups
+in this league`.
+
+**Verified against ESPN over every settled matchup period of the live league**
+(1–18, 108 matchups, 216 sides): the triple **sums to the ten categories on
+216 of 216 sides**, **matches ESPN's own `cumulativeScore` on 216 of 216**, and
+the side the triple implies is the winner agrees with ESPN's `winner` **and**
+with the card's own `matchup.winner` on **108 of 108**. Live, week 19 reads
+`7-1-2` / `1-7-2` and `3-5-2` / `5-3-2`.
+
+### Batters and pitchers are two blocks, not one ten-column run
+
+**The league's own category order interleaves the two sides of the ball** — the
+live league scores `R HR RBI W ERA SB WHIP K OPS SVHD` — so a manager wanting to
+know how his *pitchers* were doing had to pick four columns out of ten by eye.
+A category league is read as two halves, because a manager's bats and his arms
+are two rosters doing two jobs. So the line is two blocks, each with its own
+head and its own two rows, under a small-caps `BATTERS` / `PITCHERS` label.
+
+**And it is what stops the line overflowing a phone.** Ten columns at the grid's
+`minmax(42px, 1fr)` want 438px inside a card that is 318px wide at 390 —
+measured before the change, the category line **overflowed its own card by
+118px** and scrolled sideways. Split, each half is five columns: measured after,
+`scrollWidth - clientWidth` is **0 on both blocks at 320, 375, 390, 640, 900,
+1200 and 1920**, with no horizontal overflow of the page body at any of them.
+Each block's own `border-top` is the rule between the two, so the split costs no
+new mark.
+
+**A label line above each block rather than a leading column.** A left-hand
+label column costs the card about 52px of *width* where a line costs it 14px of
+*height*, and this card is width-bound rather than height-bound — the whole
+reason the split was worth making. The card is 800px at 1200 and 346 at 390,
+unchanged.
+
+### Which side a category is on is the server's answer
+
+**`categoryGroups` in `LeagueView.tsx` is the one place the split happens**, and
+both the scoreboard's line and the Rankings table read it — so a cell, its
+header and the group head above it cannot come to disagree about which column is
+which.
+
+**It groups, it does not decide.** The side and the reading order ride on
+`EspnCategory` off `STAT_META`, which is the only place that can say either: a
+**label cannot**, because `H` is a hit and a hit allowed, `K` a strikeout taken
+and a strikeout thrown, and `BB`, `HR`, `HBP` and `IBB` are each two categories
+in that table under one abbreviation. Pattern-matching the labels here would get
+four of them wrong on a league that scores both sides. See **ESPN fantasy
+league**, *`STAT_META` says which side of the ball, and in what order*.
+
+**The array on the wire stays in the league's own order**, and the client
+regroups. The payload is a faithful record of what the league scores; grouping
+is presentation, and putting it in the client means nothing server-side had to
+learn about it — `sideFrom`, `getRankings` and the blob keys all index by
+`statId` and are untouched.
+
+**A category the table cannot place is drawn rather than dropped**, in a third
+group called **`Other`** at the end. That is the honest bucket for an ESPN stat
+id `STAT_META` has never been read against — the same one whose header already
+reads `Stat 62` — because filing it under Batters would be a claim where a group
+of its own is an admission. Driven with one category rewritten to an unknown id:
+the card draws `Batters` (four), `Pitchers` (five) and `Other` (one), with
+nothing lost from either real group. A group with nothing in it is not drawn at
+all, so an ordinary league sees two — and on the Rankings table the group
+**header row is not drawn at all below two groups**, a single spanning label
+over every column being a row spent saying nothing.
+
 **A bye is a real shape, not a failed read.** The live 12-team league's first
 playoff round is 2 matchups and **8 byes**, so a card with one team on it and
 the word `Bye` is the ordinary case in mid-September rather than an error state.
@@ -306,6 +402,105 @@ arriving here rather than a new one: the winning side of a category is green and
 the loser goes quiet, because ten red cells down one side of a card would be the
 row shouting where the job is to mark a winner. A twelve-row table of ranks is
 that same picture turned on its side.
+
+### The Rankings table has the same two sections
+
+**A spanning header row over each run of categories, rather than a rule between
+two columns.** The rule alone says *there is a seam here* without saying what is
+on either side of it, and what a reader coming to a fantasy table wants is the
+two words. So the `<thead>` is two rows: `BATTERS` and `PITCHERS` spanning their
+own runs, over the sort headers.
+
+**Which means two sticky rows, and they had to be told apart.** A sticky header
+can only stick to the box that scrolls, and both rows were claiming `top: 0` —
+so the group row holds the top and the sort headers hold **`--lg-group-h`**,
+the one number two rules share and therefore the one that is named rather than
+written twice. It is the group row's own box: 5px + a 16px line + 5px, with no
+bottom border (the sort row under it carries the one that closes the head).
+Measured, the pair pins as one head — group row at **1px** (the border, which is
+exactly where the single header row used to pin) and the sort headers at **27**.
+
+**And one hairline where the runs meet**, so the sections still read as sections
+with the head scrolled past on a phone. An **inset shadow rather than a border**:
+every cell in this table paints an opaque `--cell-bg`, and a border would add a
+pixel to the column where a shadow costs the layout nothing and paints over the
+ground the cell has already resolved.
+
+**The colSpans cannot disagree with the columns**, which is what a two-row head
+most easily gets wrong: the group heads' spans and the body's cells come out of
+the same `groups` array (`shown` is its `flatMap`), so the sum is the column
+count by construction. Checked anyway on every state driven: **spans sum to 10
+against 10 category columns and 12 cells a row**.
+
+### The cells are washed by rank, which departs from a documented rule
+
+**More red the better the rank, more blue the worse** — a diverging scale over
+the teams ranked in one category, fading to nothing in the middle.
+
+**It is a departure from the research board's rule and is worth saying so
+plainly.** That board's stat columns are deliberately **monochrome** and its
+percentile badges deliberately `--faint`, on the stated grounds that *"colour is
+reserved for state"* — a heat scale there would be a second colour system beside
+the live inning, the postponement and the trend. That rule is right for what it
+governs: a six-hundred-row leaderboard whose job is to be **scanned for names**.
+This table is the other thing. It is **twelve rows read for standing**, it
+carries no live state at all, and where the board says *here is a number, judge
+it* a league table says *here is where you are*. The colour **is** the reading,
+and at this size it is the difference between finding your weak category at a
+glance and reading a hundred and twenty ordinals. The board is untouched.
+
+**It colours the rank and never the value**, which is what makes `lowerBetter`
+need no special case at all: the server has already computed the rank with the
+direction baked in (`rankBy`, 1 is best whichever way the category runs), so a
+3.29 ERA and 232 home runs are both `1st` and both take the deepest red.
+**Ties share a rank and so share a colour** by the same construction — checked
+over every category column of the live board: **2 tie groups, 0 colour
+mismatches**. `n` is the teams *ranked in that category* rather than the twelve
+rows, matching the badge's own denominator, so a team with no figure takes no
+wash any more than it takes a rank.
+
+**The wash rides as a background *image* over the cell's own ground**, not as a
+`background`. `--rank-tint` is a flat gradient layer composited over
+`background-color: var(--cell-bg)`, which is what lets the zebra stripe and the
+reader's own 12% accent row show through it rather than being painted out —
+checked, all three grounds resolve underneath (`rgb(11, 18, 32)`,
+`rgb(22, 33, 58)` and the accent mix) with only the layer above them changing.
+The two ends are tokens on `.league-table` rather than on `:root`: this is the
+one surface in the app that reads a diverging scale, and a palette entry would
+invite a second reader to import the argument along with the colour.
+
+**22% at the ends**, and the scale is symmetric and monotone in the rank —
+measured on the live twelve-team board, `1st` is hot 22% and `12th` cold 22%,
+with 6th and 7th at 2% either side of nothing.
+
+**The contrast was checked over every shade the table can produce**, by
+resolving each cell's `color-mix` in the page and compositing it over the ground
+that cell actually resolved (26 distinct shades across plain, zebra and the
+reader's own row). Worst case of all of them: the **value text 9.23:1**, the
+rank badge **4.07:1**, and the `1st` green mark **5.58:1**. The deepest red
+lands on `#3f2732` and the deepest blue on `#263e64`.
+
+**The rank badge went `--faint` → `--muted`, and the wash is why.** `--faint`
+reads 3.0–3.7:1 on this table's three grounds untinted and would have fallen to
+2.0–2.7 under the scale at its strongest — a legibility loss on the very badge
+the colour is a picture of. `--muted` reads 4.07–6.97 tinted, which is *better*
+than the old badge was on a bare cell. `--faint` remains right on the research
+board, where the badge annotates a number in a six-hundred-row scan; here it is
+half the cell's content.
+
+**The `1st`-in-green mark is kept rather than made to give way.** It is a
+different layer from the wash — text over ground — and it is the same green the
+scoreboard's winning category takes, so a reader who has learned it on one tab
+reads it on the other. At 5.58:1 over the reddest cell it is legible, and the
+alternative (weight alone) would have cost the app one mark for two facts.
+
+**Nothing else about the table moved**, measured at 390 / 1200 / 1920 before and
+after: page-body overflow **0**, the badge column pinned at **0**, rows
+**56.55px**, the table **803.08 / 1200 / 1920px**, the pane bleeding to **0 from
+both edges**, and no row hover or pointer (`cursor: auto`). Sorting is untouched
+and was driven rather than assumed — one press of `HR` gives ranks
+`1, 2, 2, 4 … 12` with the tie sharing its rank, the group row still drawn and
+`aria-sort` naming exactly one column.
 
 **Sorting is on the rank rather than the value**, which is the one thing this
 table does that the season table did not, and it buys the reader a rule they no
@@ -612,6 +807,87 @@ says a player moved, not whether he pitches — falling back to `batter`, which 
 what a bare id in an old link has always done (`readKeys`). Measured on the live
 league: **42 of 42 names on the first page are links, 0 plain.**
 
+### A row says who moved, not only that he moved
+
+**The name was the whole of a player row, and a name is not enough to decide
+anything on.** A waiver feed is read to answer *does this matter to me* — which
+turns on where he plays, how widely he is rostered and, at a glance, whether you
+recognise him at all — and the row said none of it. It now carries his headshot,
+his club's cap logo, ESPN's own position eligibility and his global roster %.
+
+**Three of the four are on the row and the fourth is the mark alone**, which is a
+judgement about density rather than about room. The **positions** are the most
+actionable thing a feed of adds and drops can say (*somebody just dropped a
+shortstop*). The **roster %** is how big a deal the move is — a 78%-rostered
+player being dropped is news where a 2% one is noise — and it is four characters,
+right-aligned to the same edge the transaction's own date sits on, so it reads as
+a column rather than as something in the way of scanning the names. The
+**headshot** is recognition, and the app's own way of naming a player everywhere
+else. And the **club** is the cap logo with the abbreviation on its tooltip: on a
+*fantasy* feed it is the least decision-relevant of the four, and drawn as `MIL`
+it would have been a third string on a line already carrying two.
+
+**The block is `PlayerIdentity`**, the same component the summary table and the
+research board draw a name over a club and a position list with, and the position
+itself is `lib.ts::positionCell` — one definition rather than a third copy, which
+is the rule those two already state for each other. What this caller adds is the
+two things a row in a *feed* needs of it: room to shrink, and a name line that
+carries the trade destination and the waiver bid beside the name.
+
+**The headshot is a plain image rather than a second link.** The name is 8px away
+and is the press, so a 32px target beside it would only be a smaller version of
+the same one — at the cost of a tab stop on every one of up to nine players in a
+trade. And **no lineup pip and no `IL10` code**, which the two wide tables put on
+a headshot: those read off `/api/statuses`, which this page does not fetch, and
+they answer a question about *this afternoon* where every row here is dated — a
+call-up's pip says nothing about the trade that moved him three weeks ago.
+
+**The club is the one fact that needed threading, and it needed no upstream.**
+Roster % and eligibility ride on the `/api/espn/ownership` response App already
+holds for the research board, and a player's *kind* and MLB's listed position
+come off the season roster the header search holds — but MLB serves a cap logo by
+**team id** and nothing else, and no client-side list carries one for an arbitrary
+player. The join that finds a transaction's `mlbId` already has it:
+`matchMlbPlayer` answers with the whole `IndexEntry`, whose club is the very field
+the tie is broken on. So `EspnPlayerPool.byEspnId` keeps that id beside the name
+it already kept, and `EspnTransactionPlayer` gains `mlbTeamId` and `team` — the
+abbreviation off `getTeamAbbrevs()`, the 24h table every other badge in the app
+reads. **No new request, and no cache version moves**: the pool and the
+transactions blob are both memory-only, so there is no stored shape to deserialize
+with a field missing.
+
+**Where ESPN has said nothing the row prints MLB's own word rather than a guess.**
+`positionCell`'s pitching fallback is `starter` — a fact about how a man has been
+*used*, which a transaction does not carry — so the kind is read as a batter's for
+that one branch, which routes a pitcher to `P` instead of to a coin-flip between
+SP and RP; where ESPN *has* spoken, the real kind narrows his list, which is what
+stops a mis-joined pitcher reading `2B/SS`. Measured with `/api/espn/ownership`
+blocked: 42 of 42 rows fall back, pitchers read `P — MLB's listed position`,
+batters their own, the cap logos still draw (they are the transaction row's own
+fact) and the roster % is simply **absent** rather than a column of dashes — a
+feed is not a table, so a missing figure reads as missing.
+
+**A player the join could not place keeps his slot.** He has no club and no
+eligibility, so the row draws his name alone rather than an identity block of two
+em dashes — but the circle is still there, as his initials, which is
+`PlayerOrderEditor`'s own fallback and is what keeps every name in the list
+starting at one x. Measured over the whole feed: **412 of 415 rows joined**, and
+the three that didn't read as initials and plain text.
+
+**The name line wraps, and only a trade can make it.** `to Ookie Rookie` beside a
+name is more than a 390px row has, and the name is the half that must not give:
+measured on the live league's 415 rows, the name was ellipsized on **every one of
+the 23 trades at 390 and on none at 1200**. Wrapping puts the destination on its
+own line there and leaves every other row at its 32px.
+
+**And the Load-more button is the app's own.** It carried `className="load-more"`,
+a class **no rule in the stylesheet answered** — a bare browser button at the foot
+of the one tab that is a stream. `.lg-tx-more` is folded onto `.feed-more`'s
+selector list, count badge and all, so this is the Feed's button rather than one
+that resembles it; `.lg-transactions` becomes a flex column so its
+`align-self: center` resolves against something, which is the shape
+`.feed-section` already gives the stream whose paging idiom this tab borrowed.
+
 **The word for the move is the manager's rather than ESPN's message-type
 number** — `Added`, `Claimed`, `Dropped`, `Traded` — and a waiver claim is worth
 telling from a free pickup: one cost him a bid and his place in the order and the
@@ -654,10 +930,19 @@ Driven against the built client and the live 2026 league at **390×844 and
   writing its own `lspan=`.
 - **The ranks were recomputed independently** from the values the route ships,
   over all five spans: **600 of 600 cells match, 0 wrong, 73 of them tied.**
-- **Transactions**: 25 rows on the first page of 250, `Load more · 225 older`
-  taking it to 50, **7 of the 25 the reader's own**, and 42 of 42 names links.
-  Pressing one opens `?player=pitcher-676775` with `Keaton Winn` in the `<h1>`,
-  and one press of Escape closes the page and leaves the tab on Transactions.
+- **Transactions**: 25 rows on the first page of 250, the Load-more button
+  reading `Load more` over a `225` badge and taking it to 50, **7 of the 25 the
+  reader's own**, and 42 of 42 names links. Pressing one opens
+  `?player=pitcher-676775` with `Keaton Winn` in the `<h1>`, and one press of
+  Escape closes the page and leaves the tab on Transactions.
+- **The player rows, over the whole feed** (all 250 transactions paged out, both
+  widths): **415 rows, 412 with a cap logo, a position list and a roster %**, 3
+  with initials and a plain name, and **0 clipped names**. Every row is
+  **32.00px** at 1200 and at 390 alike, save the 23 trades at 390 (52px, the
+  destination on its own line) and one long unjoined name (37px); **page-body
+  overflow 0** at both. Spot-checked against ESPN: `Francisco Alvarez · NYM ·
+  C/DH · 11.4%`, `Keaton Winn · SF · RP · 0.5%`, `Fernando Tatis Jr. · SD ·
+  2B/OF · 99.6% · to Baldy's Bozos`.
 - **Every empty state names its cause**, driven with the relevant route blocked:
   a failed rankings or transactions read draws `Couldn't read your league` over
   the message, and with no league connected the strip is not drawn at all — three
@@ -670,3 +955,8 @@ Driven against the built client and the live 2026 league at **390×844 and
 115.36 KB of CSS** (20.12 → 20.47 gzipped) — 7.8KB and 2.4KB raw, 2.1KB and
 0.35KB over the wire, for two tabs, two routes, two components and the paragraphs
 above restated where the rules are.
+
+**And for the player rows on Transactions: 494.02 → 495.54 KB of JS** (146.19 →
+146.62 gzipped) and **115.61 → 116.33 KB of CSS** (20.54 → 20.63) — 1.5KB and
+0.7KB raw, 0.43KB and 0.09KB over the wire, for a shared identity block, a
+headshot with its fallback, a roster-% cell and the Load-more fold.

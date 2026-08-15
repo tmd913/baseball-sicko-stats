@@ -256,6 +256,37 @@ export interface PlayerNews {
 }
 
 /**
+ * How recently a player was in the news — the two states the mark beside his
+ * name has, and the only two.
+ *
+ * A **day** rather than an hour, because a day is the resolution both upstreams
+ * publish (see `recentNews.ts`): `'today'` is the app's own `baseballToday()`,
+ * `'yesterday'` the day before it, and there is no third value because anything
+ * older is not shipped at all.
+ */
+export type NewsRecency = 'today' | 'yesterday';
+
+/**
+ * The newest thing said about one player, for the mark beside his name.
+ *
+ * Deliberately not a `NewsItem`: the mark is a mark and needs the day, the
+ * level and something to say in its tooltip, where a news *row* needs a source,
+ * a summary, a link and a stable id. Shipping the item would put six hundred of
+ * them on the wire to draw six hundred dots.
+ */
+export interface RecentNews {
+  /** `YYYY-MM-DD`, the day the newest item is stamped — the one the tooltip
+   *  names, so the reader can check the colour against a date. */
+  date: string;
+  level: NewsRecency;
+  /** The headline of that newest item, which is what turns the mark from "go
+   *  and look" into "he is on the IL". RotoWire's wording where both halves
+   *  spoke on the same day, which is the precedence `getPlayerNews` gives them,
+   *  so this is the headline at the top of the tab it points at. */
+  headline: string;
+}
+
+/**
  * What a base-running event was — MLB's own runner `details.eventType`
  * collapsed to the distinctions worth a badge (see `baseEventKind` on the
  * server for what is in it, and for the two things measurement kept out).
@@ -1324,6 +1355,12 @@ export interface ScheduleWindow {
  */
 export type EspnScoringFormat = 'h2h-categories' | 'h2h-points' | 'standings' | 'unknown';
 
+/** Which side of the ball a scoring category is scored on. `other` is a real
+ *  answer rather than a failure bucket — an ESPN stat id the server's own table
+ *  has never been read against — and is drawn in a group of its own rather than
+ *  filed under a side nothing establishes it is on. */
+export type EspnCategorySide = 'batting' | 'pitching' | 'other';
+
 export interface EspnCategory {
   statId: number;
   label: string;
@@ -1331,6 +1368,11 @@ export interface EspnCategory {
   /** ERA and WHIP: the smaller number takes the category. */
   lowerBetter: boolean;
   format: 'count' | 'avg' | 'rate';
+  /** The side of the ball, and where it reads within that side. The array
+   *  itself stays in the **league's own order** — grouping is the client's, and
+   *  `categoryGroups` in `LeagueView.tsx` is the one place that does it. */
+  side: EspnCategorySide;
+  order: number;
 }
 
 export interface EspnMatchupSide {
@@ -1444,6 +1486,13 @@ export interface EspnTransactionPlayer {
    *  row can open his page; null where it doesn't, and the name draws as
    *  text. */
   mlbId: number | null;
+  /** His MLB club, for the cap logo the row's identity block draws — the id the
+   *  mark is served by, and the abbreviation that is its `alt`, its tooltip and
+   *  what the block prints when there is no mark to draw. Both fall out of the
+   *  join that found `mlbId`, so neither is a request of its own; both null on
+   *  the row that did not join. */
+  mlbTeamId: number | null;
+  team: string | null;
   move: 'add' | 'drop';
   via: 'free-agent' | 'waiver' | 'trade';
   toTeamId: number | null;

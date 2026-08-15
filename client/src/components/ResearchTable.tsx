@@ -1,6 +1,7 @@
 import { useContext, useLayoutEffect, useMemo, useRef } from 'react';
 import { BaseballMark } from './BaseballMark';
 import { LockGlyph, LockMark } from './LockMark';
+import { PlayerNewsMark } from './NewsMark';
 import { LoadingBlock, LoadingLine } from './Loading';
 import { ExpandButton } from './ExpandButton';
 import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
@@ -2266,6 +2267,19 @@ export function ResearchTable({
                       {!onlyOthers && !rosterKeys.has(key) && ownedElsewhere?.has(r.id) && (
                         <LockMark name={r.name} team={ownedElsewhere.get(r.id) as string} />
                       )}
+                      {/* And the **newspaper**, which is a different kind of
+                          fact from the two above it and so sits after both:
+                          those two answer *whose* he is, this one answers what
+                          has happened to him. It is last among the labels and
+                          ahead of the star, which is the only control on the
+                          line.
+
+                          Unsuppressed, unlike the baseball — that mark is
+                          hidden when every row would carry one, and this one
+                          cannot reach that state: 285 of the league's 1,386
+                          players were inside the window when this was measured,
+                          so it always distinguishes the row it is on. */}
+                      <PlayerNewsMark id={r.id} name={r.name} />
                       <WatchStar
                         on={watchlistKeys.has(key)}
                         name={r.name}
