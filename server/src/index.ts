@@ -10,6 +10,7 @@ import { getPercentiles } from './percentiles.js';
 import { getXwobaSeries } from './xwoba.js';
 import { getBatterGameLog, getPitcherGameLog } from './gameLog.js';
 import { getNextGame } from './nextGame.js';
+import { getProjectedStarts } from './projectedStarts.js';
 import { getPlayerNews } from './news.js';
 import { getSeasonArsenal } from './pitcherArsenal.js';
 import { getPitcherXera } from './expectedStats.js';
@@ -1208,6 +1209,33 @@ app.get(
       return;
     }
     res.json(await getNextGame(playerId, req.query.start === '1'));
+  }),
+);
+
+// A pitcher's next several starts — the ones his club has named him for, and,
+// past those, the ones his own rotation slot puts him in. The player page's
+// **Projected Starts** block, which is the sentence `next-game` above could only
+// answer with "not yet scheduled": a rotation turn is named a few days out, so
+// for most of the month the honest answer to "when does he pitch next" is one
+// nobody has published and everybody can work out.
+//
+// **No `?type=`**, unlike its neighbours: a rotation slot is a fact about a
+// pitcher, so there is no batting half of this question to ask for. Whether the
+// player *is* a rotation starter is still not decided here — `projectedStarts.ts`
+// answers honestly for whoever is asked and says `not-a-starter` when there are
+// no starts to read a cadence off, and the client draws the block only for a man
+// `lib.ts::isRotationStarter` places in the rotation, which is the app's one
+// definition of that and has no business being restated on the server.
+app.get(
+  '/api/players/:playerId/projected-starts',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const playerId = Number(req.params.playerId);
+    if (!Number.isInteger(playerId) || playerId <= 0) {
+      res.status(400).json({ error: 'invalid playerId' });
+      return;
+    }
+    res.json(await getProjectedStarts(playerId));
   }),
 );
 

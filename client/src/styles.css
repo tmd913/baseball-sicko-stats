@@ -3822,7 +3822,8 @@ body {
   flex-direction: column;
   gap: 6px;
 }
-.ovw-next-line {
+.ovw-next-line,
+.start-row {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -3849,6 +3850,104 @@ body {
 .ovw-next-vs {
   color: var(--faint);
   font-weight: 600;
+}
+
+/* ---- Projected Starts ------------------------------------------------
+   A rotation starter's next five turns, on the Overview tab directly under the
+   day. **A reading column, not a table**: five short lines, each a when, a
+   matchup, sometimes an opposing starter and a tag — the same content the
+   `.ovw-next-line` above it holds, five times over, so it caps at
+   `--card-column` the way the News block beside it does rather than taking the
+   window the two stat tables do. */
+.ovw-starts {
+  max-width: var(--card-column);
+}
+.start-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+/* One start. **Folded onto `.ovw-next-line`'s rule** rather than restyled to
+   resemble it — the block above draws exactly this sentence for exactly this
+   kind of fact, so the two are one object and a second copy of the wrap, the
+   gap and the type is the drift this stylesheet spends its comments avoiding.
+   What this adds is a row's own padding and a hairline between rows, the
+   `.news-item` device: this is one list of one player's month, and five
+   bordered cards would read as five unrelated things. */
+.start-row {
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+}
+.start-row:last-child {
+  border-bottom: none;
+}
+/* **A projection is drawn as a guess**, which is the app's standing rule —
+   the percentile card's dotted bubble and the Splits card's hatched fill are
+   the same rule on two other surfaces. It is said three ways, because one of
+   them is bound to be the one a given reader takes it from: the row's text goes
+   muted, its rail goes dashed, and the tag says the word.
+
+   The rail is a **left border** rather than the feed's 3px/11px gradient: that
+   device groups a header, a card and a clip into one item, where this is one
+   line and wants a mark beside it rather than a bracket around it. Announced
+   takes the accent solid, projected `--faint` dashed — and the dash is not
+   decoration, it is the same broken-mark vocabulary `.pct-bubble--est` uses to
+   say "our estimate, not a measurement". */
+.start-row--announced {
+  border-left: 3px solid var(--accent);
+  padding-left: 10px;
+}
+.start-row--projected {
+  border-left: 3px dashed var(--faint);
+  padding-left: 10px;
+  color: var(--muted);
+}
+/* The muted row's own cells have to give up their colours, or the three ways of
+   saying "guess" come down to two: `.ovw-next-when` and `.ovw-next-opp` are
+   `--text` on the block above and would keep it here. */
+.start-row--projected .ovw-next-when,
+.start-row--projected .ovw-next-opp {
+  color: var(--muted);
+  font-weight: 600;
+}
+/* The word, at the end of the line. A **label** rather than a control, so it is
+   the app's fully-round pill (status chips, outcome badges, the lineup pip) and
+   not `--control-radius` — the rule that says a round pill is something you
+   read and a 12px corner is something you press. `margin-left: auto` puts it at
+   the right end of the line it wraps onto, which on a phone is under the
+   matchup rather than beside it. */
+.start-tag {
+  margin-left: auto;
+  flex: none;
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border: 1px solid var(--faint);
+  color: var(--faint);
+}
+.start-row--announced .start-tag {
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  color: var(--accent);
+}
+.start-row--projected .start-tag {
+  border-style: dashed;
+}
+/* The caveat, on the card rather than behind an ⓘ — see the component, where
+   the split between a general key and a caveat about *these rows* is argued.
+   `.ovw-none`'s voice, which is what every other sentence-under-a-block on this
+   tab takes. */
+.start-note {
+  margin: 10px 0 0;
+  color: var(--faint);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.45;
 }
 
 /* ---- News ------------------------------------------------------------

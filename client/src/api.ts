@@ -6,6 +6,7 @@ import type {
   EspnStatus,
   PitcherGameLog,
   NextGameInfo,
+  ProjectedStarts,
   PlayerNews,
   SeasonArsenal,
   PlayerKind,
@@ -461,6 +462,20 @@ export const api = {
    */
   async nextGame(playerId: number, start: boolean): Promise<NextGameInfo> {
     return request(`/api/players/${playerId}/next-game${start ? '?start=1' : ''}`);
+  },
+  /**
+   * A pitcher's next several starts — announced where his club has named him,
+   * projected from his own rotation slot past that. The Overview tab's
+   * **Projected Starts** block.
+   *
+   * **No `kind`**, unlike his day, his log and his boards: a rotation slot is a
+   * fact about a pitcher, so there is no batting half of the question. Which
+   * players it is asked *about* is the caller's business and is
+   * `lib.ts::isRotationStarter`, the app's one definition of who works out of
+   * the rotation.
+   */
+  async projectedStarts(playerId: number): Promise<ProjectedStarts> {
+    return request(`/api/players/${playerId}/projected-starts`);
   },
   /**
    * His latest news — the News tab, and the section that previews it on the
