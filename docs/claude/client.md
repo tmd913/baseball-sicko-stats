@@ -288,6 +288,47 @@ The settings toggle is `.settings-toggle`, **folded into `.sim-toggle`'s selecto
 
 **One definition per workspace, mirrored by hand.** The workspaces cannot import from each other — the same constraint that has `client/src/types.ts` mirroring `server/src/types.ts` — so the accent-stripping step is `stripAccents` in `client/src/lib.ts` and `stripAccents` in `server/src/names.ts`, and nothing else in either workspace spells out the NFKD-and-strip again: `savantPlayerUrl` had its own copy and now stands on the client's, and `espn.ts::normalizeName` (the ESPN name join, which needs a *different* normalisation — suffixes gone, punctuation to spaces) now stands on the server's. `searchFold` itself is client-only, there being no typed-input search on the server. `names.ts` is where the server's goes because it is the module named for exactly this, and it keeps the count at one per workspace rather than the four a third copy would have made.
 
+### A rate is `.xxx` and a share is a percent, and the two are not interchangeable
+
+**Baseball writes some of its rates with a leading dot and three decimals and
+the rest as percentages, and which is which is a convention rather than a
+property of the number** — so the app cannot decide it from the value and has
+to decide it per stat. Stated once, since the vocabulary is shared by half a
+dozen surfaces:
+
+- **`.xxx` — the rates baseball itself writes that way**: AVG, OBP, SLG, OPS,
+  ISO, BABIP, wOBA/xwOBA (and wOBAcon), xBA/xSLG, batting average against and
+  opponent batting average. Several of them are *named* "percentage" — on-base
+  percentage, slugging percentage, winning percentage — and are still written
+  `.xxx`, which is exactly why the name cannot be the test.
+- **A percent — a share of something**: K%, BB%, K-BB%, HR%, SB%, strike%,
+  whiff, chase, barrel, hard-hit, sweet-spot, the GB/LD/FB split, pull-air,
+  squared-up, blast, first-pitch strike, edge, meatball, HR/FB, fast swing,
+  put-away, pitch usage and ESPN's rostered percentage.
+
+**One decimal on a percent**, which is what every surface that prints one
+already used — `researchColumns.tsx::pct`, `PlatoonSplits`' `pct1` and the
+percentile card's `dec1` — the arsenal's own `pct` being the one deliberate
+exception, an integer in a dense pitch-mix strip where usage, strike and whiff
+are coarse.
+
+**The percentile card is the one place a `%`-labelled row prints a bare
+number**, and that is Savant's own layout kept deliberately: its labels *are*
+`Whiff %` and `K %`, so the value beside them reads `26.4` and `Whiff % 26.4%`
+would be the sign twice. It is consistent across all 26 such rows on both
+cards, which is what makes it read as a label-and-value pair rather than as a
+missing suffix.
+
+**Two server lines carry a share as a `.xxx` string** — `PitcherSeasonStats`'s
+`kRate`/`bbRate` (per batter faced) and `TeamHittingLine`'s (per plate
+appearance). That is a reasonable thing to put on the wire and the wrong thing
+to put on screen, so **`lib.ts::ratePercent` is the one place the conversion
+lives**: `".261"` → `"26.1%"`, read by the player page's Overview strip and by
+the opposing-lineup section a pitcher's Upcoming row and outing breakdown draw.
+Before it there were two answers — the Overview printed the string raw, so a
+column headed `K%` read `.261`, which is a share drawn in the notation this app
+reserves for a slash line.
+
 ### Where the rest of the client's documentation lives
 
 This file was one 443KB document and is now six, because `CLAUDE.md` sets a 150k
