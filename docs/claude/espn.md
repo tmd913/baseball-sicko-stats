@@ -393,6 +393,18 @@ this table has never been read against. Each entry also carries a `format`, and
 getting *that* wrong is the difference between an ERA and an OPS — `avg` prints
 `.759` the way a slash line is written, `rate` prints `3.93`.
 
+**Two `avg` entries are named "percentage" and are still `.xxx`, deliberately**:
+`55` (WPCT) and `59` (SV%) are shares, and baseball writes both with a leading
+dot exactly as it writes on-base *percentage* and slugging *percentage* — which
+is why the app's rule (see **Client**, *A rate is `.xxx` and a share is a
+percent*) is a table of stats rather than a test on the name or the value. Note
+what makes SV% the closest call in that table: ESPN's own label carries a `%`
+where WPCT's does not. It is left as `avg` on the convention, and it is
+**unverified against a real league** — the live league scores neither, so
+nothing here has ever drawn either cell. ESPN sends every `avg` category as a
+proportion (measured: OPS arrives as `0.75955848`), so a future `pct` format
+would need the ×100 rather than only the suffix.
+
 **Four formats, and only two of them have matchups** (`formatOf`).
 `H2H_CATEGORY` and `H2H_MOST_CATEGORIES` share a bucket, the scoreboard being
 the same object either way and the difference being only how the league's

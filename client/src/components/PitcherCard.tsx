@@ -23,6 +23,7 @@ import {
   pitchingCorner,
   prettyGameDate,
   rangePitchingSummary,
+  ratePercent,
   whipOf,
 } from '../lib';
 import {
@@ -302,12 +303,6 @@ export function GameLine({ pg, defaultOpen = true }: { pg: PitcherGame; defaultO
   );
 }
 
-/** A ".231"-style rate as a percentage, for the K%/BB% columns. */
-function ratePct(rate: string): string {
-  const n = Number(rate);
-  return Number.isNaN(n) ? '—' : pct(n);
-}
-
 /** A league rank as an ordinal — "1st", "23rd" — or nothing when unranked. */
 function rankNote(rank: number | null | undefined): string | undefined {
   return rank ? ordinal(rank) : undefined;
@@ -373,11 +368,11 @@ export function OpponentSection({
           <ResultStat label="HR" value={String(s.homeRuns)} note={rankNote(s.ranks?.homeRuns)} />
           <ResultStat
             label="K%"
-            value={ratePct(s.kRate)}
+            value={ratePercent(s.kRate)}
             note={rankNote(s.ranks?.kRate)}
             title="Rank counts the fewest strikeouts as 1st"
           />
-          <ResultStat label="BB%" value={ratePct(s.bbRate)} note={rankNote(s.ranks?.bbRate)} />
+          <ResultStat label="BB%" value={ratePercent(s.bbRate)} note={rankNote(s.ranks?.bbRate)} />
         </div>
         {split && (
           <div
@@ -396,12 +391,12 @@ export function OpponentSection({
             />
             <ResultStat
               label="K%"
-              value={ratePct(split.kRate)}
+              value={ratePercent(split.kRate)}
               note={rankNote(split.ranks?.kRate)}
             />
             <ResultStat
               label="BB%"
-              value={ratePct(split.bbRate)}
+              value={ratePercent(split.bbRate)}
               note={rankNote(split.ranks?.bbRate)}
             />
           </div>

@@ -287,10 +287,35 @@ export function lineOps(line: BattingLine): number | null {
   return obp + slg;
 }
 
-/** A rate stat printed the baseball way: three decimals, no leading zero (".812", "1.250"). */
+/** A rate stat printed the baseball way: three decimals, no leading zero (".812", "1.250").
+ *
+ * **This form is for the rates baseball actually writes that way** — AVG, OBP,
+ * SLG, OPS, ISO, BABIP, wOBA/xwOBA, xBA/xSLG and batting average against. A
+ * *share* of something — K%, BB%, whiff, chase, barrel — is a percentage and
+ * takes `ratePercent` below, or a `%` formatter of its own. The two are not
+ * interchangeable: a column headed `K%` reading `.261` is the app printing a
+ * share in the notation it reserves for a slash line. */
 export function formatRate(n: number): string {
   const s = n.toFixed(3);
   return s.startsWith('0.') ? s.slice(1) : s;
+}
+
+/**
+ * A share the server sent down as a `.xxx` string, printed as the percentage it
+ * is — `".261"` → `"26.1%"`.
+ *
+ * Two server-side lines carry a share in that shape: `PitcherSeasonStats`'s
+ * `kRate`/`bbRate` (per batter faced) and `TeamHittingLine`'s (per plate
+ * appearance). Three decimals is a reasonable thing to put on the wire and the
+ * wrong thing to put on screen, so the conversion lives here — once, so a
+ * pitcher's K% cannot read two ways in one app. One decimal, which is what
+ * every other percentage in the app prints. `str()` on the server yields an
+ * em-dash where it has nothing, so the unparseable case is the ordinary one.
+ */
+export function ratePercent(rate: string | null | undefined): string {
+  if (rate === null || rate === undefined || rate === '') return '—';
+  const n = Number(rate);
+  return Number.isFinite(n) ? `${(n * 100).toFixed(1)}%` : '—';
 }
 
 export function lineSummary(line: BattingLine): string {

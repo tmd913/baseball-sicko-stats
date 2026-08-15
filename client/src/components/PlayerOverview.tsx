@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
-import { formatStartTime, handThrows, isRotationStarter, prettyGameDate, surname } from '../lib';
+import {
+  formatStartTime,
+  handThrows,
+  isRotationStarter,
+  prettyGameDate,
+  ratePercent,
+  surname,
+} from '../lib';
 import type {
   BatterGameLog,
   NextGameInfo,
@@ -283,6 +290,15 @@ function GameLogWait({ loading }: { loading: boolean }) {
  * game log, which the Game Log's own foot does a game at a time: they are MLB's
  * own totals on the very line this block already has, and a second arithmetic
  * over 60 rows would be a second answer free to disagree with it.
+ *
+ * **And his K% is a share, so it prints as one.** `PitcherSeasonStats.kRate`
+ * comes down the wire as `".261"` — a three-decimal string, which is what MLB's
+ * own line is made of — and this strip used to print it raw, so a column headed
+ * `K%` read `.261`: a share drawn in the notation the app reserves for a slash
+ * line, three cells along from an ERA and a WHIP that really are decimals.
+ * `ratePercent` is the one place that conversion lives (see **Client**, *A rate
+ * is `.xxx` and a share is a percent*), so this cell and the opposing-lineup
+ * section that draws the same field cannot come to print it two ways.
  */
 function SeasonSummary({
   isPitcher,
@@ -307,7 +323,9 @@ function SeasonSummary({
           ['HD', String(pitcherSeason.holds)],
           ['ERA', pitcherSeason.era],
           ['WHIP', pitcherSeason.whip],
-          ['K%', pitcherSeason.kRate],
+          // A share, not a slash-line rate: the line carries it as ".261" and
+          // the column is headed `K%`, so it prints as 26.1% (see `ratePercent`).
+          ['K%', ratePercent(pitcherSeason.kRate)],
         ]
       : null
     : season && season.pa > 0
