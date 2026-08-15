@@ -136,19 +136,16 @@ const ESPN_TO_MLB_TEAM: Record<number, number> = {
   30: 139, // TB
 };
 
-/**
- * The same table read the other way, MLB club id → ESPN club id.
- *
- * **ESPN's site API numbers its clubs identically to the fantasy game's
- * `proTeamId`** — checked club by club against
- * `site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams`, all 30 the same
- * (1 BAL … 30 TB) — so the one table above answers for both and `news.ts` needs
- * no second copy of a mapping neither numbering system derives from the other.
- * Derived rather than written out, so the two can never come to disagree.
- */
-export const ESPN_SITE_TEAM_BY_MLB: Record<number, number> = Object.fromEntries(
-  Object.entries(ESPN_TO_MLB_TEAM).map(([espn, mlb]) => [mlb, Number(espn)]),
-);
+// The reverse of that table — MLB club id → ESPN club id — used to live here
+// for `news.ts`, which read ESPN's per-club article feed. That feed is gone
+// (RotoWire's per-player notes replaced it, see `rotowire.ts`) and with it the
+// only reader, so the export went too rather than being left as a derivation
+// nothing derives anything from. The measurement it carried is worth keeping
+// even so: **ESPN's site API numbers its clubs identically to the fantasy
+// game's `proTeamId`**, checked club by club against
+// `site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams` — all 30 the same,
+// 1 BAL … 30 TB — so if anything ever needs the site API again, the table above
+// answers for it and no second copy is warranted.
 
 /**
  * ESPN's `lineupSlotId` to the slot a fantasy manager would call it.
@@ -252,7 +249,7 @@ function eligiblePositions(slots: number[] | undefined): string[] {
  * writes "Luis Garcia Jr." where MLB writes "Luis García Jr.", and either may
  * carry the period or not.
  */
-function normalizeName(raw: string): string {
+export function normalizeName(raw: string): string {
   return stripAccents(raw)
     .toLowerCase()
     .replace(/[.'’]/g, ' ')
@@ -262,7 +259,7 @@ function normalizeName(raw: string): string {
     .trim();
 }
 
-interface IndexEntry {
+export interface IndexEntry {
   id: number;
   name: string;
   teamId: number | null;
@@ -273,7 +270,7 @@ interface IndexEntry {
   kinds: PlayerKind[];
 }
 
-interface MlbIndex {
+export interface MlbIndex {
   /** Normalised name to every MLB player who has it — a list, because the
    *  season roster really does hold three collisions of its own. */
   byName: Map<string, IndexEntry[]>;
@@ -287,7 +284,7 @@ let indexCache: { index: MlbIndex; fetchedAt: number } | null = null;
  * name — this needs the **team id**, since that is the currency the ESPN team
  * table above is written in and a name is one rename away from breaking.
  */
-async function getMlbIndex(): Promise<MlbIndex> {
+export async function getMlbIndex(): Promise<MlbIndex> {
   if (indexCache && Date.now() - indexCache.fetchedAt < INDEX_TTL_MS) {
     return indexCache.index;
   }
@@ -321,26 +318,44 @@ async function getMlbIndex(): Promise<MlbIndex> {
 }
 
 /**
- * The MLB id for one ESPN player, or null if he isn't a major leaguer this
- * season (most of ESPN's universe isn't).
+ * The MLB player one *outside* source is naming, or null if he isn't a major
+ * leaguer this season (most of ESPN's universe isn't).
  *
  * Team first, name second: a club match is decisive, and falling back to the
  * name alone covers the player ESPN still has on his old team the morning after
  * a trade. An ambiguity neither test resolves is left unmatched rather than
  * guessed — marking the wrong Wilmer Flores as owned is worse than marking
  * neither.
+ *
+ * **Exported because `rotowire.ts` runs the identical join** and a second
+ * normalisation beside this one is exactly the drift this codebase spends its
+ * comments avoiding: one fold, one index, one tie-break rule, two upstreams.
  */
+export function matchMlbPlayer(
+  index: MlbIndex,
+  name: string,
+  mlbTeamId: number | undefined,
+): IndexEntry | null {
+  const candidates = index.byName.get(normalizeName(name));
+  if (!candidates || candidates.length === 0) return null;
+  if (candidates.length === 1) return candidates[0];
+  const onTeam = candidates.filter((c) => c.teamId === mlbTeamId);
+  return onTeam.length === 1 ? onTeam[0] : null;
+}
+
+/** The same match phrased in ESPN's own club numbering, which is the currency
+ *  every caller in this file has. `rotowire.ts` asks the exported form above
+ *  with an MLB club id, since that is the currency *it* can reach. */
 function matchPlayer(
   index: MlbIndex,
   name: string,
   espnTeamId: number | undefined,
 ): IndexEntry | null {
-  const candidates = index.byName.get(normalizeName(name));
-  if (!candidates || candidates.length === 0) return null;
-  if (candidates.length === 1) return candidates[0];
-  const mlbTeam = espnTeamId === undefined ? undefined : ESPN_TO_MLB_TEAM[espnTeamId];
-  const onTeam = candidates.filter((c) => c.teamId === mlbTeam);
-  return onTeam.length === 1 ? onTeam[0] : null;
+  return matchMlbPlayer(
+    index,
+    name,
+    espnTeamId === undefined ? undefined : ESPN_TO_MLB_TEAM[espnTeamId],
+  );
 }
 
 // ---- The season-wide player pool: roster % and eligibility ---------------

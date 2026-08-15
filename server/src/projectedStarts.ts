@@ -312,8 +312,8 @@ function toStart(
 export async function getProjectedStarts(playerId: number): Promise<ProjectedStarts> {
   const today = baseballToday();
   // The season off the app's own definition of today rather than a constant:
-  // this is a date-window read and `CLAUDE.md` lists eight places the season is
-  // already pinned, none of which this needs to become a ninth of.
+  // this is a date-window read and `CLAUDE.md` lists nine places the season is
+  // already pinned, none of which this needs to become a tenth of.
   const season = Number(today.slice(0, 4));
   const info = (await getRosterInfo([playerId])).get(playerId) ?? null;
   let teamId = info?.teamId ?? null;
