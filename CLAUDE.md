@@ -68,6 +68,10 @@ letting it grow past it.
 
 @docs/claude/client-player-page.md
 
+**Client — the League view** — the fantasy league's own page: the matchup scoreboard, the season table, the four ESPN league formats and which two of them it refuses to guess at.
+
+@docs/claude/client-league.md
+
 **Client — popups** — the app-wide dialog rules: why details are popups rather than accordions, the layer ladder, what a popup has to cover, and why one press of Escape undoes exactly one thing.
 
 @docs/claude/client-dialogs.md

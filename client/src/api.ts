@@ -2,6 +2,7 @@ import type {
   BatterGameLog,
   EspnOwnership,
   EspnRoster,
+  EspnScoreboard,
   EspnStatus,
   PitcherGameLog,
   NextGameInfo,
@@ -330,6 +331,22 @@ export const api = {
    *  made a move and wants the board to agree with ESPN. */
   async espnOwnership(refresh = false): Promise<EspnOwnership> {
     return request(`/api/espn/ownership${refresh ? '?refresh=1' : ''}`);
+  },
+
+  /** The league's scoreboard: one matchup period's matchups, plus every team's
+   *  season totals in the league's own categories.
+   *
+   *  `period` names a matchup period — absent, the one being played. A period
+   *  this league has no row for is answered with the current one rather than
+   *  an empty board, so the arrows can never strand the reader. `refresh` is
+   *  the same escape hatch `espnOwnership` carries and reaches only the live
+   *  period; a settled week is a fact and reads back off its blob. */
+  async espnScoreboard(period?: number | null, refresh = false): Promise<EspnScoreboard> {
+    const q = new URLSearchParams();
+    if (period != null) q.set('period', String(period));
+    if (refresh) q.set('refresh', '1');
+    const qs = q.toString();
+    return request(`/api/espn/scoreboard${qs ? `?${qs}` : ''}`);
   },
 
   // Every player in the league on one board, season to date — the research

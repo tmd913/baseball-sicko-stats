@@ -280,3 +280,155 @@ Client-side, the connection is set up on **`EspnSettings.tsx`**, a full-screen o
 **It is in the fantasy popover**, one press from any view (`refreshFantasyFromMenu`). It was only on the Fantasy league page, which put two navigations between "I just moved somebody on ESPN" and the app agreeing — the wrong distance for the one thing this app cannot see for itself, and the popover is already where every other fantasy control ended up for that same reason. It sits **above League settings and below the roster-source toggle**: it acts on what the menu is about without leaving it, where the entry under it is the menu's way *out*. A `.help-btn` like that entry rather than a control of its own, so the two rows are one object by construction; the only thing `.fantasy-refresh` adds is a glyph slot that holds its size, the app's spinning baseball being 14px inline against the 15px arrow it replaces, so without it the label would step a pixel left the moment the read started and back when it landed; the rule names `svg` rather than a spinner class because the ball *is* one. Its label drops to `Reading` while the read is out, with no ellipsis: the ball beside it is what says the read is still going (see **Loading** under **Client**). It takes that button's `MIN_SPIN` floor too, and the popover deliberately **stays open** across the press, this being the one entry whose result is a change in the page behind it. `Up to date ✓` is about the press rather than a standing state and is dropped when the menu is reopened, or a tick from an hour ago would greet someone who has come back precisely because they suspect it isn't.
 
 **It stays on the league page as well**, and the two are not quite the same control: that one re-reads the **team picker** after the league (`EspnSettings`'s `refresh`), which is the page's own business and no use to the popover, and the page carries the paragraph explaining the ten-minute cache — a note naming a button that isn't there is worse than a second doorway. They are never on screen together, opening the page closing the popover, so this is one action reached from two places rather than the duplicated affordance the search bar's own close button was. There it still sits beside Disconnect on the status panel, in the app's accent — reading the league again is an ordinary action, and the red beside it is reserved for the control that undoes the connection. It reads `Reading` with the ball beside it in flight, as the popover's entry does, and the connect form's submit reads `Checking with ESPN` the same way; neither takes a `MIN_SPIN` floor of its own — this one inherits it through `onRefresh`, which *is* `refreshFantasy`, and a connect is a round trip to ESPN with no fast answer to leave a press without a trace.
+
+### The league scoreboard
+
+**Everything above is about players — who owns whom, who is eligible where, what
+each manager has in his lineup — and the one thing a manager opens ESPN for is
+the thing none of it could say: the matchups.** `getScoreboard` answers for one
+matchup period's matchups and every team's season-to-date total in each of the
+league's own scoring categories. See **Client — the League view** for the page
+it draws.
+
+**Which ESPN view carries what, measured against the live 12-team league rather
+than assumed**, because three of them look interchangeable and are not:
+
+- **`mScoreboard`** is the only one carrying `cumulativeScore.scoreByStat` — the
+  per-category total for each side of a matchup, plus ESPN's own `result`
+  (WIN/LOSS/TIE) once the matchup is over. It is what a scoreboard is made of
+  and nothing else has it.
+- **`mMatchupScore`** carries `matchupPeriodId` and `pointsByScoringPeriod` and
+  **not** `scoreByStat` — its `statBySlot` is null on every row. What it is worth
+  reading for is the **date span**: the keys of `pointsByScoringPeriod` are the
+  scoring periods a matchup period covers, and they are the only published
+  statement of which days a scoreboard's numbers are drawn from.
+- **`mTeam`** carries `valuesByStat` — every team's **season** total in each
+  category — beside its record, playoff seed and logo. That is the whole
+  standings table in one 46KB read, and it is the read `getLeagueInfo` already
+  makes with one view added.
+- **`mStandings` is useless here** and was checked: its `teams` carry an `id`
+  and nothing else at all.
+
+**`scoringPeriodId=0` is what makes the scoreboard affordable, and it is the
+measurement worth keeping.** `mScoreboard` embeds two whole rosters per side —
+`rosterForCurrentScoringPeriod` and `rosterForMatchupPeriod`, ~43KB a team —
+which is the entire payload: one matchup period comes to **524,565 bytes**.
+Naming a scoring period that is not a day empties both while leaving
+`cumulativeScore` untouched, that being a fact about the **matchup** period
+rather than about a day: **23,759 bytes**, a 22× reduction, and the category
+scores are **byte-identical** — checked field by field over all 10 matchups of a
+period, both sides, 18,102 bytes of scores, `IDENTICAL: true`. It is the same
+trick `forTeamId` plays for the per-day roster read, arrived at from the other
+end: there the payload is narrowed to one team, here to no day.
+
+**`X-Fantasy-Filter` does the narrowing server-side**, which is the first time
+this file has needed it, so `leagueGet` gained an optional fourth argument that
+becomes that header. `{"schedule":{"filterMatchupPeriodIds":{"value":[19]}}}`
+returns that period's matchups alone where the season's 118 come back without
+it. `filterCurrentMatchupPeriod` answers identically and is deliberately **not**
+used, for the reason the whole of this file distrusts ESPN's own pointers.
+
+**Which period is the current one is read off the schedule, not off ESPN's
+pointer** — the rule this file has followed since the scoring-period anchor.
+ESPN materialises **no future matchup periods at all** (checked: the schedule's
+highest is exactly the one being played, 19 of a 21-period season), so the
+highest period the schedule carries **is** the current one, as a fact about the
+data rather than a claim about a clock. `status.currentMatchupPeriod` is kept as
+the fallback and agrees today.
+
+**What that cannot fix, and does not pretend to.** Between our 3am rollover and
+ESPN's own nightly batch — the ~90-minute window **The anchor is derived from
+ESPN's calendar** measures at 03:39–05:19 ET — ESPN has not yet opened the new
+matchup period, so on a Monday morning the highest period it carries is the week
+that has just ended. There is nothing to read for the new one, by anybody. That
+is shown as what it is: the period's own dates, and `Final` rather than `Live`,
+with the arrows to move. A wrong week silently labelled "this week" is the
+failure being avoided, and **printing the dates is what avoids it** — which is
+also why the header prints them rather than a bare week number.
+
+**The dates come from the anchor run backwards.** `dateForPeriod` is
+`getPeriodAnchor`'s arithmetic the other way round (`addDays(anchor.date, period
+− anchor.period)`), so one pair dates every period of the season and a failed
+schedule read costs the header its dates and nothing else.
+
+**The category winner is computed here, not read.** ESPN fills `result` and the
+wins/losses/ties tally only once a matchup is **over**: a live one comes back
+with `result: null`, `wins/losses/ties: 0` and `winner: 'UNDECIDED'`, so a page
+that only reported ESPN's answer would say nothing at all about the week being
+played — which is the week anybody is looking at. So the comparison is done here
+for every matchup, live and final alike, honouring `isReverseItem` (ERA and
+WHIP, where the smaller number wins).
+
+**Checked against ESPN's own answer rather than reasoned about.** Over all 18
+completed matchup periods of the live league — **108 matchups and 1,080 category
+comparisons** — the computed per-category result matched ESPN's `result`
+**1,080 of 1,080**, the computed matchup winner matched ESPN's `winner` on all
+108, and the computed win/loss/tie tally matched ESPN's own `cumulativeScore` on
+all 108. So a live matchup and a final one are drawn by one arithmetic, and that
+arithmetic is known to reproduce ESPN's. `ineligible` was scanned for over the
+same **5,244 score cells** and is false on every one; it is honoured anyway,
+since a category a team cannot score in is not a category it is losing, and a
+zero in a `lowerBetter` category would otherwise read as the best score in the
+league.
+
+**A bye is a real shape.** A matchup with a `home` and no `away` is what a
+playoff round looks like — period 19 of the live league is 2 matchups and **8
+byes**, all 12 teams accounted for — so `EspnMatchup.away` is nullable rather
+than the read being treated as malformed.
+
+**The stat ids are a curated table, because ESPN publishes no dictionary of them
+anywhere.** Checked against the game-level `seasons/{year}`, `kona_game_state`
+and every league view: none names a single stat. So `STAT_META` is the same
+shape `pitchLeague.ts` takes for its league averages, and the honest failure is
+a header reading `Stat 62` rather than a wrong one. **Twenty-three entries were
+confirmed arithmetically** against the live league rather than taken on trust,
+by checking identities the numbers themselves have to satisfy: `41` is
+`(37 + 39) / (34 / 3)` to eight places (1.24968711 from 1,440 hits and 557 walks
+over 1,598 innings), `47` is `45 × 9 / (34 / 3)` (3.92553191 from 697 earned
+runs), and `83` is `57 + 60` (2 = 1 + 1). Those are 0, 1, 3, 4, 5, 10, 12, 13,
+18, 20, 21, 23, 34, 37, 39, 41, 45, 47, 48, 53, 57, 60 and 83 — this league's
+own 23. **The rest are the community mapping `cwendt94/espn-api` uses and are
+unconfirmed**: a league scoring quality starts or complete games is a league
+this table has never been read against. Each entry also carries a `format`, and
+getting *that* wrong is the difference between an ERA and an OPS — `avg` prints
+`.759` the way a slash line is written, `rate` prints `3.93`.
+
+**Four formats, and only two of them have matchups** (`formatOf`).
+`H2H_CATEGORY` and `H2H_MOST_CATEGORIES` share a bucket, the scoreboard being
+the same object either way and the difference being only how the league's
+standings are kept — which are read off `mTeam` rather than computed.
+`H2H_POINTS` is matchups with one number a side. `ROTO` and `TOTAL_POINTS` have
+**no matchups at all**, so `getScoreboard` does not even issue the scoreboard
+read for them and the client draws the table alone; anything else is `unknown`,
+named on screen rather than guessed at. **Only the category case is verified
+against a real league** — there was one to test against — which is worth
+knowing before trusting the points-league card.
+
+**Caching, on this file's own two rules.**
+
+- **The league's own facts** (`leagueMeta` — teams, records, `valuesByStat`, the
+  categories, and the whole season's period spans) are two reads, **49,749 +
+  70,794 bytes**, cached in memory per league on the rosters' own
+  `OWNERSHIP_TTL_MS` (10 min) with an `inFlight` guard, so a cold Lambda serving
+  three tabs sends one upstream rather than three. The season's spans are read
+  unfiltered because the point of them *is* the season: they date every period
+  and they are what tells the client which periods exist.
+- **A finished matchup period is a fact**, so it takes a storage blob read with
+  **no freshness test** — `espn-scoreboard-{leagueId}-{period}-v1.json`, **3,396
+  bytes** on a checked week — which is the rule `espn-lineup-…` already follows
+  for a finished day's roster and for the same reason: you cannot retroactively
+  score a run in a week that is over. The period being played is memory-only on
+  the same ten minutes.
+- **`?refresh=1` drops every period of the league from memory**, not just the
+  one asked for — "read my league again" is a statement about the league rather
+  than about a week, which is exactly what `getOwnership` says — **while the
+  frozen blobs stand**, since re-reading a settled week would spend an ESPN
+  request to be told what the blob already says. That is `getTeamRoster`'s
+  `stale = force && !frozen` applied one level up.
+
+**Measured against the live league through the route**, each cold figure from a
+fresh process: the **current** period **10,023 bytes in 470ms**, a **finished**
+one **9,876 bytes in 282ms** cold and **2.7ms** off its blob, and the current
+period **1.7ms** warm in memory. A period the league has no row for falls back
+to the current one rather than answering with an empty board the reader could
+not explain (checked: `?period=999` → 19).
