@@ -4995,20 +4995,21 @@ body {
      corners sat at its own extreme height, 5px off the centre line, where the
      cap's ink has already receded `8 - sqrt(8^2 - 5^2)` = **1.76px** — so at 3px
      that corner had 1.24px of rail beside it against its own midline's 3px, and
-     read as a bar running out of its rail with the corner cut off. The clamp is
-     a **chevron** now (see `.spl-fill--over`) and every cap is round, which is
-     the case 3px was chosen for: a radius-5 cap 3px inside a radius-8 one shares
-     its centre, so the track shows exactly 3px of itself at **every** angle
-     rather than 5px at the midline and 3.24 at the corner. Every bar is 2px
-     longer for it. (That argument is about the **outer** cap, which is still
-     round; the inner one is flat now and nests inside nothing, the rail being
-     straight-sided in its middle.)
+     read as a bar running out of its rail with the corner cut off. **A clamped
+     bar is drawn no differently from one at full scale now** — see the note
+     above `.spl-fill--thin` — so every outer cap is round, which is the case 3px
+     was chosen for: a radius-5 cap 3px inside a radius-8 one shares its centre,
+     so the track shows exactly 3px of itself at **every** angle rather than 5px
+     at the midline and 3.24 at the corner. Every bar is 2px longer for it. (That
+     argument is about the **outer** cap; the inner one is flat and nests inside
+     nothing, the rail being straight-sided in its middle.)
 
      What the single token still buys is what it always did: length stays
      monotonic in the gap. Inset a clamped end further than an unclamped one and
      a bar just past full scale would draw *shorter* than one exactly at it, so a
-     bigger gap would read as a smaller one — which is why the clamp mark must
-     never be a change of length. */
+     bigger gap would read as a smaller one. Nothing can breach that now that the
+     clamp draws nothing at all, which is one way of saying the mark was the only
+     thing this token ever had to be defended against. */
   --spl-inset: 3px;
 }
 .spl-heads,
@@ -5118,9 +5119,9 @@ body {
    1200: the inner ink was up to 3px short of the centre at the rows a reader
    sees the shape by, and is 0.000 short at every row now. Nothing about the
    length moved — the inline width and `max-width` are untouched — so the clamp,
-   the chevron, the hatch and `railFraction`'s invariant are all exactly as they
-   were; what moved is which rows of an unchanged box carry ink to its inner
-   edge. See `.spl-track::before` for what that edge does to the zero guide. */
+   the hatch and `railFraction`'s invariant are all exactly as they were; what
+   moved is which rows of an unchanged box carry ink to its inner edge. See
+   `.spl-track::before` for what that edge does to the zero guide. */
 .spl-fill {
   position: absolute;
   top: var(--spl-inset);
@@ -5154,85 +5155,29 @@ body {
   );
   opacity: 1;
 }
-/* A gap past the rail's own full scale is clamped, and says so with a **chevron
-   knocked out of the fill just inside its tip** — the one thing a clamped bar
-   must not do is read as an exact measurement, and 57% of batters have at least
-   one such row (1 − 0.9^8 over eight rows at a per-row 90th percentile), so the
-   signal is the common case rather than an exception and is worth keeping.
+/* **A clamped bar draws exactly like one at full scale, and there is no mark
+   for it.** A gap past `full` is clamped by `railFraction` and the row's own
+   tooltip says so in a sentence; nothing on the rail does.
 
-   **It squared the outer end instead until now**, and that is what this
-   reverses: a square cap was complained about twice, it forced the ends onto a
-   larger inset of their own (see `--spl-inset`), and — the quieter fault — it
-   was never explained anywhere on the card, so a reader met a differently-shaped
-   bar end with nothing to tell them what it meant. The key behind the title's ⓘ
-   now has the room to say, which is what makes a mark worth drawing at all.
+   That reverses two rounds of trying to draw it, and both are worth keeping in
+   outline because the reasons they failed are the reasons nothing replaces
+   them. The first squared the fill's outer end off, which was complained about
+   twice and forced the ends onto a larger inset of their own (`--spl-inset-x`,
+   5px — see `--spl-inset`, where its retirement is set out). The second was a
+   chevron knocked out of the fill just inside its tip, over 14px of solid
+   accent so it stayed legible on a hatched fill; that one was complained about
+   too, and by then the mark had cost a token, a pseudo-element pair, four
+   direction rules and a stub of bar in the key's popover to explain it.
 
-   **Why a mark inside the fill rather than one beside it.** Past the end there
-   is nowhere to put anything: a full bar stops 3px short of the rail and the
-   figure beside it is one 10px column gap away (7px under 560), so a glyph out
-   there would sit in the gutter and collide at the widths this table is tightest
-   at. And it must not be a `background` treatment — `.spl-fill--thin` already
-   spends that on the hatch, and a row can be thin *and* clamped — so a
-   pseudo-element is the one layer that composes with both.
-
-   **It costs no length**, which is the invariant `--spl-inset` exists to
-   protect: the chevron is drawn *within* the fill, so a clamped bar is exactly
-   as long as one at full scale and length stays monotonic in the gap. Drawn in
-   `--panel`, i.e. knocked out to the card's own ground, so it reads as the rail
-   showing through the bar.
-
-   **The tip under it is painted solid, and that is not decoration.** A row can
-   be thin *and* clamped, and `.spl-fill--thin` is accent stripes over
-   transparent gaps showing the rail — which is `--panel` under a 6% wash, i.e.
-   the chevron's own colour. Drawn straight onto that the mark was one more gap
-   among ten: measured at 1× on Nick Allen (31 PA vs LHP, four rows both thin and
-   clamped) it was invisible, and darkening it to `--bg` barely helped, the hatch
-   being busy rather than merely similar. So `::before` lays 14px of solid accent
-   — two whole stripe periods — under the outer end, and the chevron is knocked
-   out of *that*. On a solid fill the tip is the same accent the bar already is
-   and changes nothing whatever; on a hatched one it gives the mark a ground to
-   be legible against. One rule, one mark, both fills.
-
-   Geometry: a 4px box with 1.8px borders on two sides, rotated 45°, is 5.66px on
-   its diagonal — 2.17px of clearance top and bottom inside a 10px fill — and its
-   outer point lands 2.17px inside the fill's own tip, so it never rides the cap.
-   `.spl-key-chevron` is the same mark on a stub of bar in the key's popover, so
-   what is explained there is drawn by the very rule that draws it here. */
-.spl-fill--over::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 14px;
-  background: var(--accent);
-}
-.spl-fill--r.spl-fill--over::before {
-  right: 0;
-  border-radius: 0 999px 999px 0;
-}
-.spl-fill--l.spl-fill--over::before {
-  left: 0;
-  border-radius: 999px 0 0 999px;
-}
-.spl-fill--over::after,
-.spl-key-chevron::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  width: 4px;
-  height: 4px;
-  border-top: 1.8px solid var(--panel);
-  border-right: 1.8px solid var(--panel);
-}
-.spl-fill--r.spl-fill--over::after,
-.spl-key-chevron::after {
-  right: 3px;
-  transform: translateY(-50%) rotate(45deg);
-}
-.spl-fill--l.spl-fill--over::after {
-  left: 3px;
-  transform: translateY(-50%) rotate(-135deg);
-}
+   **What decides it is the two figures printed either side of the rail.** The
+   picture loses precision at the end of its scale, and the exact numbers it
+   lost are ten pixels away on the same row — so the mark was flagging a loss
+   the reader can already read off, in a glyph they had to open the key to
+   decode. And a full bar and a clamped one say the same *true* thing — one of
+   the biggest splits in the league in that stat — so the two reading alike is
+   not a claim anybody has to be warned about. `--spl-inset` is one number again
+   for it, every outer cap is round, and length stays monotonic in the gap
+   without a rule having to protect it. */
 /* The one caption left under the bars: the sample-size caveat, when there is
    one. **`.spl-intro` sat beside it in this rule and is gone** — that was the
    key to how a bar is drawn, and it is behind the ⓘ on the title row now
@@ -5354,22 +5299,6 @@ body {
 .info-key-panel strong {
   color: var(--text);
   font-weight: 700;
-}
-/* The chevron in the key is drawn on a stub of the bar it marks — same accent,
-   same opacity, same pill, and the mark itself comes off `.spl-fill--over`'s own
-   rule above. A bare chevron in prose would be the inverse of what is on screen
-   (accent on panel, where the bar knocks panel out of accent) and would not read
-   as the same thing. */
-.spl-key-chevron {
-  position: relative;
-  display: inline-block;
-  width: 22px;
-  height: 10px;
-  vertical-align: -1px;
-  margin: 0 2px;
-  border-radius: 999px;
-  background: var(--accent);
-  opacity: 0.8;
 }
 /* Narrow: the label and the two figures give up what they can, and the rail
    keeps whatever is left — it is the thing the tab is for. */
