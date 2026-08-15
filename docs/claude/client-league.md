@@ -142,8 +142,12 @@ unchanged.
 
 **`categoryGroups` in `LeagueView.tsx` is the one place the split happens**, and
 both the scoreboard's line and the Rankings table read it — so a cell, its
-header and the group head above it cannot come to disagree about which column is
-which.
+header and the block it belongs to cannot come to disagree about which column is
+which. The two surfaces use it differently and deliberately: the scoreboard
+*draws* the split (a labelled block per side, which is also what stops that line
+overflowing a phone), where the Rankings table only *orders* by it and names the
+side in each header's tooltip — see **The Rankings table groups its columns and
+does not label them**, which is where that asymmetry is argued.
 
 **It groups, it does not decide.** The side and the reading order ride on
 `EspnCategory` off `STAT_META`, which is the only place that can say either: a
@@ -403,34 +407,60 @@ the loser goes quiet, because ten red cells down one side of a card would be the
 row shouting where the job is to mark a winner. A twelve-row table of ranks is
 that same picture turned on its side.
 
-### The Rankings table has the same two sections
+### The Rankings table groups its columns and does not label them
 
-**A spanning header row over each run of categories, rather than a rule between
-two columns.** The rule alone says *there is a seam here* without saying what is
-on either side of it, and what a reader coming to a fantasy table wants is the
-two words. So the `<thead>` is two rows: `BATTERS` and `PITCHERS` spanning their
-own runs, over the sort headers.
+**The two sections order the columns and are not drawn.** The `<thead>` was two
+rows — `BATTERS` and `PITCHERS` spanning their own runs, over the sort headers —
+with an inset-shadow hairline where the runs met. Both are gone, along with the
+second sticky row and the `--lg-group-h` offset that held the sort headers under
+it.
 
-**Which means two sticky rows, and they had to be told apart.** A sticky header
-can only stick to the box that scrolls, and both rows were claiming `top: 0` —
-so the group row holds the top and the sort headers hold **`--lg-group-h`**,
-the one number two rules share and therefore the one that is named rather than
-written twice. It is the group row's own box: 5px + a 16px line + 5px, with no
-bottom border (the sort row under it carries the one that closes the head).
-Measured, the pair pins as one head — group row at **1px** (the border, which is
-exactly where the single header row used to pin) and the sort headers at **27**.
+**What the labels said, the columns already say.** The argument for them was
+that a bare rule between two columns *"says there is a seam here without saying
+what is on either side of it"*, and that is true of the **rule**; it is not an
+argument for the **words**, which on a ten-column table nobody needs — no reader
+takes `ERA` for a batting stat or `RBI` for a pitching one. So a whole extra
+pinned header row, a second pinning offset for the row under it, and a hairline
+were being spent on a label the data carries.
 
-**And one hairline where the runs meet**, so the sections still read as sections
-with the head scrolled past on a phone. An **inset shadow rather than a border**:
-every cell in this table paints an opaque `--cell-bg`, and a border would add a
-pixel to the column where a shadow costs the layout nothing and paints over the
-ground the cell has already resolved.
+**The grouping itself stays and is load-bearing**, which is why `groups` is
+still what the table renders rather than the league's own array: it is the
+server's `side`/`order` (see **ESPN fantasy league**, *`STAT_META` says which
+side of the ball, and in what order*), and it is the only thing keeping the
+batting run ahead of the pitching one. Measured after: `R · HR · RBI · SB · OPS`
+then `K · W · ERA · WHIP · SVHD`, unchanged.
 
-**The colSpans cannot disagree with the columns**, which is what a two-row head
-most easily gets wrong: the group heads' spans and the body's cells come out of
-the same `groups` array (`shown` is its `flatMap`), so the sum is the column
-count by construction. Checked anyway on every state driven: **spans sum to 10
-against 10 category columns and 12 cells a row**.
+**And the side is still named per column, in the sort header's `title`** — which
+is not a consolation prize but the half that matters. `H` is a hit and a hit
+allowed, `K` a strikeout taken and one thrown, and `BB`, `HR`, `HBP` and `IBB`
+are each two categories in `STAT_META` under one abbreviation, so on a league
+scoring both sides the label alone is genuinely ambiguous where the tooltip is
+not. Measured: `Batters · Runs — season`, `Batters · Home runs — season`.
+
+**The caption above the table is the research board's spacing now**, which is
+the other half of this change and was a plain inconsistency. `.lg-span-detail`
+carried `margin: 10px 0 6px` on the reasoning that the first thing under a
+pinned bar needs air — true, and the air was already there: the chrome's own
+`margin-bottom` is 14px, so the caption's 10 sat on top of it and the line
+landed **24px** down where the board's own count line lands at 14. They are the
+same object — the one line between the controls and the rows, saying what is
+under them — so the margin goes and the two now measure the same: **14px above
+and 10 below**, the 10 being the pane's own margin exactly as it is over there.
+
+**Measured at 390 and 1200, after.** Caption **14 above / 10 below** at both
+(24 / 16 before). One `<thead>` row where there were two, **0** `.lg-group-row`,
+**0** `.lg-group-start` and **0** cells painting an inset shadow. The single
+header row pins at **1px** (the border) with the pane scrolled down, and the
+badge column still pins at **0** with it scrolled to its far right. Rows
+**61.55px**, table **824.7 / 1200px**, page-body overflow **0**.
+
+**The scoreboard's own `BATTERS` / `PITCHERS` labels are deliberately kept**,
+and the two cases are not the same one. There they head *a block of five
+categories inside a matchup card*, which is what stopped that line overflowing a
+phone by 118px (see the section above); the labels are the block's own heading
+rather than a second header row over a table, and a card has no sticky head for
+them to compete with. Checked after the change: all 10 matchup cards still draw
+both.
 
 ### The rank is a badge and the badge is the scale
 
