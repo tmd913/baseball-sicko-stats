@@ -7,6 +7,9 @@ import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
 import { createPortal } from 'react-dom';
 import { ColumnPicker, ColumnsButton } from './ColumnPicker';
 import { RankBadge, RanksButton, rankScales } from './columnRanks';
+import { ScheduleSpanTabs, ScheduleToggle } from './ScheduleControl';
+import { SCHED_GAMES_KEY, scheduleColumns } from './schedule';
+import type { ScheduleIndex, ScheduleSpan } from './schedule';
 import {
   PlayerStatusContext,
   useFullPage,
@@ -553,6 +556,20 @@ interface Props {
    *  rather than which of its rows are shown. */
   window: ResearchWindow;
   onWindowChange: (w: ResearchWindow) => void;
+  /**
+   * The **Schedule view** — the days ahead in place of the stat columns.
+   *
+   * Two props rather than one because the two answer different questions and
+   * arrive at different times: `scheduleSpan` is the control's own state (in
+   * the URL as `sched=`, held in App and shared with the summary table, so one
+   * press of the toggle changes the mode on both), and `schedule` is the window
+   * once it has landed. So a board can be *in* the mode with the index still
+   * null, which is exactly the state the wait below is drawn for — the app's
+   * standing rule that nothing blanks while a read is in flight.
+   */
+  scheduleSpan: ScheduleSpan | null;
+  onScheduleSpanChange: (s: ScheduleSpan | null) => void;
+  schedule: ScheduleIndex | null;
   /** Which of the three sets of players the board includes. Lifted to App with
    *  the other cross-board controls, and in the URL for the same reason the
    *  window is: it changes the population the table describes, not the
@@ -813,6 +830,9 @@ export function ResearchTable({
   onColumnsChange,
   window: statWindow,
   onWindowChange,
+  scheduleSpan,
+  onScheduleSpanChange,
+  schedule,
   include,
   onIncludeChange,
   includeWatchlist,
@@ -889,8 +909,26 @@ export function ResearchTable({
     () => columnKeys ?? defaultColumnKeys(kind),
     [columnKeys, kind],
   );
-  const visibleKeys = useMemo(() => new Set(orderedKeys), [orderedKeys]);
+  /**
+   * **What the table draws** — the reader's stat columns, or the days ahead.
+   *
+   * The swap is here and nowhere else, which is the whole of the Schedule
+   * view's cost on this board: everything downstream reads `columns` and
+   * `visible`, so the sort, the count line, the pinned headshot and name, the
+   * sorted-column double-edge pin, the include buttons, the position pills, the
+   * search and the row identity all work untouched.
+   *
+   * `allColumns` deliberately stays the **stat** vocabulary underneath, because
+   * two things still read it and must: the column picker (which is what the
+   * reader comes back to) and `columnsByKey`, which is what the stat *filters*
+   * are applied through. "A filter on a hidden column still applies" is this
+   * board's own rule, and a schedule of `PA ≥ 300` batters is exactly the
+   * question a fantasy manager asks of it — so a `PA ≥ 300` chip goes on
+   * narrowing the rows while their PA is off screen, precisely as it does when
+   * the column is merely unticked.
+   */
   const columns = useMemo(() => {
+    if (schedule) return scheduleColumns(schedule, kind);
     const byKey = new Map(allColumns.map((c) => [c.key, c]));
     // `filter(Boolean)` rather than a fallback: a key with no column on this
     // board is one the board doesn't have — Ros% without a league, a trend
@@ -898,7 +936,20 @@ export function ResearchTable({
     // already do. A saved list keeps the key, so connecting a league puts the
     // column back where the reader had it.
     return orderedKeys.map((k) => byKey.get(k)).filter((c): c is Column => c !== undefined);
-  }, [allColumns, orderedKeys]);
+  }, [allColumns, orderedKeys, schedule, kind]);
+  /** Which keys are *drawn*, which is what the sort's fallback tests against —
+   *  the schedule's own in that mode, so a stat sort left over from before the
+   *  swap cannot leave the table ordered by a column that is not on it. */
+  const visibleKeys = useMemo(
+    () => new Set(schedule ? columns.map((c) => c.key) : orderedKeys),
+    [schedule, columns, orderedKeys],
+  );
+  /** The columns actually on screen, by key. The sort resolves through this
+   *  first and `columnsByKey` second: in schedule mode the sorted column is a
+   *  day and exists nowhere in the stat vocabulary, and out of it the fallback
+   *  is what preserves the old behaviour of sorting by a column the reader has
+   *  unticked. */
+  const drawnByKey = useMemo(() => new Map(columns.map((c) => [c.key, c])), [columns]);
 
   // Search and the stat filters each sit behind their own button. The table is
   // the page; on a phone a permanently-open control bar cost it four rows
@@ -1037,9 +1088,13 @@ export function ResearchTable({
    * a badge must not change because somebody typed a letter. Null when the
    * toggle is off, so the pass costs nothing at all to anyone not reading them.
    */
+  // Null in schedule mode whatever the toggle says, and the toggle is not drawn
+  // there either: a percentile under `@ LAD` is nothing, and a games-in-the-span
+  // count ranked against the league would be a percentile of a *fixture list*
+  // — the same reason the Fantasy group is on `NO_GOOD_END`, a step further.
   const ranks = useMemo(
-    () => (showRanks ? rankScales(columns, population) : null),
-    [showRanks, columns, population],
+    () => (showRanks && !schedule ? rankScales(columns, population) : null),
+    [showRanks, columns, population, schedule],
   );
   /** What a badge says it is ranked against — the board and the span, in
    *  words, since a 7-day percentile and a season one are different claims. */
@@ -1103,8 +1158,14 @@ export function ResearchTable({
    */
   // Visible, not merely present: hiding the Ros% column must not leave the
   // board ordered by it, which is the same trap the fallback exists for.
-  const defaultSortKey =
-    hasRosterPct && visibleKeys.has('rosterPct') ? 'rosterPct' : DEFAULT_SORT[kind];
+  // In schedule mode the answer is **games in the span, most first**, which is
+  // the half of the question the view is opened with — and it is a column that
+  // is always drawn, unlike GS, which the batting board hasn't got.
+  const defaultSortKey = schedule
+    ? SCHED_GAMES_KEY
+    : hasRosterPct && visibleKeys.has('rosterPct')
+      ? 'rosterPct'
+      : DEFAULT_SORT[kind];
   const activeSortKey =
     sortKey && visibleKeys.has(sortKey) ? sortKey : defaultSortKey;
 
@@ -1287,7 +1348,7 @@ export function ResearchTable({
       return true;
     });
 
-    const col = columnsByKey.get(activeSortKey);
+    const col = drawnByKey.get(activeSortKey) ?? columnsByKey.get(activeSortKey);
     if (!col) return out;
     const dir = sortAsc ? 1 : -1;
     // A column of words orders by them, the null-to-the-bottom rule below being
@@ -1316,7 +1377,17 @@ export function ResearchTable({
       if (av === bv) return a.name.localeCompare(b.name);
       return (av - bv) * dir;
     });
-  }, [boardRows, search, searchText, posMatch, filters, activeSortKey, sortAsc, columnsByKey]);
+  }, [
+    boardRows,
+    search,
+    searchText,
+    posMatch,
+    filters,
+    activeSortKey,
+    sortAsc,
+    columnsByKey,
+    drawnByKey,
+  ]);
 
   function toggleSort(col: Column) {
     if (activeSortKey === col.key) {
@@ -1547,7 +1618,7 @@ export function ResearchTable({
           {/* The badges under the values are a setting like any other, and one
               the reader most needs named here: expanded there is no toggle on
               screen to explain a second number in every cell. */}
-          {showRanks && (
+          {showRanks && !schedule && (
             <span
               className="research-badge"
               title={`Every value carries its percentile against the whole ${windowLabel(
@@ -1555,6 +1626,27 @@ export function ResearchTable({
               )} board — 100 is best`}
             >
               Ranks
+            </span>
+          )}
+          {/* **What span of days the columns are**, which expanded is the one
+              thing nothing else on screen can say: the toggle and its span tabs
+              are behind this box, and a grid of dates whose header says `Fri
+              8/15` still leaves "how far does this run" unanswered. The rule
+              this row exists for — a table narrowed with nothing on screen to
+              say why — applies to a table *widened* into the future exactly as
+              it does to one narrowed to shortstops. */}
+          {scheduleSpan !== null && (
+            <span
+              className="research-badge"
+              title={
+                schedule
+                  ? `Every club's games from ${schedule.dates[0]} to ${
+                      schedule.dates[schedule.dates.length - 1]
+                    }`
+                  : 'The days ahead, still loading'
+              }
+            >
+              Schedule · next {scheduleSpan} days
             </span>
           )}
           <span className="research-badge">{windowLabel(statWindow)}</span>
@@ -1816,30 +1908,68 @@ export function ResearchTable({
                 <span className="research-toggle-count">{watchlistCount}</span>
               )}
             </button>
-            {/* Columns reads last: the three before it decide *who* is in the
-                table, where this changes what is shown about them. Shared with
-                the player page's Stats tab (`ColumnsButton`), so the two cannot
-                come to look like different controls. */}
-            <ColumnsButton
-              open={columnsOpen}
-              count={columns.length}
-              customised={!!columnKeys}
-              onToggle={() => setPanel('columns', !columnsOpen)}
+            {/**
+             * **Schedule reads after the four that narrow the board and before
+             * the two that dress it**, which is where it belongs in the run's
+             * own order: Search, Filters and Watchlist decide *who* is in the
+             * table, this decides *what the table is about them*, and Columns
+             * and Ranks decide how that is drawn.
+             *
+             * The two below it are **not drawn while it is on**, and that is
+             * the honest version of the rule the app already applies to a menu
+             * entry that would do nothing on the page it is read from. Columns
+             * names the stat vocabulary and Ranks puts a percentile under each
+             * of them; neither is on screen in schedule mode, and a control
+             * whose whole subject has been swapped out is a setting lying about
+             * its own reach. Search and Filters stay, because they narrow the
+             * *rows* and a schedule of the shortstops with 300+ PA is exactly
+             * the question this board is opened with.
+             */}
+            <ScheduleToggle
+              on={scheduleSpan !== null}
+              /* On with no index is the read still out — App holds the window
+                 and hands it down only once it has landed, so this needs no
+                 fourth prop to know it. */
+              loading={scheduleSpan !== null && !schedule}
+              onToggle={() => onScheduleSpanChange(scheduleSpan === null ? 7 : null)}
             />
-            {/* And Ranks after it, which is the order the two are read in:
-                Columns decides which numbers are on screen, this decides
-                whether each of them carries a second reading. It is the run's
-                other panel-less toggle, so it takes `.on` and never `.active`,
-                exactly as Watchlist does. Shared with the Stats tab's caption
-                row (`RanksButton`), for the reason `ColumnsButton` is. */}
-            <RanksButton
-              on={showRanks}
-              onToggle={() => onShowRanksChange(!showRanks)}
-              population={`the whole ${windowLabel(statWindow)} board (${population.length} ${
-                kind === 'pitcher' ? 'pitchers' : 'batters'
-              }), whatever you have narrowed it to`}
-            />
+            {!schedule && (
+              <>
+                {/* Columns reads last: the three before it decide *who* is in the
+                    table, where this changes what is shown about them. Shared with
+                    the player page's Stats tab (`ColumnsButton`), so the two cannot
+                    come to look like different controls. */}
+                <ColumnsButton
+                  open={columnsOpen}
+                  count={columns.length}
+                  customised={!!columnKeys}
+                  onToggle={() => setPanel('columns', !columnsOpen)}
+                />
+                {/* And Ranks after it, which is the order the two are read in:
+                    Columns decides which numbers are on screen, this decides
+                    whether each of them carries a second reading. It is the run's
+                    other panel-less toggle, so it takes `.on` and never `.active`,
+                    exactly as Watchlist does. Shared with the Stats tab's caption
+                    row (`RanksButton`), for the reason `ColumnsButton` is. */}
+                <RanksButton
+                  on={showRanks}
+                  onToggle={() => onShowRanksChange(!showRanks)}
+                  population={`the whole ${windowLabel(statWindow)} board (${population.length} ${
+                    kind === 'pitcher' ? 'pitchers' : 'batters'
+                  }), whatever you have narrowed it to`}
+                />
+              </>
+            )}
             </div>
+            {/* How far ahead, offered only while the mode is on — its own group,
+                so it wraps whole and lands beside the tools run or under it as
+                the width allows, exactly as every other group in this bar does.
+                `Next 7` / `Next 14` spelled out rather than `7d` / `14d`,
+                because the window tabs an inch away read `7d` and mean the
+                opposite direction in time — see `ScheduleSpanTabs`. */}
+            {scheduleSpan !== null && (
+              <ScheduleSpanTabs span={scheduleSpan} onChange={onScheduleSpanChange} />
+            )}
           </div>
 
           {searchOpen && (
@@ -2055,7 +2185,11 @@ export function ResearchTable({
                         <span className="research-arrow" aria-hidden="true">
                           {active ? (sortAsc ? '▲' : '▼') : ''}
                         </span>
-                        {c.label}
+                        {/* A string for every column in the app but one: the
+                            Schedule view's days are two lines (`Fri` over
+                            `8/15`), which is what keeps a day column as narrow
+                            as the matchup under it. */}
+                        {c.headNode ?? c.label}
                       </button>
                     </th>
                   );
