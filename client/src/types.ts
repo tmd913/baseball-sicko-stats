@@ -1324,6 +1324,12 @@ export interface ScheduleWindow {
  */
 export type EspnScoringFormat = 'h2h-categories' | 'h2h-points' | 'standings' | 'unknown';
 
+/** Which side of the ball a scoring category is scored on. `other` is a real
+ *  answer rather than a failure bucket — an ESPN stat id the server's own table
+ *  has never been read against — and is drawn in a group of its own rather than
+ *  filed under a side nothing establishes it is on. */
+export type EspnCategorySide = 'batting' | 'pitching' | 'other';
+
 export interface EspnCategory {
   statId: number;
   label: string;
@@ -1331,6 +1337,11 @@ export interface EspnCategory {
   /** ERA and WHIP: the smaller number takes the category. */
   lowerBetter: boolean;
   format: 'count' | 'avg' | 'rate';
+  /** The side of the ball, and where it reads within that side. The array
+   *  itself stays in the **league's own order** — grouping is the client's, and
+   *  `categoryGroups` in `LeagueView.tsx` is the one place that does it. */
+  side: EspnCategorySide;
+  order: number;
 }
 
 export interface EspnMatchupSide {

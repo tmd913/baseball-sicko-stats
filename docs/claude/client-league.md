@@ -74,6 +74,102 @@ is spent on **state** is honoured by marking one state and letting the other go
 quiet. A tie is `--faint`, neither. Each cell's `title` spells it out in words
 (`Runs: 32 — winning so far`), the `so far` appearing on a live period alone.
 
+### The headline is a triple, because a categories matchup has no single score
+
+**A head-to-head categories matchup is won category by category**, so what a
+side *has* is not one number: it is how many categories it is winning, losing
+and tied in. A team up in six, down in three and level in one reads **`6-3-1`**.
+The card printed the wins alone — a `6` beside a `3` — which left the reader to
+work out how many of the ten were still level, or whether the other seven had
+even been played.
+
+**The triple is the server's own tally rather than a second count**, and that
+matters because the tally is the thing that has been *checked*: ESPN fills its
+`cumulativeScore` only once a matchup is over, so `espn.ts` computes it for
+every matchup live and final alike, and the computed answer matched ESPN's on
+all 1,080 category comparisons of the league's eighteen completed periods (see
+**ESPN fantasy league**, *The category winner is computed here, not read*). The
+client's own `outcome()` still decides the *cell* colours, which is a per-cell
+question the tally cannot answer; what it does not do is add itself up into a
+second definition of who is winning a category.
+
+**All three terms, always**, where the season record beside it drops a zero tie
+count (`record()` — `7-7` rather than `7-7-0`). Two reasons and the second is
+the load-bearing one: the three are a partition of the categories, so the sum is
+a fact a reader can check against the header above, which `6-3` cannot be; and
+`7-7` as a season record and `7-7` as this week's categories would be the same
+string meaning two different things an inch apart on one row.
+
+**Only a categories league has this shape.** A points league has one number a
+side and `score()` still prints `fmtPoints(side.points)`; a roto league has no
+matchups at all and draws its own empty state. Both were driven with the
+response stubbed rather than reasoned about — the points card reads `812.5` /
+`774.25` with **no category grid at all**, and the roto one reads `No matchups
+in this league`.
+
+**Verified against ESPN over every settled matchup period of the live league**
+(1–18, 108 matchups, 216 sides): the triple **sums to the ten categories on
+216 of 216 sides**, **matches ESPN's own `cumulativeScore` on 216 of 216**, and
+the side the triple implies is the winner agrees with ESPN's `winner` **and**
+with the card's own `matchup.winner` on **108 of 108**. Live, week 19 reads
+`7-1-2` / `1-7-2` and `3-5-2` / `5-3-2`.
+
+### Batters and pitchers are two blocks, not one ten-column run
+
+**The league's own category order interleaves the two sides of the ball** — the
+live league scores `R HR RBI W ERA SB WHIP K OPS SVHD` — so a manager wanting to
+know how his *pitchers* were doing had to pick four columns out of ten by eye.
+A category league is read as two halves, because a manager's bats and his arms
+are two rosters doing two jobs. So the line is two blocks, each with its own
+head and its own two rows, under a small-caps `BATTERS` / `PITCHERS` label.
+
+**And it is what stops the line overflowing a phone.** Ten columns at the grid's
+`minmax(42px, 1fr)` want 438px inside a card that is 318px wide at 390 —
+measured before the change, the category line **overflowed its own card by
+118px** and scrolled sideways. Split, each half is five columns: measured after,
+`scrollWidth - clientWidth` is **0 on both blocks at 320, 375, 390, 640, 900,
+1200 and 1920**, with no horizontal overflow of the page body at any of them.
+Each block's own `border-top` is the rule between the two, so the split costs no
+new mark.
+
+**A label line above each block rather than a leading column.** A left-hand
+label column costs the card about 52px of *width* where a line costs it 14px of
+*height*, and this card is width-bound rather than height-bound — the whole
+reason the split was worth making. The card is 800px at 1200 and 346 at 390,
+unchanged.
+
+### Which side a category is on is the server's answer
+
+**`categoryGroups` in `LeagueView.tsx` is the one place the split happens**, and
+both the scoreboard's line and the Rankings table read it — so a cell, its
+header and the group head above it cannot come to disagree about which column is
+which.
+
+**It groups, it does not decide.** The side and the reading order ride on
+`EspnCategory` off `STAT_META`, which is the only place that can say either: a
+**label cannot**, because `H` is a hit and a hit allowed, `K` a strikeout taken
+and a strikeout thrown, and `BB`, `HR`, `HBP` and `IBB` are each two categories
+in that table under one abbreviation. Pattern-matching the labels here would get
+four of them wrong on a league that scores both sides. See **ESPN fantasy
+league**, *`STAT_META` says which side of the ball, and in what order*.
+
+**The array on the wire stays in the league's own order**, and the client
+regroups. The payload is a faithful record of what the league scores; grouping
+is presentation, and putting it in the client means nothing server-side had to
+learn about it — `sideFrom`, `getRankings` and the blob keys all index by
+`statId` and are untouched.
+
+**A category the table cannot place is drawn rather than dropped**, in a third
+group called **`Other`** at the end. That is the honest bucket for an ESPN stat
+id `STAT_META` has never been read against — the same one whose header already
+reads `Stat 62` — because filing it under Batters would be a claim where a group
+of its own is an admission. Driven with one category rewritten to an unknown id:
+the card draws `Batters` (four), `Pitchers` (five) and `Other` (one), with
+nothing lost from either real group. A group with nothing in it is not drawn at
+all, so an ordinary league sees two — and on the Rankings table the group
+**header row is not drawn at all below two groups**, a single spanning label
+over every column being a row spent saying nothing.
+
 **A bye is a real shape, not a failed read.** The live 12-team league's first
 playoff round is 2 matchups and **8 byes**, so a card with one team on it and
 the word `Bye` is the ordinary case in mid-September rather than an error state.
@@ -306,6 +402,105 @@ arriving here rather than a new one: the winning side of a category is green and
 the loser goes quiet, because ten red cells down one side of a card would be the
 row shouting where the job is to mark a winner. A twelve-row table of ranks is
 that same picture turned on its side.
+
+### The Rankings table has the same two sections
+
+**A spanning header row over each run of categories, rather than a rule between
+two columns.** The rule alone says *there is a seam here* without saying what is
+on either side of it, and what a reader coming to a fantasy table wants is the
+two words. So the `<thead>` is two rows: `BATTERS` and `PITCHERS` spanning their
+own runs, over the sort headers.
+
+**Which means two sticky rows, and they had to be told apart.** A sticky header
+can only stick to the box that scrolls, and both rows were claiming `top: 0` —
+so the group row holds the top and the sort headers hold **`--lg-group-h`**,
+the one number two rules share and therefore the one that is named rather than
+written twice. It is the group row's own box: 5px + a 16px line + 5px, with no
+bottom border (the sort row under it carries the one that closes the head).
+Measured, the pair pins as one head — group row at **1px** (the border, which is
+exactly where the single header row used to pin) and the sort headers at **27**.
+
+**And one hairline where the runs meet**, so the sections still read as sections
+with the head scrolled past on a phone. An **inset shadow rather than a border**:
+every cell in this table paints an opaque `--cell-bg`, and a border would add a
+pixel to the column where a shadow costs the layout nothing and paints over the
+ground the cell has already resolved.
+
+**The colSpans cannot disagree with the columns**, which is what a two-row head
+most easily gets wrong: the group heads' spans and the body's cells come out of
+the same `groups` array (`shown` is its `flatMap`), so the sum is the column
+count by construction. Checked anyway on every state driven: **spans sum to 10
+against 10 category columns and 12 cells a row**.
+
+### The cells are washed by rank, which departs from a documented rule
+
+**More red the better the rank, more blue the worse** — a diverging scale over
+the teams ranked in one category, fading to nothing in the middle.
+
+**It is a departure from the research board's rule and is worth saying so
+plainly.** That board's stat columns are deliberately **monochrome** and its
+percentile badges deliberately `--faint`, on the stated grounds that *"colour is
+reserved for state"* — a heat scale there would be a second colour system beside
+the live inning, the postponement and the trend. That rule is right for what it
+governs: a six-hundred-row leaderboard whose job is to be **scanned for names**.
+This table is the other thing. It is **twelve rows read for standing**, it
+carries no live state at all, and where the board says *here is a number, judge
+it* a league table says *here is where you are*. The colour **is** the reading,
+and at this size it is the difference between finding your weak category at a
+glance and reading a hundred and twenty ordinals. The board is untouched.
+
+**It colours the rank and never the value**, which is what makes `lowerBetter`
+need no special case at all: the server has already computed the rank with the
+direction baked in (`rankBy`, 1 is best whichever way the category runs), so a
+3.29 ERA and 232 home runs are both `1st` and both take the deepest red.
+**Ties share a rank and so share a colour** by the same construction — checked
+over every category column of the live board: **2 tie groups, 0 colour
+mismatches**. `n` is the teams *ranked in that category* rather than the twelve
+rows, matching the badge's own denominator, so a team with no figure takes no
+wash any more than it takes a rank.
+
+**The wash rides as a background *image* over the cell's own ground**, not as a
+`background`. `--rank-tint` is a flat gradient layer composited over
+`background-color: var(--cell-bg)`, which is what lets the zebra stripe and the
+reader's own 12% accent row show through it rather than being painted out —
+checked, all three grounds resolve underneath (`rgb(11, 18, 32)`,
+`rgb(22, 33, 58)` and the accent mix) with only the layer above them changing.
+The two ends are tokens on `.league-table` rather than on `:root`: this is the
+one surface in the app that reads a diverging scale, and a palette entry would
+invite a second reader to import the argument along with the colour.
+
+**22% at the ends**, and the scale is symmetric and monotone in the rank —
+measured on the live twelve-team board, `1st` is hot 22% and `12th` cold 22%,
+with 6th and 7th at 2% either side of nothing.
+
+**The contrast was checked over every shade the table can produce**, by
+resolving each cell's `color-mix` in the page and compositing it over the ground
+that cell actually resolved (26 distinct shades across plain, zebra and the
+reader's own row). Worst case of all of them: the **value text 9.23:1**, the
+rank badge **4.07:1**, and the `1st` green mark **5.58:1**. The deepest red
+lands on `#3f2732` and the deepest blue on `#263e64`.
+
+**The rank badge went `--faint` → `--muted`, and the wash is why.** `--faint`
+reads 3.0–3.7:1 on this table's three grounds untinted and would have fallen to
+2.0–2.7 under the scale at its strongest — a legibility loss on the very badge
+the colour is a picture of. `--muted` reads 4.07–6.97 tinted, which is *better*
+than the old badge was on a bare cell. `--faint` remains right on the research
+board, where the badge annotates a number in a six-hundred-row scan; here it is
+half the cell's content.
+
+**The `1st`-in-green mark is kept rather than made to give way.** It is a
+different layer from the wash — text over ground — and it is the same green the
+scoreboard's winning category takes, so a reader who has learned it on one tab
+reads it on the other. At 5.58:1 over the reddest cell it is legible, and the
+alternative (weight alone) would have cost the app one mark for two facts.
+
+**Nothing else about the table moved**, measured at 390 / 1200 / 1920 before and
+after: page-body overflow **0**, the badge column pinned at **0**, rows
+**56.55px**, the table **803.08 / 1200 / 1920px**, the pane bleeding to **0 from
+both edges**, and no row hover or pointer (`cursor: auto`). Sorting is untouched
+and was driven rather than assumed — one press of `HR` gives ranks
+`1, 2, 2, 4 … 12` with the tie sharing its rank, the group row still drawn and
+`aria-sort` naming exactly one column.
 
 **Sorting is on the rank rather than the value**, which is the one thing this
 table does that the season table did not, and it buys the reader a rule they no

@@ -26,7 +26,7 @@ import type {
   EspnRankings,
 } from '../types';
 import { LoadingBlock } from './Loading';
-import { TeamLogo, fmtValue, prettyDate, record } from './LeagueView';
+import { TeamLogo, categoryGroups, fmtValue, prettyDate, record } from './LeagueView';
 
 /** `1st`, `2nd`, `3rd`, `12th` — the ordinal a league table is read in. */
 function ordinal(n: number): string {
@@ -42,6 +42,50 @@ function ordinal(n: number): string {
     default:
       return `${n}th`;
   }
+}
+
+/**
+ * The wash behind a cell, from its rank.
+ *
+ * **A diverging scale over the teams in one category — red at the top, blue at
+ * the bottom, nothing in the middle.** It is a departure from a rule this
+ * codebase states at length, so it is worth stating why here rather than
+ * leaving a reader to find the contradiction: the research board's stat columns
+ * are deliberately **monochrome** and its percentile badges deliberately
+ * `--faint`, on the grounds that "colour is reserved for *state*" (see
+ * `client-research.md`). That rule is right for a six-hundred-row leaderboard
+ * whose job is to be *scanned* for names, where a heat map would be a second
+ * colour system beside the live inning, the postponement and the trend. This
+ * table is the other thing: **twelve rows read for standing**, with no live
+ * state on it at all, and where the board says "here is a number, judge it" a
+ * league table says "here is where you are". The colour *is* the reading, and
+ * on a table this small it is the difference between finding your weak category
+ * at a glance and reading twelve ordinals.
+ *
+ * **It colours the rank, never the value**, which is what makes it right for a
+ * `lowerBetter` category with no special case at all: the server has already
+ * computed the rank with the direction baked in (`rankBy`, `1` is best whichever
+ * way the category runs), so a 3.29 ERA and 232 home runs are both `1st` and
+ * both take the same red. **Ties share a rank and so share a colour** by the
+ * same construction.
+ *
+ * **`n` is the teams *ranked in that category*, not the twelve rows**, matching
+ * the badge's own denominator: a team with no figure is out of the ranking
+ * rather than at the bottom of it, so it takes no wash either.
+ */
+const TINT_MAX = 22;
+
+function rankTint(rank: number | undefined, n: number): string | undefined {
+  if (typeof rank !== 'number' || !Number.isFinite(rank) || n < 2) return undefined;
+  // 0 at the best rank, 1 at the worst; `d` is the distance from the middle, so
+  // the scale fades to nothing where a team is neither.
+  const t = Math.min(1, Math.max(0, (rank - 1) / (n - 1)));
+  const d = Math.abs(t - 0.5) * 2;
+  if (d <= 0) return undefined;
+  const pct = Math.round(d * TINT_MAX * 10) / 10;
+  // The two ends are tokens on `.league-table` rather than hexes written here,
+  // so the scale is one definition and the alpha is the only thing computed.
+  return `color-mix(in srgb, var(${t < 0.5 ? '--rank-hot' : '--rank-cold'}) ${pct}%, transparent)`;
 }
 
 /**
@@ -107,6 +151,23 @@ function RankTable({
     [rankings.teams],
   );
 
+  // **Batters over pitchers**, each group in its own reading order — see
+  // `categoryGroups`. The table renders the groups' concatenation rather than
+  // the league's own array, so a cell, its header and the group head above it
+  // cannot come to disagree about which column is which.
+  const groups = useMemo(() => categoryGroups(categories), [categories]);
+  const shown = useMemo(() => groups.flatMap((g) => g.categories), [groups]);
+
+  // How many teams are ranked in each category — the badge's denominator and
+  // the wash's, computed once rather than per cell.
+  const ranked = useMemo(() => {
+    const out = new Map<number, number>();
+    for (const c of categories) {
+      out.set(c.statId, rankings.rows.filter((r) => typeof r.ranks[c.statId] === 'number').length);
+    }
+    return out;
+  }, [categories, rankings.rows]);
+
   const rows = useMemo(() => {
     const out = [...rankings.rows];
     out.sort((a, b) => {
@@ -160,6 +221,19 @@ function RankTable({
     );
   };
 
+  // Which indices of `shown` open a group after the first — the one visual
+  // break between the two runs, so the sections read as sections even with the
+  // header row scrolled past on a phone.
+  const starts = useMemo(() => {
+    const out = new Set<number>();
+    let i = 0;
+    for (const [gi, g] of groups.entries()) {
+      if (gi > 0) out.add(i);
+      i += g.categories.length;
+    }
+    return out;
+  }, [groups]);
+
   const spanInfo = rankings.spans.find((s) => s.span === rankings.span);
   const spanWords = spanInfo ? spanInfo.label.toLowerCase() : 'this span';
 
@@ -167,6 +241,31 @@ function RankTable({
     <div className="league-scroll">
       <table className="league-table">
         <thead>
+          {/* **The sections are a spanning header row rather than a break in the
+              cells**, which is what a wide stat table does: the alternative — a
+              rule between the two runs and nothing else — says *there is a seam
+              here* without saying what is on either side of it, and a reader
+              coming to a fantasy table wants the words `Batters` and `Pitchers`.
+              It is a second sticky row, held at `--lg-group-h` so it and the
+              sort headers pin as a pair rather than over each other, and its own
+              cells span the pinned pair so the group labels start where the
+              categories do. */}
+          {groups.length > 1 && (
+            <tr className="lg-group-row">
+              <th className="lg-logo-col" aria-hidden="true" />
+              <th className="lg-name-col" aria-hidden="true" />
+              {groups.map((g, i) => (
+                <th
+                  key={g.side}
+                  scope="colgroup"
+                  colSpan={g.categories.length}
+                  className={`lg-group-head${i > 0 ? ' lg-group-start' : ''}`}
+                >
+                  {g.label}
+                </th>
+              ))}
+            </tr>
+          )}
           <tr>
             {/* The pinned column is the badge alone — see `.lg-logo-col`. It
                 carries no label and no sort: it is the same cell the two roster
@@ -174,13 +273,18 @@ function RankTable({
                 identity belongs on its name. */}
             <th scope="col" className="lg-logo-col" aria-label="Team badge" />
             {head({ kind: 'team' }, 'Team', 'The league standing', 'lg-name-col')}
-            {categories.map((c) =>
-              head(
-                { kind: 'cat', statId: c.statId },
-                c.label,
-                // The direction is stated because a bare abbreviation cannot
-                // say it and it differs per category.
-                `${c.name} — ${spanWords}${c.lowerBetter ? ', lower is better' : ''}`,
+            {groups.flatMap((g, gi) =>
+              g.categories.map((c, ci) =>
+                head(
+                  { kind: 'cat', statId: c.statId },
+                  c.label,
+                  // The direction is stated because a bare abbreviation cannot
+                  // say it and it differs per category.
+                  `${g.label} · ${c.name} — ${spanWords}${
+                    c.lowerBetter ? ', lower is better' : ''
+                  }`,
+                  gi > 0 && ci === 0 ? 'lg-group-start' : '',
+                ),
               ),
             )}
           </tr>
@@ -204,11 +308,22 @@ function RankTable({
                     <span className="lg-row-sub">{t ? record(t) : ''}</span>
                   </span>
                 </th>
-                {categories.map((c) => {
+                {shown.map((c, i) => {
                   const v = r.values[c.statId];
                   const rank = r.ranks[c.statId];
+                  const n = ranked.get(c.statId) ?? 0;
+                  const tint = rankTint(rank, n);
                   return (
-                    <td key={c.statId} className="lg-num">
+                    <td
+                      key={c.statId}
+                      className={`lg-num${starts.has(i) ? ' lg-group-start' : ''}`}
+                      // The wash rides as a custom property rather than as a
+                      // `background`, so it composites *over* whatever
+                      // `--cell-bg` the row resolved — the zebra stripe and the
+                      // reader's own accent row both show through it rather than
+                      // being painted out. See `.league-table td.lg-num`.
+                      style={tint ? ({ '--rank-tint': tint } as React.CSSProperties) : undefined}
+                    >
                       {fmtValue(v, c)}
                       {/* The rank under the value, in the slot and the type the
                           research board's own percentile badge takes — folded
@@ -217,9 +332,7 @@ function RankTable({
                       {typeof rank === 'number' && (
                         <span
                           className={`col-rank${rank === 1 ? ' lg-rank-best' : ''}`}
-                          title={`${c.name}: ${ordinal(rank)} of ${
-                            rows.filter((x) => typeof x.ranks[c.statId] === 'number').length
-                          } — ${spanWords}`}
+                          title={`${c.name}: ${ordinal(rank)} of ${n} — ${spanWords}`}
                         >
                           {ordinal(rank)}
                         </span>
