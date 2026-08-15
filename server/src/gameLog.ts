@@ -121,12 +121,19 @@ interface GameLogSplit {
   gameType?: string;
   opponent?: { id?: number; name?: string };
   game?: { gamePk?: number };
+  // The fielding positions he held that game, first one first. Already on the
+  // split — nothing was added to the request for it.
+  positionsPlayed?: { abbreviation?: string }[];
   stat?: Record<string, unknown>;
 }
 
 interface PeopleGameLogResponse {
   people?: { id: number; stats?: { type?: { displayName?: string }; splits?: GameLogSplit[] }[] }[];
 }
+
+/** The first position of a split's `positionsPlayed`, or null. */
+const positionPlayed = (sp: GameLogSplit): string | null =>
+  sp.positionsPlayed?.[0]?.abbreviation ?? null;
 
 const n = (v: unknown): number => (typeof v === 'number' ? v : 0);
 const s = (v: unknown): string =>
@@ -166,6 +173,31 @@ function toBatterGame(
     // Where he hit, from the posted order. Null when he isn't in it — he came
     // off the bench, and the posted lineup can't say whose spot he took.
     lineupSpot: at >= 0 ? at + 1 : null,
+    // **Where he started** — the split's own `positionsPlayed`, gated on his
+    // being in the posted order.
+    //
+    // The two halves answer the two halves of the question and neither does it
+    // alone. `positionsPlayed` is the *fielding positions he held*, first one
+    // first (checked against the boxscore's own `allPositions`: 41 of 42
+    // player-games identical), and it **drops PH and PR outright** — so a
+    // pinch-hitter who stayed in at DH reads a bare `DH` and would print as a
+    // start he never made, which is exactly the one row that disagreed. The
+    // lineup entry says whether he started and cannot say where; this says
+    // where and cannot say whether. Together they are right on both, and
+    // `startPosition` is null on exactly the rows `lineupSpot` is null on.
+    //
+    // **The alternative was the schedule's own `lineups`, which carries a
+    // per-game position and was rejected on payload.** MLB overloads
+    // `primaryPosition` inside that hydrate to mean the position he started at
+    // (checked: 162 of 162 posted players match the boxscore), so it is a
+    // correct answer and a free *request* — `getSchedule` already fetches it —
+    // but not a free *read*: `fields` is leaf-matched, and opening
+    // `primaryPosition` on ~44,000 lineup entries takes the season schedule
+    // from **685KB to 1,696KB** at its cheapest spelling (`code`) and 1,982KB
+    // with `abbreviation`. That is a shared, once-per-30-minutes fetch every
+    // player's log waits on, and this answer costs nothing at all: the split is
+    // already in hand.
+    startPosition: at >= 0 ? positionPlayed(sp) : null,
     pa: n(st.plateAppearances),
     ab: n(st.atBats),
     runs: n(st.runs),

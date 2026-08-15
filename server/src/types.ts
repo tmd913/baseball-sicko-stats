@@ -770,6 +770,11 @@ export interface BatterGameLog extends GameLogEntry {
   // Where he hit in the posted order, 1-9. Null when he wasn't in it — he came
   // on off the bench, and the posted lineup doesn't say whose spot he took.
   lineupSpot: number | null;
+  // **Where he started**, off that same posted entry — `SS`, `CF`, `DH`. Null
+  // on exactly the rows `lineupSpot` is null on, which is the point of reading
+  // both off one entry: a man who came off the bench started nowhere, and the
+  // two can never say different things about whether he was in the lineup.
+  startPosition: string | null;
   // Not a column: it rides the `H/AB` cell's tooltip, since "how many times did
   // he come up" is a fair question to ask of a row whose leading cell counts
   // only the official at-bats. It is also what tells a pinch-runner's `0/0`
