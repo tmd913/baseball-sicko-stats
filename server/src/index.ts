@@ -12,6 +12,7 @@ import { getBatterGameLog, getPitcherGameLog } from './gameLog.js';
 import { getNextGame } from './nextGame.js';
 import { getProjectedStarts } from './projectedStarts.js';
 import { getPlayerNews } from './news.js';
+import { getRecentNews } from './recentNews.js';
 import { getSeasonArsenal } from './pitcherArsenal.js';
 import { getPitcherXera } from './expectedStats.js';
 import { getResearch, getPlayerWindows } from './research.js';
@@ -1328,6 +1329,28 @@ app.get(
       return;
     }
     res.json(await getPlayerNews(playerId));
+  }),
+);
+
+// Who in the league has news today or yesterday, keyed by MLB player id — the
+// mark beside a player's name on the two roster tables and on his own page.
+//
+// One call for the whole league rather than a lookup per player, and that is
+// the whole design rather than an optimisation: the research board draws six
+// hundred names at once, so the per-player `/news` route above could never
+// answer for it. `recentNews.ts` opens with the league-wide endpoints that were
+// probed and what each of them does instead, including the RotoWire feed that
+// looks like the answer and reaches back only a few hours.
+//
+// **Only the players with news in the window are in it**, the rule `/api/statuses`
+// follows: an id that is absent has no recent news, which is most of the league.
+// The day is the server's own `baseballToday()` rather than anything the client
+// sends — one definition of "today" beats two that agree most of the time.
+app.get(
+  '/api/news/recent',
+  requireUser,
+  asyncRoute(async (_req, res) => {
+    res.json({ players: Object.fromEntries(await getRecentNews()) });
   }),
 );
 

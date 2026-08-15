@@ -18,6 +18,7 @@ import type {
   PlayerReport,
   PlayerWindows,
   PlayerStatus,
+  RecentNews,
   ResearchIncludeKey,
   ResearchRow,
   RosterSource,
@@ -414,6 +415,28 @@ export const api = {
    */
   async statuses(): Promise<Record<string, PlayerStatus>> {
     const { players } = await request<{ players: Record<string, PlayerStatus> }>('/api/statuses');
+    return players;
+  },
+  /**
+   * Who in the league has news today or yesterday, keyed by MLB player id — the
+   * mark beside a player's name.
+   *
+   * One request for everybody, for the reason `statuses` above is: the mark is
+   * drawn on the research board, which is six hundred rows of the whole league,
+   * and the per-player `news` route below could never answer for it.
+   *
+   * Read **once on mount** rather than on every entry, which is where this
+   * parts from `statuses`: a lineup posts a couple of hours before first pitch
+   * and a man goes on the IL at noon, so that map is wrong by dinner — where
+   * this one dates to a *day* on both of its upstreams, so re-asking inside one
+   * page-load can only ever return what it already said. The server's thirty
+   * minutes is where freshness is actually decided.
+   *
+   * A failure is swallowed: this decorates a name, and the table it sits on is
+   * what the reader came for.
+   */
+  async recentNews(): Promise<Record<string, RecentNews>> {
+    const { players } = await request<{ players: Record<string, RecentNews> }>('/api/news/recent');
     return players;
   },
   async percentiles(
