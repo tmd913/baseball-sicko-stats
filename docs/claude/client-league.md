@@ -399,6 +399,17 @@ about a tenth of that over the wire once `compression()` has had it.
 
 ### The page updates itself, a minute at a time
 
+**Polling was half the fix, and on its own it fixed nothing.** The page was
+still reported stale after the poll shipped, and the cause was not on this side
+of the wire at all: ESPN's `cumulativeScore` — the figure every matchup cell is
+drawn from — **stops at yesterday**, covering every scoring period of the week
+except the one being played. A poll can only be as live as the number it
+re-reads, and that number does not move until ESPN's nightly batch. The server
+adds the missing day now; the whole of that measurement, the two guards that
+keep it from double-counting at the rollover, and the `cumulativeScoreLive` dead
+end are in **ESPN fantasy league**, *`cumulativeScore` stops at yesterday*. What
+follows is the client half, which is unchanged by it.
+
 **The three tabs are the one part of this app that describes something which
 moves while you watch it**, and until now all three were read on entry and then
 left: a matchup's category totals climb through an evening's games, the standings
