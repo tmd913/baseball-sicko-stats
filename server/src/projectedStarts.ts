@@ -6,25 +6,38 @@ import { getRosterInfo, getTeamAbbrevs } from './mlbStats.js';
 const UA = { 'User-Agent': 'statcast-sicko/1.0' };
 
 /**
- * How many starts to answer with. **Three, where this said five**, and the
- * measurement that argued for five is the one that argues for three: walking the
- * 2026 season and projecting each pitcher's next turns off only what was known
- * then, the run is **73.0% exact for the next start, 57.0% for the second and
- * 46.6% for the third**, then 39.1% and 33.5% for the fourth and fifth (81.0%
- * down to 45.4% over the 40 busiest starters). A third row is still better than
- * a coin; the two under it were a heading's worth of authority over a guess that
- * is wrong more often than it is right. Three turns is also a fortnight, which
- * is far enough out to see a two-start week coming.
+ * How many starts to answer with. **Five again, where this briefly said
+ * three.** The trim to three was argued from the same measurement restated
+ * here rather than hedged around: walking the 2026 season and projecting
+ * each pitcher's next turns off only what was known then, the run is
+ * **73.0% exact for the next start, 57.0% for the second and 46.6% for the
+ * third**, then **39.1% and 33.5%** for the fourth and fifth (81.0% down to
+ * 45.4% over the 40 busiest starters). That decay is real and the two extra
+ * rows are read with it in view rather than hidden from it — a projected row
+ * is muted and tagged `Projected` exactly like the third, and the block's own
+ * note names the cadence it was built from rather than claiming a date. A row
+ * that is right a third of the time is still worth having: it is the row
+ * most likely to be the one a manager actually needed, since a two-start
+ * week five turns out is the thing worth seeing a month ahead, not a
+ * fortnight.
  *
- * **Trimmed here rather than sliced in the client**, although the client is the
- * only reader. The walk down the club's schedule is free either way, but the
- * opposing starters' hands are not: `getRosterInfo` reads one 40-man roster per
- * distinct club of the ids it is handed, so a fourth or fifth row that carries a
- * named probable is an upstream read for a row nothing draws. And a route whose
- * own comment argues for a span the page does not show is a second answer
- * waiting to drift from the first.
+ * **The upstream cost the trim was written to avoid turns out not to be
+ * paid.** `getRosterInfo` reads one 40-man roster per distinct club of the
+ * ids it is handed, so a fourth or fifth row carrying a named opposing
+ * probable is a genuine extra read, not a free one — and it was a reasonable
+ * worry to have. Checked against the live 2026 season, every row counted by
+ * position: **151 first rows, 142 apiece at second through fifth** (a pitcher
+ * who clears the anchor keeps a row at every position this deep into the
+ * season; the shortfall is the nine refusals that draw one announced row and
+ * stop). The opposing probable is on **39 of the 151 first rows (25.8%) and
+ * on 0 of the 568 rows behind it**: MLB names one about three days out, and a
+ * fourth or fifth turn on an ordinary five-day cadence is three to four weeks
+ * off — nowhere near where any club has named anybody. The cost was
+ * theoretical when the trim was written and measures as theoretical now.
+ * `WANT` still gates all three places at once — the announced slice, the
+ * projection loop and the final `rows` — so it is one constant either way.
  */
-const WANT = 3;
+const WANT = 5;
 
 /**
  * The fewest starts we will read a cadence off. Two consecutive gaps is a thin
