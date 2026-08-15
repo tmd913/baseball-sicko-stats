@@ -80,17 +80,15 @@ function Count({ n }: { n: number }) {
 }
 
 /* Batting is where he hit in the order — game context like the opponent beside
-   it, so it leads rather than sitting among the counting stats. The last three
+   it, so it leads rather than sitting among the counting stats. The last four
    are prefixed Szn because they're his line *through* that game rather than the
    game's own — see the field comments on BatterGameLog. They read in slash-line
-   order, AVG · OBP · OPS, so the eye takes them the way a slash line is taken;
-   the SLG that would sit between the last two is the one part of it this table
-   doesn't spend a column on, being exactly OPS − OBP off the two beside it.
-   H/AB is where AB and H used to be two columns; see `HitsPerAb` for why one
-   cell. */
+   order, AVG · OBP · SLG · OPS, so the eye takes them the way a slash line is
+   taken. H/AB is where AB and H used to be two columns; see `HitsPerAb` for why
+   one cell. */
 const BATTER_COLUMNS = [
   'Batting', 'H/AB', 'R', '2B', '3B', 'HR', 'RBI', 'BB', 'K', 'SB',
-  'Szn AVG', 'Szn OBP', 'Szn OPS',
+  'Szn AVG', 'Szn OBP', 'Szn SLG', 'Szn OPS',
 ];
 
 /**
@@ -176,6 +174,7 @@ function BatterRows({
           <Count n={g.sb} />
           <td className="glog-num glog-rate">{g.seasonAvg}</td>
           <td className="glog-num glog-rate">{g.seasonObp}</td>
+          <td className="glog-num glog-rate">{g.seasonSlg}</td>
           <td className="glog-num glog-rate">{g.seasonOps}</td>
         </tr>
       ))}
@@ -191,8 +190,8 @@ function BatterRows({
  */
 function BatterTotals({ games }: { games: BatterGameLog[] }) {
   const sum = (f: (g: BatterGameLog) => number) => games.reduce((s, g) => s + f(g), 0);
-  // One denominator for the whole row: the cell above, the AVG at the end of it
-  // and the SLG inside its OPS are all over at-bats, which is what a batting
+  // One denominator for the whole row: the cell above, the AVG, the SLG and
+  // the OPS at the end of it are all over at-bats, which is what a batting
   // average and a slugging percentage are.
   const ab = sum((g) => g.ab);
   const hits = sum((g) => g.hits);
@@ -226,12 +225,13 @@ function BatterTotals({ games }: { games: BatterGameLog[] }) {
       <td className="glog-num">{sum((g) => g.sb)}</td>
       <td className="glog-num glog-rate">{avg}</td>
       {/* Recomputed from the totals like the two beside it, rather than taken
-          off the newest row's running line — the three cells are then one
+          off the newest row's running line — the four cells are then one
           arithmetic over one set of sums, and the OPS at the end of the row is
-          this number plus a slugging over the same at-bats. It agrees with the
-          newest row's Szn OBP by construction: a season-to-date line through the
-          last game is the season. */}
+          this OBP plus this SLG. Both agree with the newest row's Szn OBP and
+          Szn SLG by construction: a season-to-date line through the last game
+          is the season. */}
       <td className="glog-num glog-rate">{obp !== null ? formatRate(obp) : '—'}</td>
+      <td className="glog-num glog-rate">{slg !== null ? formatRate(slg) : '—'}</td>
       <td className="glog-num glog-rate">
         {obp !== null && slg !== null ? formatRate(obp + slg) : '—'}
       </td>

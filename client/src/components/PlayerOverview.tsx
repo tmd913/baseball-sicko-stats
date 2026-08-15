@@ -34,7 +34,7 @@ import { PlayerDay, playerDayLine } from './PlayerDay';
  * 4. **Last 5 games** — the Game Log's own table, five rows of it.
  *
  * **A rotation starter gets a fifth, and it goes second**: `Projected Starts`,
- * his next three turns — announced where his club has named him, projected from
+ * his next five turns — announced where his club has named him, projected from
  * his own rotation slot past that. It is second because "when does he pitch
  * next" is the forward half of *what is he doing*, and the paragraph below is
  * about not splitting those two halves across a page. It is the only block here
@@ -135,7 +135,7 @@ export function OverviewTab({
              of the month is nothing — clubs name a rotation three or four days
              out — so what it mostly said was `Not yet scheduled.`: a true
              sentence, and a useless one over a question the club's own schedule
-             and his own cadence can answer in three rows. So he gets the line
+             and his own cadence can answer in five rows. So he gets the line
              saying today is empty, and Projected Starts says when. */
           <p className="ovw-none">No game for {name} today.</p>
         ) : (
@@ -377,7 +377,7 @@ function SeasonSummary({
  *
  * **It asks for his club's next game and nothing else now**, where it used to
  * take a `wantStart` and ask for his next *announced* start instead. That half
- * belongs to `ProjectedStartsBlock`, which answers the same question in three
+ * belongs to `ProjectedStartsBlock`, which answers the same question in five
  * rows and can answer it for the turns nobody has named yet — so this block
  * is not drawn for a rotation starter at all, and the flag it would have needed
  * has gone with the branch. **The server route keeps its `?start=1`**, which is
@@ -460,7 +460,7 @@ function NextGameBlock({ playerId, name }: { playerId: number; name: string }) {
 }
 
 /**
- * The Projected Starts block: his next three turns, announced where his club has
+ * The Projected Starts block: his next five turns, announced where his club has
  * named him and projected from his own rotation slot past that.
  *
  * **It sits second, directly under the day**, and that is the tab's own ordering
@@ -484,7 +484,7 @@ function NextGameBlock({ playerId, name }: { playerId: number; name: string }) {
  * is true for most of the month and useless: clubs name a rotation three or four
  * days out, so the honest answer is the one nobody has published and everybody
  * can work out. So for a rotation starter that block is not drawn at all — the
- * day says `Today` and the block under it says when, in three rows instead of a
+ * day says `Today` and the block under it says when, in five rows instead of a
  * sentence.
  *
  * Its own read, lazily and once per player, in the shape every other lazily
@@ -527,7 +527,7 @@ function ProjectedStartsBlock({ playerId, name }: { playerId: number; name: stri
       {/* **The block's own note rides in the heading row**, where it used to be
           a paragraph under the list. Two of them, in fact — the cadence caveat
           and, on a list that stopped short, the reason it did — and a block of
-          three rows closing on two sentences of small print was more apparatus
+          five rows closing on two sentences of small print was more apparatus
           than the rows it qualified. What each said is not lost, only shortened
           to the phrase that carries it and moved to the one line on the block
           that is always drawn and always read: `a turn every 5 club games` says
