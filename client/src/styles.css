@@ -4012,34 +4012,20 @@ body {
 .news-item:last-child {
   border-bottom: none;
 }
-.news-link,
+/* **No row here is a press.** A `rotowire` note used to open that player's
+   page in a new tab and `.news-link` gave it a pointer, a hover tint and a
+   focus ring; the link is gone (it was never item-precise, every note on a man
+   going to the same `#latest-news` anchor, and what it opened onto was a
+   subscription wall), so the whole list is the shape the transaction row always
+   had. Which means one rule rather than two and nothing on this list that
+   *looks* pressable — the rule `.news-static` was written to state, now true of
+   the list rather than of half of it. */
 .news-static {
   display: flex;
   flex-direction: column;
   gap: 4px;
   padding: 10px 0;
-  text-decoration: none;
   color: inherit;
-}
-/* Only an **article** is a press, and only because only an article has
-   somewhere to go: MLB publishes a transaction as one sentence and no link, so
-   that row is `.news-static` and carries neither the pointer nor the tint. A
-   row that looked pressable and did nothing is the thing this avoids. */
-.news-link {
-  cursor: pointer;
-}
-/* Scoped like every other pressable surface in the app — on touch `:hover` has
-   no way to end, so a finger dragged down this list would leave the last row it
-   crossed lit as though it were chosen. See the note at the top of this file. */
-@media (hover: hover) {
-  .news-link:hover .news-headline {
-    color: var(--accent);
-  }
-}
-.news-link:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-  border-radius: 6px;
 }
 .news-meta {
   display: flex;

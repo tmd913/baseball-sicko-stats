@@ -256,9 +256,6 @@ export interface NewsItem {
   date: string;
   headline: string;
   summary: string | null;
-  /** Absent on a transaction, which is the whole reason a row's press is
-   *  conditional rather than universal. */
-  url: string | null;
   kind: string | null;
 }
 

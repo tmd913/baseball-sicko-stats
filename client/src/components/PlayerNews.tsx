@@ -11,19 +11,23 @@ import { LoadingBlock } from './Loading';
  * preview: two lists that merely resemble each other are two lists that will one
  * day disagree about what a row is.
  *
- * **What a row is** turns on where it came from, and the list says so rather
- * than levelling the two into one voice:
+ * **No row is a press, and a report used to be one.** A `rotowire` note opened
+ * that player's RotoWire page in a new tab, on the reasoning that it is where
+ * the note was read from and where RotoWire's own (paywalled) analysis of it
+ * lives. Two things were wrong with that. The link was **not item-precise** —
+ * RotoWire publishes no per-note address a player page can reach, so every one
+ * of a man's seven notes went to the same `#latest-news` anchor — and what it
+ * offered past the row was a **subscription wall**, which is not somewhere to
+ * send a reader from inside this app. So the list is one voice: every row is a
+ * dated line, a kind and a headline, with RotoWire's note under it as a
+ * standfirst.
  *
- * - A **report** (`rotowire`) is a press that opens RotoWire's page for that
- *   player in a new tab — which is where the note was read from and where
- *   RotoWire's own analysis of it lives, the one thing this section
- *   deliberately does not ship. It carries the note itself as a standfirst on
- *   both surfaces: the tab has room for it down the list, and the Overview's
- *   preview has room for it because that block is one row.
- * - A **transaction** (`mlb`) is a fact with nowhere to go — MLB publishes one
- *   sentence and no link — so it is a static row and deliberately not a press.
- *   A row that looked like a link and did nothing would be worse than a row
- *   that plainly is not one.
+ * **What a row still says is where it came from**, in the pill and in the class
+ * (`news-rotowire` / `news-mlb`), because the two are different kinds of claim
+ * — a desk's report against the official record — and levelling them into one
+ * would be the section pretending it has a single source. What is gone is only
+ * the press: nothing on this list looks pressable, which is the same rule the
+ * transaction row has always followed and the reason it was written down.
  */
 export function NewsList({
   items,
@@ -64,18 +68,9 @@ function NewsRow({ item, summary }: { item: NewsItem; summary: boolean }) {
       {summary && item.summary && <span className="news-summary">{item.summary}</span>}
     </>
   );
-  // `noopener noreferrer` on every one of them: these are third-party links and
-  // the app has no business handing RotoWire a handle on the window it opened
-  // from.
   return (
     <li className={`news-item news-${item.source}`}>
-      {item.url ? (
-        <a className="news-link" href={item.url} target="_blank" rel="noopener noreferrer">
-          {body}
-        </a>
-      ) : (
-        <div className="news-static">{body}</div>
-      )}
+      <div className="news-static">{body}</div>
     </li>
   );
 }
