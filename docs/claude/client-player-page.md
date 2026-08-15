@@ -92,9 +92,11 @@ is opened with is what he is doing* — and the block answering it was second.
 **So the day block leads**, and the order is now:
 
 1. **Today**, or the **next game** when the day holds none.
-2. **News** (below).
-3. **Season**, over to the Stats tab.
-4. **Last 5 games**, over to the Game Log.
+2. **Projected Starts** — a rotation starter only, and see its own section
+   below, which is also where the third state of the block above it went.
+3. **News** (below).
+4. **Season**, over to the Stats tab.
+5. **Last 5 games**, over to the Game Log.
 
 **The whole block moves, rather than the scheduled-game half of it.** What was
 asked for was that the *scheduled game* lead, and there are two ways to read
@@ -117,16 +119,22 @@ sit in two places on one page. Hoisted, the leading block is the same block in
 all three states and is **never empty**, which is the property this had to have.
 
 **The heading names what the block holds, which is what makes the third state
-read.** It is `Today` where there are games and **`Next game` / `Next start`**
-where there aren't — and the label therefore comes *off* the line inside
-`NextGameBlock`, which used to print it in `.ovw-next-label`. Leading a page with
-a heading saying `Today` over a line saying `Next game` would be the same two
-words an inch apart. One definition of which of the two it is (`wantStart`,
-`isRotationStarter`'s answer) feeds the heading and the sentences below it, so
-they cannot come to disagree. The sentences still split three ways, because the
-distinctions are real: `Not yet scheduled.` for a starter nobody has named,
-`Nothing scheduled in the next two weeks.` for a club with nothing on, and
-`Couldn't read the schedule.` for a failed read.
+read.** It is `Today` where there are games and **`Next game`** where there
+aren't — and the label therefore comes *off* the line inside `NextGameBlock`,
+which used to print it in `.ovw-next-label`. Leading a page with a heading saying
+`Today` over a line saying `Next game` would be the same two words an inch apart.
+
+**`Next start` was the third wording and has gone with the sentence it headed.**
+A rotation starter's "when, then" is the Projected Starts block's now (below), so
+for him the day block says `Today` / `No game for X today.` and stops, and
+`NextGameBlock` is not drawn at all — which is why `wantStart` feeds only the
+*decision* to draw it and no longer feeds a heading or a sentence. What is left
+under a batter's or a reliever's line is two: `Nothing scheduled in the next two
+weeks.` for a club with nothing on, and `Couldn't read the schedule.` for a
+failed read. (The measurements in the paragraph below were taken before that
+change and Logan Webb's `Next start` line is the one figure in them that no
+longer renders; everything else is unmoved, and the same page is re-measured in
+the Projected Starts section.)
 
 **Driven in a browser at 1200×900 and 390×844, in all three states, on the live
 2026 season.** *Live* — Kevin Gausman: `Today [68px at 1200, 91 at 390] | News |
@@ -195,6 +203,166 @@ exactly the reader with an empty block in front of them.
 **The strip is seven tabs now, and eight on a pitcher** — five and six when Overview joined it, six and seven when Splits did, and seven and eight since **News** (below). It has needed nothing structural on any of the three occasions: `.details-tabs` already scrolls sideways and already scrolls the active tab into view with a 24px peek. Re-measured after News at **1200×900 and 390×844, on a batter and a pitcher, clicking every tab in turn**: all 7 and all 8 land **fully inside the strip** when selected, the tab's own column is `--card-column` less the overlay's gutters (358px), and the page body and the overlay each overflow by **0** at both widths.
 
 **The day takes `--card-column` rather than the 860px the tabs beside it use**, because what is in it is exactly what the feed holds — an at-bat card, a clip, an outing's innings — and those were sized against that number in the first place. A day read here and the same day read on the stream is then the same reading at the same width (measured: 800px at 1440, 358 at 390). The cap sits on `.details-overview .player-day` rather than on the tab, which spans the tab so its two tables can (see **the player page's Overview tab** above), and the `container-type` sits on the same box for the reason `.details-arsenal` carries one: the cards inside size themselves off their container, and read off a full-width tab they would answer a container query the card itself never satisfies.
+
+#### Projected Starts, and what a rotation slot is
+
+**A starting pitcher's next turn is the one fact a fantasy manager plans around
+and the one the app could least often say.** The block above answered it with
+`/api/players/:id/next-game?start=1` — his next *announced* start — and clubs
+name a rotation three or four days out, so for most of the month the honest
+answer was `Not yet scheduled.`: true, useless, and a thing anybody with the
+fixture list could have worked out. `ProjectedStartsBlock` works it out, five
+turns ahead.
+
+**It is second in the tab, directly under the day**, which is that tab's own
+ordering argument rather than an exception to it: "when does he pitch next" is
+the forward half of *what is he doing*, and the day block's own note says the
+two halves of that question must not end up in two places on one page. And it is
+drawn **only for a rotation starter** (`lib.ts::isRotationStarter`, the app's one
+definition of who works out of the rotation), because a batter is in every game
+his club plays and a reliever could be in any of them — neither has a slot to be
+projected into. ESPN's `SP` eligibility is deliberately not the test, for the
+reason `NextGameBlock` already states: it is a cover rather than a partition, so
+it says where a league will let you start a man and not whether he takes the ball
+every fifth day.
+
+**So the day block defers to it, and `Not yet scheduled.` is gone.** For a
+rotation starter with no game today the day says `Today` / `No game for
+Cristopher Sánchez today.` and nothing else, and the block under it says when —
+in five rows rather than a sentence. `NextGameBlock` therefore keeps only the
+club's-next-game half, loses its `wantStart` prop and passes `false` at its one
+call site; **the server route keeps its `?start=1`**, which is the rule
+`/api/watchlist` follows for its own name — a tab open at the moment of a deploy
+is still asking for it and still gets the right answer.
+
+**What a projection is made of, in one paragraph.** Take the club's regular
+season as an ordered run of games; find the positions in it of the games he has
+started; the **median gap** between consecutive ones is his cadence — 5 for an
+ordinary five-man rotation. Anchor on the latest start we know of and step
+forward a cadence at a time over the games still to be played. **Counting in team
+games rather than in days is the whole trick**: an off day, a rain-out and the
+All-Star break each push a rotation back by exactly the days they take out of the
+calendar and none of them takes a turn out of the run of games, so an index into
+the club's own schedule models none of them and gets them all right. The median
+rather than the mean because the outliers are the interesting half of a pitcher's
+season — one IL stint of a month is a single gap of twenty team games — and gaps
+past `MAX_TURN_GAP` (9) are dropped outright rather than trusted to it, so a man
+with three starts either side of a stint is still placed off the two turns that
+really were consecutive.
+
+**A postponement is dropped from the run**, which is not tidiness: MLB
+reschedules one under a **new `gamePk`**, so counting the original would put a
+phantom game in the club's sequence and shift every slot after it by one.
+Measured league-wide on the 2026 season, `detailedState` takes eight values —
+Final, Scheduled, Postponed, In Progress, Completed Early, Game Over, Warmup,
+Pre-Game — of which only Postponed (27 games) is one of these.
+
+**Announced beats projected, always, and it re-phases what follows.** Every game
+his club has named him for is in the answer as a fact; the anchor is then the
+latest of those rather than his last actual start, which is his club saying where
+he is in the rotation *now*. Where MLB has named **somebody else** for a slot the
+projection wanted, that slot is not his — it is skipped and the rest re-phased
+from wherever he lands, up to `MAX_SLIP` (3) consecutive skips, past which the
+rotation has clearly been re-ordered and a shorter list beats a longer wrong one.
+
+**What it refuses to guess**, which is four different facts about the pitcher and
+so four different sentences (`ProjectionRefusal`). `not-a-starter` — he has
+started nothing. `too-few-starts` — under three, too thin a median to read a
+cadence off. **`new-club`** — he has a full season of starts and every one of them
+is the club that has since traded him, so he holds no slot in this one yet;
+checked on the live season, Kris Bubic's nine starts are Kansas City's and his
+club is now the Dodgers, and reading that as `not-a-starter` would have printed
+"he hasn't started a game this season" over a man with twenty-odd turns behind
+him. And `out-of-rotation` — his last start was more than two turns ago, which is
+a man something has happened to rather than a man with a slot; measured against
+the announcements, the one pitcher on the live board in that state is also the one
+whose projection missed. **Whatever is announced still comes back in every one of
+those cases**, because an announcement is a fact whatever we can or cannot infer
+around it — and where a refusal sits under a list rather than instead of one, the
+sentence is drawn under the rows so a reader is not left wondering where the other
+four went.
+
+**A rehabbing starter's club is his org, not his rehab club.** `getRosterInfo`
+answers with `currentTeam`, which for a man on a rehab assignment is a
+minor-league club — checked: Edward Cabrera's is the Knoxville Smokies — so the
+schedule read came back empty and the block said `Couldn't read his club's
+schedule`, which is true of the id and a lie about him. `parentOrgOf` is the
+fallback, fired only when the schedule is empty and cached for a day; with it he
+reads his announced start and four projections off it, which is exactly the
+pitcher this block is most worth drawing for.
+
+**Announced and projected are never drawn alike**, which is the app's standing
+rule that an estimate is marked as one — the percentile card's dotted bubble and
+the Splits card's hatched fill are the same rule on two other surfaces. It is
+said three ways over, because one of them is bound to be the one a given reader
+takes it from: the row's rail goes from solid accent to **dashed** `--faint`, its
+text goes muted, and the tag says the word. The rail is a left border rather than
+the feed's 3px/11px gradient — that device groups a header, a card and a clip into
+one item, where this is one line and wants a mark beside it rather than a bracket
+around it. The row itself is **folded onto `.ovw-next-line`'s rule**: the block
+above draws exactly this sentence for exactly this kind of fact, so the two are
+one object. And the opposing starter is by **surname**, where that single line
+prints the whole name — this is a list of five scanned down rather than one
+sentence read across, which is the same reason the summary table's opponent cell
+and the feed's Upcoming bar cut theirs.
+
+**The caveat stays on the card where the Splits and Charts keys went behind an
+ⓘ**, and that is those cards' own split rather than an exception to it:
+instructions are read once and belong behind a button, where a caveat about
+*these rows* changes how what is on screen should be read. It names **his own
+cadence** rather than saying "estimated", because the number is what tells a
+reader how much to trust the dashed rows — one turn every five club games is a
+settled rotation, and the same sentence saying six is a club running a six-man —
+and it is drawn only when something on screen is actually a guess.
+
+**Validated three ways, and the honest one is the middle number.**
+
+- **The implementation against an independent recompute.** The whole method was
+  written a second time in Python off the raw upstreams and run against the
+  route for **all 183 pitchers with eight or more starts**: gamePks, the
+  announced flags, the cadence and the refusal all agree, **183 of 183, 0
+  mismatches**. (The one tie worth knowing about: `Math.round` is half-up where
+  Python's `round` is half-even, which differ on a median of an even number of
+  gaps — `[6, 7]` gives 7 here and 6 there.)
+- **The method against the announcements, which is the production case.**
+  Projecting from his last *actual* start with the announcements hidden, then
+  revealing them: of the **48** of those 183 whose club has named their next
+  start, the projection lands on it **exactly 41 times (85%) and within a day 43
+  (90%)**. Split by the guard: **41 of 47 (87%) exact and 91% within a day** for
+  the anchors it allows, and the single stale-anchor case — which it refuses —
+  missed by three days, which is the guard earning its keep.
+- **The method against the season, which is the pessimistic case.** Walking each
+  pitcher's season and projecting his next five off only what was known then,
+  with **no announcements at all** (they cannot be reconstructed historically),
+  over 10,232 projections: **73.0% exact and 90.1% within a day** for the next
+  start, then 57.0/78.7, 46.6/69.8, 39.1/62.4 and **33.5/56.1** for the fifth.
+  Over the 40 busiest starters alone it is 81.0/95.4 down to 45.4/70.3. The tail
+  decays because an IL stint is unpredictable by construction — 11.3% of fifth
+  starts miss by more than eight days — which is why the block says five and not
+  ten, and why the note names the cadence rather than claiming a date.
+
+**Driven in a browser at 1200×900 and 390×844 against the live 2026 season**, in
+all six states. *Announced + projected* — Logan Webb: `Today · Projected Starts ·
+News · Season · Last 5 games`, one solid accent row (`Aug 15 · 4:05 PM · vs COL ·
+vs RHP Lorenzen · Announced`, `rgb(56, 189, 248)`) over four dashed `rgb(92, 111,
+151)` ones at 32px each, under `4 starts are projected from his last one, at a
+turn every 5 club games`. *All projected* — Cristopher Sánchez on his club's off
+day: five dashed rows and the heading `Today` over `No game for Cristopher
+Sánchez today.` with **0** `NextGameBlock`s, which is the deferral. *Announced
+with no cadence* — Cody Bradford (2 GS): one announced row and the
+`too-few-starts` sentence under it. *Refused* — Shohei Ohtani's pitcher page
+(`out-of-rotation`) and Kris Bubic's (`new-club`), each a sentence and no rows.
+*Not drawn at all* — Josh Hader (a reliever) and Ohtani's **batter** page, four
+headings and no block. And *unchanged* — Jhoan Duran, a reliever on the same off
+day, still reads `Next game` with `NextGameBlock` under it naming his club's next
+game and the opposing starter. **Page and overlay overflow 0 in every one of
+those, at both widths**; the block caps at `--card-column` (800 / 358), and at 390
+only the announced row wraps, to 50px.
+
+**Bundle: 466.09 → 468.73 KB of JS** (138.60 → 139.32 gzipped) and **106.85 →
+107.84 KB of CSS** (19.09 → 19.27) — 2.6KB and 1.0KB raw, 0.7KB and 0.2KB over
+the wire, for a block, a route, a server module and the rules above restated
+where they are.
 
 #### The scheduled game's pitcher link opened nothing
 

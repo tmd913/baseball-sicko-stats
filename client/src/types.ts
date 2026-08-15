@@ -148,6 +148,65 @@ export interface NextGameInfo {
 }
 
 /**
+ * One start on a pitcher's next month — the player page's **Projected Starts**
+ * block.
+ *
+ * **`announced` is the field the whole thing turns on.** A club names its
+ * probables a few days out and that is a fact; everything past it is
+ * `projectedStarts.ts` placing him on his club's remaining schedule at the
+ * cadence his own season has been pitched at, which is a guess. The two ride on
+ * one list because they answer one question, and the flag is what stops them
+ * reading as one kind of thing — the client draws a projected row differently,
+ * the app's standing rule that an estimate is marked as one.
+ */
+export interface ProjectedStart {
+  gamePk: number;
+  date: string; // "2026-08-15" — the day it counts on
+  startTime: string | null; // ISO, null until the club posts one
+  home: boolean; // his club's side of it
+  opponent: string; // "TOR" — the abbreviation, as everywhere else
+  opponentId: number;
+  /** True where MLB has named him for this game, false where we have placed
+   *  him. Never a shade in between: a row is a fact or it is a guess. */
+  announced: boolean;
+  /** The **other** side's announced starter — his counterpart. Null until that
+   *  club names one, which on a projected row it never has. */
+  probablePitcher: ProbablePitcher | null;
+}
+
+/**
+ * Why nothing was projected past what has been announced. Each is a different
+ * sentence on screen, because they are different facts about the pitcher:
+ *
+ * - `not-a-starter` — he has started nothing this season, so there is no slot.
+ * - `too-few-starts` — under three, which is too thin a median to read a
+ *   cadence off.
+ * - `new-club` — he has started this season and every one of them was for the
+ *   club that has since traded him, so he holds no slot in this one yet.
+ * - `out-of-rotation` — his last start was more than two turns ago, so whatever
+ *   slot he held is not his to be projected into now.
+ * - `no-schedule` — his club couldn't be placed, or its schedule couldn't be
+ *   read. The only one of the four that is our failure rather than his.
+ */
+export type ProjectionRefusal =
+  | 'not-a-starter'
+  | 'too-few-starts'
+  | 'new-club'
+  | 'out-of-rotation'
+  | 'no-schedule';
+
+export interface ProjectedStarts {
+  /** Announced first where they exist, then projected, in date order. */
+  starts: ProjectedStart[];
+  /** How many of his club's games a turn takes — 5 for an ordinary five-man
+   *  rotation. Null whenever nothing was projected, which is what `refusal`
+   *  then says the reason for. */
+  cadence: number | null;
+  /** Null when the projection ran. */
+  refusal: ProjectionRefusal | null;
+}
+
+/**
  * One thing that has been reported or recorded about a player, for the player
  * page's **News** tab and the section that previews it.
  *

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
-import { formatStartTime, handThrows, isRotationStarter, prettyGameDate } from '../lib';
+import { formatStartTime, handThrows, isRotationStarter, prettyGameDate, surname } from '../lib';
 import type {
   BatterGameLog,
   NextGameInfo,
@@ -8,6 +8,8 @@ import type {
   PitcherSeasonStats,
   PlayerNews,
   PlayerReport,
+  ProjectedStart,
+  ProjectedStarts,
   SeasonStats,
 } from '../types';
 import { useDelayedFlag } from '../hooks';
@@ -30,6 +32,16 @@ import { PlayerDay, playerDayLine } from './PlayerDay';
  * 2. **News** — his latest transactions and articles, over to the News tab.
  * 3. **Season** — the box-score line a roster decision turns on, over to Stats.
  * 4. **Last 5 games** — the Game Log's own table, five rows of it.
+ *
+ * **A rotation starter gets a fifth, and it goes second**: `Projected Starts`,
+ * his next five turns — announced where his club has named him, projected from
+ * his own rotation slot past that. It is second because "when does he pitch
+ * next" is the forward half of *what is he doing*, and the paragraph below is
+ * about not splitting those two halves across a page. It is the only block here
+ * with no door under it, there being no tab that holds it whole; and it is the
+ * only one drawn for one kind of player, because a batter is in every game his
+ * club plays and a reliever could be in any of them, so neither has a slot to be
+ * projected into.
  *
  * **The day leads, where the season used to.** What a player page is opened
  * with on a game day is *what he is doing* — which is the argument this tab is
@@ -95,11 +107,15 @@ export function OverviewTab({
   // being the only place the two halves are added up.
   const line = report.games.length > 1 ? playerDayLine(report) : null;
   const hasGames = report.games.length > 0;
-  // Which of the two questions the next-game block asks, hoisted here because
-  // the block's *heading* now names it and the block itself prints it. One
-  // definition, so the two can never say different words.
+  // Whether he works out of the rotation, which decides two things on this tab:
+  // that the Projected Starts block is drawn at all, and that the day block
+  // above it stops trying to answer "when next". `lib.ts::isRotationStarter` is
+  // the app's one definition of it and is read rather than restated.
   const wantStart = isPitcher && isRotationStarter(report);
-  const nextLabel = wantStart ? 'Next start' : 'Next game';
+  // The day block's heading names what the block holds. For a starter that is
+  // always the day — the next turn is the block *under* it now — so the third
+  // wording, `Next start`, has gone with the sentence it used to head.
+  const dayHead = hasGames || wantStart ? 'Today' : 'Next game';
   return (
     <div className="details-overview">
       {/* **The day leads.** Whichever of its three states it is in — a game in
@@ -108,25 +124,31 @@ export function OverviewTab({
           the third state is the scheduled game, which is what the block's own
           heading then names. */}
       <section className="ovw-block">
-        <h2 className="ovw-head">{hasGames ? 'Today' : nextLabel}</h2>
+        <h2 className="ovw-head">{dayHead}</h2>
         {line && <p className="details-note details-day-line">{line}</p>}
         {hasGames ? (
           <PlayerDay report={report} onOpenDetails={onOpenDetails} />
+        ) : wantStart ? (
+          /* **A rotation starter's "when, then" is the block below**, and that
+             is a deferral rather than a loss. `NextGameBlock` answered this for
+             a starter by asking for his next *announced* start, which for most
+             of the month is nothing — clubs name a rotation three or four days
+             out — so what it mostly said was `Not yet scheduled.`: a true
+             sentence, and a useless one over a question the club's own schedule
+             and his own cadence can answer in five rows. So he gets the line
+             saying today is empty, and Projected Starts says when. */
+          <p className="ovw-none">No game for {name} today.</p>
         ) : (
-          /* Nothing today, which is the moment the obvious next question is
-             "when, then". Whose next game it is turns on `isRotationStarter` —
-             a starter is in one game in five and only the one he is named for
-             is his, where any of his club's could be a reliever's or a
-             batter's. ESPN's SP/RP eligibility is deliberately *not* the test:
-             it is a cover rather than a partition (a fifth of the league's
-             pitchers are eligible at both), so it can say where a league will
-             let you start him and not whether he works out of the rotation.
-
-             The heading above carries the label, so the block does not print
-             it a second time on its own line — see `NextGameBlock`. */
-          <NextGameBlock playerId={playerId} wantStart={wantStart} name={name} />
+          /* Nothing today for a batter or a reliever, and for them the club's
+             next game really is the answer: any of its games could be his,
+             where a starter is in one in five. */
+          <NextGameBlock playerId={playerId} name={name} />
         )}
       </section>
+
+      {/* Second, because "when does he pitch next" is the forward half of the
+          question the block above answers — see this file's own head. */}
+      {wantStart && <ProjectedStartsBlock playerId={playerId} name={name} />}
 
       <NewsPreview
         news={news}
@@ -334,23 +356,19 @@ function SeasonSummary({
  * only say *today*. So the block names the next one: his club's, or, for a
  * starting pitcher, the next turn he has actually been named for.
  *
- * **A starter with nothing announced is told so rather than shown his club's
- * next game**, which would be somebody else's start. That distinction is the
- * whole reason the server answers with `start` beside the game rather than a
- * bare `NextGame | null`.
+ * **It asks for his club's next game and nothing else now**, where it used to
+ * take a `wantStart` and ask for his next *announced* start instead. That half
+ * belongs to `ProjectedStartsBlock`, which answers the same question in five
+ * rows and can answer it for the four turns nobody has named yet — so this block
+ * is not drawn for a rotation starter at all, and the flag it would have needed
+ * has gone with the branch. **The server route keeps its `?start=1`**, which is
+ * the rule `/api/watchlist` follows for its own name: a tab open at the moment
+ * of a deploy is still asking for it, and it still answers correctly.
  *
  * Its own read, on open, and only in this branch: a day that holds a game never
  * asks the question, so a player who is playing today costs nothing.
  */
-function NextGameBlock({
-  playerId,
-  wantStart,
-  name,
-}: {
-  playerId: number;
-  wantStart: boolean;
-  name: string;
-}) {
+function NextGameBlock({ playerId, name }: { playerId: number; name: string }) {
   const [info, setInfo] = useState<NextGameInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const wait = useDelayedFlag(loading);
@@ -359,7 +377,9 @@ function NextGameBlock({
     setLoading(true);
     setInfo(null);
     api
-      .nextGame(playerId, wantStart)
+      // False, and hard-coded rather than passed: this block is the club's-next-game
+      // half of the question and the other half is the Projected Starts block's.
+      .nextGame(playerId, false)
       .then((d) => {
         if (live) setInfo(d);
       })
@@ -374,17 +394,15 @@ function NextGameBlock({
     return () => {
       live = false;
     };
-  }, [playerId, wantStart]);
+  }, [playerId]);
 
   const game = info?.game ?? null;
   // **The label is the block's heading now, so it is not repeated here.** The
   // day block leads the tab and its heading names what it holds — `Today` where
-  // there is a game and `Next start` / `Next game` where there isn't — so a
-  // label on the line under it would be the same two words an inch apart. The
-  // *sentences* below still have to distinguish the two, which is what
-  // `wantStart` is still read for: "not yet scheduled" is a fact about how far
-  // ahead clubs name a rotation and is a different claim from "nothing
-  // scheduled".
+  // there is a game and `Next game` where there isn't — so a label on the line
+  // under it would be the same two words an inch apart. And there is one
+  // sentence rather than two: `Not yet scheduled.` was the starter's answer and
+  // a starter no longer reaches this block.
   return (
     <div className="ovw-next">
       <p className="ovw-none">No game for {name} today.</p>
@@ -414,12 +432,186 @@ function NextGameBlock({
           <span className="ovw-next-when">
             {info === null
               ? 'Couldn’t read the schedule.'
-              : wantStart
-                ? 'Not yet scheduled.'
-                : 'Nothing scheduled in the next two weeks.'}
+              : 'Nothing scheduled in the next two weeks.'}
           </span>
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * The Projected Starts block: his next five turns, announced where his club has
+ * named him and projected from his own rotation slot past that.
+ *
+ * **It sits second, directly under the day**, and that is the tab's own ordering
+ * argument rather than an exception to it. The day block answers *what is he
+ * doing*; "when does he pitch next" is the forward half of exactly that
+ * question, which is why the day block's own note says the two halves must not
+ * end up in two places on one page. For a starting pitcher it is also the most
+ * actionable thing on the page — a two-start week is worth seeing a fortnight
+ * out — and nothing else in the app can say it.
+ *
+ * **Drawn only for a rotation starter** (`lib.ts::isRotationStarter`, the app's
+ * one definition of who works out of the rotation), because the block is
+ * meaningless for anybody else: a batter is in every game his club plays and a
+ * reliever could be in any of them, so neither has a slot to be projected into.
+ * ESPN's `SP` eligibility is deliberately not the test — it is a cover rather
+ * than a partition, so it says where a league will let you start a man and not
+ * whether he takes the ball every fifth day.
+ *
+ * **And the day block above defers to it.** `NextGameBlock` used to answer this
+ * question for a starter and mostly answered it with `Not yet scheduled.`, which
+ * is true for most of the month and useless: clubs name a rotation three or four
+ * days out, so the honest answer is the one nobody has published and everybody
+ * can work out. So for a rotation starter that block is not drawn at all — the
+ * day says `Today` and the block under it says when, in five rows instead of a
+ * sentence.
+ *
+ * Its own read, lazily and once per player, in the shape every other lazily
+ * fetched thing on this page takes: `useDelayedFlag` behind `WAIT_DELAY` so a
+ * warm answer never flashes a wait, and the spinning baseball over a line naming
+ * what is being read.
+ */
+function ProjectedStartsBlock({ playerId, name }: { playerId: number; name: string }) {
+  const [info, setInfo] = useState<ProjectedStarts | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+  const wait = useDelayedFlag(loading);
+  useEffect(() => {
+    let live = true;
+    setLoading(true);
+    setInfo(null);
+    setFailed(false);
+    api
+      .projectedStarts(playerId)
+      .then((d) => {
+        if (live) setInfo(d);
+      })
+      .catch(() => {
+        // A failed read costs this block and nothing else — every other block on
+        // the tab is already drawn.
+        if (live) setFailed(true);
+      })
+      .finally(() => {
+        if (live) setLoading(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [playerId]);
+
+  const starts = info?.starts ?? [];
+  const projected = starts.filter((s) => !s.announced).length;
+  return (
+    <section className="ovw-block ovw-starts">
+      <h2 className="ovw-head">Projected Starts</h2>
+      {starts.length > 0 ? (
+        <ol className="start-list">
+          {starts.map((s) => (
+            <StartRow key={s.gamePk} start={s} />
+          ))}
+        </ol>
+      ) : wait ? (
+        <LoadingLine>Reading his rotation</LoadingLine>
+      ) : loading ? null : (
+        <p className="ovw-none">{refusalText(info, failed, name)}</p>
+      )}
+      {/* **The caveat stays on the card**, where the general key behind an ⓘ on
+          the Splits and Charts cards does not — and the split is that one's own:
+          instructions are read once and belong behind a button, where a caveat
+          about *these rows* changes how what is on screen should be read. It
+          names his own cadence rather than saying "estimated", because the
+          number is what tells a reader how much to trust the dashed rows: one
+          turn every five club games is a settled rotation, and the same
+          sentence saying six is a club running a six-man. Drawn only when
+          something on screen is actually a guess. */}
+      {projected > 0 && info?.cadence != null && (
+        <p className="start-note">
+          {projected === 1 ? 'One start is' : `${projected} starts are`} projected from his last
+          one, at a turn every {info.cadence} club {info.cadence === 1 ? 'game' : 'games'} — his
+          own pace this season. Nobody has named them yet.
+        </p>
+      )}
+      {/* **A refusal with rows above it still owes the reader a sentence.** A
+          pitcher can have an announced start and no cadence to project past it
+          — a call-up his club has named for Sunday is exactly that — and a
+          block that showed the one row and stopped would leave him wondering
+          where the other four went. The refusal branch below only speaks when
+          there is nothing at all, so this says the same thing under a list. */}
+      {starts.length > 0 && info?.refusal && (
+        <p className="start-note">{refusalText(info, false, name)}</p>
+      )}
+    </section>
+  );
+}
+
+/** What the block says when it has nothing to show, which is four different
+ *  facts about the pitcher and so four different sentences — see
+ *  `ProjectionRefusal`, where each is set out. */
+function refusalText(info: ProjectedStarts | null, failed: boolean, name: string): string {
+  if (failed || info === null || info.refusal === 'no-schedule') {
+    return 'Couldn’t read his club’s schedule.';
+  }
+  switch (info.refusal) {
+    case 'not-a-starter':
+      return `${name} hasn’t started a game this season, so there’s no rotation slot to place him in.`;
+    case 'new-club':
+      return `${name} hasn’t started for his new club yet, so there’s no slot to place him in — nothing past what they have named.`;
+    case 'too-few-starts':
+      return `Too few starts this season to read a rotation slot off — nothing past what his club has named.`;
+    case 'out-of-rotation':
+      return `${name} has missed more than a turn, so his rotation slot isn’t his to project from — nothing past what his club has named.`;
+    default:
+      return 'Nothing left on his club’s schedule.';
+  }
+}
+
+/**
+ * One start. The parts are a when, a matchup, whoever the other side has named,
+ * and the tag that says whether the row is a fact or a guess — the same wrapping
+ * line `.ovw-next-line` uses one block up, so a start read here and the next
+ * game read there read alike.
+ *
+ * **A projected row is drawn as a guess and an announced one is not**, which is
+ * the app's standing rule that an estimate is marked as one — the percentile
+ * card's dotted bubble and the Splits card's hatched fill are the same rule on
+ * two other surfaces. It is said three ways over, because one of them is bound
+ * to be the one a given reader takes it from: the row's text goes muted, its
+ * rail goes dashed, and the tag says the word.
+ *
+ * The opposing starter is by **surname**, where the single next-game line above
+ * prints the whole name: this is a list of five rows scanned down rather than
+ * one sentence read across, which is the same reason the summary table's
+ * opponent cell and the feed's Upcoming bar cut theirs. The full name is on the
+ * row's tooltip.
+ */
+function StartRow({ start }: { start: ProjectedStart }) {
+  const when = prettyGameDate(start.date);
+  const time = formatStartTime(start.startTime);
+  const opp = `${start.home ? 'vs' : '@'} ${start.opponent}`;
+  const sp = start.probablePitcher;
+  return (
+    <li
+      className={`start-row${start.announced ? ' start-row--announced' : ' start-row--projected'}`}
+      title={
+        (start.announced
+          ? `Announced by his club: ${when}${time ? ` at ${time}` : ''} ${opp}`
+          : `Projected from his rotation slot — nobody has named this start yet: ${when} ${opp}`) +
+        (sp ? ` · against ${handThrows(sp.hand)} ${sp.name}` : '')
+      }
+    >
+      <span className="ovw-next-when">
+        {when}
+        {time ? ` · ${time}` : ''}
+      </span>
+      <span className="ovw-next-opp">{opp}</span>
+      {sp && (
+        <span className="ovw-next-vs">
+          vs {handThrows(sp.hand)} {surname(sp.name)}
+        </span>
+      )}
+      <span className="start-tag">{start.announced ? 'Announced' : 'Projected'}</span>
+    </li>
   );
 }
