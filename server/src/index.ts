@@ -1066,11 +1066,11 @@ app.get(
 // answering with an empty table, the same way `?period=` falls back to the
 // current matchup. **Which spans can be served at all is on the response**
 // (`spans`), because that is a fact about the league rather than about the
-// request: a season with no All-Star break in ESPN's own calendar has no
-// halves, and the tab strip is drawn from what comes back rather than from a
-// list the client holds. `?refresh=1` as everywhere else, reaching the span
-// that includes the week being played and leaving the settled ones on their
-// blobs — see `espn.ts`, **The Rankings tab**.
+// request: a league that publishes no matchup count has no halves at all, and
+// one in April has no second half yet, so the tab strip is drawn from what
+// comes back rather than from a list the client holds. `?refresh=1` as
+// everywhere else, reaching the span that includes the week being played and
+// leaving the settled ones on their blobs — see `espn.ts`, **The Rankings tab**.
 app.get(
   '/api/espn/rankings',
   requireUser,

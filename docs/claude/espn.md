@@ -92,7 +92,7 @@ So the lineup is read **per day, at that day's own scoring period** (`getTeamRos
 
 **The pair is picked by majority vote** over all 184 rather than by taking the first: each mapped period is restated as "what would the first date's period have been?" and the modal answer wins, so one malformed row cannot shift the season by a day. With 0 violations today the vote is unanimous; it is there for the day it isn't. A period whose games straddle two ET dates is dropped rather than guessed at.
 
-**The read is cookie-free and season-static, so it is one read for everybody.** `seasons/{season}?view=proTeamSchedules_wl` returns 200 with **no `Cookie` header at all** — none of it is league-specific — which puts it in the same class as `getPlayerPool`'s 940KB player list: one fetch shared by every league and every user. It is 850,891 bytes, and **what is cached is the pair rather than the payload**: `espn-period-anchor-{season}-v1.json`, **67 bytes**, in memory and in the storage tier on a 30-day window, since a season's schedule does not move. `getPeriodAnchor` **never rejects** — it returns the pair or null — which is load-bearing rather than tidy: the fan-out names a period in every one of 62 places and `getTeamRosters` catches per *roster read* rather than around the naming, so a throw would take the whole range instead of costing it its accuracy. That was found by driving the module with the read forced to 503, where the in-flight guard handed one rejecting promise to five concurrent callers and the range died. A failure is remembered for a minute so a dead upstream is asked once per fan-out rather than once per wave.
+**The read is cookie-free and season-static, so it is one read for everybody.** `seasons/{season}?view=proTeamSchedules_wl` returns 200 with **no `Cookie` header at all** — none of it is league-specific — which puts it in the same class as `getPlayerPool`'s 940KB player list: one fetch shared by every league and every user. It is 850,891 bytes, and **what is cached is the pair rather than the payload**: `espn-period-anchor-{season}-v2.json`, **67 bytes**, in memory and in the storage tier on a 30-day window, since a season's schedule does not move. `getPeriodAnchor` **never rejects** — it returns the pair or null — which is load-bearing rather than tidy: the fan-out names a period in every one of 62 places and `getTeamRosters` catches per *roster read* rather than around the naming, so a throw would take the whole range instead of costing it its accuracy. That was found by driving the module with the read forced to 503, where the in-flight guard handed one rejecting promise to five concurrent callers and the range died. A failure is remembered for a minute so a dead upstream is asked once per fan-out rather than once per wave.
 
 **If the schedule can't be read at all the old rule stands as the fallback**, logged — ESPN's pointer plus the days from `baseballToday()`, which is right for 22½ hours a day and is what this file did for its whole life. A failed derivation must cost accuracy in the small hours, never the feature. Below that, an unnameable period leaves the request un-parameterised and ESPN answers for its own current day, which is the right direction to fail in.
 
@@ -675,27 +675,58 @@ it covers, and says `so far` where it reaches into the week being played.
 (checked: 12 of 12 teams), which is a fact about the calendar rather than a
 duplication — they diverge the moment round 20 is played.
 
-**The halves are cut on the All-Star break, read off ESPN's own calendar.**
-`fetchPeriodAnchor` already downloads `proTeamSchedules_wl` and now reduces it
-twice: the anchor pair as before, and the **longest run of gameless scoring
-periods** inside the span the schedule covers. Checked on 2026: of the 187
-periods it carries, exactly **three are gameless — 111, 112 and 113 — and they
-are the only run of them in the season** (110 carries 30 games, 114 carries 2,
-115 carries 30), so "the longest gameless run" is not a heuristic that happens
-to work, it is the only candidate there is. `espn-period-anchor-{season}` goes
-to **`-v2`** for it, which is exactly the bump that key's own note asked for: a
-stored v1 blob carries no break and would come back deserializing as a season
-with none, quietly costing the tab its two halves for a month.
+**The halves are an even division of the regular season by matchup period, and
+they were the All-Star break until now.** That break was read off ESPN's own
+calendar — `fetchPeriodAnchor` reduced `proTeamSchedules_wl` twice, once to the
+anchor pair and once to the longest run of gameless scoring periods, which on
+2026 is exactly three (111–113) and is the only run of them in the season. It
+was a true fact about the season and the wrong cut for this table, because **the
+break does not fall halfway**: on the live league it lands inside matchup period
+15 of an 18-period regular season, so `First half` was fifteen weeks of play and
+`Second half` three.
 
-**A matchup period that straddles the break goes to the half holding more of its
-game days**, the gameless ones counting for neither — the live league's period
-15 spans scoring periods 104–117, seven game days before the break and four
-after, so it is the first half's. Dropping a straddling period outright was the
-alternative and is worse: it would take a fortnight's play out of *both* halves
-with nothing on screen to explain the gap. A half with no matchup periods in it
-is **absent from the `spans` list** rather than served empty, which is the rule
-the scoreboard's forward arrow already follows for a period ESPN has not opened;
-so is a season whose break the calendar cannot show.
+**What that did to the numbers is the whole of the argument.** Measured on the
+live league by summing every counting category over each period, the old split
+gave the twelve teams **4.5× to 6.8× more runs in the first half than the
+second** (The Homewreckers 608 against 93, Pirates Cove 572 against 125); the
+even split gives **0.88× to 1.19×** (359/342 and 337/360). Two columns that
+differ by a factor of five in every counting stat are not two halves a manager
+can read against each other — they are a season and a fortnight under labels
+saying otherwise.
+
+So `halvesOf` takes `regularPeriods` alone: `mid = ceil(N / 2)`, first half
+1..mid, second half the rest, the odd period going to the first (19 → 10 and 9)
+since one of them has to take it. On the checked league that is **`Weeks 1–9 ·
+Mar 25 – May 31`** and **`Weeks 10–18 · Jun 1 – Aug 9`**, where it read `Weeks
+1–15 · Mar 25 – Jul 19` and `Weeks 16–18 · Jul 20 – Aug 9`.
+
+**The boundary is the league's matchup count, not the periods the schedule
+happens to carry**, and that is what keeps it still: a league's
+`matchupPeriodCount` is settled before opening day, so `ceil(N / 2)` names the
+same week in April as in September, where halving the list of periods *played so
+far* would move the line every week and change what a saved `lspan=first` link
+described between two visits. In April the second half is therefore empty, and a
+half with no matchup period in it is **absent from the `spans` list** rather than
+served empty — the rule the scoreboard's forward arrow already follows for a
+period ESPN has not opened, and the same one a playoff round nobody has reached
+follows. A league that publishes no matchup count gets no halves at all, which
+is what an unreadable one looked like before.
+
+**And the two halves still partition the regular season exactly**, which is the
+property the old cut had and this must not lose: checked against an independent
+per-period sum built from each matchup period's own `scoreByStat`, **168 of 168
+counting cells** (12 teams × 7 categories × 2 halves) reproduce it, and the
+eight consolation teams' `first + second == season` check above is unmoved.
+
+**The break derivation went with the cut.** Nothing else read it, so
+`SeasonCalendar` is a `PeriodAnchor` again and `fetchPeriodAnchor` reduces the
+schedule once — a field nobody reads is a field nobody misses, the rule
+`teamProbablePitcher`'s removal already sets. **The blob key stays at `-v2`**
+although the shape has shrunk back to the pair: that bump *was* the break
+joining it, and a stored v2 blob carrying the two extra numbers deserializes
+into the pair with them ignored, where the hazard a version guards against is
+the opposite one — a field arriving missing. Bumping would spend the 850KB
+again to learn the same `{ period, date }`.
 
 **Ranks are computed on the server here, where the research board computes them
 in the client**, and the two are not in tension. That board ranks columns
