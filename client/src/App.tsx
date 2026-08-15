@@ -3537,6 +3537,11 @@ export default function App() {
              yet. */
           rankPopulations={detailsRankPopulations}
           onNeedRankPopulations={loadDetailsRankPopulations}
+          /* The page is navigable between players: the Overview tab's
+             scheduled game names the other side's starter and opens him. The
+             same `setDetailsKey` every other route in uses, so one man's page
+             is reached the one way however it was arrived at. */
+          onOpenDetails={setDetailsKey}
           onClose={() => setDetailsKey(null)}
         />
       )}

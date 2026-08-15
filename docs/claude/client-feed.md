@@ -146,6 +146,16 @@ anything newly read back out of one", and the answer is that the field was
 already there and already read (the summary table's opponent cell prints the same
 object's `name`).
 
+**And it is drawn wherever the row is, which was true of the markup and not of
+the handler.** This block renders on every `UpcomingRow`, `grouped` or not —
+`grouped` drops the row's *own* identity header and has never had anything to
+say about the block naming the other side's starter. The **player page's
+Overview tab** draws the same row through `PlayerDay`, and that was the one
+caller of `PlayerDay` which never passed an `onOpenDetails`, so both links there
+reached its `?? (() => {})` default and **did nothing at all**. See
+**Client — the player page**, *The scheduled game's pitcher link opened nothing*,
+for the measurement and the threading.
+
 **A key the season roster cannot resolve opens nothing**, which is
 `App.tsx::detailsPlayer`'s standing behaviour — it resolves a `player=` key
 against `reports` and then `getSeasonPlayers`, and renders `PlayerDetails` only

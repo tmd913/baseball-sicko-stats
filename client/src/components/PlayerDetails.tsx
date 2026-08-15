@@ -382,6 +382,7 @@ export function PlayerDetails({
   onShowRanksChange,
   rankPopulations,
   onNeedRankPopulations,
+  onOpenDetails,
   onClose,
 }: {
   playerId: number;
@@ -445,6 +446,22 @@ export function PlayerDetails({
    *  and this is the same cache. */
   rankPopulations: Partial<Record<string, ResearchRow[]>>;
   onNeedRankPopulations: () => void;
+  /**
+   * Open another player's page from inside this one — what the Overview tab's
+   * scheduled game needs, and the reason this page is navigable at all.
+   *
+   * That row's dialog draws the opposing starter with a headshot and a name,
+   * both of them links, because he is the man a reader has come to the row
+   * about and `PlayerDetails` opens on anybody. It was the one caller of
+   * `PlayerDay` that never passed a handler, so both links reached
+   * `PlayerDay`'s `?? (() => {})` and did **nothing at all** — measured on
+   * Soderstrom's page: press either and the URL, the `<h1>` and the dialog are
+   * byte-identical afterwards. The default was written when every item here was
+   * `grouped` and so drew no identity row; what it missed is that `grouped`
+   * drops the *row's own* header and not the block naming the other side's
+   * starter, which renders either way.
+   */
+  onOpenDetails: (key: string) => void;
   onClose: () => void;
 }) {
   // This view covers the page but scrolls in its own box, so the list behind it
@@ -501,9 +518,17 @@ export function PlayerDetails({
   // anywhere, they can now be pressed from 1,700px down a percentile card — and
   // what the next tab has at that offset is somebody else's rows, or nothing at
   // all. A tab is a different reading of the player, not a place in one.
+  // `playerId` as well as `tab`, and it is a **guard rather than a fix**: a
+  // different player is a different page and the offset the last one was read at
+  // means nothing on it, but the reset beside this one clears `day`, which
+  // unmounts the Overview's whole subtree, which collapses the box and leaves
+  // the browser to clamp the offset to 0 on its own. Measured either way at
+  // 390×844 — scrolled to 149 on a batter, the pitcher's page opens at 0 with or
+  // without the dependency. It is here so the property holds by construction
+  // rather than by an accident of what another effect happens to clear.
   useLayoutEffect(() => {
     if (viewRef.current) viewRef.current.scrollTop = 0;
-  }, [tab]);
+  }, [tab, playerId]);
   useLayoutEffect(() => {
     const row = tabsRef.current;
     const el = row?.querySelector<HTMLElement>('.details-tab.is-active');
@@ -702,7 +727,26 @@ export function PlayerDetails({
   }, [playerId, isPitcher]);
 
   // Reset the (lazily-loaded) rolling series when the player changes.
+  //
+  // **And the tab with them, which this page only now has to answer for.** Until
+  // the Overview's scheduled game gained a working link there was no way for
+  // `playerId` to change while the page was open — every route in opened it and
+  // every route out closed it — so the tab could only ever belong to the player
+  // on screen.
+  //
+  // It is a **guard rather than a fix**, and the honest version is worth saying:
+  // the one link that changes the player lives in the Overview tab's own
+  // dialog, so `tab` is already `overview` whenever it fires and the reset is a
+  // no-op today (measured — the tab reads `Overview` before and after, on both
+  // kinds). What it defends against is the next link somewhere else, where
+  // carrying a tab across would be wrong in a way the reader cannot undo:
+  // `arsenal` renders its button only for a pitcher, so carrying it onto a
+  // batter leaves a page with no tab selected and nothing under it, every block
+  // below being gated on an `arsenal` this very effect has just cleared.
+  // Overview is where the page opens on everybody, and a new player is a new
+  // page.
   useEffect(() => {
+    setTab('overview');
     xwobaReq.current = null;
     setXwoba(null);
     setXwobaError(null);
@@ -836,7 +880,7 @@ export function PlayerDetails({
     return () => {
       live = false;
     };
-  }, [tab, playerId]);
+  }, [tab]);
 
   // Same lazy load for the Arsenal tab.
   useEffect(() => {
@@ -862,7 +906,7 @@ export function PlayerDetails({
     return () => {
       live = false;
     };
-  }, [tab, playerId]);
+  }, [tab]);
 
   // Fetch the season xwOBA series the first time the Charts tab is opened for
   // this player (xwobaReq tracks which player we've already requested).
@@ -1207,6 +1251,7 @@ export function PlayerDetails({
           news={news}
           newsLoading={newsLoading}
           onTab={setTab}
+          onOpenDetails={onOpenDetails}
         />
       )}
 
