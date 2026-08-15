@@ -1455,6 +1455,13 @@ export interface EspnTransactionPlayer {
    *  row can open his page; null where it doesn't, and the name draws as
    *  text. */
   mlbId: number | null;
+  /** His MLB club, for the cap logo the row's identity block draws — the id the
+   *  mark is served by, and the abbreviation that is its `alt`, its tooltip and
+   *  what the block prints when there is no mark to draw. Both fall out of the
+   *  join that found `mlbId`, so neither is a request of its own; both null on
+   *  the row that did not join. */
+  mlbTeamId: number | null;
+  team: string | null;
   move: 'add' | 'drop';
   via: 'free-agent' | 'waiver' | 'trade';
   toTeamId: number | null;

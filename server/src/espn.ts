@@ -35,6 +35,10 @@ import type { PlayerKind, WatchPlayer } from './types.js';
 import { readBlob, readJsonBlob, writeBlob, writeJsonBlob } from './storage.js';
 import { addDays, baseballToday, daysBetween, easternDate } from './etDate.js';
 import { mapLimit } from './limit.js';
+// The 30-club table every abbreviation in the app is drawn from — 24h cached
+// and already fetched for a player's own club badge, so a transactions row's
+// `MIL` costs nothing new.
+import { getTeamAbbrevs } from './mlbStats.js';
 
 // Keep in sync with hfSea in savant.ts, CURRENT_SEASON in percentiles.ts, and
 // SEASON in xwoba.ts / pitcherArsenal.ts / teamStats.ts / expectedStats.ts /
@@ -408,7 +412,8 @@ export interface EspnPlayerPool {
    *  meaning is what keeps that rule single. */
   eligible: Record<number, string[]>;
   /**
-   * **ESPN's own player id → his name and the MLB id he joined to.**
+   * **ESPN's own player id → his name, the MLB id he joined to, and the club
+   * that join found him on.**
    *
    * The third reading of the same row, and it exists because the league's
    * activity feed names a player by ESPN's id and by nothing else — no name, no
@@ -418,10 +423,17 @@ export interface EspnPlayerPool {
    * row is kept, matched or not, since a name is worth having for a player MLB
    * has never listed; `mlbId` is null for him and the row simply is not a link.
    *
+   * `teamId` rides along because the join has it in hand — `matchMlbPlayer`
+   * answers with the whole `IndexEntry`, whose club is the very field the tie
+   * is broken on — and because a transactions row draws the identity block the
+   * summary table and the research board draw, which is a cap logo and MLB
+   * serves one by id and by nothing else. Null for a player who did not join,
+   * which is the same row that has no `mlbId` and so draws no block at all.
+   *
    * Checked against a whole season of this league's activity: **376 of 376**
    * distinct ESPN player ids named in it are on this list.
    */
-  byEspnId: Record<number, { name: string; mlbId: number | null }>;
+  byEspnId: Record<number, { name: string; mlbId: number | null; teamId: number | null }>;
 }
 
 const ROSTER_PCT_TTL_MS = 6 * 60 * 60 * 1000;
@@ -450,7 +462,8 @@ export async function getPlayerPool(): Promise<EspnPlayerPool> {
     const index = await getMlbIndex();
     const pct: Record<number, number> = {};
     const eligible: Record<number, string[]> = {};
-    const byEspnId: Record<number, { name: string; mlbId: number | null }> = {};
+    const byEspnId: Record<number, { name: string; mlbId: number | null; teamId: number | null }> =
+      {};
     for (const row of rows) {
       if (!row.fullName) continue;
       // The join first, once, and the three readings of the row after it: they
@@ -461,7 +474,11 @@ export async function getPlayerPool(): Promise<EspnPlayerPool> {
       // ESPN's id alone, and a transaction is worth printing for a man MLB has
       // never listed. `mlbId` null is what makes his row not a link.
       if (typeof row.id === 'number') {
-        byEspnId[row.id] = { name: row.fullName, mlbId: found?.id ?? null };
+        byEspnId[row.id] = {
+          name: row.fullName,
+          mlbId: found?.id ?? null,
+          teamId: found?.teamId ?? null,
+        };
       }
       if (!found) continue;
       const owned = row.ownership?.percentOwned;
@@ -3067,6 +3084,14 @@ export interface EspnTransactionPlayer {
    *  an ambiguity neither name nor club resolves is left unmatched rather than
    *  guessed. The row still draws; it simply is not a link. */
   mlbId: number | null;
+  /** His MLB club, for the cap logo the row's identity block draws — the id the
+   *  mark is served by, and the abbreviation that is its `alt`, its tooltip and
+   *  what the block prints when there is no mark to draw. Both come off the
+   *  join that found `mlbId` (`IndexEntry.teamId`) and the 24h team table every
+   *  other abbreviation in the app comes from, so neither is a request of its
+   *  own; both are null on the row that did not join. */
+  mlbTeamId: number | null;
+  team: string | null;
   move: 'add' | 'drop';
   via: 'free-agent' | 'waiver' | 'trade';
   /** The team that took him, and the one that gave him up. A free-agent pickup
@@ -3142,7 +3167,7 @@ export async function getTransactions(
   if (running && !force) return running;
 
   const job = (async () => {
-    const [meta, data, pool] = await Promise.all([
+    const [meta, data, pool, abbrevs] = await Promise.all([
       leagueMeta(creds, force),
       leagueGet<EspnTopicResponse>(creds, ['kona_league_communication'], null, {
         topics: {
@@ -3164,6 +3189,13 @@ export async function getTransactions(
       // distinct ESPN player ids named in 2026's transactions are on it.
       getPlayerPool().catch((err: Error) => {
         console.error('ESPN player pool unavailable for transactions:', err.message);
+        return null;
+      }),
+      // The 30-club abbreviation table, 24h-cached and already fetched for every
+      // roster badge in the app — so a row's `MIL` is a `Map` lookup rather than
+      // a request. A failure costs the cap logo its `alt` and nothing else.
+      getTeamAbbrevs().catch((err: Error) => {
+        console.error('MLB team table unavailable for transactions:', err.message);
         return null;
       }),
     ]);
@@ -3197,6 +3229,8 @@ export async function getTransactions(
           // is a fact even where his name is not to hand.
           name: entry?.name ?? `ESPN player ${m.targetId}`,
           mlbId: entry?.mlbId ?? null,
+          mlbTeamId: entry?.teamId ?? null,
+          team: entry?.teamId != null ? abbrevs?.get(entry.teamId) ?? null : null,
           move: rule.move,
           via: rule.via,
           toTeamId,

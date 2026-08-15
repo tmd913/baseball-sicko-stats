@@ -43,6 +43,7 @@ import type {
   EspnScoreboard,
   EspnStandingsTeam,
   EspnTransactions,
+  SeasonPlayer,
 } from '../types';
 import { LoadingBlock } from './Loading';
 import LeagueRankings from './LeagueRankings';
@@ -511,6 +512,9 @@ export default function LeagueView({
   transactions,
   transactionsLoading,
   transactionsError,
+  players,
+  rosterPct,
+  eligibility,
   onOpenPlayer,
   connected,
   onConnect,
@@ -527,6 +531,12 @@ export default function LeagueView({
   transactions: EspnTransactions | null;
   transactionsLoading: boolean;
   transactionsError: string | null;
+  /** Threaded through to the Transactions tab alone — the season roster and the
+   *  two maps off the ownership read, which are what a player row draws his
+   *  club, his positions and his roster % from. */
+  players: SeasonPlayer[];
+  rosterPct: Map<number, number> | null;
+  eligibility: Map<number, string[]> | null;
   onOpenPlayer: (mlbId: number) => void;
   connected: boolean;
   onConnect: () => void;
@@ -566,6 +576,9 @@ export default function LeagueView({
           data={transactions}
           loading={transactionsLoading}
           error={transactionsError}
+          players={players}
+          rosterPct={rosterPct}
+          eligibility={eligibility}
           onOpenPlayer={onOpenPlayer}
         />
       ) : error && !board ? (
