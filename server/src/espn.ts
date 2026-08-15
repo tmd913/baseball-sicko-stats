@@ -2059,6 +2059,10 @@ interface EspnScoreboardResponse {
       scoringType?: string;
       scoringItems?: { statId?: number; isReverseItem?: boolean }[];
     };
+    /** How many matchup periods the **regular season** is. Everything past it
+     *  is a playoff round — the distinction the halves and the playoff span
+     *  both turn on, and one the schedule alone cannot make. */
+    scheduleSettings?: { matchupPeriodCount?: number };
   };
   status?: { currentMatchupPeriod?: number };
   teams?: {
@@ -2145,6 +2149,11 @@ interface LeagueMeta {
   /** Every matchup period the schedule carries, with the scoring periods it
    *  covers, ascending. */
   periods: { period: number; first: number; last: number }[];
+  /** The last period of the **regular season** (ESPN's `matchupPeriodCount`).
+   *  Everything past it is a playoff round. Null if ESPN did not say. */
+  regularPeriods: number | null;
+  /** The period being played, off ESPN's own pointer. */
+  currentPeriod: number | null;
   fetchedAt: number;
 }
 
@@ -2257,6 +2266,19 @@ async function leagueMeta(creds: EspnCreds, force = false): Promise<LeagueMeta> 
       teams,
       myTeamId,
       periods,
+      // Where the regular season ends. **ESPN's own number, not a guess from
+      // the schedule**: `matchupPeriodCount` is 18 on the checked league while
+      // the schedule runs to 21, and periods past it are playoff rounds — which
+      // is exactly the distinction the halves and the playoff span turn on.
+      regularPeriods: info.settings?.scheduleSettings?.matchupPeriodCount ?? null,
+      // ESPN's own pointer at the live period, preferred over "the last period
+      // the schedule mentions": those agree today only because the playoff
+      // rounds past the current one are not scheduled yet, and the day they are
+      // the last one would be a round nobody has played.
+      currentPeriod:
+        typeof info.status?.currentMatchupPeriod === 'number'
+          ? info.status.currentMatchupPeriod
+          : null,
       fetchedAt: Date.now(),
     };
     metaCache.set(creds.leagueId, meta);
@@ -2425,7 +2447,9 @@ export async function getScoreboard(
     }
   }
   const meta = await leagueMeta(creds, force);
-  const current = meta.periods.length > 0 ? meta.periods[meta.periods.length - 1].period : null;
+  const current =
+    meta.currentPeriod ??
+    (meta.periods.length > 0 ? meta.periods[meta.periods.length - 1].period : null);
   // A period the schedule has no row for is not a period this league has, so
   // it falls back to the current one rather than answering with an empty
   // scoreboard the reader has no way to explain.
@@ -2514,7 +2538,7 @@ export async function getScoreboard(
 // summed as though it were a count.
 
 /** The four cuts the Rankings tab offers. */
-export type EspnRankSpan = 'matchup' | 'season' | 'first' | 'second';
+export type EspnRankSpan = 'season' | 'matchup' | 'first' | 'second' | 'playoffs';
 
 /** One span, as the tab strip needs it: what it is called and what it covers. */
 export interface EspnRankSpanInfo {
@@ -2709,12 +2733,21 @@ async function getSpanTotals(
  * Null when there is no break to cut on, which is what an unreadable schedule
  * looks like — and the halves are then not offered at all.
  */
+/** The two halves of the **regular season**, split at the All-Star break.
+ *
+ * `regularPeriods` is what keeps the playoffs out of them, and leaving it out
+ * was a real error rather than a tidiness one: on the checked league the
+ * regular season is 18 periods and the schedule runs to 19, so period 19 — the
+ * first playoff round, already being played — was landing in "Second half" and
+ * being counted as regular-season play. */
 function halvesOf(
   periods: { period: number; first: number; last: number }[],
   breakFirst: number | null,
   breakLast: number | null,
+  regularPeriods: number | null,
 ): { first: number[]; second: number[] } | null {
   if (breakFirst == null || breakLast == null) return null;
+  if (regularPeriods != null) periods = periods.filter((p) => p.period <= regularPeriods);
   const first: number[] = [];
   const second: number[] = [];
   for (const p of periods) {
@@ -2780,8 +2813,23 @@ export async function getRankings(
   }
   const meta = await leagueMeta(creds, force);
   const calendar = await getPeriodAnchor();
-  const current = meta.periods.length > 0 ? meta.periods[meta.periods.length - 1].period : null;
-  const halves = halvesOf(meta.periods, calendar?.breakFirst ?? null, calendar?.breakLast ?? null);
+  const current =
+    meta.currentPeriod ??
+    (meta.periods.length > 0 ? meta.periods[meta.periods.length - 1].period : null);
+  // The playoff rounds that exist — periods past the regular season which the
+  // schedule actually carries. A round nobody has reached yet is not in the
+  // schedule, so this grows as the bracket is played rather than offering a
+  // span with nothing in it.
+  const playoffs =
+    meta.regularPeriods == null
+      ? []
+      : meta.periods.filter((p) => p.period > meta.regularPeriods!).map((p) => p.period);
+  const halves = halvesOf(
+    meta.periods,
+    calendar?.breakFirst ?? null,
+    calendar?.breakLast ?? null,
+    meta.regularPeriods,
+  );
 
   const dated = async (first: number, last: number) => {
     const a = meta.periods.find((p) => p.period === first);
@@ -2793,7 +2841,12 @@ export async function getRankings(
     return { start, end };
   };
 
+  // **Season leads**, then the week being played, then the season cut into its
+  // two halves, then the bracket. That is the order a manager reads them in —
+  // the whole year first, then the narrowing — and it is why `season` is also
+  // the default rather than the first thing in the array.
   const spans: EspnRankSpanInfo[] = [];
+  spans.push({ span: 'season', label: 'Season', periods: null, start: null, end: null, live: false });
   if (current != null && meta.categories.length > 0) {
     const { start, end } = await dated(current, current);
     spans.push({
@@ -2805,10 +2858,10 @@ export async function getRankings(
       live: true,
     });
   }
-  spans.push({ span: 'season', label: 'Season', periods: null, start: null, end: null, live: false });
   for (const [key, label, list] of [
     ['first', 'First half', halves?.first ?? []],
     ['second', 'Second half', halves?.second ?? []],
+    ['playoffs', 'Playoffs', playoffs],
   ] as const) {
     if (list.length === 0) continue;
     const { start, end } = await dated(list[0], list[list.length - 1]);
@@ -2845,7 +2898,12 @@ export async function getRankings(
     const raw = await getSpanTotals(creds, [current], false, force);
     for (const [id, v] of Object.entries(raw)) values[Number(id)] = onlyCategories(v);
   } else {
-    const list = asked === 'first' ? (halves?.first ?? []) : (halves?.second ?? []);
+    const list =
+      asked === 'first'
+        ? (halves?.first ?? [])
+        : asked === 'second'
+          ? (halves?.second ?? [])
+          : playoffs;
     if (list.length > 0) {
       const frozen = current == null || !list.includes(current);
       const raw = await getSpanTotals(creds, list, frozen, force);

@@ -1391,7 +1391,7 @@ export interface EspnScoreboard {
  *
  * Mirrors `EspnRankings` and its parts in the server's `espn.ts`.
  */
-export type EspnRankSpan = 'matchup' | 'season' | 'first' | 'second';
+export type EspnRankSpan = 'season' | 'matchup' | 'first' | 'second' | 'playoffs';
 
 export interface EspnRankSpanInfo {
   span: EspnRankSpan;

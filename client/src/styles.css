@@ -341,8 +341,19 @@ body {
     position: static;
   }
 }
+/* The three fixed-height columns opt out of sticky **explicitly**, rather than
+   relying on it being a no-op in a column that does not scroll — which it is
+   not, quite: `overflow: hidden` makes that column a scrollport of its own, and
+   a sticky box in one is held against its **padding** box, which undoes the
+   chrome's negative top margin and leaves a 14px strip of page above the bar
+   that no other view shows. Static puts it back in flow, where the margin does
+   what it was written to do.
+   `league-rank-mode` was added later and did not join this list, which is
+   exactly the strip it produced — measured, the bar sat at y=14 there against
+   y=0 on the two views beside it. */
 .app.summary-mode .app-chrome,
-.app.research-mode .app-chrome {
+.app.research-mode .app-chrome,
+.app.league-rank-mode .app-chrome {
   position: static;
 }
 
@@ -10802,7 +10813,9 @@ body {
   left: 0;
   z-index: 1;
   width: 1%;
-  padding-right: 0;
+  /* Its own gutters on both sides. `padding-right: 0` put the badge hard
+     against the name beside it, which on a pinned column reads as the image
+     having been clipped rather than as two columns meeting. */
   text-align: left;
   box-shadow: var(--pin-edge);
 }
@@ -10810,12 +10823,15 @@ body {
 .league-table thead .lg-logo-col {
   z-index: 3;
 }
-/* The name, which now scrolls. It keeps a floor so the column does not collapse
-   to its shortest name, and a cap so one long name cannot push the categories
-   off the right of a phone — `.lg-row-title` is what gives. */
+/* The name, which now scrolls with the stats rather than pinning. **Uncapped
+   and never ellipsized**: it was truncated when it was the pinned column and
+   every pixel of it was paid for out of the categories held beside it, and
+   that argument died with the pin. A name in a column that scrolls costs the
+   reader nothing but the scrolling they are already doing, and a team called
+   `Brian&Tom's Excellent Adventure` reading `Brian&Tom's Excellent…` is the
+   one thing a league table must not do — the row is the team. */
 .league-table .lg-name-col {
   min-width: 132px;
-  max-width: 260px;
   text-align: left;
   font-weight: 700;
 }
@@ -10825,15 +10841,8 @@ body {
   line-height: 1.2;
   min-width: 0;
   font-weight: 600;
-  overflow: hidden;
 }
-/* The name itself, which is the part that has to give: `text-overflow` needs
-   the element that holds the text, and `.lg-row-name` is a flex column holding
-   two of them. The record under it is short enough never to be the constraint. */
-.lg-row-title {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+
 .lg-row-sub {
   font-size: 11px;
   font-weight: 500;
@@ -10902,7 +10911,10 @@ body {
    count line — the one thing between the controls and the rows, describing
    what is under it. */
 .lg-span-detail {
-  margin: 0 0 6px;
+  /* Air above it as well as below: it is the first thing on the page under the
+     pinned bar, and with no top margin it sat against the bar's own hairline
+     as though it were part of the chrome rather than the table's caption. */
+  margin: 10px 0 6px;
   font-size: 12px;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
@@ -11102,11 +11114,10 @@ body {
     margin-top: var(--stack-gap);
   }
 
-  /* The name column on a phone. It no longer pins, so this is about how much
-     of the screen one team's name may take before the categories start, not
-     about what is held against the left edge. */
+  /* The name column on a phone. It no longer pins and is no longer capped —
+     see the rule above — so all this sets is the floor that keeps the column
+     from collapsing to its shortest name. */
   .league-table .lg-name-col {
     min-width: 116px;
-    max-width: 168px;
   }
 }

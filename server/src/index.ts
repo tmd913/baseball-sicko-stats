@@ -1042,8 +1042,17 @@ app.get(
   requireUser,
   asyncRoute(async (req, res) => {
     const raw = req.query.span;
+    // The five spans, validated against the union rather than trusted. An
+    // unrecognised one is null, which `getRankings` reads as "the default",
+    // so an older tab's `?span=` is a season rather than an error.
     const span =
-      raw === 'matchup' || raw === 'season' || raw === 'first' || raw === 'second' ? raw : null;
+      raw === 'season' ||
+      raw === 'matchup' ||
+      raw === 'first' ||
+      raw === 'second' ||
+      raw === 'playoffs'
+        ? raw
+        : null;
     try {
       const creds = await getEspnCreds(userId(req));
       if (!creds) {
