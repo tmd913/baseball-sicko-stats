@@ -414,6 +414,13 @@ function releaseInert(el: Element) {
  * how-to page reads 60 against the player page's 50 — and it is the same number
  * that decides which box answers Escape, so the two cannot come to disagree
  * about which of a pair is on top.
+ *
+ * **And the skip has to hold for a box that opens *later*, which is what the
+ * registry beside this is for** — see the note on `BackgroundMark`. The sibling
+ * test above can only answer for the stack as it stands when the walk runs, and
+ * the app's commonest route puts the higher box *inside* something an older
+ * mark is already holding: a `Modal` portalled to the body holds `#root`, and
+ * the player page it opens renders inside it.
  */
 export function useInertBackground(ref: RefObject<HTMLElement | null>, active = true) {
   useEffect(() => {
@@ -423,46 +430,122 @@ export function useInertBackground(ref: RefObject<HTMLElement | null>, active = 
 }
 
 /**
- * The walk itself. Returns its own release, so `useOverlayFocus` can order that
- * against giving focus back — and so the observers are disconnected by the same
- * call that drops the holds.
+ * Every background mark in force, and the reason there is a registry at all:
+ * **a mark has to answer to overlays that open after it.**
+ *
+ * The walk below runs once, when an overlay opens, and marks what is beside it
+ * on the way up to the body. That is right for the stack as it stands and goes
+ * wrong the moment a box opens *inside* something an older mark is holding —
+ * which is not a corner of this app but one of its ordinary routes. The feed's
+ * Upcoming row opens a `Modal` (46) portalled to the body, so that dialog's
+ * only sibling to hold is `#root`; the pitcher's headshot inside it then opens
+ * the player page (50), which renders **inside `#root`**. Measured on exactly
+ * that path at 1200×900: `#root` still `inert`, `.details-view` reading
+ * `insideInert: true`, `document.elementFromPoint` over its own tab strip
+ * answering `BODY`, `document.activeElement` never leaving the body, and a
+ * press on a tab doing nothing at all — the whole player page dead, on the one
+ * route that opens it on a man nobody has rostered.
+ *
+ * The sibling test could not have caught it: `#root` is not the higher box, it
+ * *contains* it, and it was held before that box existed. So the marks are
+ * registered, each one recomputes what it should be holding rather than
+ * remembering what it holds, and opening or closing any overlay re-runs the lot
+ * (`syncMarks`). The holds are still counted, which is what lets two marks want
+ * `#root` at once and the second release not undo the first.
  */
-function markBackgroundInert(box: HTMLElement | null): () => void {
-  const held = new Set<Element>();
-  const watchers: MutationObserver[] = [];
-  if (!box) return () => {};
-  const mine = layerOf(box);
-  const hold = (sib: Element) => {
-    // Once per overlay: an element removed and re-added would otherwise be held
-    // twice and released once, and would stay inert for the life of the page.
-    if (held.has(sib)) return;
+type BackgroundMark = { box: HTMLElement; held: Set<Element> };
+
+const marks = new Set<BackgroundMark>();
+
+/**
+ * What `mark` should be holding inert as things stand: everything on either
+ * side of its box's path to the body, less whatever a box stacked above it
+ * needs left reachable.
+ */
+function backgroundOf(mark: BackgroundMark): Set<Element> {
+  const want = new Set<Element>();
+  const mine = layerOf(mark.box);
+  const behindUs = (sib: Element) => {
     // Above us in the stack, so not behind us — see the note on the hook.
-    if (layerOf(sib) > mine) return;
-    held.add(sib);
-    holdInert(sib);
+    if (layerOf(sib) > mine) return false;
+    // Or it *contains* a box that is, which is the case a sibling test cannot
+    // see and the one this app hits — see the note on `BackgroundMark`. Read
+    // off the registry rather than off `OVERLAYS`, since the full-page table
+    // box is a mark and is not one of those.
+    for (const other of marks) {
+      if (other === mark) continue;
+      if (sib.contains(other.box) && layerOf(other.box) > mine) return false;
+    }
+    return true;
   };
-  let node: Element | null = box;
+  let node: Element | null = mark.box;
   while (node && node !== document.body) {
     const parent: HTMLElement | null = node.parentElement;
     if (!parent) break;
     const onPath: Element = node;
     for (const sib of Array.from(parent.children)) {
-      if (sib !== onPath) hold(sib);
+      if (sib !== onPath && behindUs(sib)) want.add(sib);
     }
-    const watcher = new MutationObserver((records) => {
-      for (const record of records) {
-        for (const added of Array.from(record.addedNodes)) {
-          if (added instanceof Element && added !== onPath) hold(added);
-        }
-      }
-    });
-    watcher.observe(parent, { childList: true });
-    watchers.push(watcher);
     node = parent;
   }
+  return want;
+}
+
+/**
+ * Bring one mark's holds level with what it should be holding. A diff rather
+ * than a re-walk-and-hold, which is also what keeps the old "once per overlay"
+ * rule: an element removed and re-added is held once, not twice and released
+ * once, and would otherwise stay inert for the life of the page.
+ */
+function syncMark(mark: BackgroundMark) {
+  const want = backgroundOf(mark);
+  for (const el of mark.held) {
+    if (want.has(el)) continue;
+    mark.held.delete(el);
+    releaseInert(el);
+  }
+  for (const el of want) {
+    if (mark.held.has(el)) continue;
+    mark.held.add(el);
+    holdInert(el);
+  }
+}
+
+function syncMarks() {
+  for (const mark of marks) syncMark(mark);
+}
+
+/**
+ * The walk itself. Returns its own release, so `useOverlayFocus` can order that
+ * against giving focus back — and so the observers are disconnected by the same
+ * call that drops the holds.
+ */
+function markBackgroundInert(box: HTMLElement | null): () => void {
+  if (!box) return () => {};
+  const mark: BackgroundMark = { box, held: new Set() };
+  const watchers: MutationObserver[] = [];
+  // Each parent on the path is watched, so a sibling that arrives later is
+  // marked too — see the note on the hook. `childList`, not subtree: four
+  // observers at the very deepest, firing only when children actually change,
+  // and an `inert` attribute going on or off is not one of them.
+  for (let node: Element | null = box; node && node !== document.body; node = node.parentElement) {
+    const parent: HTMLElement | null = node.parentElement;
+    if (!parent) break;
+    const watcher = new MutationObserver(() => syncMark(mark));
+    watcher.observe(parent, { childList: true });
+    watchers.push(watcher);
+  }
+  marks.add(mark);
+  // Every mark, not just this one: a box opening inside something an older mark
+  // holds is precisely what that older mark now has to give up.
+  syncMarks();
   return () => {
     for (const watcher of watchers) watcher.disconnect();
-    for (const el of held) releaseInert(el);
+    marks.delete(mark);
+    for (const el of mark.held) releaseInert(el);
+    mark.held.clear();
+    // ...and the marks still open take back what this one was making them skip.
+    syncMarks();
   };
 }
 
