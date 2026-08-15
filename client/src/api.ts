@@ -2,9 +2,11 @@ import type {
   BatterGameLog,
   EspnOwnership,
   EspnRoster,
+  EspnScoreboard,
   EspnStatus,
   PitcherGameLog,
   NextGameInfo,
+  ProjectedStarts,
   PlayerNews,
   SeasonArsenal,
   PlayerKind,
@@ -16,6 +18,7 @@ import type {
   ResearchIncludeKey,
   ResearchRow,
   RosterSource,
+  ScheduleWindow,
   SeasonPlayer,
   SeasonStats,
   UserPrefs,
@@ -96,6 +99,18 @@ const JSON_HEADERS = { 'Content-Type': 'application/json' };
 export const api = {
   async players(): Promise<{ season: number; players: SeasonPlayer[] }> {
     return request('/api/players');
+  },
+  /**
+   * Every club's next fortnight, with whoever each side has announced — what
+   * the Schedule view draws on both wide tables.
+   *
+   * No parameters: the server names the window off its own `baseballToday()`
+   * and the client slices it to the span on screen, so one answer serves every
+   * user, every row and both spans. Fetched once per session and kept, the way
+   * the research blob is.
+   */
+  async schedule(): Promise<ScheduleWindow> {
+    return request('/api/schedule');
   },
   /** The user's **roster** — the saved list the three roster views report on.
    *  The path is still `/api/watchlist` and stays that way: renaming a route
@@ -332,6 +347,22 @@ export const api = {
     return request(`/api/espn/ownership${refresh ? '?refresh=1' : ''}`);
   },
 
+  /** The league's scoreboard: one matchup period's matchups, plus every team's
+   *  season totals in the league's own categories.
+   *
+   *  `period` names a matchup period — absent, the one being played. A period
+   *  this league has no row for is answered with the current one rather than
+   *  an empty board, so the arrows can never strand the reader. `refresh` is
+   *  the same escape hatch `espnOwnership` carries and reaches only the live
+   *  period; a settled week is a fact and reads back off its blob. */
+  async espnScoreboard(period?: number | null, refresh = false): Promise<EspnScoreboard> {
+    const q = new URLSearchParams();
+    if (period != null) q.set('period', String(period));
+    if (refresh) q.set('refresh', '1');
+    const qs = q.toString();
+    return request(`/api/espn/scoreboard${qs ? `?${qs}` : ''}`);
+  },
+
   // Every player in the league on one board, season to date — the research
   // table. Watchlist-independent and season-wide, so it takes no date range.
   async research(
@@ -431,6 +462,20 @@ export const api = {
    */
   async nextGame(playerId: number, start: boolean): Promise<NextGameInfo> {
     return request(`/api/players/${playerId}/next-game${start ? '?start=1' : ''}`);
+  },
+  /**
+   * A pitcher's next several starts — announced where his club has named him,
+   * projected from his own rotation slot past that. The Overview tab's
+   * **Projected Starts** block.
+   *
+   * **No `kind`**, unlike his day, his log and his boards: a rotation slot is a
+   * fact about a pitcher, so there is no batting half of the question. Which
+   * players it is asked *about* is the caller's business and is
+   * `lib.ts::isRotationStarter`, the app's one definition of who works out of
+   * the rotation.
+   */
+  async projectedStarts(playerId: number): Promise<ProjectedStarts> {
+    return request(`/api/players/${playerId}/projected-starts`);
   },
   /**
    * His latest news — the News tab, and the section that previews it on the
