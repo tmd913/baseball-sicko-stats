@@ -11190,6 +11190,35 @@ body {
   background: var(--panel-2);
   border: 1px solid var(--border);
 }
+/* The circle opens his page, exactly as it does on the summary table, the
+   research board and the feed — a bare button holding the 32px slot, so the row
+   is laid out identically to the plain image it replaced. `line-height: 0` is
+   what stops the button's own strut adding a pixel under an inline image, which
+   `.feed-photo-link` already carries for the same reason. */
+.lg-tx-photo-link {
+  display: block;
+  flex: none;
+  line-height: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  border-radius: 50%;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+/* Unscoped by `(hover: hover)`, unlike the pressable *surfaces* in the app: a
+   headshot circle is an aimed target rather than a band a finger crosses on the
+   way past, and a stuck tint on a 32px border reads as nothing at all. That is
+   the exemption `.sum-photo-wrap`, `.feed-photo-link` and `.player-photo-link`
+   already take — see the note at the top of this file. */
+.lg-tx-photo-link:hover .lg-tx-photo {
+  border-color: var(--accent);
+}
+.lg-tx-photo-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .lg-tx-photo-empty {
   display: inline-flex;
   align-items: center;

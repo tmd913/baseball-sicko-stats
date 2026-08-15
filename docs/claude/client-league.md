@@ -1036,13 +1036,55 @@ is the rule those two already state for each other. What this caller adds is the
 two things a row in a *feed* needs of it: room to shrink, and a name line that
 carries the trade destination and the waiver bid beside the name.
 
-**The headshot is a plain image rather than a second link.** The name is 8px away
+### The headshot opens his page, where it used to be a plain image
+
+**This reverses the paragraph that stood here**, which read: *the name is 8px away
 and is the press, so a 32px target beside it would only be a smaller version of
 the same one — at the cost of a tab stop on every one of up to nine players in a
-trade. And **no lineup pip and no `IL10` code**, which the two wide tables put on
-a headshot: those read off `/api/statuses`, which this page does not fetch, and
+trade.* The first half of that is true of **every table in the app** and is not
+how a single one of them is built: the summary table's `PhotoCell`, the research
+board's and the feed's `FeedHeadshot` all wrap the circle in a button of its own
+beside a name that opens the same page, because a face is what a reader aims at
+when scanning a list of people. A row that looks like every other row in the app
+and is the one that does not answer a press is worse than a duplicated target,
+and it was reported as exactly that.
+
+**The tab-stop cost is real and is the one every other table already pays.** The
+button carries `aria-label` (`Open Lawrence Butler's page`) the way
+`.sum-photo-wrap` and `.feed-photo-link` carry theirs, so a screen reader hears
+two named routes to one page rather than an unnamed control; it is the app's own
+bare-button reset holding the 32px slot, so the row is laid out identically to
+the image it replaced.
+
+**A player the join could not place is not a press**, which is `PlayerName`'s own
+rule one element to the right — there is no page to open. The two are the same
+set by construction rather than by care, and were checked to be: over the whole
+415-row feed, **412 photo links and 412 name buttons, 3 plain marks and 3 plain
+names**, and *every row* agrees with itself about which it is.
+
+**A missing image is still a press.** The initials fallback is what the button
+wraps once `onError` fires, so a player with no headshot on file keeps both the
+slot and the link (checked by dispatching the error: `LB` in a 32 × 32 mark,
+still pressable, row still 32px).
+
+**Still no lineup pip and no `IL10` code**, which the two wide tables put on a
+headshot: those read off `/api/statuses`, which this page does not fetch, and
 they answer a question about *this afternoon* where every row here is dated — a
 call-up's pip says nothing about the trade that moved him three weeks ago.
+
+**Measured at 1200×900 and 390×844 against the live league**, before → after: the
+image is **32 × 32** and the row **32px** either way, and the whole feed paged out
+is **415 rows with heights 32 / 37 / 52** (52 for the 23 trades, 37 for the one
+long unjoined name) — the figures this file already records, unmoved — with the
+page body overflowing by **0** at both widths. A press opens
+`?…player=batter-671732` with `Lawrence Butler` in the `<h1>`; the button focuses,
+draws the accent ring and reads `cursor: pointer`; and one press of Escape closes
+the page and leaves the tab on Transactions with its 42 rows.
+
+**Bundle: 500.00 → 500.20 KB of JS** (147.88 → 147.93 gzipped) and **116.54 →
+116.82 KB of CSS** (20.73 → 20.76) — 0.2KB and 0.28KB raw, 0.05KB and 0.03KB
+over the wire, for a button, a bare-button reset and the paragraphs above
+restated where the rule is.
 
 **The club is the one fact that needed threading, and it needed no upstream.**
 Roster % and eligibility ride on the `/api/espn/ownership` response App already
