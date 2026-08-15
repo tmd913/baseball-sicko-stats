@@ -441,6 +441,88 @@ assumed: `HR` sorts to the leaders and reverses, `First half` loads and writes
 `lspan=first` with `Weeks 1–15 · Mar 25 – Jul 19` under the strip, and switching
 to Transactions from the navbar drops the fixed-height mode and draws 302 rows.
 
+### Only the badge pins, and it is a circle
+
+**The pinned column was the whole identity block** — logo, name and record — and
+a pinned column is paid for out of the categories beside it. Uncapped, the
+longest team name took it to **257px of a 390px phone**, two thirds of the
+screen; capping and ellipsizing the name got it to 168 and four categories,
+which was better and still the wrong shape. The board's own rule is the answer:
+it pins the 42px headshot at *every* width and pins the **name** only from 820px
+up, on the grounds that below that the pinned pair eats two fifths of the
+screen. So the cell is two cells here — a `.lg-logo-col` holding the badge
+alone, pinned, and a `.lg-name-col` holding the name over its record, which
+scrolls away with the stats it is being compared against.
+
+Measured: the pinned column is **49px at 1200 and 33px at 390** (one 26px circle
+in its own gutters) against the 318/257 it was; after scrolling right the badge
+sits at **0** from the pane's left edge while the name column has gone to
+**−267**, which is the whole point of the split. The sort that belonged to the
+team's identity stays on the **name** header — a badge column carries no label
+and nothing to sort by — and the club's name and record are the badge cell's
+`title`, so the row is still identifiable from the pinned part alone.
+
+**The badges are circles**, which is what every other picture of a person or a
+thing in this app already is: the headshot on three tables, the portrait on the
+player page. A 6px corner made this the one mark in the app that wasn't.
+`object-fit: contain` rather than `cover`, because these are arbitrary
+third-party images at arbitrary aspect ratios and `cover` crops a wide badge to
+its middle.
+
+**A team with no logo gets a default image rather than its initials.** Three
+letters in a circle read as a *broken* logo — the eye takes it as text that
+failed to become a picture — where a plain mark reads as the absence of one,
+which is the honest statement: this manager has not set one, or ESPN's URL for
+it is dead. On a real league that is the ordinary case rather than the exception
+(measured: **1 of 12** teams on the live league), which is why it is drawn with
+as much care as the real thing. It is a baseball, because the app already has
+one: `BaseballMark`'s own shape in `--faint`, so the default sits in the same
+vocabulary as the roster mark and the spinner rather than importing a silhouette
+from somewhere else. The abbreviation is not lost — it rides on the cell's
+`title` with the name and the record.
+
+### The span strip is in the tab row, and its caption is on the table
+
+**Both halves of that sentence were wrong before and they were wrong in opposite
+directions.** The strip sat on the page with its caption beside it; the strip
+belongs in the tab row with every other control of its kind, and the caption
+does not belong with the strip at all.
+
+**The strip** is the research board's window tabs asking the same shape of
+question about a different thing — *which games are these numbers drawn from* —
+so it takes that control's answers exactly: pills on a desktop, a native
+`<select>` under 640px, **both rendered and swapped by one media query** rather
+than by a JS media test that could drift from the CSS, which is the rule every
+"pills on a desktop, dropdown on a phone" control in this app follows.
+`.lg-span-select` is folded onto `.date-presets-select` / `.research-window-select`
+/ `.research-pos-select` so all four are one control by construction, and the
+pill row is hidden two classes deep (`.view-bar-tabs .lg-span-row`) for the
+reason `.research-bar .research-window-row` is: the shared `.view-switch` rule
+sets `display: inline-flex` later in the file and would otherwise leave both on
+screen at once. Measured at 1200 the pills are `flex` and the select `none`; at
+390 the reverse.
+
+It is drawn from **`rankings.spans`** — the spans the server says it can serve
+honestly — rather than from a list in the client, so a season whose All-Star
+break ESPN's calendar does not show has no halves and April has no second half,
+instead of either being offered and coming back empty. It renders only on the
+Rankings tab, so the Scoreboard and Transactions carry no empty slot for it
+(checked: absent on both).
+
+**The caption** — `Weeks 1–15 · Mar 25 – Jul 19`, and `· so far` where the span
+reaches into the week being played — sat beside the strip, on the reasoning that
+it was a caption on the *control*. With the strip a tier away in the tab row
+that would have stranded it up among the buttons, describing something two boxes
+below it. It is the **table's** caption and now sits directly above the table,
+which is where the research board keeps its count line and for the same reason:
+the one thing between the controls and the rows describes what is under them.
+Measured 16px above the pane at both widths.
+
+Driven rather than assumed: the desktop pill and the phone `<select>` each write
+`lspan=` and redraw the caption (`First half` → `Weeks 1–15 · Mar 25 – Jul 19`,
+`Second half` → `Weeks 16–19 · Jul 20 – Aug 15 · so far`), the select keeps its
+value across the reload, and sorting is untouched.
+
 ### The three tabs are in the app's tab row
 
 **They rendered on the page, directly above what they selected**, which is where

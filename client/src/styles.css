@@ -484,7 +484,8 @@ body {
    dropdown on a phone" control in the app is one control by construction. */
 .date-presets-select,
 .research-window-select,
-.research-pos-select {
+.research-pos-select,
+.lg-span-select {
   display: none;
   /* Custom chevron (native arrow can't be inset from the edge): draw it as a
      background image positioned 14px in, and reserve room for it on the right. */
@@ -507,7 +508,8 @@ body {
 }
 .date-presets-select:hover,
 .research-window-select:hover,
-.research-pos-select:hover {
+.research-pos-select:hover,
+.lg-span-select:hover {
   border-color: var(--accent);
 }
 /* On phones the header wraps and the date control spans the full width. Swap the
@@ -528,7 +530,8 @@ body {
     display: block;
   }
   .research-window-select,
-  .research-pos-select {
+  .research-pos-select,
+  .lg-span-select {
     display: block;
     /* In a wrapping flex bar rather than the header's grid — each must be only
        as wide as its own widest option, so the three share a line and the four
@@ -7689,7 +7692,12 @@ body {
    and its dropdown would both be on screen at once. */
 @media (max-width: 640px) {
   .research-bar .research-window-row,
-  .research-bar .research-positions {
+  .research-bar .research-positions,
+  /* The League Rankings span, same swap and the same specificity problem: the
+     shared `.view-switch` rule sets `display: inline-flex` later in the file,
+     so without a second class both the pills and their dropdown would be on
+     screen at once. */
+  .view-bar-tabs .lg-span-row {
     display: none;
   }
 }
@@ -10455,7 +10463,7 @@ body {
   max-height: 100%;
   overflow: auto;
 }
-.app.league-rank-mode .lg-span-head {
+.app.league-rank-mode .lg-span-detail {
   flex: none;
 }
 .league-view {
@@ -10580,25 +10588,32 @@ body {
   padding: 4px 0;
   min-width: 0;
 }
+/* **A circle, not a rounded square.** Every other picture of a person or a
+   thing in this app is round — the headshot on three tables, the portrait on
+   the player page — and a fantasy team's badge is the same kind of object, so
+   a 6px corner made it the one mark in the app that wasn't. `contain` rather
+   than `cover` because these are arbitrary third-party images at arbitrary
+   aspect ratios: `cover` crops a wide badge to its middle, where `contain`
+   fits the whole of it inside the circle. */
 .lg-logo {
   width: 26px;
   height: 26px;
   flex: none;
-  border-radius: 6px;
-  object-fit: cover;
+  border-radius: 50%;
+  object-fit: contain;
   background: var(--bg);
 }
 /* The fallback for a logo that is a dead third-party URL, which on a real
    league is the ordinary case rather than the exception. */
+/* The default mark, for a team with no logo or a dead URL. The border is what
+   makes the circle read as a deliberate placeholder rather than as an image
+   still loading. */
 .lg-logo-none {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 9px;
-  font-weight: 800;
   color: var(--faint);
   border: 1px solid var(--border);
-  letter-spacing: 0.02em;
 }
 .lg-team-name {
   font-size: 14px;
@@ -10772,39 +10787,37 @@ body {
 /* The team column pins to the left edge as the categories scroll under it —
    without it a row six categories in belongs to no team in particular, which is
    the same argument the board makes for pinning the player's name. */
-/* **Capped, because a pinned column is paid for out of the stats beside it.**
-   The board makes this trade explicitly — it pins the 42px headshot at every
-   width and only pins the name column from 820px up, on the grounds that below
-   that "the pinned pair would eat two fifths of the screen". Measured here
-   before the cap: the longest team name in this league took the column to
-   257px of a 390px phone, which is two thirds of it, so three categories were
-   reachable and the rest were a swipe away. Capped and ellipsized, the logo,
-   the name and the record all still read and the stats get the room. */
-.league-table .lg-team-col {
+/* **Only the badge pins.** It was the whole identity block — logo, name and
+   record — and that column is paid for out of the categories beside it: the
+   longest team name took it to 257px of a 390px phone, two thirds of the
+   screen, so two categories were reachable and the rest were a swipe away.
+   Capping and ellipsizing the name helped and did not answer it. The board's
+   own rule does: it pins the 42px headshot at every width and pins the *name*
+   only from 820px up, on the grounds that below that the pinned pair eats two
+   fifths of the screen. Here the name never pins, so the pinned column is one
+   26px circle in its own gutters — 50px — and the name scrolls away with the
+   stats it is being compared against. */
+.league-table .lg-logo-col {
   position: sticky;
   left: 0;
   z-index: 1;
-  min-width: 168px;
-  max-width: 300px;
+  width: 1%;
+  padding-right: 0;
   text-align: left;
-  font-weight: 700;
   box-shadow: var(--pin-edge);
 }
-/* The top-left corner, above both sticky axes so neither slides over it. */
-.league-table thead .lg-team-col {
+/* The top-left corner: above both sticky axes so neither slides over it. */
+.league-table thead .lg-logo-col {
   z-index: 3;
 }
-/* The identity block inside the cell — a `<span>`, not the cell itself. This is
-   `.row-id`'s shape (a logo beside a name over its record) and it is spelled
-   out here rather than folded onto it because that block is the *player*
-   identity the summary table and the board share, tuned to a 42px headshot and
-   a 58px row; a club's mark and a win-loss record are a different pair of
-   facts at a different size. */
-.lg-team {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
+/* The name, which now scrolls. It keeps a floor so the column does not collapse
+   to its shortest name, and a cap so one long name cannot push the categories
+   off the right of a phone — `.lg-row-title` is what gives. */
+.league-table .lg-name-col {
+  min-width: 132px;
+  max-width: 260px;
+  text-align: left;
+  font-weight: 700;
 }
 .lg-row-name {
   display: flex;
@@ -10868,26 +10881,11 @@ body {
   max-width: var(--card-column);
   margin: 0 auto 14px;
 }
-/* Left-aligned across the pane, **not centred in a reading column**. It carried
-   `max-width: var(--card-column); margin: 0 auto` from when the page under it
-   was a list of cards; the table under it now spans the window like the board's
-   does, so a strip centred in an 800px column floated in the middle of the page
-   with the thing it governs running past it on both sides. The board keeps its
-   own controls at the app's gutters over a table that bleeds past them, which
-   is the same arrangement. */
-.lg-span-head {
-  margin: 0 0 12px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
 /* Both strips break **between** two pills rather than inside one, which is the
    rule `.view-bar-tabs` states one tier up. Without it `Current matchup` wraps
    inside its own button on a phone — a two-line pill in a row of one-line ones,
    which `align-items: center` then leaves at a different top from its
-   neighbours — and the shell overhangs the column it is centred in (measured at
-   320: 288.56px of switch in a 276px column, 6.28px into each gutter). */
+   neighbours. */
 .lg-tabs,
 .lg-span-row {
   flex-wrap: wrap;
@@ -10896,11 +10894,15 @@ body {
 .lg-span-tab {
   white-space: nowrap;
 }
-/* What the span covers, beside the tabs rather than under them — it is a
-   caption on the control rather than on the table, the way the scoreboard's
-   dates sit beside its week number. Wraps to its own line on a phone, which is
-   what the `flex-wrap` above is for. */
+/* What the span covers, **as the table's caption**. It sat beside the strip
+   that picks the span, on the reasoning that it was a caption on the control;
+   the strip is in the app's tab row now, a tier away from the numbers, so the
+   sentence would have been stranded up there among the buttons describing
+   something two boxes below it. Against the table it is the research board's
+   count line — the one thing between the controls and the rows, describing
+   what is under it. */
 .lg-span-detail {
+  margin: 0 0 6px;
   font-size: 12px;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
@@ -11100,11 +11102,11 @@ body {
     margin-top: var(--stack-gap);
   }
 
-  /* The pinned column's share of a phone — see the cap above. 168px of a 390px
-     screen is 43% against the 66% the uncapped name took, and leaves the stat
-     columns the rest. */
-  .league-table .lg-team-col {
-    min-width: 132px;
+  /* The name column on a phone. It no longer pins, so this is about how much
+     of the screen one team's name may take before the categories start, not
+     about what is held against the left edge. */
+  .league-table .lg-name-col {
+    min-width: 116px;
     max-width: 168px;
   }
 }

@@ -82,16 +82,35 @@ export function record(t: { wins: number; losses: number; ties: number }): strin
  * abbreviation rather than leaving a broken-image glyph, which is the same
  * fallback `TeamMark` makes for an MLB cap that fails to load.
  */
+/** The generic mark a team with no usable logo wears.
+ *
+ * **An image rather than the club's initials**, which is what stood here. Three
+ * letters in a circle read as a *broken* logo — the eye takes it as text that
+ * failed to become a picture — where a plain mark reads as the absence of one,
+ * which is the honest statement: this manager has not set a logo, or ESPN's URL
+ * for it is dead (on a real league that is the ordinary case rather than the
+ * exception, which is why this is drawn with as much care as the real thing).
+ *
+ * A baseball, because the app already has one and this is a baseball app: it is
+ * `BaseballMark`'s own shape in `--faint`, so the default sits in the same
+ * vocabulary as the roster mark and the spinner rather than importing a
+ * silhouette from somewhere else. The club's abbreviation is not lost — it is
+ * the cell's `title`, where a name too long for the column already goes. */
+function DefaultTeamLogo() {
+  return (
+    <span className="lg-logo lg-logo-none" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor">
+        <circle cx="12" cy="12" r="9" strokeWidth="1.6" />
+        <path d="M6.4 5.4c2.1 2 3.1 4.2 3.1 6.6s-1 4.6-3.1 6.6" strokeWidth="1.4" />
+        <path d="M17.6 5.4c-2.1 2-3.1 4.2-3.1 6.6s1 4.6 3.1 6.6" strokeWidth="1.4" />
+      </svg>
+    </span>
+  );
+}
+
 export function TeamLogo({ team }: { team: EspnStandingsTeam | undefined }) {
   const [failed, setFailed] = useState(false);
-  if (!team) return <span className="lg-logo lg-logo-none" aria-hidden="true" />;
-  if (!team.logo || failed) {
-    return (
-      <span className="lg-logo lg-logo-none" aria-hidden="true">
-        {team.abbrev.slice(0, 3)}
-      </span>
-    );
-  }
+  if (!team || !team.logo || failed) return <DefaultTeamLogo />;
   return (
     <img
       className="lg-logo"
@@ -392,7 +411,6 @@ export default function LeagueView({
   rankSpan,
   rankingsLoading,
   rankingsError,
-  onRankSpan,
   transactions,
   transactionsLoading,
   transactionsError,
@@ -409,7 +427,6 @@ export default function LeagueView({
   rankSpan: EspnRankSpan;
   rankingsLoading: boolean;
   rankingsError: string | null;
-  onRankSpan: (span: EspnRankSpan) => void;
   transactions: EspnTransactions | null;
   transactionsLoading: boolean;
   transactionsError: string | null;
@@ -446,7 +463,6 @@ export default function LeagueView({
           span={rankSpan}
           loading={rankingsLoading}
           error={rankingsError}
-          onSpan={onRankSpan}
         />
       ) : tab === 'transactions' ? (
         <LeagueTransactions
