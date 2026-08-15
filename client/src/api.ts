@@ -265,6 +265,18 @@ export const api = {
       body: JSON.stringify({ on }),
     });
   },
+  /** Mark the League page's Transactions feed read up to `ts` — the date of
+   *  the newest move on screen. What undraws the red dot on that tab, and the
+   *  only thing that does. The league travels with the date because a marker
+   *  only means anything against the feed it was read in; the server keeps
+   *  whichever is newer, so this is safe to fire from two tabs. */
+  async saveSeenTransactions(leagueId: number, ts: number): Promise<UserPrefs> {
+    return request('/api/prefs/seen-transactions', {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ leagueId, ts }),
+    });
+  },
   // ---- ESPN fantasy league ----
   // The credential (`espnS2`, an ESPN session cookie) travels one way: in
   // through `saveEspn` and never back out, so nothing in this app's memory or

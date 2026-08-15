@@ -145,6 +145,29 @@ export interface UserPrefs {
    */
   recentPlayers?: string[];
   /**
+   * How far the reader has got down the League page's **Transactions** feed —
+   * the date of the newest move they had seen when that tab was last open, and
+   * the league it belonged to. What it is for is the red dot on the tab: a feed
+   * is unread until somebody looks at it, and "unread" is a fact about a person
+   * rather than about a view, so it belongs here beside `recentPlayers` rather
+   * than in the URL or in a link somebody might be handed.
+   *
+   * **The league id is stored with the date and is not decoration.** A marker
+   * only means anything against the feed it was taken from, so a user who moves
+   * to another league — or joins a leaguemate's — would otherwise have that
+   * league's whole history silently marked read by a timestamp with nothing to
+   * do with it. Requiring the id to match fails in the one safe direction: an
+   * unrecognised league draws the dot, which is news offered rather than news
+   * hidden.
+   *
+   * **A date rather than a transaction id**, because the feed's own order is by
+   * date and ESPN's topic ids are opaque strings — "newer than the last thing I
+   * saw" is a comparison a date supports and an id does not. Absent means
+   * nothing has ever been read, which draws the dot, which is right: a reader
+   * who has never opened the tab has seen none of it.
+   */
+  seenTransactions?: { leagueId: number; ts: number };
+  /**
    * @deprecated The same flag under the name it carried when it *narrowed* the
    * board to the watchlist rather than adding the watchlist to it. Kept on the
    * type because `GET /api/prefs` hands the stored object straight to the
@@ -889,6 +912,35 @@ export async function setRecentPlayer(userId: string, key: string): Promise<User
     const prev = cur.prefs.recentPlayers ?? [];
     const recent = [key, ...prev.filter((k) => k !== key)].slice(0, RECENT_PLAYERS);
     return { prefs: { ...cur.prefs, recentPlayers: recent } };
+  });
+  return next.prefs;
+}
+
+/**
+ * Mark the League page's Transactions feed read up to `ts` — the date of the
+ * newest move on screen while that tab was open.
+ *
+ * **The marker only ever moves forward within a league**, which is what makes
+ * this safe to replay against a newer record the way `setWatchlisted` and
+ * `setRecentPlayer` are: two tabs on the same page, or a slow response carrying
+ * an older head than one that has already landed, cannot un-read what has been
+ * read. A *different* league replaces it outright rather than being compared
+ * against, there being one connection at a time and no ordering between two
+ * leagues' feeds.
+ *
+ * A marker that would not move writes **nothing** — the no-op path `mutate`
+ * already has — so sitting on the tab through a poll that brings no new moves
+ * costs no write at all.
+ */
+export async function setSeenTransactions(
+  userId: string,
+  leagueId: number,
+  ts: number,
+): Promise<UserPrefs> {
+  const next = await mutate(userId, (cur) => {
+    const prev = cur.prefs.seenTransactions;
+    if (prev && prev.leagueId === leagueId && prev.ts >= ts) return null;
+    return { prefs: { ...cur.prefs, seenTransactions: { leagueId, ts } } };
   });
   return next.prefs;
 }

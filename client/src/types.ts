@@ -1122,6 +1122,15 @@ export interface UserPrefs {
    *  hand, and a player who has left that list is one the search cannot find
    *  either. Absent means none, the same convention as everything above. */
   recentPlayers?: string[];
+  /** How far the reader has got down the League page's **Transactions** feed:
+   *  the date (epoch ms) of the newest move they had seen when that tab was
+   *  last open, and the league it belonged to. What draws the red dot on the
+   *  tab, and what clears it. The league id is stored with the date because a
+   *  marker only means anything against the feed it came from — an
+   *  unrecognised league draws the dot, which is news offered rather than news
+   *  hidden. Absent means nothing has been read, which is right for a reader
+   *  who has never opened the tab. */
+  seenTransactions?: { leagueId: number; ts: number };
   /** @deprecated The same flag under its old name, from when it narrowed the
    *  board rather than widening it. Read on the way in so a preference saved
    *  before the change survives; never written — a record migrates the first

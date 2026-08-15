@@ -55,6 +55,26 @@ const UA = { 'User-Agent': 'statcast-sicko/1.0' };
  *  league-wide stat tables settle on. */
 const OWNERSHIP_TTL_MS = 10 * 60 * 1000;
 
+/**
+ * How long a **moving** league fact is kept — the week being played, the
+ * transactions feed, and the league's own running totals.
+ *
+ * Ten minutes is the right span for a *roster*, which changes when a manager
+ * acts; it is far too long for a scoreboard, which changes while games are on
+ * and which is the one thing somebody sitting on the League page is watching.
+ * A minute is what makes that page live: the client polls the tab it is showing
+ * on the same cadence, so a poll either reads a cache under a minute old or
+ * goes and asks, and the reader is never more than about a minute behind ESPN.
+ *
+ * **What this deliberately does not shorten is anything settled.** A finished
+ * matchup period and a finished span are facts and are read back off their
+ * blobs with no freshness test at all, exactly as before — so the cost of a
+ * minute is paid only by the week actually being played, and only while
+ * somebody has the page open (`App.tsx::LEAGUE_POLL_MS`, which skips a tick
+ * while the tab is hidden).
+ */
+const LIVE_TTL_MS = 60 * 1000;
+
 /** The MLB name index changes only as players are added to the season roster. */
 const INDEX_TTL_MS = 60 * 60 * 1000;
 
@@ -2209,7 +2229,11 @@ const metaInFlight = new Map<number, Promise<LeagueMeta>>();
 
 async function leagueMeta(creds: EspnCreds, force = false): Promise<LeagueMeta> {
   const hit = metaCache.get(creds.leagueId);
-  if (!force && hit && Date.now() - hit.fetchedAt < OWNERSHIP_TTL_MS) return hit;
+  // `LIVE_TTL_MS`, not the rosters' ten minutes: `valuesByStat` on every team
+  // is the Rankings tab's **season** column, and it accrues while games are
+  // being played — so the one span that reads ESPN's own running total would
+  // otherwise be the one span on the page that did not move.
+  if (!force && hit && Date.now() - hit.fetchedAt < LIVE_TTL_MS) return hit;
   const running = metaInFlight.get(creds.leagueId);
   if (running && !force) return running;
 
@@ -2349,8 +2373,9 @@ async function leagueMeta(creds: EspnCreds, force = false): Promise<LeagueMeta> 
  * **A finished matchup period is a fact**, so it takes a storage blob read with
  * no freshness test — the rule `getTeamRoster` already follows for a finished
  * day's lineup, and for the same reason: you cannot retroactively score a run
- * in a week that is over. The period being played is memory-only on the same
- * ten minutes the rosters take, and `force` — the header's `Refresh from ESPN`
+ * in a week that is over. The period being played is memory-only on
+ * `LIVE_TTL_MS`, a minute, which is what the League page's own poll reads
+ * through, and `force` — the header's `Refresh from ESPN`
  * — reaches it and leaves the frozen ones alone, since re-reading a settled
  * week spends an ESPN request to be told what the blob already says.
  */
@@ -2439,7 +2464,9 @@ async function getMatchups(
   const frozen = !live;
   const stale = force && !frozen;
   const hit = scoreboardCache.get(key);
-  if (!stale && hit && (frozen || Date.now() - hit.fetchedAt < OWNERSHIP_TTL_MS)) {
+  // A settled week is read back with no freshness test at all; the week being
+  // played is a minute old at most, which is what makes the page live.
+  if (!stale && hit && (frozen || Date.now() - hit.fetchedAt < LIVE_TTL_MS)) {
     return hit.matchups;
   }
   const running = scoreboardInFlight.get(key);
@@ -2693,7 +2720,7 @@ const DERIVED: Record<number, { needs: number[]; of: (v: Record<number, number>)
  * **A settled span is a fact and takes a blob**, the rule `getMatchups` follows
  * one period at a time: a span whose last matchup period is over cannot change,
  * so it is read back with no freshness test. A span reaching into the week
- * being played is memory-only on the rosters' own ten minutes, and `force` —
+ * being played is memory-only on `LIVE_TTL_MS`, and `force` —
  * `Refresh from ESPN` — reaches that one and leaves the frozen ones alone.
  *
  * The read is `mScoreboard` **alone**, filtered to the span's periods. It does
@@ -2742,7 +2769,9 @@ async function getSpanTotals(
   const key = `${creds.leagueId}:${first}-${last}`;
   const stale = force && !frozen;
   const hit = spanCache.get(key);
-  if (!stale && hit && (frozen || Date.now() - hit.fetchedAt < OWNERSHIP_TTL_MS)) return hit.totals;
+  // As `getMatchups`: frozen is forever, and a span reaching into the week
+  // being played is a minute.
+  if (!stale && hit && (frozen || Date.now() - hit.fetchedAt < LIVE_TTL_MS)) return hit.totals;
   const running = spanInFlight.get(key);
   if (running && !stale) return running;
 
@@ -3148,9 +3177,9 @@ interface EspnTopicResponse {
  * immutable, which is the argument for one — and what is being read is not a
  * past transaction, it is the *head of a feed* that grows all season, which is
  * `nextGame.ts`'s class rather than `espn-lineup-…`'s: a blob's freshness test
- * here could only ever be the ten minutes beside it, and the thing it would
+ * here could only ever be the TTL beside it, and the thing it would
  * store is a window that has moved by the time it is read. It is keyed per
- * league on the rosters' own `OWNERSHIP_TTL_MS`, with an `inFlight` guard so a
+ * league on `LIVE_TTL_MS`, with an `inFlight` guard so a
  * cold container serving three tabs sends one upstream, and `?refresh=1`
  * reaches it — a move made on ESPN is exactly what that button is for.
  */
@@ -3162,7 +3191,11 @@ export async function getTransactions(
   force = false,
 ): Promise<EspnTransactions> {
   const hit = txCache.get(creds.leagueId);
-  if (!force && hit && Date.now() - hit.fetchedAt < OWNERSHIP_TTL_MS) return hit.value;
+  // A minute, not the rosters' ten: this is the head of a feed the League page
+  // polls, and it is what the red dot on the Transactions tab is computed from —
+  // a mark saying "something happened" ten minutes after it happened is a mark
+  // the reader has already scrolled past on ESPN.
+  if (!force && hit && Date.now() - hit.fetchedAt < LIVE_TTL_MS) return hit.value;
   const running = txInFlight.get(creds.leagueId);
   if (running && !force) return running;
 

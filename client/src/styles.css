@@ -8524,6 +8524,31 @@ body {
   outline-offset: 2px;
 }
 
+/* The Transactions tab's unread mark: moves have landed that this reader has
+   not seen. The app's red (`--strikeout`, the tone `NewsMark` already gives
+   news filed today), because that is what a notification dot is and this is
+   the only one in the app.
+
+   **Absolutely positioned in the tab's own padding rather than laid out after
+   the label**, which is the whole reason `.lg-tab` gains a containing block of
+   its own. Laid out it would be a 6px dot plus the row's 6px gap — 12px of tab
+   that appears when somebody makes a move and vanishes when the tab is opened,
+   moving the two tabs beside it each time. The corner it sits in is the 12px
+   of horizontal padding the label never reaches, so it overlaps nothing at any
+   width. */
+.lg-tab {
+  position: relative;
+}
+.lg-tab-dot {
+  position: absolute;
+  top: 4px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--strikeout);
+}
+
 /* ---- Live feed (per-at-bat stream) ---- */
 /* One cap, and it is not the app's (`--card-column`, 800px; this was 860 before
    the two views became one). A stream of at-bats is read down rather than
