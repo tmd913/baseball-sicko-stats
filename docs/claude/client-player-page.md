@@ -220,22 +220,25 @@ on the field and the row is a `gap`-spaced flex column, so the child is *absent*
 rather than empty. Measured on Amador, whose latest is `Recalled`: the row's inner
 box ends **10px** below the headline, which is exactly `.news-static`'s own
 bottom padding, against **32px at 1200 and 50 at 390** on a row that does carry
-one. It is also `.news-static` rather than `.news-link`, MLB publishing no URL,
-which is unchanged.
+one. It was also `.news-static` rather than `.news-link`, MLB publishing no URL
+— a distinction that has since gone with the link, `.news-static` now being the
+only shape there is (see *No row is a press* below). The measurement is
+unchanged either way: that padding is what the rule always carried.
 
 **Driven in a browser at 1200×900 and 390×844 against the live 2026 season**, on
 a player of each source: **Blake Snell / Logan Webb / Mike Trout** draw one
 `.news-rotowire` row — `Aug 9 · Report · Tosses eight innings in no-decision`
-over `Webb did not factor into the decision Sunday against the Tigers, …` — as a
-press that opens RotoWire in a new tab, and **Adael Amador** draws one
-`.news-mlb` row — `Aug 12 · Recalled · Colorado Rockies recalled 2B Adael Amador
-from Albuquerque Isotopes.` — as a static row with **0** `.news-summary`
-elements. `News →` is drawn on both, the block caps at `--card-column`
+over `Webb did not factor into the decision Sunday against the Tigers, …`, and
+**Adael Amador** draws one `.news-mlb` row — `Aug 12 · Recalled · Colorado
+Rockies recalled 2B Adael Amador from Albuquerque Isotopes.` — with **0**
+`.news-summary` elements. Both are `.news-static` and neither is a press; before
+the link was dropped the first of them was an `<a>` opening a new tab. `News →` is drawn on both, the block caps at `--card-column`
 (800 / 358), and the page and the overlay each overflow by **0**.
 
 **There is no further body text to reach for, and this is where that was
-checked.** `NewsItem` carries `date`, `kind`, `headline`, `summary` and `url` and
-nothing else, and `summary` is RotoWire's note itself — so "the whole item" is
+checked.** `NewsItem` carries `date`, `kind`, `headline` and `summary` and
+nothing else (it carried a `url` until the link went, above), and `summary` is
+RotoWire's note itself — so "the whole item" is
 the whole item. The one thing either upstream has beyond it is RotoWire's own
 **analysis** block, which is **paywalled** and deliberately not scraped
 (`rotowire.ts`, *What is deliberately not taken*: 1 of 7 items on a checked player
@@ -623,27 +626,48 @@ list rather than two. It takes the app's one loading discipline — `useDelayedF
 behind `WAIT_DELAY`, the spinning baseball, `Reading the latest news` — like every
 other lazily-fetched tab.
 
-**A row is what its source makes it, and the list says which.** A **report**
-(`rotowire`) carries a link, opens RotoWire's page for that player in a new tab
-(`target="_blank"`, `rel="noopener noreferrer"` on every one) and shows the note
-itself as a standfirst here where there is room for it. A **transaction** (`mlb`)
-carries neither link nor summary, because MLB publishes neither — the whole of it
-is the one sentence — so it is a static row that is deliberately **not** a press,
-and carries neither the pointer nor the hover tint. A row that looked pressable
-and did nothing would be worse than one that plainly is not. The hover it does
-have is scoped to `@media (hover: hover)`, the app-wide rule for a full-width row
-in a list that scrolls.
+**No row is a press, and a report used to be one.** A `rotowire` note opened
+that player's RotoWire page in a new tab (`target="_blank"`,
+`rel="noopener noreferrer"`), on the reasoning that it is where the note was read
+from and where RotoWire's own analysis of it lives. That is gone, and the two
+reasons are the ones the paragraph it replaces was already half-admitting:
 
-**The report's link is the player's page rather than the note's own**, and that
-is a limit of the source rather than a choice. RotoWire's per-note addresses
-(`/baseball/headlines/…-1020205`) exist on its **league-wide** feed and not on a
-player page, where the headline is a bare `<div>` — so a note read here has no
-address of its own to link to. What the page it *is* linked to has that this
-section does not is RotoWire's own **analysis**, which is paywalled and therefore
-deliberately not shipped (see `rotowire.ts`), so the press is worth making even
-though seven rows share one destination. The alternative — every row static — was
-weighed and refused: it would leave the list's press branch reachable by nothing,
-which is a comment claiming a behaviour the code cannot have.
+- **The link was never item-precise.** RotoWire's per-note addresses
+  (`/baseball/headlines/…-1020205`) exist on its **league-wide** feed and not on
+  a player page, where the headline is a bare `<div>` — so all seven of a man's
+  notes went to the same `#latest-news` anchor on the same page. A link that
+  cannot reach the row it is on is a link to *a list containing* the row.
+- **What it opened onto was a subscription wall.** The one thing that page has
+  past what this section already draws is RotoWire's **analysis**, which is
+  paywalled — measured when the scrape was written, 1 of 7 notes on a checked
+  player carried it and the other six read *"Subscribe now to instantly reveal
+  our take on this news."* The old passage used that same fact as the argument
+  *for* the link; it is a better argument against one. Sending a reader out of
+  the app to be asked to subscribe is not what a row on this list is for.
+
+So the list is **one voice**: every row is a dated line, a kind and a headline,
+with RotoWire's note under it as a standfirst where there is one. `.news-link`
+and its pointer, hover tint and focus ring are gone from the stylesheet, and
+`.news-static` — the shape the transaction row always had — is the only one
+left. Nothing on this list looks pressable, which is the rule that class was
+written to state and which is now true of the whole of it rather than half.
+
+**What a row still says is where it came from**, in the pill and in the class
+(`news-rotowire` / `news-mlb`): a desk's report and the official record are
+different kinds of claim, and levelling them would be the section pretending it
+has one source. A **transaction** still carries no summary, because MLB
+publishes none — the whole of it is the one sentence — so that row is the date,
+the kind and the headline and stops.
+
+**`NewsItem.url` went with the link**, which is this codebase's own rule for a
+field whose only reader has gone (`teamProbablePitcher` is the precedent: *a
+field nobody reads is a field nobody misses*). It is dropped from both `types.ts`
+and from `rotowire.ts`'s emit; `news.ts` never filled it with anything but
+`null`. Nothing versioned moved — `news.ts` caches per player in memory alone on
+30 minutes and writes no blob, so there is no stored shape to deserialize with a
+field missing. The RotoWire **page address is still needed and still used**: it
+is what the scrape fetches, a local in `rotowire.ts`, and none of that is
+touched.
 
 **The `kind` pill is the upstream's own word, and both upstreams already write
 English** — which is why `prettyKind` is one line where it used to be a table.
@@ -785,8 +809,10 @@ and costs collisions.
 is read for and it is **paywalled**: on a checked player 1 of 7 notes carried it
 and the other 6 read "Subscribe now to instantly reveal our take on this news."
 Shipping that string would be an advertisement in the app, and shipping the one
-free take would make one row a paragraph and six rows a line. The row links to
-the page instead, which is where the take is.
+free take would make one row a paragraph and six rows a line. **The row used to
+link to the page instead and no longer does**, for the same reason one step on:
+a link whose whole value past the row is behind a paywall is a link out of the
+app to be asked to subscribe. See *No row is a press* above.
 
 **One transaction type code is dropped and only one.** `NUM` (a uniform change)
 is 2 of 12,235 league transactions over a checked six weeks, and on one day a

@@ -330,12 +330,6 @@ export async function fetchRotowireNews(path: string, mlbId: number): Promise<Ne
       date,
       headline,
       summary: body,
-      // Every note on a player links to that player's page. It is not
-      // item-precise — RotoWire publishes no per-note address a player page
-      // can reach — and it is where the note, and RotoWire's own analysis of
-      // it, actually live, which is the one thing this section deliberately
-      // does not ship.
-      url: `${url}#latest-news`,
       // RotoWire's own word for what the note is about: the body part it files
       // an injury note under, which says more in four characters than any
       // label this app could invent, and `Report` for everything else.

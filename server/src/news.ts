@@ -146,7 +146,6 @@ async function fetchTransactions(playerId: number): Promise<NewsItem[]> {
       date,
       headline: text,
       summary: null,
-      url: null,
       kind: t.typeDesc ?? null,
     });
   }
