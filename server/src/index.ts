@@ -55,7 +55,9 @@ import {
   EspnAuthError,
   getLeagueInfo,
   getOwnership,
+  getRankings,
   getScoreboard,
+  getTransactions,
   lineupsFrom,
   getTeamRosters,
   normalizeS2,
@@ -1015,6 +1017,62 @@ app.get(
         return;
       }
       res.json(await getScoreboard(creds, period, req.query.refresh === '1'));
+    } catch (err) {
+      if (!espnError(err, res)) throw err;
+    }
+  }),
+);
+
+// The League page's **Rankings** tab: every team's figure in each of the
+// league's scoring categories, and where that figure stands, over one of four
+// spans.
+//
+// `?span=` is `matchup | season | first | second`; anything else — including a
+// half this league has no periods for — falls back to `season` rather than
+// answering with an empty table, the same way `?period=` falls back to the
+// current matchup. **Which spans can be served at all is on the response**
+// (`spans`), because that is a fact about the league rather than about the
+// request: a season with no All-Star break in ESPN's own calendar has no
+// halves, and the tab strip is drawn from what comes back rather than from a
+// list the client holds. `?refresh=1` as everywhere else, reaching the span
+// that includes the week being played and leaving the settled ones on their
+// blobs — see `espn.ts`, **The Rankings tab**.
+app.get(
+  '/api/espn/rankings',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const raw = req.query.span;
+    const span =
+      raw === 'matchup' || raw === 'season' || raw === 'first' || raw === 'second' ? raw : null;
+    try {
+      const creds = await getEspnCreds(userId(req));
+      if (!creds) {
+        res.status(409).json({ error: 'No ESPN league connected', code: 'espn-missing' });
+        return;
+      }
+      res.json(await getRankings(creds, span, req.query.refresh === '1'));
+    } catch (err) {
+      if (!espnError(err, res)) throw err;
+    }
+  }),
+);
+
+// The League page's **Transactions** tab: who added, dropped and traded whom,
+// most recent first. One read of ESPN's own activity feed, reduced to the
+// moves and joined to MLB ids so a name can open the player page — see
+// `espn.ts`, **The Transactions tab**, which also records the four endpoints
+// that look as though they should answer this and don't.
+app.get(
+  '/api/espn/transactions',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    try {
+      const creds = await getEspnCreds(userId(req));
+      if (!creds) {
+        res.status(409).json({ error: 'No ESPN league connected', code: 'espn-missing' });
+        return;
+      }
+      res.json(await getTransactions(creds, req.query.refresh === '1'));
     } catch (err) {
       if (!espnError(err, res)) throw err;
     }

@@ -1384,3 +1384,91 @@ export interface EspnScoreboard {
   leagueName: string;
   fetchedAt: number;
 }
+
+/**
+ * The League page's **Rankings** tab — every team's figure in each scoring
+ * category and where that figure stands, over one of four spans.
+ *
+ * Mirrors `EspnRankings` and its parts in the server's `espn.ts`.
+ */
+export type EspnRankSpan = 'matchup' | 'season' | 'first' | 'second';
+
+export interface EspnRankSpanInfo {
+  span: EspnRankSpan;
+  label: string;
+  /** The matchup periods it is made of, or null for the season — which is
+   *  ESPN's own figure rather than a range the server summed. */
+  periods: [number, number] | null;
+  start: string | null;
+  end: string | null;
+  /** Whether it reaches into the week being played, which is the difference
+   *  between a total and a total *so far*. */
+  live: boolean;
+}
+
+export interface EspnRankRow {
+  teamId: number;
+  /** Keyed by stat id. A category with no honest figure for this span is
+   *  **absent** rather than zero. */
+  values: Record<number, number>;
+  /** 1 is best whichever way the category runs, ties sharing a rank. Absent
+   *  exactly where the value is. */
+  ranks: Record<number, number>;
+}
+
+export interface EspnRankings {
+  span: EspnRankSpan;
+  /** Only the spans this league can actually be asked for — a half with no
+   *  matchup periods in it is absent rather than served empty, so the tab
+   *  strip is drawn from what came back rather than from a list held here. */
+  spans: EspnRankSpanInfo[];
+  format: EspnScoringFormat;
+  scoringType: string;
+  categories: EspnCategory[];
+  rows: EspnRankRow[];
+  teams: EspnStandingsTeam[];
+  myTeamId: number | null;
+  leagueName: string;
+  fetchedAt: number;
+}
+
+/**
+ * The League page's **Transactions** tab — who added, dropped and traded whom.
+ *
+ * Mirrors `EspnTransactions` and its parts in the server's `espn.ts`.
+ */
+export interface EspnTransactionPlayer {
+  espnId: number;
+  name: string;
+  /** The MLB id where the name-and-club join lands on exactly one man, so the
+   *  row can open his page; null where it doesn't, and the name draws as
+   *  text. */
+  mlbId: number | null;
+  move: 'add' | 'drop';
+  via: 'free-agent' | 'waiver' | 'trade';
+  toTeamId: number | null;
+  fromTeamId: number | null;
+  /** ESPN's waiver bid, on a claim that carried one. */
+  bid: number | null;
+}
+
+export interface EspnTransaction {
+  id: string;
+  /** Epoch milliseconds. */
+  date: number;
+  kind: 'add' | 'drop' | 'trade';
+  teamIds: number[];
+  players: EspnTransactionPlayer[];
+}
+
+export interface EspnTransactions {
+  transactions: EspnTransaction[];
+  /** Whether the read came back at the server's own limit, i.e. whether there
+   *  is more season behind it. The page says so rather than implying a
+   *  complete record it hasn't got. */
+  capped: boolean;
+  teams: EspnStandingsTeam[];
+  myTeamId: number | null;
+  leagueName: string;
+  fetchedAt: number;
+}

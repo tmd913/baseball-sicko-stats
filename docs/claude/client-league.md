@@ -227,3 +227,210 @@ Driven against the built client and the live 2026 league at **390×844 and
 111.03 KB of CSS** (19.09 → 19.77 gzipped) — 9.1KB and 4.2KB raw, 2.6KB and
 0.7KB over the wire, for a view, a route, a component and the paragraphs above
 restated where the rules are.
+
+### Three tabs, because they are three questions
+
+**The page above is described as two blocks and is now three tabs** —
+`Scoreboard`, `Rankings`, `Transactions` — and the passage before this one is
+kept as written because its argument for the *page* is unchanged: this is still
+the one view about the fantasy league rather than about players, and it still
+earns a pill rather than an entry in the fantasy popover. What changed is that
+one page holding a scoreboard with a season table stacked under it was a page
+with one question and a half, and it has three:
+
+1. **Scoreboard** — every matchup of one period, the category line under both
+   sides. *Am I winning.*
+2. **Rankings** — every team's figure in every category and where that figure
+   stands, over a span the reader picks. *Why.*
+3. **Transactions** — who added, dropped and traded whom. *What has been going
+   on.*
+
+**The season table moved into Rankings rather than staying beside the
+scoreboard**, which is what makes the split three questions rather than two and
+a leftover: it *is* the answer to "why", read the other way round.
+
+### The period arrows live inside the Scoreboard tab
+
+**A control above the strip is a control over the page, and this one governs
+exactly one third of it.** Rankings has a span filter of its own — four named
+cuts rather than a week at a time, which is a *different* question — and
+Transactions is a feed with no period on it at all. Left above the strip,
+`‹ Week 19 ›` would sit over two tabs it says nothing about, and a reader
+pressing it on the Transactions tab would watch nothing happen.
+
+The app's own precedent is the **date control**, which sits with the roster tabs
+it qualifies and is hidden on the research board it does not. So the arrows, the
+`Live`/`Final` tag and the dates go inside the tab they belong to, and
+`Scoreboard` is a component of its own holding all four.
+
+**`mp=` is therefore the Scoreboard tab's parameter alone**, and nothing about it
+moved: absent still means the period being played, and `‹` still writes `mp=18`.
+
+### Which tab is open is in the URL, and so is the span
+
+**`lt=` for the tab and `lspan=` for the Rankings span**, both by the rule
+`view=`, `win=` and `mp=` follow: each decides what data is on screen, so a link
+that leaves one out describes a different page. The Scoreboard is the default and
+is omitted, so a bare `?view=league` opens where the page always opened; `season`
+is the span default and is omitted the same way.
+
+**`lspan=` is deliberately not `win=`.** That one is the research board's own
+window and means five different spans of a different thing; one parameter meaning
+two things in two views is exactly the trap `cols=` avoids by being scoped to the
+board `pos=` names. Neither name can collide: the app's other params are
+`preset`, `start`, `end`, `player`, `view`, `kind`, `sim`, `hideil`, `starters`,
+`sched`, `roster`, `pos`, `cols`, `inc`, `scope`, `watch`, `win`, `help`, `mp`
+and `league`.
+
+**Each tab's data is read on its first open and kept**, the way the player page's
+tabs are — the scoreboard read is gated on `leagueTab === 'scoreboard'` now, and
+each of the three responses carries its own `teams`, so no tab depends on another
+having been opened. Nobody who only looks at the scoreboard pays for a 300KB
+aggregation of the first half or an 86KB activity feed. The transactions read is
+the one that is kept outright (a `transactionsRef`, so the effect does not re-run
+on its own result): it is one request per league on the server's ten minutes, and
+`Refresh from ESPN` drops it, a move made on ESPN being the one thing no cache can
+know about.
+
+### Rankings
+
+**Each cell carries the rank under the figure, and carries the figure**, because
+a rank with no number behind it cannot be acted on: `1st` is what you are looking
+for and `12th` is what you are looking for, and the value is what you do about
+it. The badge is **`.col-rank`**, the research board's own percentile badge,
+folded onto rather than restyled — a second line under a number is one object in
+this app.
+
+**First place is marked and nothing else is**, which is the scoreboard's rule
+arriving here rather than a new one: the winning side of a category is green and
+the loser goes quiet, because ten red cells down one side of a card would be the
+row shouting where the job is to mark a winner. A twelve-row table of ranks is
+that same picture turned on its side.
+
+**Sorting is on the rank rather than the value**, which is the one thing this
+table does that the season table did not, and it buys the reader a rule they no
+longer have to know: **every column opens on first place**, whichever direction
+the category itself runs. It comes to the same thing where every team has a
+figure, and where one doesn't it keeps that team out of the order rather than
+filing him at one end of it — nulls to the bottom in both directions, the board's
+own rule. The **span column sorts like any other column** and time order is what
+sorting by it *is*, which is the Stats tab's answer to the same problem: a table
+that already has an order must have a way back to it as cheap as the way out, and
+a press on the leftmost header is that way in the grammar the reader has just
+used to leave it.
+
+**The span strip is drawn from what the server says it can serve**, not from a
+list held here — so a season with no All-Star break in ESPN's calendar has no
+halves at all, and April has no second half, rather than either being offered and
+answering with an empty table. It is folded onto `.view-switch` / `.view-tab`
+alongside the League strip itself, which is this stylesheet's standing rule: the
+League tabs are the view switch one tier down and the span tabs are the research
+board's window tabs asking the same shape of question about a different thing, so
+both are that control and only their placement is their own.
+
+**What each span covers is printed beside the tabs** — `Weeks 1–15 · Mar 25 –
+Jul 19`, `Week 19 · Aug 10 – Aug 15 · so far`, `ESPN's own season line` — and it
+is not decoration. `First half` is a phrase, and which weeks and which days it is
+made of is the whole of what makes the numbers under it readable, which is the
+same argument the scoreboard's header makes for printing its dates beside `Week
+19`. `so far` is the other half of it: a span reaching into the week being played
+is a total to date, and a bare `Season` over a figure that stops on Tuesday would
+be a claim.
+
+**`Current matchup` means the week being played, not the week the Scoreboard tab
+is navigated to.** The tabs are independent pages of one view — which is the
+whole reason the period arrows belong to the Scoreboard — and a span labelled
+`Current matchup` that silently followed somebody else's arrows would be a label
+that is false as often as it is true. Which week it is, is printed under the tabs.
+
+**Where the four spans come from, which two are ESPN's own and which two are
+summed, and the `first + second ≠ season` wart** are all in **ESPN fantasy
+league**, *The Rankings tab, and the four spans*. The one thing worth repeating
+here is the last of those, because a reader can see it: the two halves add up to
+the season for the four teams in the winners' bracket and fall short by their
+live week for the other eight, and `season` is kept as **ESPN's own figure**
+deliberately — it is the number on ESPN's site and the number the old table drew.
+
+### Transactions
+
+**A feed, which is why it is neither of the two tabs beside it** — the Scoreboard
+is one period and the Rankings are one span, and this is a stream with no period
+on it at all, read from the top and paged the way the app's other two streams are
+(`PAGE_SIZE` 25, the Feed's and the Game Log's own idiom).
+
+**A row is one transaction and its players are what moved in it**, which is
+ESPN's own shape rather than one imposed here: a pickup and the drop that paid
+for it are one act by one manager and arrive as one topic, and a trade is one
+topic carrying three to nine players. Drawing them as separate rows would read as
+five things happening where one did. A trade names both teams in its head with an
+arrow that says nothing about direction, and **the direction rides on the
+player** — which way *he* went is the fact, and in a five-player trade the two
+names above say nothing about any one of them.
+
+**Every name opens the player page**, wherever the name-and-club join found
+exactly one major leaguer; where it didn't the name is plain text, which is
+`matchMlbPlayer`'s standing rule rather than a new one and leaves the row still
+saying what happened. `App.tsx::openLeaguePlayer` resolves the **kind** off the
+season roster — the app keys a player page on `${kind}-${id}` and a transaction
+says a player moved, not whether he pitches — falling back to `batter`, which is
+what a bare id in an old link has always done (`readKeys`). Measured on the live
+league: **42 of 42 names on the first page are links, 0 plain.**
+
+**The word for the move is the manager's rather than ESPN's message-type
+number** — `Added`, `Claimed`, `Dropped`, `Traded` — and a waiver claim is worth
+telling from a free pickup: one cost him a bid and his place in the order and the
+other cost him nothing, so the bid rides on the row where there was one. The
+reader's own moves take the accent rail, the same mark the scoreboard puts on the
+reader's own matchup and for the same reason: a feed of a twelve-team league is
+mostly somebody else's business.
+
+**The date is printed at the resolution it has** — `Today · 5:43 AM`,
+`Yesterday · 7:21 PM`, `Aug 11 · 12:14 PM` — because what a reader wants from
+this list is how long ago, and for anything inside two days the day's name says
+it faster than its date does.
+
+**And what the list *is* is said at its foot when it is at the server's own
+limit**, rather than implied: `The 250 most recent moves. ESPN's activity feed
+goes back further than this page reads it.` A reader who scrolls to the bottom of
+a season deserves to know that rather than to conclude the league was quiet in
+April.
+
+### Measured
+
+Driven against the built client and the live 2026 league at **390×844 and
+1200×900**, and swept at **320 / 375 / 390 / 640 / 1200 / 1920**.
+
+- **Page-body overflow 0 at every one of the six widths**, on all three tabs, and
+  0 on the Roster, Feed and Research views (which draw no `.lg-tabs` at all).
+- **The tab strip is one row from 375 up** and hugs its pills at **296.97px**
+  rather than stretching the 800px column; both strips wrap to two rows at 320,
+  where this bar already pays a line for everything else. The span strip is one
+  row from 640 up and two below it.
+- **Rankings**: 12 rows, 10 categories, **120 rank badges and 11 marked first**
+  (eleven rather than ten because one category has a tie at the top, which is the
+  competition ranking doing its job). The header reads `Team · R · HR · RBI · W ·
+  ERA · SB · WHIP · K · OPS · SVHD`; the pane bleeds to **0 from both edges**;
+  the team column pins at **0** with the pane scrolled to its far right; rows are
+  **58.55px** and the header row **36.00** at every width.
+- **The four spans read**: `Season` (`ESPN's own season line`), `Current matchup`
+  (`Week 19 · Aug 10 – Aug 15 · so far`), `First half` (`Weeks 1–15 · Mar 25 –
+  Jul 19`) and `Second half` (`Weeks 16–19 · Jul 20 – Aug 15 · so far`), each
+  writing its own `lspan=`.
+- **The ranks were recomputed independently** from the values the route ships,
+  over all four spans: **480 of 480 cells match, 87 of them tied.**
+- **Transactions**: 25 rows on the first page of 250, `Load more · 225 older`
+  taking it to 50, **7 of the 25 the reader's own**, and 42 of 42 names links.
+  Pressing one opens `?player=pitcher-676775` with `Keaton Winn` in the `<h1>`,
+  and one press of Escape closes the page and leaves the tab on Transactions.
+- **Every empty state names its cause**, driven with the relevant route blocked:
+  a failed rankings or transactions read draws `Couldn't read your league` over
+  the message, and with no league connected the strip is not drawn at all — three
+  tabs over one message would be chrome for a feature the reader hasn't got.
+- **A span this league cannot serve falls back to the season** rather than an
+  empty table (`?lspan=bogus` → `Season`, and the param dropped from the URL),
+  and a deep link straight to `?lt=transactions` or `?lspan=second` opens on it.
+
+**Bundle: 485.25 → 493.09 KB of JS** (143.98 → 146.06 gzipped) and **112.93 →
+115.36 KB of CSS** (20.12 → 20.47 gzipped) — 7.8KB and 2.4KB raw, 2.1KB and
+0.35KB over the wire, for two tabs, two routes, two components and the paragraphs
+above restated where the rules are.

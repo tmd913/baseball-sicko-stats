@@ -432,3 +432,178 @@ one **9,876 bytes in 282ms** cold and **2.7ms** off its blob, and the current
 period **1.7ms** warm in memory. A period the league has no row for falls back
 to the current one rather than answering with an empty board the reader could
 not explain (checked: `?period=999` → 19).
+
+### The Rankings tab, and the four spans
+
+**The season table the League page opened with was the raw values, and a value
+is only half of what a manager wants from it.** 232 home runs is a lot or a
+little depending on the eleven numbers beside it, and the reader was doing that
+comparison by eye down a column of twelve. `getRankings` answers with the figure
+*and* where it stands, over one of four spans — and the whole of the work was
+establishing which of those four could be answered honestly.
+
+**ESPN will not aggregate a stat over a span, and every way of asking was
+tried.** `mTeam`'s `valuesByStat` is the **season** and only the season: naming
+a `scoringPeriodId` leaves it byte-identical (checked at `sp=100` against the
+bare read), and every span filter there is comes back **400** —
+`filterStatsForTopScoringPeriodIds`, `filterScoringPeriodIds`,
+`filterStatsForMatchupPeriodIds`, `filterStatsForSplitTypeIds` and
+`filterStatsForExternalIds`, each rejected outright.
+
+**What answers it is a measurement on a payload this file already reads.**
+`mScoreboard`'s `cumulativeScore.scoreByStat` carries **all 23 stats ESPN
+tracks** — the *components* (AB, H, 2B, 3B, HR, BB, HBP, SF, outs, hits and
+walks allowed, earned runs) as well as the ten this league scores. So a span is
+the **sum of its matchup periods**: the counting stats add, and the rate
+categories are **recomputed from the summed components** rather than averaged,
+which would be wrong in exactly the way averaging sixty daily barrel rates is
+wrong in `statcastWindow.ts`.
+
+**Verified against the one span ESPN does publish**, which is the check the
+whole design turns on. Summing `scoreByStat` over a prefix of matchup periods
+reproduces every team's `valuesByStat` **exactly — all 12 teams, all 20 counting
+stats to the unit, and OPS, WHIP and ERA to within 5e-9** over all 36 of them.
+The prefix is 1..18 for eight teams and 1..19 for four, and that difference is
+ESPN's own quirk rather than a fault in the arithmetic: the four are the ones in
+the **winners' bracket** in the live period 19, whose stats ESPN counts toward
+the season line while the consolation ladder's are not yet counted. Every team
+is reproduced by *some* prefix, to machine precision, which is what makes the
+summation trustworthy.
+
+**So all four spans are served and none is faked.** `matchup` and `season` are
+**ESPN's own numbers** — the current period's `scoreByStat` and `valuesByStat`
+respectively — and the two halves are ours; where ESPN publishes a figure this
+reads it, and it computes only where ESPN publishes nothing. What *is* refused
+is a category with no derivation from the components in hand (opponent batting
+average, runs created): `DERIVED` names the stat ids each rate needs and a span
+missing any one of them yields **null**, which the client dashes rather than
+summing a rate as though it were a count.
+
+**`first + second` is not `season` for eight of the twelve teams, and the cause
+is the quirk above rather than the arithmetic.** Measured through the route: it
+matches exactly for the four winners'-bracket teams and is short by their live
+week for the other eight (`Swag` reads 676 runs on the season against 704 over
+the two halves). `season` is kept as ESPN's own figure deliberately — it is the
+number the manager sees on ESPN's site and the number the old table drew — and
+each half states the weeks and days it covers, and says `so far` where it
+reaches into the week being played.
+
+**The halves are cut on the All-Star break, read off ESPN's own calendar.**
+`fetchPeriodAnchor` already downloads `proTeamSchedules_wl` and now reduces it
+twice: the anchor pair as before, and the **longest run of gameless scoring
+periods** inside the span the schedule covers. Checked on 2026: of the 187
+periods it carries, exactly **three are gameless — 111, 112 and 113 — and they
+are the only run of them in the season** (110 carries 30 games, 114 carries 2,
+115 carries 30), so "the longest gameless run" is not a heuristic that happens
+to work, it is the only candidate there is. `espn-period-anchor-{season}` goes
+to **`-v2`** for it, which is exactly the bump that key's own note asked for: a
+stored v1 blob carries no break and would come back deserializing as a season
+with none, quietly costing the tab its two halves for a month.
+
+**A matchup period that straddles the break goes to the half holding more of its
+game days**, the gameless ones counting for neither — the live league's period
+15 spans scoring periods 104–117, seven game days before the break and four
+after, so it is the first half's. Dropping a straddling period outright was the
+alternative and is worse: it would take a fortnight's play out of *both* halves
+with nothing on screen to explain the gap. A half with no matchup periods in it
+is **absent from the `spans` list** rather than served empty, which is the rule
+the scoreboard's forward arrow already follows for a period ESPN has not opened;
+so is a season whose break the calendar cannot show.
+
+**Ranks are computed on the server here, where the research board computes them
+in the client**, and the two are not in tension. That board ranks columns
+*derived in `Column.value`* — BB%, K-BB%, ISO, PA/HR — which exist nowhere on
+the row, so a server-side ranking could reach only the raw half. Nothing on this
+table is derived in the client: the server holds the values, the `lowerBetter`
+flag and the population, so there is no half it cannot reach. Competition
+ranking, 1 is best whichever way the category runs, ties share a rank and the
+next distinct figure skips — `teamStats.ts::rankAll`'s convention. A team with
+no figure is **out of the ranking entirely** rather than at the bottom of it,
+the rule `sideFrom` already follows for a category a side is ineligible for.
+Checked against an independent recompute over all four spans: **480 of 480 cells
+match, with 87 tied cells among them.**
+
+**Caching is this file's own two rules.** A span whose last matchup period is
+**over** cannot change, so it takes a storage blob read with no freshness test —
+`espn-span-{leagueId}-{first}-{last}-v1.json` — which is what `getMatchups`
+already does one period at a time. A span reaching into the week being played is
+memory-only on the rosters' ten minutes, and `force` reaches that one and leaves
+the frozen ones alone. The read is `mScoreboard` **alone**, filtered to the
+span's periods: it does not carry `matchupPeriodId` back (that is
+`mMatchupScore`'s field, which is why `leagueMeta` reads it separately) and it
+does not need to, since every row it returns belongs to a period that was asked
+for. Measured on the live league: the first half's fifteen periods are **299,245
+bytes**, the second half's four **82,823**, one period **23,511** — about 20KB a
+week either way.
+
+**Measured through the route**, each cold figure from a fresh process: `season`
+**10.8KB in 449ms** cold and **5ms** warm, `matchup` **178ms**, `first`
+**258ms**, `second` **195ms**.
+
+### The Transactions tab: who moved whom
+
+**Which ESPN endpoint answers this, and the ones that look as though they should
+and don't.** Recorded for the reason the scoreboard's own probe table is: this
+file exists partly so nobody re-probes.
+
+- **`view=mTransactions2`** is real and is **scoped to one scoring period** — by
+  the query param, not the filter. Bare it returns the current day's 30 rows;
+  `scoringPeriodId=100` returns that day's. `filterType` works
+  (`{"transactions":{"filterType":{"value":["FREEAGENT","WAIVER","TRADE_ACCEPT"]}}}`
+  narrows 30 rows to 4), but **`filterScoringPeriodIds` is ignored** — the same
+  30 rows come back — and `limit`, `offset` and `sortDate` are each a **400**.
+  So a season off this view is one request per scoring period, ~150 of them,
+  which is not a page load.
+- **`view=mTransactions`** carries no `transactions` key at all (1,375 bytes:
+  `members`, `players`, `settings`), and **`mPendingTransactions`** is 1,285
+  bytes of nothing on a league with none pending.
+- **Diffing `mRoster` day over day** was the fallback and is not needed; it would
+  also be a reconstruction where the endpoint below is a record.
+
+**What answers it is `communication/` with `kona_league_communication`**, the
+endpoint ESPN's own "recent activity" is drawn from — and the one that takes
+`limit` and `offset`, which is the whole difference: the entire 2026 season of
+this league is **770 topics and 1,261 messages in one request** (933,078 bytes
+at `limit: 1000`), against 244KB for the most recent 200.
+
+**A topic is the transaction and its messages are the players in it.** The
+shapes, counted over that whole season: `178+179` (pick up and drop) 458, `178`
+alone 160, `239` alone 121, `180+181` (waiver claim and drop) 19, `180` alone 8,
+and five trades of three to nine messages each.
+
+**The message-type table was cross-checked against `mTransactions2` rather than
+taken from the community mapping**, on four topics of the same afternoon: a
+`t179 p32667 to6` is `mTransactions2`'s `DROP p32667 6->0`, and the `t178 p39640
+to6` beside it is its `ADD p39640 0->6`. **And the field carrying the team was
+counted over all 1,266 messages**, because it is not the same field on every
+type: `to` is a real team id on all 1,122 of the 178/179/180/181 messages and on
+both ends of all 23 trades, while a **`239` has `to: -1` on all 121 of them and
+its team in `for`** — where its `from` is a lineup slot that merely *looks* like
+a team id 50 times in 121. Reading `from` there would have filed a third of the
+league's drops under the wrong manager.
+
+**Names cost no upstream at all.** `EspnPlayerPool` gains a third reading of
+rows it already parses and joins — `byEspnId`, ESPN's own player id to his name
+and the MLB id he joined to — so the tab's names come off the same cookie-free
+940KB list `getRosterPct` and the eligibility chip already share on six hours.
+Checked against a whole season of this league's activity: **376 of 376** distinct
+ESPN player ids named in it are on that list. Every row is kept whether or not
+it joined, since a name is worth having for a player MLB has never listed; a null
+`mlbId` is what makes his row not a link. Measured through the route: **412 of
+415 players joined (99.3%)**, the three that didn't being names the join declines
+to guess at.
+
+**Memory only, and deliberately no storage blob.** A past transaction is
+immutable, which is the argument for one — and what is read is not a past
+transaction, it is the **head of a feed** that grows all season, which is
+`nextGame.ts`'s class rather than `espn-lineup-…`'s: a blob's freshness test here
+could only ever be the ten minutes beside it, and what it stored would be a
+window that has moved by the time it is read. Keyed per league on
+`OWNERSHIP_TTL_MS` with an `inFlight` guard, and `?refresh=1` reaches it — a move
+made on ESPN is exactly what that button is for. `TRANSACTIONS_LIMIT` is 250,
+which cuts nothing today (a season of this league is 770 topics and the tab reads
+the most recent 250 of them) and bounds a payload that grows all season; the
+client says when the list is at it.
+
+**Measured through the route**: **86KB in 402ms** cold and **5ms** warm — 250
+transactions, 415 players, 197 adds, 49 drops and 4 trades.

@@ -407,6 +407,21 @@ export interface EspnPlayerPool {
    *  it does for a player ESPN has never heard of, and one shape for one
    *  meaning is what keeps that rule single. */
   eligible: Record<number, string[]>;
+  /**
+   * **ESPN's own player id → his name and the MLB id he joined to.**
+   *
+   * The third reading of the same row, and it exists because the league's
+   * activity feed names a player by ESPN's id and by nothing else — no name, no
+   * club. Filling it here rather than fetching anything is the whole point: it
+   * is one more `Map` over rows already parsed and already joined, so the
+   * transactions tab costs **no upstream request at all** for its names. Every
+   * row is kept, matched or not, since a name is worth having for a player MLB
+   * has never listed; `mlbId` is null for him and the row simply is not a link.
+   *
+   * Checked against a whole season of this league's activity: **376 of 376**
+   * distinct ESPN player ids named in it are on this list.
+   */
+  byEspnId: Record<number, { name: string; mlbId: number | null }>;
 }
 
 const ROSTER_PCT_TTL_MS = 6 * 60 * 60 * 1000;
@@ -435,18 +450,26 @@ export async function getPlayerPool(): Promise<EspnPlayerPool> {
     const index = await getMlbIndex();
     const pct: Record<number, number> = {};
     const eligible: Record<number, string[]> = {};
+    const byEspnId: Record<number, { name: string; mlbId: number | null }> = {};
     for (const row of rows) {
       if (!row.fullName) continue;
-      // The join first, once, and the two readings of the row after it: they
+      // The join first, once, and the three readings of the row after it: they
       // are the same player either way, and `matchPlayer` is the costly part.
       const found = matchPlayer(index, row.fullName, row.proTeamId);
+      // The name is kept whether or not he joined, which is the one reading
+      // that does not need the join: the activity feed names a player by
+      // ESPN's id alone, and a transaction is worth printing for a man MLB has
+      // never listed. `mlbId` null is what makes his row not a link.
+      if (typeof row.id === 'number') {
+        byEspnId[row.id] = { name: row.fullName, mlbId: found?.id ?? null };
+      }
       if (!found) continue;
       const owned = row.ownership?.percentOwned;
       if (typeof owned === 'number') pct[found.id] = owned;
       const positions = eligiblePositions(row.eligibleSlots);
       if (positions.length > 0) eligible[found.id] = positions;
     }
-    const pool = { pct, eligible };
+    const pool = { pct, eligible, byEspnId };
     poolCache = { pool, fetchedAt: Date.now() };
     return pool;
   })().finally(() => {
@@ -681,9 +704,14 @@ async function leagueGet<T = EspnRosterResponse>(
   // for one matchup period rather than the season's 118 takes the read from
   // 524KB to 24KB, and ESPN does the filtering rather than the wire.
   filter?: unknown,
+  // A sub-path under the league. Only the activity feed uses one
+  // (`/communication/`), and it is the same league, the same cookies and the
+  // same error handling — so it is a segment on this function rather than a
+  // second fetch beside it with its own copy of the 401 rule.
+  path = '',
 ): Promise<T> {
   const url =
-    `${FANTASY_BASE}/${SEASON}/segments/0/leagues/${creds.leagueId}` +
+    `${FANTASY_BASE}/${SEASON}/segments/0/leagues/${creds.leagueId}${path}` +
     `?${views.map((v) => `view=${v}`).join('&')}` +
     // Omitted rather than sent as ESPN's own current value when there is
     // nothing to say: an absent `scoringPeriodId` is exactly "whichever day the
@@ -841,22 +869,51 @@ interface PeriodAnchor {
 }
 
 /**
+ * What the pro schedule reduces to, which is now two facts rather than one.
+ *
+ * The **anchor** dates every scoring period of the season. The **All-Star
+ * break** is the run of scoring periods on which no club plays at all, and it
+ * is what the Rankings tab's `First half` / `Second half` are cut on — derived
+ * from ESPN's own calendar rather than hardcoded, because a date written down
+ * here is a date that is wrong next season with nothing on screen to say so.
+ *
+ * Checked on 2026: of the 187 scoring periods the schedule carries, exactly
+ * **three are gameless — 111, 112 and 113 — and they are the only run of them
+ * in the season** (110 carries 30 games, 114 carries 2, 115 carries 30). So
+ * "the longest gameless run" is not a heuristic that happens to work here, it
+ * is the only candidate there is. Null when the schedule carries no such run,
+ * which is what a season with no break, or an unreadable schedule, looks like —
+ * and the two halves are then simply not offered.
+ */
+interface SeasonCalendar extends PeriodAnchor {
+  /** First and last **scoring** period of the break, inclusive. */
+  breakFirst: number | null;
+  breakLast: number | null;
+}
+
+/**
  * The pro schedule is **static for the season and takes no cookies at all** —
  * checked, 200 with no `Cookie` header, 850,891 bytes — so this is one read
  * shared by every league and every user, exactly as `getPlayerPool` is. It is
- * the 0.81MB that is not worth holding: what gets cached is the pair it
- * reduces to — a **67-byte** blob, stamp and all — which is why the storage key
- * is by season and the freshness window is measured in weeks rather than hours.
- * Bump the `-v1` if the pair ever grows.
+ * the 0.81MB that is not worth holding: what gets cached is the handful of
+ * numbers it reduces to — a **67-byte** blob when it held the pair alone, and
+ * a hundred-odd now that the break rides with it — which is why the storage
+ * key is by season and the freshness window is measured in weeks rather than
+ * hours.
+ *
+ * **`-v2` is the break joining the pair**, which is exactly the bump the `-v1`
+ * note asked for: a stored v1 blob carries no break at all and would come back
+ * deserializing as a season with none, quietly costing the Rankings tab its two
+ * halves for a month. A v1 blob is simply not read and the 850KB is paid once.
  */
-const anchorBlobKey = (season: number) => `espn-period-anchor-${season}-v1.json`;
+const anchorBlobKey = (season: number) => `espn-period-anchor-${season}-v2.json`;
 const ANCHOR_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
-let anchorCache: { anchor: PeriodAnchor; fetchedAt: number } | null = null;
+let anchorCache: { anchor: SeasonCalendar; fetchedAt: number } | null = null;
 /** A cold container answering three tabs should send one upstream read — the
  *  rule `inFlight` follows for the ownership blob and `poolInFlight` for the
  *  player pool. */
-let anchorInFlight: Promise<PeriodAnchor> | null = null;
+let anchorInFlight: Promise<SeasonCalendar> | null = null;
 
 /**
  * Reduce ESPN's whole season schedule to one `{ period, date }` pair.
@@ -875,7 +932,7 @@ let anchorInFlight: Promise<PeriodAnchor> | null = null;
  * shifting the entire season by a day. With 0 violations today the vote is
  * unanimous; it is there for the day it isn't.
  */
-async function fetchPeriodAnchor(): Promise<PeriodAnchor> {
+async function fetchPeriodAnchor(): Promise<SeasonCalendar> {
   const url = `${FANTASY_BASE}/${SEASON}?view=proTeamSchedules_wl`;
   const res = await fetch(url, { headers: UA });
   if (!res.ok) throw new Error(`ESPN pro schedule returned ${res.status}`);
@@ -888,11 +945,16 @@ async function fetchPeriodAnchor(): Promise<PeriodAnchor> {
   // Period → the ET dates its games fall on. A period with more than one is a
   // period this can't speak for and is dropped rather than guessed at.
   const dates = new Map<number, Set<string>>();
+  // Period → how many games the whole league plays in it. The *second*
+  // reduction of this same payload, and the one the All-Star break falls out
+  // of: a period with no games at all is a day nobody plays.
+  const games = new Map<number, number>();
   for (const team of data.settings?.proTeams ?? []) {
-    for (const [id, games] of Object.entries(team.proGamesByScoringPeriod ?? {})) {
+    for (const [id, list] of Object.entries(team.proGamesByScoringPeriod ?? {})) {
       const period = Number(id);
       if (!Number.isInteger(period) || period < 1) continue;
-      for (const game of games ?? []) {
+      games.set(period, (games.get(period) ?? 0) + (list?.length ?? 0));
+      for (const game of list ?? []) {
         if (typeof game.date !== 'number') continue;
         const day = easternDate(new Date(game.date));
         const at = dates.get(period);
@@ -924,7 +986,34 @@ async function fetchPeriodAnchor(): Promise<PeriodAnchor> {
       period = value;
     }
   }
-  return { period, date: base.date };
+
+  // The break: the longest run of consecutive gameless periods *inside* the
+  // span the schedule covers. Bounded by the first and last period that carry
+  // a game, so the empty stretch before opening day and after the last one are
+  // not candidates — those are not a break in the season, they are outside it.
+  const played = [...games.entries()].filter(([, n]) => n > 0).map(([p]) => p);
+  let breakFirst: number | null = null;
+  let breakLast: number | null = null;
+  if (played.length > 0) {
+    const lo = Math.min(...played);
+    const hi = Math.max(...played);
+    let runStart: number | null = null;
+    for (let p = lo; p <= hi + 1; p++) {
+      const empty = p <= hi && !(games.get(p) ?? 0);
+      if (empty) {
+        if (runStart === null) runStart = p;
+      } else if (runStart !== null) {
+        const len = p - runStart;
+        if (breakFirst === null || len > breakLast! - breakFirst + 1) {
+          breakFirst = runStart;
+          breakLast = p - 1;
+        }
+        runStart = null;
+      }
+    }
+  }
+
+  return { period, date: base.date, breakFirst, breakLast };
 }
 
 /** How long a failed derivation is remembered before it is tried again. */
@@ -947,14 +1036,14 @@ let anchorFailedAt = 0;
  * it, a 62-day range against a dead upstream would retry an 850KB fetch once
  * per wave of the fan-out rather than once.
  */
-async function getPeriodAnchor(): Promise<PeriodAnchor | null> {
+async function getPeriodAnchor(): Promise<SeasonCalendar | null> {
   if (anchorCache && Date.now() - anchorCache.fetchedAt < ANCHOR_TTL_MS) return anchorCache.anchor;
   if (anchorFailedAt && Date.now() - anchorFailedAt < ANCHOR_RETRY_MS) return null;
 
   if (!anchorInFlight) {
     anchorInFlight = (async () => {
       const key = anchorBlobKey(SEASON);
-      const stored = await readJsonBlob<PeriodAnchor>(
+      const stored = await readJsonBlob<SeasonCalendar>(
         key,
         (_value, cachedAt) => Date.now() - cachedAt < ANCHOR_TTL_MS,
       );
@@ -2374,4 +2463,681 @@ export async function getScoreboard(
     leagueName: meta.leagueName,
     fetchedAt: Date.now(),
   };
+}
+
+// ---- The Rankings tab: where each team stands, category by category ------
+//
+// **The season table the League page opened with was the raw values, and a
+// value is only half of what a manager wants from it.** 232 home runs is a lot
+// or a little depending on the eleven teams beside it, and the reader was
+// doing that comparison by eye down a column of twelve. So the table is drawn
+// again with the *rank* under each value — the values kept, because a rank
+// with no number behind it cannot be acted on.
+//
+// **Which spans can be answered honestly, and the one thing that decided it.**
+// The obvious way to cut a season into halves is to ask ESPN for one, and ESPN
+// will not:
+//
+//  - `mTeam`'s `valuesByStat` is the **season** and only the season. Naming a
+//    `scoringPeriodId` leaves it byte-identical (checked, sp=100 against the
+//    bare read), and every span filter there is comes back **400**:
+//    `filterStatsForTopScoringPeriodIds`, `filterScoringPeriodIds`,
+//    `filterStatsForMatchupPeriodIds`, `filterStatsForSplitTypeIds` and
+//    `filterStatsForExternalIds` were each tried and each rejected outright.
+//  - `mTransactions2`-style paging does not apply, and `mStandings` carries an
+//    `id` and nothing else (already recorded above).
+//
+// **What does answer it is `mScoreboard`'s own `scoreByStat`, which carries
+// more than the league's scoring categories.** That was the measurement that
+// opened this up: a matchup period's `scoreByStat` holds **all 23 stats
+// `valuesByStat` holds** — the *components* (AB, H, 2B, 3B, HR, BB, HBP, SF,
+// outs, hits and walks allowed, earned runs) as well as the ten this league
+// actually scores. So a span is the sum of its matchup periods: the counting
+// stats add, and the rate categories are **recomputed from the summed
+// components** rather than averaged, which would be wrong in exactly the way
+// averaging sixty daily barrel rates is wrong in `statcastWindow.ts`.
+//
+// **Verified against the one span ESPN does publish**, which is the check this
+// design turns on: summing `scoreByStat` over a prefix of matchup periods
+// reproduces every team's `valuesByStat` **exactly — all 12 teams, all 20
+// counting stats to the unit, and OPS, WHIP and ERA to within 5e-9** on all 36
+// of them. The prefix is 1..18 for eight teams and 1..19 for four, and that is
+// an ESPN quirk rather than a fault in the arithmetic: the four are the ones in
+// the winners' bracket in the live period 19, whose stats ESPN counts toward
+// the season line while the consolation ladder's are not yet. Every team is
+// reproduced by *some* prefix, to machine precision, which is what makes the
+// summation trustworthy.
+//
+// **So all four spans are served and none is faked.** What *is* refused is a
+// category with no derivation from the components in hand — opponent batting
+// average, runs created — which comes back null and is dashed rather than
+// summed as though it were a count.
+
+/** The four cuts the Rankings tab offers. */
+export type EspnRankSpan = 'matchup' | 'season' | 'first' | 'second';
+
+/** One span, as the tab strip needs it: what it is called and what it covers. */
+export interface EspnRankSpanInfo {
+  span: EspnRankSpan;
+  label: string;
+  /** The matchup periods it is made of — `[first, last]`, or null for the
+   *  season, which is ESPN's own figure rather than a range this file summed. */
+  periods: [number, number] | null;
+  /** ET calendar days, where the anchor could date them. */
+  start: string | null;
+  end: string | null;
+  /** Whether the numbers include a week still being played, which is what
+   *  makes the difference between a total and a total *so far*. */
+  live: boolean;
+}
+
+/** One team's row: its figure in each category and where that figure stands. */
+export interface EspnRankRow {
+  teamId: number;
+  /** Keyed by stat id. A category with no honest figure for this span is
+   *  **absent** rather than zero — the rule `sideFrom` already follows for a
+   *  category a side is ineligible for, and for the same reason. */
+  values: Record<number, number>;
+  /** 1 is best, whichever direction the category runs. Absent exactly where
+   *  the value is: a team with no figure has not got the worst one. */
+  ranks: Record<number, number>;
+}
+
+export interface EspnRankings {
+  span: EspnRankSpan;
+  /** Every span this league can actually be asked for, in reading order. A
+   *  half with no matchup period in it — the second half in April, either of
+   *  them in a season whose break ESPN's calendar does not show — is **absent
+   *  from this list rather than served empty**, which is the same rule the
+   *  scoreboard's forward arrow follows for a period ESPN has not opened. */
+  spans: EspnRankSpanInfo[];
+  format: EspnScoringFormat;
+  scoringType: string;
+  categories: EspnCategory[];
+  rows: EspnRankRow[];
+  teams: EspnStandingsTeam[];
+  myTeamId: number | null;
+  leagueName: string;
+  fetchedAt: number;
+}
+
+/**
+ * How a rate category is rebuilt from the counting stats a span was summed
+ * from — because a rate does not add.
+ *
+ * Every entry names the stat ids it **needs**, and a span missing any one of
+ * them yields null rather than a figure computed from a hole: a league whose
+ * `scoreByStat` omits sacrifice flies has no OBP this file can honestly state,
+ * and the cell dashes. The three that matter to the live league are checked
+ * against ESPN's own season figure to 5e-9 (above); the rest are the same
+ * arithmetic written from the same definitions and are **unverified**, for the
+ * reason `STAT_META`'s own tail is: there was one league to read.
+ */
+const DERIVED: Record<number, { needs: number[]; of: (v: Record<number, number>) => number | null }> =
+  {
+    // AVG = H / AB.
+    2: { needs: [1, 0], of: (v) => (v[0] ? v[1] / v[0] : null) },
+    // SLG = TB / AB, with total bases from the extra-base counts.
+    9: {
+      needs: [1, 3, 4, 5, 0],
+      of: (v) => (v[0] ? (v[1] + v[3] + 2 * v[4] + 3 * v[5]) / v[0] : null),
+    },
+    // OBP = (H + BB + HBP) / (AB + BB + HBP + SF).
+    17: {
+      needs: [1, 10, 12, 0, 13],
+      of: (v) => {
+        const den = v[0] + v[10] + v[12] + v[13];
+        return den ? (v[1] + v[10] + v[12]) / den : null;
+      },
+    },
+    // OPS = OBP + SLG, and the two halves are the two above.
+    18: {
+      needs: [1, 3, 4, 5, 10, 12, 0, 13],
+      of: (v) => {
+        const den = v[0] + v[10] + v[12] + v[13];
+        if (!den || !v[0]) return null;
+        return (v[1] + v[10] + v[12]) / den + (v[1] + v[3] + 2 * v[4] + 3 * v[5]) / v[0];
+      },
+    },
+    // WHIP = (H + BB) / IP, and IP is outs over three.
+    41: { needs: [37, 39, 34], of: (v) => (v[34] ? (v[37] + v[39]) / (v[34] / 3) : null) },
+    // ERA = ER * 9 / IP.
+    47: { needs: [45, 34], of: (v) => (v[34] ? (v[45] * 9) / (v[34] / 3) : null) },
+    // K/9.
+    49: { needs: [48, 34], of: (v) => (v[34] ? (v[48] * 9) / (v[34] / 3) : null) },
+    // Winning percentage.
+    55: { needs: [53, 54], of: (v) => (v[53] + v[54] ? v[53] / (v[53] + v[54]) : null) },
+    // Save percentage.
+    59: { needs: [57, 56], of: (v) => (v[56] ? v[57] / v[56] : null) },
+  };
+
+/**
+ * One span's totals per team, summed a matchup period at a time.
+ *
+ * **A settled span is a fact and takes a blob**, the rule `getMatchups` follows
+ * one period at a time: a span whose last matchup period is over cannot change,
+ * so it is read back with no freshness test. A span reaching into the week
+ * being played is memory-only on the rosters' own ten minutes, and `force` —
+ * `Refresh from ESPN` — reaches that one and leaves the frozen ones alone.
+ *
+ * The read is `mScoreboard` **alone**, filtered to the span's periods. It does
+ * not carry `matchupPeriodId` back (that is `mMatchupScore`'s field, which is
+ * why `leagueMeta` reads it separately), and it does not need to: every row it
+ * returns belongs to a period that was asked for, so every row is summed.
+ * Measured on the live league: the first half's fifteen periods are **299,245
+ * bytes**, the second half's four are **82,823**, and one period is 23,511 —
+ * about 20KB a week either way.
+ */
+const spanBlobKey = (leagueId: number, first: number, last: number) =>
+  `espn-span-${leagueId}-${first}-${last}-v1.json`;
+
+const spanCache = new Map<string, { totals: Record<number, Record<number, number>>; fetchedAt: number }>();
+const spanInFlight = new Map<string, Promise<Record<number, Record<number, number>>>>();
+
+async function fetchSpanTotals(
+  creds: EspnCreds,
+  periods: number[],
+): Promise<Record<number, Record<number, number>>> {
+  const data = await leagueGet<EspnScoreboardResponse>(creds, ['mScoreboard'], 0, {
+    schedule: { filterMatchupPeriodIds: { value: periods } },
+  });
+  const totals: Record<number, Record<number, number>> = {};
+  for (const m of data.schedule ?? []) {
+    for (const side of [m.home, m.away]) {
+      if (!side || typeof side.teamId !== 'number') continue;
+      const at = (totals[side.teamId] ??= {});
+      for (const [id, cell] of Object.entries(side.cumulativeScore?.scoreByStat ?? {})) {
+        if (!cell || cell.ineligible === true || typeof cell.score !== 'number') continue;
+        at[Number(id)] = (at[Number(id)] ?? 0) + cell.score;
+      }
+    }
+  }
+  return totals;
+}
+
+async function getSpanTotals(
+  creds: EspnCreds,
+  periods: number[],
+  frozen: boolean,
+  force = false,
+): Promise<Record<number, Record<number, number>>> {
+  const first = periods[0];
+  const last = periods[periods.length - 1];
+  const key = `${creds.leagueId}:${first}-${last}`;
+  const stale = force && !frozen;
+  const hit = spanCache.get(key);
+  if (!stale && hit && (frozen || Date.now() - hit.fetchedAt < OWNERSHIP_TTL_MS)) return hit.totals;
+  const running = spanInFlight.get(key);
+  if (running && !stale) return running;
+
+  const job = (async () => {
+    if (frozen) {
+      const stored = await readJsonBlob<Record<number, Record<number, number>>>(
+        spanBlobKey(creds.leagueId, first, last),
+        () => true,
+      );
+      if (stored && typeof stored === 'object') {
+        spanCache.set(key, { totals: stored, fetchedAt: Date.now() });
+        return stored;
+      }
+    }
+    const totals = await fetchSpanTotals(creds, periods);
+    spanCache.set(key, { totals, fetchedAt: Date.now() });
+    if (frozen) await writeJsonBlob(spanBlobKey(creds.leagueId, first, last), totals);
+    return totals;
+  })().finally(() => {
+    spanInFlight.delete(key);
+  });
+
+  spanInFlight.set(key, job);
+  return job;
+}
+
+/**
+ * Which matchup periods make up each half of the season.
+ *
+ * The divider is the **All-Star break**, read off ESPN's own calendar as the
+ * run of scoring periods on which no club plays (`SeasonCalendar`), so nothing
+ * here is a date somebody typed. A matchup period that *straddles* the break —
+ * the live league's period 15 spans scoring periods 104–117, seven game days
+ * before the break and four after — belongs to the half holding more of its
+ * **game** days, the gameless ones counting for neither. That is a rule rather
+ * than a convention, and the alternative is worse in a way worth naming:
+ * dropping a straddling period outright would have taken a fortnight's play out
+ * of both halves with nothing on screen to explain the gap.
+ *
+ * Null when there is no break to cut on, which is what an unreadable schedule
+ * looks like — and the halves are then not offered at all.
+ */
+function halvesOf(
+  periods: { period: number; first: number; last: number }[],
+  breakFirst: number | null,
+  breakLast: number | null,
+): { first: number[]; second: number[] } | null {
+  if (breakFirst == null || breakLast == null) return null;
+  const first: number[] = [];
+  const second: number[] = [];
+  for (const p of periods) {
+    if (!p.first || !p.last) continue;
+    if (p.last < breakFirst) first.push(p.period);
+    else if (p.first > breakLast) second.push(p.period);
+    else {
+      // Straddling: count the game days either side of the break.
+      const before = Math.max(0, Math.min(p.last, breakFirst - 1) - p.first + 1);
+      const after = Math.max(0, p.last - Math.max(p.first, breakLast + 1) + 1);
+      (before >= after ? first : second).push(p.period);
+    }
+  }
+  return { first, second };
+}
+
+/** Competition ranking — 1 is best, ties share a rank and the next distinct
+ *  figure skips (1, 2, 2, 4) — which is `teamStats.ts::rankAll`'s convention
+ *  and, more to the point, the one every league table in the world uses. */
+function rankBy(
+  entries: { teamId: number; value: number }[],
+  lowerBetter: boolean,
+): Record<number, number> {
+  const sorted = [...entries].sort((a, b) => (lowerBetter ? a.value - b.value : b.value - a.value));
+  const out: Record<number, number> = {};
+  let rank = 0;
+  let seen = 0;
+  let prev: number | null = null;
+  for (const e of sorted) {
+    seen++;
+    if (prev === null || e.value !== prev) rank = seen;
+    out[e.teamId] = rank;
+    prev = e.value;
+  }
+  return out;
+}
+
+/**
+ * The Rankings tab: every team's figure and standing in each of the league's
+ * scoring categories, over one of four spans.
+ *
+ * **`matchup` and `season` are ESPN's own numbers and the two halves are ours**
+ * — the current period's `scoreByStat` and `valuesByStat` respectively, drawn
+ * as they arrive. That split is deliberate rather than accidental: where ESPN
+ * publishes a figure this reads it, and it computes only where ESPN publishes
+ * nothing. The two arithmetics are the same one, checked to 5e-9 above.
+ *
+ * **`matchup` means the week being played, not the week the Scoreboard tab is
+ * navigated to.** The tabs are independent pages of one view — the period
+ * arrows belong to the Scoreboard because they govern only it — and a span
+ * labelled `Current matchup` that silently followed somebody else's arrows
+ * would be a label that is false as often as it is true. Which week it is, is
+ * printed under the tabs.
+ */
+export async function getRankings(
+  creds: EspnCreds,
+  span?: EspnRankSpan | null,
+  force = false,
+): Promise<EspnRankings> {
+  if (force) {
+    const prefix = `${creds.leagueId}:`;
+    for (const k of [...spanCache.keys()]) if (k.startsWith(prefix)) spanCache.delete(k);
+  }
+  const meta = await leagueMeta(creds, force);
+  const calendar = await getPeriodAnchor();
+  const current = meta.periods.length > 0 ? meta.periods[meta.periods.length - 1].period : null;
+  const halves = halvesOf(meta.periods, calendar?.breakFirst ?? null, calendar?.breakLast ?? null);
+
+  const dated = async (first: number, last: number) => {
+    const a = meta.periods.find((p) => p.period === first);
+    const b = meta.periods.find((p) => p.period === last);
+    const [start, end] = await Promise.all([
+      a?.first ? dateForPeriod(a.first) : Promise.resolve(null),
+      b?.last ? dateForPeriod(b.last) : Promise.resolve(null),
+    ]);
+    return { start, end };
+  };
+
+  const spans: EspnRankSpanInfo[] = [];
+  if (current != null && meta.categories.length > 0) {
+    const { start, end } = await dated(current, current);
+    spans.push({
+      span: 'matchup',
+      label: 'Current matchup',
+      periods: [current, current],
+      start,
+      end,
+      live: true,
+    });
+  }
+  spans.push({ span: 'season', label: 'Season', periods: null, start: null, end: null, live: false });
+  for (const [key, label, list] of [
+    ['first', 'First half', halves?.first ?? []],
+    ['second', 'Second half', halves?.second ?? []],
+  ] as const) {
+    if (list.length === 0) continue;
+    const { start, end } = await dated(list[0], list[list.length - 1]);
+    spans.push({
+      span: key,
+      label,
+      periods: [list[0], list[list.length - 1]],
+      start,
+      end,
+      live: current != null && list.includes(current),
+    });
+  }
+
+  const asked = span && spans.some((s) => s.span === span) ? span : 'season';
+
+  // The values, by team. Three sources for four spans, and each is the
+  // cheapest honest answer to its own question.
+  let values: Record<number, Record<number, number>> = {};
+  // ESPN's own two carry all 23 stats it tracks — the components as well as
+  // the ten this league scores — so both are narrowed to the categories the
+  // table actually draws. It is the same shape the halves come out in, and
+  // the thirteen it drops are 1KB a read of numbers nothing renders.
+  const onlyCategories = (v: Record<number, number>) => {
+    const out: Record<number, number> = {};
+    for (const cat of meta.categories) {
+      const n = v[cat.statId];
+      if (typeof n === 'number' && Number.isFinite(n)) out[cat.statId] = n;
+    }
+    return out;
+  };
+  if (asked === 'season') {
+    for (const t of meta.teams) values[t.id] = onlyCategories(t.values);
+  } else if (asked === 'matchup' && current != null) {
+    const raw = await getSpanTotals(creds, [current], false, force);
+    for (const [id, v] of Object.entries(raw)) values[Number(id)] = onlyCategories(v);
+  } else {
+    const list = asked === 'first' ? (halves?.first ?? []) : (halves?.second ?? []);
+    if (list.length > 0) {
+      const frozen = current == null || !list.includes(current);
+      const raw = await getSpanTotals(creds, list, frozen, force);
+      // Counting stats add; rates are rebuilt from what they add up from, and
+      // a rate with a component missing is left out rather than invented.
+      for (const [id, summed] of Object.entries(raw)) {
+        const out: Record<number, number> = {};
+        for (const cat of meta.categories) {
+          if (cat.format === 'count') {
+            const v = summed[cat.statId];
+            if (typeof v === 'number') out[cat.statId] = v;
+            continue;
+          }
+          const rule = DERIVED[cat.statId];
+          if (!rule || !rule.needs.every((n) => typeof summed[n] === 'number')) continue;
+          const v = rule.of(summed);
+          if (typeof v === 'number' && Number.isFinite(v)) out[cat.statId] = v;
+        }
+        values[Number(id)] = out;
+      }
+    }
+  }
+
+  const rows: EspnRankRow[] = meta.teams.map((t) => ({
+    teamId: t.id,
+    values: values[t.id] ?? {},
+    ranks: {},
+  }));
+  const byTeam = new Map(rows.map((r) => [r.teamId, r]));
+  for (const cat of meta.categories) {
+    const entries = rows
+      .filter((r) => typeof r.values[cat.statId] === 'number')
+      .map((r) => ({ teamId: r.teamId, value: r.values[cat.statId] }));
+    if (entries.length === 0) continue;
+    for (const [teamId, rank] of Object.entries(rankBy(entries, cat.lowerBetter))) {
+      const row = byTeam.get(Number(teamId));
+      if (row) row.ranks[cat.statId] = rank;
+    }
+  }
+
+  return {
+    span: asked,
+    spans,
+    format: meta.format,
+    scoringType: meta.scoringType,
+    categories: meta.categories,
+    rows,
+    teams: meta.teams,
+    myTeamId: meta.myTeamId,
+    leagueName: meta.leagueName,
+    fetchedAt: Date.now(),
+  };
+}
+
+// ---- The Transactions tab: who moved whom ---------------------------------
+//
+// **Which ESPN endpoint answers this, and the two that look as though they
+// should and don't.** Recorded here for the reason the scoreboard's own probe
+// table is: this file exists partly so nobody re-probes.
+//
+//  - **`view=mTransactions2`** is real and is **scoped to one scoring period**
+//    — the query param, not the filter. Bare it returns the current day's 30
+//    rows; `scoringPeriodId=100` returns that day's. `filterType` works
+//    (`{"transactions":{"filterType":{"value":["FREEAGENT","WAIVER","TRADE_ACCEPT"]}}}`
+//    narrows 30 rows to 4), but `filterScoringPeriodIds` is **ignored** — the
+//    same 30 rows come back — and `limit`, `offset` and `sortDate` are each a
+//    **400**. So a season of transactions off this view is one request per
+//    scoring period, ~150 of them, which is not a page load.
+//  - **`view=mTransactions`** carries no `transactions` key at all (1,375
+//    bytes, `members`/`players`/`settings`), and **`mPendingTransactions`** is
+//    1,285 bytes of nothing on a league with none pending.
+//  - **Diffing `mRoster` day over day** was the fallback and is not needed; it
+//    would also be a reconstruction where the two below are a record.
+//
+// **What answers it is `communication/` with `kona_league_communication`**, the
+// endpoint ESPN's own "recent activity" is drawn from — and it is the one that
+// takes `limit` and `offset`, which is the whole difference: the entire 2026
+// season of this league is **770 topics and 1,261 messages in one request**
+// (933,078 bytes at `limit: 1000`), against 244KB for the most recent 200.
+//
+// **A topic is the transaction and its messages are the players in it.** The
+// shapes, counted over that whole season: `178+179` (pick up and drop) 458,
+// `178` alone 160, `239` alone 121, `180+181` (waiver claim and drop) 19, `180`
+// alone 8, and five trades of three to nine messages each.
+//
+// **The message type table was cross-checked against `mTransactions2` rather
+// than taken from the community mapping**, on four topics of the same
+// afternoon: a `t179 p32667 to6` is `mTransactions2`'s `DROP p32667 6->0`, and
+// the `t178 p39640 to6` beside it is its `ADD p39640 0->6`. And the field that
+// carries the team was **counted over all 1,266 messages**, because it is not
+// the same field on every type: `to` is a real team id on all 1,122 of the
+// 178/179/180/181 messages and on both ends of all 23 trades, while a `239`
+// has `to: -1` on all 121 of them and its team in **`for`** — where its `from`
+// is a lineup slot that merely *looks* like a team id 50 times in 121. Reading
+// `from` there would have filed a third of the league's drops under the wrong
+// manager.
+
+/** How many topics are read. A season of this league is 770, so this is not a
+ *  window that cuts anything today; it is a bound on a payload that grows all
+ *  season and is here so a league with a very busy waiver wire cannot make the
+ *  read unbounded. The client says when the list is at it. */
+const TRANSACTIONS_LIMIT = 250;
+
+/** ESPN's own message types, in the vocabulary the page speaks. `for` rather
+ *  than `to` on 239 is not a typo — see the note above, where it is counted. */
+const TX_MESSAGE: Record<
+  number,
+  { move: 'add' | 'drop'; via: 'free-agent' | 'waiver' | 'trade'; team: 'to' | 'for' | 'both' }
+> = {
+  178: { move: 'add', via: 'free-agent', team: 'to' },
+  180: { move: 'add', via: 'waiver', team: 'to' },
+  179: { move: 'drop', via: 'free-agent', team: 'to' },
+  181: { move: 'drop', via: 'waiver', team: 'to' },
+  239: { move: 'drop', via: 'free-agent', team: 'for' },
+  244: { move: 'add', via: 'trade', team: 'both' },
+};
+
+/** One player moving in one transaction. */
+export interface EspnTransactionPlayer {
+  /** ESPN's own player id, which is what the activity feed names him by. */
+  espnId: number;
+  name: string;
+  /** The MLB id where the name-and-club join lands on exactly one man, so the
+   *  row can open his page like every other player name in the app — and null
+   *  where it doesn't, which is `matchMlbPlayer`'s rule rather than a new one:
+   *  an ambiguity neither name nor club resolves is left unmatched rather than
+   *  guessed. The row still draws; it simply is not a link. */
+  mlbId: number | null;
+  move: 'add' | 'drop';
+  via: 'free-agent' | 'waiver' | 'trade';
+  /** The team that took him, and the one that gave him up. A free-agent pickup
+   *  has no `from` and a drop no `to`; a trade has both. */
+  toTeamId: number | null;
+  fromTeamId: number | null;
+  /** ESPN's waiver bid, on a claim that carried one. */
+  bid: number | null;
+}
+
+export interface EspnTransaction {
+  id: string;
+  /** Epoch milliseconds, which is what ESPN stamps a topic with. */
+  date: number;
+  kind: 'add' | 'drop' | 'trade';
+  /** Every team the move touched — one for a pickup or a drop, two for a
+   *  trade. In the order they read: the team that acted first. */
+  teamIds: number[];
+  players: EspnTransactionPlayer[];
+}
+
+export interface EspnTransactions {
+  transactions: EspnTransaction[];
+  /** Whether the read came back at `TRANSACTIONS_LIMIT`, i.e. whether there is
+   *  more season behind it. The page says so rather than implying a complete
+   *  record it hasn't got. */
+  capped: boolean;
+  teams: EspnStandingsTeam[];
+  myTeamId: number | null;
+  leagueName: string;
+  fetchedAt: number;
+}
+
+interface EspnTopicResponse {
+  topics?: {
+    id?: string;
+    date?: number;
+    author?: string;
+    messages?: {
+      messageTypeId?: number;
+      targetId?: number;
+      to?: number;
+      from?: number;
+      for?: number;
+      date?: number;
+    }[];
+  }[];
+}
+
+/**
+ * The league's activity feed, reduced to the moves.
+ *
+ * **Memory only, and deliberately no storage blob.** A past transaction is
+ * immutable, which is the argument for one — and what is being read is not a
+ * past transaction, it is the *head of a feed* that grows all season, which is
+ * `nextGame.ts`'s class rather than `espn-lineup-…`'s: a blob's freshness test
+ * here could only ever be the ten minutes beside it, and the thing it would
+ * store is a window that has moved by the time it is read. It is keyed per
+ * league on the rosters' own `OWNERSHIP_TTL_MS`, with an `inFlight` guard so a
+ * cold container serving three tabs sends one upstream, and `?refresh=1`
+ * reaches it — a move made on ESPN is exactly what that button is for.
+ */
+const txCache = new Map<number, { value: EspnTransactions; fetchedAt: number }>();
+const txInFlight = new Map<number, Promise<EspnTransactions>>();
+
+export async function getTransactions(
+  creds: EspnCreds,
+  force = false,
+): Promise<EspnTransactions> {
+  const hit = txCache.get(creds.leagueId);
+  if (!force && hit && Date.now() - hit.fetchedAt < OWNERSHIP_TTL_MS) return hit.value;
+  const running = txInFlight.get(creds.leagueId);
+  if (running && !force) return running;
+
+  const job = (async () => {
+    const [meta, data, pool] = await Promise.all([
+      leagueMeta(creds, force),
+      leagueGet<EspnTopicResponse>(creds, ['kona_league_communication'], null, {
+        topics: {
+          filterType: { value: ['ACTIVITY_TRANSACTIONS'] },
+          limit: TRANSACTIONS_LIMIT,
+          // Generous rather than tight: a nine-player trade is one topic and
+          // truncating its messages would print half a trade.
+          limitPerMessageSet: { value: 40 },
+          offset: 0,
+          sortMessageDate: { sortPriority: 1, sortAsc: false },
+          sortFor: { sortPriority: 2, sortAsc: false },
+          filterIncludeMessageTypeIds: { value: Object.keys(TX_MESSAGE).map(Number) },
+        },
+      }, '/communication/'),
+      // The names, and with them the MLB ids. **No new upstream**: this is the
+      // same cookie-free 940KB pool `getRosterPct` and the eligibility chip
+      // already share, read once every six hours by every user of the app —
+      // and it covers the whole season's activity, checked: **376 of 376**
+      // distinct ESPN player ids named in 2026's transactions are on it.
+      getPlayerPool().catch((err: Error) => {
+        console.error('ESPN player pool unavailable for transactions:', err.message);
+        return null;
+      }),
+    ]);
+
+    const teamIds = new Set(meta.teams.map((t) => t.id));
+    const out: EspnTransaction[] = [];
+    for (const topic of data.topics ?? []) {
+      const players: EspnTransactionPlayer[] = [];
+      const touched: number[] = [];
+      let anyTrade = false;
+      for (const m of topic.messages ?? []) {
+        const rule = m.messageTypeId == null ? undefined : TX_MESSAGE[m.messageTypeId];
+        if (!rule || typeof m.targetId !== 'number') continue;
+        let toTeamId: number | null = null;
+        let fromTeamId: number | null = null;
+        if (rule.team === 'both') {
+          anyTrade = true;
+          toTeamId = teamIds.has(m.to as number) ? (m.to as number) : null;
+          fromTeamId = teamIds.has(m.from as number) ? (m.from as number) : null;
+        } else {
+          const raw = rule.team === 'for' ? m.for : m.to;
+          const team = teamIds.has(raw as number) ? (raw as number) : null;
+          if (rule.move === 'add') toTeamId = team;
+          else fromTeamId = team;
+        }
+        for (const t of [toTeamId, fromTeamId]) if (t != null && !touched.includes(t)) touched.push(t);
+        const entry = pool?.byEspnId[m.targetId];
+        players.push({
+          espnId: m.targetId,
+          // A player the pool has never heard of still gets a row: what he was
+          // is a fact even where his name is not to hand.
+          name: entry?.name ?? `ESPN player ${m.targetId}`,
+          mlbId: entry?.mlbId ?? null,
+          move: rule.move,
+          via: rule.via,
+          toTeamId,
+          fromTeamId,
+          bid: rule.via === 'waiver' && typeof m.for === 'number' ? m.for : null,
+        });
+      }
+      if (players.length === 0) continue;
+      out.push({
+        id: topic.id ?? `${topic.date ?? 0}-${players[0].espnId}`,
+        date: typeof topic.date === 'number' ? topic.date : 0,
+        kind: anyTrade ? 'trade' : players.some((p) => p.move === 'add') ? 'add' : 'drop',
+        teamIds: touched,
+        players,
+      });
+    }
+    // Newest first. ESPN sorts them that way and is asked to; sorting here as
+    // well costs nothing and means the page's own order does not depend on it.
+    out.sort((a, b) => b.date - a.date);
+
+    const value: EspnTransactions = {
+      transactions: out,
+      capped: (data.topics ?? []).length >= TRANSACTIONS_LIMIT,
+      teams: meta.teams,
+      myTeamId: meta.myTeamId,
+      leagueName: meta.leagueName,
+      fetchedAt: Date.now(),
+    };
+    txCache.set(creds.leagueId, { value, fetchedAt: Date.now() });
+    return value;
+  })().finally(() => {
+    txInFlight.delete(creds.leagueId);
+  });
+
+  txInFlight.set(creds.leagueId, job);
+  return job;
 }

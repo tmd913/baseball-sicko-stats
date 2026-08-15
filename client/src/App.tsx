@@ -4,6 +4,9 @@ import { SignOutButton } from './auth';
 import { playerKey, RESEARCH_WINDOWS } from './types';
 import type {
   EspnOwnership,
+  EspnRankings,
+  EspnRankSpan,
+  EspnTransactions,
   EspnRoster,
   EspnScoreboard,
   EspnStatus,
@@ -60,6 +63,7 @@ import { LoadingBlock, LoadingLine, SpinningBaseball } from './components/Loadin
 import { Tutorial } from './components/Tutorial';
 import { EspnSettings } from './components/EspnSettings';
 import LeagueView from './components/LeagueView';
+import type { LeagueTab } from './components/LeagueView';
 
 // How long a press-triggered mark keeps spinning at a minimum — the fantasy
 // popover's `Refresh from ESPN`, and the league page's own Refresh through it.
@@ -965,6 +969,52 @@ export default function App() {
 
   const showScoreboardWait = useDelayedFlag(scoreboardLoading);
 
+  /**
+   * Which of the League page's three tabs is open, and — for the Rankings tab
+   * — which span it is cut on.
+   *
+   * **Both are in the URL because both decide what data is on screen**, the
+   * rule `view=`, `win=` and `mp=` follow. `lt=` is the tab (the Scoreboard is
+   * the default and is omitted, so a bare `?view=league` opens where the page
+   * always opened) and `lspan=` the span. Neither can collide: the app's other
+   * params are `preset`, `start`, `end`, `player`, `view`, `kind`, `sim`,
+   * `hideil`, `starters`, `sched`, `roster`, `pos`, `cols`, `inc`, `scope`,
+   * `watch`, `win`, `help`, `mp` and `league`.
+   *
+   * `lspan=` is deliberately **not** `win=`, which is the research board's own
+   * window and means five different spans of a different thing; one param
+   * meaning two things in two views is exactly the trap `cols=` avoids by
+   * being scoped to the board `pos=` names.
+   */
+  const [leagueTab, setLeagueTab] = useState<LeagueTab>(() => {
+    const raw = initialParams.get('lt');
+    return raw === 'rankings' || raw === 'transactions' ? raw : 'scoreboard';
+  });
+  const [rankSpan, setRankSpan] = useState<EspnRankSpan>(() => {
+    const raw = initialParams.get('lspan');
+    return raw === 'matchup' || raw === 'first' || raw === 'second' || raw === 'season'
+      ? raw
+      : 'season';
+  });
+
+  const [rankings, setRankings] = useState<EspnRankings | null>(null);
+  const [rankingsLoading, setRankingsLoading] = useState(false);
+  const [rankingsError, setRankingsError] = useState<string | null>(null);
+  const showRankingsWait = useDelayedFlag(rankingsLoading);
+
+  const [transactions, setTransactions] = useState<EspnTransactions | null>(null);
+  /** What the transactions effect reads to know it has already read: the feed
+   *  is one request per league on the server's own ten minutes, so entering
+   *  the tab twice should cost nothing. A ref rather than the state itself,
+   *  which as a dependency would re-run the effect on its own result. */
+  const transactionsRef = useRef<EspnTransactions | null>(null);
+  useEffect(() => {
+    transactionsRef.current = transactions;
+  }, [transactions]);
+  const [transactionsLoading, setTransactionsLoading] = useState(false);
+  const [transactionsError, setTransactionsError] = useState<string | null>(null);
+  const showTransactionsWait = useDelayedFlag(transactionsLoading);
+
   const [espnOpen, setEspnOpen] = useState(false);
   const [espnStatus, setEspnStatus] = useState<EspnStatus | null>(null);
   const [ownership, setOwnership] = useState<EspnOwnership | null>(null);
@@ -1108,7 +1158,7 @@ export default function App() {
    * view's block wait is gated on there being nothing to show yet.
    */
   useEffect(() => {
-    if (view !== 'league' || !espnConnected) return;
+    if (view !== 'league' || leagueTab !== 'scoreboard' || !espnConnected) return;
     let cancelled = false;
     setScoreboardLoading(true);
     setScoreboardError(null);
@@ -1129,7 +1179,68 @@ export default function App() {
     // Deliberately not `scoreboard` or `scoreboardLoading`, either of which
     // would re-run the effect on its own result and spin — the same dependency
     // rule the ownership read follows.
-  }, [view, espnConnected, matchupPeriod, espnLeagueId]);
+  }, [view, leagueTab, espnConnected, matchupPeriod, espnLeagueId]);
+
+  /**
+   * The Rankings tab, read on its first open and whenever the span changes.
+   *
+   * Gated on the tab as well as the view, which is what "lazily fetch each
+   * tab's data on first open" means here: a reader who only ever looks at the
+   * scoreboard never pays for a 300KB aggregation of the first half. The
+   * previous table is left standing while the next span is in flight, rule 1
+   * of the loading discipline.
+   */
+  useEffect(() => {
+    if (view !== 'league' || leagueTab !== 'rankings' || !espnConnected) return;
+    let cancelled = false;
+    setRankingsLoading(true);
+    setRankingsError(null);
+    api
+      .espnRankings(rankSpan)
+      .then((r) => {
+        if (!cancelled) setRankings(r);
+      })
+      .catch((e: Error) => {
+        if (!cancelled) setRankingsError(e.message);
+      })
+      .finally(() => {
+        if (!cancelled) setRankingsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [view, leagueTab, espnConnected, rankSpan, espnLeagueId]);
+
+  /**
+   * The Transactions tab, read on its first open and then kept — the feed is
+   * one request for the league and the server holds it ten minutes, so there
+   * is nothing a re-read on every entry would buy. `Refresh from ESPN` is what
+   * goes and asks again, which is the one thing a cache cannot know about.
+   */
+  useEffect(() => {
+    if (view !== 'league' || leagueTab !== 'transactions' || !espnConnected) return;
+    if (transactionsRef.current) return;
+    let cancelled = false;
+    setTransactionsLoading(true);
+    setTransactionsError(null);
+    api
+      .espnTransactions()
+      .then((t) => {
+        if (!cancelled) setTransactions(t);
+      })
+      .catch((e: Error) => {
+        if (!cancelled) setTransactionsError(e.message);
+      })
+      .finally(() => {
+        if (!cancelled) setTransactionsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // `transactionsRef` rather than `transactions`, deliberately: depending on
+    // the state itself would re-run the effect on its own result and spin,
+    // which is the dependency rule the ownership read already states.
+  }, [view, leagueTab, espnConnected, espnLeagueId]);
 
   const ownedIds = useMemo(
     () => (ownership ? new Set(Object.keys(ownership.owned).map(Number)) : null),
@@ -1663,6 +1774,13 @@ export default function App() {
     // means "current", which is a rule and not a value — so a link shared this
     // week opens on the week the recipient is in rather than on a frozen one.
     if (view === 'league' && matchupPeriod != null) p.set('mp', String(matchupPeriod));
+    // Which of the League page's three tabs, and the Rankings span. Written
+    // only on that view and only off their defaults, the rule every other
+    // param here follows.
+    if (view === 'league' && leagueTab !== 'scoreboard') p.set('lt', leagueTab);
+    if (view === 'league' && leagueTab === 'rankings' && rankSpan !== 'season') {
+      p.set('lspan', rankSpan);
+    }
     if (simulate) p.set('sim', '1');
     if (hideInjured) p.set('hideil', '1');
     // Only while it is actually narrowing something — see `startersActive`.
@@ -1688,6 +1806,8 @@ export default function App() {
     researchCols,
     researchKind,
     matchupPeriod,
+    leagueTab,
+    rankSpan,
     simulate,
     hideInjured,
     startersActive,
@@ -1895,7 +2015,39 @@ export default function App() {
    * in-flight guard as well as the cache, so firing them together would send
    * three copies of one 2MB upstream read instead of one and two lookups.
    */
+  /**
+   * Open a player's page from a **transaction row**, which names him by MLB id
+   * and by nothing else.
+   *
+   * The app keys a player page on `${kind}-${id}`, and a transaction has no
+   * kind in it: ESPN's activity feed says a player moved, not whether he
+   * pitches. So the kind is resolved against the season roster the header
+   * search already holds — the same list `detailsPlayer` falls back to when it
+   * resolves a `player=` key — and a two-way player, who appears on it once per
+   * kind, opens on his batting page, which is the same thing a bare id in an
+   * old link has always done (`readKeys`).
+   *
+   * A player that list has never heard of opens nothing, which is
+   * `detailsPlayer`'s own standing behaviour rather than a rule invented here:
+   * it renders the page only for a key one of its two sources can resolve.
+   */
+  const openLeaguePlayer = useCallback(
+    (mlbId: number) => {
+      const hit = seasonPlayers.find((p) => p.id === mlbId);
+      setDetailsKey(playerKey({ id: mlbId, kind: hit?.kind ?? 'batter' }));
+    },
+    [seasonPlayers],
+  );
+
   const refreshFantasy = useCallback(() => {
+    // The League page's own three reads go with it — a move made on ESPN is
+    // exactly what changes a transactions feed, and it is the one thing no
+    // cache can know about. Dropping the feed rather than re-fetching it is
+    // what makes the tab re-read on its next open; the scoreboard and the
+    // rankings re-read on entry anyway, and their own `?refresh=1` is the
+    // server's business rather than a fourth request from here.
+    transactionsRef.current = null;
+    setTransactions(null);
     const fresh = espnConnected ? loadOwnership(true) : Promise.resolve();
     return fresh.then(() => {
       if (!usingFantasy) return;
@@ -3601,10 +3753,21 @@ export default function App() {
 
       {view === 'league' ? (
         <LeagueView
+          tab={leagueTab}
+          onTab={setLeagueTab}
           board={scoreboard}
           loading={showScoreboardWait}
           error={scoreboardError}
           onPeriod={setMatchupPeriod}
+          rankings={rankings}
+          rankSpan={rankSpan}
+          rankingsLoading={showRankingsWait}
+          rankingsError={rankingsError}
+          onRankSpan={setRankSpan}
+          transactions={transactions}
+          transactionsLoading={showTransactionsWait}
+          transactionsError={transactionsError}
+          onOpenPlayer={openLeaguePlayer}
           connected={espnConnected}
           onConnect={openEspnSettings}
         />
