@@ -10796,12 +10796,6 @@ body {
 .league-table {
   --row-gutter: clamp(5px, 1.9vw, 28px);
   --sort-gutter: var(--row-gutter);
-  /* The group header row's own height, declared because the sort headers below
-     it have to pin at exactly that offset — the one number in this table that
-     two rules share, so it is named rather than written twice. It is the row's
-     own box: 5px + a 16px line + 5px, with no bottom border (the sort row under
-     it carries the one that closes the head). */
-  --lg-group-h: 26px;
   /* The two ends of the rank scale, which the **badge** is filled from — it
      washed the whole cell until the scale moved onto the chip. Table-local
      rather than on `:root`: this is the one surface in the app that reads a
@@ -10862,41 +10856,16 @@ body {
   letter-spacing: 0.03em;
   color: var(--muted);
 }
-/* **The sections: a spanning header row over each run of categories.** A wide
-   stat table says which run is which by naming it, where a bare rule between
-   two columns says only that there is a seam. It is a second sticky row, so the
-   two have to be told apart: this one holds the top and the sort headers below
-   it hold `--lg-group-h`, which is what makes the pair pin as one head rather
-   than over each other. */
-.league-table thead .lg-group-row th {
-  top: 0;
-  z-index: 2;
-  padding-top: 5px;
-  padding-bottom: 5px;
-  line-height: 16px;
-  border-bottom: none;
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--faint);
-  text-align: left;
-}
-.league-table thead .lg-group-row .lg-logo-col,
-.league-table thead .lg-group-row .lg-name-col {
-  z-index: 3;
-}
-/* The sort headers sit under the group row rather than at the top of the pane. */
-.league-table thead tr:last-child th {
-  top: var(--lg-group-h);
-}
-/* And one hairline where the runs meet, so the sections still read as sections
-   with the head scrolled past on a phone. An **inset shadow rather than a
-   border**, because every cell in this table paints an opaque `--cell-bg` and a
-   border would add a pixel to the column: the shadow costs the layout nothing
-   and paints over the ground the cell has already resolved. */
-.league-table .lg-group-start {
-  box-shadow: inset 1px 0 0 var(--border);
-}
+/* **The `BATTERS` / `PITCHERS` header row and the seam between the runs are
+   gone**, and with them the second sticky row, the `--lg-group-h` offset that
+   held the sort headers under it, and the inset-shadow hairline. What they said
+   the columns already say — nobody reads `ERA` as a batting stat — so the row
+   was a whole extra pinned header and a second pinning offset spent on a label
+   the data carries. The grouping still *orders* the columns (batters before
+   pitchers, off the server's `side`/`order`) and the side is still named per
+   column in the sort header's `title`, which is where it matters: `H` is a hit
+   and a hit allowed, and `K` a strikeout taken and one thrown. The head is one
+   row again, so it pins at the top of the pane with no offset to declare. */
 
 /* The team column pins to the left edge as the categories scroll under it —
    without it a row six categories in belongs to no team in particular, which is
@@ -11021,10 +10990,15 @@ body {
    count line — the one thing between the controls and the rows, describing
    what is under it. */
 .lg-span-detail {
-  /* Air above it as well as below: it is the first thing on the page under the
-     pinned bar, and with no top margin it sat against the bar's own hairline
-     as though it were part of the chrome rather than the table's caption. */
-  margin: 10px 0 6px;
+  /* **No margin of its own, which is the research board's own answer.** It
+     carried `10px 0 6px` on the reasoning that the first thing under a pinned
+     bar needs air — true, and the air was already there: the chrome's own
+     `margin-bottom` is 14px, so its 10 sat on top of that and the caption
+     landed **24px** down where the board's count line lands at 14. The two are
+     the same object (the one line between the controls and the rows, saying
+     what is under them) and now measure the same: 14px above and 10 below, the
+     10 being the pane's own margin exactly as it is over there. */
+  margin: 0;
   font-size: 12px;
   color: var(--muted);
   font-variant-numeric: tabular-nums;

@@ -238,19 +238,6 @@ function RankTable({
     );
   };
 
-  // Which indices of `shown` open a group after the first — the one visual
-  // break between the two runs, so the sections read as sections even with the
-  // header row scrolled past on a phone.
-  const starts = useMemo(() => {
-    const out = new Set<number>();
-    let i = 0;
-    for (const [gi, g] of groups.entries()) {
-      if (gi > 0) out.add(i);
-      i += g.categories.length;
-    }
-    return out;
-  }, [groups]);
-
   const spanInfo = rankings.spans.find((s) => s.span === rankings.span);
   const spanWords = spanInfo ? spanInfo.label.toLowerCase() : 'this span';
 
@@ -258,31 +245,24 @@ function RankTable({
     <div className="league-scroll">
       <table className="league-table">
         <thead>
-          {/* **The sections are a spanning header row rather than a break in the
-              cells**, which is what a wide stat table does: the alternative — a
-              rule between the two runs and nothing else — says *there is a seam
-              here* without saying what is on either side of it, and a reader
-              coming to a fantasy table wants the words `Batters` and `Pitchers`.
-              It is a second sticky row, held at `--lg-group-h` so it and the
-              sort headers pin as a pair rather than over each other, and its own
-              cells span the pinned pair so the group labels start where the
-              categories do. */}
-          {groups.length > 1 && (
-            <tr className="lg-group-row">
-              <th className="lg-logo-col" aria-hidden="true" />
-              <th className="lg-name-col" aria-hidden="true" />
-              {groups.map((g, i) => (
-                <th
-                  key={g.side}
-                  scope="colgroup"
-                  colSpan={g.categories.length}
-                  className={`lg-group-head${i > 0 ? ' lg-group-start' : ''}`}
-                >
-                  {g.label}
-                </th>
-              ))}
-            </tr>
-          )}
+          {/* **The sections order the columns and are not drawn.** There was a
+              spanning `BATTERS` / `PITCHERS` row over each run and a hairline
+              where they met, and both are gone: on a table of ten columns the
+              two runs are told apart by the categories themselves (nobody reads
+              `ERA` as a batting stat), so the row spent a second sticky header
+              — and a second pinning offset for the one under it — on a label
+              the data already carries.
+
+              **The grouping itself stays and is load-bearing**, which is why
+              `groups` is still what the table renders rather than the league's
+              own array: it is the server's `side`/`order` (see `STAT_META`),
+              and it is the only thing that keeps the batting run before the
+              pitching one. What replaces the visible label is the header's own
+              `title`, which names the side per column — and that is not a
+              consolation but the important half, since `H` is a hit and a hit
+              allowed and `K` a strikeout taken and one thrown, so on a league
+              scoring both sides the abbreviation alone is genuinely
+              ambiguous. */}
           <tr>
             {/* The pinned column is the badge alone — see `.lg-logo-col`. It
                 carries no label and no sort: it is the same cell the two roster
@@ -290,8 +270,8 @@ function RankTable({
                 identity belongs on its name. */}
             <th scope="col" className="lg-logo-col" aria-label="Team badge" />
             {head({ kind: 'team' }, 'Team', 'The league standing', 'lg-name-col')}
-            {groups.flatMap((g, gi) =>
-              g.categories.map((c, ci) =>
+            {groups.flatMap((g) =>
+              g.categories.map((c) =>
                 head(
                   { kind: 'cat', statId: c.statId },
                   c.label,
@@ -300,7 +280,6 @@ function RankTable({
                   `${g.label} · ${c.name} — ${spanWords}${
                     c.lowerBetter ? ', lower is better' : ''
                   }`,
-                  gi > 0 && ci === 0 ? 'lg-group-start' : '',
                 ),
               ),
             )}
@@ -336,7 +315,7 @@ function RankTable({
                     <span className="lg-row-sub">{t ? record(t) : ''}</span>
                   </span>
                 </th>
-                {shown.map((c, i) => {
+                {shown.map((c) => {
                   const v = r.values[c.statId];
                   const rank = r.ranks[c.statId];
                   const n = ranked.get(c.statId) ?? 0;
@@ -344,7 +323,7 @@ function RankTable({
                   return (
                     <td
                       key={c.statId}
-                      className={`lg-num${starts.has(i) ? ' lg-group-start' : ''}`}
+                      className="lg-num"
                     >
                       {fmtValue(v, c)}
                       {/* The rank under the value, in the slot the research
