@@ -165,7 +165,7 @@ function RankTable({
 
   return (
     <div className="league-scroll">
-      <table className="glog-table league-table">
+      <table className="league-table">
         <thead>
           <tr>
             {head({ kind: 'team' }, 'Team', 'The league standing', 'lg-team-col')}
@@ -185,18 +185,25 @@ function RankTable({
             const t = teams.get(r.teamId);
             return (
               <tr key={r.teamId} className={r.teamId === rankings.myTeamId ? 'lg-row-mine' : undefined}>
-                <th scope="row" className="lg-team-col glog-date">
-                  <TeamLogo team={t} />
-                  <span className="lg-row-name">
-                    {t?.name ?? `Team ${r.teamId}`}
-                    <span className="lg-row-sub">{t ? record(t) : ''}</span>
+                {/* The block is a `<span>` inside the cell, not the cell
+                    itself: a `<th>` set to `display: flex` leaves table layout,
+                    which is what had this column laying out 150px narrower than
+                    its own header and painting the reader's row wash as a
+                    rectangle inside it. */}
+                <th scope="row" className="lg-team-col">
+                  <span className="lg-team">
+                    <TeamLogo team={t} />
+                    <span className="lg-row-name">
+                      <span className="lg-row-title">{t?.name ?? `Team ${r.teamId}`}</span>
+                      <span className="lg-row-sub">{t ? record(t) : ''}</span>
+                    </span>
                   </span>
                 </th>
                 {categories.map((c) => {
                   const v = r.values[c.statId];
                   const rank = r.ranks[c.statId];
                   return (
-                    <td key={c.statId} className="glog-num">
+                    <td key={c.statId} className="lg-num">
                       {fmtValue(v, c)}
                       {/* The rank under the value, in the slot and the type the
                           research board's own percentile badge takes — folded

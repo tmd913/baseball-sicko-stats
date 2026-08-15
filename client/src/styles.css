@@ -10419,6 +10419,45 @@ body {
    the table's, which is the same split the player page's Overview tab already
    makes and for the same reason: a matchup card is *read*, and a stat table
    spanning twelve teams by ten categories is *scanned*. */
+/* ---- The Rankings tab is a fixed-height column ---------------------------
+   The board's own shape (`.app.research-mode`), applied to the one League tab
+   that is a wide table rather than a list of cards. A sticky header row can
+   only stick to a box that scrolls, so without this the page grew, the header
+   scrolled away with it, and the table could be read across only by taking the
+   whole window with it. Scoped to the tab: Scoreboard and Transactions are
+   card lists and want the ordinary scrolling page. */
+.app.league-rank-mode {
+  height: 100dvh;
+  padding-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.app.league-rank-mode .league-view,
+.app.league-rank-mode .lg-rankings {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.app.league-rank-mode .league-view {
+  padding-bottom: 0;
+}
+/* Grows to its rows and never past the height left under the span strip, then
+   scrolls in both axes — `flex: 0 1 auto` with `min-height: 0` is the pair the
+   board and the summary table both settled on, and the reason is written out
+   at `.research-scroll`: with `flex: 1` a short table sits in a bordered
+   expanse of nothing reaching the bottom of the window. */
+.app.league-rank-mode .league-scroll {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 100%;
+  overflow: auto;
+}
+.app.league-rank-mode .lg-span-head {
+  flex: none;
+}
 .league-view {
   padding-bottom: 8px;
 }
@@ -10650,12 +10689,30 @@ body {
   color: var(--faint);
 }
 
-/* ---- The season table ---------------------------------------------------
-   Folded onto `.glog-table` / `.glog-scroll` rather than restyled to resemble
-   them — the same economy `.stats-table` makes, and for the same reason: this
-   is the app's plain wide stat table with a sticky first column. What it adds
-   under its own name is the team cell (a logo over two lines, where the log has
-   a date) and the reader's own row. */
+/* ---- The Rankings table -------------------------------------------------
+   **Modelled on the research board rather than on the game log**, which is
+   what it was folded onto before and is the whole of what was wrong with it.
+   The log is a list of one player's games read down inside an overlay: its
+   rows are presses, its table is `width: 100%`, and its cells paint an opaque
+   `--bg` because nothing under them ever changes colour. None of those three
+   is true here. This is the league read *across* — twelve teams by ten
+   categories, each cell two lines — which is the board's shape exactly, so it
+   takes the board's answers: a table sized to its content inside a scrollport
+   of its own, a first column pinned to the left edge, a header row pinned to
+   the top, and a ground named once as `--cell-bg` so a sticky cell can never
+   disagree with the row it belongs to.
+
+   **Three faults came out of the old fold and all three had one cause.** The
+   team `<th>` was `display: flex`, which takes a cell out of table layout
+   altogether — the trap this stylesheet already records for the game log's own
+   corner header. Measured on the live league: the body cell laid out at 168px
+   under a header cell of 318px at 1200 (257 at 390), so the columns did not
+   line up; the reader's own row wash, painted on that cell, filled 168px of a
+   318px column and read as **a dark blue rectangle** sitting in the team
+   column; and with the table still `width: 100%` there was nothing to scroll
+   sideways at 1200 while the cells were crushed. The flex box is gone — the
+   logo and the two lines are a `<span>` inside the cell, which is what
+   `.row-id` already does on the two tables that draw an identity block. */
 .league-table {
   --row-gutter: clamp(5px, 1.9vw, 28px);
   --sort-gutter: var(--row-gutter);
@@ -10663,15 +10720,91 @@ body {
      declare it: a header must not change height by being sorted, whichever face
      the browser finds for U+25B2. */
   --research-head-line: 15px;
+  /* Sized to its content and never narrower than its pane. `width: 100%` is
+     what the log wants (fourteen columns that must fit an overlay) and the
+     opposite of what a league table wants: at 1200 it squeezed ten categories
+     into the window and left nothing to scroll, where the board's rule is that
+     a wide table overflows and the pane scrolls under it. */
+  width: max-content;
+  min-width: 100%;
 }
+/* Every cell opaque, and its ground **named** rather than assigned — the rule
+   the summary table states at length and for exactly this reason: the pinned
+   first column must paint the same colour as the row it is part of, and a
+   second declaration of that colour is a second thing to keep in step. Anything
+   below sets `--cell-bg` alone; the paint happens here, once. */
+.league-table th,
+.league-table td {
+  padding: 12px var(--row-gutter);
+  line-height: 1.35;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+  --cell-bg: var(--bg);
+  background: var(--cell-bg);
+}
+/* Zebra, so a row stays trackable across ten categories — the same device the
+   other three wide tables use, and set through `--cell-bg` so the pinned team
+   cell stripes with its row instead of showing the scrolled columns through. */
+.league-table tbody tr:nth-child(even) th,
+.league-table tbody tr:nth-child(even) td {
+  --cell-bg: var(--panel);
+}
+/* **No row hover and no pointer.** The log's rows carry both because a press
+   there opens that game; nothing in this table is pressable, so a tint that
+   followed the cursor would offer something that isn't there — and on touch,
+   where `:hover` has no way to end, it would leave the last row a finger
+   crossed looking selected. The header buttons keep their own hover: those
+   really are controls. */
+.league-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  /* Two under the body's, as everywhere else in the app: a header is one short
+     line where a body row is two. */
+  padding-top: 10px;
+  padding-bottom: 10px;
+  --cell-bg: var(--panel-2);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+/* The team column pins to the left edge as the categories scroll under it —
+   without it a row six categories in belongs to no team in particular, which is
+   the same argument the board makes for pinning the player's name. */
+/* **Capped, because a pinned column is paid for out of the stats beside it.**
+   The board makes this trade explicitly — it pins the 42px headshot at every
+   width and only pins the name column from 820px up, on the grounds that below
+   that "the pinned pair would eat two fifths of the screen". Measured here
+   before the cap: the longest team name in this league took the column to
+   257px of a 390px phone, which is two thirds of it, so three categories were
+   reachable and the rest were a swipe away. Capped and ellipsized, the logo,
+   the name and the record all still read and the stats get the room. */
 .league-table .lg-team-col {
+  position: sticky;
+  left: 0;
+  z-index: 1;
   min-width: 168px;
+  max-width: 300px;
   text-align: left;
+  font-weight: 700;
+  box-shadow: var(--pin-edge);
 }
-.league-table tbody .lg-team-col {
+/* The top-left corner, above both sticky axes so neither slides over it. */
+.league-table thead .lg-team-col {
+  z-index: 3;
+}
+/* The identity block inside the cell — a `<span>`, not the cell itself. This is
+   `.row-id`'s shape (a logo beside a name over its record) and it is spelled
+   out here rather than folded onto it because that block is the *player*
+   identity the summary table and the board share, tuned to a 42px headshot and
+   a 58px row; a club's mark and a win-loss record are a different pair of
+   facts at a different size. */
+.lg-team {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 .lg-row-name {
   display: flex;
@@ -10679,18 +10812,39 @@ body {
   line-height: 1.2;
   min-width: 0;
   font-weight: 600;
+  overflow: hidden;
+}
+/* The name itself, which is the part that has to give: `text-overflow` needs
+   the element that holds the text, and `.lg-row-name` is a flex column holding
+   two of them. The record under it is short enough never to be the constraint. */
+.lg-row-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .lg-row-sub {
   font-size: 11px;
   font-weight: 500;
   color: var(--muted);
 }
+/* The reader's own row. **`--cell-bg`, not `background`** — set as a paint it
+   would win on the team cell and lose to the zebra stripe elsewhere, which is
+   how the wash came to be a rectangle in one column rather than a tint across a
+   row. Named, it resolves on every cell of the row including the pinned one. */
 .league-table tbody tr.lg-row-mine th,
 .league-table tbody tr.lg-row-mine td {
   /* The same 12% accent wash the pitcher card's live inning takes — enough to
      find your own row down a column of twelve and not enough to read as a
      selection you could act on. */
-  background: color-mix(in srgb, var(--accent) 12%, var(--bg));
+  --cell-bg: color-mix(in srgb, var(--accent) 12%, var(--bg));
+}
+/* The category cells: a share of the slack rather than content width, right
+   aligned and tabular, as every stat column in the app is. */
+.league-table .lg-num {
+  width: auto;
+  min-width: clamp(52px, 6vw, 96px);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
 }
 
 /* ---- The three tabs, and the Rankings span --------------------------------
@@ -10714,9 +10868,15 @@ body {
   max-width: var(--card-column);
   margin: 0 auto 14px;
 }
+/* Left-aligned across the pane, **not centred in a reading column**. It carried
+   `max-width: var(--card-column); margin: 0 auto` from when the page under it
+   was a list of cards; the table under it now spans the window like the board's
+   does, so a strip centred in an 800px column floated in the middle of the page
+   with the thing it governs running past it on both sides. The board keeps its
+   own controls at the app's gutters over a table that bleeds past them, which
+   is the same arrangement. */
 .lg-span-head {
-  max-width: var(--card-column);
-  margin: 0 auto 12px;
+  margin: 0 0 12px;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -10938,5 +11098,13 @@ body {
   }
   .live-feed {
     margin-top: var(--stack-gap);
+  }
+
+  /* The pinned column's share of a phone — see the cap above. 168px of a 390px
+     screen is 43% against the 66% the uncapped name took, and leaves the stat
+     columns the rest. */
+  .league-table .lg-team-col {
+    min-width: 132px;
+    max-width: 168px;
   }
 }

@@ -351,6 +351,121 @@ the season for the four teams in the winners' bracket and fall short by their
 live week for the other eight, and `season` is kept as **ESPN's own figure**
 deliberately — it is the number on ESPN's site and the number the old table drew.
 
+### The Rankings table is the research board's, not the game log's
+
+**It was folded onto `.glog-table` / `.glog-scroll` and that was the wrong table
+to be.** The reasoning at the time was that both are "the app's plain wide stat
+table with a sticky first column", which is true as far as it goes and misses
+what the log actually is: a list of *one player's games*, read **down**, inside
+an overlay. Its rows are presses, its table is `width: 100%` because fourteen
+columns have to fit a box, and its cells paint an opaque `--bg` because nothing
+underneath them ever changes colour. None of those three holds for twelve teams
+by ten categories read **across**, which is the research board's shape exactly.
+
+**Three faults came out of that one fold, and all three had a single cause.**
+The team `<th>` carried `display: flex` — which takes a cell out of table layout
+altogether, the trap this stylesheet already records for the game log's own
+corner header, and which nothing in the build or the DOM reports. Measured on
+the live 12-team league, before:
+
+| | 1200×900 | 390×844 |
+| --- | --- | --- |
+| team cell width | **168px** | **168px** |
+| its own header cell | 318.34px | 257.34px |
+| pane horizontal scroll | **0** | 353px |
+
+So the column and its header disagreed by 150px and 89px — the misalignment —
+and the reader's own row wash (`.lg-row-mine`, a 12% accent over `--bg`) painted
+**168px of a 318px column**, which is the *dark blue rectangle in the team
+column* that was reported. The third symptom is the same sentence: with the
+table still `width: 100%` there was nothing to scroll sideways at 1200 while the
+cells were crushed to fit.
+
+**What it takes from the board instead**, each answering one of those:
+
+- **A table sized to its content** (`width: max-content; min-width: 100%`) inside
+  a scrollport of its own, so a wide table overflows and the pane scrolls under
+  it rather than the columns being squeezed into the window.
+- **A ground named once as `--cell-bg`**, the rule the summary table states at
+  length. The pinned column must paint the same colour as the row it belongs to,
+  and a second declaration of that colour is a second thing to keep in step —
+  which is precisely how the row wash became a rectangle. `.lg-row-mine` sets the
+  variable rather than a `background`, so it resolves on every cell of the row
+  including the sticky one.
+- **The identity block is a `<span>` inside the cell**, not the cell itself —
+  what `.row-id` already does on the two tables that draw one.
+- **Both axes pinned**: the header row to the top, the team column to the left,
+  the corner above both.
+
+**And the tab is a fixed-height column** (`.app.league-rank-mode`), which is the
+board's own `.app.research-mode` applied to the one League tab that is a table
+rather than a list of cards. A sticky header can only stick to a box that
+scrolls; without it the page grew, the header scrolled away with it, and reading
+across meant taking the whole window along. **Scoped to the tab**: Scoreboard and
+Transactions are card lists and keep the ordinary scrolling page (measured: the
+`-mode` class is absent on both, and the document scrolls 275px and 1,668px
+where Rankings scrolls 0 and its pane scrolls instead).
+
+**No row hover and no pointer.** The log's rows carry both because a press there
+opens that game; nothing in this table is pressable, so a tint following the
+cursor offers something that is not there — and on touch, where `:hover` has no
+way to end, it leaves the last row a finger crossed looking selected, which is
+the app-wide rule set out in **Client**, *A card doesn't highlight when you
+scroll past it*. The header buttons keep their own hover: those really are
+controls.
+
+**The pinned column is capped, because it is paid for out of the stats beside
+it.** The board makes this trade explicitly — it pins the 42px headshot at every
+width and only pins the *name* column from 820px up, on the grounds that below
+that the pinned pair would eat two fifths of the screen. Uncapped, the longest
+team name here took the column to **257px of a 390px phone**, two thirds of it,
+leaving two categories reachable. Capped at 168 on a phone and ellipsized, the
+logo, the name and the record all still read and **four** categories fit.
+
+**Measured after, at 1200×900 and 390×844:**
+
+| | before | after |
+| --- | --- | --- |
+| team cell vs its header | 168 vs 318 / 168 vs 257 | **318 vs 318 / 257 vs 257** |
+| `display` on the body `<th>` | `flex` | **`table-cell`** |
+| distinct cell grounds on the reader's row | 2 | **1** |
+| cells cover the row's width | no | **yes** |
+| header row after scrolling down | scrolls away | **pinned, 1px** (the border) |
+| team column after scrolling right 300px | — | **pinned, 0px** |
+| row `cursor` | `pointer` | **`auto`** |
+| background under the pointer | tints | **unchanged** |
+| page-body overflow | 0 | **0** |
+
+Sorting, the span strip and the URL are unchanged and were driven rather than
+assumed: `HR` sorts to the leaders and reverses, `First half` loads and writes
+`lspan=first` with `Weeks 1–15 · Mar 25 – Jul 19` under the strip, and switching
+to Transactions from the navbar drops the fixed-height mode and draws 302 rows.
+
+### The three tabs are in the app's tab row
+
+**They rendered on the page, directly above what they selected**, which is where
+a tab strip belongs when the page is all there is — and this app already has a
+row for exactly that statement. `.view-bar-tabs` holds the view switch, the kind
+tabs and the roster row's own controls, and its whole rule is that each group is
+`flex: none` so the row fits as many whole groups per line as the width allows.
+A second strip of tabs an inch under the first read as a different kind of
+control rather than as one tier down of the same one.
+
+So `App` draws them there, beside where the kind tabs go and under the same
+condition — **only on the League view**, exactly as the kind tabs are drawn only
+on the two roster views, so no other page carries an empty slot. `LeagueView`
+keeps the vocabulary (`LEAGUE_TABS`, exported) and has no `onTab` prop any more.
+The strip is still folded onto `.view-switch` / `.view-tab`, so it is the same
+object as the pills above it by construction.
+
+**The span strip lost its reading column with it.** It carried
+`max-width: var(--card-column); margin: 0 auto` from when the page under it was
+a list of cards; the table under it now spans the window, so a strip centred in
+an 800px column floated in the middle of the page with the thing it governs
+running past it on both sides. It sits at the app's gutters now, over a table
+that bleeds past them — which is the arrangement the research board's own count
+line already has.
+
 ### Transactions
 
 **A feed, which is why it is neither of the two tabs beside it** — the Scoreboard
