@@ -79,15 +79,18 @@ function Count({ n }: { n: number }) {
   return <td className="glog-num">{n === 0 ? <span className="glog-zero">0</span> : n}</td>;
 }
 
-/* Batting is where he hit in the order — game context like the opponent beside
-   it, so it leads rather than sitting among the counting stats. The last four
+/* Batting is where he hit in the order and Pos is where he started — game
+   context like the opponent beside it, so the two lead together rather than
+   sitting among the counting stats. They are one fact read twice (both come off
+   the same posted-lineup entry, so neither can claim he started when the other
+   says he didn't), which is also why they are adjacent. The last four
    are prefixed Szn because they're his line *through* that game rather than the
    game's own — see the field comments on BatterGameLog. They read in slash-line
    order, AVG · OBP · SLG · OPS, so the eye takes them the way a slash line is
    taken. H/AB is where AB and H used to be two columns; see `HitsPerAb` for why
    one cell. */
 const BATTER_COLUMNS = [
-  'Batting', 'H/AB', 'R', '2B', '3B', 'HR', 'RBI', 'BB', 'K', 'SB',
+  'Batting', 'Pos', 'H/AB', 'R', '2B', '3B', 'HR', 'RBI', 'BB', 'K', 'SB',
   'Szn AVG', 'Szn OBP', 'Szn SLG', 'Szn OPS',
 ];
 
@@ -163,6 +166,15 @@ function BatterRows({
           <td className="glog-num glog-spot" title={g.lineupSpot !== null ? `Batted ${ordinal(g.lineupSpot)}` : 'Not in the posted lineup'}>
             {g.lineupSpot !== null ? ordinal(g.lineupSpot) : <span className="glog-zero">—</span>}
           </td>
+          {/* Where he started. Dashed on exactly the rows the cell beside it is
+              dashed on — both come off the same posted-lineup entry, so a man
+              who came on off the bench has neither rather than one of them. */}
+          <td
+            className="glog-num glog-spot"
+            title={g.startPosition ? `Started at ${g.startPosition}` : 'Not in the posted lineup'}
+          >
+            {g.startPosition ?? <span className="glog-zero">—</span>}
+          </td>
           <HitsPerAb g={g} />
           <Count n={g.runs} />
           <Count n={g.doubles} />
@@ -204,9 +216,10 @@ function BatterTotals({ games }: { games: BatterGameLog[] }) {
   const slg = ab > 0 ? sum((g) => g.totalBases) / ab : null;
   return (
     <tr>
-      {/* The label eats the lineup column too: a season has no one spot, and
-          the most common one is a different stat from anything else here. */}
-      <th className="glog-date glog-total-label" scope="row" colSpan={3}>
+      {/* The label eats the lineup and position columns too: a season has no
+          one spot and no one position, and the most common of either is a
+          different stat from anything else here. */}
+      <th className="glog-date glog-total-label" scope="row" colSpan={4}>
         Season · {games.length} G
       </th>
       {/* Season hits over season at-bats — the sum of the column above it, not
