@@ -11050,6 +11050,13 @@ body {
   align-items: baseline;
   gap: 6px;
   min-width: 0;
+  /* It wraps, and only a trade can make it: `to Ookie Rookie` beside a name is
+     more than a 390px row has, and the name is the half that must not be the
+     one to give. Measured on the live league's 415 rows — 23 of them trades —
+     the name was ellipsized on every one of the 23 at 390 and on none at 1200;
+     wrapping puts the destination on its own line there and leaves every other
+     row at its 32px. */
+  flex-wrap: wrap;
 }
 /* The headshot: 32px against the wide tables' 42, this being a list of events
    read down rather than a roster read across, and the block beside it is 31px

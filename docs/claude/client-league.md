@@ -612,6 +612,87 @@ says a player moved, not whether he pitches — falling back to `batter`, which 
 what a bare id in an old link has always done (`readKeys`). Measured on the live
 league: **42 of 42 names on the first page are links, 0 plain.**
 
+### A row says who moved, not only that he moved
+
+**The name was the whole of a player row, and a name is not enough to decide
+anything on.** A waiver feed is read to answer *does this matter to me* — which
+turns on where he plays, how widely he is rostered and, at a glance, whether you
+recognise him at all — and the row said none of it. It now carries his headshot,
+his club's cap logo, ESPN's own position eligibility and his global roster %.
+
+**Three of the four are on the row and the fourth is the mark alone**, which is a
+judgement about density rather than about room. The **positions** are the most
+actionable thing a feed of adds and drops can say (*somebody just dropped a
+shortstop*). The **roster %** is how big a deal the move is — a 78%-rostered
+player being dropped is news where a 2% one is noise — and it is four characters,
+right-aligned to the same edge the transaction's own date sits on, so it reads as
+a column rather than as something in the way of scanning the names. The
+**headshot** is recognition, and the app's own way of naming a player everywhere
+else. And the **club** is the cap logo with the abbreviation on its tooltip: on a
+*fantasy* feed it is the least decision-relevant of the four, and drawn as `MIL`
+it would have been a third string on a line already carrying two.
+
+**The block is `PlayerIdentity`**, the same component the summary table and the
+research board draw a name over a club and a position list with, and the position
+itself is `lib.ts::positionCell` — one definition rather than a third copy, which
+is the rule those two already state for each other. What this caller adds is the
+two things a row in a *feed* needs of it: room to shrink, and a name line that
+carries the trade destination and the waiver bid beside the name.
+
+**The headshot is a plain image rather than a second link.** The name is 8px away
+and is the press, so a 32px target beside it would only be a smaller version of
+the same one — at the cost of a tab stop on every one of up to nine players in a
+trade. And **no lineup pip and no `IL10` code**, which the two wide tables put on
+a headshot: those read off `/api/statuses`, which this page does not fetch, and
+they answer a question about *this afternoon* where every row here is dated — a
+call-up's pip says nothing about the trade that moved him three weeks ago.
+
+**The club is the one fact that needed threading, and it needed no upstream.**
+Roster % and eligibility ride on the `/api/espn/ownership` response App already
+holds for the research board, and a player's *kind* and MLB's listed position
+come off the season roster the header search holds — but MLB serves a cap logo by
+**team id** and nothing else, and no client-side list carries one for an arbitrary
+player. The join that finds a transaction's `mlbId` already has it:
+`matchMlbPlayer` answers with the whole `IndexEntry`, whose club is the very field
+the tie is broken on. So `EspnPlayerPool.byEspnId` keeps that id beside the name
+it already kept, and `EspnTransactionPlayer` gains `mlbTeamId` and `team` — the
+abbreviation off `getTeamAbbrevs()`, the 24h table every other badge in the app
+reads. **No new request, and no cache version moves**: the pool and the
+transactions blob are both memory-only, so there is no stored shape to deserialize
+with a field missing.
+
+**Where ESPN has said nothing the row prints MLB's own word rather than a guess.**
+`positionCell`'s pitching fallback is `starter` — a fact about how a man has been
+*used*, which a transaction does not carry — so the kind is read as a batter's for
+that one branch, which routes a pitcher to `P` instead of to a coin-flip between
+SP and RP; where ESPN *has* spoken, the real kind narrows his list, which is what
+stops a mis-joined pitcher reading `2B/SS`. Measured with `/api/espn/ownership`
+blocked: 42 of 42 rows fall back, pitchers read `P — MLB's listed position`,
+batters their own, the cap logos still draw (they are the transaction row's own
+fact) and the roster % is simply **absent** rather than a column of dashes — a
+feed is not a table, so a missing figure reads as missing.
+
+**A player the join could not place keeps his slot.** He has no club and no
+eligibility, so the row draws his name alone rather than an identity block of two
+em dashes — but the circle is still there, as his initials, which is
+`PlayerOrderEditor`'s own fallback and is what keeps every name in the list
+starting at one x. Measured over the whole feed: **412 of 415 rows joined**, and
+the three that didn't read as initials and plain text.
+
+**The name line wraps, and only a trade can make it.** `to Ookie Rookie` beside a
+name is more than a 390px row has, and the name is the half that must not give:
+measured on the live league's 415 rows, the name was ellipsized on **every one of
+the 23 trades at 390 and on none at 1200**. Wrapping puts the destination on its
+own line there and leaves every other row at its 32px.
+
+**And the Load-more button is the app's own.** It carried `className="load-more"`,
+a class **no rule in the stylesheet answered** — a bare browser button at the foot
+of the one tab that is a stream. `.lg-tx-more` is folded onto `.feed-more`'s
+selector list, count badge and all, so this is the Feed's button rather than one
+that resembles it; `.lg-transactions` becomes a flex column so its
+`align-self: center` resolves against something, which is the shape
+`.feed-section` already gives the stream whose paging idiom this tab borrowed.
+
 **The word for the move is the manager's rather than ESPN's message-type
 number** — `Added`, `Claimed`, `Dropped`, `Traded` — and a waiver claim is worth
 telling from a free pickup: one cost him a bid and his place in the order and the
@@ -654,10 +735,19 @@ Driven against the built client and the live 2026 league at **390×844 and
   writing its own `lspan=`.
 - **The ranks were recomputed independently** from the values the route ships,
   over all five spans: **600 of 600 cells match, 0 wrong, 73 of them tied.**
-- **Transactions**: 25 rows on the first page of 250, `Load more · 225 older`
-  taking it to 50, **7 of the 25 the reader's own**, and 42 of 42 names links.
-  Pressing one opens `?player=pitcher-676775` with `Keaton Winn` in the `<h1>`,
-  and one press of Escape closes the page and leaves the tab on Transactions.
+- **Transactions**: 25 rows on the first page of 250, the Load-more button
+  reading `Load more` over a `225` badge and taking it to 50, **7 of the 25 the
+  reader's own**, and 42 of 42 names links. Pressing one opens
+  `?player=pitcher-676775` with `Keaton Winn` in the `<h1>`, and one press of
+  Escape closes the page and leaves the tab on Transactions.
+- **The player rows, over the whole feed** (all 250 transactions paged out, both
+  widths): **415 rows, 412 with a cap logo, a position list and a roster %**, 3
+  with initials and a plain name, and **0 clipped names**. Every row is
+  **32.00px** at 1200 and at 390 alike, save the 23 trades at 390 (52px, the
+  destination on its own line) and one long unjoined name (37px); **page-body
+  overflow 0** at both. Spot-checked against ESPN: `Francisco Alvarez · NYM ·
+  C/DH · 11.4%`, `Keaton Winn · SF · RP · 0.5%`, `Fernando Tatis Jr. · SD ·
+  2B/OF · 99.6% · to Baldy's Bozos`.
 - **Every empty state names its cause**, driven with the relevant route blocked:
   a failed rankings or transactions read draws `Couldn't read your league` over
   the message, and with no league connected the strip is not drawn at all — three
@@ -670,3 +760,8 @@ Driven against the built client and the live 2026 league at **390×844 and
 115.36 KB of CSS** (20.12 → 20.47 gzipped) — 7.8KB and 2.4KB raw, 2.1KB and
 0.35KB over the wire, for two tabs, two routes, two components and the paragraphs
 above restated where the rules are.
+
+**And for the player rows on Transactions: 494.02 → 495.54 KB of JS** (146.19 →
+146.62 gzipped) and **115.61 → 116.33 KB of CSS** (20.54 → 20.63) — 1.5KB and
+0.7KB raw, 0.43KB and 0.09KB over the wire, for a shared identity block, a
+headshot with its fallback, a roster-% cell and the Load-more fold.
