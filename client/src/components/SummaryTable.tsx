@@ -4,6 +4,8 @@ import { FantasySlotTag } from './FantasySlot';
 import { ExpandButton } from './ExpandButton';
 import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
 import { PlayerIdentity } from './PlayerIdentity';
+import { DayHead, ScheduleCell, gameCount, gamesOn, startCount } from './schedule';
+import type { ScheduleIndex } from './schedule';
 import { useEligible, useFullPage } from '../hooks';
 import type { BattingLine, PitchingLine, PlayerGame, PlayerReport } from '../types';
 import { playerKey } from '../types';
@@ -237,22 +239,151 @@ function RowIdentity({ r, children }: { r: PlayerReport; children: ReactNode }) 
   );
 }
 
+/**
+ * ---------------------------------------------------------------------------
+ * The Schedule view's cells, on this table
+ * ---------------------------------------------------------------------------
+ *
+ * Everything about what a day says — the opponent, the start mark, the counts,
+ * the header — is `schedule.tsx`'s and is shared with the research board, so a
+ * day read here and the same day read there cannot come to say two things. What
+ * is this table's own is the shape of the row: which columns replace the stats,
+ * and what the `Total` row adds up when they do.
+ */
+
+/** The day headers, plus the two counts that lead them. */
+function ScheduleHeadCells({ index, kind }: { index: ScheduleIndex; kind: 'batter' | 'pitcher' }) {
+  return (
+    <>
+      <th className="sum-num" scope="col" title={`Games his club plays in the next ${index.span} days — postponements excluded`}>
+        G
+      </th>
+      {kind === 'pitcher' && (
+        <th
+          className="sum-num"
+          scope="col"
+          title={`Starts his club has announced in the next ${index.span} days — clubs name a probable about three days out, so this counts the announced front of the span`}
+        >
+          GS
+        </th>
+      )}
+      {index.dates.map((date) => (
+        <th key={date} className="sum-num" scope="col">
+          <DayHead date={date} today={index.today} />
+        </th>
+      ))}
+    </>
+  );
+}
+
+/** One player's row of days, and the counts over them. */
+function ScheduleCells({
+  index,
+  r,
+}: {
+  index: ScheduleIndex;
+  r: PlayerReport;
+}) {
+  const starts = r.kind === 'pitcher' ? startCount(index, r.teamId, r.id) : 0;
+  return (
+    <>
+      <td className="sum-num">{gameCount(index, r.teamId)}</td>
+      {r.kind === 'pitcher' && (
+        <td className="sum-num">
+          {starts === 0 ? (
+            '—'
+          ) : (
+            /* **The two-start marker**, which is the single most actionable
+               thing this table can say — and it says it only where his club
+               has actually named him twice. See `startCount` for the measured
+               reason it is an announcement rather than a projection. */
+            <span
+              className={starts >= 2 ? 'sched-two' : undefined}
+              title={
+                starts >= 2
+                  ? `Two announced starts in the next ${index.span} days`
+                  : undefined
+              }
+            >
+              {starts}
+            </span>
+          )}
+        </td>
+      )}
+      {index.dates.map((date) => (
+        <td key={date} className="sum-num">
+          <ScheduleCell index={index} teamId={r.teamId} playerId={r.id} date={date} />
+        </td>
+      ))}
+    </>
+  );
+}
+
+/**
+ * The `Total` row, in schedule mode — and it is the most useful row on the
+ * table rather than a formality.
+ *
+ * Each day's cell is **how many of these players have a game that day**, which
+ * is the "do I have enough bodies on Thursday" question a fantasy manager asks
+ * of a schedule and which no other view in the app can answer. The two leading
+ * cells are the ordinary sums: games the roster plays in the span, and starts
+ * it has announced.
+ */
+function ScheduleTotalCells({
+  index,
+  players,
+  kind,
+}: {
+  index: ScheduleIndex;
+  players: PlayerReport[];
+  kind: 'batter' | 'pitcher';
+}) {
+  const games = players.reduce((n, r) => n + gameCount(index, r.teamId), 0);
+  const starts = players.reduce((n, r) => n + startCount(index, r.teamId, r.id), 0);
+  return (
+    <>
+      <td className="sum-num">{games}</td>
+      {kind === 'pitcher' && <td className="sum-num">{starts > 0 ? starts : '—'}</td>}
+      {index.dates.map((date) => {
+        const n = players.filter(
+          (r) => gamesOn(index, r.teamId, date).some((g) => g.state !== 'postponed'),
+        ).length;
+        return (
+          <td
+            key={date}
+            className="sum-num"
+            title={`${n} of these ${players.length} play on this day`}
+          >
+            {n > 0 ? n : '—'}
+          </td>
+        );
+      })}
+    </>
+  );
+}
+
 interface RowHandlers {
   onOpenDetails: (key: string) => void;
 }
 
-/** The shared leading cells of a summary row: headshot, name (link), opponent. */
+/** The shared leading cells of a summary row: headshot, name (link), opponent.
+ *
+ *  The opponent cell is dropped in schedule mode, where it would be a
+ *  thirteenth of the same fact: that column is one representative game's
+ *  matchup and the whole table beside it is every game of the span. */
 function LeadCells({
   r,
   game,
   role,
   corner,
+  showOpponent,
   onOpenDetails,
 }: {
   r: PlayerReport;
   game: PlayerGame | null;
   role: LiveRole | null;
   corner: Corner;
+  showOpponent: boolean;
 } & RowHandlers) {
   return (
     <>
@@ -304,7 +435,7 @@ function LeadCells({
               chip that widens the one column this table can least afford. */}
         </RowIdentity>
       </th>
-      <OpponentCell game={game} />
+      {showOpponent && <OpponentCell game={game} />}
     </>
   );
 }
@@ -318,10 +449,12 @@ function BatterTable({
   batters,
   handlers,
   expand,
+  schedule,
 }: {
   batters: PlayerReport[];
   handlers: RowHandlers;
   expand: Expand;
+  schedule: ScheduleIndex | null;
 }) {
   const total = combineLines(batters.flatMap((r) => r.games.map((g) => g.line)));
   const cols = ['H/AB', 'R', 'HR', 'RBI', 'SB', 'OPS', 'BB', 'K'];
@@ -336,14 +469,20 @@ function BatterTable({
           <th className="sum-name-col" scope="col">
             Batter
           </th>
-          <th className="sum-opp-col" scope="col">
-            Opponent
-          </th>
-          {cols.map((c) => (
-            <th key={c} className="sum-num" scope="col">
-              {c}
-            </th>
-          ))}
+          {schedule ? (
+            <ScheduleHeadCells index={schedule} kind="batter" />
+          ) : (
+            <>
+              <th className="sum-opp-col" scope="col">
+                Opponent
+              </th>
+              {cols.map((c) => (
+                <th key={c} className="sum-num" scope="col">
+                  {c}
+                </th>
+              ))}
+            </>
+          )}
         </tr>
       </thead>
       <tbody>
@@ -352,8 +491,19 @@ function BatterTable({
           const role = liveRole(r);
           return (
             <tr key={r.id} className={role ? `role-${role}` : undefined}>
-              <LeadCells r={r} game={game} role={role} corner={game ? lineupCorner(game) : null} {...handlers} />
-              <StatCells line={combineLines(r.games.map((g) => g.line))} />
+              <LeadCells
+                r={r}
+                game={game}
+                role={role}
+                corner={game ? lineupCorner(game) : null}
+                showOpponent={!schedule}
+                {...handlers}
+              />
+              {schedule ? (
+                <ScheduleCells index={schedule} r={r} />
+              ) : (
+                <StatCells line={combineLines(r.games.map((g) => g.line))} />
+              )}
             </tr>
           );
         })}
@@ -364,8 +514,14 @@ function BatterTable({
           <th className="sum-name-col" scope="row">
             <span className="sum-total-label">Total · {batters.length}</span>
           </th>
-          <td className="sum-opp" aria-hidden="true" />
-          <StatCells line={total} />
+          {schedule ? (
+            <ScheduleTotalCells index={schedule} players={batters} kind="batter" />
+          ) : (
+            <>
+              <td className="sum-opp" aria-hidden="true" />
+              <StatCells line={total} />
+            </>
+          )}
         </tr>
       </tfoot>
     </table>
@@ -377,10 +533,12 @@ function PitcherTable({
   pitchers,
   handlers,
   expand,
+  schedule,
 }: {
   pitchers: PlayerReport[];
   handlers: RowHandlers;
   expand: Expand;
+  schedule: ScheduleIndex | null;
 }) {
   const totalLine = combinePitchingLines(
     pitchers.flatMap((r) => r.games.filter((g) => g.pitching).map((g) => g.pitching!.line)),
@@ -397,14 +555,20 @@ function PitcherTable({
           <th className="sum-name-col" scope="col">
             Pitcher
           </th>
-          <th className="sum-opp-col" scope="col">
-            Opponent
-          </th>
-          {cols.map((c) => (
-            <th key={c} className="sum-num" scope="col">
-              {c}
-            </th>
-          ))}
+          {schedule ? (
+            <ScheduleHeadCells index={schedule} kind="pitcher" />
+          ) : (
+            <>
+              <th className="sum-opp-col" scope="col">
+                Opponent
+              </th>
+              {cols.map((c) => (
+                <th key={c} className="sum-num" scope="col">
+                  {c}
+                </th>
+              ))}
+            </>
+          )}
         </tr>
       </thead>
       <tbody>
@@ -413,8 +577,19 @@ function PitcherTable({
           const role = liveRole(r);
           return (
             <tr key={r.id} className={role ? `role-${role}` : undefined}>
-              <LeadCells r={r} game={game} role={role} corner={game ? pitchingCorner(game) : null} {...handlers} />
-              <PitchStatCells line={aggregatePitching(r)} />
+              <LeadCells
+                r={r}
+                game={game}
+                role={role}
+                corner={game ? pitchingCorner(game) : null}
+                showOpponent={!schedule}
+                {...handlers}
+              />
+              {schedule ? (
+                <ScheduleCells index={schedule} r={r} />
+              ) : (
+                <PitchStatCells line={aggregatePitching(r)} />
+              )}
             </tr>
           );
         })}
@@ -425,8 +600,14 @@ function PitcherTable({
           <th className="sum-name-col" scope="row">
             <span className="sum-total-label">Total · {pitchers.length}</span>
           </th>
-          <td className="sum-opp" aria-hidden="true" />
-          <PitchStatCells line={totalLine} />
+          {schedule ? (
+            <ScheduleTotalCells index={schedule} players={pitchers} kind="pitcher" />
+          ) : (
+            <>
+              <td className="sum-opp" aria-hidden="true" />
+              <PitchStatCells line={totalLine} />
+            </>
+          )}
         </tr>
       </tfoot>
     </table>
@@ -506,11 +687,22 @@ export function SummaryTable({
   reports,
   onOpenDetails,
   chrome,
+  schedule,
 }: {
   reports: PlayerReport[];
   /** The headshot and the name both open the player's page — the one that leads
    *  with his day. */
   onOpenDetails: (key: string) => void;
+  /**
+   * The Schedule view: the days ahead in place of the stat columns.
+   *
+   * Null is the ordinary table, so the mode is the *presence of an index*
+   * rather than a flag beside one — which is what makes "on but still reading"
+   * impossible to draw. App holds the flag and hands this down only once the
+   * window has landed, so the table never has a schedule mode with no schedule
+   * in it.
+   */
+  schedule?: ScheduleIndex | null;
   /** What to keep from the app's own chrome once the table has the page: the
    *  kind tabs and the date control, handed down as nodes because App owns both
    *  the state behind them and the markup. Rendered only while expanded. */
@@ -538,10 +730,20 @@ export function SummaryTable({
             columns) would stop short of the scrolled-right edge. */}
         <div className="summary-tables">
           {batters.length > 0 && (
-            <BatterTable batters={batters} handlers={handlers} expand={expand} />
+            <BatterTable
+              batters={batters}
+              handlers={handlers}
+              expand={expand}
+              schedule={schedule ?? null}
+            />
           )}
           {pitchers.length > 0 && (
-            <PitcherTable pitchers={pitchers} handlers={handlers} expand={expand} />
+            <PitcherTable
+              pitchers={pitchers}
+              handlers={handlers}
+              expand={expand}
+              schedule={schedule ?? null}
+            />
           )}
         </div>
       </div>

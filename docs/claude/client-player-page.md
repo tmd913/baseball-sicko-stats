@@ -67,7 +67,7 @@ So a game is a **card** (`.pday-game`, **folded into `.feed-item-toggle`'s selec
 
 **The matchup line went, and the badge is what let it.** The old header printed `CHC @ WSH` beside a badge that already reads `CHC 0–7 WSH` the moment there is a score — the same fact twice on one row — so the card drops the line and passes **`withMatchup`**, which fills exactly the gap the badge leaves (a game with no score yet). The card therefore says who was played in every state and says it once.
 
-**The live entry and a scheduled game keep their place on the page**, which is the line worth drawing. A card behind a press is right for what has already happened; "he is at the plate right now" and "he is starting at 7:05" are what the page was opened *for*, and putting either behind a press would hide the answer to the question being asked. A **live** entry therefore sits above the cards — filing it behind one would bury it — while the game it belongs to still gets its card for the plays already completed in it.
+**The live entry and a scheduled game keep their place on the page**, which is the line worth drawing. A card behind a press is right for what has already happened; "he is at the plate right now" and "he is starting at 7:05" are what the page was opened *for*, and putting either behind a press would hide the answer to the question being asked. A **live** entry therefore sits above the cards — filing it behind one would bury it — while for a **batter** the game it belongs to still gets its card for the plays already completed in it. For a **pitcher** it does not, and the sentence used to stop one clause too early; see the section below.
 
 **A scheduled game is an `UpcomingRow` instead of a card, not as well as one.** That row *is* the game info before first pitch — matchup, the SP chip, the other side's announced starter, first pitch, opening onto the platoon split or the lineup waiting for him — so a card above it would state the matchup twice.
 
@@ -78,6 +78,32 @@ So a game is a **card** (`.pday-game`, **folded into `.feed-item-toggle`'s selec
 **The combined line at the top of the tab is unchanged and still only appears when there is something to combine.** A day is one game almost every time, and that game's own card already carries his line for it — so on a single-game day the strip was the same string twice, an inch apart (measured on a real page: `1-2, 1 R, 2B, 2 BB, K, 1.750 OPS` in both). It is drawn only over a doubleheader, where it is the one place the two halves are added up.
 
 **Narrowed to one game there is no card at all.** `PlayerDay` takes a `gamePk` — what a Game Log row means, and what a card's own dialog passes back in — and in that mode draws the feed directly: the box is already about that game, so a card inside one would be a press to reach the only thing on screen.
+
+#### A pitcher on the mound was drawn twice
+
+**The rule above reads as correct because it was written about a batter**, whose live entry is the **at-bat in progress** — never one of the completed plays, so his card underneath is the rest of his day and the two are complementary. A **pitcher's** feed item is his *whole outing* (`FeedPitcherGame`), so the live entry and the card were the same object: the outing bar with his line and his `GameStatusBadge`, and directly under it a static card with the date, the same line and the same badge again. On the tab the page opens on, an inch apart.
+
+**`playerDayEntries` has had the guard since it was written and the card never saw it.** That function computes a `pinned` — the game a pitcher's live item is drawn from — and keeps its entry out of `entries`, which is what stops `LiveFeed`'s own stream repeating a pinned outing. `PlayerDay` builds its **sections off `report.games`** rather than off the entries, so the filter reached the plays and not the card. `livePitching` is that same guard one level up, phrased on exactly the condition the live branch renders on (`isPitcher && live.game.pitching`), so the two cannot come to disagree about which game is spoken for.
+
+**Under a `gamePk` it was worse than a duplicate, which is the half a screenshot of the Overview tab would not have shown.** In the Game Log's popup the section *is* the plays, and with the pinned entry already filtered out of `entries` there were none — so `PlayerDayGameFeed` fell through to its empty case and printed **`Not in the game yet.`** beneath a bar saying he was on the mound in the second. The popup now draws the live item with `detailInline`, which is the rule that box already applies to a finished outing: it is about one game, so the innings read in it rather than behind a second press.
+
+**Measured on the live 2026 season** (Grayson Rodriguez, LAA, 2026-08-14, on the mound), before → after:
+
+| | 1200×900 | 390×844 |
+| --- | --- | --- |
+| Overview — outing bars | 1 → **1** | 1 → **1** |
+| Overview — `.pday-game` cards | 1 → **0** | 1 → **0** |
+| Overview — `GameStatusBadge`s | 2 → **1** | 2 → **1** |
+| Overview — line summaries | 2 → **1** | 2 → **1** |
+| Overview — `.player-day` height | 104 → **44px** | 135 → **75px** |
+| Game Log popup — `Not in the game yet.` | 1 → **0** | 1 → **0** |
+| Game Log popup — inning bars | 0 → **1** | 0 → **2** |
+
+**And the three cases it must not touch were driven rather than reasoned about**, each pair back to back on the same build minutes apart. A **batter with a live at-bat** (Julio Rodríguez, at bat in the top of the 5th) is byte-identical at 1200: the `At bat` entry over one card reading `1-2, 2B, 1.500 OPS`, `.player-day` 146px both ways — which it has to be, `livePitching` being null for a batter and the filter then a no-op. A **final** game is identical on both kinds (Seiya Suzuki and Kodai Senga, one card and no bar, 44px). And the **Game Log popup** is identical where nothing is live — a batter's 675px at 390, a finished outing's 213px with its one inning bar at 1200. The **feed** is untouched by construction (`LiveFeed.tsx` is not in the diff, and the dependency runs the other way — `PlayerDay` imports from it), and was checked anyway: the pitcher stream draws 3 outings as 3 bars, and under `sim=1`, which puts three men on the mound, 3 live entries and 1 in Recent with no outing in both.
+
+**`sim=1` does not reach this tab**, which is worth recording because it is the obvious way to try to reproduce this: the overlay applies to `reports` from `/api/report`, and the player page fetches its own day off `/api/players/:id/day`. Both halves above were reproduced on genuinely live pitchers instead.
+
+**Bundle: 466.09 → 466.16 KB of JS** (138.60 → 138.63 gzipped), CSS unchanged at 106.85 (19.09).
 
 #### The day leads, and the scheduled game is the third state of it
 
@@ -92,9 +118,11 @@ is opened with is what he is doing* — and the block answering it was second.
 **So the day block leads**, and the order is now:
 
 1. **Today**, or the **next game** when the day holds none.
-2. **News** (below).
-3. **Season**, over to the Stats tab.
-4. **Last 5 games**, over to the Game Log.
+2. **Projected Starts** — a rotation starter only, and see its own section
+   below, which is also where the third state of the block above it went.
+3. **News** (below).
+4. **Season**, over to the Stats tab.
+5. **Last 5 games**, over to the Game Log.
 
 **The whole block moves, rather than the scheduled-game half of it.** What was
 asked for was that the *scheduled game* lead, and there are two ways to read
@@ -117,16 +145,22 @@ sit in two places on one page. Hoisted, the leading block is the same block in
 all three states and is **never empty**, which is the property this had to have.
 
 **The heading names what the block holds, which is what makes the third state
-read.** It is `Today` where there are games and **`Next game` / `Next start`**
-where there aren't — and the label therefore comes *off* the line inside
-`NextGameBlock`, which used to print it in `.ovw-next-label`. Leading a page with
-a heading saying `Today` over a line saying `Next game` would be the same two
-words an inch apart. One definition of which of the two it is (`wantStart`,
-`isRotationStarter`'s answer) feeds the heading and the sentences below it, so
-they cannot come to disagree. The sentences still split three ways, because the
-distinctions are real: `Not yet scheduled.` for a starter nobody has named,
-`Nothing scheduled in the next two weeks.` for a club with nothing on, and
-`Couldn't read the schedule.` for a failed read.
+read.** It is `Today` where there are games and **`Next game`** where there
+aren't — and the label therefore comes *off* the line inside `NextGameBlock`,
+which used to print it in `.ovw-next-label`. Leading a page with a heading saying
+`Today` over a line saying `Next game` would be the same two words an inch apart.
+
+**`Next start` was the third wording and has gone with the sentence it headed.**
+A rotation starter's "when, then" is the Projected Starts block's now (below), so
+for him the day block says `Today` / `No game for X today.` and stops, and
+`NextGameBlock` is not drawn at all — which is why `wantStart` feeds only the
+*decision* to draw it and no longer feeds a heading or a sentence. What is left
+under a batter's or a reliever's line is two: `Nothing scheduled in the next two
+weeks.` for a club with nothing on, and `Couldn't read the schedule.` for a
+failed read. (The measurements in the paragraph below were taken before that
+change and Logan Webb's `Next start` line is the one figure in them that no
+longer renders; everything else is unmoved, and the same page is re-measured in
+the Projected Starts section.)
 
 **Driven in a browser at 1200×900 and 390×844, in all three states, on the live
 2026 season.** *Live* — Kevin Gausman: `Today [68px at 1200, 91 at 390] | News |
@@ -141,7 +175,7 @@ and the overlay each overflow by **0** in every one of those, at both widths.
 
 #### The News section, and why it sits second
 
-**It is his latest transactions and articles, three of them, over to the News tab**
+**It is his latest reports and transactions, three of them, over to the News tab**
 (`NewsPreview` in this file, `NewsList` in `PlayerNews.tsx`).
 
 **Second, between the day and the season line**, which is the order the tab is
@@ -154,7 +188,7 @@ been told a man is hurt does not want to read a season line first.
 **`NewsList` with `shown={3}`, not a second list.** That is the rule
 `GameLogTable` sets for the Game Log and its own five-row preview, and it is
 worth restating because it is the whole reason there is one component: the row
-shapes, the two sources' different voices and the press that opens an article
+shapes, the two sources' different voices and the press that opens a report
 have one definition. The only two things this block decides are how many rows and
 whether the standfirst is drawn (`summaries`, off here — three two-line rows would
 be the whole of the block above the season line it introduces).
@@ -196,6 +230,166 @@ exactly the reader with an empty block in front of them.
 
 **The day takes `--card-column` rather than the 860px the tabs beside it use**, because what is in it is exactly what the feed holds — an at-bat card, a clip, an outing's innings — and those were sized against that number in the first place. A day read here and the same day read on the stream is then the same reading at the same width (measured: 800px at 1440, 358 at 390). The cap sits on `.details-overview .player-day` rather than on the tab, which spans the tab so its two tables can (see **the player page's Overview tab** above), and the `container-type` sits on the same box for the reason `.details-arsenal` carries one: the cards inside size themselves off their container, and read off a full-width tab they would answer a container query the card itself never satisfies.
 
+#### Projected Starts, and what a rotation slot is
+
+**A starting pitcher's next turn is the one fact a fantasy manager plans around
+and the one the app could least often say.** The block above answered it with
+`/api/players/:id/next-game?start=1` — his next *announced* start — and clubs
+name a rotation three or four days out, so for most of the month the honest
+answer was `Not yet scheduled.`: true, useless, and a thing anybody with the
+fixture list could have worked out. `ProjectedStartsBlock` works it out, five
+turns ahead.
+
+**It is second in the tab, directly under the day**, which is that tab's own
+ordering argument rather than an exception to it: "when does he pitch next" is
+the forward half of *what is he doing*, and the day block's own note says the
+two halves of that question must not end up in two places on one page. And it is
+drawn **only for a rotation starter** (`lib.ts::isRotationStarter`, the app's one
+definition of who works out of the rotation), because a batter is in every game
+his club plays and a reliever could be in any of them — neither has a slot to be
+projected into. ESPN's `SP` eligibility is deliberately not the test, for the
+reason `NextGameBlock` already states: it is a cover rather than a partition, so
+it says where a league will let you start a man and not whether he takes the ball
+every fifth day.
+
+**So the day block defers to it, and `Not yet scheduled.` is gone.** For a
+rotation starter with no game today the day says `Today` / `No game for
+Cristopher Sánchez today.` and nothing else, and the block under it says when —
+in five rows rather than a sentence. `NextGameBlock` therefore keeps only the
+club's-next-game half, loses its `wantStart` prop and passes `false` at its one
+call site; **the server route keeps its `?start=1`**, which is the rule
+`/api/watchlist` follows for its own name — a tab open at the moment of a deploy
+is still asking for it and still gets the right answer.
+
+**What a projection is made of, in one paragraph.** Take the club's regular
+season as an ordered run of games; find the positions in it of the games he has
+started; the **median gap** between consecutive ones is his cadence — 5 for an
+ordinary five-man rotation. Anchor on the latest start we know of and step
+forward a cadence at a time over the games still to be played. **Counting in team
+games rather than in days is the whole trick**: an off day, a rain-out and the
+All-Star break each push a rotation back by exactly the days they take out of the
+calendar and none of them takes a turn out of the run of games, so an index into
+the club's own schedule models none of them and gets them all right. The median
+rather than the mean because the outliers are the interesting half of a pitcher's
+season — one IL stint of a month is a single gap of twenty team games — and gaps
+past `MAX_TURN_GAP` (9) are dropped outright rather than trusted to it, so a man
+with three starts either side of a stint is still placed off the two turns that
+really were consecutive.
+
+**A postponement is dropped from the run**, which is not tidiness: MLB
+reschedules one under a **new `gamePk`**, so counting the original would put a
+phantom game in the club's sequence and shift every slot after it by one.
+Measured league-wide on the 2026 season, `detailedState` takes eight values —
+Final, Scheduled, Postponed, In Progress, Completed Early, Game Over, Warmup,
+Pre-Game — of which only Postponed (27 games) is one of these.
+
+**Announced beats projected, always, and it re-phases what follows.** Every game
+his club has named him for is in the answer as a fact; the anchor is then the
+latest of those rather than his last actual start, which is his club saying where
+he is in the rotation *now*. Where MLB has named **somebody else** for a slot the
+projection wanted, that slot is not his — it is skipped and the rest re-phased
+from wherever he lands, up to `MAX_SLIP` (3) consecutive skips, past which the
+rotation has clearly been re-ordered and a shorter list beats a longer wrong one.
+
+**What it refuses to guess**, which is four different facts about the pitcher and
+so four different sentences (`ProjectionRefusal`). `not-a-starter` — he has
+started nothing. `too-few-starts` — under three, too thin a median to read a
+cadence off. **`new-club`** — he has a full season of starts and every one of them
+is the club that has since traded him, so he holds no slot in this one yet;
+checked on the live season, Kris Bubic's nine starts are Kansas City's and his
+club is now the Dodgers, and reading that as `not-a-starter` would have printed
+"he hasn't started a game this season" over a man with twenty-odd turns behind
+him. And `out-of-rotation` — his last start was more than two turns ago, which is
+a man something has happened to rather than a man with a slot; measured against
+the announcements, the one pitcher on the live board in that state is also the one
+whose projection missed. **Whatever is announced still comes back in every one of
+those cases**, because an announcement is a fact whatever we can or cannot infer
+around it — and where a refusal sits under a list rather than instead of one, the
+sentence is drawn under the rows so a reader is not left wondering where the other
+four went.
+
+**A rehabbing starter's club is his org, not his rehab club.** `getRosterInfo`
+answers with `currentTeam`, which for a man on a rehab assignment is a
+minor-league club — checked: Edward Cabrera's is the Knoxville Smokies — so the
+schedule read came back empty and the block said `Couldn't read his club's
+schedule`, which is true of the id and a lie about him. `parentOrgOf` is the
+fallback, fired only when the schedule is empty and cached for a day; with it he
+reads his announced start and four projections off it, which is exactly the
+pitcher this block is most worth drawing for.
+
+**Announced and projected are never drawn alike**, which is the app's standing
+rule that an estimate is marked as one — the percentile card's dotted bubble and
+the Splits card's hatched fill are the same rule on two other surfaces. It is
+said three ways over, because one of them is bound to be the one a given reader
+takes it from: the row's rail goes from solid accent to **dashed** `--faint`, its
+text goes muted, and the tag says the word. The rail is a left border rather than
+the feed's 3px/11px gradient — that device groups a header, a card and a clip into
+one item, where this is one line and wants a mark beside it rather than a bracket
+around it. The row itself is **folded onto `.ovw-next-line`'s rule**: the block
+above draws exactly this sentence for exactly this kind of fact, so the two are
+one object. And the opposing starter is by **surname**, where that single line
+prints the whole name — this is a list of five scanned down rather than one
+sentence read across, which is the same reason the summary table's opponent cell
+and the feed's Upcoming bar cut theirs.
+
+**The caveat stays on the card where the Splits and Charts keys went behind an
+ⓘ**, and that is those cards' own split rather than an exception to it:
+instructions are read once and belong behind a button, where a caveat about
+*these rows* changes how what is on screen should be read. It names **his own
+cadence** rather than saying "estimated", because the number is what tells a
+reader how much to trust the dashed rows — one turn every five club games is a
+settled rotation, and the same sentence saying six is a club running a six-man —
+and it is drawn only when something on screen is actually a guess.
+
+**Validated three ways, and the honest one is the middle number.**
+
+- **The implementation against an independent recompute.** The whole method was
+  written a second time in Python off the raw upstreams and run against the
+  route for **all 183 pitchers with eight or more starts**: gamePks, the
+  announced flags, the cadence and the refusal all agree, **183 of 183, 0
+  mismatches**. (The one tie worth knowing about: `Math.round` is half-up where
+  Python's `round` is half-even, which differ on a median of an even number of
+  gaps — `[6, 7]` gives 7 here and 6 there.)
+- **The method against the announcements, which is the production case.**
+  Projecting from his last *actual* start with the announcements hidden, then
+  revealing them: of the **48** of those 183 whose club has named their next
+  start, the projection lands on it **exactly 41 times (85%) and within a day 43
+  (90%)**. Split by the guard: **41 of 47 (87%) exact and 91% within a day** for
+  the anchors it allows, and the single stale-anchor case — which it refuses —
+  missed by three days, which is the guard earning its keep.
+- **The method against the season, which is the pessimistic case.** Walking each
+  pitcher's season and projecting his next five off only what was known then,
+  with **no announcements at all** (they cannot be reconstructed historically),
+  over 10,232 projections: **73.0% exact and 90.1% within a day** for the next
+  start, then 57.0/78.7, 46.6/69.8, 39.1/62.4 and **33.5/56.1** for the fifth.
+  Over the 40 busiest starters alone it is 81.0/95.4 down to 45.4/70.3. The tail
+  decays because an IL stint is unpredictable by construction — 11.3% of fifth
+  starts miss by more than eight days — which is why the block says five and not
+  ten, and why the note names the cadence rather than claiming a date.
+
+**Driven in a browser at 1200×900 and 390×844 against the live 2026 season**, in
+all six states. *Announced + projected* — Logan Webb: `Today · Projected Starts ·
+News · Season · Last 5 games`, one solid accent row (`Aug 15 · 4:05 PM · vs COL ·
+vs RHP Lorenzen · Announced`, `rgb(56, 189, 248)`) over four dashed `rgb(92, 111,
+151)` ones at 32px each, under `4 starts are projected from his last one, at a
+turn every 5 club games`. *All projected* — Cristopher Sánchez on his club's off
+day: five dashed rows and the heading `Today` over `No game for Cristopher
+Sánchez today.` with **0** `NextGameBlock`s, which is the deferral. *Announced
+with no cadence* — Cody Bradford (2 GS): one announced row and the
+`too-few-starts` sentence under it. *Refused* — Shohei Ohtani's pitcher page
+(`out-of-rotation`) and Kris Bubic's (`new-club`), each a sentence and no rows.
+*Not drawn at all* — Josh Hader (a reliever) and Ohtani's **batter** page, four
+headings and no block. And *unchanged* — Jhoan Duran, a reliever on the same off
+day, still reads `Next game` with `NextGameBlock` under it naming his club's next
+game and the opposing starter. **Page and overlay overflow 0 in every one of
+those, at both widths**; the block caps at `--card-column` (800 / 358), and at 390
+only the announced row wraps, to 50px.
+
+**Bundle: 466.09 → 468.73 KB of JS** (138.60 → 139.32 gzipped) and **106.85 →
+107.84 KB of CSS** (19.09 → 19.27) — 2.6KB and 1.0KB raw, 0.7KB and 0.2KB over
+the wire, for a block, a route, a server module and the rules above restated
+where they are.
+
 #### The scheduled game's pitcher link opened nothing
 
 **The report: press the pitcher in the Overview tab's scheduled-game popup and nothing happens.** Not a wrong page and not a dead-looking one — no change at all.
@@ -223,7 +417,7 @@ exactly the reader with an empty block in front of them.
 
 **Bundle: 466.02 → 466.09 KB of JS** (138.59 → 138.60 gzipped), CSS unchanged at 106.85 (19.09).
 
-### The News tab, and the two feeds behind it
+### The News tab, and the two sources behind it
 
 **It is the eighth tab and it reads before Stats and the Game Log** — the strip
 is `Overview · Percentile Rankings · Splits · News · Stats · Game Log ·
@@ -240,40 +434,69 @@ list rather than two. It takes the app's one loading discipline — `useDelayedF
 behind `WAIT_DELAY`, the spinning baseball, `Reading the latest news` — like every
 other lazily-fetched tab.
 
-**A row is what its source makes it, and the list says which.** An **article**
-carries a link, opens ESPN in a new tab (`target="_blank"`,
-`rel="noopener noreferrer"` on every one) and shows its standfirst here where
-there is room for it. A **transaction** carries neither link nor summary, because
-MLB publishes neither — the whole of it is the one sentence — so it is a static
-row that is deliberately **not** a press, and carries neither the pointer nor the
-hover tint. A row that looked pressable and did nothing would be worse than one
-that plainly is not. The hover it does have is scoped to `@media (hover: hover)`,
-the app-wide rule for a full-width row in a list that scrolls.
+**A row is what its source makes it, and the list says which.** A **report**
+(`rotowire`) carries a link, opens RotoWire's page for that player in a new tab
+(`target="_blank"`, `rel="noopener noreferrer"` on every one) and shows the note
+itself as a standfirst here where there is room for it. A **transaction** (`mlb`)
+carries neither link nor summary, because MLB publishes neither — the whole of it
+is the one sentence — so it is a static row that is deliberately **not** a press,
+and carries neither the pointer nor the hover tint. A row that looked pressable
+and did nothing would be worse than one that plainly is not. The hover it does
+have is scoped to `@media (hover: hover)`, the app-wide rule for a full-width row
+in a list that scrolls.
 
-**The `kind` pill is the upstream's own word, in the reader's vocabulary where
-the two differ.** MLB's `typeDesc` is already English (`Status Change`, `Trade`,
-`Assigned`) and prints as it comes; ESPN's `type` is a CMS label, so
-`HeadlineNews` reads **`Report`** and `Media` reads `Video`, while `Story`,
-`Recap` and `Preview` keep their own word. Outlined and `--faint` rather than
-toned: this is a *label*, and the app's colour is spent on state.
+**The report's link is the player's page rather than the note's own**, and that
+is a limit of the source rather than a choice. RotoWire's per-note addresses
+(`/baseball/headlines/…-1020205`) exist on its **league-wide** feed and not on a
+player page, where the headline is a bare `<div>` — so a note read here has no
+address of its own to link to. What the page it *is* linked to has that this
+section does not is RotoWire's own **analysis**, which is paywalled and therefore
+deliberately not shipped (see `rotowire.ts`), so the press is worth making even
+though seven rows share one destination. The alternative — every row static — was
+weighed and refused: it would leave the list's press branch reachable by nothing,
+which is a comment claiming a behaviour the code cannot have.
 
-**A transaction is a day and an article is an instant**, and each is printed at
-the resolution it actually has — `Aug 11` against `Aug 14 · 7:23 AM`. The sort
-compares them on the day they share (`news.ts::cmpDate`); comparing the raw
-strings would work by accident and would file every one of a day's transactions
-under every one of its articles.
+**The `kind` pill is the upstream's own word, and both upstreams already write
+English** — which is why `prettyKind` is one line where it used to be a table.
+MLB's `typeDesc` prints as it comes (`Status Change`, `Trade`, `Assigned`).
+RotoWire's is the **body part** it files an injury note under — `Elbow`,
+`Hamstring`, `Head` — which says more in four characters than any label this app
+could invent, with `Report` on the notes it files under nothing; the server fills
+it, so the pill is RotoWire's word rather than a mapping of it. (ESPN's `type`
+was the one that needed translating, being a CMS label, and it went with the
+feed.) Outlined and `--faint` rather than toned: this is a *label*, and the app's
+colour is spent on state.
 
-**The empty state is the one this most had to get right**, because it is common:
-a healthy player mid-season has nothing written about him and no move on his
-record, which is an ordinary player rather than a failed read. So it names its
-cause the way every emptied view in the app does — `No recent news for Chad
-Patrick.` over a line saying that MLB's transaction log and ESPN's own
-attribution were both read and both were empty.
+**Both sources date to the day** — MLB publishes no time with a transaction and
+RotoWire stamps a note `August 14, 2026` — so every row reads `Aug 11` today.
+`formatDate`'s instant branch is kept anyway and is doing the work that matters
+either way: reading a bare date as an instant is what goes wrong on its own,
+`new Date('2026-08-11')` being UTC midnight, which in ET is the 10th. The length
+of the string picks the branch, a day is pinned to noon before it is formatted,
+and a source that starts publishing an instant draws as one without this being
+touched. `news.ts::cmpDate` sorts on the day for the same reason.
+
+**Reports lead the transactions they share a day with.** `cmpDate` answers 0 for
+two rows on one day, `sort` is stable, so the concat order *is* the same-day
+order — and a note that reads like a sentence belongs above the roster move it
+describes rather than under it.
+
+**The empty state is the one this most had to get right**, and it has become the
+*rare* case rather than the common one. It used to be routine — a healthy player
+mid-season had nothing written about him and no move on his record — and it is
+now a man RotoWire has never written up, which over a random 40-player sample was
+**nobody at all**: 40 of 40 had notes, and the median player had 10 items. It
+still names its cause the way every emptied view in the app does — `No recent
+news for Chad Patrick.` over a line saying that RotoWire's notes and MLB's
+transaction log were both read and both were empty, so a reader can tell it from
+a read that broke. (Chad Patrick himself now has seven notes; the wording is what
+survives, not the example.)
 
 ### There is no per-player news API, and this is what was tried
 
-**Recorded so nobody probes them again.** Every one of these is a dead end, and
-the fifth is the dangerous one because it returns 200:
+**Recorded so nobody probes them again**, across three publishers. Every one of
+these is a dead end, and the **two 200s are the dangerous half**, because they
+look like they worked:
 
 | Endpoint | Result |
 | --- | --- |
@@ -283,80 +506,161 @@ the fifth is the dangerous one because it returns 200:
 | `lm-api-reads.fantasy.espn.com/apis/v3/games/flb/news/players?playerId=` | **404** |
 | `site.api.espn.com/…/mlb/news?athlete=` / `athleteId=` / `player=` | **200, parameter ignored** — the league-wide feed whatever you name |
 | `search-api.mlb.com` | does not resolve |
+| `rotowire.com/baseball/news.php?playerid=` / `?id=` / `?player=` | **200, parameter ignored** — the same 25 league-wide items, whatever you name. Caught by diffing the player links out of three responses: identical, 25 items, 25 distinct players |
+| `rotowire.com/baseball/news.php?page=` / `?offset=` | **200, ignored** — the league feed is 25 items and does not page |
+| `rotowire.com/rss/news.php?sport=MLB` | **200**, a real feed and league-wide: **10 items**, no player filter |
+| `rotowire.com/inc/player-panel/api/main/?player_id=&sport=baseball` | **200 and `null`** — the React player panel's JSON API is real and its own page says `SUPPORTED_SPORTS = { football: true }`; `sport=mlb` is a 400 |
+| `rotowire.com/baseball/ajax/player-page-data.php?id=` | **200, 572KB JSON** — real, and it is game logs, splits and matchups. **No news in it**, checked key by key |
+| `rotowire.com/baseball/ajax/player-news.php`, `/baseball/tables/player-news.php`, `/baseball/player-news.php`, `/baseball/player/{slug}/news` | **404** |
 
-So the list is **assembled** from two feeds that answer for something else, and
-both are here because they have opposite characters (`server/src/news.ts`).
+So the list is **assembled** from two sources of opposite character
+(`server/src/news.ts`, `server/src/rotowire.ts`).
 
-**MLB transactions are the spine** — `/api/v1/transactions?playerId=`, per
-player, official, dated, and needing **no matching of any kind**. They are also
-precisely what a fantasy manager acts on: IL placements and activations, rehab
-assignments, recalls, options, trades, DFAs. What they are not is *reporting* — a
-player having a bad month makes no transaction at all, which is why they are not
-the whole of it.
+**RotoWire's player page is the reporting, and it is why this section is worth
+having.** `www.rotowire.com/baseball/player/{slug}-{id}` carries an
+`id="latest-news"` region holding up to **7** dated notes about that one player,
+written by a fantasy desk: a lineup he is out of, a bullpen session, a save, a
+demotion, the closer's job changing hands. No login, no cookie, no User-Agent
+gate; **~627KB of HTML, 93KB gzipped**, of which about 4KB is the news.
 
-**ESPN's team feed is the reporting, and the join is the interesting part.**
-`site.api.espn.com/…/mlb/news?team={id}` is scoped to a club, and the way back to
-one player is **not** a headline search: every article carries a `categories[]`
-array with entries of `type: "athlete"` naming whom ESPN itself says it is about.
-So the filter is a name comparison against **ESPN's own structured attribution**,
-folded through the same accent-stripping the rest of the codebase uses (which is
-what joins MLB's "Edwin Díaz" to ESPN's "Edwin Diaz").
+**It is a scrape, and the shape it depends on is written down in the code** —
+which is the standard `percentiles.ts` already sets by scraping a Savant player
+page. Three things: a container `id="latest-news"`; inside it one
+`<div class="news-update …">` per note, matched on the class **followed by a
+space** (every field inside is `news-update__something`, and a looser split
+matched those too — ten "blocks" for one real note, on the first pass); and
+within a block `__headline`, `__timestamp`, `__news` and `__inj`. Each field's
+own tag is captured and back-referenced when it is read, because the note body
+carries inline `<a>` links to the reporter's post and a closer written as
+`</(?:div|a)>` truncates the sentence at the first of them — measured, it cut
+*"…activated from the 60-day injured list ahead of his start Tuesday night
+against the Royals"* at "list". **How it fails**: every field is optional, a note
+with no date or no headline is dropped rather than drawn, a moved region yields
+zero notes, and the whole read is inside its own `try` — so the worst a shape
+change does is empty this half and leave the transactions carrying the section.
+What it can never do is put somebody else's news on a player's page, since the
+*join* decides whose page was read and the join is not in the HTML.
 
-**An ambiguity that cannot be resolved is left out rather than guessed**, which
-is `espn.ts`'s rule applied to a join running the other way. There the club
-disambiguates; here the club is already fixed and what remains is that a club's
-feed carries league-wide stories too, so a `Max Muncy` tag in the Dodgers feed
-could in principle be the other Max Muncy. The set is **enumerated rather than
-feared**: over the 1,382 players on the 2026 season roster there are exactly
-**3 shared names and 6 players in them** (José Fermín, Luis García, Max Muncy),
-and a player whose folded name is shared is shown his transactions and **no
-articles at all**. It costs no upstream — `getSeasonPlayers` is the same
-1h-cached list the roster search reads. Checked in the running app: Max Muncy's
-page draws his one transaction and zero articles, where Blake Snell's draws 3
-articles and 9 transactions.
+**MLB transactions are the record** — `/api/v1/transactions?playerId=`, per
+player, official, dated, and needing **no matching of any kind**. RotoWire
+reports most of these moves too and reports them better, but MLB is the one that
+is authoritative about them, and it is the half that keeps standing if the scrape
+ever goes quiet.
 
-**Recall is better than the club scoping suggests**, which was measured rather
-than assumed: a club's feed carries league-wide stories as well as its own, so
-Tarik Skubal is tagged 13 times in Detroit's feed and 8 times in the Dodgers'.
-A player's own club's feed is therefore the right scope and loses nothing.
+**ESPN's club article feed was the reporting half and is gone.** It was scoped to
+a club and joined back to a player through ESPN's own `categories[]` athlete
+tags — a good join, and beaten on every axis that matters here. RotoWire is per
+player rather than per club, fantasy-shaped rather than general, and reaches
+**1,375 of the 1,383 players on the season roster** rather than only the ones
+ESPN happened to tag. `espn.ts::ESPN_SITE_TEAM_BY_MLB` went with it, that feed
+having been its only reader; the measurement it carried (ESPN's site API numbers
+its clubs identically to the fantasy `proTeamId`, all 30 checked) is kept as a
+comment where the table it was derived from lives.
 
-**`limit=100` is answered with 50** (measured), which is about ten days of a
-club's feed, and there is no paging past it.
+**The join is `espn.ts`'s, imported rather than rewritten** — the same
+accent-and-suffix fold, the same MLB name index off `sports/1/players`, the same
+rule that a club match breaks a tie and *an ambiguity neither test resolves is
+left unmatched rather than guessed*. What is joined is RotoWire's own player
+tables (`player-basic-stats.php` at `pos=B` and `pos=P`, cookie-free JSON,
+`ID` / `URL` / `player` / `team`), 685 batters and 847 pitchers over all 30
+clubs. **The slug is what has to be carried, not the id**: a RotoWire URL with
+the right number and a wrong slug 301s to `/baseball/`, and the bare number is a
+404, so an index is not optional.
 
-**The ESPN site API numbers its clubs identically to the fantasy `proTeamId`** —
-checked club by club against `site.api.espn.com/…/mlb/teams`, all 30 the same
-(1 BAL … 30 TB) — so `espn.ts::ESPN_SITE_TEAM_BY_MLB` is that one table derived
-in reverse rather than a second copy of a mapping neither numbering system
-derives from the other.
+**Measured, and the shared names are the headline result.** Of RotoWire's 1,378
+rows, **1,375 match** — 1,370 on the name alone and **5 where the club broke a
+tie**, which is five more than the ESPN join could ever manage, that one having
+had no club to break one with. So **both Max Muncys and both José Fermíns now
+get their own news**, where the old join gave all six of the shared-name players
+their transactions and nothing else. Read the other way it covers **1,375 of the
+1,383 players on MLB's list**; the eight it misses are three whose spelling the
+fold cannot bridge (`Jihwan Bae` against RotoWire's `Ji Hwan Bae`, `José A.
+Ferrer` against `Jose Ferrer`, and the third Luis García, whom MLB does not list
+on the club RotoWire has him on) and five with no MLB stat line for RotoWire's
+tables to carry. Each of the eight gets his transactions and no reporting, which
+is the direction this codebase fails in everywhere else.
 
-**Two type codes are dropped and only two.** `NUM` (a uniform change) is 2 of
-12,235 league transactions over a checked six weeks, and on one day a year it is
-a uniform change for **every player in the league** — Jackie Robinson Day would
-put "changed number to 42" at the top of 1,300 news sections for a fortnight.
-Everything else stays, including the ones that look procedural: `ASG` is 5,147 of
-that sample and is where a **rehab assignment** lives, which is the most useful
-thing this list can say about a man on the IL. MLB also emits the same move twice
-under two ids often enough to matter (a rehab assignment came back as 863948 and
-863854 on a checked player, same date, same wording), so the dedupe is on what a
-row *says* rather than on its id.
+**Club abbreviations agree 29 of 30**, checked club by club: the exception is
+Arizona, `ARI` to RotoWire and `AZ` to MLB. A one-entry alias table rather than a
+thirty-entry one, applied over MLB's own abbreviations read at request time so a
+rename cannot leave a stale copy.
+
+**A second index was measured and rejected.** RotoWire's injury-report table
+(`/baseball/tables/injury-report.php?team=ALL`) is cookie-free JSON with slugs
+and needs no season parameter, and as an index it adds **369 ids, not one of
+which** is among the eight major leaguers the stats tables miss — every one of
+the 369 a minor leaguer whose name is a fresh chance to collide. It buys nothing
+and costs collisions.
+
+**RotoWire's own analysis is deliberately not shipped.** It is the thing RotoWire
+is read for and it is **paywalled**: on a checked player 1 of 7 notes carried it
+and the other 6 read "Subscribe now to instantly reveal our take on this news."
+Shipping that string would be an advertisement in the app, and shipping the one
+free take would make one row a paragraph and six rows a line. The row links to
+the page instead, which is where the take is.
+
+**One transaction type code is dropped and only one.** `NUM` (a uniform change)
+is 2 of 12,235 league transactions over a checked six weeks, and on one day a
+year it is a uniform change for **every player in the league** — Jackie Robinson
+Day would put "changed number to 42" at the top of 1,300 news sections for a
+fortnight. Everything else stays, including the ones that look procedural: `ASG`
+is 5,147 of that sample and is where a **rehab assignment** lives, which is the
+most useful thing this list can say about a man on the IL. MLB also emits the
+same move twice under two ids often enough to matter (a rehab assignment came
+back as 863948 and 863854 on a checked player, same date, same wording), so the
+dedupe is on what a row *says* rather than on its id.
+
+**And the same rule now runs across the two sources**, one step more abstract
+because the wording is two publishers' rather than one's. About a fifth of
+RotoWire's notes restate a transaction — *"The Dodgers placed Treinen on the
+15-day injured list Saturday due to right elbow inflammation"* against *"Los
+Angeles Dodgers placed RHP Blake Treinen on the 15-day injured list. Right elbow
+inflammation."* — and the two share no phrasing to compare, so what is compared
+is **the move each names, on the day they share**: an ordered, mutually exclusive
+classifier (`rehab`, `transfer`, `activate`, `il`, `dfa`, `select`, `recall`,
+`option`, `trade`, `claim`, `release`, `sign`, `suspend`, first match wins). The
+order is what makes an equality test meaningful — an activation *from* the IL has
+to read `activate` rather than `il`, or a man placed on the IL in the morning and
+a man activated off it would collapse into each other.
+
+**RotoWire's row wins and MLB's is dropped**, which the sample settles rather
+than taste: on every pair inspected RotoWire's note carries everything MLB's does
+— the stint length, the club, the body part — with the reporting attached
+(*"began a rehab assignment with Triple-A Durham on Sunday, walking three and
+giving up a three-run homer"* against *"sent LHP Garrett Cleavinger on a rehab
+assignment to Durham Bulls"*) and a headline a reader can scan. Measured over a
+random 60-player sample of the 2026 season (401 notes, 266 deduped transactions):
+**76 same-day same-class pairs, every one a genuine restatement on inspection**,
+and **28 same-day different-class pairs all correctly kept** — a trade and an
+option on one afternoon, a Triple-A club activating a man his major-league club
+optioned. With no RotoWire notes the whole transaction list survives untouched,
+which is what makes the collapse safe when the scrape fails.
 
 **Each source is fetched in its own `try` and each failure costs its own half** —
-a dead ESPN feed leaves the transactions standing and vice versa, and the route
-answers `{ items: [] }` rather than 502ing a page whose other seven tabs are
-already drawn.
+a dead RotoWire page leaves the transactions standing and vice versa, and the
+route answers `{ items: [] }` rather than 502ing a page whose other seven tabs
+are already drawn.
 
-**Bundle: 456.51 → 460.14 KB of JS** (135.38 → 136.44 gzipped) and **105.18 →
-106.45 KB of CSS** (18.81 → 19.00 gzipped) — 3.6KB and 1.3KB raw, 1.1KB and
-0.2KB over the wire, for a tab, an Overview section, a route, a server module
-and the block reorder above.
+**Bundle: 466.09 → 466.18 KB of JS** (138.60 → 138.62 gzipped) and **CSS
+unchanged at 106.85** (19.09) — 90 bytes raw and 20 over the wire, and the
+components themselves came in *smaller* than they went out (466.03 before the
+how-to page's own paragraph about the section was rewritten): an ESPN kind table
+and a per-player name lookup are more code than a one-line `prettyKind` and a
+scrape that lives on the server.
 
 **Measured against the live 2026 season.** Blake Snell reads as a genuine injury
-narrative: `Dodgers' Blake Snell K's 10 in 6 innings in return from injury`
-(ESPN, Aug 12) directly above `Los Angeles Dodgers activated LHP Blake Snell from
-the 60-day injured list.` (MLB, Aug 11), with the rehab assignments and the
-original 15-day placement under them — which is the interleaving the two-source
-design exists for and neither feed could have given on its own. **12 items, 3.2KB,
-343ms genuinely cold and ~50ms once the club's feed is warm.**
+narrative and reads it in RotoWire's own voice: `Strikes out 10 in return` over
+`Activated from IL ahead of start` over `Making return Tuesday` (Aug 7, pill
+`ELBOW`) over `Ready to make next start in majors`, then MLB's `sent LHP Blake
+Snell on a rehab assignment to Oklahoma City Comets` — **15 items, 4.5KB**, with
+MLB's own activation row collapsed into RotoWire's second note. **1,192ms
+genuinely cold** (no blob, fresh process), **638ms from the blob in a fresh
+process**, **610ms with the index warm**, **0.8ms on a cache hit**. Driven in a
+browser at **1200×900 and 390×844**: the Overview's three-row preview and the
+News tab's fifteen rows both draw, 7 rows are presses and 8 are static, the page
+body and the overlay each overflow by **0** at both widths, and with the response
+stubbed to `{ items: [] }` the tab draws its empty state and the Overview draws
+its one line.
 
 ### The Stats tab: the board, transposed
 
