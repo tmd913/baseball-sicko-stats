@@ -67,7 +67,7 @@ So a game is a **card** (`.pday-game`, **folded into `.feed-item-toggle`'s selec
 
 **The matchup line went, and the badge is what let it.** The old header printed `CHC @ WSH` beside a badge that already reads `CHC 0–7 WSH` the moment there is a score — the same fact twice on one row — so the card drops the line and passes **`withMatchup`**, which fills exactly the gap the badge leaves (a game with no score yet). The card therefore says who was played in every state and says it once.
 
-**The live entry and a scheduled game keep their place on the page**, which is the line worth drawing. A card behind a press is right for what has already happened; "he is at the plate right now" and "he is starting at 7:05" are what the page was opened *for*, and putting either behind a press would hide the answer to the question being asked. A **live** entry therefore sits above the cards — filing it behind one would bury it — while the game it belongs to still gets its card for the plays already completed in it.
+**The live entry and a scheduled game keep their place on the page**, which is the line worth drawing. A card behind a press is right for what has already happened; "he is at the plate right now" and "he is starting at 7:05" are what the page was opened *for*, and putting either behind a press would hide the answer to the question being asked. A **live** entry therefore sits above the cards — filing it behind one would bury it — while for a **batter** the game it belongs to still gets its card for the plays already completed in it. For a **pitcher** it does not, and the sentence used to stop one clause too early; see the section below.
 
 **A scheduled game is an `UpcomingRow` instead of a card, not as well as one.** That row *is* the game info before first pitch — matchup, the SP chip, the other side's announced starter, first pitch, opening onto the platoon split or the lineup waiting for him — so a card above it would state the matchup twice.
 
@@ -78,6 +78,32 @@ So a game is a **card** (`.pday-game`, **folded into `.feed-item-toggle`'s selec
 **The combined line at the top of the tab is unchanged and still only appears when there is something to combine.** A day is one game almost every time, and that game's own card already carries his line for it — so on a single-game day the strip was the same string twice, an inch apart (measured on a real page: `1-2, 1 R, 2B, 2 BB, K, 1.750 OPS` in both). It is drawn only over a doubleheader, where it is the one place the two halves are added up.
 
 **Narrowed to one game there is no card at all.** `PlayerDay` takes a `gamePk` — what a Game Log row means, and what a card's own dialog passes back in — and in that mode draws the feed directly: the box is already about that game, so a card inside one would be a press to reach the only thing on screen.
+
+#### A pitcher on the mound was drawn twice
+
+**The rule above reads as correct because it was written about a batter**, whose live entry is the **at-bat in progress** — never one of the completed plays, so his card underneath is the rest of his day and the two are complementary. A **pitcher's** feed item is his *whole outing* (`FeedPitcherGame`), so the live entry and the card were the same object: the outing bar with his line and his `GameStatusBadge`, and directly under it a static card with the date, the same line and the same badge again. On the tab the page opens on, an inch apart.
+
+**`playerDayEntries` has had the guard since it was written and the card never saw it.** That function computes a `pinned` — the game a pitcher's live item is drawn from — and keeps its entry out of `entries`, which is what stops `LiveFeed`'s own stream repeating a pinned outing. `PlayerDay` builds its **sections off `report.games`** rather than off the entries, so the filter reached the plays and not the card. `livePitching` is that same guard one level up, phrased on exactly the condition the live branch renders on (`isPitcher && live.game.pitching`), so the two cannot come to disagree about which game is spoken for.
+
+**Under a `gamePk` it was worse than a duplicate, which is the half a screenshot of the Overview tab would not have shown.** In the Game Log's popup the section *is* the plays, and with the pinned entry already filtered out of `entries` there were none — so `PlayerDayGameFeed` fell through to its empty case and printed **`Not in the game yet.`** beneath a bar saying he was on the mound in the second. The popup now draws the live item with `detailInline`, which is the rule that box already applies to a finished outing: it is about one game, so the innings read in it rather than behind a second press.
+
+**Measured on the live 2026 season** (Grayson Rodriguez, LAA, 2026-08-14, on the mound), before → after:
+
+| | 1200×900 | 390×844 |
+| --- | --- | --- |
+| Overview — outing bars | 1 → **1** | 1 → **1** |
+| Overview — `.pday-game` cards | 1 → **0** | 1 → **0** |
+| Overview — `GameStatusBadge`s | 2 → **1** | 2 → **1** |
+| Overview — line summaries | 2 → **1** | 2 → **1** |
+| Overview — `.player-day` height | 104 → **44px** | 135 → **75px** |
+| Game Log popup — `Not in the game yet.` | 1 → **0** | 1 → **0** |
+| Game Log popup — inning bars | 0 → **1** | 0 → **2** |
+
+**And the three cases it must not touch were driven rather than reasoned about**, each pair back to back on the same build minutes apart. A **batter with a live at-bat** (Julio Rodríguez, at bat in the top of the 5th) is byte-identical at 1200: the `At bat` entry over one card reading `1-2, 2B, 1.500 OPS`, `.player-day` 146px both ways — which it has to be, `livePitching` being null for a batter and the filter then a no-op. A **final** game is identical on both kinds (Seiya Suzuki and Kodai Senga, one card and no bar, 44px). And the **Game Log popup** is identical where nothing is live — a batter's 675px at 390, a finished outing's 213px with its one inning bar at 1200. The **feed** is untouched by construction (`LiveFeed.tsx` is not in the diff, and the dependency runs the other way — `PlayerDay` imports from it), and was checked anyway: the pitcher stream draws 3 outings as 3 bars, and under `sim=1`, which puts three men on the mound, 3 live entries and 1 in Recent with no outing in both.
+
+**`sim=1` does not reach this tab**, which is worth recording because it is the obvious way to try to reproduce this: the overlay applies to `reports` from `/api/report`, and the player page fetches its own day off `/api/players/:id/day`. Both halves above were reproduced on genuinely live pitchers instead.
+
+**Bundle: 466.09 → 466.16 KB of JS** (138.60 → 138.63 gzipped), CSS unchanged at 106.85 (19.09).
 
 #### The day leads, and the scheduled game is the third state of it
 
