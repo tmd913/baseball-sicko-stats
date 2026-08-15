@@ -198,11 +198,11 @@ period writes no `mp`, `‹` writes `mp=18`, `‹` again `mp=17`, `›` back to
 `mp=18`, and `?view=league&mp=14` opens on `Week 14 · Jun 29 – Jul 5 · Final`.
 
 **The season table** is every team against every one of the league's own
-categories, sortable per column, with the reader's own row on a 12% accent wash
-— the same wash the pitcher card's live inning takes, enough to find your row
-down a column of twelve and not enough to read as a selection you could act on.
-The team cell carries the logo, the name, and the record, streak and (in a
-points league) the points total on a second line.
+categories, sortable per column, with the reader's own row marked by an accent
+ring on its team badge — see *The rank is a badge and the badge is the scale*
+below, which is also where the 12% accent row wash this sentence used to
+describe went and why. The team cell carries the logo, the name, and the record,
+streak and (in a points league) the points total on a second line.
 
 **A logo is an arbitrary third-party URL and is treated as one.** ESPN lets a
 manager upload anything: the live league carries images on `thespun.com` and
@@ -432,75 +432,116 @@ the same `groups` array (`shown` is its `flatMap`), so the sum is the column
 count by construction. Checked anyway on every state driven: **spans sum to 10
 against 10 category columns and 12 cells a row**.
 
-### The cells are washed by rank, which departs from a documented rule
+### The rank is a badge and the badge is the scale
 
-**More red the better the rank, more blue the worse** — a diverging scale over
-the teams ranked in one category, fading to nothing in the middle.
+**More red the better the rank, more blue the worse, grey in the middle** — a
+diverging scale over the teams ranked in one category. **It is on the chip,
+where it used to wash the whole cell**, and the reader's own row is marked by a
+ring on its team badge where it used to be washed accent-blue across all twelve
+cells. The three changes are one change: there were three colour systems on this
+table and now there is one.
 
-**It is a departure from the research board's rule and is worth saying so
-plainly.** That board's stat columns are deliberately **monochrome** and its
-percentile badges deliberately `--faint`, on the stated grounds that *"colour is
-reserved for state"* — a heat scale there would be a second colour system beside
-the live inning, the postponement and the trend. That rule is right for what it
-governs: a six-hundred-row leaderboard whose job is to be **scanned for names**.
-This table is the other thing. It is **twelve rows read for standing**, it
-carries no live state at all, and where the board says *here is a number, judge
-it* a league table says *here is where you are*. The colour **is** the reading,
-and at this size it is the difference between finding your weak category at a
-glance and reading a hundred and twenty ordinals. The board is untouched.
+**Why the cell wash went.** It had to be a translucent layer over whatever
+ground the row resolved — that is what made it compose with the zebra stripe —
+so it could only ever be faint (22% at its strongest, and 2% either side of the
+middle, where it said nothing at all), and it painted a colour across the
+**value** as well as the rank. A figure tinted by its own standing is the one
+thing a raw number on this page is there to avoid: the whole argument for
+carrying the value beside the rank is that *a rank with no number behind it
+cannot be acted on*, and washing the number is that argument half taken back. On
+the chip the scale can be strong enough to read at a glance and it stops where
+the claim stops — `1st` is red, and the figure beside it is just the figure.
+
+**Why the row wash went with it.** The reader's own row was a 12% accent
+`--cell-bg`, which is one wash too many once every rank cell carries a colour of
+its own: an accent-blue row under a column of blue-to-red badges is two scales
+competing for one reading, and on the cold end of a category the two were very
+nearly the same ink. The team's badge is where the row says who it is anyway —
+the logo, the name and the record are all in those two cells — so the mark goes
+there and the numbers are left to mean one thing. A **ring rather than a
+border**, which is this app's own idiom for exactly this (the live-role ring is
+a 2px `box-shadow` outside a 1px border): every image in the app is
+`border-box`, so a real border would eat 2px out of a 26px badge and shrink the
+picture, where a shadow is drawn outside it and costs the layout nothing. It
+composes with `.lg-logo-none`'s own hairline, so a team with no logo is marked
+as plainly as one with, and the cell's `title` names it in words
+(`… — your team`) since a ring is a thing you see rather than a thing you can
+read.
+
+**The departure from the research board's rule is unchanged and still worth
+saying plainly.** That board's stat columns are deliberately **monochrome** and
+its percentile badges deliberately `--faint`, on the stated grounds that
+*"colour is reserved for state"* — a heat scale there would be a second colour
+system beside the live inning, the postponement and the trend. That rule is
+right for what it governs: a six-hundred-row leaderboard whose job is to be
+**scanned for names**. This table is the other thing. It is **twelve rows read
+for standing**, it carries no live state at all, and where the board says *here
+is a number, judge it* a league table says *here is where you are*. The colour
+**is** the reading, and at this size it is the difference between finding your
+weak category at a glance and reading a hundred and twenty ordinals. The board
+is untouched, and `.col-rank` is still one object in this app — the League table
+adds a fill to it and the two other callers draw it bare.
 
 **It colours the rank and never the value**, which is what makes `lowerBetter`
 need no special case at all: the server has already computed the rank with the
 direction baked in (`rankBy`, 1 is best whichever way the category runs), so a
 3.29 ERA and 232 home runs are both `1st` and both take the deepest red.
-**Ties share a rank and so share a colour** by the same construction — checked
-over every category column of the live board: **2 tie groups, 0 colour
-mismatches**. `n` is the teams *ranked in that category* rather than the twelve
-rows, matching the badge's own denominator, so a team with no figure takes no
-wash any more than it takes a rank.
+**Ties share a rank and so share a colour** by the same construction. `n` is the
+teams *ranked in that category* rather than the twelve rows, matching the
+badge's own denominator, so a team with no figure gets no badge at all any more
+than it gets a rank.
 
-**The wash rides as a background *image* over the cell's own ground**, not as a
-`background`. `--rank-tint` is a flat gradient layer composited over
-`background-color: var(--cell-bg)`, which is what lets the zebra stripe and the
-reader's own 12% accent row show through it rather than being painted out —
-checked, all three grounds resolve underneath (`rgb(11, 18, 32)`,
-`rgb(22, 33, 58)` and the accent mix) with only the layer above them changing.
-The two ends are tokens on `.league-table` rather than on `:root`: this is the
-one surface in the app that reads a diverging scale, and a palette entry would
-invite a second reader to import the argument along with the colour.
+**The fill carries the scale and the text does not**, and that is a measurement
+rather than a preference. Colouring the *text* is the obvious first move — it is
+what the old badge did on top of the wash — and it puts a mid-luminance red on a
+mid-luminance ground: `--rank-hot` on the reddest chip is **3.09:1**, under the
+4.5 an 11px label owes a reader, and no amount of tuning the tint fixes it
+because both ends of the pair move together. `--text` on the same grounds is
+**5.12:1 at its worst and 11.72 at its best**, measured over all 120 badges the
+live board draws. `--panel-2` is the base the tone is mixed into, which is what
+makes the middle of a category a plain neutral chip and the scale pass through
+grey rather than through nothing.
 
-**22% at the ends**, and the scale is symmetric and monotone in the rank —
-measured on the live twelve-team board, `1st` is hot 22% and `12th` cold 22%,
-with 6th and 7th at 2% either side of nothing.
+**48% at the ends**, and the scale is symmetric and monotone in the rank —
+measured on the live twelve-team board, `1st` resolves to `rgb(133, 76, 92)` and
+`12th` to `rgb(60, 100, 158)`, with 6th and 7th within a few points of
+`--panel-2` (`#1b2949`) either side of it. Opaque rather than a
+`color-mix(…, transparent)` layer, unlike the wash it replaces: that one had to
+let the zebra stripe through because it covered a whole cell, where a badge is a
+discrete object and reads as one ink.
 
-**The contrast was checked over every shade the table can produce**, by
-resolving each cell's `color-mix` in the page and compositing it over the ground
-that cell actually resolved (26 distinct shades across plain, zebra and the
-reader's own row). Worst case of all of them: the **value text 9.23:1**, the
-rank badge **4.07:1**, and the `1st` green mark **5.58:1**. The deepest red
-lands on `#3f2732` and the deepest blue on `#263e64`.
+**The `1st`-in-green mark is gone**, and the paragraph it replaces argued for
+keeping it: *it is a different layer from the wash — text over ground — and it
+is the same green the scoreboard's winning category takes, so a reader who has
+learned it on one tab reads it on the other.* That is true and it lost to the
+scale. The scoreboard's rule is right for a card showing **one matchup**, where
+the job is to mark a *winner*; this is twelve teams ranked in one category,
+where the job is to say **where each of them stands**, and a green `1st` inside
+a red-to-blue scale is a third colour system saying what the reddest chip
+already says. First place is marked by being at the end of the scale.
 
-**The rank badge went `--faint` → `--muted`, and the wash is why.** `--faint`
-reads 3.0–3.7:1 on this table's three grounds untinted and would have fallen to
-2.0–2.7 under the scale at its strongest — a legibility loss on the very badge
-the colour is a picture of. `--muted` reads 4.07–6.97 tinted, which is *better*
-than the old badge was on a bare cell. `--faint` remains right on the research
-board, where the badge annotates a number in a six-hundred-row scan; here it is
-half the cell's content.
+**What it costs is 5px a row**, which is the honest price of turning a bare
+second line into a chip: `56.55 → 61.55px`, measured by neutralising the pill's
+own padding and margin in the page and reading the row back. It is the rank cell
+that sets the row height (the team cell's own block is 28.78px inside 24px of
+padding), so the whole of the 5px is the badge and none of it is anything else.
 
-**The `1st`-in-green mark is kept rather than made to give way.** It is a
-different layer from the wash — text over ground — and it is the same green the
-scoreboard's winning category takes, so a reader who has learned it on one tab
-reads it on the other. At 5.58:1 over the reddest cell it is legible, and the
-alternative (weight alone) would have cost the app one mark for two facts.
+**Nothing else about the table moved**, re-measured at 390 / 1200 / 1920 on the
+live twelve-team league: page-body overflow **0** at every width, the badge
+column pinned at **0** with the pane scrolled to its far right, **120 badges on
+12 rows**, the pane bleeding to **0 from both edges**, and no row hover or
+pointer (`cursor: auto`). The reader's own row resolves the ordinary zebra
+ground it shares with everybody else (`rgb(11, 18, 32)` against the striped
+`rgb(22, 33, 58)`) where it used to resolve the accent mix, its badge carries
+`rgb(56, 189, 248) 0 0 0 2px` and no other row's does, and `background-image` on
+a rank cell is **`none`**. Sorting is untouched and was driven rather than
+assumed — one press of `HR` gives ranks `1, 2, 2, 4 … 12` with the tie sharing
+its rank, the group row still drawn and `aria-sort` naming exactly one column.
 
-**Nothing else about the table moved**, measured at 390 / 1200 / 1920 before and
-after: page-body overflow **0**, the badge column pinned at **0**, rows
-**56.55px**, the table **803.08 / 1200 / 1920px**, the pane bleeding to **0 from
-both edges**, and no row hover or pointer (`cursor: auto`). Sorting is untouched
-and was driven rather than assumed — one press of `HR` gives ranks
-`1, 2, 2, 4 … 12` with the tie sharing its rank, the group row still drawn and
-`aria-sort` naming exactly one column.
+**Bundle: 498.60 → 498.59 KB of JS** (147.48 → 147.47 gzipped) and **117.22 →
+117.10 KB of CSS** (20.83 → 20.82) — both *down*, which is what removing a
+per-cell gradient layer, a row-wash rule and a green first-place override costs
+when what replaces them is one pill rule and one ring.
 
 **Sorting is on the rank rather than the value**, which is the one thing this
 table does that the season table did not, and it buys the reader a rule they no
