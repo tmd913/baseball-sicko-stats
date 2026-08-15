@@ -3895,6 +3895,13 @@ export default function App() {
           transactions={transactions}
           transactionsLoading={showTransactionsWait}
           transactionsError={transactionsError}
+          /* The Transactions tab's player rows draw the same identity block the
+             two wide tables do, so they want the same three things: the season
+             roster (for a player's kind and MLB's listed position) and the two
+             maps the ownership read already puts in hand. No read of its own. */
+          players={seasonPlayers}
+          rosterPct={rosterPct}
+          eligibility={eligibility}
           onOpenPlayer={openLeaguePlayer}
           connected={espnConnected}
           onConnect={openEspnSettings}

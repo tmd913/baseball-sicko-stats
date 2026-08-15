@@ -19,13 +19,36 @@
  * name is plain text — `matchMlbPlayer`'s standing rule rather than a new one:
  * an ambiguity neither name nor club resolves is left unmatched rather than
  * guessed, and the row still says what happened.
+ *
+ * **A player row says who he is, not only that he moved**: his headshot, his
+ * club and where his league will let him start him, plus how widely he is
+ * rostered. Which of those four earn a place, and where, is argued at
+ * `PlayerLine` below.
  */
-import { useState } from 'react';
-import type { EspnStandingsTeam, EspnTransaction, EspnTransactionPlayer, EspnTransactions } from '../types';
+import { useMemo, useState } from 'react';
+import type {
+  EspnStandingsTeam,
+  EspnTransaction,
+  EspnTransactionPlayer,
+  EspnTransactions,
+  PlayerKind,
+  SeasonPlayer,
+} from '../types';
+import { eligibleForKind, headshotUrl, positionCell } from '../lib';
 import { LoadingBlock } from './Loading';
+import { PlayerIdentity } from './PlayerIdentity';
 import { TeamLogo } from './LeagueView';
 
 const PAGE_SIZE = 25;
+
+/** What the season roster knows about a transacted player: which board he is on
+ *  and MLB's own word for where he plays. Both are only ever the *fallback* for
+ *  the position cell — a connected league answers with ESPN's eligibility — but
+ *  the kind is what narrows that list to the half this player speaks. */
+interface MlbFacts {
+  kind: PlayerKind;
+  position: string | null;
+}
 
 /**
  * `Today · 9:43 AM`, `Yesterday · 7:21 PM`, `Aug 11 · 12:14 PM`.
@@ -87,17 +110,169 @@ function PlayerName({
   );
 }
 
+/** The headshot, with the initials fallback `OrderPhoto` already extends to one:
+ *  a handful of ids have no image on file, and a broken frame in a list of
+ *  thirty rows is louder than the picture it fails to be. */
+function TxPhoto({ id, name }: { id: number | null; name: string }) {
+  const [failed, setFailed] = useState(false);
+  // A player the join could not place has no id to draw a face from, and the
+  // slot is held rather than dropped: it is what keeps every name in the list
+  // starting at one x, which is the whole reason the move word is a fixed width
+  // two elements to its left.
+  if (id == null || failed) {
+    const initials = name
+      .split(/\s+/)
+      .map((p) => p[0])
+      .slice(0, 2)
+      .join('');
+    return (
+      <span className="lg-tx-photo lg-tx-photo-empty" aria-hidden="true">
+        {initials}
+      </span>
+    );
+  }
+  return (
+    <img
+      className="lg-tx-photo"
+      src={headshotUrl(id)}
+      alt=""
+      loading="lazy"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+/**
+ * One player in one transaction: what happened to him, who he is, and how
+ * widely he is rostered.
+ *
+ * **Three of the four facts are on the row and the fourth is a tooltip**, which
+ * is a judgement about what a *feed* is for rather than a shortage of room. A
+ * reader here is scanning events, so what earns a place is what changes whether
+ * this event matters to them:
+ *
+ * - **The headshot** — recognition, and the app's own way of naming a player
+ *   everywhere else. It is a plain image rather than a second link: the name is
+ *   8px away and is the press, and a 32px target beside it would only be a
+ *   smaller version of the same one, at the cost of a tab stop on every one of
+ *   up to nine players in a trade.
+ * - **The positions** — the single most actionable thing a waiver feed can say
+ *   (*somebody just dropped a shortstop*), and ESPN's own eligibility wherever a
+ *   league is connected, which on this page it always is.
+ * - **The roster %** — how big a deal the move is. A 78%-rostered player being
+ *   dropped is news and a 2% one is noise, and it is four characters,
+ *   right-aligned so it stays out of the scan path down the names.
+ * - **The club** is the cap logo alone, which is `PlayerIdentity`'s own
+ *   sub-line: on a *fantasy* feed it is the least decision-relevant of the four,
+ *   and at 15px of mark with the abbreviation on its tooltip it costs the row no
+ *   text at all. Drawing it as `MIL` beside the positions would have been a
+ *   third string on a line that already carries two.
+ *
+ * **What is deliberately absent is today's status** — the lineup pip and the
+ * `IL10` code the two wide tables put on a headshot. Those come off
+ * `/api/statuses`, which this page does not read, and they answer a question
+ * about *this afternoon* where every row here is dated: a call-up's pip says
+ * nothing about the trade that moved him three weeks ago.
+ */
+function PlayerLine({
+  player,
+  teams,
+  facts,
+  rosterPct,
+  eligibility,
+  onOpenPlayer,
+}: {
+  player: EspnTransactionPlayer;
+  teams: Map<number, EspnStandingsTeam>;
+  facts: Map<number, MlbFacts>;
+  rosterPct: Map<number, number> | null;
+  eligibility: Map<number, string[]> | null;
+  onOpenPlayer: (mlbId: number) => void;
+}) {
+  const mlb = player.mlbId == null ? undefined : facts.get(player.mlbId);
+  const pct = player.mlbId == null ? undefined : rosterPct?.get(player.mlbId);
+  const kind: PlayerKind = mlb?.kind ?? 'batter';
+  const espn = eligibleForKind(
+    player.mlbId == null ? null : eligibility?.get(player.mlbId),
+    kind,
+  );
+  // `lib.ts::positionCell` is the app's one definition of what a position is,
+  // and its pitching *fallback* is `starter` — a fact about how a man has been
+  // used, which a transaction does not carry. So where ESPN has said nothing the
+  // kind is read as a batter's for that one branch, which routes a pitcher to
+  // MLB's own word (`P`) rather than to a guess between SP and RP; where ESPN
+  // *has* spoken, the real kind narrows his list, which is what stops a
+  // mis-joined pitcher reading `2B/SS`.
+  const pos = positionCell({
+    eligible: espn,
+    kind: espn ? kind : 'batter',
+    position: mlb?.position ?? null,
+    starter: false,
+    starterSource: 'off his appearances this season',
+    unknownTitle: (p) => `${p} — MLB's listed position`,
+  });
+
+  const name = (
+    <>
+      <PlayerName player={player} onOpenPlayer={onOpenPlayer} />
+      {/* A trade's direction belongs on the player rather than on the header:
+          which way *he* went is the fact, and in a five-player trade the two
+          teams' names above say nothing about any one of them. */}
+      {player.via === 'trade' && player.toTeamId != null && (
+        <span className="lg-tx-to">
+          to {teams.get(player.toTeamId)?.name ?? `Team ${player.toTeamId}`}
+        </span>
+      )}
+      {player.bid != null && player.bid > 0 && (
+        <span className="lg-tx-bid" title="ESPN's own waiver bid">
+          ${player.bid}
+        </span>
+      )}
+    </>
+  );
+
+  return (
+    <li className={`lg-tx-player lg-tx-${player.move}`}>
+      <span className={`lg-tx-move lg-tx-move-${player.move}`}>{moveLabel(player)}</span>
+      <TxPhoto id={player.mlbId} name={player.name} />
+      {player.mlbId == null ? (
+        // Nothing joined, so there is no club and no eligibility: the row keeps
+        // what it has rather than drawing an identity block of two em dashes.
+        <span className="lg-tx-bare">{name}</span>
+      ) : (
+        <PlayerIdentity teamId={player.mlbTeamId} team={player.team ?? ''} pos={pos}>
+          {name}
+        </PlayerIdentity>
+      )}
+      {pct != null && (
+        <span
+          className="lg-tx-pct"
+          title={`Rostered in ${pct.toFixed(1)}% of all ESPN leagues`}
+        >
+          {pct.toFixed(1)}%
+        </span>
+      )}
+    </li>
+  );
+}
+
 function TransactionRow({
   tx,
   teams,
   myTeamId,
   now,
+  facts,
+  rosterPct,
+  eligibility,
   onOpenPlayer,
 }: {
   tx: EspnTransaction;
   teams: Map<number, EspnStandingsTeam>;
   myTeamId: number | null;
   now: number;
+  facts: Map<number, MlbFacts>;
+  rosterPct: Map<number, number> | null;
+  eligibility: Map<number, string[]> | null;
   onOpenPlayer: (mlbId: number) => void;
 }) {
   const mine = tx.teamIds.includes(myTeamId ?? -1);
@@ -124,24 +299,15 @@ function TransactionRow({
       </div>
       <ul className="lg-tx-players">
         {tx.players.map((p, i) => (
-          <li key={`${p.espnId}-${i}`} className={`lg-tx-player lg-tx-${p.move}`}>
-            <span className={`lg-tx-move lg-tx-move-${p.move}`}>{moveLabel(p)}</span>
-            <PlayerName player={p} onOpenPlayer={onOpenPlayer} />
-            {/* A trade's direction belongs on the player rather than on the
-                header: which way *he* went is the fact, and in a five-player
-                trade the two teams' names above say nothing about any one of
-                them. */}
-            {p.via === 'trade' && p.toTeamId != null && (
-              <span className="lg-tx-to">
-                to {teams.get(p.toTeamId)?.name ?? `Team ${p.toTeamId}`}
-              </span>
-            )}
-            {p.bid != null && p.bid > 0 && (
-              <span className="lg-tx-bid" title="ESPN's own waiver bid">
-                ${p.bid}
-              </span>
-            )}
-          </li>
+          <PlayerLine
+            key={`${p.espnId}-${i}`}
+            player={p}
+            teams={teams}
+            facts={facts}
+            rosterPct={rosterPct}
+            eligibility={eligibility}
+            onOpenPlayer={onOpenPlayer}
+          />
         ))}
       </ul>
     </li>
@@ -152,14 +318,33 @@ export default function LeagueTransactions({
   data,
   loading,
   error,
+  players,
+  rosterPct,
+  eligibility,
   onOpenPlayer,
 }: {
   data: EspnTransactions | null;
   loading: boolean;
   error: string | null;
+  /** The season roster the header search already holds — read for the *kind* a
+   *  player is and MLB's own listed position, which are the two things the
+   *  position cell falls back to where ESPN has said nothing. First entry wins,
+   *  which is `App.tsx::openLeaguePlayer`'s own rule for a two-way player. */
+  players: SeasonPlayer[];
+  /** Both off the `/api/espn/ownership` response App already holds for the
+   *  research board — no read of this tab's own, and null before it lands. */
+  rosterPct: Map<number, number> | null;
+  eligibility: Map<number, string[]> | null;
   onOpenPlayer: (mlbId: number) => void;
 }) {
   const [shown, setShown] = useState(PAGE_SIZE);
+  const facts = useMemo(() => {
+    const map = new Map<number, MlbFacts>();
+    for (const p of players) {
+      if (!map.has(p.id)) map.set(p.id, { kind: p.kind, position: p.position });
+    }
+    return map;
+  }, [players]);
 
   if (error && !data) {
     return (
@@ -201,13 +386,22 @@ export default function LeagueTransactions({
             teams={teams}
             myTeamId={data.myTeamId}
             now={now}
+            facts={facts}
+            rosterPct={rosterPct}
+            eligibility={eligibility}
             onOpenPlayer={onOpenPlayer}
           />
         ))}
       </ul>
       {rest > 0 && (
-        <button type="button" className="load-more" onClick={() => setShown((n) => n + PAGE_SIZE)}>
-          Load more · {rest} older
+        // The app has one Load-more button and this is it: `.lg-tx-more` is
+        // folded onto the feed's own rule rather than restyled to resemble it,
+        // count badge and all. It had been an unstyled `.load-more`, which no
+        // rule in the stylesheet answered — a bare browser button at the foot of
+        // the one tab that is a stream.
+        <button type="button" className="lg-tx-more" onClick={() => setShown((n) => n + PAGE_SIZE)}>
+          Load more
+          <span className="lg-tx-more-count">{rest}</span>
         </button>
       )}
       {/* What the list *is*, said when it is at the server's own limit rather

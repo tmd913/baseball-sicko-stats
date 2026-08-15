@@ -8778,7 +8778,8 @@ body {
 /* "Load more" under the Recent section — the stream shows a page at a time, so
    a long day doesn't mount hundreds of at-bat cards at once. The count is
    what's still below it. */
-.feed-more {
+.feed-more,
+.lg-tx-more {
   align-self: center;
   display: inline-flex;
   align-items: center;
@@ -8795,15 +8796,18 @@ body {
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
 }
-.feed-more:hover {
+.feed-more:hover,
+.lg-tx-more:hover {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 10%, var(--bg-2));
 }
-.feed-more:focus-visible {
+.feed-more:focus-visible,
+.lg-tx-more:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-.feed-more-count {
+.feed-more-count,
+.lg-tx-more-count {
   background: rgba(56, 189, 248, 0.18);
   color: var(--accent);
   border-radius: 999px;
@@ -10945,6 +10949,12 @@ body {
 .lg-transactions {
   max-width: var(--card-column);
   margin: 0 auto;
+  /* A column so the Load-more button's `align-self: center` resolves against
+     something — the same shape `.feed-section` gives the stream this tab
+     borrows its paging idiom from. */
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 .lg-tx-list {
   list-style: none;
@@ -11015,13 +11025,66 @@ body {
   flex-direction: column;
   gap: 4px;
 }
+/* A player row is the move, his face, the identity block every other table in
+   the app draws him with, and his roster % at the far end. It does **not**
+   wrap: the block ellipsizes instead, which is what keeps a nine-player trade a
+   list of nine rows rather than of nine paragraphs. */
 .lg-tx-player {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
   font-size: 13px;
   min-width: 0;
+}
+/* The block is `PlayerIdentity`'s, unscoped and shared with the summary table
+   and the research board — see `components/PlayerIdentity.tsx`. What this
+   caller adds is the two things a *row in a feed* needs of it: room to shrink,
+   and a name line that carries the trade direction and the waiver bid beside
+   the name without any of the three pushing the others out of the row. */
+.lg-tx-player .row-id {
+  min-width: 0;
+}
+.lg-tx-player .row-id-name,
+.lg-tx-bare {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+/* The headshot: 32px against the wide tables' 42, this being a list of events
+   read down rather than a roster read across, and the block beside it is 31px
+   tall — so the circle and the two lines are the same height and the row is as
+   short as its contents allow. */
+.lg-tx-photo {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: top center;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+}
+.lg-tx-photo-empty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--faint);
+}
+/* ESPN's global rostered percentage — how big a deal the move is. Muted and
+   right-aligned, so it is there to be read off a row rather than in the way of
+   scanning the names. */
+.lg-tx-pct {
+  margin-left: auto;
+  flex: none;
+  padding-left: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 /* The word for the move, in a fixed-width slot so the names under one another
    start at one x — the same arithmetic the summary table's fantasy slot chip
@@ -11071,10 +11134,12 @@ body {
   text-decoration: none;
 }
 .lg-tx-to {
+  flex: none;
   font-size: 12px;
   color: var(--muted);
 }
 .lg-tx-bid {
+  flex: none;
   font-size: 11px;
   font-weight: 700;
   color: var(--faint);
