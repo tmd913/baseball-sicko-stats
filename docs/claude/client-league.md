@@ -343,9 +343,9 @@ whole reason the period arrows belong to the Scoreboard — and a span labelled
 `Current matchup` that silently followed somebody else's arrows would be a label
 that is false as often as it is true. Which week it is, is printed under the tabs.
 
-**Where the four spans come from, which two are ESPN's own and which two are
-summed, and the `first + second ≠ season` wart** are all in **ESPN fantasy
-league**, *The Rankings tab, and the four spans*. The one thing worth repeating
+**Where the five spans come from, which are ESPN's own and which are summed,
+and why the halves are the regular season alone** are all in **ESPN fantasy
+league**, *The Rankings tab, and the five spans*. The one thing worth repeating
 here is the last of those, because a reader can see it: the two halves add up to
 the season for the four teams in the winners' bracket and fall short by their
 live week for the other eight, and `season` is kept as **ESPN's own figure**
@@ -419,8 +419,12 @@ it.** The board makes this trade explicitly — it pins the 42px headshot at eve
 width and only pins the *name* column from 820px up, on the grounds that below
 that the pinned pair would eat two fifths of the screen. Uncapped, the longest
 team name here took the column to **257px of a 390px phone**, two thirds of it,
-leaving two categories reachable. Capped at 168 on a phone and ellipsized, the
-logo, the name and the record all still read and **four** categories fit.
+leaving two categories reachable. Now the pinned column is the badge alone and
+**the name is neither capped nor ellipsized**: it scrolls with the stats it is
+being compared against, so it costs the reader nothing but the scrolling they
+are already doing, and `Brian&Tom's Excellent Adventure` reading
+`Brian&Tom's Excellent…` is the one thing a league table must not do — the row
+*is* the team. Measured: 0 of 12 names truncated at either width.
 
 **Measured after, at 1200×900 and 390×844:**
 
@@ -480,6 +484,41 @@ one: `BaseballMark`'s own shape in `--faint`, so the default sits in the same
 vocabulary as the roster mark and the spinner rather than importing a silhouette
 from somewhere else. The abbreviation is not lost — it rides on the cell's
 `title` with the name and the record.
+
+### Four spacing and shape faults, and where each came from
+
+Reported together after the rebuild, and each has its own cause rather than a
+shared one.
+
+**The pinned bar had a 14px strip of page above it, which no other view shows.**
+`.app.league-rank-mode` is a fixed-height column with `overflow: hidden`, and
+this stylesheet already records what that does to a sticky child: it makes the
+column a scrollport of its own, and a sticky box in one is held against its
+**padding** box, which undoes the chrome's negative top margin. The two views
+that were fixed-height before this opt out of sticky explicitly for exactly that
+reason (`.app.summary-mode .app-chrome, .app.research-mode .app-chrome`), and
+the new mode simply had not joined the list. Measured: the bar sat at **y=14** on
+Rankings against **y=0** on Research and Roster, and joining the list puts it at
+0. Worth noting as a maintenance hazard — that rule is a list of modes, and a
+mode added anywhere else in the app has to be added to it too.
+
+**The caption had no air above it.** It is the first thing under the bar and
+carried a bottom margin only, so it sat against the bar's own hairline as
+though it were part of the chrome rather than the table's caption. `10px` on
+top; measured 24px below the chrome and 16px above the pane once the strip
+above went.
+
+**The badge column had no gutter on its right.** It was given `padding-right: 0`
+when it still held the whole identity block and the name sat beside the badge
+inside the cell; with the name in its own column that put the image hard against
+the column boundary, which on a pinned column reads as the picture having been
+clipped. It takes the table's own gutter on both sides now — measured 22.8px at
+1200 and 7.41px at 390, symmetric.
+
+**The team name was truncated.** See the passage above: the cap and the ellipsis
+were bought when the name was *pinned* and every pixel of it was paid for out of
+the categories held beside it. That argument died with the pin and the rules
+outlived it.
 
 ### The span strip is in the tab row, and its caption is on the table
 
@@ -609,12 +648,12 @@ Driven against the built client and the live 2026 league at **390×844 and
   ERA · SB · WHIP · K · OPS · SVHD`; the pane bleeds to **0 from both edges**;
   the team column pins at **0** with the pane scrolled to its far right; rows are
   **58.55px** and the header row **36.00** at every width.
-- **The four spans read**: `Season` (`ESPN's own season line`), `Current matchup`
+- **The five spans read**: `Season` (`ESPN's own season line`), `Current matchup`
   (`Week 19 · Aug 10 – Aug 15 · so far`), `First half` (`Weeks 1–15 · Mar 25 –
   Jul 19`) and `Second half` (`Weeks 16–19 · Jul 20 – Aug 15 · so far`), each
   writing its own `lspan=`.
 - **The ranks were recomputed independently** from the values the route ships,
-  over all four spans: **480 of 480 cells match, 87 of them tied.**
+  over all five spans: **600 of 600 cells match, 0 wrong, 73 of them tied.**
 - **Transactions**: 25 rows on the first page of 250, `Load more · 225 older`
   taking it to 50, **7 of the 25 the reader's own**, and 42 of 42 names links.
   Pressing one opens `?player=pitcher-676775` with `Keaton Winn` in the `<h1>`,

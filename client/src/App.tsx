@@ -1003,7 +1003,11 @@ export default function App() {
   });
   const [rankSpan, setRankSpan] = useState<EspnRankSpan>(() => {
     const raw = initialParams.get('lspan');
-    return raw === 'matchup' || raw === 'first' || raw === 'second' || raw === 'season'
+    return raw === 'season' ||
+      raw === 'matchup' ||
+      raw === 'first' ||
+      raw === 'second' ||
+      raw === 'playoffs'
       ? raw
       : 'season';
   });

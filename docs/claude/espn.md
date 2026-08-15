@@ -433,13 +433,13 @@ period **1.7ms** warm in memory. A period the league has no row for falls back
 to the current one rather than answering with an empty board the reader could
 not explain (checked: `?period=999` → 19).
 
-### The Rankings tab, and the four spans
+### The Rankings tab, and the five spans
 
 **The season table the League page opened with was the raw values, and a value
 is only half of what a manager wants from it.** 232 home runs is a lot or a
 little depending on the eleven numbers beside it, and the reader was doing that
 comparison by eye down a column of twelve. `getRankings` answers with the figure
-*and* where it stands, over one of four spans — and the whole of the work was
+*and* where it stands, over one of five spans — and the whole of the work was
 establishing which of those four could be answered honestly.
 
 **ESPN will not aggregate a stat over a span, and every way of asking was
@@ -470,7 +470,7 @@ the season line while the consolation ladder's are not yet counted. Every team
 is reproduced by *some* prefix, to machine precision, which is what makes the
 summation trustworthy.
 
-**So all four spans are served and none is faked.** `matchup` and `season` are
+**So all five spans are served and none is faked.** `matchup` and `season` are
 **ESPN's own numbers** — the current period's `scoreByStat` and `valuesByStat`
 respectively — and the two halves are ours; where ESPN publishes a figure this
 reads it, and it computes only where ESPN publishes nothing. What *is* refused
@@ -479,14 +479,47 @@ average, runs created): `DERIVED` names the stat ids each rate needs and a span
 missing any one of them yields **null**, which the client dashes rather than
 summing a rate as though it were a count.
 
-**`first + second` is not `season` for eight of the twelve teams, and the cause
-is the quirk above rather than the arithmetic.** Measured through the route: it
-matches exactly for the four winners'-bracket teams and is short by their live
-week for the other eight (`Swag` reads 676 runs on the season against 704 over
-the two halves). `season` is kept as ESPN's own figure deliberately — it is the
-number the manager sees on ESPN's site and the number the old table drew — and
-each half states the weeks and days it covers, and says `so far` where it
-reaches into the week being played.
+**The halves are the *regular season*, and a fifth span carries the bracket.**
+The spans were four and the two halves were cut over every period the schedule
+carried — which on the checked league meant period 19, **the first playoff
+round and already being played**, was landing in "Second half" and being counted
+as regular-season play. ESPN says where the regular season ends and the schedule
+does not: `settings.scheduleSettings.matchupPeriodCount` is **18** on that league
+against a schedule running to 21 (`playoffMatchupPeriodLength: 2`,
+`playoffTeamCount: 6`), and period 19's matchups carry
+`playoffTierType: WINNERS_BRACKET | LOSERS_CONSOLATION_LADDER` where 18 and
+below carry `NONE`. So `halvesOf` takes `regularPeriods` and filters to it, and
+**`playoffs`** is the periods past it that the schedule actually carries — 19
+today, growing to 21 as the bracket is played, so a round nobody has reached is
+absent rather than offered empty.
+
+**The order is `Season · Current matchup · First half · Second half ·
+Playoffs`**, which is the order a manager reads them in: the whole year, then
+the week being played, then the year cut up. `season` is also the default.
+
+**`current` is ESPN's own pointer now**, not "the last period the schedule
+mentions". Those agree today only because the rounds past the current one are
+not scheduled yet; the day they are, the last one would be a round nobody has
+played. `status.currentMatchupPeriod` is read where present, with the old
+derivation as the fallback.
+
+**Every team's spans now add up, and the residue has an exact cause.** Measured
+through the route over all seven counting categories, each of the twelve teams
+falls into one of exactly two cases and **none is unexplained**:
+
+- **The four winners'-bracket teams**: `first + second + playoffs == season`.
+- **The eight consolation teams**: `first + second == season` — ESPN's own
+  season figure does **not** count their live playoff week.
+
+That is the same quirk the old note recorded as "`first + second` is not
+`season` for eight of the twelve teams", stated precisely instead of as a wart:
+ESPN counts playoff-week play in `valuesByStat` only for teams still in the
+winners' bracket. `season` is kept as ESPN's own figure deliberately — it is the
+number the manager sees on ESPN's site — and each span states the weeks and days
+it covers, and says `so far` where it reaches into the week being played.
+`matchup` and `playoffs` are identical while 19 is the only playoff round
+(checked: 12 of 12 teams), which is a fact about the calendar rather than a
+duplication — they diverge the moment round 20 is played.
 
 **The halves are cut on the All-Star break, read off ESPN's own calendar.**
 `fetchPeriodAnchor` already downloads `proTeamSchedules_wl` and now reduces it
@@ -520,8 +553,8 @@ ranking, 1 is best whichever way the category runs, ties share a rank and the
 next distinct figure skips — `teamStats.ts::rankAll`'s convention. A team with
 no figure is **out of the ranking entirely** rather than at the bottom of it,
 the rule `sideFrom` already follows for a category a side is ineligible for.
-Checked against an independent recompute over all four spans: **480 of 480 cells
-match, with 87 tied cells among them.**
+Checked against an independent recompute over all **five** spans: **600 of 600
+cells match, 0 wrong, with 73 tied cells among them.**
 
 **Caching is this file's own two rules.** A span whose last matchup period is
 **over** cannot change, so it takes a storage blob read with no freshness test —
