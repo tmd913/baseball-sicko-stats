@@ -110,35 +110,74 @@ function PlayerName({
   );
 }
 
-/** The headshot, with the initials fallback `OrderPhoto` already extends to one:
- *  a handful of ids have no image on file, and a broken frame in a list of
- *  thirty rows is louder than the picture it fails to be. */
-function TxPhoto({ id, name }: { id: number | null; name: string }) {
+/**
+ * The headshot, with the initials fallback `OrderPhoto` already extends to one:
+ * a handful of ids have no image on file, and a broken frame in a list of
+ * thirty rows is louder than the picture it fails to be.
+ *
+ * **It opens his page, which reverses what stood here.** The argument was that
+ * "the name is 8px away and is the press, so a 32px target beside it would only
+ * be a smaller version of the same one, at the cost of a tab stop on every one
+ * of up to nine players in a trade". The first half of that is true of every
+ * table in the app and is not how any of them is built: the summary table's
+ * `PhotoCell`, the research board's and the feed's `FeedHeadshot` all wrap the
+ * circle in its own button beside a name that opens the same page, because a
+ * face is the thing a reader aims at when scanning a list of people. A row that
+ * looks like every other row in the app and is the one that does not answer a
+ * press is worse than a duplicated target.
+ *
+ * The tab-stop cost is real and is what it is everywhere else: `aria-label`
+ * names it the way `sum-photo-wrap` and `feed-photo-link` name theirs, so a
+ * screen reader hears two routes to one page rather than an unnamed control.
+ *
+ * A player the join could not place stays a plain mark, which is `PlayerName`'s
+ * own rule one element to the right: there is no page to open, so there is
+ * nothing to press.
+ */
+function TxPhoto({
+  id,
+  name,
+  onOpenPlayer,
+}: {
+  id: number | null;
+  name: string;
+  onOpenPlayer: (mlbId: number) => void;
+}) {
   const [failed, setFailed] = useState(false);
-  // A player the join could not place has no id to draw a face from, and the
-  // slot is held rather than dropped: it is what keeps every name in the list
-  // starting at one x, which is the whole reason the move word is a fixed width
-  // two elements to its left.
-  if (id == null || failed) {
-    const initials = name
-      .split(/\s+/)
-      .map((p) => p[0])
-      .slice(0, 2)
-      .join('');
-    return (
+  // The slot is held rather than dropped for a player with no id and for one
+  // whose image is missing: it is what keeps every name in the list starting at
+  // one x, which is the whole reason the move word is a fixed width two
+  // elements to its left.
+  const initials = name
+    .split(/\s+/)
+    .map((p) => p[0])
+    .slice(0, 2)
+    .join('');
+  const face =
+    id == null || failed ? (
       <span className="lg-tx-photo lg-tx-photo-empty" aria-hidden="true">
         {initials}
       </span>
+    ) : (
+      <img
+        className="lg-tx-photo"
+        src={headshotUrl(id)}
+        alt=""
+        loading="lazy"
+        onError={() => setFailed(true)}
+      />
     );
-  }
+  if (id == null) return face;
   return (
-    <img
-      className="lg-tx-photo"
-      src={headshotUrl(id)}
-      alt=""
-      loading="lazy"
-      onError={() => setFailed(true)}
-    />
+    <button
+      type="button"
+      className="lg-tx-photo-link"
+      title={`Open ${name}'s page`}
+      aria-label={`Open ${name}'s page`}
+      onClick={() => onOpenPlayer(id)}
+    >
+      {face}
+    </button>
   );
 }
 
@@ -152,10 +191,9 @@ function TxPhoto({ id, name }: { id: number | null; name: string }) {
  * this event matters to them:
  *
  * - **The headshot** — recognition, and the app's own way of naming a player
- *   everywhere else. It is a plain image rather than a second link: the name is
- *   8px away and is the press, and a 32px target beside it would only be a
- *   smaller version of the same one, at the cost of a tab stop on every one of
- *   up to nine players in a trade.
+ *   everywhere else, which is why it **opens his page** as the circle does on
+ *   the summary table, the research board and the feed. See `TxPhoto`, which is
+ *   where that reverses the "plain image" this used to be and says why.
  * - **The positions** — the single most actionable thing a waiver feed can say
  *   (*somebody just dropped a shortstop*), and ESPN's own eligibility wherever a
  *   league is connected, which on this page it always is.
@@ -234,7 +272,7 @@ function PlayerLine({
   return (
     <li className={`lg-tx-player lg-tx-${player.move}`}>
       <span className={`lg-tx-move lg-tx-move-${player.move}`}>{moveLabel(player)}</span>
-      <TxPhoto id={player.mlbId} name={player.name} />
+      <TxPhoto id={player.mlbId} name={player.name} onOpenPlayer={onOpenPlayer} />
       {player.mlbId == null ? (
         // Nothing joined, so there is no club and no eligibility: the row keeps
         // what it has rather than drawing an identity block of two em dashes.
