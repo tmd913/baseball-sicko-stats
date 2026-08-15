@@ -63,6 +63,14 @@ import { Modal } from './Modal';
  * are what a reader opened the page *for*, and putting either behind a press
  * would be hiding the answer to the question being asked.
  *
+ * **What the live entry leaves behind depends on the kind, and for a while it
+ * didn't.** A batter's live item is the at-bat in progress, which is never one
+ * of the completed plays, so his game keeps its card and the two are
+ * complementary. A pitcher's live item is his *whole outing* — the same
+ * `FeedItem` the stream carries — so the game it comes from must lose its card
+ * entirely, or the same line and the same status badge are drawn twice, an inch
+ * apart, on the tab the page opens on. See `livePitching` below.
+ *
  * **Narrowed to one game (`gamePk`) there is no card at all** — the Game Log's
  * popup and a card's own dialog are already boxes about that game, so drawing a
  * card inside one would be a press to reach the only thing on screen.
@@ -109,8 +117,20 @@ export function PlayerDay({
   // pitch — matchup, the SP chip, the other side's announced starter, first
   // pitch — and a card over it would say the matchup twice.
   const scheduled = new Set(upcoming.map((u) => u.game.gamePk));
+  // And the game a **pitcher's** live item is drawn from gets no section
+  // either, for the same reason one level in: his live item *is* that outing,
+  // where a batter's is the at-bat in progress and his card holds the plays
+  // that are already done. `playerDayEntries` has kept the pinned outing out of
+  // `entries` since it was written (its own `pinned`); the *card* here is built
+  // off `report.games` rather than off the entries, so it never saw the guard —
+  // and drew the same line, the same badge and the same matchup a second time
+  // directly under the live bar. Under a `gamePk` it was worse than a
+  // duplicate: with the entry filtered away the section had nothing in it, so
+  // the Game Log's popup read `Not in the game yet.` beneath a bar saying he was
+  // on the mound.
+  const livePitching = live && isPitcher && live.game.pitching ? live.game.gamePk : null;
   const sections = games
-    .filter((g) => !scheduled.has(g.gamePk))
+    .filter((g) => !scheduled.has(g.gamePk) && g.gamePk !== livePitching)
     // Read forwards: a day is one afternoon start to finish, so the first game
     // of a doubleheader leads. See `byPlayOrder` for the same argument applied
     // to the plays inside one.
@@ -125,14 +145,20 @@ export function PlayerDay({
     <div className="player-day">
       {/* The live entry sits above the games rather than inside one: it is the
           "happening now" item and the most important row on the page, where
-          filing it behind a card would bury it. The game it belongs to still
-          gets its card for the plays already completed. */}
+          filing it behind a card would bury it. For a **batter** the game it
+          belongs to still gets its card, which holds the plays already
+          completed in it; a **pitcher's** live item is his whole outing, so
+          that game has no card at all — see `livePitching` above. */}
       {live &&
         (isPitcher && live.game.pitching ? (
           <FeedItem
             entry={{ type: 'pitching', report, game: live.game }}
             onOpenDetails={open}
             grouped
+            /* Narrowed to one game, the box is already about this outing, so
+               the innings read here rather than behind a second press — the
+               same rule `PlayerDayGameFeed` states for a finished one. */
+            detailInline={oneGame}
           />
         ) : (
           <LiveEntry
