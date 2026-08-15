@@ -3609,16 +3609,27 @@ export default function App() {
       {showViewToggle && (
         <div className="view-bar">
           <div className="view-bar-tabs">
+            {/* **The whole tablist waits on `initialLoadSettled`, element and
+                all** — see where it's computed. It is drawn all at once rather
+                than a pill at a time, since Research needs no roster and has
+                nothing else gating it, and showing it a beat before its
+                siblings is exactly the flicker this waits out.
+
+                The gate is on the `<div>` rather than inside it, and that is
+                the whole of a fix rather than a detail: `.view-switch` is a
+                *segmented control*, so it carries a `--panel` ground, a border,
+                a 12px radius and `min-height: var(--control-h)` of its own.
+                Empty, it drew all of that around nothing — an **8 × 36px** nub
+                (3px of padding a side plus the border) sitting at the left of
+                the chrome for the whole of the first read, which reads as a
+                broken control rather than as a bar that has not filled in yet.
+                It also put an empty `role="tablist"` in the accessibility tree.
+                Nothing else in `.view-bar-tabs` is affected — the kind tabs,
+                the roster row's own controls and the research board's chrome
+                are gated on their own conditions and none of them depends on
+                the report. */}
+            {initialLoadSettled && (
             <div className="view-switch" role="tablist" aria-label="Page">
-              {/* The pills themselves wait on `initialLoadSettled` — see where
-                  it's computed. Before that, this tablist is empty rather than
-                  showing Research alone: Research needs no roster and so has
-                  nothing else gating it, and drawing it a beat before its
-                  siblings is exactly the flicker this waits out. Everything
-                  else in `.view-bar-tabs` (the kind tabs, the roster row's own
-                  controls, the research board's own chrome) is untouched,
-                  since none of it depends on the report either. */}
-              {initialLoadSettled && (
               <>
               {/* Nothing watched, nothing to put on either roster page — so
                   these two pills only appear once there is something to read. */}
@@ -3687,8 +3698,8 @@ export default function App() {
                 </button>
               )}
               </>
-              )}
             </div>
+            )}
             {/* Batters / Pitchers. */}
             {isRosterView(view) && kindTabs}
             {/* Scoreboard / Rankings / Transactions. */}
