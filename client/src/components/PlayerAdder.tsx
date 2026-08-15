@@ -242,7 +242,7 @@ export function PlayerAdder({
       )}
       {focused && query.trim() && matches.length === 0 && (
         <ul className="adder-menu">
-          <li className="adder-none">No players match \u201c{query}\u201d.</li>
+          <li className="adder-none">No players match &ldquo;{query}&rdquo;.</li>
         </ul>
       )}
     </div>
