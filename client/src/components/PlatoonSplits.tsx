@@ -17,9 +17,17 @@ import type { PitcherSeasonStats, SeasonStats } from '../types';
  * it toward the side he is *better* against, and its length is the size of that
  * edge measured against `full` — **the 90th percentile of that stat's real
  * platoon gaps**, measured rather than guessed (see the two tables below). So a
- * full bar means one thing on every row — *a top-decile split in this stat* —
- * and two rows of different stats are readable against each other, which is the
- * whole reason the rail is not scaled to each player's own numbers.
+ * full bar means one thing on every row — *one of the biggest splits in the
+ * league in this stat* — and two rows of different stats are readable against
+ * each other, which is the whole reason the rail is not scaled to each player's
+ * own numbers.
+ *
+ * **The key says that in those words rather than in the percentile's.** It used
+ * to read *"a gap bigger than nine players in ten have in that stat"*, which is
+ * the same fact stated as the statistic it is drawn from and lands as a riddle:
+ * a reader wants to know whether a long bar is a big split, not what quantile
+ * the rail's end sits at. Nothing about `full` moved — the two tables below are
+ * the same measured numbers — only the sentence explaining them.
  *
  * ### The fill can never exceed its half of the rail
  *
@@ -52,10 +60,11 @@ import type { PitcherSeasonStats, SeasonStats } from '../types';
  * centre line, where the cap's ink has already receded 1.76px, so at 3px it had
  * 1.24px of rail beside it against its own midline's 3px and read as a bar
  * running out of its rail with the corner cut off. **Every outer cap is round
- * now** (see `over` below), and a round cap is the case the 3px was chosen for in
- * the first place — so the exception is retired, the two tokens are one again,
- * and every bar is 2px longer than it was. The inset is the stylesheet's, so the
- * geometry and the length written here cannot drift apart.
+ * now** — a clamped bar draws exactly like one at full scale (see `over` below)
+ * — and a round cap is the case the 3px was chosen for in the first place, so
+ * the exception is retired, the two tokens are one again, and every bar is 2px
+ * longer than it was. The inset is the stylesheet's, so the geometry and the
+ * length written here cannot drift apart.
  *
  * **The inner end is flat**, which is a later round and the opposite end of the
  * bar rather than a reversal of the one above. A bar anchored at a centre has to
@@ -183,9 +192,9 @@ function railFraction(gap: number, full: number): number {
  * .090, SLG .204 → .200, ISO .140, HR% 3.34 → 3.5, K% 8.51 → 8.5, BB% 6.61 →
  * 6.5. (The medians, for scale, are .101 of OPS and 3.3 points of K% — so the
  * ordinary platoon split fills about a third of the rail and the rail's end is
- * a real place rather than a decoration.) A gap past `full` clamps and squares
- * off its outer end to say it has: about one qualified hitter in ten does that
- * on any given row, by construction.
+ * a real place rather than a decoration.) A gap past `full` clamps — about one
+ * qualified hitter in ten does on any given row, by construction — and says so
+ * in the row's own tooltip and nowhere else; see `over` in `SplitRow`.
  */
 const BATTER_STATS: SplitStat<SeasonStats>[] = [
   {
@@ -448,9 +457,8 @@ function SplitsKey() {
         further it runs, the bigger the split.
       </p>
       <p>
-        A full bar is a gap bigger than nine players in ten have in that stat. It carries a
-        <span className="spl-key-chevron" aria-hidden="true" /> at its end when the real gap is
-        bigger still than the rail can draw.
+        A full bar is one of the biggest splits in the league for that stat. Each stat has its own
+        scale, so a long OPS bar and a long K% bar mean the same thing.
       </p>
     </InfoKey>
   );
@@ -486,14 +494,21 @@ function SplitRow<T>({
   const leftStronger = both ? (stat.lowerBetter ? l < r : l > r) : false;
   const gap = both ? Math.abs(l - r) : 0;
   const frac = railFraction(gap, stat.full);
-  // Clamped, and so marked. Read off `frac` rather than off `gap > stat.full`
-  // again, so the mark and the length can never disagree about whether the bar
-  // ran out of rail — and so an input `railFraction` refused cannot mark a bar
-  // of no length. What the mark *is* changed: it used to be a squared-off outer
-  // end, and is now a chevron knocked out of the fill just inside its tip. The
-  // **outer** cap stays round on every bar, which is what lets the inset go back
-  // to the sides' own — see the note at the top of this file. (The *inner* cap is
-  // flat, and is no business of the clamp's: that end is the zero, not the tip.)
+  // Clamped, and so said in the row's own tooltip — and nowhere else. Read off
+  // `frac` rather than off `gap > stat.full` again, so the sentence and the
+  // length can never disagree about whether the bar ran out of rail, and so an
+  // input `railFraction` refused cannot flag a bar of no length.
+  //
+  // **It is not drawn.** A clamped bar used to square its outer end off, and
+  // then to carry a chevron knocked out just inside the tip; both were the same
+  // claim — *this bar is not the real number* — and both were complained about.
+  // The reason the mark loses is the two figures printed either side of the
+  // rail: the precision the picture gives up is spelled out ten pixels away, so
+  // the mark was decorating a loss the reader could already read off the row.
+  // And what a full bar *says* is true of a clamped one too — one of the
+  // biggest splits in the league for that stat — so the two reading alike is
+  // not a lie the reader has to be warned about. See
+  // `docs/claude/client-player-page.md`, *The clamp is a sentence, not a mark*.
   const over = frac === 1 && gap > stat.full;
   // The rail's half, less the inset the fill is nested by: a full bar then lands
   // inside the rail's cap rather than on its box, which is a different place.
@@ -510,9 +525,11 @@ function SplitRow<T>({
         ? ': dead even.'
         : `: ${stat.gapText(gap)} better ${leftStronger ? leftLabel : rightLabel}` +
           (stat.lowerBetter ? ' (lower is better).' : '.')) +
-      // A clamped row says so in words as well as with the chevron, which is a
-      // mark a reader meets before they have read the key behind the ⓘ.
-      (bars && over ? " Bigger than the rail's full scale, so the bar stops at the end." : '') +
+      // A clamped row says so here and nowhere else — see `over` above. Plainer
+      // than the rail it used to name: the reader has the two figures beside
+      // the bar, so what they need is that the picture stopped, not what it
+      // stopped against.
+      (bars && over ? ' Bigger than the bar can show, so it stops at the end.' : '') +
       (bars ? (thin ? ' Sample too thin to lean on.' : '') : ' Sample too thin to draw a bar.')
     : // Two different absences, and the row says which. A side with no split
       // object at all is a man who has not faced that hand; a side that has one
@@ -534,9 +551,7 @@ function SplitRow<T>({
         {both && bars && (
           <span
             className={
-              `spl-fill spl-fill--${leftStronger ? 'l' : 'r'}` +
-              (thin ? ' spl-fill--thin' : '') +
-              (over ? ' spl-fill--over' : '')
+              `spl-fill spl-fill--${leftStronger ? 'l' : 'r'}` + (thin ? ' spl-fill--thin' : '')
             }
             style={leftStronger ? { right: '50%', width } : { left: '50%', width }}
           />
