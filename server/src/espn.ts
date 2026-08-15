@@ -2131,7 +2131,13 @@ interface EspnScoreboardResponse {
      *  both turn on, and one the schedule alone cannot make. */
     scheduleSettings?: { matchupPeriodCount?: number };
   };
-  status?: { currentMatchupPeriod?: number };
+  status?: {
+    currentMatchupPeriod?: number;
+    /** The scoring period ESPN is *on*. Load-bearing rather than decorative:
+     *  a matchup's `cumulativeScore` covers every scoring period of the week
+     *  **except** this one — see `scoringPeriodTotals`. */
+    latestScoringPeriod?: number;
+  };
   teams?: {
     id: number;
     name?: string;
@@ -2172,6 +2178,25 @@ interface EspnScheduleSide {
     losses?: number;
     ties?: number;
     scoreByStat?: Record<string, { score?: number; ineligible?: boolean }> | null;
+  } | null;
+  /** The lineup as it stands on the scoring period the request named, each
+   *  player carrying his stat line for that one day. Empty on a request that
+   *  names no day (`scoringPeriodId=0`), which is exactly why the live read
+   *  below has to name one. */
+  rosterForCurrentScoringPeriod?: {
+    entries?: {
+      lineupSlotId?: number;
+      playerPoolEntry?: {
+        player?: {
+          stats?: {
+            scoringPeriodId?: number;
+            statSourceId?: number;
+            statSplitTypeId?: number;
+            stats?: Record<string, number> | null;
+          }[];
+        };
+      };
+    }[];
   } | null;
 }
 
@@ -2221,6 +2246,10 @@ interface LeagueMeta {
   regularPeriods: number | null;
   /** The period being played, off ESPN's own pointer. */
   currentPeriod: number | null;
+  /** The scoring period ESPN is on — the day every `cumulativeScore` in this
+   *  league leaves out, and so the day the live scoreboard and the live span
+   *  have to add back. See `scoringPeriodTotals`. */
+  latestScoringPeriod: number | null;
   fetchedAt: number;
 }
 
@@ -2355,6 +2384,10 @@ async function leagueMeta(creds: EspnCreds, force = false): Promise<LeagueMeta> 
         typeof info.status?.currentMatchupPeriod === 'number'
           ? info.status.currentMatchupPeriod
           : null,
+      latestScoringPeriod:
+        typeof info.status?.latestScoringPeriod === 'number'
+          ? info.status.latestScoringPeriod
+          : null,
       fetchedAt: Date.now(),
     };
     metaCache.set(creds.leagueId, meta);
@@ -2385,9 +2418,128 @@ const scoreboardBlobKey = (leagueId: number, period: number) =>
 const scoreboardCache = new Map<string, { matchups: EspnMatchup[]; fetchedAt: number }>();
 const scoreboardInFlight = new Map<string, Promise<EspnMatchup[]>>();
 
+/** ESPN's bench and injured-reserve lineup slots — the two a player accrues
+ *  nothing from. Everything else counts, which is the same fail-safe rule
+ *  `toRosterPlayer` takes for the slot chip: an undocumented slot reads as
+ *  playing rather than as benched. */
+const NON_ACCRUING_SLOTS = new Set([16, 17]);
+
+/**
+ * One scoring period's production per team, summed over the players actually in
+ * a lineup — **the day ESPN's own `cumulativeScore` leaves out.**
+ *
+ * This is the fix for "the scoreboard doesn't incorporate today". A matchup's
+ * `cumulativeScore` is not a running total: it covers every scoring period of
+ * the week **except `status.latestScoringPeriod`**, so through an evening's
+ * games it sits still at yesterday's figure however often it is re-read. No
+ * amount of cache-shortening reaches that, because the number itself is not
+ * moving — which is why this file spent a release polling a figure that could
+ * not answer.
+ *
+ * **Measured rather than assumed, twice.** On the live week, every team whose
+ * players had produced that day was short by *exactly* that day's contribution
+ * (Pirates Cove `25/9/27` summed against a cumulative `22/8/24`, the day being
+ * `3/1/3`) while every team with a quiet day matched — which is what makes the
+ * boundary a rule rather than a coincidence, and what made the first check on
+ * one quiet team inconclusive. And on the **settled** week 18, summing its days
+ * this way reproduces ESPN's own final `cumulativeScore` for **120 of 120
+ * cells to 4.9e-9**, rate categories included. So the summation is ESPN's
+ * arithmetic, not an approximation of it.
+ *
+ * **`cumulativeScoreLive` is not the answer and was the first thing tried.** The
+ * side object declares it beside `totalPointsLive`, which reads exactly like the
+ * field this needs; it is **null on every side of every read** — bare, at
+ * `scoringPeriodId=0` and at the current day alike, 0 of 12 populated. It is a
+ * points-league field this league never fills.
+ *
+ * **The read is `mMatchupScore` at the day, and the view is chosen on
+ * payload.** Measured on the live league for one matchup period: `mScoreboard`
+ * at `scoringPeriodId=0` is **23KB and carries no roster at all**, the same read
+ * at the day is **488KB** and carries both, and `mMatchupScore` at the day is
+ * **208KB** and carries the roster without the scores. So the live path is two
+ * reads at 231KB rather than one at 488 — and the frozen path keeps the 23KB
+ * read it has always made, untouched.
+ */
+async function scoringPeriodTotals(
+  creds: EspnCreds,
+  period: number,
+  scoringPeriodId: number,
+): Promise<Record<number, Record<number, number>>> {
+  const data = await leagueGet<EspnScoreboardResponse>(creds, ['mMatchupScore'], scoringPeriodId, {
+    schedule: { filterMatchupPeriodIds: { value: [period] } },
+  });
+  const out: Record<number, Record<number, number>> = {};
+  for (const m of data.schedule ?? []) {
+    for (const side of [m.home, m.away]) {
+      if (!side || typeof side.teamId !== 'number') continue;
+      const acc = (out[side.teamId] ??= {});
+      for (const e of side.rosterForCurrentScoringPeriod?.entries ?? []) {
+        if (e.lineupSlotId != null && NON_ACCRUING_SLOTS.has(e.lineupSlotId)) continue;
+        // `statSourceId: 0` is the real line rather than a projection, and
+        // `statSplitTypeId: 5` the one-day split. A player who has not taken
+        // the field carries an entry with no stats in it at all.
+        const line = (e.playerPoolEntry?.player?.stats ?? []).find(
+          (st) =>
+            st.scoringPeriodId === scoringPeriodId &&
+            st.statSourceId === 0 &&
+            st.statSplitTypeId === 5,
+        )?.stats;
+        if (!line) continue;
+        for (const [id, v] of Object.entries(line)) {
+          if (typeof v === 'number' && Number.isFinite(v)) {
+            acc[Number(id)] = (acc[Number(id)] ?? 0) + v;
+          }
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * ESPN's through-yesterday score with today's day added on.
+ *
+ * **Counting stats add and rates do not**, which is the same rule
+ * `getSpanTotals` obeys one level up and the reason this cannot be a merge of
+ * two numbers: a rate is rebuilt from the components it is made of, and the
+ * components are in `scoreByStat` — it carries all 23 stats ESPN tracks, the
+ * components as well as the ten a league scores. So every `DERIVED` id is
+ * skipped on the way in and recomputed on the way out.
+ *
+ * **Today can move a number ESPN already gave this side and can never invent
+ * one.** A category a side is *ineligible* for is absent from `scores` by
+ * `sideFrom`'s own rule, and adding a day's production would put it back — as a
+ * zero-based total that in a `lowerBetter` category reads as the best score in
+ * the league. A rate whose components are incomplete keeps yesterday's figure
+ * rather than being rebuilt out of half of them.
+ */
+function withScoringPeriod(
+  scores: Record<number, number>,
+  today: Record<number, number> | undefined,
+  categories: EspnCategory[],
+): Record<number, number> {
+  if (!today) return scores;
+  const merged = { ...scores };
+  for (const [id, v] of Object.entries(today)) {
+    const n = Number(id);
+    if (merged[n] === undefined || DERIVED[n]) continue;
+    merged[n] += v;
+  }
+  for (const cat of categories) {
+    const rule = DERIVED[cat.statId];
+    if (!rule || merged[cat.statId] === undefined) continue;
+    if (!rule.needs.every((n) => typeof merged[n] === 'number')) continue;
+    const v = rule.of(merged);
+    if (typeof v === 'number' && Number.isFinite(v)) merged[cat.statId] = v;
+  }
+  return merged;
+}
+
 function sideFrom(
   raw: EspnScheduleSide | undefined,
   live: boolean,
+  today: Record<number, Record<number, number>> | null,
+  categories: EspnCategory[],
 ): { teamId: number; scores: Record<number, number>; points: number | null } | null {
   if (!raw || typeof raw.teamId !== 'number') return null;
   const scores: Record<number, number> = {};
@@ -2399,7 +2551,11 @@ function sideFrom(
     scores[Number(id)] = cell.score;
   }
   const points = live ? raw.totalPointsLive ?? raw.totalPoints : raw.totalPoints;
-  return { teamId: raw.teamId, scores, points: typeof points === 'number' ? points : null };
+  return {
+    teamId: raw.teamId,
+    scores: withScoringPeriod(scores, today?.[raw.teamId], categories),
+    points: typeof points === 'number' ? points : null,
+  };
 }
 
 async function fetchMatchups(
@@ -2407,16 +2563,42 @@ async function fetchMatchups(
   period: number,
   categories: EspnCategory[],
   live: boolean,
+  span: { first: number; last: number } | null,
 ): Promise<EspnMatchup[]> {
   const data = await leagueGet<EspnScoreboardResponse>(creds, ['mScoreboard'], 0, {
     schedule: { filterMatchupPeriodIds: { value: [period] } },
   });
 
+  /**
+   * The day `cumulativeScore` leaves out — read only for the week being played,
+   * and only when ESPN's own latest day falls **inside** that week.
+   *
+   * That guard is what makes the boundary safe at the rollover rather than
+   * merely right this afternoon. ESPN's nightly batch (03:39–05:19 ET, measured
+   * under *The anchor is derived from ESPN's calendar*) folds the finished day
+   * into `cumulativeScore` and advances `latestScoringPeriod` to the new one —
+   * which by then belongs to the *next* matchup period, falls outside this
+   * span, and so is not added. A settled week therefore never has a day put
+   * back on it, and no day is ever counted twice.
+   *
+   * A failed read costs the live day and leaves the week standing, which is the
+   * direction every read in this file fails in.
+   */
+  const latest = data.status?.latestScoringPeriod;
+  const wantsToday =
+    live && typeof latest === 'number' && span != null && latest >= span.first && latest <= span.last;
+  const today = wantsToday
+    ? await scoringPeriodTotals(creds, period, latest).catch((err: Error) => {
+        console.error(`ESPN live day ${latest} unavailable for league ${creds.leagueId}:`, err.message);
+        return null;
+      })
+    : null;
+
   const out: EspnMatchup[] = [];
   for (const m of data.schedule ?? []) {
-    const home = sideFrom(m.home, live);
+    const home = sideFrom(m.home, live, today, categories);
     if (!home) continue;
-    const away = sideFrom(m.away, live);
+    const away = sideFrom(m.away, live, today, categories);
 
     let hw = 0;
     let aw = 0;
@@ -2458,6 +2640,11 @@ async function getMatchups(
   period: number,
   categories: EspnCategory[],
   live: boolean,
+  /** The scoring periods this matchup period covers, so the live read can tell
+   *  whether ESPN's latest day belongs to the week it is building. Null where
+   *  the schedule could not place the period, which costs the live day and
+   *  nothing else. */
+  span: { first: number; last: number } | null,
   force = false,
 ): Promise<EspnMatchup[]> {
   const key = `${creds.leagueId}:${period}`;
@@ -2484,7 +2671,7 @@ async function getMatchups(
         return stored;
       }
     }
-    const matchups = await fetchMatchups(creds, period, categories, live);
+    const matchups = await fetchMatchups(creds, period, categories, live, span);
     scoreboardCache.set(key, { matchups, fetchedAt: Date.now() });
     if (frozen) await writeJsonBlob(scoreboardBlobKey(creds.leagueId, period), matchups);
     return matchups;
@@ -2548,7 +2735,14 @@ export async function getScoreboard(
   const matchups =
     asked === null || meta.format === 'standings' || meta.format === 'unknown'
       ? []
-      : await getMatchups(creds, asked, meta.categories, live, force);
+      : await getMatchups(
+          creds,
+          asked,
+          meta.categories,
+          live,
+          span ? { first: span.first, last: span.last } : null,
+          force,
+        );
 
   return {
     format: meta.format,
@@ -2737,9 +2931,18 @@ const spanBlobKey = (leagueId: number, first: number, last: number) =>
 const spanCache = new Map<string, { totals: Record<number, Record<number, number>>; fetchedAt: number }>();
 const spanInFlight = new Map<string, Promise<Record<number, Record<number, number>>>>();
 
+/** The day a span is missing, where it reaches into the week being played:
+ *  which matchup period to read it from and which scoring period it is. Null
+ *  for a span that is entirely settled, which is every span but one. */
+export interface LiveDay {
+  period: number;
+  scoringPeriodId: number;
+}
+
 async function fetchSpanTotals(
   creds: EspnCreds,
   periods: number[],
+  liveDay: LiveDay | null,
 ): Promise<Record<number, Record<number, number>>> {
   const data = await leagueGet<EspnScoreboardResponse>(creds, ['mScoreboard'], 0, {
     schedule: { filterMatchupPeriodIds: { value: periods } },
@@ -2755,6 +2958,30 @@ async function fetchSpanTotals(
       }
     }
   }
+
+  // The same day `cumulativeScore` leaves out of the scoreboard, added for the
+  // same reason and by the same read — see `scoringPeriodTotals`. **Components
+  // only**: a rate is not summable, and every caller of this rebuilds its rate
+  // categories from the components afterwards, so adding a rate here would be
+  // adding a number nothing reads and confusing the one thing that does.
+  if (liveDay) {
+    const today = await scoringPeriodTotals(creds, liveDay.period, liveDay.scoringPeriodId).catch(
+      (err: Error) => {
+        console.error(`ESPN live day unavailable for span in league ${creds.leagueId}:`, err.message);
+        return null;
+      },
+    );
+    if (today) {
+      for (const [teamId, day] of Object.entries(today)) {
+        const at = (totals[Number(teamId)] ??= {});
+        for (const [id, v] of Object.entries(day)) {
+          const n = Number(id);
+          if (DERIVED[n]) continue;
+          at[n] = (at[n] ?? 0) + v;
+        }
+      }
+    }
+  }
   return totals;
 }
 
@@ -2762,6 +2989,7 @@ async function getSpanTotals(
   creds: EspnCreds,
   periods: number[],
   frozen: boolean,
+  liveDay: LiveDay | null,
   force = false,
 ): Promise<Record<number, Record<number, number>>> {
   const first = periods[0];
@@ -2786,7 +3014,7 @@ async function getSpanTotals(
         return stored;
       }
     }
-    const totals = await fetchSpanTotals(creds, periods);
+    const totals = await fetchSpanTotals(creds, periods, frozen ? null : liveDay);
     spanCache.set(key, { totals, fetchedAt: Date.now() });
     if (frozen) await writeJsonBlob(spanBlobKey(creds.leagueId, first, last), totals);
     return totals;
@@ -2973,11 +3201,67 @@ export async function getRankings(
     }
     return out;
   };
+  /** Rates rebuilt from the components they are made of — one definition for
+   *  the two branches below, since a span that has had the live day added to it
+   *  can no longer read ESPN's own rate off the wire. A rate whose components
+   *  are incomplete is left out rather than invented, which is the rule the
+   *  halves have always followed. */
+  const withRates = (summed: Record<number, number>) => {
+    const out: Record<number, number> = {};
+    for (const cat of meta.categories) {
+      if (cat.format === 'count') {
+        const v = summed[cat.statId];
+        if (typeof v === 'number') out[cat.statId] = v;
+        continue;
+      }
+      const rule = DERIVED[cat.statId];
+      if (!rule || !rule.needs.every((n) => typeof summed[n] === 'number')) continue;
+      const v = rule.of(summed);
+      if (typeof v === 'number' && Number.isFinite(v)) out[cat.statId] = v;
+    }
+    return out;
+  };
+
+  /**
+   * The day every `cumulativeScore` in this league is missing, where the span
+   * asked for actually reaches it — see `scoringPeriodTotals` for the
+   * measurement, and `fetchMatchups` for the same guard on the scoreboard.
+   *
+   * The scoring period has to fall inside the **current** matchup period's own
+   * span, which is what keeps a day off a week it does not belong to at the
+   * rollover: ESPN's nightly batch folds the finished day in and advances the
+   * pointer to one that belongs to the next week.
+   */
+  const currentSpan = current != null ? meta.periods.find((p) => p.period === current) : undefined;
+  const latest = meta.latestScoringPeriod;
+  const liveDay: LiveDay | null =
+    current != null &&
+    currentSpan != null &&
+    latest != null &&
+    latest >= currentSpan.first &&
+    latest <= currentSpan.last
+      ? { period: current, scoringPeriodId: latest }
+      : null;
+
   if (asked === 'season') {
+    // **ESPN's own published season line, left exactly as it comes** — which
+    // means it, too, stops at yesterday, and deliberately so: this column is
+    // the number the manager sees on ESPN's own site, and a figure of ours that
+    // silently disagreed with it would be worse than one that lags with it.
+    // (ESPN's season line has a second quirk of its own that has nothing to do
+    // with today: it counts a playoff week only for the teams still in the
+    // winners' bracket — measured, the eight teams on a bye are short by
+    // exactly their week's own total.)
     for (const t of meta.teams) values[t.id] = onlyCategories(t.values);
   } else if (asked === 'matchup' && current != null) {
-    const raw = await getSpanTotals(creds, [current], false, force);
-    for (const [id, v] of Object.entries(raw)) values[Number(id)] = onlyCategories(v);
+    const raw = await getSpanTotals(creds, [current], false, liveDay, force);
+    // One period's rates are ESPN's own and read as they come — **unless** the
+    // live day has been added underneath them, in which case they are rebuilt
+    // from the components exactly as a multi-period span's are. This is the tab
+    // that shows the same week as the Scoreboard, so the two must agree.
+    for (const [id, v] of Object.entries(raw)) {
+      values[Number(id)] = liveDay ? withRates(v) : onlyCategories(v);
+    }
   } else {
     const list =
       asked === 'first'
@@ -2987,24 +3271,10 @@ export async function getRankings(
           : playoffs;
     if (list.length > 0) {
       const frozen = current == null || !list.includes(current);
-      const raw = await getSpanTotals(creds, list, frozen, force);
+      const raw = await getSpanTotals(creds, list, frozen, liveDay, force);
       // Counting stats add; rates are rebuilt from what they add up from, and
       // a rate with a component missing is left out rather than invented.
-      for (const [id, summed] of Object.entries(raw)) {
-        const out: Record<number, number> = {};
-        for (const cat of meta.categories) {
-          if (cat.format === 'count') {
-            const v = summed[cat.statId];
-            if (typeof v === 'number') out[cat.statId] = v;
-            continue;
-          }
-          const rule = DERIVED[cat.statId];
-          if (!rule || !rule.needs.every((n) => typeof summed[n] === 'number')) continue;
-          const v = rule.of(summed);
-          if (typeof v === 'number' && Number.isFinite(v)) out[cat.statId] = v;
-        }
-        values[Number(id)] = out;
-      }
+      for (const [id, summed] of Object.entries(raw)) values[Number(id)] = withRates(summed);
     }
   }
 

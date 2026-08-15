@@ -309,6 +309,88 @@ than assumed**, because three of them look interchangeable and are not:
 - **`mStandings` is useless here** and was checked: its `teams` carry an `id`
   and nothing else at all.
 
+### `cumulativeScore` stops at yesterday, and polling could not fix that
+
+**The scoreboard was reported stale after the League page was given a
+minute-by-minute poll, and the poll was not the problem: the number it was
+re-reading does not move.** A matchup's `cumulativeScore` covers every scoring
+period of the week **except `status.latestScoringPeriod`** — the day being
+played — so through an evening's games it sits at yesterday's figure however
+often it is asked for. Shortening a cache cannot reach that.
+
+**Measured on the live league rather than reasoned about, and the first check
+was inconclusive in a way worth recording.** Summing one team's per-day lineup
+stats over the week reproduced its `cumulativeScore` exactly — which looked like
+proof that today was included, and was not: that team's players had done nothing
+yet that day, so a cumulative *excluding* today would have matched too. Run
+across all twelve, every team whose players had produced that day was short by
+**exactly** that day's contribution (Pirates Cove `25/9/27` summed against a
+cumulative `22/8/24`, the day being `3/1/3`) and every team with a quiet day
+matched. That is what makes the boundary a rule.
+
+**And the summation is ESPN's own arithmetic, checked against a settled week.**
+Rebuilding matchup period 18 from its seven scoring periods — summing the stat
+lines of every player in a lineup, then recomputing the rate categories from the
+components — reproduces ESPN's own final `cumulativeScore` for **120 of 120
+cells to 4.9e-9**. So the fix is not an approximation of ESPN's number, it is
+the same number computed a day earlier than ESPN gets round to it.
+
+**`cumulativeScoreLive` is not the answer, and it was the first thing tried.**
+The side object declares it beside `totalPointsLive`, which reads exactly like
+the field this needs. It is **null on every side of every read** — bare, at
+`scoringPeriodId=0`, and at the current day alike, 0 of 12 populated. A
+points-league field this league never fills.
+
+**So the live period's scoreboard adds the missing day**
+(`espn.ts::scoringPeriodTotals`, `withScoringPeriod`): today's stat lines,
+summed over the players in a lineup, added to `cumulativeScore`'s components,
+with every rate category rebuilt from those components afterwards — the rule
+`getSpanTotals` already obeys, because a rate does not add. Two guards make it
+safe rather than merely right this afternoon:
+
+- **Today is added only when ESPN's own latest scoring period falls inside the
+  week being built.** ESPN's nightly batch (03:39–05:19 ET, measured under *The
+  anchor is derived from ESPN's calendar*) folds the finished day into
+  `cumulativeScore` and advances the pointer to a day that belongs to the *next*
+  matchup period — which fails the test, so a settled week never has a day put
+  back on it and no day is ever counted twice. A frozen period is untouched
+  either way.
+- **Today can move a number ESPN already gave a side and can never invent one.**
+  A category a side is ineligible for is absent by `sideFrom`'s own rule, and
+  putting it back as a day's total would read, in a `lowerBetter` category, as
+  the best score in the league.
+
+**The bench and IL are excluded** (`NON_ACCRUING_SLOTS`, ESPN's slots 16 and
+17), which is what the 120-of-120 check validates: everything else counts, the
+same fail-safe direction `toRosterPlayer` takes for the slot chip.
+
+**Which view to read it from was chosen on payload**, measured on one matchup
+period of the live league: `mScoreboard` at `scoringPeriodId=0` is **23KB and
+carries no roster at all**, the same read at the day is **488KB** and carries
+both, and **`mMatchupScore` at the day is 208KB** and carries the roster without
+the scores. So the live path is **two reads at 231KB** rather than one at 488,
+and the frozen path keeps the 23KB read it has always made. A failed second read
+costs the live day and leaves the week standing.
+
+**The Rankings tab takes the same fix on the same day**, because its `Current
+matchup` span is the same week the Scoreboard draws and the two must not
+disagree — checked after the change: **120 of 120 cells identical, worst delta
+0**. The halves and the playoff span get it too, being the same
+`getSpanTotals` path; a frozen span never receives a day and its blob stays
+clean. **`season` deliberately does not**: that column is ESPN's own published
+season line, and a figure of ours that silently disagreed with ESPN's own site
+would be worse than one that lags with it. (It has a second quirk of its own
+that has nothing to do with today, already recorded below: it counts a playoff
+week only for the teams still in the winners' bracket — measured, the eight
+teams on a bye are short by exactly their week's total.)
+
+**Measured through the route**: a live scoreboard is **698ms** cold against the
+536ms it was, and **2.1ms** warm; a settled week is **1.8ms**; the live rankings
+span **743ms** cold and **1.5ms** warm. The response itself is unchanged in size
+— only the numbers in it moved. And they do move: sampled a minute apart with
+games in progress, `Let's Go Mets OPS 0.909 → 0.913`, which is a cell that could
+not have changed at all before this.
+
 **`scoringPeriodId=0` is what makes the scoreboard affordable, and it is the
 measurement worth keeping.** `mScoreboard` embeds two whole rosters per side —
 `rosterForCurrentScoringPeriod` and `rosterForMatchupPeriod`, ~43KB a team —
@@ -316,7 +398,9 @@ which is the entire payload: one matchup period comes to **524,565 bytes**.
 Naming a scoring period that is not a day empties both while leaving
 `cumulativeScore` untouched, that being a fact about the **matchup** period
 rather than about a day: **23,759 bytes**, a 22× reduction, and the category
-scores are **byte-identical** — checked field by field over all 10 matchups of a
+scores are **byte-identical** (re-checked with games in progress: 0 differing
+cells of 12 sides — what it drops is the *roster*, and with it the live day the
+section above has to read separately) — checked field by field over all 10 matchups of a
 period, both sides, 18,102 bytes of scores, `IDENTICAL: true`. It is the same
 trick `forTeamId` plays for the per-day roster read, arrived at from the other
 end: there the payload is narrowed to one team, here to no day.
