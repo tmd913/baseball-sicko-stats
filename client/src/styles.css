@@ -8495,6 +8495,13 @@ body {
 .view-switch,
 .kind-switch,
 .research-window-row,
+/* The League page's three tabs, and the Rankings tab's four spans. Folded here
+   rather than restyled to resemble the row above them: the first is the view
+   switch one tier down and the second is the research board's window tabs
+   asking the same shape of question about a different thing — see
+   `docs/claude/client-league.md`. */
+.lg-tabs,
+.lg-span-row,
 .date-presets {
   display: inline-flex;
   align-items: center;
@@ -8508,6 +8515,8 @@ body {
 .view-tab,
 .kind-tab,
 .research-window-tab,
+.lg-tab,
+.lg-span-tab,
 .date-preset {
   display: inline-flex;
   align-items: center;
@@ -8525,12 +8534,16 @@ body {
 .view-tab:hover,
 .kind-tab:hover,
 .research-window-tab:hover,
+.lg-tab:hover,
+.lg-span-tab:hover,
 .date-preset:hover {
   color: var(--text);
 }
 .view-tab.active,
 .kind-tab.active,
 .research-window-tab.active,
+.lg-tab.active,
+.lg-span-tab.active,
 .date-preset.active {
   color: var(--bg);
   background: var(--accent);
@@ -8538,6 +8551,8 @@ body {
 .view-tab:focus-visible,
 .kind-tab:focus-visible,
 .research-window-tab:focus-visible,
+.lg-tab:focus-visible,
+.lg-span-tab:focus-visible,
 .date-preset:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -10706,15 +10721,6 @@ body {
    is the app's plain wide stat table with a sticky first column. What it adds
    under its own name is the team cell (a logo over two lines, where the log has
    a date) and the reader's own row. */
-.lg-section {
-  max-width: var(--card-column);
-  margin: 22px auto 8px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
 .league-table {
   --row-gutter: clamp(5px, 1.9vw, 28px);
   --sort-gutter: var(--row-gutter);
@@ -10750,6 +10756,213 @@ body {
      find your own row down a column of twelve and not enough to read as a
      selection you could act on. */
   background: color-mix(in srgb, var(--accent) 12%, var(--bg));
+}
+
+/* ---- The three tabs, and the Rankings span --------------------------------
+   Both strips are **folded onto `.view-switch` / `.view-tab`** up beside the
+   app's own view switch rather than restyled to resemble it, which is this
+   file's standing rule: two things that are the same object must not be able
+   to come to look like two. The League tabs are the view switch one tier down
+   (which page of this league) and the span tabs are the research board's window
+   tabs asking the same shape of question about a different thing (which cut of
+   the season) — so both are that control, and only their placement is theirs.
+
+   The one thing each adds is the row it sits in: the League strip leads the
+   view and the span strip leads its table, both left-aligned rather than
+   centred, because the page under them starts at the left edge. */
+.lg-tabs {
+  margin: 0 auto 14px;
+  max-width: var(--card-column);
+  display: flex;
+}
+.lg-span-head {
+  max-width: var(--card-column);
+  margin: 0 auto 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+/* What the span covers, beside the tabs rather than under them — it is a
+   caption on the control rather than on the table, the way the scoreboard's
+   dates sit beside its week number. Wraps to its own line on a phone, which is
+   what the `flex-wrap` above is for. */
+.lg-span-detail {
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Rankings -------------------------------------------------------------
+   The rank under the value, in the slot and the type the research board's own
+   percentile badge takes — `.col-rank`, folded onto rather than restyled, so a
+   second line under a number is one object in this app.
+
+   **First place is marked and nothing else is**, which is the League page's own
+   rule arriving from the scoreboard: the winning side of a category is green
+   and the loser goes quiet, because ten red cells down one side of a card would
+   be the row shouting where the job is to mark a winner. A twelve-row table of
+   ranks is that same picture turned on its side. */
+.league-table td .col-rank {
+  color: var(--faint);
+}
+.league-table td .col-rank.lg-rank-best {
+  color: var(--hit);
+  font-weight: 700;
+}
+
+/* ---- Transactions ---------------------------------------------------------
+   A feed rather than a table, so it takes the app's reading column and the
+   feed's own item shape: a rail down the left of each move, the identity row
+   at the top, the players under it. */
+.lg-transactions {
+  max-width: var(--card-column);
+  margin: 0 auto;
+}
+.lg-tx-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.lg-tx {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--muted);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, var(--panel), var(--bg-2));
+  padding: 10px 12px;
+}
+/* The reader's own moves take the accent edge — the same mark the scoreboard
+   puts on the reader's own matchup, and for the same reason: a feed of a
+   twelve-team league is mostly somebody else's business. */
+.lg-tx-mine {
+  border-left-color: var(--accent);
+}
+.lg-tx-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.lg-tx-teams {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.lg-tx-team {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.lg-tx-team-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lg-tx-swap {
+  color: var(--faint);
+  font-size: 13px;
+  margin-right: 2px;
+}
+.lg-tx-date {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.lg-tx-players {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.lg-tx-player {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  min-width: 0;
+}
+/* The word for the move, in a fixed-width slot so the names under one another
+   start at one x — the same arithmetic the summary table's fantasy slot chip
+   makes for its own column. `Claimed` is the widest the vocabulary holds. */
+.lg-tx-move {
+  min-width: 58px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.lg-tx-move-add {
+  color: var(--hit);
+}
+.lg-tx-move-drop {
+  color: var(--muted);
+}
+.lg-tx-name {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  color: var(--accent);
+  cursor: pointer;
+  text-align: left;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lg-tx-name:hover {
+  text-decoration: underline;
+}
+.lg-tx-name:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+/* A player the name-and-club join could not place: the row still says what
+   happened, it simply is not a link — `matchMlbPlayer`'s rule drawn. */
+.lg-tx-name-plain {
+  color: var(--text);
+  cursor: default;
+}
+.lg-tx-name-plain:hover {
+  text-decoration: none;
+}
+.lg-tx-to {
+  font-size: 12px;
+  color: var(--muted);
+}
+.lg-tx-bid {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--faint);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 6px;
+}
+/* What the list is, said at its foot when it is at the server's own limit
+   rather than implied — the same honesty the research board's count line
+   carries for a filtered table. */
+.lg-tx-cap {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: var(--faint);
+  text-align: center;
 }
 
 @media (max-width: 640px) {

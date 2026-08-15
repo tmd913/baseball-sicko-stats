@@ -2,7 +2,10 @@ import type {
   BatterGameLog,
   EspnOwnership,
   EspnRoster,
+  EspnRankings,
+  EspnRankSpan,
   EspnScoreboard,
+  EspnTransactions,
   EspnStatus,
   PitcherGameLog,
   NextGameInfo,
@@ -361,6 +364,28 @@ export const api = {
     if (refresh) q.set('refresh', '1');
     const qs = q.toString();
     return request(`/api/espn/scoreboard${qs ? `?${qs}` : ''}`);
+  },
+
+  /** The League page's Rankings tab: every team's figure in each of the
+   *  league's categories and where it stands, over one span.
+   *
+   *  A span this league cannot be asked for — a half with no matchup periods
+   *  in it — is answered with the season rather than an empty table, and the
+   *  response says which spans it *can* serve so the tab strip is drawn from
+   *  the league rather than from a list held here. */
+  async espnRankings(span?: EspnRankSpan | null, refresh = false): Promise<EspnRankings> {
+    const q = new URLSearchParams();
+    if (span) q.set('span', span);
+    if (refresh) q.set('refresh', '1');
+    const qs = q.toString();
+    return request(`/api/espn/rankings${qs ? `?${qs}` : ''}`);
+  },
+
+  /** The League page's Transactions tab: who added, dropped and traded whom,
+   *  most recent first. `refresh` as everywhere else — a move made on ESPN is
+   *  exactly what it is for. */
+  async espnTransactions(refresh = false): Promise<EspnTransactions> {
+    return request(`/api/espn/transactions${refresh ? '?refresh=1' : ''}`);
   },
 
   // Every player in the league on one board, season to date — the research

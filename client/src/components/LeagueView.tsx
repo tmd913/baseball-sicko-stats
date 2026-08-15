@@ -2,22 +2,50 @@
  * The League view — the one page in this app that is about the *fantasy
  * league* rather than about players.
  *
- * Two blocks, in the order the two questions come in:
+ * **Three tabs, because they are three questions.** The page was a scoreboard
+ * with a season table stacked under it, which is the shape a page takes when it
+ * has one question and a half; it has three now and each is a page of its own:
  *
- *  1. **The scoreboard** — every matchup of the period, both teams named, with
- *     the category line under them and the winning side of each marked. The
- *     reader's own matchup leads, because that is what the page is opened for.
- *  2. **The standings table** — every team in the league against every one of
- *     the league's own scoring categories, sortable per column.
+ *  1. **Scoreboard** — every matchup of one period, the category line under
+ *     both sides and the winning half of each marked. *Am I winning.*
+ *  2. **Rankings** — every team's figure in every category and where that
+ *     figure stands, over a span the reader picks. *Why.*
+ *  3. **Transactions** — who added, dropped and traded whom. *What has been
+ *     going on.*
  *
- * **It is honest about the league it is looking at.** ESPN runs four shapes of
- * baseball league and only two of them have matchups at all; the server names
- * which (`EspnScoreboard.format`), and each is drawn as what it is rather than
- * as an empty version of the category grid — see `renderScoreboard` below.
+ * **The period arrows live inside the Scoreboard tab rather than above the
+ * strip**, and that is a decision rather than a placement. A control above the
+ * tabs is a control over the page, and this one governs exactly one third of
+ * it: the Rankings tab has a span filter of its own — which is a *different*
+ * question, four named cuts rather than a week at a time — and Transactions is
+ * a feed with no period on it at all. Left above the strip, `‹ Week 19 ›` would
+ * have sat over two tabs it says nothing about, and a reader pressing it on the
+ * Transactions tab would have watched nothing happen. The app's own precedent
+ * is the date control, which sits with the roster tabs it qualifies and is
+ * hidden on the research board it does not.
+ *
+ * **Which tab is open is in the URL** (`lt=`), because it decides what data is
+ * on screen — the rule `view=`, `win=` and `mp=` all follow. The Scoreboard is
+ * the default and is omitted, so a bare `?view=league` opens where the page
+ * always opened.
+ *
+ * **Each tab's data is read on its first open and kept**, the way the player
+ * page's tabs are: nobody who never opens Transactions pays for a 250-row
+ * activity feed. See `docs/claude/client-league.md`.
  */
 import { useMemo, useState } from 'react';
-import type { EspnCategory, EspnMatchup, EspnScoreboard, EspnStandingsTeam } from '../types';
+import type {
+  EspnCategory,
+  EspnMatchup,
+  EspnRankSpan,
+  EspnRankings,
+  EspnScoreboard,
+  EspnStandingsTeam,
+  EspnTransactions,
+} from '../types';
 import { LoadingBlock } from './Loading';
+import LeagueRankings from './LeagueRankings';
+import LeagueTransactions from './LeagueTransactions';
 
 /* ---- Formatting ---------------------------------------------------------
  *
@@ -28,7 +56,7 @@ import { LoadingBlock } from './Loading';
  * integer already, and rounding one would hide a fractional value the app has
  * no business inventing.
  */
-function fmt(value: number | undefined, cat: EspnCategory): string {
+export function fmtValue(value: number | undefined, cat: EspnCategory): string {
   if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
   if (cat.format === 'avg') {
     const s = value.toFixed(3);
@@ -41,7 +69,7 @@ function fmt(value: number | undefined, cat: EspnCategory): string {
 }
 
 /** `7-7-4`, or `7-7` where the league has no ties to report. */
-function record(t: { wins: number; losses: number; ties: number }): string {
+export function record(t: { wins: number; losses: number; ties: number }): string {
   return t.ties > 0 ? `${t.wins}-${t.losses}-${t.ties}` : `${t.wins}-${t.losses}`;
 }
 
@@ -54,7 +82,7 @@ function record(t: { wins: number; losses: number; ties: number }): string {
  * abbreviation rather than leaving a broken-image glyph, which is the same
  * fallback `TeamMark` makes for an MLB cap that fails to load.
  */
-function TeamLogo({ team }: { team: EspnStandingsTeam | undefined }) {
+export function TeamLogo({ team }: { team: EspnStandingsTeam | undefined }) {
   const [failed, setFailed] = useState(false);
   if (!team) return <span className="lg-logo lg-logo-none" aria-hidden="true" />;
   if (!team.logo || failed) {
@@ -179,7 +207,7 @@ function MatchupCard({
                       key={c.statId}
                       role="cell"
                       className={state ? `lg-cat-${state}` : undefined}
-                      title={`${c.name}: ${fmt(v, c)}${
+                      title={`${c.name}: ${fmtValue(v, c)}${
                         state === 'win'
                           ? ' — winning'
                           : state === 'loss'
@@ -189,7 +217,7 @@ function MatchupCard({
                               : ''
                       }${live ? ' so far' : ''}`}
                     >
-                      {fmt(v, c)}
+                      {fmtValue(v, c)}
                     </span>
                   );
                 })}
@@ -206,138 +234,9 @@ function fmtPoints(p: number | null): string {
   return typeof p === 'number' && Number.isFinite(p) ? String(Math.round(p * 100) / 100) : '—';
 }
 
-/* ---- The standings table ------------------------------------------------
- *
- * Sortable per column, and the mechanics are the research board's own
- * `.research-sort` / `.research-arrow` — folded onto in the stylesheet rather
- * than restated — while the *sort itself* is local and small. That split is
- * deliberate: the board's sort is written against its `Column` vocabulary
- * (`value`, `toValue`, `ascFirst`, forty definitions of a derived rate), and
- * none of that exists here. These columns are discovered at runtime from the
- * league's own `scoringItems`, so there is nothing to reuse but the look of a
- * sorted header — which is exactly what is reused.
- */
-type SortKey = { kind: 'name' } | { kind: 'record' } | { kind: 'cat'; statId: number };
-
-function sameKey(a: SortKey, b: SortKey): boolean {
-  if (a.kind !== b.kind) return false;
-  return a.kind !== 'cat' || b.kind !== 'cat' || a.statId === b.statId;
-}
-
-function StandingsTable({
-  teams,
-  categories,
-  myTeamId,
-  format,
-}: {
-  teams: EspnStandingsTeam[];
-  categories: EspnCategory[];
-  myTeamId: number | null;
-  format: EspnScoreboard['format'];
-}) {
-  // Opens on the league's own standing, which is the order ESPN keeps and the
-  // one a reader arrives expecting. `seed` is that order; ascending, so first
-  // is first.
-  const [sort, setSort] = useState<SortKey>({ kind: 'record' });
-  const [asc, setAsc] = useState(true);
-
-  const rows = useMemo(() => {
-    const out = [...teams];
-    out.sort((a, b) => {
-      let d = 0;
-      if (sort.kind === 'name') d = a.name.localeCompare(b.name);
-      else if (sort.kind === 'record') d = (a.seed || 99) - (b.seed || 99);
-      else {
-        const av = a.values[sort.statId];
-        const bv = b.values[sort.statId];
-        // Nulls to the bottom in **both** directions, the board's own rule: a
-        // team with no figure has not got a bad one.
-        const an = typeof av !== 'number';
-        const bn = typeof bv !== 'number';
-        if (an && bn) d = 0;
-        else if (an) return 1;
-        else if (bn) return -1;
-        else d = (av as number) - (bv as number);
-      }
-      return asc ? d : -d;
-    });
-    return out;
-  }, [teams, sort, asc]);
-
-  const toggle = (key: SortKey, opensAsc: boolean) => {
-    if (sameKey(key, sort)) setAsc((v) => !v);
-    else {
-      setSort(key);
-      setAsc(opensAsc);
-    }
-  };
-
-  const head = (key: SortKey, label: string, title: string, opensAsc: boolean, cls = '') => {
-    const active = sameKey(key, sort);
-    return (
-      <th
-        scope="col"
-        className={`${cls} research-sort${active ? ' active' : ''}`}
-        aria-sort={active ? (asc ? 'ascending' : 'descending') : 'none'}
-      >
-        <button type="button" onClick={() => toggle(key, opensAsc)} title={title}>
-          <span className="research-arrow" aria-hidden="true">
-            {active ? (asc ? '▲' : '▼') : ''}
-          </span>
-          {label}
-        </button>
-      </th>
-    );
-  };
-
-  return (
-    <div className="league-scroll">
-      <table className="glog-table league-table">
-        <thead>
-          <tr>
-            {head({ kind: 'record' }, 'Team', 'The league standing', true, 'lg-team-col')}
-            {categories.map((c) =>
-              head(
-                { kind: 'cat', statId: c.statId },
-                c.label,
-                // The direction is stated because it is the one thing a bare
-                // abbreviation cannot say, and it differs per category.
-                `${c.name} — season to date${c.lowerBetter ? ', lower is better' : ''}`,
-                c.lowerBetter,
-              ),
-            )}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((t) => (
-            <tr key={t.id} className={t.id === myTeamId ? 'lg-row-mine' : undefined}>
-              <th scope="row" className="lg-team-col glog-date">
-                <TeamLogo team={t} />
-                <span className="lg-row-name">
-                  {t.name}
-                  <span className="lg-row-sub">
-                    {record(t)}
-                    {t.streak ? ` · ${t.streak}` : ''}
-                    {format === 'h2h-points' ? ` · ${fmtPoints(t.points)} pts` : ''}
-                  </span>
-                </span>
-              </th>
-              {categories.map((c) => (
-                <td key={c.statId} className="glog-num">
-                  {fmt(t.values[c.statId], c)}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 /* ---- The view ----------------------------------------------------------- */
 
-function prettyDate(iso: string | null): string {
+export function prettyDate(iso: string | null): string {
   if (!iso) return '';
   const [y, m, d] = iso.split('-').map(Number);
   return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(undefined, {
@@ -347,33 +246,29 @@ function prettyDate(iso: string | null): string {
   });
 }
 
-export default function LeagueView({
+/**
+ * The Scoreboard tab: the period header, its arrows, and the matchup cards.
+ *
+ * Split out of the view proper when the view gained tabs, so that "which
+ * period" and "which matchups" stay one component — they are one question and
+ * the arrows are the only control over it.
+ */
+function Scoreboard({
   board,
-  loading,
-  error,
   onPeriod,
-  connected,
-  onConnect,
 }: {
-  board: EspnScoreboard | null;
-  loading: boolean;
-  error: string | null;
+  board: EspnScoreboard;
   onPeriod: (period: number) => void;
-  connected: boolean;
-  onConnect: () => void;
 }) {
-  const teamMap = useMemo(
-    () => new Map((board?.teams ?? []).map((t) => [t.id, t])),
-    [board],
-  );
+  const teamMap = useMemo(() => new Map(board.teams.map((t) => [t.id, t])), [board.teams]);
 
   // The reader's own matchup leads. That is what this page is opened for, and
   // it is a *sort* rather than a mark on its own — the accent border says which
   // one it is, and putting it first means it is on screen without scrolling on
   // a phone, which no amount of marking achieves.
   const matchups = useMemo(() => {
-    const list = [...(board?.matchups ?? [])];
-    const me = board?.myTeamId;
+    const list = [...board.matchups];
+    const me = board.myTeamId;
     if (me == null) return list;
     return list.sort((a, b) => {
       const am = a.home.teamId === me || a.away?.teamId === me ? 0 : 1;
@@ -381,42 +276,6 @@ export default function LeagueView({
       return am - bm;
     });
   }, [board]);
-
-  // Every empty state names its own cause, which for this view means naming
-  // the *league format* rather than saying there is nothing here: a roto league
-  // has no matchups by design and one whose scoring ESPN spells in a word this
-  // app has never seen is a refusal rather than a failure.
-  if (!connected) {
-    return (
-      <div className="empty-state">
-        <h3>No fantasy league connected</h3>
-        <p>
-          The League page reads your ESPN league's matchups and standings, so it needs one
-          connected.
-        </p>
-        <div className="empty-actions">
-          <button type="button" className="empty-help" onClick={onConnect}>
-            Connect a league
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (error && !board) {
-    return (
-      <div className="empty-state">
-        <h3>Couldn't read your league</h3>
-        <p>{error}</p>
-      </div>
-    );
-  }
-
-  // Never over data: a re-read leaves what is on screen standing, and the block
-  // wait is only for a pane with nothing in it yet.
-  if (!board) {
-    return loading ? <LoadingBlock>Reading your league's scoreboard</LoadingBlock> : null;
-  }
 
   const span =
     board.start && board.end
@@ -426,7 +285,7 @@ export default function LeagueView({
       : null;
 
   return (
-    <div className="league-view">
+    <>
       <div className="lg-head">
         <div className="lg-period">
           <button
@@ -467,8 +326,8 @@ export default function LeagueView({
           <h3>This league's scoring isn't supported yet</h3>
           <p>
             ESPN reports it as <code>{board.scoringType}</code>, which this page has never been
-            read against — so it shows the season table below rather than guessing at a
-            scoreboard shape the league may not have.
+            read against — so it shows nothing here rather than guessing at a scoreboard shape
+            the league may not have. The Rankings tab still draws the league's own totals.
           </p>
         </div>
       ) : board.format === 'standings' ? (
@@ -476,7 +335,7 @@ export default function LeagueView({
           <h3>No matchups in this league</h3>
           <p>
             ESPN scores it as <code>{board.scoringType}</code> — a season-long league rather than
-            head to head, so there is nothing to draw a scoreboard from. The table below is the
+            head to head, so there is nothing to draw a scoreboard from. The Rankings tab is the
             league.
           </p>
         </div>
@@ -500,20 +359,126 @@ export default function LeagueView({
           ))}
         </div>
       )}
+    </>
+  );
+}
 
-      <h3 className="lg-section">Season totals</h3>
-      {board.teams.length === 0 ? (
-        <div className="empty-state">
-          <h3>No teams in this league</h3>
-          <p>ESPN returned no teams, which usually means the league id is for another season.</p>
+/** Which of the three pages of this view is on screen. */
+export type LeagueTab = 'scoreboard' | 'rankings' | 'transactions';
+
+const TABS: { tab: LeagueTab; label: string; title: string }[] = [
+  { tab: 'scoreboard', label: 'Scoreboard', title: "This period's matchups" },
+  { tab: 'rankings', label: 'Rankings', title: 'Where every team stands in each category' },
+  { tab: 'transactions', label: 'Transactions', title: 'Who has added, dropped and traded whom' },
+];
+
+export default function LeagueView({
+  tab,
+  onTab,
+  board,
+  loading,
+  error,
+  onPeriod,
+  rankings,
+  rankSpan,
+  rankingsLoading,
+  rankingsError,
+  onRankSpan,
+  transactions,
+  transactionsLoading,
+  transactionsError,
+  onOpenPlayer,
+  connected,
+  onConnect,
+}: {
+  tab: LeagueTab;
+  onTab: (tab: LeagueTab) => void;
+  board: EspnScoreboard | null;
+  loading: boolean;
+  error: string | null;
+  onPeriod: (period: number) => void;
+  rankings: EspnRankings | null;
+  rankSpan: EspnRankSpan;
+  rankingsLoading: boolean;
+  rankingsError: string | null;
+  onRankSpan: (span: EspnRankSpan) => void;
+  transactions: EspnTransactions | null;
+  transactionsLoading: boolean;
+  transactionsError: string | null;
+  onOpenPlayer: (mlbId: number) => void;
+  connected: boolean;
+  onConnect: () => void;
+}) {
+  // Every empty state names its own cause. This one is the view's rather than a
+  // tab's: with no league connected there is nothing for any of the three to
+  // read, so the strip is not drawn at all — three tabs over one message would
+  // be chrome for a feature the reader hasn't got.
+  if (!connected) {
+    return (
+      <div className="empty-state">
+        <h3>No fantasy league connected</h3>
+        <p>
+          The League page reads your ESPN league's matchups, rankings and transactions, so it
+          needs one connected.
+        </p>
+        <div className="empty-actions">
+          <button type="button" className="empty-help" onClick={onConnect}>
+            Connect a league
+          </button>
         </div>
-      ) : (
-        <StandingsTable
-          teams={board.teams}
-          categories={board.categories}
-          myTeamId={board.myTeamId}
-          format={board.format}
+      </div>
+    );
+  }
+
+  return (
+    <div className="league-view">
+      {/* The strip. Folded onto `.view-switch` / `.view-tab` in the stylesheet
+          rather than restyled to resemble the app's other tab rows, so this is
+          the same object as the view switch above it by construction. */}
+      <div className="lg-tabs" role="tablist" aria-label="League">
+        {TABS.map((t) => (
+          <button
+            key={t.tab}
+            type="button"
+            role="tab"
+            aria-selected={t.tab === tab}
+            className={`lg-tab${t.tab === tab ? ' active' : ''}`}
+            onClick={() => onTab(t.tab)}
+            title={t.title}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'rankings' ? (
+        <LeagueRankings
+          rankings={rankings}
+          span={rankSpan}
+          loading={rankingsLoading}
+          error={rankingsError}
+          onSpan={onRankSpan}
         />
+      ) : tab === 'transactions' ? (
+        <LeagueTransactions
+          data={transactions}
+          loading={transactionsLoading}
+          error={transactionsError}
+          onOpenPlayer={onOpenPlayer}
+        />
+      ) : error && !board ? (
+        <div className="empty-state">
+          <h3>Couldn't read your league</h3>
+          <p>{error}</p>
+        </div>
+      ) : !board ? (
+        // Never over data: a re-read leaves what is on screen standing, and the
+        // block wait is only for a pane with nothing in it yet.
+        loading ? (
+          <LoadingBlock>Reading your league's scoreboard</LoadingBlock>
+        ) : null
+      ) : (
+        <Scoreboard board={board} onPeriod={onPeriod} />
       )}
     </div>
   );
