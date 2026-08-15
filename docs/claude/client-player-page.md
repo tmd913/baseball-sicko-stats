@@ -196,6 +196,33 @@ exactly the reader with an empty block in front of them.
 
 **The day takes `--card-column` rather than the 860px the tabs beside it use**, because what is in it is exactly what the feed holds — an at-bat card, a clip, an outing's innings — and those were sized against that number in the first place. A day read here and the same day read on the stream is then the same reading at the same width (measured: 800px at 1440, 358 at 390). The cap sits on `.details-overview .player-day` rather than on the tab, which spans the tab so its two tables can (see **the player page's Overview tab** above), and the `container-type` sits on the same box for the reason `.details-arsenal` carries one: the cards inside size themselves off their container, and read off a full-width tab they would answer a container query the card itself never satisfies.
 
+#### The scheduled game's pitcher link opened nothing
+
+**The report: press the pitcher in the Overview tab's scheduled-game popup and nothing happens.** Not a wrong page and not a dead-looking one — no change at all.
+
+**A prop that was never threaded, and a default that swallowed it silently.** The popup is `UpcomingRow`'s, and its `.upcoming-sp` block draws the opposing starter with a headshot and a name, both links (see **Client — the Feed view**, *The headshot links to the opposing pitcher's own page*). `PlayerDay` takes `onOpenDetails` **optionally** and falls back to `() => {}`; `PlayerOverview` threads whatever it is given; and `PlayerDetails` rendered `<OverviewTab …>` without one. So the press reached a real button, ran a no-op, and left the page exactly as it was.
+
+**The comment on that default said why it was safe and was out of date.** It read: *grouped items draw no identity row at all, so nothing here can actually reach it.* True when it was written and false since the Upcoming dialog started naming the starter — **`grouped` drops the row's *own* header and not that block**, which renders either way. A default that is justified by a claim about what renders is a default that goes wrong the moment something else starts rendering, and there is nothing on screen to say it has.
+
+**Measured before, at 1200×900 and 390×844.** On Soderstrom's page, open the scheduled game and press the headshot: URL `?…player=batter-691016` **unchanged**, `<h1>` `Tyler Soderstrom` **unchanged**, dialogs still 1. The name link the same. Note this is *not* the inert fault of the section above it in **Client — popups**: `#root` is inert, correctly, and the link is inside the live dialog — the press lands, and the handler does nothing.
+
+**So `PlayerDetails` takes an `onOpenDetails` and passes it down**, and App gives it the same `setDetailsKey` every other route into the page uses, so one man's page is reached the one way however it was arrived at.
+
+**The dialog closes on its own, by construction rather than by a rule.** The per-player reset effect clears `day`, which unmounts the Overview's whole subtree, which unmounts the `UpcomingRow` holding the dialog's `open` state. That is the right split falling out of the tree: this dialog is *inside* the thing being navigated and its contents (one batter's platoon split against tonight's starter) mean nothing over the pitcher's page, where the **feed's** copy of the same row is *behind* the page and deliberately stays open under it (measured there: the page over the dialog at 50 against 46, Escape closing the page first and the dialog second).
+
+**Two guards came with it, and both are guards rather than fixes** — the page could not change player at all until now, every route in opening it and every route out closing it, so nothing about it had ever had to answer for one.
+
+- **The tab resets to Overview.** A no-op today, and measured as one: the only link that changes the player lives in the Overview tab's own dialog, so `tab` is already `overview` whenever it fires. What it defends against is the next link somewhere else — `arsenal` renders its button only for a pitcher, so carrying it onto a batter would leave a page with no tab selected and nothing under it, every block being gated on an `arsenal` the same effect has just cleared.
+- **The scroll resets on `playerId` as well as `tab`.** Also a no-op today, and also measured: scrolled to 149 on a batter's Overview at 390, the pitcher's page opens at **0 with or without the dependency**, because clearing `day` collapses the box and the browser clamps. It is there so the property holds by construction rather than by an accident of what another effect happens to clear.
+
+**Measured after, at 1200×900 and 390×844, by the headshot and by the name.** Batter page → 7 tabs, no Arsenal → open the scheduled game (`#root` inert, 4 focusables outside the page, all of them the dialog's) → press the SP: URL **`?…player=pitcher-808967`**, `<h1>` **`Yoshinobu Yamamoto`**, dialogs **1 → 0**, `#root` **released**, **8 tabs with Arsenal**, tab `Overview`, scroll 0, `insideInert: false`, **0 focusables outside the page**. His Arsenal tab then opens, and Escape closes the page leaving **no `inert` attribute**. Re-run against the shipping bundle on `:4000`.
+
+**Nothing else moved, driven rather than reasoned about.** The feed's own Upcoming dialog still opens the pitcher *over* itself and unwinds `page → dialog` on two presses; feed → outing (46) → inning (47) → faced batter (48); the triple Upcoming dialog (46) → player page (50) → Game Log popup (51); and `?player=…&help=1` — each one press of Escape per box, top box never inert, 0 stops outside it.
+
+**`PlayerDayModal` still passes no handler and stays optional for it alone.** It narrows `PlayerDay` to one `gamePk` off a Game Log row, which is a game that has been played, so `upcoming` is empty there by construction and the block cannot render — plumbing for an unreachable link, against a comment saying why there is none.
+
+**Bundle: 466.02 → 466.09 KB of JS** (138.59 → 138.60 gzipped), CSS unchanged at 106.85 (19.09).
+
 ### The News tab, and the two feeds behind it
 
 **It is the eighth tab and it reads before Stats and the Game Log** — the strip

@@ -77,10 +77,21 @@ export function PlayerDay({
    *  dialog passes back in. Absent, the whole day is drawn as a card per game,
    *  which on a doubleheader is two. */
   gamePk?: number;
-  /** Opening another player's page from inside this one. Grouped items draw no
-   *  identity row at all, so nothing here can actually reach it; the default
-   *  keeps the two call sites from having to invent a handler for a link that
-   *  is never rendered. */
+  /**
+   * Opening another player's page from inside this one.
+   *
+   * This comment used to say the default was safe because "grouped items draw
+   * no identity row at all, so nothing here can actually reach it", and that
+   * was false the moment the Upcoming row's dialog started naming the opposing
+   * starter: `grouped` drops the row's *own* header and not that block, whose
+   * headshot and name are links to a man nobody has rostered. So a no-op
+   * default silently ate them on the Overview tab — the one caller that never
+   * passed a handler.
+   *
+   * It stays optional for `PlayerDayModal` alone, which narrows to one
+   * `gamePk` off a Game Log row: that is a game that has been played, so
+   * `upcoming` is empty there by construction and the block cannot render.
+   */
   onOpenDetails?: (key: string) => void;
 }) {
   const open = onOpenDetails ?? (() => {});
