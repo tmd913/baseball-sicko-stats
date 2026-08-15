@@ -944,7 +944,6 @@ export function UpcomingRow({
                   vsLeft={report.splitVsLeft}
                   vsRight={report.splitVsRight}
                   highlight={spHand === 'L' ? 'left' : 'right'}
-                  highlightNote="this game"
                   highlightTitle={`${sp!.name} throws ${spHand === 'L' ? 'left' : 'right'}-handed, so this is the half that applies to this game.`}
                 />
               </>

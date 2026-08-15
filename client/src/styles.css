@@ -5045,24 +5045,13 @@ body {
   text-transform: none;
   color: var(--faint);
 }
-/* Which of the two halves the reader came about — drawn only when a caller names
-   one (the feed's Upcoming row does; the player page's Splits tab does not), and
-   then on **both** heads, the unmarked one hidden rather than blank, so a third
-   line can't push one column's label off the baseline the other sits on. It
-   wraps freely: the head column is `--spl-val-w` (54px, 46 inside a dialog on a
-   phone) and `this game` genuinely takes two lines there, which is exactly why
-   the reservation is the string itself and not a single blank line. Accent
-   because it marks a thing rather than labelling one. */
-.spl-head-mark {
-  color: var(--accent);
-  font-weight: 700;
-}
-/* The unmarked side's copy of the same phrase, laid out and hidden — see
-   `SplitHead`: it is what keeps the two heads on one baseline whether the
-   caller's phrase takes one line or two. */
-.spl-head-mark--ghost {
-  visibility: hidden;
-}
+/* Which of the two halves the reader came about — the feed's Upcoming row
+   marks one (the player page's own Splits tab marks neither). It used to carry
+   a second line saying so in words (`this game`), reserved on both heads
+   whether or not either was marked so a third line on one side alone couldn't
+   push its label and sample off the baseline its twin sits on; the words are
+   gone; the accent colour and the head's own `title` tooltip are the whole of
+   the mark now, and neither costs the head a line. */
 .spl-head-side--on {
   color: var(--accent);
 }

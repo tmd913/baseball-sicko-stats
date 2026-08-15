@@ -552,36 +552,26 @@ function SplitRow<T>({
 }
 
 /**
- * One of the two column heads: the side, its sample size, and — only when a
- * caller has named a half — a marker line saying which of the two the reader
- * came about.
- *
- * **The marker line is rendered on both sides whenever it is rendered at all**,
- * hidden on the unmarked one rather than blank. The heads are a grid row with
- * `align-items: center`, so a third line on one side alone would push its label
- * and sample off the baseline its twin sits on. A blank `\u00a0` reserves one
- * line and would be wrong the moment a caller's phrase wrapped to two in a 54px
- * column, which `this game` does at 46px inside a dialog on a phone — so the
- * reservation is *the same string*, laid out and made
- * `visibility: hidden`: the Columns hint's own ghost, which reserves its taller
- * sentence by rendering it rather than by declaring a height. `visibility`
- * rather than `aria-hidden` alone, since that is what keeps the copy out of the
- * accessibility tree as well as out of the picture.
+ * One of the two column heads: the side and its sample size. When a caller has
+ * named a half (`marked`) the head takes the accent colour, and `title` — the
+ * whole sentence, e.g. "Andrew Alvarez throws left-handed, so this is the half
+ * that applies to this game." — carries the reason on hover or tap. That used
+ * to be restated as a two-word line under the sample (`this game`), which said
+ * nothing the colour and the tooltip didn't already say and cost the head a
+ * reserved line on both sides to hold it; it's gone, and the mark is the
+ * colour alone.
  */
 function SplitHead({
   label,
   sample,
   unit,
   marked,
-  note,
   title,
 }: {
   label: string;
   sample: number;
   unit: string;
   marked: boolean;
-  /** Present on both heads or on neither — see above. */
-  note?: string;
   title?: string;
 }) {
   return (
@@ -590,9 +580,6 @@ function SplitHead({
       <small>
         {sample} {unit}
       </small>
-      {note !== undefined && (
-        <small className={`spl-head-mark${marked ? '' : ' spl-head-mark--ghost'}`}>{note}</small>
-      )}
     </span>
   );
 }
@@ -610,7 +597,6 @@ function SplitCard<T>({
   sampleNoun,
   stats,
   highlight = null,
-  highlightNote,
   highlightTitle,
 }: {
   left: T | null;
@@ -629,15 +615,12 @@ function SplitCard<T>({
    *  announced, and the whole comparison is what makes his half mean anything
    *  (`.750 vs LHP` is nothing until you know the other side reads `.587`). So
    *  the card is unchanged and the head *says which column is his*: absent
-   *  everywhere else, which is why the marker line is drawn only when a caller
-   *  asks for one. */
+   *  everywhere else, which is why the accent colour is drawn only when a
+   *  caller asks for one. */
   highlight?: 'left' | 'right' | null;
-  /** What the marked column is marked *as*, in two words at most — the head
-   *  column is 54px wide. Deliberately not a temporal phrase: the Upcoming
-   *  section reaches future days as well as tonight. */
-  highlightNote?: string;
   /** The whole sentence, for the head's tooltip, where there is room to name the
-   *  pitcher the mark is about. */
+   *  pitcher the mark is about — the tooltip and the accent colour are the
+   *  whole of the mark now; see `SplitHead`. */
   highlightTitle?: string;
 }) {
   const smaller = Math.min(leftSample, rightSample);
@@ -665,7 +648,6 @@ function SplitCard<T>({
             sample={leftSample}
             unit={sampleUnit}
             marked={highlight === 'left'}
-            note={highlight ? highlightNote : undefined}
             title={highlight === 'left' ? highlightTitle : undefined}
           />
           <span />
@@ -674,7 +656,6 @@ function SplitCard<T>({
             sample={rightSample}
             unit={sampleUnit}
             marked={highlight === 'right'}
-            note={highlight ? highlightNote : undefined}
             title={highlight === 'right' ? highlightTitle : undefined}
           />
         </div>
@@ -742,14 +723,12 @@ export function BatterSplitsTab({
   vsLeft,
   vsRight,
   highlight,
-  highlightNote,
   highlightTitle,
 }: {
   vsLeft: SeasonStats | null;
   vsRight: SeasonStats | null;
   /** 'left' is vs LHP — see `SplitCard`. */
   highlight?: 'left' | 'right' | null;
-  highlightNote?: string;
   highlightTitle?: string;
 }) {
   const lp = vsLeft?.pa ?? 0;
@@ -767,7 +746,6 @@ export function BatterSplitsTab({
       sampleNoun="plate appearances"
       stats={BATTER_STATS}
       highlight={highlight}
-      highlightNote={highlightNote}
       highlightTitle={highlightTitle}
     />
   );
