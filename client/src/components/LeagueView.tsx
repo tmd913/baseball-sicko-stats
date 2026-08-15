@@ -366,7 +366,17 @@ function Scoreboard({
 /** Which of the three pages of this view is on screen. */
 export type LeagueTab = 'scoreboard' | 'rankings' | 'transactions';
 
-const TABS: { tab: LeagueTab; label: string; title: string }[] = [
+/** The three pages of the League view.
+ *
+ * **Exported, because the strip that draws them is not this component's any
+ * more.** It rendered here, directly above the page it selected, which is where
+ * a tab row belongs when the page is all there is — but the app already has a
+ * row for exactly this statement (`.view-bar-tabs`, which holds the view
+ * switch, the kind tabs and the roster row's own controls), and a second strip
+ * of tabs an inch under the first read as a different kind of control rather
+ * than as one tier down of the same one. So `App` draws it there and this file
+ * keeps only the vocabulary. */
+export const LEAGUE_TABS: { tab: LeagueTab; label: string; title: string }[] = [
   { tab: 'scoreboard', label: 'Scoreboard', title: "This period's matchups" },
   { tab: 'rankings', label: 'Rankings', title: 'Where every team stands in each category' },
   { tab: 'transactions', label: 'Transactions', title: 'Who has added, dropped and traded whom' },
@@ -374,7 +384,6 @@ const TABS: { tab: LeagueTab; label: string; title: string }[] = [
 
 export default function LeagueView({
   tab,
-  onTab,
   board,
   loading,
   error,
@@ -392,7 +401,6 @@ export default function LeagueView({
   onConnect,
 }: {
   tab: LeagueTab;
-  onTab: (tab: LeagueTab) => void;
   board: EspnScoreboard | null;
   loading: boolean;
   error: string | null;
@@ -432,27 +440,6 @@ export default function LeagueView({
 
   return (
     <div className="league-view">
-      {/* The strip. Folded onto `.view-switch` / `.view-tab` in the stylesheet
-          rather than restyled to resemble the app's other tab rows, so this is
-          the same object as the view switch above it by construction. */}
-      <div className="lg-tabs-row">
-      <div className="lg-tabs" role="tablist" aria-label="League">
-        {TABS.map((t) => (
-          <button
-            key={t.tab}
-            type="button"
-            role="tab"
-            aria-selected={t.tab === tab}
-            className={`lg-tab${t.tab === tab ? ' active' : ''}`}
-            onClick={() => onTab(t.tab)}
-            title={t.title}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-      </div>
-
       {tab === 'rankings' ? (
         <LeagueRankings
           rankings={rankings}

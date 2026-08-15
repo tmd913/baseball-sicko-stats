@@ -62,7 +62,7 @@ import type { FantasySlot } from './hooks';
 import { LoadingBlock, LoadingLine, SpinningBaseball } from './components/Loading';
 import { Tutorial } from './components/Tutorial';
 import { EspnSettings } from './components/EspnSettings';
-import LeagueView from './components/LeagueView';
+import LeagueView, { LEAGUE_TABS } from './components/LeagueView';
 import type { LeagueTab } from './components/LeagueView';
 
 // How long a press-triggered mark keeps spinning at a minimum — the fantasy
@@ -2647,6 +2647,32 @@ export default function App() {
       </div>
     ) : null;
   const kindTabs = kindSwitch(showKindTabs, shownKind);
+  /* The League page's own three tabs, in the app's tab row rather than on the
+     page below it. They are the same kind of statement as every other group in
+     `.view-bar-tabs` — which page, then which reading of it — and the row is
+     already the app's answer to "more groups than fit on a line": each group is
+     `flex: none`, so this one travels whole and breaks between groups rather
+     than inside one. Drawn only on the League view, exactly as the kind tabs are
+     drawn only on the two roster views, so no other page carries an empty slot
+     for it. */
+  const leagueTabs =
+    view === 'league' && espnConnected ? (
+      <div className="lg-tabs" role="tablist" aria-label="League">
+        {LEAGUE_TABS.map((t) => (
+          <button
+            key={t.tab}
+            type="button"
+            role="tab"
+            aria-selected={t.tab === leagueTab}
+            className={`lg-tab${t.tab === leagueTab ? ' active' : ''}`}
+            onClick={() => setLeagueTab(t.tab)}
+            title={t.title}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+    ) : null;
   // The header's cluster, at the top right: the roster search, and nothing
   // else. The calendar was once beside it and moved down to the roster row (see
   // `dateToggle`); Edit was the next and is now an entry in the settings menu;
@@ -3105,6 +3131,12 @@ export default function App() {
          one — it took this page over when Edit moved off the Games view. */
       className={`app${view === 'summary' && !editMode ? ' summary-mode' : ''}${
         view === 'research' ? ' research-mode' : ''
+      }${
+        /* The Rankings tab is a wide table read across and wants the same
+           fixed-height column the board has, so its header row can pin to a
+           scrollport rather than to a page that grows. The other two League
+           tabs are card lists and stay ordinary scrolling pages. */
+        view === 'league' && leagueTab === 'rankings' ? ' league-rank-mode' : ''
       }${editMode ? ' edit-mode' : ''}${dateOpen ? ' date-open' : ''}`}
     >
       {/* Everything above the page's content, in one box so it can be pinned to
@@ -3572,6 +3604,8 @@ export default function App() {
             </div>
             {/* Batters / Pitchers. */}
             {isRosterView(view) && kindTabs}
+            {/* Scoreboard / Rankings / Transactions. */}
+            {leagueTabs}
             {/* The feed's grouping, the starters filter and the calendar that
                 says which days they cover. All of it in the one wrapping row:
                 each group is `flex: none`, so the row fits as many whole groups
@@ -3800,7 +3834,6 @@ export default function App() {
       {view === 'league' ? (
         <LeagueView
           tab={leagueTab}
-          onTab={setLeagueTab}
           board={scoreboard}
           loading={showScoreboardWait}
           error={scoreboardError}
