@@ -54,7 +54,7 @@ function ordinal(n: number): string {
  * half of it: a span reaching into the week being played is a total to date,
  * and saying `Season` over a figure that stops on Tuesday would be a claim.
  */
-function spanDetail(info: EspnRankSpanInfo | undefined): string {
+export function spanDetail(info: EspnRankSpanInfo | undefined): string {
   if (!info) return '';
   const days =
     info.start && info.end
@@ -168,7 +168,12 @@ function RankTable({
       <table className="league-table">
         <thead>
           <tr>
-            {head({ kind: 'team' }, 'Team', 'The league standing', 'lg-team-col')}
+            {/* The pinned column is the badge alone — see `.lg-logo-col`. It
+                carries no label and no sort: it is the same cell the two roster
+                tables give a headshot, and the sort that belongs to a team's
+                identity belongs on its name. */}
+            <th scope="col" className="lg-logo-col" aria-label="Team badge" />
+            {head({ kind: 'team' }, 'Team', 'The league standing', 'lg-name-col')}
             {categories.map((c) =>
               head(
                 { kind: 'cat', statId: c.statId },
@@ -185,18 +190,18 @@ function RankTable({
             const t = teams.get(r.teamId);
             return (
               <tr key={r.teamId} className={r.teamId === rankings.myTeamId ? 'lg-row-mine' : undefined}>
-                {/* The block is a `<span>` inside the cell, not the cell
-                    itself: a `<th>` set to `display: flex` leaves table layout,
-                    which is what had this column laying out 150px narrower than
-                    its own header and painting the reader's row wash as a
-                    rectangle inside it. */}
-                <th scope="row" className="lg-team-col">
-                  <span className="lg-team">
-                    <TeamLogo team={t} />
-                    <span className="lg-row-name">
-                      <span className="lg-row-title">{t?.name ?? `Team ${r.teamId}`}</span>
-                      <span className="lg-row-sub">{t ? record(t) : ''}</span>
-                    </span>
+                {/* Two cells, because only the badge pins. The name scrolls
+                    away with the stats, which is the board's own rule for a
+                    phone: what has to stay is the least that identifies the
+                    row, and 168px of team name is paid for out of the
+                    categories beside it. */}
+                <td className="lg-logo-col" title={t ? `${t.name} — ${record(t)}` : undefined}>
+                  <TeamLogo team={t} />
+                </td>
+                <th scope="row" className="lg-name-col">
+                  <span className="lg-row-name">
+                    <span className="lg-row-title">{t?.name ?? `Team ${r.teamId}`}</span>
+                    <span className="lg-row-sub">{t ? record(t) : ''}</span>
                   </span>
                 </th>
                 {categories.map((c) => {
@@ -236,13 +241,11 @@ export default function LeagueRankings({
   span,
   loading,
   error,
-  onSpan,
 }: {
   rankings: EspnRankings | null;
   span: EspnRankSpan;
   loading: boolean;
   error: string | null;
-  onSpan: (span: EspnRankSpan) => void;
 }) {
   if (error && !rankings) {
     return (
@@ -264,28 +267,13 @@ export default function LeagueRankings({
 
   return (
     <div className="lg-rankings">
-      {/* The span strip. Folded onto `.view-switch` / `.view-tab` in the
-          stylesheet rather than restyled to resemble the research board's
-          window tabs — it *is* that control, asking the same shape of question
-          about a different thing. */}
-      <div className="lg-span-head">
-        <div className="lg-span-row" role="tablist" aria-label="Which span">
-          {rankings.spans.map((s) => (
-            <button
-              key={s.span}
-              type="button"
-              role="tab"
-              aria-selected={s.span === shown}
-              className={`lg-span-tab${s.span === shown ? ' active' : ''}`}
-              onClick={() => onSpan(s.span)}
-              title={spanDetail(s) || s.label}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
-        <span className="lg-span-detail">{spanDetail(info)}</span>
-      </div>
+      {/* What the span covers, **directly above the table** rather than beside
+          the strip that picks it. The strip is in the app's tab row now (see
+          `App`), and this is not a control: it is the table's caption, which is
+          where the research board keeps its own count line and for the same
+          reason — the sentence describes what is under it, so it belongs
+          against it rather than an inch away among the buttons. */}
+      <p className="lg-span-detail">{spanDetail(info)}</p>
 
       {rankings.categories.length === 0 ? (
         <div className="empty-state">

@@ -63,6 +63,7 @@ import { LoadingBlock, LoadingLine, SpinningBaseball } from './components/Loadin
 import { Tutorial } from './components/Tutorial';
 import { EspnSettings } from './components/EspnSettings';
 import LeagueView, { LEAGUE_TABS } from './components/LeagueView';
+import { spanDetail } from './components/LeagueRankings';
 import type { LeagueTab } from './components/LeagueView';
 
 // How long a press-triggered mark keeps spinning at a minimum — the fantasy
@@ -2673,6 +2674,49 @@ export default function App() {
         ))}
       </div>
     ) : null;
+  /* The Rankings span — **in the tab row with everything else, and a dropdown
+     on a phone**. It is the research board's window tabs asking the same shape
+     of question about a different thing (which games these numbers are drawn
+     from), so it takes that control's answers exactly: pills on a desktop, a
+     native `<select>` under 640px, both rendered and swapped by one media query
+     rather than by a JS media test that could drift from the CSS.
+
+     It is drawn from `rankings.spans` — the spans the server says it can serve
+     honestly — rather than from a list here, so a season with no All-Star break
+     in ESPN's calendar has no halves and April has no second half, instead of
+     either being offered and coming back empty. */
+  const leagueSpanTabs =
+    view === 'league' && leagueTab === 'rankings' && rankings && rankings.spans.length > 1 ? (
+      <>
+        <div className="lg-span-row" role="tablist" aria-label="Which span">
+          {rankings.spans.map((sp) => (
+            <button
+              key={sp.span}
+              type="button"
+              role="tab"
+              aria-selected={sp.span === rankSpan}
+              className={`lg-span-tab${sp.span === rankSpan ? ' active' : ''}`}
+              onClick={() => setRankSpan(sp.span)}
+              title={spanDetail(sp) || sp.label}
+            >
+              {sp.label}
+            </button>
+          ))}
+        </div>
+        <select
+          className="lg-span-select"
+          value={rankSpan}
+          onChange={(e) => setRankSpan(e.target.value as EspnRankSpan)}
+          aria-label="Which span"
+        >
+          {rankings.spans.map((sp) => (
+            <option key={sp.span} value={sp.span}>
+              {sp.label}
+            </option>
+          ))}
+        </select>
+      </>
+    ) : null;
   // The header's cluster, at the top right: the roster search, and nothing
   // else. The calendar was once beside it and moved down to the roster row (see
   // `dateToggle`); Edit was the next and is now an entry in the settings menu;
@@ -3606,6 +3650,8 @@ export default function App() {
             {isRosterView(view) && kindTabs}
             {/* Scoreboard / Rankings / Transactions. */}
             {leagueTabs}
+            {/* Which span the Rankings table is drawn from. */}
+            {leagueSpanTabs}
             {/* The feed's grouping, the starters filter and the calendar that
                 says which days they cover. All of it in the one wrapping row:
                 each group is `flex: none`, so the row fits as many whole groups
@@ -3842,7 +3888,6 @@ export default function App() {
           rankSpan={rankSpan}
           rankingsLoading={showRankingsWait}
           rankingsError={rankingsError}
-          onRankSpan={setRankSpan}
           transactions={transactions}
           transactionsLoading={showTransactionsWait}
           transactionsError={transactionsError}
