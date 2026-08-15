@@ -12,6 +12,7 @@ import type {
   ResearchRow,
   ResearchWindow,
   RosterSource,
+  ScheduleWindow,
   SeasonPlayer,
   TrendWindow,
   WatchPlayer,
@@ -41,6 +42,9 @@ import { simulateLiveDay } from './simulate';
 import { PlayerDetails } from './components/PlayerDetails';
 import { toStatsColumnKeys } from './components/PlayerWindowTable';
 import { DateRangePicker, numericRange, tightRange } from './components/DateRangePicker';
+import { ScheduleSpanTabs, ScheduleToggle } from './components/ScheduleControl';
+import { buildScheduleIndex, toScheduleSpan } from './components/schedule';
+import type { ScheduleSpan } from './components/schedule';
 import {
   EligibilityContext,
   FantasyRosterContext,
@@ -400,6 +404,81 @@ export default function App() {
    */
   const [startersOnly, setStartersOnly] = useState<boolean>(
     () => initialParams.get('starters') === '1',
+  );
+  /**
+   * **The Schedule view** — the days ahead in place of the stat columns, on the
+   * summary table and the research board alike. Null is off; 7 or 14 is the span.
+   *
+   * **One piece of state for both tables**, which is what makes it one feature
+   * rather than two that resemble each other: a reader who wants the schedule
+   * wants the schedule, and the two tables are one vocabulary the way `statRanks`
+   * says they are. The span is shared for the same reason `researchWindow` is
+   * shared across the two boards — "the next 7 days" means one thing.
+   *
+   * **In the URL as `sched=7` / `sched=14`**, by the rule `hideil=1` and
+   * `roster=fantasy` follow: it changes *what data the view is showing*, so a
+   * link that carries it describes a different table. One param rather than a
+   * mode flag and a span beside it, so it can never say something meaningless —
+   * the same reason `starters=1` is kept out of a URL where it does nothing.
+   *
+   * **Not a saved preference**, and the line is `view`'s rather than
+   * `hideInjured`'s: which *reading* of your players you are on is restored by a
+   * link and a reload, not by a record, and every other reading in the app
+   * (`view=feed`, `kind=pitcher`) is on exactly that footing. So there is no
+   * `UserPrefs` key, no route, and none of the already-touched ref dance the
+   * saved toggles need.
+   */
+  const [scheduleSpan, setScheduleSpan] = useState<ScheduleSpan | null>(() =>
+    toScheduleSpan(initialParams.get('sched')),
+  );
+  /**
+   * The window itself — every club's next fortnight, read **once per session
+   * and kept**, exactly as the research blob is and for the same two reasons:
+   * it is one upstream shared by every user and every row (see
+   * `server/src/schedule.ts`), and the server holds it for half an hour anyway,
+   * so a second read on a toggle would buy a wait and nothing else.
+   *
+   * The client slices it to 7 or 14, so **changing the span costs no request**;
+   * and because it is fetched lazily on the first entry into the mode, a reader
+   * who never presses the toggle never pays for it at all.
+   */
+  const [scheduleWindow, setScheduleWindow] = useState<ScheduleWindow | null>(null);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
+  useEffect(() => {
+    if (scheduleSpan === null || scheduleWindow) return;
+    let cancelled = false;
+    setScheduleLoading(true);
+    setScheduleError(null);
+    api
+      .schedule()
+      .then((w) => {
+        if (!cancelled) setScheduleWindow(w);
+      })
+      .catch((e: Error) => {
+        if (!cancelled) setScheduleError(e.message);
+      })
+      .finally(() => {
+        if (!cancelled) setScheduleLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [scheduleSpan, scheduleWindow]);
+  /**
+   * The window indexed by club and day, or null while the mode is off or the
+   * read is still out.
+   *
+   * **The mode is the presence of this rather than a flag beside it**, which is
+   * what makes "in schedule mode with no schedule" impossible to draw: both
+   * tables go on showing their stat columns until it lands, which is rule 1 of
+   * the app's loading system (nothing blanks while a read is in flight), and
+   * the only mark the press leaves is the ball inside the toggle it started
+   * from.
+   */
+  const scheduleIndex = useMemo(
+    () => (scheduleSpan !== null && scheduleWindow ? buildScheduleIndex(scheduleWindow, scheduleSpan) : null),
+    [scheduleSpan, scheduleWindow],
   );
   // The filter is about *today*, so it can only act on a range that contains
   // today. Over "Yesterday" or a custom week in July there is nobody it could
@@ -1519,6 +1598,10 @@ export default function App() {
     if (hideInjured) p.set('hideil', '1');
     // Only while it is actually narrowing something — see `startersActive`.
     if (startersActive) p.set('starters', '1');
+    // The mode and its span as one param, so it can never say a span with no
+    // mode — see `scheduleSpan`. Absent is off, which is the only thing the
+    // absence can mean.
+    if (scheduleSpan !== null) p.set('sched', String(scheduleSpan));
     if (rosterSource === 'fantasy') p.set('roster', 'fantasy');
     if (helpOpen) p.set('help', '1');
     window.history.replaceState(null, '', `?${p.toString()}`);
@@ -1538,6 +1621,7 @@ export default function App() {
     simulate,
     hideInjured,
     startersActive,
+    scheduleSpan,
     rosterSource,
     helpOpen,
   ]);
@@ -2400,6 +2484,39 @@ export default function App() {
      lone one on a row of tabs would have nothing beside it to say what it
      meant, and the two labels were 174px of a line a phone hasn't got. */
 
+  /**
+   * The Schedule toggle and, once it is on, how far ahead — the roster row's
+   * copy of the control the research board draws in its own bar.
+   *
+   * **It leads the group**, ahead of `Starters` and the calendar, which is this
+   * row's own documented order rather than an exception to it: the questions
+   * come in the sequence *which page, which kind, **which reading of it**,
+   * which players, which days*, and the mode is literally the third of those.
+   * (The board puts it in its tools run after the controls that narrow *rows*
+   * and before the two that dress the columns, which is that run's own reading
+   * order; the two placements answer to two different rows and each is argued
+   * where it sits.)
+   *
+   * **`Starters` and the calendar are untouched by it**, and that is the same
+   * split the board makes: this changes which *columns* the table has, where
+   * those two decide which *rows* and which days the report was built from. The
+   * calendar keeps its second job here — over a range the report's player list
+   * is the roster as it stood on those days, so it still says whose roster is on
+   * screen even when nothing on screen is drawn from those days.
+   */
+  const scheduleControl = (
+    <>
+      <ScheduleToggle
+        on={scheduleSpan !== null}
+        loading={scheduleLoading}
+        onToggle={() => setScheduleSpan((s) => (s === null ? 7 : null))}
+      />
+      {scheduleSpan !== null && (
+        <ScheduleSpanTabs span={scheduleSpan} onChange={setScheduleSpan} />
+      )}
+    </>
+  );
+
   const startersToggle = startersOffered ? (
       <button
         type="button"
@@ -3177,6 +3294,9 @@ export default function App() {
                 now stands here as the toggle that replaced the third of them. */}
             {view !== 'research' && showRosterViews && (
               <>
+              {/* Which reading of these players — the stats over the range, or
+                  the days ahead. See `scheduleControl`. */}
+              {view === 'summary' && scheduleControl}
               {/* Only over a range that contains today — see `startersToggle`. */}
               {startersToggle}
               {dateToggle}
@@ -3219,6 +3339,15 @@ export default function App() {
           permanent row against the top of the window — and be folded away by a
           menu button that has nothing to do with it. */}
       {error && <div className="error-banner">⚠ {error}</div>}
+
+      {/* Its own line rather than folded into the one above: a failed schedule
+          read is news about one *mode* and the report behind the page is
+          untouched, so the two must not stand in for each other. The mode stays
+          on and both tables go on drawing their stat columns, which is the same
+          direction every read in this app fails in. */}
+      {scheduleError && (
+        <div className="error-banner">⚠ Couldn’t read the schedule — {scheduleError}</div>
+      )}
 
       {/* `!usingFantasy`, because this block is about the *saved* list and in
           fantasy mode the views are not reading it: a user with an ESPN team
@@ -3397,6 +3526,10 @@ export default function App() {
           onColumnsChange={setResearchColumns}
           window={researchWindow}
           onWindowChange={setResearchWindow}
+          /* One flag and one span for both wide tables — see `scheduleSpan`. */
+          scheduleSpan={scheduleSpan}
+          onScheduleSpanChange={setScheduleSpan}
+          schedule={scheduleIndex}
           include={researchInclude}
           onIncludeChange={setResearchInclude}
           includeWatchlist={researchWatchlist}
@@ -3436,6 +3569,9 @@ export default function App() {
           <SummaryTable
             reports={filteredCards}
             onOpenDetails={setDetailsKey}
+            /* Null while the mode is off *and* while its one read is still out,
+               so the stat columns stand until the days can replace them. */
+            schedule={scheduleIndex}
             /* Kept when the table takes the page. The same nodes render in the
                view bar as well, which is behind the expanded box and so never
                on screen at the same time — the alternative is lifting the
@@ -3445,6 +3581,13 @@ export default function App() {
             chrome={
               <>
                 {kindTabs}
+                {/* Expanded, the mode and its span are live controls rather
+                    than a badge — the same argument the starters filter makes
+                    below, one step stronger: a table of dates with nothing on
+                    screen saying how far they run is the state this must never
+                    be in, and this is also the way back to the stats without
+                    leaving the page. */}
+                {scheduleControl}
                 {/* Expanded, the research board reduces its control set to a
                     row of read-only badges; this view keeps its controls
                     instead, and the filter comes with them for the same reason

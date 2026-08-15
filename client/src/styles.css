@@ -5522,7 +5522,8 @@ body {
    looking small. Only the calendar takes the muted fill; the toggle's glyph
    follows its own text colour, which is what carries its `.on` state. */
 .date-toggle svg,
-.starters-toggle svg {
+.starters-toggle svg,
+.schedule-toggle svg {
   flex: none;
 }
 .date-toggle svg {
@@ -6941,6 +6942,26 @@ body {
 .research-tools {
   flex: none;
 }
+/* ---- …except at the width where the run outgrows the screen ----------------
+   `flex: none` is what makes the group travel to the next line whole rather
+   than folding in half, and it is right everywhere it fits. At **320px** it no
+   longer does: the Schedule toggle is a sixth button, and the run went from
+   289px to 333 against a 320px chrome — measured, and a 7px horizontal
+   overflow of the page body, which is the one thing this bar must never cause.
+   Letting it shrink there lets it wrap **within itself**, which is the lesser
+   evil this rule's own comment already names ("it may wrap within itself on a
+   very narrow screen"). `min-width: 0` is the half that makes shrinking
+   possible at all — a flex item's automatic minimum is its content — and the
+   threshold is 360 rather than 320 because 360 is where the run and the
+   viewport are within a few pixels of each other and the next button added
+   would tip it. Above it nothing moves: measured 375 → 1920, the group is the
+   same width and the bar wraps to the same rows either way. */
+@media (max-width: 360px) {
+  .research-tools {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+}
 .research-positions {
   flex: 0 1 auto;
   display: flex;
@@ -6998,7 +7019,8 @@ body {
    by construction. (Qualified was the closer twin of the two and is gone —
    see `research.ts`.) */
 .research-toggle,
-.starters-toggle {
+.starters-toggle,
+.schedule-toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -7014,7 +7036,8 @@ body {
   cursor: pointer;
 }
 .research-toggle:hover,
-.starters-toggle:hover {
+.starters-toggle:hover,
+.schedule-toggle:hover {
   color: var(--text);
 }
 /* `.active` is "the panel is open"; `.on` is "the panel holds something",
@@ -7032,18 +7055,21 @@ body {
    phone, which is right for four icons in a known run and wrong for a lone
    button on a row of tabs, where nothing beside it would say what the glyph
    meant. */
-.starters-toggle {
+.starters-toggle,
+.schedule-toggle {
   flex: none;
   white-space: nowrap;
 }
 .research-toggle.on,
-.starters-toggle.on {
+.starters-toggle.on,
+.schedule-toggle.on {
   color: var(--accent);
   border-color: rgba(56, 189, 248, 0.5);
   background: rgba(56, 189, 248, 0.12);
 }
 .research-toggle:focus-visible,
-.starters-toggle:focus-visible {
+.starters-toggle:focus-visible,
+.schedule-toggle:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
@@ -7562,7 +7588,8 @@ body {
    Its own narrow-screen block, next to the component rather than in the rhythm
    block at the end of the file, but still after every base rule it overrides. */
 @media (max-width: 640px) {
-  .research-toggle-label {
+  .research-toggle-label,
+  .schedule-toggle-label {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -7594,6 +7621,7 @@ body {
      button in the header already takes — rather than whatever their padding
      leaves around a 15px glyph, so the pair reads as a set. */
   .starters-toggle,
+  .schedule-toggle,
   .date-toggle {
     width: var(--control-h);
     padding: 0;
@@ -10226,6 +10254,107 @@ body {
   background: rgba(56, 189, 248, 0.16);
   color: var(--accent);
 }
+
+/* ---- The Schedule view ------------------------------------------------------
+   A column per day across both wide tables, each cell naming that day's
+   opponent. The whole of it is `components/schedule.tsx` and the two tables
+   draw the same cell, so there is one block of rules here rather than one per
+   table.
+
+   **The toggle itself has no rules of its own**: `.schedule-toggle` is folded
+   into `.research-toggle`/`.starters-toggle`'s five selector lists above — the
+   base, the hover, the `flex: none`, the `.on` fill, the focus ring — plus the
+   glyph's `flex: none` and the two narrow-screen blocks, so it is the same
+   object as the board's Watchlist button and the roster row's Starters filter
+   by construction rather than by resemblance. */
+
+/* `Next 7` / `Next 14`, the app's segmented switch (it carries `.view-switch`
+   and its tabs `.view-tab`, so it inherits outright). `flex: none` for the
+   reason `.research-window-row` carries it: it travels whole when the bar
+   wraps rather than folding in half. */
+.schedule-span {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* The day header — two lines, `Fri` over `8/15`, which is what keeps the column
+   as narrow as the matchup under it rather than as wide as its own label. The
+   header rows of both tables are `text-transform: uppercase`, which is right
+   for a weekday and for a date alike. */
+.sched-head {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.15;
+}
+.sched-head-date {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--faint);
+}
+
+/* A day cell is `.sum-num` like every other narrow column — right-aligned, so
+   the abbreviations line up down the column and the header, the counts and the
+   opponents all share one edge. It needs **no width of its own**: the two-line
+   header is what sets the column (measured, ~59px on the board and ~61 on the
+   summary table at 390px, against a `vs SEA` that wants ~40), so a floor here
+   would be a number that never binds. */
+.sched-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.2;
+}
+/* A doubleheader draws both matchups stacked, so two cells sit in one td. */
+.sched-cell + .sched-cell {
+  margin-top: 2px;
+}
+.sched-opp {
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+/* **Colour is spent on state and on nothing else**, which is the rule both
+   tables already keep for their stat columns: a game in progress takes the
+   accent green the summary table's own opponent cell gives a live inning, a
+   postponement the amber that cell gives `PPD`, and a game already final goes
+   muted so today's column says at a glance which of its games are still to
+   come. An off day is a faint dash — quiet on purpose, so a row's games are
+   what the eye lands on scanning across. */
+.sched-live .sched-opp {
+  color: var(--hit);
+}
+.sched-final .sched-opp {
+  color: var(--muted);
+}
+.sched-postponed .sched-opp {
+  color: var(--hr);
+}
+.sched-off {
+  color: var(--faint);
+}
+/* His club has announced him to start. A chip rather than a colour on the
+   opponent, because the opponent's colour is already spoken for by the game's
+   own state above and a starter can be announced for a game that is live. */
+.sched-sp {
+  margin-top: 1px;
+  padding: 0 4px;
+  color: var(--accent);
+  background: rgba(56, 189, 248, 0.14);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+/* Two announced starts in the span — the single most actionable thing this
+   view can say, and it says it only where his club has actually named him
+   twice (see `startCount`, which measures how far ahead that reaches). */
+.sched-two {
+  color: var(--accent);
+  font-weight: 800;
+}
+
 /* ---- Narrow-screen vertical rhythm -----------------------------------------
    On a phone every one of these rows stacks, and each was spaced by whichever
    rule happened to own it — the header's own gap, the view bar's, the tab

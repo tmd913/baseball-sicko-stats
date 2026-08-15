@@ -1058,3 +1058,55 @@ export interface ResearchRow {
   // Batter only — Savant publishes no sprint speed on the pitching board.
   sprintSpeed: number | null; // feet per second
 }
+
+// ---- The Schedule view -----------------------------------------------------
+
+/**
+ * One scheduled game, as the Schedule view reads it — the next fortnight of
+ * every club, over the wire once and joined to a row by its player's club.
+ *
+ * Deliberately thin. It carries no scores, no line score and no probable
+ * *names*: the view draws an opponent abbreviation and, on a pitcher's own row,
+ * whether he is the man his club has announced — which needs the two ids and
+ * nothing else. A name here would be a few hundred strings on the wire to fill
+ * a tooltip the row already answers with the player it is about.
+ */
+export interface ScheduleGame {
+  gamePk: number;
+  /** The ET baseball day the game counts on, `YYYY-MM-DD`. */
+  date: string;
+  /** ISO first pitch, or null where the schedule gives none. */
+  startTime: string | null;
+  homeId: number;
+  awayId: number;
+  /** Club abbreviations — "MIL". Empty where the teams table couldn't be read. */
+  home: string;
+  away: string;
+  /**
+   * MLB's own state for the game. **A postponement is not a game he gets**, so
+   * it is excluded from the per-row count and the cell says so; and today's
+   * column can hold a game already final, which the cell draws quietly rather
+   * than as something still to come.
+   */
+  state: 'scheduled' | 'live' | 'final' | 'postponed';
+  /**
+   * Whom each side has *announced*, and nothing more. Clubs name a starter
+   * about three days out (measured: 28/28 today, 27/30 tomorrow, 30/30 at two
+   * days, 3/22 at three, 1/30 at four and nothing beyond), so a start mark is a
+   * fact about the front of the window and an absence past it is the schedule
+   * rather than the view — see `docs/claude/client-summary.md`.
+   */
+  homeProbableId: number | null;
+  awayProbableId: number | null;
+}
+
+/** The whole window, as `/api/schedule` answers it. */
+export interface ScheduleWindow {
+  /** First ET day, inclusive — the server's own `baseballToday()`. */
+  start: string;
+  /** Last ET day, inclusive. */
+  end: string;
+  /** How many days that is, so a client can tell a short answer from a full one. */
+  days: number;
+  games: ScheduleGame[];
+}
