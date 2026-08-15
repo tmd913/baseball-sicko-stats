@@ -30,8 +30,12 @@
  * always opened.
  *
  * **Each tab's data is read on its first open and kept**, the way the player
- * page's tabs are: nobody who never opens Transactions pays for a 250-row
- * activity feed. See `docs/claude/client-league.md`.
+ * page's tabs are — with one exception: the transactions feed is read on entry
+ * to the **view**, whichever tab is open, because the red dot on the
+ * Transactions tab is computed from its head and nothing else on the wire
+ * carries that. All three are then re-read a minute at a time for as long as
+ * the page is on screen, quietly and only for what can still change
+ * (`App.tsx::LEAGUE_POLL_MS`). See `docs/claude/client-league.md`.
  */
 import { useMemo, useState } from 'react';
 import type {

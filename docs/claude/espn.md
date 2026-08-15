@@ -468,17 +468,24 @@ knowing before trusting the points-league card.
 
 - **The league's own facts** (`leagueMeta` — teams, records, `valuesByStat`, the
   categories, and the whole season's period spans) are two reads, **49,749 +
-  70,794 bytes**, cached in memory per league on the rosters' own
-  `OWNERSHIP_TTL_MS` (10 min) with an `inFlight` guard, so a cold Lambda serving
-  three tabs sends one upstream rather than three. The season's spans are read
-  unfiltered because the point of them *is* the season: they date every period
-  and they are what tells the client which periods exist.
+  70,794 bytes**, cached in memory per league on **`LIVE_TTL_MS` (1 min)** with
+  an `inFlight` guard, so a cold Lambda serving three tabs sends one upstream
+  rather than three. The season's spans are read unfiltered because the point of
+  them *is* the season: they date every period and they are what tells the
+  client which periods exist. **A minute rather than the rosters' ten**, and
+  `valuesByStat` is why: it is the Rankings tab's **season** column and it
+  accrues while games are being played, so on the rosters' clock the one span
+  that reads ESPN's own running total would have been the one span on the page
+  that did not move.
 - **A finished matchup period is a fact**, so it takes a storage blob read with
   **no freshness test** — `espn-scoreboard-{leagueId}-{period}-v1.json`, **3,396
   bytes** on a checked week — which is the rule `espn-lineup-…` already follows
   for a finished day's roster and for the same reason: you cannot retroactively
   score a run in a week that is over. The period being played is memory-only on
-  the same ten minutes.
+  **`LIVE_TTL_MS`**, a minute, which is the cadence the League page's own poll
+  reads through (**Client — the League view**, *The page updates itself, a
+  minute at a time*) — so a reader sitting on the scoreboard is never more than
+  about a minute behind ESPN, and a settled week costs nothing at all.
 - **`?refresh=1` drops every period of the league from memory**, not just the
   one asked for — "read my league again" is a statement about the league rather
   than about a week, which is exactly what `getOwnership` says — **while the
@@ -491,7 +498,10 @@ fresh process: the **current** period **10,023 bytes in 470ms**, a **finished**
 one **9,876 bytes in 282ms** cold and **2.7ms** off its blob, and the current
 period **1.7ms** warm in memory. A period the league has no row for falls back
 to the current one rather than answering with an empty board the reader could
-not explain (checked: `?period=999` → 19).
+not explain (checked: `?period=999` → 19). **Re-measured against the live TTL**
+with no poller running: the live period is **536ms** at the first ask past the
+minute and **3.7ms** inside it, and a settled week is **271ms** — which is its
+`leagueMeta` and not its matchups, those coming off the frozen blob — and 1.4ms.
 
 ### The Rankings tab, and the five spans
 
@@ -628,7 +638,7 @@ the departure from the research board's monochrome rule is argued.
 **over** cannot change, so it takes a storage blob read with no freshness test —
 `espn-span-{leagueId}-{first}-{last}-v1.json` — which is what `getMatchups`
 already does one period at a time. A span reaching into the week being played is
-memory-only on the rosters' ten minutes, and `force` reaches that one and leaves
+memory-only on **`LIVE_TTL_MS`**, and `force` reaches that one and leaves
 the frozen ones alone. The read is `mScoreboard` **alone**, filtered to the
 span's periods: it does not carry `matchupPeriodId` back (that is
 `mMatchupScore`'s field, which is why `leagueMeta` reads it separately) and it
@@ -698,13 +708,25 @@ to guess at.
 immutable, which is the argument for one — and what is read is not a past
 transaction, it is the **head of a feed** that grows all season, which is
 `nextGame.ts`'s class rather than `espn-lineup-…`'s: a blob's freshness test here
-could only ever be the ten minutes beside it, and what it stored would be a
+could only ever be the TTL beside it, and what it stored would be a
 window that has moved by the time it is read. Keyed per league on
-`OWNERSHIP_TTL_MS` with an `inFlight` guard, and `?refresh=1` reaches it — a move
-made on ESPN is exactly what that button is for. `TRANSACTIONS_LIMIT` is 250,
+**`LIVE_TTL_MS`** with an `inFlight` guard, and `?refresh=1` reaches it — a move
+made on ESPN is exactly what that button is for. **A minute rather than the
+rosters' ten**, and for a reason the feed did not have until now: the League page
+polls it whatever tab is open, because the red dot on the Transactions tab is
+computed from its head, and a mark saying "something happened" ten minutes after
+it happened is a mark the reader has already scrolled past on ESPN. `TRANSACTIONS_LIMIT` is 250,
 which cuts nothing today (a season of this league is 770 topics and the tab reads
 the most recent 250 of them) and bounds a payload that grows all season; the
 client says when the list is at it.
 
 **Measured through the route**: **86KB in 402ms** cold and **5ms** warm — 250
-transactions, 415 players, 197 adds, 49 drops and 4 trades.
+transactions, 415 players, 197 adds, 49 drops and 4 trades; **140ms** at the
+first ask past the minute and **3.2ms** inside it.
+
+**What the polling costs upstream is one league's worth per minute, not one per
+reader**, which is the measurement the whole cadence rests on: every cache in
+this file is keyed by league, so twelve leaguemates all sitting on the League
+page cost the same one read a minute that one of them does — and only while
+somebody has the page in front of them, a hidden browser tab skipping its ticks
+outright.

@@ -42,6 +42,7 @@ import {
   setMuteAudio,
   setStatRanks,
   setRecentPlayer,
+  setSeenTransactions,
   setLeagueSharing,
   setResearchColumns,
   setStatsColumns,
@@ -484,6 +485,38 @@ app.put(
       return;
     }
     res.json(await setRecentPlayer(userId(req), key));
+  }),
+);
+
+/**
+ * Mark the League page's Transactions feed read up to a date — what draws, and
+ * undraws, the red dot on that tab.
+ *
+ * The **sixth** update semantic on this item and its own again: not a boolean
+ * that is always set, nor a list a null clears, nor a key pushed onto one, but
+ * a watermark that only ever moves forward within a league (see
+ * `store.ts::setSeenTransactions`). Two fields for the same reason
+ * `research-include` takes two — they are one fact, and a date without the
+ * league it was read in is a date that could mark somebody else's feed read.
+ *
+ * `ts` is epoch milliseconds, which is what ESPN stamps a transaction with and
+ * what the feed is ordered by. Both are shape-checked and otherwise trusted:
+ * the worst a bad pair can do is this user's own dot.
+ */
+app.put(
+  '/api/prefs/seen-transactions',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const { leagueId, ts } = (req.body ?? {}) as { leagueId?: unknown; ts?: unknown };
+    if (typeof leagueId !== 'number' || !Number.isInteger(leagueId) || leagueId <= 0) {
+      res.status(400).json({ error: 'leagueId must be a positive integer' });
+      return;
+    }
+    if (typeof ts !== 'number' || !Number.isFinite(ts) || ts < 0) {
+      res.status(400).json({ error: 'ts must be epoch milliseconds' });
+      return;
+    }
+    res.json(await setSeenTransactions(userId(req), leagueId, ts));
   }),
 );
 

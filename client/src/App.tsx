@@ -78,6 +78,33 @@ import type { LeagueTab } from './components/LeagueView';
 const MIN_SPIN = 450;
 
 /**
+ * How often the League page re-reads what it is showing, while it is showing
+ * it.
+ *
+ * The three tabs are the one part of this app that describes a thing which
+ * moves while you watch it — a matchup's category totals climb through an
+ * evening's games, the standings under them climb with them, and a leaguemate
+ * can drop somebody at any hour — and until now all three were read on entry
+ * and then left, so a page anybody actually sits on quietly went stale.
+ *
+ * A minute rather than the report's twenty seconds, and the reason is what is
+ * being watched. That poll tracks a *plate appearance* — bases, count, the
+ * batter at the plate — where this tracks a **week's** totals, which ESPN's own
+ * scoreboard does not move faster than about a minute anyway. It is matched to
+ * `espn.ts::LIVE_TTL_MS` so that a tick either reads a cache under a minute old
+ * or goes and asks, which is the cheapest way to be a minute behind ESPN and no
+ * more.
+ *
+ * **A tick is skipped while the tab is hidden**, which is where this parts from
+ * the report poll deliberately: a league read is 10–120KB upstream against a
+ * league that has no idea we are doing it, and a forgotten background tab
+ * polling it all night buys nobody anything. Coming back to the tab polls
+ * immediately rather than waiting out the interval, so what a reader returns to
+ * is current — which is also what keeps the Transactions dot honest.
+ */
+const LEAGUE_POLL_MS = 60_000;
+
+/**
  * The app's three pages. **Roster** is the summary table over the date range,
  * **Feed** the same players and days read as a stream, and **Research** the
  * whole league over the season.
@@ -793,6 +820,18 @@ export default function App() {
             ),
           );
         }
+        // The transactions read-marker is merged on the same rule and for the
+        // same reason one step sharper: a reader who opened that tab in the
+        // second before this landed has already marked the feed read here *and*
+        // on the server, so a saved marker that is older must not put the dot
+        // back. Whichever is newer **for the same league** wins, which is
+        // exactly the rule the server applies to the write itself.
+        if (prefs.seenTransactions) {
+          const saved = prefs.seenTransactions;
+          setSeenTx((cur) =>
+            cur && cur.leagueId === saved.leagueId && cur.ts >= saved.ts ? cur : saved,
+          );
+        }
         // Same rule as hide-injured: the URL can only ever say `fantasy`, so
         // silence there is unspecified rather than "watchlist", which is what
         // lets the saved value fill it in.
@@ -1032,6 +1071,22 @@ export default function App() {
   const [transactionsError, setTransactionsError] = useState<string | null>(null);
   const showTransactionsWait = useDelayedFlag(transactionsLoading);
 
+  /**
+   * How far down the transactions feed this reader has got — the date of the
+   * newest move they had in front of them, and the league it was in. What the
+   * red dot on the Transactions tab is drawn from, and the only thing that
+   * undraws it.
+   *
+   * Saved per user (`UserPrefs.seenTransactions`) rather than held for the
+   * session, because "unread" is a claim about a *person* and has to survive a
+   * reload to mean anything: a dot that came back every morning whatever you
+   * had read would be a dot nobody looks at. Deliberately **not** in the URL —
+   * it says nothing about the view a link describes, which is the line
+   * `muteAudio` and `recentPlayers` are already on, and a link that marked
+   * somebody else's feed read would be worse than useless.
+   */
+  const [seenTx, setSeenTx] = useState<{ leagueId: number; ts: number } | null>(null);
+
   const [espnOpen, setEspnOpen] = useState(false);
   const [espnStatus, setEspnStatus] = useState<EspnStatus | null>(null);
   const [ownership, setOwnership] = useState<EspnOwnership | null>(null);
@@ -1158,10 +1213,15 @@ export default function App() {
     loadOwnership,
   ]);
 
-  // A different league (or a disconnect) invalidates the whole set.
+  // A different league (or a disconnect) invalidates the whole set — and the
+  // transactions feed with it, which is the one League read that is kept rather
+  // than re-read on entry, so nothing else would ever throw it away. A feed
+  // from the league you have just left is not a feed about the one you are in.
   useEffect(() => {
     setOwnership(null);
     setEspnError(null);
+    setTransactions(null);
+    transactionsRef.current = null;
   }, [espnLeagueId]);
 
   /**
@@ -1229,13 +1289,23 @@ export default function App() {
   }, [view, leagueTab, espnConnected, rankSpan, espnLeagueId]);
 
   /**
-   * The Transactions tab, read on its first open and then kept — the feed is
-   * one request for the league and the server holds it ten minutes, so there
-   * is nothing a re-read on every entry would buy. `Refresh from ESPN` is what
-   * goes and asks again, which is the one thing a cache cannot know about.
+   * The Transactions feed, read on the **first entry to the League view** —
+   * any tab of it — and then kept.
+   *
+   * It was gated on the Transactions tab, on the reasoning that nobody who
+   * only ever looks at the scoreboard should pay for a 250-row activity feed.
+   * What overrules that is the **dot on the tab itself**: "there are moves you
+   * haven't seen" is a claim this page has to be able to make *before* the tab
+   * is opened, and there is nothing else on the wire that carries it. So the
+   * read moves one level out and the cost is paid — one request per entry,
+   * answered from the server's own minute-long cache and gzipped down the wire.
+   *
+   * Kept rather than re-read on every entry: the poll below is what keeps it
+   * current, and `Refresh from ESPN` is what goes and asks when a reader knows
+   * something has happened that a cache cannot.
    */
   useEffect(() => {
-    if (view !== 'league' || leagueTab !== 'transactions' || !espnConnected) return;
+    if (view !== 'league' || !espnConnected) return;
     if (transactionsRef.current) return;
     let cancelled = false;
     setTransactionsLoading(true);
@@ -1256,8 +1326,142 @@ export default function App() {
     };
     // `transactionsRef` rather than `transactions`, deliberately: depending on
     // the state itself would re-run the effect on its own result and spin,
-    // which is the dependency rule the ownership read already states.
-  }, [view, leagueTab, espnConnected, espnLeagueId]);
+    // which is the dependency rule the ownership read already states. And no
+    // `leagueTab`, which is the whole of the change above.
+  }, [view, espnConnected, espnLeagueId]);
+
+  /**
+   * Which of the League page's three readings can still change, and so are
+   * worth polling.
+   *
+   * **A settled week is a fact** — the server reads one back off a blob with no
+   * freshness test at all — so a reader looking at last week's scoreboard is
+   * looking at something that cannot move, and asking again every minute would
+   * be a request a minute to be told so.
+   *
+   * The Rankings tab's answer is the span's own `live` flag with one addition:
+   * `season` is ESPN's running total, which accrues all year, and its flag is
+   * `false` because that flag answers a different question — *do these numbers
+   * include a week still being played*, which is what puts `so far` on the
+   * caption. What the poll needs to know is whether they can change at all, and
+   * the season's can.
+   */
+  const scoreboardLive = scoreboard?.live === true;
+  const rankSpanLive =
+    rankings != null &&
+    (rankings.span === 'season' ||
+      rankings.spans.find((s) => s.span === rankings.span)?.live === true);
+
+  /**
+   * One tick of that poll: re-read what is on screen, quietly.
+   *
+   * **Quiet is the whole difference** from the three effects above, and it is
+   * rule 1 of the app's loading discipline stated for a read nobody asked for:
+   * no wait goes up, nothing is blanked, and a tick that *fails* leaves the
+   * last good answer standing with no error banner over it — a page that has
+   * been readable for ten minutes must not become a message because one poll
+   * lost its connection. The next tick will say so if it is real.
+   *
+   * The transactions feed is polled whatever tab is open, the other two only
+   * when they are, which is the same laziness the reads themselves take: what
+   * is not on screen is not worth a request — except the one thing the tab row
+   * itself draws.
+   */
+  const pollLeague = useCallback(() => {
+    const quiet = (what: string) => (e: Error) =>
+      console.error(`league poll (${what}) failed:`, e.message);
+    if (leagueTab === 'scoreboard' && scoreboardLive) {
+      api.espnScoreboard(matchupPeriod).then(setScoreboard).catch(quiet('scoreboard'));
+    }
+    if (leagueTab === 'rankings' && rankSpanLive) {
+      api.espnRankings(rankSpan).then(setRankings).catch(quiet('rankings'));
+    }
+    api.espnTransactions().then(setTransactions).catch(quiet('transactions'));
+  }, [leagueTab, scoreboardLive, rankSpanLive, matchupPeriod, rankSpan]);
+
+  /** The latest tick, so the interval below can be set up once per visit to the
+   *  page rather than torn down and rebuilt every time a poll lands — which is
+   *  what depending on `pollLeague` directly would do, since its own answer
+   *  changes what it closes over. */
+  const pollLeagueRef = useRef(pollLeague);
+  useEffect(() => {
+    pollLeagueRef.current = pollLeague;
+  });
+
+  /**
+   * The poll itself, for as long as the League page is on screen.
+   *
+   * A hidden tab is skipped rather than polled — see `LEAGUE_POLL_MS` — and
+   * becoming visible fires one immediately, so a reader who comes back to a tab
+   * they left an hour ago is looking at this minute's league rather than that
+   * hour's, and the Transactions dot is answering for now.
+   */
+  useEffect(() => {
+    if (view !== 'league' || !espnConnected) return;
+    const tick = () => {
+      if (!document.hidden) pollLeagueRef.current();
+    };
+    const timer = setInterval(tick, LEAGUE_POLL_MS);
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', tick);
+    };
+  }, [view, espnConnected, espnLeagueId]);
+
+  /**
+   * The newest move in the feed, which is what "have I seen it" is asked
+   * against.
+   *
+   * A **max rather than the first row**, although the server sends the feed
+   * newest first: this is the one number the dot turns on, and a reduce over
+   * 250 rows costs nothing and cannot be wrong the day an upstream sort
+   * changes under us. Null with no feed read yet, which draws no dot — an
+   * absence of news is not news.
+   */
+  const latestTxTs = useMemo(() => {
+    const list = transactions?.transactions;
+    if (!list || list.length === 0) return null;
+    return list.reduce((max, t) => (t.date > max ? t.date : max), list[0].date);
+  }, [transactions]);
+
+  /**
+   * Whether the Transactions tab wears its dot: there is a move in the feed
+   * newer than the newest this reader has seen.
+   *
+   * **A reader who has never opened the tab has seen none of it**, so a marker
+   * of `null` draws the dot rather than suppressing it — and so does a marker
+   * from a *different* league, which is why the league id is stored beside the
+   * date. Both fail in the same direction, which is the only safe one here:
+   * news offered rather than news hidden.
+   */
+  const unseenTransactions =
+    espnLeagueId != null &&
+    latestTxTs != null &&
+    !(seenTx != null && seenTx.leagueId === espnLeagueId && seenTx.ts >= latestTxTs);
+
+  /**
+   * Opening the tab is reading it, so the marker moves to the head of the feed
+   * — and moves again while the tab stays open and a poll brings something
+   * new, since those rows are on screen too.
+   *
+   * The state leads and the write follows, the rule `noteRecentPlayer` already
+   * states: the dot has to go on the very next render rather than a round trip
+   * later. Through `queueUserWrite` because this and the search history write
+   * to the same user item, and the dev file backend has no version to conflict
+   * on. It depends on `seenTx` and sets it, which is safe by the guard: the run
+   * its own write triggers falls out at the first line.
+   */
+  useEffect(() => {
+    if (view !== 'league' || leagueTab !== 'transactions') return;
+    if (espnLeagueId == null || latestTxTs == null) return;
+    if (seenTx != null && seenTx.leagueId === espnLeagueId && seenTx.ts >= latestTxTs) return;
+    const mark = { leagueId: espnLeagueId, ts: latestTxTs };
+    setSeenTx(mark);
+    queueUserWrite(() => api.saveSeenTransactions(mark.leagueId, mark.ts)).catch((e: Error) =>
+      console.error('marking transactions read failed:', e.message),
+    );
+  }, [view, leagueTab, espnLeagueId, latestTxTs, seenTx, queueUserWrite]);
 
   const ownedIds = useMemo(
     () => (ownership ? new Set(Object.keys(ownership.owned).map(Number)) : null),
@@ -2094,14 +2298,23 @@ export default function App() {
   );
 
   const refreshFantasy = useCallback(() => {
-    // The League page's own three reads go with it — a move made on ESPN is
-    // exactly what changes a transactions feed, and it is the one thing no
-    // cache can know about. Dropping the feed rather than re-fetching it is
-    // what makes the tab re-read on its next open; the scoreboard and the
-    // rankings re-read on entry anyway, and their own `?refresh=1` is the
-    // server's business rather than a fourth request from here.
-    transactionsRef.current = null;
-    setTransactions(null);
+    // The League page's transactions feed goes with it — a move made on ESPN is
+    // exactly what changes one, and it is the one thing no cache can know
+    // about. It **asks** rather than being dropped, which is two corrections to
+    // what stood here: `?refresh=1` is what actually reaches past the server's
+    // own cache (clearing the client copy only ever re-read the same cached
+    // answer), and setting the result rather than blanking first is rule 1 —
+    // the feed stays readable while the read is out, where a null left the tab
+    // empty until the reader navigated away and back. Only when there is a feed
+    // to refresh: a reader who has never opened the League page is not made to
+    // pay for one by pressing this. The scoreboard and the rankings re-read on
+    // entry and on the poll's own tick, so neither needs a request from here.
+    if (transactionsRef.current) {
+      api
+        .espnTransactions(true)
+        .then(setTransactions)
+        .catch((e: Error) => console.error('refreshing transactions failed:', e.message));
+    }
     const fresh = espnConnected ? loadOwnership(true) : Promise.resolve();
     return fresh.then(() => {
       if (!usingFantasy) return;
@@ -2697,19 +2910,35 @@ export default function App() {
   const leagueTabs =
     view === 'league' && espnConnected ? (
       <div className="lg-tabs" role="tablist" aria-label="League">
-        {LEAGUE_TABS.map((t) => (
-          <button
-            key={t.tab}
-            type="button"
-            role="tab"
-            aria-selected={t.tab === leagueTab}
-            className={`lg-tab${t.tab === leagueTab ? ' active' : ''}`}
-            onClick={() => setLeagueTab(t.tab)}
-            title={t.title}
-          >
-            {t.label}
-          </button>
-        ))}
+        {LEAGUE_TABS.map((t) => {
+          /* The one mark in this row: moves have landed that this reader has
+             not seen. It is **absolutely positioned in the tab's own padding**
+             rather than laid out after the label, so a tab does not grow by
+             13px the moment something happens and shrink back when it is read
+             — a row of tabs that changes width under the reader is worse than
+             no mark at all. The dot is `aria-hidden` and the fact is given to a
+             screen reader as words, since a coloured circle names nothing. */
+          const dot = t.tab === 'transactions' && unseenTransactions;
+          return (
+            <button
+              key={t.tab}
+              type="button"
+              role="tab"
+              aria-selected={t.tab === leagueTab}
+              className={`lg-tab${t.tab === leagueTab ? ' active' : ''}`}
+              onClick={() => setLeagueTab(t.tab)}
+              title={dot ? `${t.title} — new since you last looked` : t.title}
+            >
+              {t.label}
+              {dot && (
+                <>
+                  <span className="lg-tab-dot" aria-hidden="true" />
+                  <span className="sr-only"> — new moves since you last looked</span>
+                </>
+              )}
+            </button>
+          );
+        })}
       </div>
     ) : null;
   /* The Rankings span — **in the tab row with everything else, and a dropdown

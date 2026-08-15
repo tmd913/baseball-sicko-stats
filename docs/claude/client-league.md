@@ -383,14 +383,134 @@ board `pos=` names. Neither name can collide: the app's other params are
 and `league`.
 
 **Each tab's data is read on its first open and kept**, the way the player page's
-tabs are — the scoreboard read is gated on `leagueTab === 'scoreboard'` now, and
-each of the three responses carries its own `teams`, so no tab depends on another
-having been opened. Nobody who only looks at the scoreboard pays for a 300KB
-aggregation of the first half or an 86KB activity feed. The transactions read is
-the one that is kept outright (a `transactionsRef`, so the effect does not re-run
-on its own result): it is one request per league on the server's ten minutes, and
-`Refresh from ESPN` drops it, a move made on ESPN being the one thing no cache can
-know about.
+tabs are — the scoreboard read is gated on `leagueTab === 'scoreboard'` and the
+rankings on `leagueTab === 'rankings'`, and each of the three responses carries
+its own `teams`, so no tab depends on another having been opened. Nobody who only
+looks at the scoreboard pays for a 300KB aggregation of the first half.
+
+**The transactions feed is the exception and is read on entry to the *view***,
+any tab of it, and then kept (a `transactionsRef`, so the effect does not re-run
+on its own result). It was gated on its own tab, on exactly the reasoning above,
+and the dot below is what overrules it: *there are moves you haven't seen* is a
+claim the tab row has to be able to make **before** the tab is opened, and
+nothing else on the wire carries it. So the read moves one level out and the
+86KB is paid on entry — answered from the server's own minute-long cache, and
+about a tenth of that over the wire once `compression()` has had it.
+
+### The page updates itself, a minute at a time
+
+**The three tabs are the one part of this app that describes something which
+moves while you watch it**, and until now all three were read on entry and then
+left: a matchup's category totals climb through an evening's games, the standings
+under them climb with them, a leaguemate can drop somebody at any hour, and a
+page anybody actually sits on quietly went stale. It polls now
+(`App.tsx::LEAGUE_POLL_MS`), and the whole of the design is four rules.
+
+**A minute, not the report's twenty seconds**, and the difference is what is
+being watched. That poll tracks a *plate appearance* — the bases, the count, the
+batter at the plate — where this tracks a **week's** totals, which ESPN's own
+scoreboard does not move faster than about a minute anyway. The number is matched
+to `espn.ts::LIVE_TTL_MS` so that a tick either reads a cache under a minute old
+or goes and asks, which is the cheapest way to be a minute behind ESPN and no
+more.
+
+**Only what is on screen, and only what can still change.** The scoreboard is
+polled when its tab is open **and the week it is showing is still being played**
+— a settled period is read back off a blob with no freshness test at all, so
+asking again every minute would be a request a minute to be told a fact. The
+rankings are polled when their tab is open and the span can still move, which is
+the span's own `live` flag **plus `season`**: that flag answers a different
+question (*do these numbers include a week still being played*, which is what
+puts `so far` on the caption) and is `false` for the season, whose figure is
+ESPN's running total and accrues all year. The transactions feed is polled
+whatever tab is open, because the dot in the tab row is drawn from it.
+
+**Quiet, which is rule 1 of the app's loading discipline stated for a read
+nobody asked for.** No wait goes up, nothing is blanked, and a tick that *fails*
+leaves the last good answer standing with no error banner over it — a page that
+has been readable for ten minutes must not become a message because one poll lost
+its connection. Component state survives it by construction: the Rankings table's
+sort and the Transactions list's paging are plain `useState` with nothing keyed
+on the data, so a new object underneath them changes the numbers and not the
+reading position.
+
+**A hidden tab is skipped**, which is where this parts from the report poll
+deliberately: a league read is 10–120KB upstream against a league that has no
+idea we are doing it, and a forgotten background tab polling it all night buys
+nobody anything. Becoming visible fires a tick immediately rather than waiting
+out the interval, so what a reader returns to is current — which is also what
+keeps the dot honest.
+
+**What it costs upstream is one league's worth per minute, not one per
+reader**, and that is the measurement the cadence rests on: the server's cache
+is keyed by league, so twelve leaguemates all sitting on the page cost the same
+one read a minute that one of them does. Measured through the route on the live
+league, with no poller running: a live scoreboard is **536ms** at the first ask
+past the minute and **3.7ms** inside it; a settled week is **271ms** (its
+`leagueMeta`, since the matchups themselves come off the frozen blob) and 1.4ms;
+the transactions feed 140ms and 3.2ms.
+
+**`Refresh from ESPN` changed with it, and in two ways that were wrong before.**
+It used to *drop* the client's copy of the feed, which re-read the same
+ten-minute server cache — so the one button whose whole purpose is "I have just
+made a move" could not actually reach past it. It now asks with `?refresh=1`,
+and it **sets** the answer rather than blanking first, so the tab stays readable
+while the read is out where a null left it empty until the reader navigated away
+and came back. Only when there is a feed to refresh: a reader who has never
+opened the League page is not made to pay for one by pressing it.
+
+### The Transactions tab wears a dot when there are moves you haven't seen
+
+A **red dot** in the corner of the tab, and it goes the moment the tab is opened.
+
+**What it is drawn from is one comparison**: the newest move in the feed against
+the newest this reader had in front of them when they last had that tab open
+(`UserPrefs.seenTransactions` — see **Roster, watchlist, users and auth**, where
+the marker and why it carries a league id are set out). Both halves fail in the
+same direction and it is the only safe one here: a reader who has **never**
+opened the tab has seen none of it and gets the dot, and so does a marker from a
+*different* league. News offered rather than news hidden.
+
+**The newest move is a `max` rather than the first row**, although the server
+sends the feed newest first: this is the one number the dot turns on, a reduce
+over 250 rows costs nothing, and it cannot be wrong the day an upstream sort
+changes under us.
+
+**Opening the tab is reading it**, and the marker moves again while the tab stays
+open and a poll brings something new, since those rows are on screen too. The
+state leads and the write follows — the rule `noteRecentPlayer` already states,
+because the dot has to go on the very next render rather than a round trip
+later — and it goes through `queueUserWrite`, this and the search history writing
+to the same user item. A marker that would not move writes **nothing**, so
+sitting on the tab through a quiet hour of polls costs no writes at all.
+
+**Absolutely positioned in the tab's own padding, not laid out after the
+label.** Laid out it would be a 6px dot plus the row's 6px gap — 12px of tab that
+appears when somebody makes a move and vanishes when the tab is opened, moving
+the two tabs beside it each time; a row of tabs that changes width under the
+reader is worse than no mark at all. Measured at 320 / 375 / 390 / 640 / 900 /
+1200 / 1920: the tab is **104.2px wide with the dot and without it** at every one
+of them, the dot lands inside its own tab at every one, and the page body
+overflows by **0**. The colour is `--strikeout`, the app's red and the tone
+`NewsMark` already gives news filed today; it is `aria-hidden` with the fact
+given to a screen reader as words, since a coloured circle names nothing.
+
+**Not on the League pill itself**, which was the obvious extension and is not
+what was asked for: the tabs are drawn only on the League view, so the dot is a
+statement about a page you are already on.
+
+**Measured end to end against the live 12-team league**, at 1200×900: a marker
+from another league draws the dot on arrival; opening the tab clears it and
+writes `{leagueId: 60120, ts: 1786824052358}` — the feed's own newest date — and
+it stays clear across a tab switch and a reload; rewinding the marker by one
+millisecond draws it again. The route rejects a bad pair (`leagueId must be a
+positive integer`, `ts must be epoch milliseconds`) and the store keeps the newer
+of two markers for one league while replacing another league's outright.
+
+**Bundle, for the poll and the dot together: 498.16 → 500.00 KB of JS** (147.34 →
+147.88 gzipped) and **116.39 → 116.54 KB of CSS** (20.70 → 20.73) — 1.8KB and
+0.15KB raw, 0.54KB and 0.03KB over the wire, for a poll, a saved marker, a route
+and the paragraphs above restated where the rules are.
 
 ### Rankings
 
