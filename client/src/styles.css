@@ -11677,6 +11677,16 @@ body {
   font-weight: 800;
   color: var(--text);
 }
+/* `OVR` is `BAT` + `PIT` and leads them, so it is the one column that summarises
+   the whole row — it takes the accent where the two side totals take `--text`,
+   which is the same one-step ladder the identity block uses (a name in `--text`
+   over a record in `--muted`) rather than a new device. The badge under it is
+   untouched: it is on the same red-to-blue scale as every other rank on the
+   table, and a second colour system for one column would be exactly what this
+   file argues against elsewhere. */
+.league-table .lg-ovr-col {
+  color: var(--accent);
+}
 
 /* ---- The three tabs, and the Rankings span --------------------------------
    Both strips are **folded onto `.view-switch` / `.view-tab`** up beside the

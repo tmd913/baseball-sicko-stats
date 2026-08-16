@@ -22,6 +22,7 @@ import { useMemo, useState } from 'react';
 import type {
   EspnCategory,
   EspnCategorySide,
+  EspnRankRow,
   EspnRankSpan,
   EspnRankSpanInfo,
   EspnRankings,
@@ -153,7 +154,8 @@ export function spanDetail(info: EspnRankSpanInfo | undefined): string {
 type SortKey =
   | { kind: 'team' }
   | { kind: 'cat'; statId: number }
-  | { kind: 'side'; side: EspnCategorySide };
+  | { kind: 'side'; side: EspnCategorySide }
+  | { kind: 'overall' };
 
 function sameKey(a: SortKey, b: SortKey): boolean {
   if (a.kind !== b.kind) return false;
@@ -204,8 +206,8 @@ function RankTable({
     return out;
   }, [categories, rankings.rows]);
 
-  // The same denominator for the two overall columns: how many teams have a
-  // total on that side at all, which is what its badge is a rank *of*.
+  // The same denominator for the summary columns: how many teams have a total
+  // at all, which is what each badge is a rank *of*.
   const rankedSide = useMemo(() => {
     const out = new Map<EspnCategorySide, number>();
     for (const g of groups) {
@@ -213,6 +215,14 @@ function RankTable({
     }
     return out;
   }, [groups, rankings.rows]);
+  const rankedOverall = useMemo(
+    () => rankings.rows.filter((r) => r.overall).length,
+    [rankings.rows],
+  );
+  // **`OVR` is drawn only where there is more than one side to combine** — the
+  // server declines to compute it otherwise, this reads that decision rather
+  // than repeating it, and a league scoring one side sees its own column once.
+  const hasOverall = rankings.rows.some((r) => r.overall);
 
   const rows = useMemo(() => {
     const out = [...rankings.rows];
@@ -225,10 +235,14 @@ function RankTable({
         // whole table shares — an overall column is a rank like any other, and
         // sorting it on the points would be the same order said in a second
         // currency.
-        const ar =
-          sort.kind === 'cat' ? a.ranks[sort.statId] : a.sides[sort.side]?.rank;
-        const br =
-          sort.kind === 'cat' ? b.ranks[sort.statId] : b.sides[sort.side]?.rank;
+        const rankOf = (row: EspnRankRow) =>
+          sort.kind === 'cat'
+            ? row.ranks[sort.statId]
+            : sort.kind === 'side'
+              ? row.sides[sort.side]?.rank
+              : row.overall?.rank;
+        const ar = rankOf(a);
+        const br = rankOf(b);
         // Nulls to the bottom in **both** directions, the board's own rule: a
         // team with no figure has not got the worst one.
         const an = typeof ar !== 'number';
@@ -305,6 +319,19 @@ function RankTable({
                 identity belongs on its name. */}
             <th scope="col" className="lg-logo-col" aria-label="Team badge" />
             {head({ kind: 'team' }, 'Team', 'The league standing', 'lg-name-col')}
+            {/* **The whole row in one column, leading the two halves it is made
+                of.** It is what a manager wants first — where he stands, full
+                stop — and putting it before `BAT` and `PIT` reads as the
+                summary and its two parts rather than as a third peer. It is
+                their sum by construction, so the three together are a figure a
+                reader can check on the page rather than take on trust. */}
+            {hasOverall &&
+              head(
+                { kind: 'overall' },
+                'OVR',
+                `Overall — points from all ${categories.length} scoring categories, ${spanWords}`,
+                'lg-side-col lg-ovr-col',
+              )}
             {groups.flatMap((g) => [
               /* **The group's own overall, leading it.** A manager reading
                  `2nd · 5th · 1st · 9th · 3rd` down his batting run is doing
@@ -364,6 +391,26 @@ function RankTable({
                     <span className="lg-row-sub">{t ? record(t) : ''}</span>
                   </span>
                 </th>
+                {hasOverall && (
+                  <td className="lg-num lg-side-col lg-ovr-col">
+                    {r.overall ? r.overall.points : '—'}
+                    {r.overall && (
+                      <span
+                        className="col-rank"
+                        style={rankBadge(r.overall.rank, rankedOverall)}
+                        title={`Overall: ${ordinal(r.overall.rank)} of ${rankedOverall} — ${
+                          r.overall.points
+                        } points from ${
+                          r.overall.categories === r.overall.of
+                            ? `all ${r.overall.of}`
+                            : `${r.overall.categories} of ${r.overall.of}`
+                        } categories, ${spanWords}`}
+                      >
+                        {ordinal(r.overall.rank)}
+                      </span>
+                    )}
+                  </td>
+                )}
                 {groups.flatMap((g) => {
                   const tot = r.sides[g.side];
                   const sideN = rankedSide.get(g.side) ?? 0;
@@ -431,19 +478,23 @@ function RankTable({
 }
 
 /**
- * What `BAT` and `PIT` are, in the fewest words that leave nothing out.
+ * What `OVR`, `BAT` and `PIT` are, in the fewest words that leave nothing out.
  *
  * **Written from the league rather than about a league**, which is what keeps
- * it honest and short at once: the team count and the two category counts come
- * off the rankings themselves, so a twelve-team 5×5 reads "1st of 12 is worth
- * 12" and "5 batting categories" while somebody else's eight-team league reads
- * its own. A worked example in the reader's own numbers beats a formula.
+ * it honest and short at once: the team count and the category counts come off
+ * the rankings themselves, so a twelve-team 5×5 reads "1st of 12 is worth 12"
+ * and "the 5 categories on that side" while somebody else's eight-team league
+ * reads its own. A worked example in the reader's own numbers beats a formula.
  *
- * **Three sentences and the tie rule.** The scale, the sum, and what the two
- * ends of it look like — plus the one thing that is not obvious from the table
- * (a tie takes the better points, because the ranks it is computed from share
- * a rank). Everything else about the method is in `espn.ts`, where the argument
- * for points over a mean of ranks lives; a key is not the place for it.
+ * **Four short paragraphs**: the scale, the sum, what `OVR` adds to it, and the
+ * one rule that is not visible on the table (a tie takes the better points,
+ * because the ranks it is computed from share a rank). Everything else about
+ * the method is in `espn.ts`, where the argument for points over a mean of
+ * ranks lives; a key is not the place for it.
+ *
+ * **`OVR` gets a sentence of its own and it is the one worth having**: that it
+ * is `BAT` plus `PIT`. A derived figure a reader can check by adding the two
+ * columns beside it is a figure they can trust, and saying so costs six words.
  */
 function RankKey({ rankings }: { rankings: EspnRankings }) {
   const n = rankings.rows.length;
@@ -456,8 +507,10 @@ function RankKey({ rankings }: { rankings: EspnRankings }) {
     bat && pit && bat !== pit
       ? `${bat} batting or ${pit} pitching categories`
       : `${bat || pit} categories on that side`;
+  const per = bat || pit;
+  const hasOverall = rankings.rows.some((r) => r.overall);
   return (
-    <InfoKey label="How BAT and PIT are worked out" className="lg-rank-key">
+    <InfoKey label="How OVR, BAT and PIT are worked out" className="lg-rank-key">
       <p>
         <strong>BAT</strong> and <strong>PIT</strong> are how a team stands across one whole
         side of the ball.
@@ -467,10 +520,19 @@ function RankKey({ rankings }: { rankings: EspnRankings }) {
         worth {n}</strong>, last is worth 1 — and the column is those points added up over
         the {counts}. The badge under it ranks those totals.
       </p>
-      <p>
-        So {n * (bat || pit)} is first in every one of them and {bat || pit} is last in
-        every one. A tie takes the better points, exactly as it shares a rank.
-      </p>
+      {hasOverall ? (
+        <p>
+          <strong>OVR</strong> is the same over every category, so it is{' '}
+          <strong>BAT + PIT</strong>: {n * rankings.categories.length} is first in all{' '}
+          {rankings.categories.length} and {rankings.categories.length} is last in all of
+          them.
+        </p>
+      ) : (
+        <p>
+          So {n * per} is first in every one of them and {per} is last in every one.
+        </p>
+      )}
+      <p>A tie takes the better points, exactly as it shares a rank.</p>
     </InfoKey>
   );
 }

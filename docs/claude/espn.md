@@ -768,7 +768,7 @@ rather than to a named constant, so the order and the default cannot come to
 disagree. `season` is the floor under that, being the one span every league has
 — it is ESPN's own line and needs no matchup period at all.
 
-### One column per side of the ball: how a team stands at batting, and at pitching
+### Three summary columns: overall, batting, and pitching
 
 **A column of ten ranks cannot say how a team is doing overall**, and that is
 the question a manager reads a league table with: `2nd · 5th · 1st · 9th · 3rd`
@@ -803,10 +803,24 @@ says so in the cell's own tooltip rather than looking like a bad one. A team
 ranked in none of a side's categories has **no total at all** rather than a
 total of nought.
 
+**`OVR` is the same arithmetic over every category the league scores**, which
+makes it the roto total — and, because both are `n + 1 − rank` added up, it is
+**`BAT` + `PIT` by construction** rather than by two computations that happen to
+agree (one `totalOver` serves both, given a different list of categories). That
+identity is worth having for a figure the app derives: a number a reader can
+check by adding the two columns beside it is a number they can trust, and it is
+why the total counts *every* side rather than the two named ones — a category
+`STAT_META` cannot place is still a category the league scores, and leaving it
+out would make the total disagree with the columns above it.
+
+**It is absent where there is only one side to combine**, that column being the
+side's own said twice.
+
 **Checked against an independent recompute through the route**, over every span
 the live league offers: `matchup`, `season`, `first` and `playoffs` each
-reproduce **24 of 24 side totals** — the points, the rank, and the count of
-categories scored in — with 0 mismatches.
+reproduce **24 of 24 side totals** and **12 of 12 overall totals** — the points,
+the rank, and the count of categories scored in — with 0 mismatches, and `OVR ==
+BAT + PIT` on every row of every span.
 
 **`current` is ESPN's own pointer now**, not "the last period the schedule
 mentions". Those agree today only because the rounds past the current one are

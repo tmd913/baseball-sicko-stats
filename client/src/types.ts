@@ -1549,6 +1549,10 @@ export interface EspnRankRow {
   /** The whole of one side of the ball, per side the league scores. Absent for
    *  a side with no categories in it. */
   sides: Partial<Record<EspnCategorySide, EspnRankSideTotal>>;
+  /** The same over **every** category — the roto total, which is the sum of the
+   *  side totals beside it by construction. Absent where there is only one side
+   *  to combine, that column being the side's own said twice. */
+  overall?: EspnRankSideTotal;
 }
 
 export interface EspnRankings {

@@ -3141,6 +3141,23 @@ export interface EspnRankRow {
    *  Absent for a side with no categories in it, so a pitching-only league
    *  draws no batting column rather than a column of noughts. */
   sides: Partial<Record<EspnCategorySide, EspnRankSideTotal>>;
+  /**
+   * **The same arithmetic over every category the league scores** — the roto
+   * total, and where it stands.
+   *
+   * It is the sum of the side totals beside it **by construction** rather than
+   * by coincidence: both are `n + 1 − rank` added up, one over a side's
+   * categories and one over all of them, so a reader can add `BAT` and `PIT`
+   * and get `OVR`. That is worth having for a figure the app derives — a
+   * number nobody can check against the page is a number nobody can trust —
+   * and it is why this counts *every* side rather than the two named ones: a
+   * category the app cannot place is still a category the league scores, and
+   * leaving it out would make the total disagree with the columns above it.
+   *
+   * Absent where there is nothing to combine — a league scoring one side only
+   * gets no `OVR`, that column being `BAT` said twice.
+   */
+  overall?: EspnRankSideTotal;
 }
 
 export interface EspnRankings {
@@ -3616,13 +3633,14 @@ export async function getRankings(
     }
   }
 
-  // **One side of the ball as a single figure**, per side the league scores.
-  // Roto points over that side's categories, then ranked like any other column
-  // — see `EspnRankSideTotal` for why points rather than a mean of ranks, and
-  // why `lowerBetter` needs no case of its own here.
-  for (const side of ['batting', 'pitching', 'other'] as const) {
-    const cats = meta.categories.filter((c) => c.side === side);
-    if (cats.length === 0) continue;
+  // **A run of categories as a single figure** — roto points over them, then
+  // ranked like any other column. One function for a side and for the whole
+  // league, so `OVR` is `BAT` + `PIT` by construction rather than by two
+  // arithmetics that happen to agree; see `EspnRankSideTotal` for why points
+  // rather than a mean of ranks, and why `lowerBetter` needs no case here.
+  const totalOver = (cats: EspnCategory[]): Map<number, EspnRankSideTotal> => {
+    const out = new Map<number, EspnRankSideTotal>();
+    if (cats.length === 0) return out;
     const totals: { teamId: number; value: number; scored: number }[] = [];
     for (const row of rows) {
       let points = 0;
@@ -3634,24 +3652,43 @@ export async function getRankings(
         points += n + 1 - rank;
         scored++;
       }
-      // A team ranked in none of a side's categories has no total rather than
-      // a total of nought — the rule every absent figure on this table follows.
+      // A team ranked in none of them has no total rather than a total of
+      // nought — the rule every absent figure on this table follows.
       if (scored > 0) totals.push({ teamId: row.teamId, value: points, scored });
     }
-    if (totals.length === 0) continue;
+    if (totals.length === 0) return out;
     const ranked = rankBy(
       totals.map((t) => ({ teamId: t.teamId, value: t.value })),
       false,
     );
     for (const t of totals) {
-      const row = byTeam.get(t.teamId);
-      if (!row) continue;
-      row.sides[side] = {
+      out.set(t.teamId, {
         points: t.value,
         rank: ranked[t.teamId],
         categories: t.scored,
         of: cats.length,
-      };
+      });
+    }
+    return out;
+  };
+
+  const sidesPresent: EspnCategorySide[] = [];
+  for (const side of ['batting', 'pitching', 'other'] as const) {
+    const cats = meta.categories.filter((c) => c.side === side);
+    if (cats.length === 0) continue;
+    sidesPresent.push(side);
+    for (const [teamId, total] of totalOver(cats)) {
+      const row = byTeam.get(teamId);
+      if (row) row.sides[side] = total;
+    }
+  }
+  // **The whole league in one column**, and only where there is more than one
+  // side to combine: with a single side it would be that side's column said
+  // twice, which is a column spent saying nothing.
+  if (sidesPresent.length > 1) {
+    for (const [teamId, total] of totalOver(meta.categories)) {
+      const row = byTeam.get(teamId);
+      if (row) row.overall = total;
     }
   }
 

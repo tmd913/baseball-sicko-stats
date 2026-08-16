@@ -1325,11 +1325,24 @@ the loser goes quiet, because ten red cells down one side of a card would be the
 row shouting where the job is to mark a winner. A twelve-row table of ranks is
 that same picture turned on its side.
 
-### An overall column leads each group
+### Three summary columns: `OVR`, then `BAT` and `PIT`
 
 **Each side of the ball gets one column — `BAT` and `PIT` — carrying that
 team's roto points over the side's categories with its rank under them, like
-every category beside it.** It is the question a column of ten ranks cannot
+every category beside it, and `OVR` leads them with the same figure over every
+category at once.**
+
+**`OVR` is `BAT` + `PIT`**, by construction rather than coincidence (one
+function, two lists of categories — see **ESPN fantasy league**), and it leads
+them for that reason: the three read as a summary and its two parts rather than
+as three peers, and a reader can check the derived figure by adding the two
+columns beside it. It is drawn only where there is more than one side to
+combine — the server declines to compute it otherwise, and the client reads that
+decision rather than repeating the test. It takes the **accent** where the two
+side totals take `--text`, which is the same one-step ladder the identity block
+already uses (a name over a record) rather than a new device; its badge is
+untouched, being on the same red-to-blue scale as every other rank on the table.
+ It is the question a column of ten ranks cannot
 answer at a glance: a manager reading `2nd · 5th · 1st · 9th · 3rd` down his
 batting run is doing arithmetic in his head. Where the number comes from, why it
 is points rather than a mean of ranks, and what a tie does to it is in **ESPN
@@ -1357,10 +1370,10 @@ the spanning `BATTERS` / `PITCHERS` header row went, on the grounds that a bare
 seam says there is a break here without saying what is on either side of it;
 reintroducing one for the same two runs would be that argument lost by default.
 
-**And it is the one thing on this table that needs a key**, which is why the
-caption line above the table now carries an ⓘ. Every other column is a figure
-and its standing, and both explain themselves; `BAT` and `PIT` are a figure the
-app *made up* out of the ranks beside them, and a number nobody can derive by
+**And they are the one thing on this table that needs a key**, which is why the
+caption line above the table carries an ⓘ. Every other column is a figure and
+its standing, and both explain themselves; `OVR`, `BAT` and `PIT` are a figure
+the app *made up* out of the ranks beside them, and a number nobody can derive by
 looking at the page is a number that has to be explained somewhere. It is the
 app's own `InfoKey` — the same disclosure the Splits tab and the Charts tab open
 — rather than a paragraph under the strip, for that component's stated reason: a
@@ -1368,12 +1381,16 @@ key is read once and is in the way ever after.
 
 **It is written from the league rather than about one.** The team count and the
 category counts come off the rankings themselves, so a twelve-team 5×5 reads
-*"1st of 12 is worth 12"* and *"the 5 categories on that side"* and closes on
-*"60 is first in every one of them and 5 is last in every one"*, where an
-eight-team league reads its own numbers. A worked example in the reader's own
-figures beats a formula, and it costs one `useMemo`-free pass over data already
-in hand. The tie rule is the fourth sentence, being the one thing the table
-cannot show: *a tie takes the better points, exactly as it shares a rank*.
+*"1st of 12 is worth 12"* and *"the 5 categories on that side"*, and its `OVR`
+sentence closes on *"120 is first in all 10 and 10 is last in all of them"* —
+where an eight-team league reads its own numbers. A worked example in the
+reader's own figures beats a formula, and it costs one pass over data already in
+hand. **`OVR` gets a sentence of its own and it is the one worth having**: that
+it is `BAT` + `PIT`, which is what makes a derived figure checkable against the
+page. The tie rule is the last paragraph, being the one thing the table cannot
+show: *a tie takes the better points, exactly as it shares a rank*. Where a
+league has only one side the `OVR` sentence is replaced by the plain
+first-and-last one, there being no column to explain.
 
 **The panel is anchored to the caption row, not to its button**, which is
 `.roll-key`'s trick and is here for the same measured reason: the ⓘ sits after a
@@ -1392,20 +1409,23 @@ of a real 30px touch target rather than a bare glyph, which is the rule
 closes it and leaves the League view standing, an outside press closes it and is
 spent on the dismissal alone (`useDismissable`'s own rule — the press that
 dismissed it does not also press the table underneath), and the button carries
-`aria-expanded` and a real accessible name (`How BAT and PIT are worked out`).
+`aria-expanded` and a real accessible name (`How OVR, BAT and PIT are worked out`).
 
-**It sorts like any other column, and on its rank** — which is the one order the
-whole table shares. Sorting on the points would be the same order said in a
+**They sort like any other column, and on their rank** — which is the one order
+the whole table shares. Sorting on the points would be the same order said in a
 second currency, and would break the rule that every column of this table opens
-on first place. Measured: one press of `BAT` gives `Swaggy Latinos 60 · 1st`,
-`Let's Go Mets 53 · 2nd`, `Baldy's Bozos 44 · 3rd`, a second press reverses it,
-and `aria-sort` reads `ascending` on the first.
+on first place. Measured: one press of `BAT` gives `Swaggy Latinos 59 · 1st`,
+`Let's Go Mets 53 · 2nd`, `Baldy's Bozos 42 · 3rd` and one of `OVR` gives
+`Baldy's Bozos 88 · 1st`, `Swaggy Latinos 81 · 2nd`, `Brian&Tom's 80 · 3rd`; a
+second press reverses either, and `aria-sort` reads `ascending` on the first.
 
-**Measured at 320 / 390 / 640 / 1200 / 1920**, both spans: **14 columns** (two
-identity, two overall, ten categories), the table 904.6 → 1920px inside a pane
+**Measured at 320 / 390 / 640 / 1200 / 1920**, both spans: **15 columns** (two
+identity, three summary, ten categories), the table 956.6 → 1920px inside a pane
 of the window's width, the badge column pinned at **0** with the pane scrolled
 to its far right, the header row **1px** inside it (the border) with it scrolled
-down, and **no horizontal overflow of the page body at any width**.
+down, and **no horizontal overflow of the page body at any width**. On a phone
+`OVR` is the first stat column after the name — the one most worth having on
+screen without scrolling.
 
 ### The Rankings table groups its columns and does not label them
 
