@@ -2041,6 +2041,11 @@ export interface EspnMatchupSide {
   ties: number;
   /** A points league's one number. Null in a category league. */
   points: number | null;
+  /** How many acquisitions this manager has used in this matchup period, off
+   *  `mTeam`'s `transactionCounter`. Null where ESPN reports none. The **limit**
+   *  is one number for the period and rides on the scoreboard rather than on
+   *  each side — see `EspnScoreboard.acquisitionLimit`. */
+  acquisitions: number | null;
 }
 
 export interface EspnMatchup {
@@ -2093,6 +2098,9 @@ export interface EspnScoreboard {
   end: string | null;
   /** Whether this is the period being played — nothing on it is final. */
   live: boolean;
+  /** How many acquisitions a manager gets in this matchup period, or null where
+   *  the league does not limit them per period. See `acquisitionLimitFor`. */
+  acquisitionLimit: number | null;
   categories: EspnCategory[];
   matchups: EspnMatchup[];
   teams: EspnStandingsTeam[];
@@ -2135,8 +2143,22 @@ interface EspnScoreboardResponse {
     };
     /** How many matchup periods the **regular season** is. Everything past it
      *  is a playoff round — the distinction the halves and the playoff span
-     *  both turn on, and one the schedule alone cannot make. */
-    scheduleSettings?: { matchupPeriodCount?: number };
+     *  both turn on, and one the schedule alone cannot make.
+     *
+     *  `matchupPeriods` maps a matchup period to the **weeks** it covers —
+     *  `{"1": [1], "19": [19, 20]}` — which is how a two-week playoff round
+     *  says so. Not scoring periods: period 1 covers one week and 12 scoring
+     *  periods on the live league, the season having opened mid-week. */
+    scheduleSettings?: {
+      matchupPeriodCount?: number;
+      matchupPeriods?: Record<string, number[]> | null;
+    };
+    /** How many acquisitions a manager gets. See `acquisitionLimitFor`. */
+    acquisitionSettings?: {
+      acquisitionLimit?: number;
+      matchupAcquisitionLimit?: number;
+      matchupLimitPerScoringPeriod?: boolean;
+    };
   };
   status?: {
     currentMatchupPeriod?: number;
@@ -2165,6 +2187,12 @@ interface EspnScoreboardResponse {
         streakType?: string;
       };
     };
+    /** How many moves this manager has made, and — the useful half — how many
+     *  in each **matchup period**, keyed by period id. */
+    transactionCounter?: {
+      acquisitions?: number;
+      matchupAcquisitionTotals?: Record<string, number> | null;
+    } | null;
   }[];
   schedule?: {
     id?: number;
@@ -2251,6 +2279,12 @@ interface LeagueMeta {
   /** The last period of the **regular season** (ESPN's `matchupPeriodCount`).
    *  Everything past it is a playoff round. Null if ESPN did not say. */
   regularPeriods: number | null;
+  /** Team id → matchup period → acquisitions used, off `mTeam`. */
+  acquisitions: Map<number, Record<string, number>>;
+  /** The league's settings, kept whole so the acquisition limit can be worked
+   *  out **per period** — it depends on which one is asked for, and this meta
+   *  is one object cached for all of them. */
+  settings: EspnScoreboardResponse['settings'] | null;
   /** The period being played, off ESPN's own pointer. */
   currentPeriod: number | null;
   /** The scoring period ESPN is on — the day every `cumulativeScore` in this
@@ -2262,6 +2296,53 @@ interface LeagueMeta {
 
 const metaCache = new Map<number, LeagueMeta>();
 const metaInFlight = new Map<number, Promise<LeagueMeta>>();
+
+/**
+ * **How many acquisitions a manager gets in one matchup period**, or null where
+ * the league does not limit them per period.
+ *
+ * ESPN does not publish the number. What it publishes is
+ * `matchupAcquisitionLimit` — **0.7142857142857143** on the live league, with
+ * `matchupLimitPerScoringPeriod: true` beside it — which is the limit *per
+ * scoring period*, so a period's own limit is that times the days in it. 5/7 is
+ * exactly 0.714…, and an ordinary seven-day week is therefore 5.
+ *
+ * **How many days a period has is the part that needs care**, because neither
+ * source is right on its own:
+ *
+ * - The **observed span** (the scoring periods `pointsByScoringPeriod` reports)
+ *   is exact on a settled period and catches the two that are not seven days —
+ *   period 1 is 12 on the live league, the season having opened mid-week, and
+ *   period 15 is 14, the All-Star break falling inside it. But it **truncates
+ *   at ESPN's own current day**, so the period being played reads short: 7 for
+ *   a two-week playoff round.
+ * - The **declared length** (`matchupPeriods`, which maps a period to the
+ *   *weeks* it covers) is right about the playoff round and wrong about both of
+ *   the others, knowing nothing of an opening stretch or a break.
+ *
+ * So it is the **larger of the two**, which needs no live/settled branch and is
+ * principled rather than lucky: the observation is a lower bound because it
+ * truncates, and the declaration is the nominal length, so a period is at least
+ * as long as both.
+ *
+ * **Checked against every team's own totals rather than reasoned about.** Over
+ * the live league's 185 team-periods, **0 are over the computed limit and 55
+ * are exactly at it** — a cap 55 managers hit and none exceeded. The four
+ * periods that are not five: 1 → 9 (12 days), 15 → 10 (14), 19 → 10 (a
+ * fortnight's playoff round), and every other week 5.
+ */
+function acquisitionLimitFor(
+  settings: EspnScoreboardResponse['settings'],
+  period: number,
+  observedDays: number,
+): number | null {
+  const perDay = settings?.acquisitionSettings?.matchupAcquisitionLimit;
+  if (typeof perDay !== 'number' || !(perDay > 0)) return null;
+  const weeks = settings?.scheduleSettings?.matchupPeriods?.[String(period)]?.length ?? 1;
+  const days = Math.max(observedDays, weeks * 7);
+  const limit = Math.round(perDay * days);
+  return limit > 0 ? limit : null;
+}
 
 async function leagueMeta(creds: EspnCreds, force = false): Promise<LeagueMeta> {
   const hit = metaCache.get(creds.leagueId);
@@ -2378,6 +2459,20 @@ async function leagueMeta(creds: EspnCreds, force = false): Promise<LeagueMeta> 
       teams,
       myTeamId,
       periods,
+      /** Per team, per matchup period: how many acquisitions he has used. Off
+       *  `mTeam`'s `transactionCounter`, which the standings read already
+       *  carries — no second request. */
+      acquisitions: new Map(
+        (info.teams ?? []).flatMap((t) =>
+          typeof t.id === 'number'
+            ? [[t.id, t.transactionCounter?.matchupAcquisitionTotals ?? {}] as const]
+            : [],
+        ),
+      ),
+      /** The whole `settings` object, kept so the limit can be worked out per
+       *  period rather than once here — it depends on which period is asked
+       *  for, and this meta is cached for every period at once. */
+      settings: info.settings ?? null,
       // Where the regular season ends. **ESPN's own number, not a guess from
       // the schedule**: `matchupPeriodCount` is 18 on the checked league while
       // the schedule runs to 21, and periods past it are playoff rounds — which
@@ -2419,8 +2514,19 @@ async function leagueMeta(creds: EspnCreds, force = false): Promise<LeagueMeta> 
  * — reaches it and leaves the frozen ones alone, since re-reading a settled
  * week spends an ESPN request to be told what the blob already says.
  */
+/**
+ * A settled matchup period's own blob, read back with **no freshness test** —
+ * the week is over and what happened in it is a fact.
+ *
+ * **`-v2` is `EspnMatchupSide.acquisitions` arriving**, and it is exactly the
+ * hazard a version guards against: a v1 blob deserializes with the new field
+ * missing, so every settled week would have gone on serving sides with no
+ * acquisition count at all while the live one had them — measured before the
+ * bump, `undefined` on every side of period 18 against a working 19. Bump it
+ * whenever a side or a matchup gains a field.
+ */
 const scoreboardBlobKey = (leagueId: number, period: number) =>
-  `espn-scoreboard-${leagueId}-${period}-v1.json`;
+  `espn-scoreboard-${leagueId}-${period}-v2.json`;
 
 const scoreboardCache = new Map<string, { matchups: EspnMatchup[]; fetchedAt: number }>();
 const scoreboardInFlight = new Map<string, Promise<EspnMatchup[]>>();
@@ -2571,6 +2677,7 @@ async function fetchMatchups(
   categories: EspnCategory[],
   live: boolean,
   span: { first: number; last: number } | null,
+  acquisitions: Map<number, Record<string, number>>,
 ): Promise<EspnMatchup[]> {
   const data = await leagueGet<EspnScoreboardResponse>(creds, ['mScoreboard'], 0, {
     schedule: { filterMatchupPeriodIds: { value: [period] } },
@@ -2632,10 +2739,23 @@ async function fetchMatchups(
     else if (live) winner = null;
     else winner = hw > aw ? 'home' : aw > hw ? 'away' : 'tie';
 
+    /**
+     * **Absent means none**, not unknown: `matchupAcquisitionTotals` carries a
+     * key only for the periods a manager actually moved in, so a quiet week is
+     * a missing key rather than a zero. Null is kept for the team ESPN reported
+     * no counter for at all, which is a different fact and draws nothing.
+     */
+    const used = (side: { teamId: number }) => {
+      const totals = acquisitions.get(side.teamId);
+      return totals ? totals[String(period)] ?? 0 : null;
+    };
     out.push({
       id: m.id ?? 0,
-      home: { ...home, wins: hw, losses: aw, ties: tie },
-      away: away === null ? null : { ...away, wins: aw, losses: hw, ties: tie },
+      home: { ...home, wins: hw, losses: aw, ties: tie, acquisitions: used(home) },
+      away:
+        away === null
+          ? null
+          : { ...away, wins: aw, losses: hw, ties: tie, acquisitions: used(away) },
       winner,
     });
   }
@@ -2652,6 +2772,9 @@ async function getMatchups(
    *  the schedule could not place the period, which costs the live day and
    *  nothing else. */
   span: { first: number; last: number } | null,
+  /** Team id → matchup period → acquisitions used, off the standings read this
+   *  scoreboard is assembled beside. */
+  acquisitions: Map<number, Record<string, number>>,
   force = false,
 ): Promise<EspnMatchup[]> {
   const key = `${creds.leagueId}:${period}`;
@@ -2678,7 +2801,7 @@ async function getMatchups(
         return stored;
       }
     }
-    const matchups = await fetchMatchups(creds, period, categories, live, span);
+    const matchups = await fetchMatchups(creds, period, categories, live, span, acquisitions);
     scoreboardCache.set(key, { matchups, fetchedAt: Date.now() });
     if (frozen) await writeJsonBlob(scoreboardBlobKey(creds.leagueId, period), matchups);
     return matchups;
@@ -2748,6 +2871,7 @@ export async function getScoreboard(
           meta.categories,
           live,
           span ? { first: span.first, last: span.last } : null,
+          meta.acquisitions,
           force,
         );
 
@@ -2755,6 +2879,16 @@ export async function getScoreboard(
     format: meta.format,
     scoringType: meta.scoringType,
     matchupPeriod: asked ?? 0,
+    /** How many acquisitions a manager gets in this period — one number for the
+     *  whole board, since the limit is the period's rather than the team's. See
+     *  `acquisitionLimitFor` for how it is derived and what it was checked
+     *  against. Null where the league does not limit them per period, which is
+     *  what makes the client draw a bare count instead of `5/10`. */
+    acquisitionLimit: acquisitionLimitFor(
+      meta.settings ?? undefined,
+      asked ?? 0,
+      span ? span.last - span.first + 1 : 0,
+    ),
     prevPeriod: at > 0 ? meta.periods[at - 1].period : null,
     nextPeriod: at >= 0 && at < meta.periods.length - 1 ? meta.periods[at + 1].period : null,
     start,

@@ -307,8 +307,46 @@ function MatchupCard({
   const leading =
     matchup.winner === 'home' ? home.teamId : matchup.winner === 'away' ? away?.teamId : null;
 
+  /**
+   * **The whole card opens the matchup**, where a `Breakdown →` link at its
+   * foot used to.
+   *
+   * That link was argued for and the argument was about *accessibility* rather
+   * than about the reader: wrapping the card in one control would put a hundred
+   * titled cells inside a single tab stop and one accessible name. Both halves
+   * of that are answerable and neither is a reason to make somebody aim at
+   * eleven characters — a card is a matchup, and a press on it should open it,
+   * which is what every row of the research board and every row of the Game Log
+   * already do.
+   *
+   * So it is `role="button"` with a `tabIndex` and an **`aria-label` naming the
+   * two teams**, which is what fixes the "one accessible name" half: the name is
+   * `Baldy's Bozos vs Sho me the Parlay — breakdown` rather than the whole grid
+   * read out. The cells keep their titles, which are a pointer's affordance and
+   * were never in the tab order to begin with. Enter and Space press it, Space
+   * with `preventDefault` so it does not also scroll the board underneath.
+   */
+  const label = away
+    ? `${teams.get(away.teamId)?.name ?? `Team ${away.teamId}`} vs ${
+        teams.get(home.teamId)?.name ?? `Team ${home.teamId}`
+      } — breakdown`
+    : `${teams.get(home.teamId)?.name ?? `Team ${home.teamId}`} — roster and feed`;
+  const open = () => onOpen(matchup.id);
+
   return (
-    <div className={`lg-matchup${away ? '' : ' lg-bye'}${mine ? ' lg-mine' : ''}`}>
+    <div
+      className={`lg-matchup${away ? '' : ' lg-bye'}${mine ? ' lg-mine' : ''}`}
+      role="button"
+      tabIndex={0}
+      aria-label={label}
+      onClick={open}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          open();
+        }
+      }}
+    >
       {mine && <div className="lg-mine-tag">Your matchup</div>}
       {sides.map((side) => {
         const team = teams.get(side.teamId);
@@ -413,15 +451,6 @@ function MatchupCard({
           cell in the grid above carries its own `title`, and wrapping the lot
           in one control would put a hundred titled cells inside a single tab
           stop and one accessible name. */}
-      {/* **A bye gets the door too**, and it has to: a matchup page is the only
-          way to a manager's roster and feed, and on the week the reader's own
-          team is on a bye — eight of the ten cards in a 12-team league's first
-          playoff round — leaving it off would put his own team out of reach
-          entirely. It reads `Team →` there, since there is no breakdown to
-          open: the page goes straight to his roster. */}
-      <button type="button" className="lg-open-matchup" onClick={() => onOpen(matchup.id)}>
-        {away ? 'Breakdown →' : 'Team →'}
-      </button>
     </div>
   );
 }

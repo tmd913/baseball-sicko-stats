@@ -10902,27 +10902,29 @@ body {
   color: var(--faint);
 }
 
-/* The way through from a scoreboard card to that matchup's own page. A text
-   door in the accent rather than the whole card made pressable — the idiom the
-   player page's Overview uses for `Stats →` and `News →`, and the right one
-   here for a stated reason: every cell of the category grid above carries its
-   own `title`, so wrapping the card in one control would put a hundred titled
-   cells inside a single tab stop and one accessible name. Right-aligned, which
-   is where a door goes when the thing above it is a table read left to right. */
-.lg-open-matchup {
-  display: block;
-  margin: 8px 0 0 auto;
-  padding: 2px 0;
-  border: none;
-  background: none;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--accent);
+/* **The whole card is the way through to that matchup's page.** It was a
+   `Breakdown →` text door at the card's foot, argued from accessibility rather
+   than from the reader — a hundred titled cells inside one tab stop and one
+   accessible name — and both halves of that are answerable (an `aria-label`
+   names the two teams; the titles were never in the tab order). A card is a
+   matchup, and a press on it should open it, which is what every row of the
+   research board and of the Game Log already does.
+
+   The pointer says so, and the hover is scoped to `(hover: hover)` for the
+   reason every pressable surface in this app is: on touch there is no pointer
+   to move away, so the tint sticks to the last card a finger crossed. See the
+   note at the top of this file. */
+.lg-matchup {
   cursor: pointer;
 }
-.lg-open-matchup:hover {
-  text-decoration: underline;
+@media (hover: hover) {
+  .lg-matchup:hover {
+    border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  }
+}
+.lg-matchup:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* ---- The Matchup tab ------------------------------------------------------
@@ -11170,6 +11172,35 @@ body {
 .mup-view {
   z-index: 48;
 }
+/* **A team page's roster reading is a fixed-height column**, so the table's own
+   header row and total row stick — which is `.app.summary-mode`'s answer to
+   exactly this, one level up, and `.details-view.gamelog-mode`'s one page
+   along. A sticky row sticks to the box that scrolls, and without this that box
+   is the overlay: the table grows to its rows and the header slides away under
+   the pinned head.
+
+   The head and the tools keep their natural height and only the pane flexes;
+   the head goes **static**, which is the trap both of those rules already
+   record — `overflow: hidden` makes this a scrollport of its own, and a sticky
+   box in one is held against its *padding* box, which would leave a strip of
+   page above it that no other reading shows. */
+.mup-view.roster-mode {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  /* No trailing gutter to scroll past — the table ends where the viewport does. */
+  padding-bottom: 12px;
+}
+.mup-view.roster-mode > .mup-chrome,
+.mup-view.roster-mode > .mup-tools {
+  flex: none;
+  position: static;
+}
+.mup-view.roster-mode .summary-view {
+  flex: 1;
+  min-height: 0;
+}
+
 /* The head: the way back, and which week the numbers are. Pinned, on
    `.details-chrome`'s own argument one page along — it is the last thing that
    should scroll away from under a page being read, and it is the way out. */
@@ -11213,6 +11244,24 @@ body {
    it read as a word adrift 700px from the team it belongs to. */
 .mup-team-head .lg-bye-tag {
   margin-left: 0;
+}
+/* His acquisitions, on the one head that has no Summary page to put them on. To
+   the right end of the row, where the scoreboard card puts its headline: it is
+   a figure rather than part of the name. */
+.mup-acq-tag {
+  margin-left: auto;
+  flex: none;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.mup-acq-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 /* Which week, printed rather than navigable — the arrows belong to the
    Scoreboard, which is the page about *which* week. The dates and the state are

@@ -480,6 +480,58 @@ as it does for a matchup — checked on the live league, all 23 stats with the
 had to change for it; the card was simply declining to read them. See **Client —
 the League view**, *A bye card shows his week*.
 
+### How many acquisitions a manager gets, which ESPN does not publish
+
+**`transactionCounter.matchupAcquisitionTotals` on every `mTeam` row is how many
+he has *used*, per matchup period** — `{"1": 9, "2": 5, …, "19": 7}` — and it
+rides on the standings read `leagueMeta` already makes, so the count costs no
+request at all.
+
+**The limit is not published and has to be derived.** What ESPN gives is
+`acquisitionSettings.matchupAcquisitionLimit` — **0.7142857142857143** on the
+live league, with `matchupLimitPerScoringPeriod: true` beside it — which is the
+limit *per scoring period*. 5/7 is exactly 0.714…, so an ordinary seven-day week
+is 5.
+
+**How many days a period has is the part that needs care**, because neither
+source is right on its own:
+
+- The **observed span** — the scoring periods `pointsByScoringPeriod` reports,
+  which `leagueMeta` already computes for the header's dates — is exact on a
+  settled period and catches the two that are not seven days: **period 1 is 12**
+  on the live league (the season opened mid-week) and **period 15 is 14** (the
+  All-Star break falls inside it). But it **truncates at ESPN's own current
+  day**, so the period being played reads short — 7 for a two-week playoff
+  round.
+- The **declared length** (`scheduleSettings.matchupPeriods`, which maps a
+  period to the *weeks* it covers — `{"1": [1], "19": [19, 20]}`) is right about
+  the playoff round and wrong about both of the others, knowing nothing of an
+  opening stretch or a break. Note it is **weeks, not scoring periods**: a
+  reading of it as days gives 1 and is wrong by an order of magnitude.
+
+So `acquisitionLimitFor` takes the **larger of the two**, which needs no
+live/settled branch and is principled rather than lucky: the observation is a
+lower bound because it truncates, and the declaration is the nominal length, so
+a period is at least as long as both.
+
+**Checked against every team's own totals rather than reasoned about.** Over the
+live league's **185 team-periods, 0 are over the computed limit and 55 are
+exactly at it** — a cap 55 managers hit and none exceeded. The four periods that
+are not 5: **1 → 9** (12 days), **15 → 10** (14), **19 → 10** (a fortnight's
+playoff round), every other week **5**.
+
+**A team with no key for the period has used none**, not an unknown number:
+`matchupAcquisitionTotals` carries a key only for the periods a manager actually
+moved in, so a quiet week is a missing key. Null is kept for a team ESPN
+reported no counter for at all, which is a different fact and draws nothing.
+
+**`espn-scoreboard-…` went to `-v2`** for it, and this is the hazard that key
+exists for stated plainly: a settled period is read back with **no freshness
+test**, so a v1 blob deserializes with `acquisitions` missing and every finished
+week would have gone on serving sides with no count while the live one had them.
+Measured before the bump: `undefined` on every side of period 18 against a
+working 19.
+
 **The stat ids are a curated table, because ESPN publishes no dictionary of them
 anywhere.** Checked against the game-level `seasons/{year}`, `kona_game_state`
 and every league view: none names a single stat. So `STAT_META` is the same
