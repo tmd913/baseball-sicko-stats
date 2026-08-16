@@ -246,6 +246,7 @@ async function buildBase(kind: PlayerKind, window: ResearchWindow): Promise<Rese
       whiffRate: null,
       chaseRate: null,
       firstPitchStrikeRate: null,
+      batSpeed: null,
       sprintSpeed: null,
       // Batter-only / pitcher-only halves; the client renders one kind's
       // columns at a time, so the other half stays null.
@@ -389,6 +390,13 @@ const CUSTOM_COLUMNS = [
   'whiff_percent',
   'oz_swing_percent',
   'f_strike_percent',
+  // Bat tracking. Checked populated on **both** boards before being added —
+  // 420/420 batters and 96/96 pitchers at `min=100` — which matters here more
+  // than usual, because its obvious neighbour `swing_length` is one of the
+  // columns this board accepts and returns **empty**: 0/420, the same failure
+  // `pull_air_rate` is recorded for above. Bat speed is real, swing length is
+  // not reachable from any leaderboard, so only the one is asked for.
+  'avg_swing_speed',
   'sprint_speed',
   // Counts, not rates, and carried only to compute xFIP below — never shown.
   'flyballs',
@@ -497,6 +505,7 @@ async function enrichWindow(
     row.whiffRate = v.whiffRate;
     row.chaseRate = v.chaseRate;
     row.firstPitchStrikeRate = v.firstPitchStrikeRate;
+    row.batSpeed = v.batSpeed;
     // xFIP off the window's own fly balls, exactly as the season path does it
     // off the custom board's — same helper, same league rate, so a pitcher's
     // xFIP means the same thing on either board.
@@ -546,6 +555,7 @@ async function enrich(rows: ResearchRow[], kind: PlayerKind): Promise<void> {
       row.whiffRate = cell(r.whiff_percent);
       row.chaseRate = cell(r.oz_swing_percent);
       row.firstPitchStrikeRate = cell(r.f_strike_percent);
+      row.batSpeed = cell(r.avg_swing_speed);
       row.sprintSpeed = cell(r.sprint_speed);
       // xFIP: FIP with his own home runs swapped for his fly balls at the
       // league rate — the one estimator needing a *count* off this board rather
@@ -609,9 +619,9 @@ const inFlight = new Map<BoardKey, Promise<Cached>>();
 // dashing the column for six hours after the deploy that filled it in. The rule
 // the version answers is "would a stored blob serve the wrong thing", and a
 // field that has started having a value is as much a wrong thing as one that is
-// missing.
+// missing. v10 is `batSpeed`, arriving on both boards and all five windows.
 const storeKey = (kind: PlayerKind, window: ResearchWindow) =>
-  `research-${kind}-${window}-${SEASON}-v9.json`;
+  `research-${kind}-${window}-${SEASON}-v10.json`;
 
 async function build(kind: PlayerKind, window: ResearchWindow): Promise<Cached> {
   const rows = await buildBase(kind, window);

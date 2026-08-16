@@ -1078,6 +1078,9 @@ export interface ResearchRow {
   whiffRate: number | null; // percent
   chaseRate: number | null; // percent
   firstPitchStrikeRate: number | null; // percent
+  /** Average bat speed over his competitive swings — the ones he took on the
+   *  batting board, the ones taken against him on the pitching board. */
+  batSpeed: number | null; // mph
   // Batter only — Savant publishes no sprint speed on the pitching board.
   sprintSpeed: number | null; // feet per second
 }
