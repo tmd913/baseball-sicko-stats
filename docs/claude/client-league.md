@@ -633,6 +633,69 @@ feed's own names already follow.
 floor, so the break is decided by the room rather than by a width written down
 here.
 
+### The roster read hung under StrictMode, and the guard was the cause
+
+**Reported as: the response comes back quickly and the spinner never goes.** It
+did, and only under `npm run dev` — which is why it survived being driven
+against the built client, React double-invoking effects in **development builds
+alone**.
+
+**The guard was the bug.** The effect marked the request as asked *before*
+firing it and bailed on a second pass that found the mark:
+
+```
+if (asked.current === key) return;
+asked.current = key;
+let live = true;
+… .then(r => live && setRosters(r.rosters)).finally(() => live && setLoading(false));
+return () => { live = false; };
+```
+
+StrictMode mounts, tears down and re-runs. **Pass one** sets the mark and fires
+— and its teardown sets `live` false, so when the answer lands neither
+`setRosters` nor `setLoading(false)` runs. **Pass two** sees the mark and
+returns. `loading` stays true for ever, `rosters` stays null, and the block wait
+is the only thing the component can draw. Reproduced on the dev build:
+`{block: true, rosters: 0, players: 0}` four seconds after the press.
+
+**It is the trap this codebase has already recorded twice** — `auth.tsx`'s
+`exchangeOnce` ("StrictMode made the exchange impossible in development: the
+boot effect runs twice, `exchangeCode` consumes the single-use verifier on the
+first pass, and the second found nothing stashed") and the research board's
+scroll memory ("StrictMode runs a mounting effect, tears it down and runs it
+again, which a flag reads as a second visit"). Both were fixed by making the
+second pass *join* the first rather than be turned away; this is the same
+mistake in a third shape.
+
+**The fix is to delete the ref**, because the dependency array was already doing
+its job: `key` is the two team ids and the date, so an unrelated re-render
+re-runs nothing and a genuine change is exactly when a re-read is wanted. The
+double invoke now costs a second **request** in development and nothing in
+production — and not even a second ESPN read, `getTeamRoster`'s `inFlight` map
+deduping the pair server-side.
+
+**The opponent table had the identical fault** and took the identical fix, one
+step better: it tests `boards[window]`, the state it already holds, rather than
+a ref. That is both simpler and self-healing — a span present in `boards` is a
+span that genuinely landed, where a mark set up-front is only a claim that one
+was asked for — and it makes the failed-read retry fall out for nothing, a span
+that errored being absent from `boards` and so asked again the moment `attempt`
+moves. It costs `boards` a place in the dependency list, which re-runs the
+effect on each arrival and returns immediately.
+
+**The rule to carry away: never mark a request answered before it is answered**,
+or unmark it in the cleanup. `App.tsx`'s `rankPopulationsInFlight` was audited
+against it and is sound — it deletes the key in an unconditional `finally` and
+sets its state with no `live` gate, so a double invoke dedupes and the answer
+still lands.
+
+**Measured after, on the dev build (5176) and the built client (4000) alike.**
+Rosters: `{rosters: 2, players: 53, block: false}` on both. The opponent table
+steps `Season 124 → 30d 28 → Away 16 → 7d 2` games on dev and `30d 28 → Home 12
+→ Season 63` on prod, with no wait left standing at any step. Both retry paths
+still work: a stubbed failure draws its own line and pressing the control again
+lands the read (`opponent 60d → 52 games`, `rosters → 2 / 53`).
+
 ### The headline stacks under the name on a phone
 
 `1fr auto 1fr` with a score on each side leaves a team about **120px at 390**,
