@@ -46,7 +46,8 @@ import type { ResearchInclude, ResearchPos, ResearchUi } from './components/Rese
 import { simulateLiveDay } from './simulate';
 import { PlayerDetails } from './components/PlayerDetails';
 import { toStatsColumnKeys } from './components/PlayerWindowTable';
-import { DateRangePicker, numericRange, tightRange } from './components/DateRangePicker';
+import { DateToggle, DateRow } from './components/DateControls';
+import type { DatePreset } from './components/DateControls';
 import { ScheduleSpanTabs, ScheduleToggle } from './components/ScheduleControl';
 import { buildScheduleIndex, toScheduleSpan } from './components/schedule';
 import type { ScheduleSpan } from './components/schedule';
@@ -65,6 +66,7 @@ import { LoadingBlock, LoadingLine, SpinningBaseball } from './components/Loadin
 import { Tutorial } from './components/Tutorial';
 import { EspnSettings } from './components/EspnSettings';
 import LeagueView, { LEAGUE_TABS } from './components/LeagueView';
+import LeagueMatchupView from './components/LeagueMatchup';
 import { spanDetail } from './components/LeagueRankings';
 import type { LeagueTab } from './components/LeagueView';
 
@@ -216,12 +218,6 @@ function mondayOnOrBefore(date: string): string {
   return addDays(date, -daysSinceMonday);
 }
 
-
-interface DatePreset {
-  label: string;
-  start: string;
-  end: string;
-}
 
 function datePresets(): DatePreset[] {
   const today = baseballToday();
@@ -505,8 +501,17 @@ export default function App() {
   const [scheduleWindow, setScheduleWindow] = useState<ScheduleWindow | null>(null);
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [scheduleError, setScheduleError] = useState<string | null>(null);
+  /**
+   * **A second surface asks for the same fortnight.** The matchup page's team
+   * pages carry the Schedule view too, and its data takes no parameters at all
+   * — one window for every club, sliced per reader — so the two share this one
+   * read rather than each making it. The flag is what lets that page ask
+   * without owning the span this one is on.
+   */
+  const [scheduleWanted, setScheduleWanted] = useState(false);
+  const needSchedule = useCallback(() => setScheduleWanted(true), []);
   useEffect(() => {
-    if (scheduleSpan === null || scheduleWindow) return;
+    if ((scheduleSpan === null && !scheduleWanted) || scheduleWindow) return;
     let cancelled = false;
     setScheduleLoading(true);
     setScheduleError(null);
@@ -524,7 +529,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [scheduleSpan, scheduleWindow]);
+  }, [scheduleSpan, scheduleWanted, scheduleWindow]);
   /**
    * The window indexed by club and day, or null while the mode is off or the
    * read is still out.
@@ -1047,14 +1052,12 @@ export default function App() {
    */
   const [leagueTab, setLeagueTab] = useState<LeagueTab>(() => {
     const raw = initialParams.get('lt');
-    return raw === 'rankings' || raw === 'transactions' || raw === 'scoreboard'
-      ? raw
-      : 'matchup';
+    // `matchup` was a fourth tab for a while and is a **page over this view**
+    // now, opened from the card that names it. An older link naming it reads as
+    // the board that matchup was always a row of — and its `mup=` still opens
+    // the page, so the link lands where it meant to.
+    return raw === 'rankings' || raw === 'transactions' ? raw : 'scoreboard';
   });
-  // The two tabs the scoreboard read serves. A matchup breakdown *is* one card
-  // of that board turned on its side, so the two share the fetch, the poll and
-  // the period.
-  const isBoardTab = (t: LeagueTab) => t === 'matchup' || t === 'scoreboard';
   const [matchupId, setMatchupId] = useState<number | null>(() => {
     const raw = Number(initialParams.get('mup'));
     return Number.isInteger(raw) && raw > 0 ? raw : null;
@@ -1252,10 +1255,10 @@ export default function App() {
    * view's block wait is gated on there being nothing to show yet.
    */
   useEffect(() => {
-    // **Both tabs read it**, and they read the same object: a matchup breakdown
-    // is one card of the scoreboard drawn the other way up, so the Matchup tab
-    // needs no fetch of its own and switching between the two costs nothing.
-    if (view !== 'league' || !isBoardTab(leagueTab) || !espnConnected) return;
+    // **The matchup page reads it too**, and reads the same object: a matchup
+    // breakdown is one card of this board drawn the other way up, so opening
+    // one costs no fetch of its own and closing it costs nothing either.
+    if (view !== 'league' || leagueTab !== 'scoreboard' || !espnConnected) return;
     let cancelled = false;
     setScoreboardLoading(true);
     setScoreboardError(null);
@@ -1390,7 +1393,7 @@ export default function App() {
   const pollLeague = useCallback(() => {
     const quiet = (what: string) => (e: Error) =>
       console.error(`league poll (${what}) failed:`, e.message);
-    if (isBoardTab(leagueTab) && scoreboardLive) {
+    if (leagueTab === 'scoreboard' && scoreboardLive) {
       api.espnScoreboard(matchupPeriod).then(setScoreboard).catch(quiet('scoreboard'));
     }
     if (leagueTab === 'rankings' && rankSpanLive) {
@@ -2050,10 +2053,11 @@ export default function App() {
     // Which of the League page's three tabs, and the Rankings span. Written
     // only on that view and only off their defaults, the rule every other
     // param here follows.
-    if (view === 'league' && leagueTab !== 'matchup') p.set('lt', leagueTab);
-    if (view === 'league' && leagueTab === 'matchup' && matchupId != null) {
-      p.set('mup', String(matchupId));
-    }
+    if (view === 'league' && leagueTab !== 'scoreboard') p.set('lt', leagueTab);
+    // Which matchup is open **over** the view, which is a page rather than a
+    // tab — so it is written whatever tab is behind it, and a link carrying it
+    // opens that page the way `player=` opens a player's.
+    if (view === 'league' && matchupId != null) p.set('mup', String(matchupId));
     if (view === 'league' && leagueTab === 'rankings' && rankSpan !== 'season') {
       p.set('lspan', rankSpan);
     }
@@ -3237,52 +3241,16 @@ export default function App() {
      groups — it is the answer to "which days", which is the question you ask
      after "which players" and "which reading of them". */
   const dateToggle = (
-    <button
-      type="button"
-      className={`date-toggle${dateOpen ? ' active' : ''}`}
-      onClick={() => {
+    <DateToggle
+      open={dateOpen}
+      onToggle={() => {
         setSearchOpen(false);
         setDateOpen((v) => !v);
       }}
-      aria-expanded={dateOpen}
-      aria-label={dateOpen ? 'Close date controls' : 'Change dates'}
-      title={dateOpen ? 'Close dates' : 'Change dates'}
-    >
-      {/* 17px, the size every other icon button in the app draws at — it was
-          15, which was fine beside a label and small once a phone made this
-          button the glyph alone beside a 20px clipboard. */}
-      <svg
-        viewBox="0 0 24 24"
-        width="17"
-        height="17"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
-        <rect x="3" y="4" width="18" height="17" rx="2" />
-        <path d="M3 9h18M8 2v4M16 2v4" />
-      </svg>
-      {/* The preset's own word while one is active, so it reads "Today" rather
-          than today's date — that is what was picked, and it survives the date
-          rolling over. A hand-picked range has no name and shows its numbers. */}
-      <span className="date-toggle-label">{activePreset ?? numericRange(start, end)}</span>
-      {/* What the label says once there is no room for a label. On a phone this
-          button and the starters toggle beside it go to their icons — two
-          squares where two words wouldn't fit — and this is the one of the pair
-          that cannot simply lose its wording: the icon says "dates" and the page
-          would then say nowhere at all *which* dates every number on it is drawn
-          from. So the range rides on the corner of the glyph as a bubble.
-
-          Numbers rather than the preset's word, always: "Today" is a label's
-          worth of text and this is a badge on a 36px square, where 8/12 says the
-          same thing in half the width and says it exactly. Rendered at every
-          width and hidden by the stylesheet above 640, the way the date presets
-          and their dropdown are already done. */}
-      <span className="date-toggle-bubble">{tightRange(start, end)}</span>
-    </button>
+      start={start}
+      end={end}
+      activePreset={activePreset}
+    />
   );
 
   /* The presets and the range picker themselves. They open as a full-width row
@@ -3291,71 +3259,32 @@ export default function App() {
      and the thing it discloses have to stay together, and following the button
      down is the whole of that. Rendered once either way rather than duplicated
      into a second location: `.view-bar` already wraps, so `flex: 1 1 100%` on
-     `.app.date-open .date-control` is all "its own row" takes. */
+     `.app.date-open .date-control` is all "its own row" takes.
+
+     The pieces are `components/DateControls.tsx`, shared with the matchup
+     overlay's team pages — see the note there for why they were extracted
+     rather than copied. What stays here is the state and what a pick does to
+     it: picking a preset closes the row behind you, that being the errand it
+     was opened for, where the range picker's own popover needs it to stay. */
   const dateControl = (
-    <div className="date-control">
-      <div className="date-row">
-        {/* Desktop: a row of preset pills. On phones this row is hidden and
-            the equivalent <select> below takes over (see styles.css). */}
-        <div className="date-presets">
-          {presets.map((p) => (
-            <button
-              key={p.label}
-              type="button"
-              className={`date-preset${activePreset === p.label ? ' active' : ''}`}
-              onClick={() => {
-                setStart(p.start);
-                setEnd(p.end);
-                setActivePreset(p.label);
-                // Same as the phone dropdown below: the row is a disclosure
-                // at every width now, and picking a preset is the errand it
-                // was opened for, so it closes behind you. The range picker
-                // still doesn't — its own popover needs the row to stay.
-                setDateOpen(false);
-              }}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-        {/* Phone-only equivalent of the pill row. A custom range (no active
-            preset) shows the disabled placeholder option. */}
-        <select
-          className="date-presets-select"
-          value={activePreset ?? ''}
-          onChange={(e) => {
-            const p = presets.find((x) => x.label === e.target.value);
-            if (!p) return;
-            setStart(p.start);
-            setEnd(p.end);
-            setActivePreset(p.label);
-            // As the pills above: picking a preset is the errand, so the
-            // row closes behind you.
-            setDateOpen(false);
-          }}
-          aria-label="Date range preset"
-        >
-          <option value="" disabled>
-            Custom range
-          </option>
-          {presets.map((p) => (
-            <option key={p.label} value={p.label}>
-              {p.label}
-            </option>
-          ))}
-        </select>
-        <DateRangePicker
-          start={start}
-          end={end}
-          max={maxDate}
-          onChange={(s, e) => {
-            setStart(s);
-            setEnd(e);
-            setActivePreset(null);
-          }}
-        />
-      </div>
-    </div>
+    <DateRow
+      presets={presets}
+      activePreset={activePreset}
+      start={start}
+      end={end}
+      max={maxDate}
+      onPick={(p) => {
+        setStart(p.start);
+        setEnd(p.end);
+        setActivePreset(p.label);
+        setDateOpen(false);
+      }}
+      onRange={(s, e) => {
+        setStart(s);
+        setEnd(e);
+        setActivePreset(null);
+      }}
+    />
   );
 
   // The search bar the header icon opens: a full-width row directly under the
@@ -4221,19 +4150,13 @@ export default function App() {
         <LeagueView
           tab={leagueTab}
           board={scoreboard}
-          matchupId={matchupId}
-          onMatchup={setMatchupId}
-          onOpenMatchup={(id) => {
-            setMatchupId(id);
-            setLeagueTab('matchup');
-          }}
+          onOpenMatchup={setMatchupId}
           loading={showScoreboardWait}
           error={scoreboardError}
           onPeriod={(period) => {
             // A matchup id belongs to one period, so stepping to another has to
-            // let go of it: `mup=` from last week names a row this board has
-            // no match for, and the tab would silently fall back to the
-            // reader's own anyway. Clearing it says so in the URL too.
+            // let go of it: `mup=` from last week names a row this board has no
+            // match for, and the page it opens would have nothing to draw.
             setMatchupId(null);
             setMatchupPeriod(period);
           }}
@@ -4252,11 +4175,6 @@ export default function App() {
           rosterPct={rosterPct}
           eligibility={eligibility}
           onOpenPlayer={openLeaguePlayer}
-          /* The Matchup tab's two team pages draw the app's own roster table
-             and feed, so a name in one of them names a player the way the rest
-             of the app does — by key, and through the one setter every other
-             route into that page uses. */
-          onOpenDetails={setDetailsKey}
           connected={espnConnected}
           onConnect={openEspnSettings}
         />
@@ -4391,6 +4309,36 @@ export default function App() {
       >
         ↑
       </button>
+
+      {/* One matchup, as a page over the League view rather than a tab inside
+          it — see `LeagueMatchup.tsx`. Rendered here beside the other overlays
+          rather than inside `LeagueView`, because that is what it is: a fixed
+          box over the whole app, with its own scroller, the body pinned behind
+          it and a Back button rather than a tab to leave by. **Before the
+          player page in the DOM and below it in the stack** (48 against 50), so
+          a name pressed on a team page opens over this and Escape unwinds one
+          rung at a time.
+
+          It draws only with a board to draw from, which is also what makes
+          `?mup=` on a cold load wait rather than flash an error: the id is held
+          from the first render and the page appears when the scoreboard lands. */}
+      {view === 'league' && matchupId != null && scoreboard && (
+        <LeagueMatchupView
+          board={scoreboard}
+          matchupId={matchupId}
+          onClose={() => setMatchupId(null)}
+          onOpenDetails={setDetailsKey}
+          /* The app's own named spans, so `Today` means one thing in the app —
+             the matchup's own week is added to them in there, that being the
+             one named range which means something only on this page. */
+          presets={presets}
+          maxDate={maxDate}
+          today={baseballToday()}
+          scheduleWindow={scheduleWindow}
+          scheduleLoading={scheduleLoading}
+          onNeedSchedule={needSchedule}
+        />
+      )}
 
       {detailsPlayer && (
         <PlayerDetails

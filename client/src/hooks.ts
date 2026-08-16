@@ -828,7 +828,7 @@ export function useFullPage<T extends HTMLElement = HTMLDivElement>() {
  * that quietly always passes, so the board's dialog and an expanded table were
  * both answering the one press.)
  */
-const OVERLAYS = '.details-view, .reel-view, .app-dialog';
+const OVERLAYS = '.details-view, .reel-view, .mup-view, .app-dialog';
 
 /**
  * The stacking layer an element sits on: the nearest ancestor's declared

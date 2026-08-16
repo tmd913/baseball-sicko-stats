@@ -52,7 +52,6 @@ import type {
 import { LoadingBlock } from './Loading';
 import LeagueRankings from './LeagueRankings';
 import LeagueTransactions from './LeagueTransactions';
-import LeagueMatchupTab from './LeagueMatchup';
 
 /* ---- Formatting ---------------------------------------------------------
  *
@@ -291,6 +290,15 @@ function MatchupCard({
           <SideIdentity team={teams.get(home.teamId)} teamId={home.teamId} />
           <span className="lg-bye-tag">Bye</span>
         </div>
+        {/* **A bye gets the door too**, and it has to: a matchup page is the
+            only way to that manager's roster and feed, and on the week the
+            reader's own team is on a bye — which in a 12-team league's first
+            playoff round is eight of the ten cards — leaving it off would put
+            his own team out of reach entirely. The page draws a bye as one
+            team, which is what it is. */}
+        <button type="button" className="lg-open-matchup" onClick={() => onOpen(matchup.id)}>
+          Team →
+        </button>
       </div>
     );
   }
@@ -547,7 +555,7 @@ function Scoreboard({
 }
 
 /** Which of the three pages of this view is on screen. */
-export type LeagueTab = 'matchup' | 'scoreboard' | 'rankings' | 'transactions';
+export type LeagueTab = 'scoreboard' | 'rankings' | 'transactions';
 
 /** The three pages of the League view.
  *
@@ -560,13 +568,13 @@ export type LeagueTab = 'matchup' | 'scoreboard' | 'rankings' | 'transactions';
  * than as one tier down of the same one. So `App` draws it there and this file
  * keeps only the vocabulary. */
 export const LEAGUE_TABS: { tab: LeagueTab; label: string; title: string }[] = [
-  // **First, and the default with it.** The one matchup a manager is in is the
-  // question the page is opened with, and the app's own convention is that the
-  // first tab is the one you land on (`Overview` on the player page, `Roster`
-  // on the view switch). It costs `lt=`'s omitted value, which was
-  // `scoreboard`: a link carrying no `lt` now opens here, and every other tab
-  // writes itself out as it always did.
-  { tab: 'matchup', label: 'Matchup', title: 'One matchup, category by category' },
+  // **Three again, and the Scoreboard leads.** A `Matchup` tab sat first here
+  // for a while and did not belong: the other three are three readings of *the
+  // league*, where a matchup is one row of the first of them opened up — a set
+  // of siblings with one member at a different depth. It is a page over this
+  // view now, opened from the card that names it (`LeagueMatchup.tsx`), so
+  // `lt=` goes back to omitting `scoreboard` and `lt=matchup` in an older link
+  // is read as the board the matchup was always a row of.
   { tab: 'scoreboard', label: 'Scoreboard', title: "This period's matchups" },
   { tab: 'rankings', label: 'Rankings', title: 'Where every team stands in each category' },
   { tab: 'transactions', label: 'Transactions', title: 'Who has added, dropped and traded whom' },
@@ -575,8 +583,6 @@ export const LEAGUE_TABS: { tab: LeagueTab; label: string; title: string }[] = [
 export default function LeagueView({
   tab,
   board,
-  matchupId,
-  onMatchup,
   onOpenMatchup,
   loading,
   error,
@@ -592,15 +598,14 @@ export default function LeagueView({
   rosterPct,
   eligibility,
   onOpenPlayer,
-  onOpenDetails,
   connected,
   onConnect,
 }: {
   tab: LeagueTab;
   board: EspnScoreboard | null;
-  matchupId: number | null;
-  onMatchup: (id: number) => void;
-  /** A press on a scoreboard card: open that matchup on the Matchup tab. */
+  /** A press on a scoreboard card's `Breakdown →`: open that matchup as a page
+   *  over this view. The card is what names the matchup, which is why this view
+   *  no longer carries a picker for one. */
   onOpenMatchup: (id: number) => void;
   loading: boolean;
   error: string | null;
@@ -619,12 +624,6 @@ export default function LeagueView({
   rosterPct: Map<number, number> | null;
   eligibility: Map<number, string[]> | null;
   onOpenPlayer: (mlbId: number) => void;
-  /** Open a player's page by the app's `${kind}-${id}` key — what the Matchup
-   *  tab's two team pages hand back, their tables and feeds being the app's own
-   *  and naming a player the way the rest of the app does. `onOpenPlayer`
-   *  beside it takes a bare MLB id, which is all a transaction row or a roster
-   *  list has; the two reach the same page from two shapes of fact. */
-  onOpenDetails: (key: string) => void;
   connected: boolean;
   onConnect: () => void;
 }) {
@@ -679,14 +678,6 @@ export default function LeagueView({
         loading ? (
           <LoadingBlock>Reading your league's scoreboard</LoadingBlock>
         ) : null
-      ) : tab === 'matchup' ? (
-        <LeagueMatchupTab
-          board={board}
-          matchupId={matchupId}
-          onMatchup={onMatchup}
-          onPeriod={onPeriod}
-          onOpenDetails={onOpenDetails}
-        />
       ) : (
         <Scoreboard board={board} onPeriod={onPeriod} onOpenMatchup={onOpenMatchup} />
       )}
