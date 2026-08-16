@@ -222,6 +222,18 @@ function statcastColumns(kind: PlayerKind): Column[] {
       ascFirst: p,
     },
     {
+      key: 'batSpeed', label: 'Bat', title: p
+        ? 'Average bat speed against — mph over the competitive swings taken at him'
+        : 'Average bat speed — mph over his competitive swings',
+      format: (r) => dec(r.batSpeed, 1), value: (r) => r.batSpeed,
+      // A grade rather than a profile, and the same way round as EV beside it:
+      // a batter wants to swing hard and a pitcher wants slower swings at him.
+      // (Bat speed is not a virtue on its own — a short quick swing beats a
+      // slow one and loses to a fast one — but the direction the column opens
+      // in has to pick an end, and this is the end each side is trying for.)
+      ascFirst: p,
+    },
+    {
       key: 'whiffRate', label: 'Whiff%', title: 'Whiffs per swing',
       // The one metric whose good end flips: a pitcher wants swings and misses,
       // a batter wants not to be the one missing.
