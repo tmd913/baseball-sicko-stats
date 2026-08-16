@@ -1093,13 +1093,18 @@ export default function App() {
   });
   const [rankSpan, setRankSpan] = useState<EspnRankSpan>(() => {
     const raw = initialParams.get('lspan');
+    // **`matchup` is the default**, which is the week a manager opens this tab
+    // in the middle of — the season line is the context for that rather than
+    // the question. A league with no matchup period does not offer it, and the
+    // server answers such a reader with the span that *does* lead its list, so
+    // this default can never draw an empty table.
     return raw === 'season' ||
       raw === 'matchup' ||
       raw === 'first' ||
       raw === 'second' ||
       raw === 'playoffs'
       ? raw
-      : 'season';
+      : 'matchup';
   });
 
   const [rankings, setRankings] = useState<EspnRankings | null>(null);
@@ -2097,7 +2102,10 @@ export default function App() {
     // tab — so it is written whatever tab is behind it, and a link carrying it
     // opens that page the way `player=` opens a player's.
     if (view === 'league' && matchupId != null) p.set('mup', String(matchupId));
-    if (view === 'league' && leagueTab === 'rankings' && rankSpan !== 'season') {
+    // Omitted at the default, which is now the week being played — so a link
+    // shared without one opens on the recipient's *own* current matchup rather
+    // than on the sharer's, which is the same rule a date preset follows.
+    if (view === 'league' && leagueTab === 'rankings' && rankSpan !== 'matchup') {
       p.set('lspan', rankSpan);
     }
     if (simulate) p.set('sim', '1');

@@ -477,8 +477,11 @@ board it was opened from asks.
 **`lt=` for the tab and `lspan=` for the Rankings span**, both by the rule
 `view=`, `win=` and `mp=` follow: each decides what data is on screen, so a link
 that leaves one out describes a different page. The Scoreboard is the default and
-is omitted, so a bare `?view=league` opens where the page always opened; `season`
-is the span default and is omitted the same way.
+is omitted, so a bare `?view=league` opens where the page always opened; the
+span default is **`matchup`** and is omitted the same way — which also means a
+link shared without one opens on the *recipient's* own current matchup rather
+than on the sharer's, the rule a date preset already follows by carrying its
+label rather than two dates.
 
 **`mup=` is on that list too and is not a tab**: it names the matchup whose
 *page* is open over the view, the way `player=` names the player whose page is
@@ -1322,6 +1325,116 @@ the loser goes quiet, because ten red cells down one side of a card would be the
 row shouting where the job is to mark a winner. A twelve-row table of ranks is
 that same picture turned on its side.
 
+### Three summary columns: `OVR`, then `BAT` and `PIT`
+
+**Each side of the ball gets one column — `BAT` and `PIT` — carrying that
+team's roto points over the side's categories with its rank under them, like
+every category beside it, and `OVR` leads them with the same figure over every
+category at once.**
+
+**`OVR` is `BAT` + `PIT`**, by construction rather than coincidence (one
+function, two lists of categories — see **ESPN fantasy league**), and it leads
+them for that reason: the three read as a summary and its two parts rather than
+as three peers, and a reader can check the derived figure by adding the two
+columns beside it. It is drawn only where there is more than one side to
+combine — the server declines to compute it otherwise, and the client reads that
+decision rather than repeating the test. **It takes no colour of its own**, which is a reversal: it
+had the accent for a round, on the argument that the summary of a row should be
+a shade louder than the two halves it is made of. That lost to the rule this
+table already states at length — **colour here is the rank badge's**, a
+red-to-blue scale over twelve teams, and it is the one thing on the page
+carrying meaning in hue. An accent column beside it is a second colour system in
+the same row, saying *this column is important* where everything else coloured
+is saying *this figure is good*. What marks `OVR` is where it sits and the
+weight `.lg-side-col` gives all three summary columns, which is what a summary
+needs. Measured after: the `OVR` cell computes `rgb(232, 238, 252)` at weight
+800 — identical to `BAT` beside it, against a category cell's 600 — while its
+badge still carries the scale.
+ It is the question a column of ten ranks cannot
+answer at a glance: a manager reading `2nd · 5th · 1st · 9th · 3rd` down his
+batting run is doing arithmetic in his head. Where the number comes from, why it
+is points rather than a mean of ranks, and what a tie does to it is in **ESPN
+fantasy league**, *One column per side of the ball*.
+
+**It leads its group rather than trailing it.** A totals column usually trails,
+and here it is what the run under it *comes to* — read left to right, the
+summary introduces the five columns that make it. It also puts the two overalls
+at fixed positions, one straight after the name and one straight after the
+batting run, so a reader finds them without counting columns.
+
+**`BAT` and `PIT` rather than `Batting` and `Pitching`**, because the header row
+reads `R · HR · RBI · SB · OPS` and a word among them would be the one column
+shouting. What the abbreviation cannot say, the header's own `title` does
+(`Batters · overall — points from all 5 batting categories, current matchup`),
+which is the same job that row's titles already do for `H` and `K` on a league
+scoring both sides. A stat id `STAT_META` has never been read against falls into
+its own `other` group and is headed `OTH` — the same honesty the group ordering
+already has.
+
+**It is set a shade stronger than the columns it totals** (`.lg-side-col` —
+`--text` at weight 800 against the categories' 600) and takes **no rule down its
+left edge**. A hairline between two runs is exactly what this table removed when
+the spanning `BATTERS` / `PITCHERS` header row went, on the grounds that a bare
+seam says there is a break here without saying what is on either side of it;
+reintroducing one for the same two runs would be that argument lost by default.
+
+**And they are the one thing on this table that needs a key**, which is why the
+caption line above the table carries an ⓘ. Every other column is a figure and
+its standing, and both explain themselves; `OVR`, `BAT` and `PIT` are a figure
+the app *made up* out of the ranks beside them, and a number nobody can derive by
+looking at the page is a number that has to be explained somewhere. It is the
+app's own `InfoKey` — the same disclosure the Splits tab and the Charts tab open
+— rather than a paragraph under the strip, for that component's stated reason: a
+key is read once and is in the way ever after.
+
+**It is written from the league rather than about one.** The team count and the
+category counts come off the rankings themselves, so a twelve-team 5×5 reads
+*"1st of 12 is worth 12"* and *"the 5 categories on that side"*, and its `OVR`
+sentence closes on *"120 is first in all 10 and 10 is last in all of them"* —
+where an eight-team league reads its own numbers. A worked example in the
+reader's own figures beats a formula, and it costs one pass over data already in
+hand. **`OVR` gets a sentence of its own and it is the one worth having**: that
+it is `BAT` + `PIT`, which is what makes a derived figure checkable against the
+page. The tie rule is the last paragraph, being the one thing the table cannot
+show: *a tie takes the better points, exactly as it shares a rank*. Where a
+league has only one side the `OVR` sentence is replaced by the plain
+first-and-last one, there being no column to explain.
+
+**The panel is anchored to the caption row, not to its button**, which is
+`.roll-key`'s trick and is here for the same measured reason: the ⓘ sits after a
+caption that is 200px of dates, so at 390 the button lands at **x=223** and a
+320px panel opening from it would run to −97. `position: static` on the key
+hands the containing block back to the row, and `left: 0` then means the row's
+own left edge — measured, the panel opens at **x=22 and ends at 342 of 390**,
+inside the viewport at every width.
+
+**What it costs is 15px of table**: the caption row goes 15 → 30px, the button's
+own height, and the pane under it 732 → 717 on a 900px window. That is the price
+of a real 30px touch target rather than a bare glyph, which is the rule
+`InfoKey` already states.
+
+**Driven rather than assumed**: a press opens it and a second closes it, Escape
+closes it and leaves the League view standing, an outside press closes it and is
+spent on the dismissal alone (`useDismissable`'s own rule — the press that
+dismissed it does not also press the table underneath), and the button carries
+`aria-expanded` and a real accessible name (`How OVR, BAT and PIT are worked out`).
+
+**They sort like any other column, and on their rank** — which is the one order
+the whole table shares. Sorting on the points would be the same order said in a
+second currency, and would break the rule that every column of this table opens
+on first place. Measured: one press of `BAT` gives `Swaggy Latinos 59 · 1st`,
+`Let's Go Mets 53 · 2nd`, `Baldy's Bozos 42 · 3rd` and one of `OVR` gives
+`Baldy's Bozos 88 · 1st`, `Swaggy Latinos 81 · 2nd`, `Brian&Tom's 80 · 3rd`; a
+second press reverses either, and `aria-sort` reads `ascending` on the first.
+
+**Measured at 320 / 390 / 640 / 1200 / 1920**, both spans: **15 columns** (two
+identity, three summary, ten categories), the table 956.6 → 1920px inside a pane
+of the window's width, the badge column pinned at **0** with the pane scrolled
+to its far right, the header row **1px** inside it (the border) with it scrolled
+down, and **no horizontal overflow of the page body at any width**. On a phone
+`OVR` is the first stat column after the name — the one most worth having on
+screen without scrolling.
+
 ### The Rankings table groups its columns and does not label them
 
 **The two sections order the columns and are not drawn.** The `<thead>` was two
@@ -1970,10 +2083,11 @@ Driven against the built client and the live 2026 league at **390×844 and
   ERA · SB · WHIP · K · OPS · SVHD`; the pane bleeds to **0 from both edges**;
   the team column pins at **0** with the pane scrolled to its far right; rows are
   **58.55px** and the header row **36.00** at every width.
-- **The five spans read**: `Season` (`ESPN's own season line`), `Current matchup`
-  (`Week 19 · Aug 10 – Aug 15 · so far`), `First half` (`Weeks 1–9 · Mar 25 –
-  May 31`) and `Second half` (`Weeks 10–18 · Jun 1 – Aug 9`), each writing its
-  own `lspan=`. **The halves are an even division of the regular season by
+- **The five spans read**: `Current matchup` (`Week 19 · Aug 10 – Aug 16 · so
+  far`, and the one the tab opens on), `Season` (`ESPN's own season line`),
+  `First half` (`Weeks 1–9 · Mar 25 – May 31`) and `Second half` (`Weeks 10–18 ·
+  Jun 1 – Aug 9`), each writing its own `lspan=` except the default, which is
+  omitted. **The halves are an even division of the regular season by
   matchup period** — nine weeks each of an eighteen-week season, where they were
   cut on the All-Star break and ran 15 and 3; see **ESPN fantasy league**, *The
   halves are an even division*.
