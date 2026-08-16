@@ -12,7 +12,6 @@ import { ScheduleSpanTabs, ScheduleToggle } from './ScheduleControl';
 import {
   defaultScheduleSpan,
   effectiveSpan,
-  SCHED_GAMES_KEY,
   scheduleColumns,
   spanLabel,
 } from './schedule';
@@ -951,11 +950,25 @@ export function ResearchTable({
     // column back where the reader had it.
     return orderedKeys.map((k) => byKey.get(k)).filter((c): c is Column => c !== undefined);
   }, [allColumns, orderedKeys, schedule, kind]);
-  /** Which keys are *drawn*, which is what the sort's fallback tests against —
-   *  the schedule's own in that mode, so a stat sort left over from before the
-   *  swap cannot leave the table ordered by a column that is not on it. */
+  /**
+   * Which keys the sort's fallback will accept. Out of schedule mode that is
+   * the columns on screen: hiding the one you were sorting on has to fall the
+   * order back, there being no header left to click.
+   *
+   * **In schedule mode it is those days *plus* the stat vocabulary**, and the
+   * union is the whole of "the mode leaves your sort alone". Swapping the
+   * columns is not the reader unticking one — it is a second reading of the
+   * same rows in the same order, and a board sorted by HR should become a
+   * schedule of the home-run leaders rather than a schedule of whoever plays
+   * most. The comparator already resolves a key that is not drawn
+   * (`columnsByKey`, the same fallback a filter on a hidden column takes), so
+   * nothing else had to be told; and the way back to the column is one press
+   * of the lit toggle, which is exactly what the trap the fallback guards
+   * against has not got.
+   */
   const visibleKeys = useMemo(
-    () => new Set(schedule ? columns.map((c) => c.key) : orderedKeys),
+    () =>
+      new Set(schedule ? [...columns.map((c) => c.key), ...orderedKeys] : orderedKeys),
     [schedule, columns, orderedKeys],
   );
   /** The columns actually on screen, by key. The sort resolves through this
@@ -1172,14 +1185,15 @@ export function ResearchTable({
    */
   // Visible, not merely present: hiding the Ros% column must not leave the
   // board ordered by it, which is the same trap the fallback exists for.
-  // In schedule mode the answer is **games in the span, most first**, which is
-  // the half of the question the view is opened with — and it is a column that
-  // is always drawn, unlike GS, which the batting board hasn't got.
-  const defaultSortKey = schedule
-    ? SCHED_GAMES_KEY
-    : hasRosterPct && visibleKeys.has('rosterPct')
-      ? 'rosterPct'
-      : DEFAULT_SORT[kind];
+  //
+  // **Schedule mode has no default of its own**, and used to open on games in
+  // the span. That is a fair reading of what the view is opened with and it
+  // reordered a table the reader had already ordered: a board sorted by HR
+  // came back sorted by G, which is a change nobody asked the toggle for. The
+  // mode swaps the *columns* and nothing else, so the default here is the
+  // board's whichever reading is on screen.
+  const defaultSortKey =
+    hasRosterPct && visibleKeys.has('rosterPct') ? 'rosterPct' : DEFAULT_SORT[kind];
   const activeSortKey =
     sortKey && visibleKeys.has(sortKey) ? sortKey : defaultSortKey;
 
