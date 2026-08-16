@@ -70,6 +70,18 @@ export interface FantasySlot {
    *  on this map rather than taking one of its own because it comes off the
    *  same roster read and reaches the same leaves. */
   injuryStatus: string | null;
+  /**
+   * Whose lineup this is, possessive (`The Homewreckers'`) — or **null for the
+   * reader's own**, which every caller but one passes and which is what makes
+   * the chip read `In your fantasy lineup` exactly as it always has.
+   *
+   * It exists because this map stopped being only the reader's team: the
+   * League page's Matchup tab draws each manager's roster with the same table
+   * and the same chip, and a pill saying *your* lineup over somebody else's
+   * bench is a lie the reader has no way to catch — the same fault, one owner
+   * along, that `day` was added to fix for a day.
+   */
+  owner?: string | null;
 }
 
 /**

@@ -592,6 +592,7 @@ export default function LeagueView({
   rosterPct,
   eligibility,
   onOpenPlayer,
+  onOpenDetails,
   connected,
   onConnect,
 }: {
@@ -618,6 +619,12 @@ export default function LeagueView({
   rosterPct: Map<number, number> | null;
   eligibility: Map<number, string[]> | null;
   onOpenPlayer: (mlbId: number) => void;
+  /** Open a player's page by the app's `${kind}-${id}` key — what the Matchup
+   *  tab's two team pages hand back, their tables and feeds being the app's own
+   *  and naming a player the way the rest of the app does. `onOpenPlayer`
+   *  beside it takes a bare MLB id, which is all a transaction row or a roster
+   *  list has; the two reach the same page from two shapes of fact. */
+  onOpenDetails: (key: string) => void;
   connected: boolean;
   onConnect: () => void;
 }) {
@@ -679,6 +686,7 @@ export default function LeagueView({
           onMatchup={onMatchup}
           onPeriod={onPeriod}
           onOpenPlayer={onOpenPlayer}
+          onOpenDetails={onOpenDetails}
         />
       ) : (
         <Scoreboard board={board} onPeriod={onPeriod} onOpenMatchup={onOpenMatchup} />

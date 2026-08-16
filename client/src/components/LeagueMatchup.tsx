@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import { useDelayedFlag } from '../hooks';
 import { LoadingBlock } from './Loading';
+import LeagueTeam from './LeagueTeam';
 import { catScore, categoryGroups, fmtValue, prettyDate, record, TeamLogo } from './LeagueView';
 import type {
   EspnCategory,
@@ -209,20 +210,48 @@ function Rosters({
   );
 }
 
+/**
+ * Which of the three pages of a matchup is on screen: one manager's team, the
+ * category comparison, or the other manager's.
+ *
+ * **Summary is the middle one and the default**, which is the whole shape of
+ * the strip: a matchup is two teams with a comparison between them, so the
+ * comparison sits between them here exactly as each category sits between the
+ * two figures it names on the page below. Landing on it is the app's own rule
+ * that the tab you open on is the question the page is opened with — *how am I
+ * doing against him* — with each side's roster one press either way.
+ */
+type MatchupSideTab = 'away' | 'summary' | 'home';
+
 export default function LeagueMatchupTab({
   board,
   matchupId,
   onMatchup,
   onPeriod,
   onOpenPlayer,
+  onOpenDetails,
 }: {
   board: EspnScoreboard;
   matchupId: number | null;
   onMatchup: (id: number) => void;
   onPeriod: (period: number) => void;
   onOpenPlayer: (mlbId: number) => void;
+  /** Open a player's page by the app's `${kind}-${id}` key — what the two team
+   *  pages' tables and feeds do with a name, and what every other route into
+   *  that page uses. The roster list beside them names a player by MLB id
+   *  alone and so keeps `onOpenPlayer`; the two are the same page reached from
+   *  two shapes of fact. */
+  onOpenDetails: (key: string) => void;
 }) {
   const [showRosters, setShowRosters] = useState(false);
+  /**
+   * **The chosen side is stored against the matchup it was chosen for**, so
+   * changing matchup or stepping a week lands back on Summary rather than on
+   * "away" — which by then names a different manager, and would be the strip
+   * silently pointing somewhere else. Derived rather than reset in an effect:
+   * an effect would render the old side for a frame first.
+   */
+  const [sideChoice, setSideChoice] = useState<{ id: number; side: MatchupSideTab } | null>(null);
   const teams = useMemo(() => new Map(board.teams.map((t) => [t.id, t])), [board.teams]);
   const groups = useMemo(() => categoryGroups(board.categories), [board.categories]);
 
@@ -324,6 +353,43 @@ export default function LeagueMatchupTab({
   // summary table's slot chips take, one level up.
   const rosterDate = board.end ?? '';
 
+  /**
+   * **The three pages of a matchup**, away on the left and home on the right —
+   * the same order the card below puts them in, so the strip and the comparison
+   * cannot disagree about which side is which.
+   *
+   * The team pages are a **week of games**, so they are offered only when the
+   * period has days to draw them over: with no anchor to date it by there is no
+   * week, and a tab leading to an empty one would be worse than a tab that
+   * isn't there. That is the rule the Rankings tab's own span strip follows for
+   * a half with no matchup period in it.
+   */
+  const sides: { tab: MatchupSideTab; label: string; title: string }[] = [];
+  const canReadTeams = Boolean(board.start && board.end);
+  if (canReadTeams && away) {
+    const t = teams.get(away.teamId);
+    sides.push({
+      tab: 'away',
+      label: t?.name ?? `Team ${away.teamId}`,
+      title: `${t?.name ?? `Team ${away.teamId}`} — this week's roster and feed`,
+    });
+  }
+  sides.push({ tab: 'summary', label: 'Summary', title: 'The two teams, category by category' });
+  if (canReadTeams) {
+    const t = teams.get(home.teamId);
+    sides.push({
+      tab: 'home',
+      label: t?.name ?? `Team ${home.teamId}`,
+      title: `${t?.name ?? `Team ${home.teamId}`} — this week's roster and feed`,
+    });
+  }
+  const sideTab: MatchupSideTab =
+    sideChoice && sideChoice.id === matchup.id && sides.some((s) => s.tab === sideChoice.side)
+      ? sideChoice.side
+      : 'summary';
+  const sideTeamId =
+    sideTab === 'away' ? away?.teamId ?? null : sideTab === 'home' ? home.teamId : null;
+
   return (
     <>
       {head}
@@ -349,99 +415,150 @@ export default function LeagueMatchupTab({
             ))}
           </select>
         </label>
-        <button
-          type="button"
-          className={`research-toggle mup-roster-btn${showRosters ? ' on' : ''}`}
-          aria-pressed={showRosters}
-          onClick={() => setShowRosters((v) => !v)}
-          title="Both teams' rosters for the last day of this period"
-        >
-          Rosters
-        </button>
+        {/* The side-by-side lineups belong to the comparison rather than to the
+            page: on a team tab there is one team on screen and the control
+            would offer two. It is the one thing the team pages do *not*
+            subsume — they are one manager's week in depth where this is both
+            managers' lineups against each other. */}
+        {sideTab === 'summary' && (
+          <button
+            type="button"
+            className={`research-toggle mup-roster-btn${showRosters ? ' on' : ''}`}
+            aria-pressed={showRosters}
+            onClick={() => setShowRosters((v) => !v)}
+            title="Both teams' rosters for the last day of this period"
+          >
+            Rosters
+          </button>
+        )}
       </div>
 
-      {!away ? (
-        // A bye is a real shape rather than a failed read — the live league's
-        // first playoff round is two matchups and eight of them — so it says so
-        // plainly. The roster view still applies: there is one team, and a
-        // reader on a bye week has more use for it than for anything else here.
-        <div className="mup-card">
-          <div className="mup-heads mup-heads-bye">
-            <SideHead
-              side={home}
-              team={teams.get(home.teamId)}
-              score={null}
-              leading={false}
-              align="left"
-            />
-            <span className="lg-bye-tag">Bye</span>
-          </div>
-        </div>
-      ) : (
-        <div className="mup-card">
-          <div className="mup-heads">
-            <SideHead
-              side={away}
-              team={teams.get(away.teamId)}
-              score={score(away)}
-              leading={leading === away.teamId}
-              align="left"
-            />
-            <span className="mup-vs">vs</span>
-            <SideHead
-              side={home}
-              team={teams.get(home.teamId)}
-              score={score(home)}
-              leading={leading === home.teamId}
-              align="right"
-            />
-          </div>
-
-          {board.format === 'h2h-points' ? (
-            <div className="mup-note">
-              A points league has one number a side, so there is no category line to break down.
-            </div>
-          ) : (
-            groups.map((g) => (
-              <div className="mup-group" key={g.side}>
-                <div className="mup-group-head">{g.label}</div>
-                {g.categories.map((c) => {
-                  const l = away.scores[c.statId];
-                  const r = home.scores[c.statId];
-                  const w = winnerOf(l, r, c);
-                  const state = (side: 'left' | 'right') =>
-                    w === null ? '' : w === side ? ' mup-win' : w === 'tie' ? ' mup-tie' : ' mup-loss';
-                  return (
-                    <div className="mup-row" key={c.statId}>
-                      <span className={`mup-val mup-val-left${state('left')}`}>
-                        {fmtValue(l, c)}
-                      </span>
-                      {/* The category between the two figures it names, which
-                          is the whole shape of this page: the comparison is a
-                          glance rather than an arithmetic. */}
-                      <span className="mup-cat" title={c.name}>
-                        {c.label}
-                      </span>
-                      <span className={`mup-val mup-val-right${state('right')}`}>
-                        {fmtValue(r, c)}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            ))
-          )}
+      {/* Two teams with the comparison between them, which is the shape of the
+          thing being read. Drawn only where there is a second page to reach —
+          a bye has one team, and a period with no dates has no week to draw
+          either of them over. */}
+      {sides.length > 1 && (
+        <div className="view-switch mup-sides" role="tablist" aria-label="Matchup">
+          {sides.map((s) => (
+            <button
+              key={s.tab}
+              type="button"
+              role="tab"
+              aria-selected={s.tab === sideTab}
+              className={`view-tab${s.tab === sideTab ? ' active' : ''}`}
+              title={s.title}
+              onClick={() => setSideChoice({ id: matchup.id, side: s.tab })}
+            >
+              {/* The label is a span of its own so it can ellipsize: a tab is
+                  `inline-flex`, and `text-overflow` has no effect on a flex
+                  container's anonymous item — measured on the live league, a
+                  17-character team name clipped hard at 124px of 137 with no
+                  ellipsis to say it had. The span is a block container for its
+                  own text and truncates properly. */}
+              <span className="mup-side-label">{s.label}</span>
+            </button>
+          ))}
         </div>
       )}
 
-      {showRosters && rosterDate && (
-        <Rosters
-          away={away}
-          home={home}
-          teams={teams}
-          date={rosterDate}
-          onOpenPlayer={onOpenPlayer}
+      {sideTeamId !== null && board.start && board.end ? (
+        <LeagueTeam
+          /* Keyed on the team and the week, so crossing from one manager to the
+             other is a fresh page rather than one team's rows under the other's
+             name while the read is out. */
+          key={`${sideTeamId}:${board.start}:${board.end}`}
+          teamId={sideTeamId}
+          team={teams.get(sideTeamId)}
+          start={board.start}
+          end={board.end}
+          onOpenDetails={onOpenDetails}
         />
+      ) : (
+        <>
+          {!away ? (
+          // A bye is a real shape rather than a failed read — the live league's
+          // first playoff round is two matchups and eight of them — so it says so
+          // plainly. The roster view still applies: there is one team, and a
+          // reader on a bye week has more use for it than for anything else here.
+          <div className="mup-card">
+            <div className="mup-heads mup-heads-bye">
+              <SideHead
+                side={home}
+                team={teams.get(home.teamId)}
+                score={null}
+                leading={false}
+                align="left"
+              />
+              <span className="lg-bye-tag">Bye</span>
+            </div>
+          </div>
+        ) : (
+          <div className="mup-card">
+            <div className="mup-heads">
+              <SideHead
+                side={away}
+                team={teams.get(away.teamId)}
+                score={score(away)}
+                leading={leading === away.teamId}
+                align="left"
+              />
+              <span className="mup-vs">vs</span>
+              <SideHead
+                side={home}
+                team={teams.get(home.teamId)}
+                score={score(home)}
+                leading={leading === home.teamId}
+                align="right"
+              />
+            </div>
+
+            {board.format === 'h2h-points' ? (
+              <div className="mup-note">
+                A points league has one number a side, so there is no category line to break down.
+              </div>
+            ) : (
+              groups.map((g) => (
+                <div className="mup-group" key={g.side}>
+                  <div className="mup-group-head">{g.label}</div>
+                  {g.categories.map((c) => {
+                    const l = away.scores[c.statId];
+                    const r = home.scores[c.statId];
+                    const w = winnerOf(l, r, c);
+                    const state = (side: 'left' | 'right') =>
+                      w === null ? '' : w === side ? ' mup-win' : w === 'tie' ? ' mup-tie' : ' mup-loss';
+                    return (
+                      <div className="mup-row" key={c.statId}>
+                        <span className={`mup-val mup-val-left${state('left')}`}>
+                          {fmtValue(l, c)}
+                        </span>
+                        {/* The category between the two figures it names, which
+                            is the whole shape of this page: the comparison is a
+                            glance rather than an arithmetic. */}
+                        <span className="mup-cat" title={c.name}>
+                          {c.label}
+                        </span>
+                        <span className={`mup-val mup-val-right${state('right')}`}>
+                          {fmtValue(r, c)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {showRosters && rosterDate && (
+          <Rosters
+            away={away}
+            home={home}
+            teams={teams}
+            date={rosterDate}
+            onOpenPlayer={onOpenPlayer}
+          />
+        )}
+        </>
       )}
     </>
   );
