@@ -10964,9 +10964,6 @@ body {
   flex: 1 1 auto;
   min-width: 0;
 }
-.mup-roster-btn {
-  flex: none;
-}
 
 .mup-card {
   border: 1px solid var(--border);
@@ -11152,106 +11149,6 @@ body {
   color: var(--muted);
 }
 
-/* Both teams' rosters, side by side on a desktop and stacked on a phone —
-   `auto-fit` with a 260px floor, so the break is decided by the room rather
-   than by a width written down here. */
-.mup-rosters {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 12px;
-  max-width: var(--card-column);
-  margin: 12px auto 0;
-}
-.mup-roster {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--panel);
-  padding: 10px 12px;
-  min-width: 0;
-}
-.mup-roster-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--border);
-}
-.mup-roster-name {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.mup-roster-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.mup-player {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 0;
-  min-width: 0;
-}
-/* The slot leads, as it does on the summary table's own rows — a fantasy roster
-   is scanned by slot. What the colour marks is **starting or not** rather than
-   which slot: `BE` against `2B/SS` is not a distinction the eye makes at a
-   glance, and "is he accruing anything today" is the question being asked. */
-.mup-slot {
-  flex: none;
-  min-width: 34px;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  color: var(--faint);
-  font-variant-numeric: tabular-nums;
-}
-.mup-slot-on {
-  color: var(--accent);
-}
-.mup-benched .mup-player-name {
-  color: var(--muted);
-}
-.mup-player-name {
-  border: none;
-  background: none;
-  padding: 0;
-  font: inherit;
-  font-size: 12px;
-  color: var(--text);
-  text-align: left;
-  cursor: pointer;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
-.mup-player-name:hover {
-  color: var(--accent);
-}
-/* A player the name join could not place opens no page, so he is not a press —
-   the rule the Transactions feed's own names already follow. */
-.mup-player-plain {
-  cursor: default;
-}
-.mup-player-plain:hover {
-  color: var(--text);
-}
-.mup-inj {
-  flex: none;
-  margin-left: auto;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.03em;
-  color: var(--hr);
-  border: 1px solid color-mix(in srgb, var(--hr) 45%, transparent);
-  border-radius: 999px;
-  padding: 1px 6px;
-}
-
 /* ---- A matchup's three pages -------------------------------------------
    The strip that selects one manager's team, the comparison, or the other
    manager's — and the head each team page carries.
@@ -11265,33 +11162,58 @@ body {
    Centred over the card it selects, and at the card's own width so the strip
    and the thing under it are one object rather than a control floating over a
    page. */
+/* **The strip hugs its tabs and centres**, where it used to stretch them across
+   the whole card column: `flex: 1 1 0` on the two team tabs made each of them
+   **351px at 1200** — a segmented control the width of a paragraph, with a
+   short name adrift in the middle of its own pill. A tab should be as wide as
+   what is written on it, within bounds, which is what every other member of
+   `.view-switch` already is. `fit-content` is what lets the shell shrink-wrap
+   the result, and the auto margins then centre it over the card it selects. */
 .mup-sides {
   display: flex;
-  max-width: var(--card-column);
+  width: fit-content;
+  max-width: min(var(--card-column), 100%);
   margin: 0 auto 10px;
 }
 /* **The label is the team's name, truncated rather than abbreviated.** ESPN's
    `abbrev` is manager-chosen and often opaque (`HOME`, `PIRA`), where the first
    dozen characters of a real name are recognisable at a glance; the whole of it
-   is on the tab's `title`. The two team tabs share whatever is left after
-   `Summary`, which is what keeps the middle tab — the default, and the one a
-   reader has to be able to find — the same width at every screen. */
+   is on the tab's `title`. */
 .mup-sides .view-tab {
   min-width: 0;
   overflow: hidden;
-  flex: 1 1 0;
+  flex: 0 1 auto;
 }
 /* The truncation is on the label rather than on the tab, because a tab is
    `inline-flex` and `text-overflow` does not apply to a flex container's
-   anonymous inline content — it clipped mid-letter with no ellipsis. */
+   anonymous inline content — it clipped mid-letter with no ellipsis. The
+   bounds ride here with it, for the same reason: this is the box the text is
+   actually laid out in.
+
+   **Bounded at both ends, which is what a label of unknown length needs.** The
+   `max` stops one manager's essay of a team name setting the width of the
+   strip — 12em is about twenty characters of this face, longer than every name
+   on the live league. The `min` stops the other end: shrunk to a 320px screen
+   the two tabs would otherwise race each other to nothing, and 4.5em keeps
+   enough of a name on screen to tell them apart. Between the two a tab is
+   simply as wide as what is written on it. `Summary` carries neither, being a
+   word of ours and always the same width. */
+.mup-side-team .mup-side-label {
+  min-width: 4.5em;
+  max-width: 12em;
+}
+/* `Summary` does not shrink at all. It is a word of ours rather than a name of
+   unknown length, it is the tab a reader lands on and has to be able to find,
+   and letting it give way clipped it to `Summ…` at 320 while the two names
+   beside it kept their minimum. The two team tabs share whatever it leaves. */
+.mup-sides .view-tab:not(.mup-side-team) {
+  flex: none;
+}
 .mup-side-label {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.mup-sides .view-tab:nth-child(2) {
-  flex: none;
 }
 
 /* The team page's own head: whose week this is, and the kind switch that
@@ -11534,27 +11456,57 @@ body {
   max-width: var(--card-column);
   margin: 0 auto 14px;
 }
-/* Both strips break **between** two pills rather than inside one, which is the
-   rule `.view-bar-tabs` states one tier up. Without it `Current matchup` wraps
-   inside its own button on a phone — a two-line pill in a row of one-line ones,
-   which `align-items: center` then leaves at a different top from its
-   neighbours. */
-.lg-tabs,
+/* The span strip breaks **between** two pills rather than inside one, which is
+   the rule `.view-bar-tabs` states one tier up. Without it `Current matchup`
+   wraps inside its own button on a phone — a two-line pill in a row of
+   one-line ones, which `align-items: center` then leaves at a different top
+   from its neighbours. */
 .lg-span-row {
   flex-wrap: wrap;
 }
-/* **And the League strip is allowed to shrink so that wrap can happen.** Every
-   group in `.view-bar-tabs` is `flex: none`, which is that row's own rule and
-   the right one: a group travels whole and the line breaks *between* two rather
-   than inside one. Four tabs is where that stops fitting — measured, the strip
-   is 377px against the 346 a 390px phone leaves inside the app's gutters, and
-   `flex: none` meant it overflowed the page by 9px rather than wrapping. Below
-   640 it gives up the `none` and wraps within itself, which is the lesser evil
-   `.research-tools` already names for a run of buttons that has outgrown a
-   phone. Above that it fits on one line and keeps the row's rule. */
+/* **The League strip scrolls on a phone where it used to wrap**, which is the
+   answer the app already gives every other strip of pills that outgrows its
+   width: the research board's position row, the window tabs, the player page's
+   own tab strip and the tutorial's jump strip all scroll sideways rather than
+   reflowing, and for the reason stated there — this view is a page that wants
+   its height, and a strip that takes a second row pushes the thing it selects
+   down by one.
+
+   Four tabs is where it stops fitting: measured, 377px against the 346 a 390px
+   phone leaves inside the app's gutters. It wrapped within itself for a while,
+   which is the lesser evil `.research-tools` names for a run of buttons — and
+   a *run of buttons* is what that rule is about, where this is a segmented
+   control, and half a segmented control on a second line reads as two controls
+   rather than as one that did not fit.
+
+   `flex: 1 1 100%` gives it a row of its own to scroll inside: below 640 it
+   cannot share one with the view switch anyway (289px + 377 against 346), so
+   the row is honest rather than spent, and taking the full width is what makes
+   the overflow the strip's own rather than the page's. Above 640 it fits on
+   one line and keeps `.view-bar-tabs`' own `flex: none`. */
 @media (max-width: 640px) {
+  /* And the row it sits in has to be allowed to shrink to the window, or the
+     strip's own `min-width: 0` buys nothing: `.view-bar-tabs` is a wrapping
+     flex item with the default `min-width: auto`, so its intrinsic width was
+     the 377px of the widest thing in it and the *row* overflowed the page by
+     9px while the strip inside it sat there at its full width, unscrolled.
+     Measured at 390: `.view-bar` 346 with a 377 scroll width. */
+  .view-bar .view-bar-tabs {
+    min-width: 0;
+  }
   .view-bar-tabs .lg-tabs {
-    flex: 0 1 auto;
+    flex: 1 1 100%;
+    /* Without this the strip cannot shrink to the row it was just given: a
+       flex item's automatic minimum is its `min-content`, so a 377px strip
+       overflowed a 346px phone by 9px (and a 320px one by 79) and never
+       scrolled, its box having simply grown to its content. */
+    min-width: 0;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    /* The strip ends where its pills do — the inline axis alone, since the
+       block axis belongs to the page under it. See the note at the top of this
+       file on `overscroll-behavior`. */
+    overscroll-behavior-x: none;
   }
 }
 .lg-tab,

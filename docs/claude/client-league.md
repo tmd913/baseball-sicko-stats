@@ -602,9 +602,10 @@ on the page.
 
 **The tab answered *how am I doing against him* and could not answer the
 question directly under every row of it — *which of his players is doing that to
-me*.** Nothing on the League page could: the `Rosters` toggle below lists who is
-in each lineup and not one thing any of them has done, and the Roster and Feed
-views next door are hard-wired to the reader's own team. So each side of the
+me*.** Nothing on the League page could: the `Rosters` toggle it has since
+replaced listed who was in each lineup and not one thing any of them had done,
+and the Roster and Feed views next door are hard-wired to the reader's own
+team. So each side of the
 matchup gets a page of its own, and the strip that selects them is **the away
 team, `Summary`, the home team** — two teams with the comparison between them,
 which is the shape of the thing being read and is the same arrangement each
@@ -653,22 +654,38 @@ vs Sho me the Parlay` to `The Homewreckers vs Cochabamba Crushers` relabels both
 team tabs and selects `Summary`.
 
 **Which side is open is deliberately not in the URL**, unlike `lt=` and `mp=`
-above it. It is the footing the player page's own tabs are on and the one the
-`Rosters` toggle beside it is on: a sub-selection *within* a thing the URL
-already names (`mup=` names the matchup), and one that resets on the parameter
-that does. `mup=` is what a shared link needs to open on the right matchup, and
+above it. It is the footing the player page's own tabs are on: a sub-selection
+*within* a thing the URL already names (`mup=` names the matchup), and one that
+resets on the parameter that does. `mup=` is what a shared link needs to open on the right matchup, and
 it does.
 
 **The label is the team's name, truncated rather than abbreviated.** ESPN's
 `abbrev` is manager-chosen and often opaque (`HOME`, `PIRA`), where the first
 dozen characters of a real name are recognisable at a glance and the whole of it
-is on the tab's `title`. The two team tabs share whatever `Summary` leaves,
-which keeps the middle tab — the default, and the one a reader has to be able to
-find — the same width at every screen. The truncation is on a **span inside the
-tab** rather than on the tab: a tab is `inline-flex`, and `text-overflow` does
-not apply to a flex container's anonymous inline content, so before that span a
-17-character name clipped mid-letter at 124px of 137 with no ellipsis to say it
-had.
+is on the tab's `title`. The truncation is on a **span inside the tab** rather
+than on the tab: a tab is `inline-flex`, and `text-overflow` does not apply to a
+flex container's anonymous inline content, so before that span a 17-character
+name clipped mid-letter at 124px of 137 with no ellipsis to say it had.
+
+**A tab is as wide as what is written on it, within bounds** — where it started
+out sharing the card column between the two team tabs (`flex: 1 1 0`), which
+made each of them **351px at 1200**: a segmented control the width of a
+paragraph with a short name adrift in the middle of its own pill, and nothing
+like the rest of `.view-switch`, every other member of which hugs its label. The
+strip is `width: fit-content` and centred over the card it selects, and the two
+team labels carry a **min of 4.5em and a max of 12em**. The max is what stops
+one manager's essay of a team name setting the width of the strip (12em is about
+twenty characters of this face, longer than every name on the live league); the
+min is what stops the other end, since shrunk to a 320px screen the two would
+otherwise race each other to nothing. **`Summary` carries neither and does not
+shrink at all**: it is a word of ours rather than a name of unknown length, it
+is the tab a reader lands on and has to be able to find, and letting it give way
+clipped it to `Summ…` at 320 while the two names beside it kept their minimum.
+
+Measured, `Baldy's Bozos · Summary · Sho me the Parlay`: **112 / 83 / 137** from
+480px up (a 346px strip centred in the window, against 351 / 83 / 351 filling
+800), shrinking to 106 / 83 / 128 at 375 and 81 / 83 / 97 at 320 — one row at
+every width, with **0 horizontal overflow of the page body** at each.
 
 **The slot chip says whose lineup it is.** `FantasySlot` gained an optional
 `owner` — the team name in the possessive, null for the reader's own — because
@@ -715,10 +732,8 @@ crossing between the two managers and back pays once, and the block wait behind
 `WAIT_DELAY` never appears on the way back. The wait names what is being read
 (`Reading this team's week`), as every wait in the app does.
 
-**The `Rosters` toggle stays and is drawn on the Summary tab alone.** It is the
-one thing the team pages do not subsume — they are one manager's week in depth
-where it is both managers' *lineups against each other* — and on a team page
-there is one team on screen while the control would offer two.
+**And the `Rosters` toggle went**, the team pages being what it was reaching
+for: see *`Rosters` is gone, because the team tabs are it* below.
 
 **Measured on the live 12-team league at 320 / 390 / 640 / 1200 / 1920**, on the
 live week's `Baldy's Bozos vs Sho me the Parlay`: the strip is **one row at
@@ -732,9 +747,8 @@ range-of-rosters rule and correctly chips nothing) and a **30-item** feed that
 columns (`IP · H · R · ER · BB · K · HR · W · SV · HLD · ERA`) and the stream to
 the outings. A name in either opens the player page over it
 (`?…player=batter-668939`, `.details-view` at z-index 50). Switching the matchup
-picker relabels both team tabs and returns to `Summary`. The `Rosters` toggle
-opens its two panels on Summary, is absent on a team page, and is still open on
-the way back. **The bye case** draws two tabs (`Summary`, `Brian&Tom’s Excellent
+picker relabels both team tabs and returns to `Summary`. **The bye case** draws
+two tabs (`Summary`, `Brian&Tom’s Excellent
 Adventure`) and the team page under the second of them. **The full-page mode
 comes along with the table**, being the table's own: the corner button takes it
 to `z-index: 45` with the kind switch in `.expanded-chrome`, and one press of
@@ -747,40 +761,35 @@ reading `In your fantasy lineup today at C`.
 the wire, for a component, a tab strip, a route parameter and the paragraphs
 above restated where the rules are.
 
-### Both rosters, behind a toggle
+**And the round that followed it gives most of that back: 513.68 → 512.11 KB of
+JS** (151.22 → 150.86 gzipped) and **122.62 → 121.41 KB of CSS** (21.71 →
+21.56), both *down* — which is what dropping the `Rosters` component and its
+~90 lines of CSS costs against a bounded tab strip, a scrolling League strip and
+one layout effect.
 
-**`Rosters` opens both teams' rosters side by side**, slot by slot, with each
-name a press through to that player's page.
+### `Rosters` is gone, because the team tabs are it
 
-**Behind a toggle rather than always drawn**, and that is a cost rather than a
-taste: it is two ESPN reads of ~198KB, and the categories above are what the tab
-is for. Read once per matchup and kept — a settled week's roster is a fact the
-server holds on a blob with no freshness test, and a live week's is the ten
-minutes the ownership map already runs on.
+**It opened both teams' rosters side by side, slot by slot, behind a toggle in
+the controls row** — and the paragraph that stood here argued for keeping it
+beside the team pages on the grounds that it is *both managers' lineups against
+each other* where they are one manager's week in depth. That reads well and it
+is not what a reader met: two ways into the same rosters an inch apart, one of
+them a slot list with nothing any of those players had done and the other the
+same names with their week beside them.
 
-**One request for both sides** (`/api/espn/rosters?teams=6,1&date=`), because
-the reader opens both at once and two round trips to draw one thing is two
-chances for half of it to arrive. **A team ESPN cannot answer for is `null` in
-the map rather than an error**, so one side failing costs that side and leaves
-the other standing — the rule the whole roster fan-out follows.
+**The team pages answer it better and answer more of it.** A slot chip leads
+every name on those tables — the same `slot` off the same read, drawn by the
+same component the app draws its own with — so the lineup is still there, with
+the stats it exists to be read against. What is lost is seeing both lineups in
+one glance, which is one press of the strip away and was never the thing the
+tab was for.
 
-**Which day's roster is the last day of the period**, which for a week still
-being played is today: a settled week shows the team that finished it and a live
-one shows the team as it stands. That is the same anchor the summary table's
-slot chips take one level up (*The slot chip and the order are the range end's,
-not today's*).
-
-**The slot leads and the colour marks starting or not**, as it does on the
-summary table's own rows: a fantasy roster is scanned by slot, and `BE` against
-`2B/SS` is not a distinction the eye makes at a glance where "is he accruing
-anything" is. ESPN's injury designation rides at the right end of the row in the
-amber `.roster-status` reserves for one. **A player the name join could not
-place is not a press**, there being no page to open — the rule the Transactions
-feed's own names already follow.
-
-**Stacked on a phone and side by side on a desktop**, by `auto-fit` with a 260px
-floor, so the break is decided by the room rather than by a width written down
-here.
+So the toggle, the `Rosters` component, its per-matchup read and the ~90 lines
+of `.mup-roster*` / `.mup-player*` / `.mup-slot*` CSS behind it are all gone,
+along with `LeagueMatchupTab`'s `onOpenPlayer` prop — the roster list was its
+only caller, the team pages naming a player by the app's own key instead.
+**`/api/espn/rosters` stays**, being what a team page reads its slot chips from,
+and so does the Transactions tab's own `onOpenPlayer` one level up.
 
 ### The roster read hung under StrictMode, and the guard was the cause
 
@@ -788,6 +797,12 @@ here.
 did, and only under `npm run dev` — which is why it survived being driven
 against the built client, React double-invoking effects in **development builds
 alone**.
+
+**The `Rosters` half of this has since been deleted with the control it served**
+(above), and the section is kept whole rather than trimmed to the opponent
+table: the rule it establishes outlived both readers and is what the team
+pages' own read was written against. Read `Rosters` below as the shape the
+mistake took, not as code that is still there.
 
 **The guard was the bug.** The effect marked the request as asked *before*
 firing it and bailed on a second pass that found the mark:
@@ -860,16 +875,62 @@ without `flex: 1 1 0` the *name block* was the thing that wrapped instead — th
 logo alone on one row with the name under it, and the two sides then starting at
 different heights.
 
-### A fourth tab is where the League strip stops fitting a phone
+### The League strip scrolls on a phone, where it used to wrap
 
 Every group in `.view-bar-tabs` is `flex: none`, which is that row's own rule and
 the right one: a group travels whole and the line breaks *between* two rather
 than inside one. Four tabs is where that stops fitting — measured, the strip is
-**377px against the 346** a 390px phone leaves inside the app's gutters, and
-`flex: none` meant it **overflowed the page by 9px** rather than wrapping. Below
-640 it gives up the `none` and wraps within itself, which is the lesser evil
-`.research-tools` already names for a run of buttons that has outgrown a phone.
-Above that it fits on one line and keeps the row's rule.
+**377px against the 346** a 390px phone leaves inside the app's gutters.
+
+**It wrapped within itself for a while** — the lesser evil `.research-tools`
+names for a run of buttons that has outgrown a phone — and that rule is about a
+*run of buttons*, where this is a **segmented control**: half of one on a second
+line reads as two controls rather than as one that did not fit. It also spent a
+row on the one view whose page wants its height. So below 640 it scrolls
+sideways instead, which is the answer the app already gives every other strip of
+pills that outgrows its width — the research board's position row, the window
+tabs, the player page's tab strip and the tutorial's jump strip.
+
+**Two declarations make it scroll rather than push**, and each answers a
+different box:
+
+- **`min-width: 0` on the strip.** A flex item's automatic minimum is its
+  `min-content`, so `flex: 1 1 100%` alone left it at its full 377px and it
+  never scrolled.
+- **`min-width: 0` on `.view-bar-tabs` too.** That row is itself a wrapping flex
+  item with the default `min-width: auto`, so its intrinsic width was the widest
+  thing in it and the *row* overflowed the page while the strip inside sat there
+  unscrolled. Measured at 390 with only the first: `.view-bar` 346 against a 377
+  scroll width, **9px of page overflow** (79 at 320, 24 at 375).
+
+**It is `flex: 1 1 100%`, so the strip takes a row of its own** — below 640 it
+cannot share one with the view switch anyway (289px + 377 against 346), so the
+row is honest rather than spent, and taking the full width is what makes the
+overflow the strip's rather than the page's.
+
+**And the selected tab is scrolled into view**, by hand rather than with
+`scrollIntoView`, which walks up every scrollable ancestor and would drag the
+page with it — the rule the research board's position row already follows, peek
+and all. `espnConnected` is in that effect's dependency list because it is what
+*draws* the strip: on a `?lt=transactions` deep link the tab and the view are
+already their final values when the effect first runs and the row does not exist
+yet, so without it the effect ran once against a null ref and never again.
+Measured at 390 before: `scrollLeft` 0 with `Transactions` off the right edge;
+after, `scrollLeft` 31 with it fully visible, and the other three tabs
+untouched at 0.
+
+**Measured, wrapping → scrolling**, on the live league: the pinned chrome goes
+**232 → 207px at 320** and **184 → 159 at 375 and 390** — a row of pills back on
+the one view that most wants it — and is byte-identical from 430 up, where the
+strip fits on one line and keeps the row's `flex: none`. **0 horizontal overflow
+of the page body** at 320 / 375 / 390 / 430 / 640 / 900 / 1200 / 1920.
+
+**The `min-width: 0` on `.view-bar-tabs` is a no-op everywhere else**, which is
+what had to be checked rather than assumed: it only bites where something inside
+that row is genuinely wider than the window. A/B'd on the same page at eight
+widths, the Roster, Feed and Research views are **identical in chrome height,
+row count and overflow at every one** (roster 255/159/159/159/159/115/115/115,
+feed 207/159/159/159/111/115/115/115, research 347/255/255/207/159/207/207/161).
 
 ### Measured — the Matchup tab
 
@@ -893,7 +954,8 @@ Above that it fits on one line and keeps the row's rule.
   no `mup`, on the reader's own matchup for that week.
 - **Rosters**: 28 and 25 players, 20 and 19 in a lineup, 53 of the 53 names a
   press, injury chips on the ten who carry one; one column at 390 and two at
-  1200.
+  1200. *(That control is gone — see `Rosters` is gone, because the team tabs
+  are it. The figures are kept as the record of what it did.)*
 - The reader's own matchup in the **live** period is a bye, and draws as one —
   no headline, no rule under the name, and the roster view still offered.
 
