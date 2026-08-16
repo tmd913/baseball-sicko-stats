@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { useDelayedFlag } from '../hooks';
 import { ordinal } from '../lib';
@@ -112,18 +112,40 @@ function OpponentBody({
   // already holds changes nothing, so without this the error line would promise
   // a retry the effect never runs.
   const [attempt, setAttempt] = useState(0);
-  // Read once per window and kept for the life of the card. A team's line over
-  // a settled span does not move, and the server caches it six hours anyway.
-  const seen = useRef(new Set<string>());
   // Declared with the other hooks and above the `!season` bail, which every
   // hook in this component has to be.
   const waiting = useDelayedFlag(loading);
 
+  /**
+   * A span is read once and kept for the life of the card — a team's line over
+   * a settled span does not move, and the server caches it six hours anyway.
+   *
+   * **What holds it to once is `boards` itself, and a ref beside it was a
+   * bug.** This used to mark the span as asked *before* firing the request and
+   * bail on a second pass that found the mark, which is fatal under
+   * `StrictMode`: React mounts, tears down and re-runs, so pass one set the
+   * mark and had its result thrown away by the teardown (`live` false, so
+   * neither `setBoards` nor `setLoading(false)` ever ran) and pass two saw the
+   * mark and returned. `loading` stayed true for ever and the block wait never
+   * resolved. It reproduced only under `npm run dev`, React double-invoking in
+   * development builds alone.
+   *
+   * Testing the state we already hold is both simpler and self-healing: a span
+   * present in `boards` is a span that genuinely landed, where a mark set
+   * up-front is only a claim that one was asked for. It costs `boards` a place
+   * in the dependency list, which re-runs the effect on each arrival and
+   * returns immediately — and it makes the failed-read retry fall out for
+   * nothing, a span that errored being absent from `boards` and so asked again
+   * the moment `attempt` moves.
+   *
+   * The same mistake, in the same shape, is recorded on the Matchup tab's
+   * roster read; the rule is **never mark a request answered before it is
+   * answered**, or unmark it in the cleanup.
+   */
   useEffect(() => {
     if (teamId === null || window === 'season') return;
-    const key = `${teamId}:${window}`;
-    if (seen.current.has(key)) return;
-    seen.current.add(key);
+    const w = String(window);
+    if (boards[w]) return;
     let live = true;
     setLoading(true);
     setError(null);
@@ -131,22 +153,16 @@ function OpponentBody({
       .teamHitting(teamId, window)
       .then((board) => {
         if (!live || !board) return;
-        setBoards((b) => ({ ...b, [String(window)]: board }));
+        setBoards((b) => ({ ...b, [w]: board }));
       })
-      .catch(() => {
-        if (!live) return;
-        // Retryable: dropping the key is what lets pressing the span again ask
-        // a second time, rather than pinning the card to one failed read.
-        seen.current.delete(key);
-        setError('span');
-      })
+      .catch(() => live && setError('span'))
       .finally(() => {
         if (live) setLoading(false);
       });
     return () => {
       live = false;
     };
-  }, [teamId, window, attempt]);
+  }, [teamId, window, attempt, boards]);
 
   if (!season) return null;
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import { useDelayedFlag } from '../hooks';
 import { LoadingBlock } from './Loading';
@@ -112,29 +112,45 @@ function Rosters({
   const [error, setError] = useState(false);
   const waiting = useDelayedFlag(loading);
   const sides = away ? [away, home] : [home];
-  const key = `${sides.map((s) => s.teamId).join(',')}:${date}`;
-  const asked = useRef<string | null>(null);
+  const ids = sides.map((s) => s.teamId);
+  const key = `${ids.join(',')}:${date}`;
 
+  /**
+   * **The dependency array is the whole of the guard, and a ref beside it was
+   * a bug.** This effect used to mark the request as asked *before* firing it
+   * and bail on a second pass that found the mark — which is fatal under
+   * `StrictMode`: React mounts, tears down and re-runs, so pass one set the
+   * mark and had its result thrown away by the teardown (`live` false, so
+   * neither `setRosters` nor `setLoading(false)` ever ran), and pass two saw
+   * the mark and returned. `loading` stayed true for ever and the spinner never
+   * resolved. It reproduced only under `npm run dev`, React double-invoking in
+   * development builds alone, which is why it survived being driven against the
+   * built client.
+   *
+   * The ref bought nothing the deps do not: `key` is the two team ids and the
+   * date, so an unrelated re-render re-runs nothing, and a genuine change is
+   * exactly when a re-read is wanted. The double invoke now costs a second
+   * request in development and nothing in production — and not even a second
+   * ESPN read, `getTeamRoster`'s `inFlight` map deduping the pair server-side.
+   *
+   * The same mistake, in the same shape, is recorded on the opponent table's
+   * own read; the rule to carry away is **never mark a request answered before
+   * it is answered**, or unmark it in the cleanup.
+   */
   useEffect(() => {
-    if (asked.current === key) return;
-    asked.current = key;
     let live = true;
     setLoading(true);
     setError(false);
     setRosters(null);
     api
-      .espnRosters(sides.map((s) => s.teamId), date)
+      .espnRosters(ids, date)
       .then((r) => live && setRosters(r.rosters))
-      .catch(() => {
-        if (!live) return;
-        asked.current = null;
-        setError(true);
-      })
+      .catch(() => live && setError(true))
       .finally(() => live && setLoading(false));
     return () => {
       live = false;
     };
-    // `sides` is derived from the two ids the key already names, so the key is
+    // `ids` is derived from the two team ids `key` already names, so the key is
     // the whole of what this effect depends on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
