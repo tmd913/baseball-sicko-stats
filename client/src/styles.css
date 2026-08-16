@@ -11193,7 +11193,26 @@ body {
   gap: 10px;
   max-width: var(--card-column);
   margin: 0 auto;
+  padding-bottom: 12px;
+}
+/* On a bye the head names the team where the strip would be — there is nothing
+   to choose between, and the reader still has to be told whose roster this is.
+   It reads as the strip's row: same column, same gap to the content below. */
+.mup-team-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: var(--card-column);
+  margin: 0 auto;
   padding-bottom: 16px;
+}
+/* The tag sits beside the name rather than at the far end of the column. On a
+   scoreboard card `margin-left: auto` puts it opposite the headline triple,
+   which is where a reader's eye already is; here there is no second column and
+   it read as a word adrift 700px from the team it belongs to. */
+.mup-team-head .lg-bye-tag {
+  margin-left: 0;
 }
 /* Which week, printed rather than navigable — the arrows belong to the
    Scoreboard, which is the page about *which* week. The dates and the state are
@@ -11289,7 +11308,9 @@ body {
   display: flex;
   width: fit-content;
   max-width: min(var(--card-column), 100%);
-  margin: 0 auto 10px;
+  /* In the pinned head now rather than on the page, so the gap below it is the
+     head's own padding — see `.mup-chrome`. */
+  margin: 0 auto 16px;
 }
 /* **The label is the team's name, truncated rather than abbreviated.** ESPN's
    `abbrev` is manager-chosen and often opaque (`HOME`, `PIRA`), where the first

@@ -473,6 +473,13 @@ playoff round looks like — period 19 of the live league is 2 matchups and **8
 byes**, all 12 teams accounted for — so `EspnMatchup.away` is nullable rather
 than the read being treated as malformed.
 
+**And a bye side carries the period's own totals**, which is what makes it worth
+drawing rather than announcing: ESPN fills `cumulativeScore` for a bye exactly
+as it does for a matchup — checked on the live league, all 23 stats with the
+*week's* figures rather than the season's (24 R, 7 HR, .677 OPS). Nothing here
+had to change for it; the card was simply declining to read them. See **Client —
+the League view**, *A bye card shows his week*.
+
 **The stat ids are a curated table, because ESPN publishes no dictionary of them
 anywhere.** Checked against the game-level `seasons/{year}`, `kona_game_state`
 and every league view: none names a single stat. So `STAT_META` is the same

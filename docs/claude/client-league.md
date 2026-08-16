@@ -180,9 +180,30 @@ all, so an ordinary league sees two — and on the Rankings table the group
 **header row is not drawn at all below two groups**, a single spanning label
 over every column being a row spent saying nothing.
 
+### A bye card shows his week
+
 **A bye is a real shape, not a failed read.** The live 12-team league's first
-playoff round is 2 matchups and **8 byes**, so a card with one team on it and
-the word `Bye` is the ordinary case in mid-September rather than an error state.
+playoff round is 2 matchups and **8 byes**, so a card with one team on it is the
+ordinary case in mid-September rather than an error state.
+
+**It drew a name, the word `Bye` and nothing else**, on the reasoning that a
+category grid with one row in it is not a comparison. True, and it threw away
+the thing a manager on a bye week actually wants: **his own numbers**. ESPN
+fills `cumulativeScore` for a bye exactly as it does for a matchup — checked on
+the live league, all 23 stats with the period's own figures (`R 24 · HR 7 ·
+RBI 27 · SB 4 · OPS .677` over the week rather than the season) — so the line
+was there all along and the card simply declined to draw it.
+
+**So the card is one shape with one or two sides.** `sides` is `[away, home]` or
+`[home]`, and the grid draws a row per side; what a bye loses is only what it
+genuinely hasn't got — an **opponent** to be winning or losing against, so the
+cells take no colour (measured: 0 coloured of 10), and the **headline triple**,
+which is a count of categories won and is nothing at all with nobody to win them
+from. The word `Bye` takes the slot that triple would have had, which is where a
+reader's eye already is.
+
+**And its door reads `Team →` rather than `Breakdown →`**, there being no
+breakdown to open — the page goes straight to his roster (below).
 
 **The period is navigable and its dates are printed.** `‹ Week 19 · Aug 10 –
 Aug 14 · Live ›`, with the two arrows as the app's `--control-h` icon square.
@@ -616,10 +637,9 @@ control would put a hundred titled cells inside a single tab stop and one
 accessible name.
 
 **A bye is a real shape** — the live league's first playoff round is two
-matchups and eight of them — so it says so plainly, with no dangling rule under
-the name and no empty headline. The roster view still applies there: there is
-one team, and a reader on a bye week has more use for it than for anything else
-on the page.
+matchups and eight of them — and it is now the one card that draws its team's
+own week rather than announcing that there is no matchup: see *A bye card shows
+his week* above.
 
 ### A matchup is a page, not a tab
 
@@ -658,12 +678,30 @@ stay on the Scoreboard, which is the page about which week.
 teams with the comparison between them, which is the shape of the thing being
 read and the same arrangement each category has on the card. **Summary is the
 middle one and the default**, being the question the page is opened with; each
-manager's roster is one press away, in the direction his own figures are on. A
-**bye** has one team and so two pages, and **its card carries the door too** —
-on a week the reader's own team is on a bye, which in a 12-team league's first
-playoff round is eight of the ten cards, leaving it off would put his own team
-out of reach entirely. That door reads `Team →` rather than `Breakdown →`, there
-being no breakdown to open.
+manager's roster is one press away, in the direction his own figures are on.
+
+**The strip is in the pinned head rather than on the page.** It is this page's
+own navigation — which of the three readings is on screen — and that is the one
+thing that must not scroll away from under a reader partway down a team's feed;
+it is the argument `.details-chrome` makes for the player page's tabs and
+`.app-chrome` makes for the view bar, one page along. Measured, the head is
+**99px** at 390 and up (130 at 320, where the Back-and-week row wraps), against
+the player page's 139/193.
+
+**A bye has no pages at all**, and that is the point rather than a degenerate
+case. There is one team and nothing to compare it against, so a `Summary` of one
+side would be a page whose whole content is the line the scoreboard card already
+draws, and a strip of one tab is a control with no choice in it. The page goes
+**straight to his roster and feed** — which is what a manager on a bye week came
+for — and the head names the team where the strip would have been: logo, name,
+record and the word `Bye`, at **109px**. That tag drops the `margin-left: auto`
+it has on a card: there it sits opposite the headline triple, where a reader's
+eye already is, and here there is no second column so it read as a word adrift
+700px from the team it belongs to.
+
+**Its card carries the door too** — on a week the reader's own team is on a bye,
+which in a 12-team league's first playoff round is eight of the ten cards,
+leaving it off would put his own team out of reach entirely.
 
 ### A team page is the app's own Roster and Feed views
 
@@ -1028,8 +1066,14 @@ where the rules are.
   player, a second closes the matchup, leaving `mup=` cleared, the scoreboard's
   10 cards behind it and **0 `inert`** anywhere.
 - **Back** does the same as that second press.
-- **A bye** draws two pages (`Summary`, `Brian&Tom's Excellent Adventure`) and
-  its card's own `Team →` door.
+- **A bye** draws **no pages at all** — its card's `Team →` door opens straight
+  onto the team's roster, with the head naming him (`Brian&Tom's Excellent
+  Adventure · 13-4-1 · Bye`), 0 strips, 0 `.mup-card`s and 14 rows. On the board
+  its card carries the week's own line, `R 24 · HR 7 · RBI 27 · SB 4 · OPS .677`
+  over `K 61 · W 2 · ERA 2.73 · WHIP 0.91 · SVHD 5`, with **0 of 10 cells
+  coloured** (nobody to be winning against).
+- **The strip is pinned**: scrolled 219px into a team page, `.mup-chrome` is
+  still at `top: 0` with the three tabs in it.
 - **Legacy links**: `?lt=matchup` opens the Scoreboard with `lt` dropped;
   `?lt=matchup&mup=110` opens the page over it.
 - **The app's own date control is untouched** by the extraction, checked at 1200
@@ -1043,6 +1087,12 @@ where the rules are.
 0.4KB and 0.2KB over the wire. The JS is flat because the change is mostly a
 *move*: a tab became a page, and extracting the date controls took two copies of
 that markup down to one.
+
+**And the round that followed — the bye card's own line, the bye page going
+straight to its roster, and the strip moving into the head: 512.20 → 512.03 KB
+of JS** (151.29 → 151.28 gzipped) and **122.47 → 122.64 KB of CSS** (21.78 →
+21.80). The JS falls: one card shape instead of two, and one strip rendered in
+one place.
 
 ### The Transactions tab wears a dot when there are moves you haven't seen
 

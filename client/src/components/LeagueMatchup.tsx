@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { answersEscape, useLockBodyScroll, useOverlayFocus } from '../hooks';
 import { DialogLayerContext } from './Modal';
 import { DateRow, DateToggle } from './DateControls';
@@ -238,7 +239,7 @@ export default function LeagueMatchupView({
     </span>
   );
 
-  const head = (
+  const head = (extra: ReactNode) => (
     <div className="mup-chrome">
       <div className="mup-bar">
         {/* The way back, and the only one this page needs: it was opened from a
@@ -254,6 +255,13 @@ export default function LeagueMatchupView({
             together. */}
         {period}
       </div>
+      {/* **The strip is part of the head rather than of the page.** It is this
+          page's own navigation — which of the three readings of the matchup is
+          on screen — and that is the one thing that should not scroll away from
+          under a reader partway down a team's feed. It is the argument
+          `.details-chrome` makes for the player page's tabs and `.app-chrome`
+          makes for the view bar, one page along. */}
+      {extra}
     </div>
   );
 
@@ -261,7 +269,7 @@ export default function LeagueMatchupView({
     return (
       <DialogLayerContext.Provider value={MATCHUP_LAYER}>
         <div ref={viewRef} tabIndex={-1} className="mup-view">
-          {head}
+          {head(null)}
           <div className="empty-state">
             <h3>That matchup isn&rsquo;t in week {board.matchupPeriod}</h3>
             <p>
@@ -286,27 +294,79 @@ export default function LeagueMatchupView({
 
   /**
    * **The three pages**, away on the left and home on the right — the same
-   * order the card below puts them in, so the strip and the comparison cannot
-   * disagree about which side is which. A bye has one team and so two pages.
+   * order the card puts them in, so the strip and the comparison cannot
+   * disagree about which side is which.
+   *
+   * **A bye has no pages at all**, and that is the point rather than a
+   * degenerate case: there is one team and nothing to compare it against, so a
+   * `Summary` of one side would be a page whose whole content is the line the
+   * scoreboard card already draws, and a strip of one tab is a control with no
+   * choice in it. The page goes **straight to his roster and feed**, which is
+   * what a manager on a bye week came for, and the head names the team where
+   * the strip would have been.
    */
-  const sides: { tab: MatchupSideTab; label: string; title: string }[] = [];
-  const teamTitle = (id: number) =>
-    `${teams.get(id)?.name ?? `Team ${id}`} — his roster and his feed`;
-  if (away) {
-    sides.push({
-      tab: 'away',
-      label: teams.get(away.teamId)?.name ?? `Team ${away.teamId}`,
-      title: teamTitle(away.teamId),
-    });
-  }
-  sides.push({ tab: 'summary', label: 'Summary', title: 'The two teams, category by category' });
-  sides.push({
-    tab: 'home',
-    label: teams.get(home.teamId)?.name ?? `Team ${home.teamId}`,
-    title: teamTitle(home.teamId),
-  });
-  const active = sides.some((s) => s.tab === sideTab) ? sideTab : 'summary';
+  const sides: { tab: MatchupSideTab; label: string; title: string }[] = away
+    ? [
+        {
+          tab: 'away',
+          label: teams.get(away.teamId)?.name ?? `Team ${away.teamId}`,
+          title: `${teams.get(away.teamId)?.name ?? `Team ${away.teamId}`} — his roster and his feed`,
+        },
+        { tab: 'summary', label: 'Summary', title: 'The two teams, category by category' },
+        {
+          tab: 'home',
+          label: teams.get(home.teamId)?.name ?? `Team ${home.teamId}`,
+          title: `${teams.get(home.teamId)?.name ?? `Team ${home.teamId}`} — his roster and his feed`,
+        },
+      ]
+    : [];
+  const active: MatchupSideTab = !away
+    ? 'home'
+    : sides.some((s) => s.tab === sideTab)
+      ? sideTab
+      : 'summary';
   const sideTeamId = active === 'away' ? away?.teamId ?? null : active === 'home' ? home.teamId : null;
+  const homeTeam = teams.get(home.teamId);
+
+  /**
+   * What the head carries under the Back button: the strip, or — on a bye — the
+   * team itself, since there is nothing to choose between and the reader still
+   * has to be told whose roster this is.
+   */
+  const nav =
+    sides.length > 1 ? (
+      <div className="view-switch mup-sides" role="tablist" aria-label="Matchup">
+        {sides.map((s) => (
+          <button
+            key={s.tab}
+            type="button"
+            role="tab"
+            aria-selected={s.tab === active}
+            className={`view-tab${s.tab === active ? ' active' : ''}${
+              s.tab === 'summary' ? '' : ' mup-side-team'
+            }`}
+            title={s.title}
+            onClick={() => setSideTab(s.tab)}
+          >
+            {/* The label is a span of its own so it can ellipsize: a tab is
+                `inline-flex`, and `text-overflow` has no effect on a flex
+                container's anonymous item — a 17-character team name clipped
+                mid-letter with no ellipsis to say it had. */}
+            <span className="mup-side-label">{s.label}</span>
+          </button>
+        ))}
+      </div>
+    ) : (
+      <div className="mup-team-head">
+        <TeamLogo team={homeTeam} />
+        <span className="mup-side-id">
+          <span className="mup-side-name">{homeTeam?.name ?? `Team ${home.teamId}`}</span>
+          {homeTeam && <span className="mup-side-rec">{record(homeTeam)}</span>}
+        </span>
+        {/* Why there is one team here and not two. */}
+        <span className="lg-bye-tag">Bye</span>
+      </div>
+    );
 
   /**
    * A team page's own controls — **the roster views' controls, because a team
@@ -399,31 +459,7 @@ export default function LeagueMatchupView({
   return (
     <DialogLayerContext.Provider value={MATCHUP_LAYER}>
       <div ref={viewRef} tabIndex={-1} className="mup-view">
-        {head}
-
-        {sides.length > 1 && (
-          <div className="view-switch mup-sides" role="tablist" aria-label="Matchup">
-            {sides.map((s) => (
-              <button
-                key={s.tab}
-                type="button"
-                role="tab"
-                aria-selected={s.tab === active}
-                className={`view-tab${s.tab === active ? ' active' : ''}${
-                  s.tab === 'summary' ? '' : ' mup-side-team'
-                }`}
-                title={s.title}
-                onClick={() => setSideTab(s.tab)}
-              >
-                {/* The label is a span of its own so it can ellipsize: a tab is
-                    `inline-flex`, and `text-overflow` has no effect on a flex
-                    container's anonymous item — a 17-character team name
-                    clipped mid-letter with no ellipsis to say it had. */}
-                <span className="mup-side-label">{s.label}</span>
-              </button>
-            ))}
-          </div>
-        )}
+        {head(nav)}
 
         {sideTeamId !== null ? (
           <>
@@ -445,23 +481,12 @@ export default function LeagueMatchupView({
             />
           </>
         ) : !away ? (
-          // A bye is a real shape rather than a failed read — a 12-team
-          // league's first playoff round is two matchups and eight of them — so
-          // it says so plainly. The team page still applies: there is one team,
-          // and a reader on a bye week has more use for it than for anything
-          // else here.
-          <div className="mup-card">
-            <div className="mup-heads mup-heads-bye">
-              <SideHead
-                side={home}
-                team={teams.get(home.teamId)}
-                score={null}
-                leading={false}
-                align="left"
-              />
-              <span className="lg-bye-tag">Bye</span>
-            </div>
-          </div>
+          // Unreachable: a bye has no `summary` page — `active` is forced to
+          // `home`, so the branch above is the only one it can take. Kept as
+          // the honest fall-through rather than a non-null assertion on `away`
+          // in the comparison below, which is the thing that would go wrong
+          // quietly if that rule ever changed.
+          null
         ) : (
           <div className="mup-card">
             <div className="mup-heads">
