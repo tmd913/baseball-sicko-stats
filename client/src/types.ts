@@ -1423,6 +1423,10 @@ export interface EspnMatchupSide {
   losses: number;
   ties: number;
   points: number | null;
+  /** How many acquisitions this manager has used in this matchup period. Null
+   *  where ESPN reports none. The **limit** is the period's rather than the
+   *  team's and rides on the scoreboard — see `EspnScoreboard.acquisitionLimit`. */
+  acquisitions: number | null;
 }
 
 export interface EspnMatchup {
@@ -1460,6 +1464,11 @@ export interface EspnScoreboard {
   start: string | null;
   end: string | null;
   live: boolean;
+  /** How many acquisitions a manager gets in this matchup period, or null where
+   *  the league does not limit them per period — which is what makes the client
+   *  draw a bare count rather than `5/10`. The server derives it; see
+   *  `espn.ts::acquisitionLimitFor`. */
+  acquisitionLimit: number | null;
   categories: EspnCategory[];
   matchups: EspnMatchup[];
   teams: EspnStandingsTeam[];

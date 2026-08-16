@@ -329,6 +329,34 @@ export default function LeagueMatchupView({
   const homeTeam = teams.get(home.teamId);
 
   /**
+   * **How many acquisitions each manager has spent this week**, at the foot of
+   * the comparison.
+   *
+   * It is the one thing a category matchup turns on that is not a category: a
+   * manager two behind in saves with `2/10` left has a move to make and one at
+   * `10/10` has not, and until now the page said nothing about it. It reads as
+   * a row of the comparison — the same `1fr auto 1fr`, so each figure lands
+   * under the name it belongs to — because that is what it is.
+   *
+   * `5/10` where the league limits them per period and a bare count where it
+   * does not, which is the honest reading of a league with no cap: the number
+   * is still worth having, the denominator is not ours to invent. A manager
+   * ESPN reports no counter for at all is a dash.
+   */
+  const acqCell = (side: EspnMatchupSide) =>
+    side.acquisitions === null
+      ? '—'
+      : board.acquisitionLimit === null
+        ? String(side.acquisitions)
+        : `${side.acquisitions}/${board.acquisitionLimit}`;
+  const acqTitle = (side: EspnMatchupSide) =>
+    side.acquisitions === null
+      ? 'ESPN reports no acquisition count for this team'
+      : board.acquisitionLimit === null
+        ? `${side.acquisitions} acquisitions this matchup period`
+        : `${side.acquisitions} of ${board.acquisitionLimit} acquisitions used this matchup period`;
+
+  /**
    * What the head carries under the Back button: the strip, or — on a bye — the
    * team itself, since there is nothing to choose between and the reader still
    * has to be told whose roster this is.
@@ -365,6 +393,15 @@ export default function LeagueMatchupView({
         </span>
         {/* Why there is one team here and not two. */}
         <span className="lg-bye-tag">Bye</span>
+        {/* **And his acquisitions**, which on a bye have nowhere else to go: the
+            Summary page is where the two managers' counts are compared, and a
+            bye has no Summary page. It is the one number on this head that is
+            about the week rather than about the season. */}
+        {home.acquisitions !== null && (
+          <span className="mup-acq-tag" title={acqTitle(home)}>
+            <span className="mup-acq-label">Acq</span> {acqCell(home)}
+          </span>
+        )}
       </div>
     );
 
@@ -458,7 +495,26 @@ export default function LeagueMatchupView({
 
   return (
     <DialogLayerContext.Provider value={MATCHUP_LAYER}>
-      <div ref={viewRef} tabIndex={-1} className="mup-view">
+      {/*
+        **`roster-mode` is what makes the table's own header and total row
+        stick.** A sticky row sticks to the box that scrolls, and outside this
+        mode the box that scrolls is the overlay: the table grows to its rows,
+        the overlay takes the scroll, and the header slides away under the
+        pinned head exactly as it would on a page. The Roster view has the same
+        problem and the same answer one level up (`.app.summary-mode`, a
+        `100dvh` flex column with `overflow: hidden`, so `.summary-scroll` is
+        the scroller), and so does the Game Log inside the player page.
+
+        **On the roster reading alone.** The feed is a stream of cards with
+        nothing to pin, and bounding its height would put a second scroller
+        inside a page that is already a scroller — which is the one thing this
+        overlay should not have two of.
+      */}
+      <div
+        ref={viewRef}
+        tabIndex={-1}
+        className={`mup-view${sideTeamId !== null && reading === 'roster' ? ' roster-mode' : ''}`}
+      >
         {head(nav)}
 
         {sideTeamId !== null ? (
@@ -540,6 +596,26 @@ export default function LeagueMatchupView({
                   })}
                 </div>
               ))
+            )}
+
+            {/* Under the categories, because it is what a manager does *about*
+                them rather than one of them — and at the foot rather than the
+                head for the same reason. */}
+            {(home.acquisitions !== null || away.acquisitions !== null) && (
+              <div className="mup-group mup-acq">
+                <div className="mup-group-head">Moves</div>
+                <div className="mup-row">
+                  <span className="mup-val mup-val-left" title={acqTitle(away)}>
+                    {acqCell(away)}
+                  </span>
+                  <span className="mup-cat" title="Acquisitions used this matchup period">
+                    Acq
+                  </span>
+                  <span className="mup-val mup-val-right" title={acqTitle(home)}>
+                    {acqCell(home)}
+                  </span>
+                </div>
+              </div>
             )}
           </div>
         )}

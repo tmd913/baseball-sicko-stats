@@ -629,17 +629,52 @@ are on*, sitting on the page it selected. The board behind it is that picker,
 and it is a better one: it shows the score of each matchup rather than only its
 two names.
 
-**The door is a text link at the foot of each card rather than the card itself
-made pressable**, which is the idiom the player page's Overview already uses for
-`Stats →` and `News →` and is the right one here for a stated reason: every cell
-of the category grid carries its own `title`, so wrapping the card in one
-control would put a hundred titled cells inside a single tab stop and one
-accessible name.
+**The whole card is the door**, where a `Breakdown →` text link at its foot used
+to be. That link was argued from accessibility rather than from the reader —
+wrapping the card in one control would put a hundred titled cells inside a
+single tab stop and one accessible name — and both halves of that are
+answerable: an **`aria-label` names the two teams** (`Baldy's Bozos vs Sho me
+the Parlay — breakdown`) rather than the whole grid being read out, and the
+titles were never in the tab order to begin with. A card *is* a matchup, and a
+press on it should open it, which is what every row of the research board and of
+the Game Log already does.
+
+So it is `role="button"` with a `tabIndex`, Enter and Space (the latter with
+`preventDefault`, so it does not also scroll the board underneath), a pointer,
+and a hover **scoped to `(hover: hover)`** for the reason every pressable
+surface in this app is: on touch there is no pointer to move away, so the tint
+sticks to the last card a finger crossed. Checked out of the CSSOM rather than
+by reading the file: `.lg-matchup:hover` resolves `inside (hover: hover)`.
 
 **A bye is a real shape** — the live league's first playoff round is two
 matchups and eight of them — and it is now the one card that draws its team's
 own week rather than announcing that there is no matchup: see *A bye card shows
 his week* above.
+
+### The Summary page ends on the acquisitions
+
+**It is the one thing a category matchup turns on that is not a category.** A
+manager two behind in saves with `2/10` left has a move to make and one at
+`10/10` has not, and the page said nothing about it. So the comparison ends on a
+`Moves` group with one row — `5/10 · Acq · 7/10` — in the same `1fr auto 1fr` as
+every category above it, so each figure lands under the name it belongs to. It
+is **at the foot rather than the head** because it is what a manager does
+*about* the categories rather than one of them, and it takes **no colour**:
+neither side is winning acquisitions.
+
+**`5/10` where the league limits them per period and a bare count where it does
+not**, which is the honest reading of a league with no cap — the number is still
+worth having and the denominator is not ours to invent. A manager ESPN reports
+no counter for at all is a dash. Where the limit comes from, and the 185
+team-periods it was checked against, is in **ESPN fantasy league**, *How many
+acquisitions a manager gets*.
+
+**A bye carries it in its head instead**, and that is not a flourish: the
+Summary page is where the two counts are compared and **a bye has no Summary
+page**, so without this the one manager most likely to be reading his own bye
+week — the reader, on the week his own team has one — could not see his own
+figure at all. It sits at the right end of the head, where the scoreboard card
+puts its headline, reading `Acq 5/10`.
 
 ### A matchup is a page, not a tab
 
@@ -739,6 +774,25 @@ the categories on the Summary page were summed over, so picking it makes every
 row the arithmetic behind a category. It is absent where the period has no dates
 to name, the rule the Rankings span strip already follows for a half with no
 matchup period in it.
+
+**The roster reading is a fixed-height column, so the table's own header and
+total row stick.** A sticky row sticks to the box that *scrolls*, and without
+that the box that scrolls is the overlay: the table grows to its rows, the
+overlay takes the scroll, and the header slides away under the pinned head
+exactly as it would on a page. `.mup-view.roster-mode` is `.app.summary-mode`'s
+answer to the same problem one level up, and `.details-view.gamelog-mode`'s one
+page along — the head and the tools keep their natural height, only the pane
+flexes, and the head goes **static**, which is the trap both of those rules
+already record (`overflow: hidden` makes this a scrollport of its own, and a
+sticky box in one is held against its *padding* box). Measured: scrolled 283px
+into the pane, the header row sits **1px** below its top and the total row 1px
+above its bottom — which is the border, and the same pair the Roster view
+measures.
+
+**On the roster reading alone.** The feed is a stream of cards with nothing to
+pin, and bounding its height would put a second scroller inside a page that is
+already one — checked: on the Feed tab the class is absent and the overlay
+scrolls, with 25 items in it.
 
 **The Schedule view is on the roster table alone**, there being nothing in a
 stream of things that have happened for a fixture list to replace, and it reads
@@ -1093,6 +1147,25 @@ straight to its roster, and the strip moving into the head: 512.20 → 512.03 KB
 of JS** (151.29 → 151.28 gzipped) and **122.47 → 122.64 KB of CSS** (21.78 →
 21.80). The JS falls: one card shape instead of two, and one strip rendered in
 one place.
+
+**And the round after it — the acquisitions line, the whole card as the press
+target, and the sticky roster table: 512.03 → 513.27 KB of JS** (151.28 → 151.56
+gzipped) and **122.64 → 123.10 KB of CSS** (21.80 → 21.87), which is 1.2KB and
+0.5KB raw for a derivation, a row, a `role="button"` and a fixed-height column.
+
+**Measured, that round.** The scoreboard draws **0 `.lg-open-matchup` doors** at
+320 / 390 / 640 / 1200 / 1920 with **0 page overflow** at each; a card carries
+`role="button"`, `tabIndex="0"`, `cursor: pointer` and an `aria-label` naming
+both teams, and a press **on a category cell** — the deepest thing in it —
+opens the page. The keyboard works: focus draws the accent ring, **Enter** opens
+`mup=110`, **Space** opens, and Escape closes with 0 `inert` left. The Summary
+page ends on `Moves · 5/10 · Acq · 7/10` at every width, titled `5 of 10
+acquisitions used this matchup period`; a bye's head reads `Bye · Acq 5/10`.
+Scrolled 283px into a team's roster pane, the header row is **1px** from its top
+and the total row 1px from its bottom, while the Feed tab keeps the ordinary
+scrolling page. Through the route, the limit is **10** on period 19 (a fortnight's
+playoff round), **5** on 18, **10** on 15 (the All-Star break) and **9** on 1
+(a 12-day opening stretch), with a team at exactly 9 on that first one.
 
 ### The Transactions tab wears a dot when there are moves you haven't seen
 
