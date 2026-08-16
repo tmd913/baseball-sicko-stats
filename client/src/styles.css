@@ -10985,6 +10985,23 @@ body {
 }
 
 .mup-card {
+  /* **The comparison's two fixed columns**, declared here because four things
+     have to agree about them — the category rows, the group headings, the
+     Moves row and the narrow-screen block below — and because a row is a grid
+     of its own rather than one grid over the whole card. That is what makes
+     these numbers rather than `auto`: with `1fr auto 1fr` per row, every row
+     sized its own middle column to its own label, so `SVHD` pushed its figures
+     further out than `R` did and the two value columns were not columns at
+     all. Measured before the fix at 1200: `31` at x=927 against `.769` at
+     x=913.
+
+     54px holds the widest figure a matchup period can produce at this size and
+     weight — five tabular characters (`1.024`) come to ~45 — and 46px holds
+     the widest category label the league scores (`SVHD`, ~34 at 11px/700). A
+     figure past either simply overflows into the track beside it, which is a
+     legible overlap rather than a clipped number. */
+  --mup-val-w: 54px;
+  --mup-cat-w: 46px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: linear-gradient(180deg, var(--panel), var(--bg-2));
@@ -11048,7 +11065,9 @@ body {
    — the scoreboard's own rule, which marks a winner rather than shouting a
    loser. */
 .mup-side-score {
-  font-size: 15px;
+  /* The one number on the head, and it was 15px — the same size as a category
+     figure ten rows down, on a page whose whole subject it is. */
+  font-size: 19px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   color: var(--muted);
@@ -11112,31 +11131,124 @@ body {
     order: 2;
     flex-basis: 100%;
   }
+  /* The two fixed columns give up what they can and the tracks keep the rest —
+     they are the thing the page is for. 46px still holds `1.024` at the
+     narrow figure size, and 40 holds `SVHD`. */
+  .mup-card {
+    --mup-val-w: 46px;
+    --mup-cat-w: 40px;
+  }
+  .mup-row,
+  .mup-group-head {
+    gap: 6px;
+  }
+  .mup-val {
+    font-size: 14px;
+  }
 }
 
 /* Batters, then pitchers — `categoryGroups`' own order, which is the server's
    `side`/`order` and the same one the scoreboard and the Rankings table read.
    A heading rather than a rule between the two, because the reader is looking
-   for one half of the list rather than for a break in it. */
+   for one half of the list rather than for a break in it.
+
+   **It takes the row's own grid**, so the label centres over the column of
+   category names it heads and each side's tally lands in the column its own
+   figures are in. It was a left-aligned word at the card's edge, which named
+   the group and pointed at nothing in it. */
 .mup-group-head {
+  display: grid;
+  grid-template-columns:
+    var(--mup-val-w) minmax(0, 1fr) var(--mup-cat-w)
+    minmax(0, 1fr) var(--mup-val-w);
+  align-items: center;
+  gap: 8px;
+  padding: 14px 0 5px;
+}
+.mup-group-label {
+  /* Across the middle three columns rather than inside the category column
+     alone: `BATTERS` is wider than `SVHD` and would spill over the tracks. */
+  grid-column: 2 / 5;
+  text-align: center;
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--muted);
-  padding: 12px 0 4px;
 }
-/* The same `1fr auto 1fr` as the heads above, so a figure lands under the name
-   it belongs to. The middle column is the category, which is what makes the
-   comparison a glance: the two numbers being compared are on one line with the
-   thing they measure between them. */
+/* Won-lost-tied over this side of the ball — the one thing the page could not
+   say before, and the thing a manager acts on: you are winning the bats and
+   losing the arms. Quieter than a category figure and quieter than the
+   headline triple it is a part of, being a subtotal of both. */
+.mup-group-tally {
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--faint);
+}
+.mup-group-head .mup-group-tally:first-child {
+  text-align: right;
+}
+.mup-group-head .mup-group-tally:last-child {
+  text-align: left;
+}
+/* **A duel: the two figures at the edges, under the teams they belong to, and
+   a bar between them running toward whoever is ahead.**
+
+   It was `1fr auto 1fr` — figure, label, figure — which put both numbers in the
+   middle third of the card with the two ends empty, on the page whose whole
+   subject is which of two ends is winning. Now the figures sit under the names
+   in the head above them, the tracks take the slack that was dead space, and
+   the comparison the reader was doing ten times in their head is drawn.
+
+   `minmax(0, 1fr)` on the tracks rather than `1fr`, so a figure that overflows
+   its column cannot push the grid wider than the card. */
 .mup-row {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: baseline;
+  grid-template-columns:
+    var(--mup-val-w) minmax(0, 1fr) var(--mup-cat-w)
+    minmax(0, 1fr) var(--mup-val-w);
+  align-items: center;
   gap: 8px;
-  padding: 5px 0;
+  padding: 6px 0;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+}
+/* The half-track either side of the label. Its full length is one side holding
+   the lot, so a bar reaching the end of it is a category that is gone. */
+.mup-track {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  /* Faint, because there are twenty of these on the card and only one of each
+     pair is ever filled: at the border's full weight the empty halves were the
+     loudest thing on the page, twenty grey rails around ten green bars. What
+     the rail is for is the **scale** — where the end is, so a bar reaching it
+     reads as a category that is gone — and that survives at a third of it. */
+  background: color-mix(in srgb, var(--border) 32%, transparent);
+}
+/* **Anchored at the label, growing outward** — the Splits card's own rule that
+   a bar grows out of its zero, which here is the category it belongs to. Only
+   the winning side is ever filled, so the direction is the answer and the
+   length is by how much; a tie fills neither.
+
+   Green, because that is what a winning figure takes in the row already and
+   what the leader's share of the meter above takes: one colour, one meaning,
+   on a page that has no room for a second. The 2px floor is what keeps a
+   near-dead-level category visible as a sliver rather than as nothing. */
+.mup-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 2px;
+  background: var(--hit);
+}
+.mup-track-left .mup-fill {
+  right: 0;
+  border-radius: 3px 0 0 3px;
+}
+.mup-track-right .mup-fill {
+  left: 0;
+  border-radius: 0 3px 3px 0;
 }
 .mup-row:last-child {
   border-bottom: none;
@@ -11147,14 +11259,18 @@ body {
   letter-spacing: 0.03em;
   text-transform: uppercase;
   color: var(--muted);
-  min-width: 52px;
   text-align: center;
+  /* The column is `--mup-cat-w` and the label is centred in it; a wider one
+     overflows into the tracks rather than widening the row out of line with
+     every other row. */
+  white-space: nowrap;
 }
 .mup-val {
   font-size: 15px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--text);
+  white-space: nowrap;
 }
 .mup-val-left {
   text-align: right;
@@ -11174,6 +11290,60 @@ body {
 }
 .mup-tie {
   color: var(--faint);
+}
+/* ---- The matchup meter --------------------------------------------------
+   **The whole matchup as one bar**, under the two records it is made of: the
+   categories each side holds with the ties between them, so the boundary
+   sitting left or right of centre is the week at a glance.
+
+   Only the **leader's** run is green, which is what keeps this on the page's
+   one colour rule: green marks whoever is winning, here as in every row below
+   and as on the scoreboard card this page was opened from. The trailing run is
+   `--faint` and the ties are dimmer again, which is the honest ordering — a
+   tied category is not a category anybody holds. */
+.mup-meter-row {
+  /* The key hangs off this row rather than off its own 30px button, which is
+     what a shrink-to-fit panel would resolve against — the trick
+     `.roll-key .info-key-panel` records. */
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0 2px;
+}
+.mup-meter {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 2px;
+  height: 10px;
+  border-radius: 999px;
+  /* The track shows through the gaps, so the runs read as counted segments
+     rather than as one continuous fill — and clips them to the pill. */
+  overflow: hidden;
+  background: color-mix(in srgb, var(--border) 60%, transparent);
+}
+.mup-meter-seg {
+  /* `flex-grow` is the count and arrives inline; the basis is 0 so the runs
+     divide the bar in proportion to it rather than to any content. */
+  flex: 0 1 0%;
+  background: var(--faint);
+}
+.mup-meter-lead {
+  background: var(--hit);
+}
+.mup-meter-tied {
+  background: color-mix(in srgb, var(--faint) 40%, transparent);
+}
+/* This caller's own half of `InfoKey` — the panel opens from the row's left
+   edge, which at 390 is the only edge a 320px panel fits inside from. */
+.mup-key {
+  display: inline-flex;
+  position: static;
+}
+.mup-meter-row .info-key-panel {
+  left: 0;
+  right: auto;
 }
 .mup-note {
   max-width: var(--card-column);

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { answersEscape, useLockBodyScroll, useOverlayFocus } from '../hooks';
 import { DialogLayerContext } from './Modal';
+import { InfoKey } from './InfoKey';
 import { DateRow, DateToggle } from './DateControls';
 import type { DatePreset } from './DateControls';
 import LeagueTeam from './LeagueTeam';
@@ -78,6 +79,36 @@ function winnerOf(
   if (typeof left !== 'number' || typeof right !== 'number') return null;
   if (left === right) return 'tie';
   return (cat.lowerBetter ? left < right : left > right) ? 'left' : 'right';
+}
+
+/**
+ * **How lopsided a category is** — the gap between the two figures as a share of
+ * the two of them together, which is the length of the bar the row draws toward
+ * whoever is ahead.
+ *
+ * A scale with no calibration in it, which is the whole reason for this one
+ * rather than the Splits card's: that bar measures a platoon gap against
+ * `full`, the 90th percentile of the league's real gaps in that stat, because
+ * one hitter's split means nothing until you know what a big split *is*. Here
+ * the comparison is already complete — two teams, one week, one category — so
+ * the pair can be measured against itself and needs no league behind it. `|a−b|
+ * / (|a|+|b|)` is in [0, 1] by construction, so nothing can clamp and a full
+ * bar means one side has the lot.
+ *
+ * What it says is **how close the category is**, which is the question a
+ * manager reads a matchup with: 63 strikeouts against 66 is a 2% sliver and is
+ * a coin flip with three days to go, where 12 home runs against 2 is a 71% bar
+ * and is gone. It is deliberately *not* a probability and not a projection —
+ * the two figures are printed either side of it, and the bar is the glance.
+ *
+ * Zero either way (a category nobody has scored in yet, both sides on 0) is a
+ * tie and draws nothing, which the guard gives for free.
+ */
+function barShare(left: number | undefined, right: number | undefined): number {
+  if (typeof left !== 'number' || typeof right !== 'number') return 0;
+  const total = Math.abs(left) + Math.abs(right);
+  if (!Number.isFinite(total) || total === 0) return 0;
+  return Math.min(1, Math.abs(left - right) / total);
 }
 
 function SideHead({
@@ -290,14 +321,78 @@ export default function LeagueMatchupView({
   }
 
   const { home, away } = matchup;
-  const leading =
-    matchup.winner === 'home' ? home.teamId : matchup.winner === 'away' ? away?.teamId : null;
+  /**
+   * **Who is ahead**, which is deliberately not the same claim as who won.
+   *
+   * `matchup.winner` is null for the whole of the week being played — the
+   * server sets it only once the period is settled (`espn.ts`, `else if (live)
+   * winner = null`), because a winner is a settled fact and ESPN's own field
+   * says `UNDECIDED` until it is one. Read straight, that left the *live*
+   * matchup — the one anybody is actually looking at — with neither side
+   * marked: two grey triples, and a meter with no green in it.
+   *
+   * So the page reads the tally instead, which is the same comparison the
+   * server makes when it does settle one (`hw > aw ? 'home' : …`) and which
+   * agrees with ESPN's own `winner` on every one of the league's 108 settled
+   * matchups. `away.losses` is `home.wins` by construction, so the two tests
+   * cannot both hold, and a dead-level week marks neither.
+   */
+  const ahead =
+    away === null
+      ? null
+      : away.wins > away.losses
+        ? away.teamId
+        : home.wins > home.losses
+          ? home.teamId
+          : null;
   const score = (side: EspnMatchupSide) =>
     board.format === 'h2h-points'
       ? typeof side.points === 'number'
         ? String(Math.round(side.points * 100) / 100)
         : '—'
       : catScore(side);
+
+  const awayName = away ? teams.get(away.teamId)?.name ?? `Team ${away.teamId}` : '';
+  const homeName = teams.get(home.teamId)?.name ?? `Team ${home.teamId}`;
+
+  /**
+   * The three runs of the matchup meter — away's categories, the ties, home's —
+   * and the sentence a reader gets on hover or from a screen reader, a bar
+   * being a thing you see rather than a thing you can read.
+   *
+   * Null on a bye and on a points league, both of which have no categories to
+   * split: a bye has nobody to be ahead of, and a points league has one number
+   * a side and says so in its own note below.
+   */
+  const meter =
+    away && board.format !== 'h2h-points'
+      ? {
+          away: away.wins,
+          ties: away.ties,
+          home: away.losses,
+          label: `Categories: ${awayName} ${away.wins}, ${homeName} ${home.wins}${
+            away.ties > 0 ? `, ${away.ties} tied` : ''
+          }`,
+        }
+      : null;
+
+  /**
+   * What a category row says on hover: the two figures and who is ahead, which
+   * is the bar beside them put into words. It carries the category's **full**
+   * name too, that being what the label under it abbreviates and what the cell
+   * used to spend its own `title` on.
+   */
+  const rowTitle = (
+    c: EspnCategory,
+    l: number | undefined,
+    r: number | undefined,
+    w: 'left' | 'right' | 'tie' | null,
+  ) => {
+    const pair = `${fmtValue(l, c)} to ${fmtValue(r, c)}`;
+    if (w === null) return `${c.name} — ${pair}`;
+    if (w === 'tie') return `${c.name} — ${pair}: level`;
+    return `${c.name} — ${pair}: ${w === 'left' ? awayName : homeName} ahead`;
+  };
 
   /**
    * **The three pages**, away on the left and home on the right — the same
@@ -563,7 +658,7 @@ export default function LeagueMatchupView({
                 side={away}
                 team={teams.get(away.teamId)}
                 score={score(away)}
-                leading={leading === away.teamId}
+                leading={ahead === away.teamId}
                 align="left"
               />
               <span className="mup-vs">vs</span>
@@ -571,44 +666,144 @@ export default function LeagueMatchupView({
                 side={home}
                 team={teams.get(home.teamId)}
                 score={score(home)}
-                leading={leading === home.teamId}
+                leading={ahead === home.teamId}
                 align="right"
               />
             </div>
+
+            {/* **The whole matchup in one bar**, directly under the two
+                records it is made of: the categories each side holds, the ties
+                between them, and the leader's share in green — the same green
+                the winning figure in every row below takes, so the page has
+                one colour meaning one thing.
+
+                The counts are the **server's own tally** (`side.wins/losses/
+                ties`) rather than a second count made here: ESPN fills its own
+                only once a matchup is over, so `espn.ts` computes it live and
+                final alike, and that computation is the one checked against
+                ESPN on all 1,080 category comparisons of the league's settled
+                weeks. The triples in the heads read the same three numbers, so
+                the bar and the score cannot come to disagree. */}
+            {board.format !== 'h2h-points' && meter !== null && (
+              <div className="mup-meter-row">
+                <div className="mup-meter" role="img" aria-label={meter.label} title={meter.label}>
+                  {/* Only a segment with something in it is rendered, so the
+                      2px gaps fall between the runs that exist rather than
+                      opening up beside two zero-width boxes. */}
+                  {meter.away > 0 && (
+                    <span
+                      className={`mup-meter-seg${ahead === away.teamId ? ' mup-meter-lead' : ''}`}
+                      style={{ flexGrow: meter.away }}
+                    />
+                  )}
+                  {meter.ties > 0 && (
+                    <span
+                      className="mup-meter-seg mup-meter-tied"
+                      style={{ flexGrow: meter.ties }}
+                    />
+                  )}
+                  {meter.home > 0 && (
+                    <span
+                      className={`mup-meter-seg${ahead === home.teamId ? ' mup-meter-lead' : ''}`}
+                      style={{ flexGrow: meter.home }}
+                    />
+                  )}
+                </div>
+                <InfoKey className="mup-key" label="How to read these bars">
+                  <p>
+                    The bar under the two records is the <strong>whole matchup</strong> — the
+                    categories each side holds, ties between them, and the leader&rsquo;s share in
+                    green.
+                  </p>
+                  <p>
+                    Each category&rsquo;s own bar runs from its label toward whoever is ahead, and
+                    its length is the gap as a share of the two figures together. A long bar is a
+                    category one side is running away with; a sliver is a coin flip.
+                  </p>
+                </InfoKey>
+              </div>
+            )}
 
             {board.format === 'h2h-points' ? (
               <div className="mup-note">
                 A points league has one number a side, so there is no category line to break down.
               </div>
             ) : (
-              groups.map((g) => (
-                <div className="mup-group" key={g.side}>
-                  <div className="mup-group-head">{g.label}</div>
-                  {g.categories.map((c) => {
-                    const l = away.scores[c.statId];
-                    const r = home.scores[c.statId];
-                    const w = winnerOf(l, r, c);
-                    const state = (s: 'left' | 'right') =>
-                      w === null ? '' : w === s ? ' mup-win' : w === 'tie' ? ' mup-tie' : ' mup-loss';
-                    return (
-                      <div className="mup-row" key={c.statId}>
-                        <span className={`mup-val mup-val-left${state('left')}`}>
-                          {fmtValue(l, c)}
-                        </span>
-                        {/* The category between the two figures it names, which
-                            is the whole shape of this page: the comparison is a
-                            glance rather than an arithmetic. */}
-                        <span className="mup-cat" title={c.name}>
-                          {c.label}
-                        </span>
-                        <span className={`mup-val mup-val-right${state('right')}`}>
-                          {fmtValue(r, c)}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              ))
+              groups.map((g) => {
+                /* The winner of each category of this group, worked once: the
+                   rows draw it and the heading counts it, so a side of the
+                   ball's tally and the green figures under it are one
+                   arithmetic rather than two that can drift. `winnerOf` is the
+                   same function the scoreboard's own cells use, run over this
+                   group alone — the server publishes a tally for the matchup
+                   and not for half of it. */
+                const won = g.categories.map((c) =>
+                  winnerOf(away.scores[c.statId], home.scores[c.statId], c),
+                );
+                const tally = (side: 'left' | 'right') =>
+                  `${won.filter((w) => w === side).length}-${
+                    won.filter((w) => w !== null && w !== 'tie' && w !== side).length
+                  }-${won.filter((w) => w === 'tie').length}`;
+                const tallyTitle = (side: 'left' | 'right') =>
+                  `${side === 'left' ? awayName : homeName} in the ${g.label.toLowerCase()}' categories, won-lost-tied`;
+                return (
+                  <div className="mup-group" key={g.side}>
+                    {/* The heading takes the row's own grid, so the label
+                        centres over the category column it names and each
+                        side's tally lands in the column its figures are in —
+                        which is also the one number this page could not say
+                        before: you are winning the bats and losing the arms. */}
+                    <div className="mup-group-head">
+                      <span className="mup-group-tally" title={tallyTitle('left')}>
+                        {tally('left')}
+                      </span>
+                      <span className="mup-group-label">{g.label}</span>
+                      <span className="mup-group-tally" title={tallyTitle('right')}>
+                        {tally('right')}
+                      </span>
+                    </div>
+                    {g.categories.map((c, i) => {
+                      const l = away.scores[c.statId];
+                      const r = home.scores[c.statId];
+                      const w = won[i];
+                      const share = barShare(l, r);
+                      const state = (s: 'left' | 'right') =>
+                        w === null ? '' : w === s ? ' mup-win' : w === 'tie' ? ' mup-tie' : ' mup-loss';
+                      return (
+                        <div className="mup-row" key={c.statId} title={rowTitle(c, l, r, w)}>
+                          <span className={`mup-val mup-val-left${state('left')}`}>
+                            {fmtValue(l, c)}
+                          </span>
+                          {/* The two figures sit at the edges, under the teams
+                              they belong to, and the bar between them says
+                              which way the category is going and how far. That
+                              is what the page is opened to find out and what a
+                              column of bare numbers made the reader work out
+                              ten times over. Each half-track is anchored at the
+                              label, so the fill grows *out of* the category it
+                              belongs to toward the side that is ahead — the
+                              Splits card's own rule that a bar grows out of its
+                              zero. */}
+                          <span className="mup-track mup-track-left">
+                            {w === 'left' && (
+                              <span className="mup-fill" style={{ width: `${share * 100}%` }} />
+                            )}
+                          </span>
+                          <span className="mup-cat">{c.label}</span>
+                          <span className="mup-track mup-track-right">
+                            {w === 'right' && (
+                              <span className="mup-fill" style={{ width: `${share * 100}%` }} />
+                            )}
+                          </span>
+                          <span className={`mup-val mup-val-right${state('right')}`}>
+                            {fmtValue(r, c)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })
             )}
 
             {/* Under the categories, because it is what a manager does *about*
@@ -616,14 +811,22 @@ export default function LeagueMatchupView({
                 head for the same reason. */}
             {(home.acquisitions !== null || away.acquisitions !== null) && (
               <div className="mup-group mup-acq">
-                <div className="mup-group-head">Moves</div>
-                <div className="mup-row">
+                <div className="mup-group-head">
+                  <span className="mup-group-label">Moves</span>
+                </div>
+                <div className="mup-row" title="Acquisitions used this matchup period">
                   <span className="mup-val mup-val-left" title={acqTitle(away)}>
                     {acqCell(away)}
                   </span>
-                  <span className="mup-cat" title="Acquisitions used this matchup period">
-                    Acq
-                  </span>
+                  {/* The two track columns are **empty rather than railed**:
+                      nobody is winning acquisitions, and a rail says a
+                      comparison is being drawn. The cells are still here
+                      because the grid places by order, and without them the
+                      label would land in a track's column and this row's
+                      figures would sit under nothing. */}
+                  <span />
+                  <span className="mup-cat">Acq</span>
+                  <span />
                   <span className="mup-val mup-val-right" title={acqTitle(home)}>
                     {acqCell(home)}
                   </span>
