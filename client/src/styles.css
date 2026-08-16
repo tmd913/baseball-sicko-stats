@@ -3392,7 +3392,10 @@ body {
 
 /* ---- Player details view (Statcast percentile rankings) ------------------ */
 /* Full-screen overlay reached by clicking a player's headshot. */
-.details-view {
+.details-view,
+/* The matchup page: the same object one page along — see the note by
+   `.mup-view` below, which carries only its own layer. */
+.mup-view {
   position: fixed;
   inset: 0;
   z-index: 50;
@@ -11147,6 +11150,119 @@ body {
   margin: 10px auto 0;
   font-size: 12px;
   color: var(--muted);
+}
+
+/* ---- The matchup page ---------------------------------------------------
+   One matchup as a **full-screen page over the League view**, opened from the
+   card on the Scoreboard that names it.
+
+   **Folded onto `.details-view` for everything about being a page** — the fixed
+   box, its own scroller, `overscroll-behavior: none`, the reserved scrollbar
+   gutter, the gutters and the `--table-bleed` the two wide tables inside it
+   take back. It is the same object as the player page and the two overlays that
+   already ride on that class, and this stylesheet's standing rule is that two
+   things which are the same object must not come to look like two.
+
+   What is its own is the **layer**: 48, below the player page's 50 and above
+   the full-page table box's 45, which is what makes the stack behave with no
+   special case — a name pressed on a team page opens the player over this, and
+   a dialog opened inside here takes 49 from `DialogLayerContext`. */
+.mup-view {
+  z-index: 48;
+}
+/* The head: the way back, and which week the numbers are. Pinned, on
+   `.details-chrome`'s own argument one page along — it is the last thing that
+   should scroll away from under a page being read, and it is the way out. */
+.mup-chrome {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  margin: 0 -16px 16px;
+  padding: 20px 16px 0;
+  background:
+    radial-gradient(760px 260px at 82% -40%, rgba(56, 189, 248, 0.09), transparent 70%),
+    linear-gradient(180deg, var(--panel) 0%, var(--bg-2) 100%);
+  box-shadow:
+    inset 0 -1px 0 var(--border),
+    0 6px 16px rgba(0, 0, 0, 0.22);
+}
+.mup-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  max-width: var(--card-column);
+  margin: 0 auto;
+  padding-bottom: 16px;
+}
+/* Which week, printed rather than navigable — the arrows belong to the
+   Scoreboard, which is the page about *which* week. The dates and the state are
+   one object because they have to be read together: a live period's totals
+   cover the days played so far. */
+.mup-week {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  min-width: 0;
+}
+.mup-week-n {
+  font-size: 15px;
+  font-weight: 800;
+}
+.mup-week-dates {
+  font-size: 12px;
+  color: var(--muted);
+}
+/* A team page's own controls — the roster views' controls, because a team page
+   is those views. It wraps like the app's own tab row and breaks between
+   groups rather than inside one, every group being `flex: none` by its own
+   rule. */
+.mup-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  max-width: var(--card-column);
+  margin: 0 auto 12px;
+}
+/* The date row takes a line of its own when it opens, which is
+   `.app.date-open .date-control`'s rule one page down: a disclosure and the
+   thing it discloses stay together, and a preset row has no business sharing a
+   line with the button that opened it.
+
+   **`display` is not optional here.** `.date-control` is `display: none` by
+   default and undone only by `.app.date-open`, which is a class on the app's
+   own shell and reaches nothing inside this overlay — measured before this
+   line, the row rendered at 0 × 0 with `flex: 1 1 100%` computing correctly and
+   nothing on screen. This rule has to sit after that one in the file, which it
+   does. */
+.mup-tools.date-open .date-control {
+  display: flex;
+  flex: 1 1 100%;
+}
+/* On a phone the presets become a `<select>` and the range picker a full-width
+   row, which want the column stretched — the app's own narrow-screen rule for
+   the same box. */
+@media (max-width: 640px) {
+  .mup-tools.date-open .date-control {
+    align-items: stretch;
+  }
+}
+.mup-tools .view-switch,
+.mup-tools .kind-switch,
+.mup-tools .schedule-toggle,
+.mup-tools .date-toggle,
+.mup-tool-icons {
+  flex: none;
+}
+/* The Schedule and date buttons as one group, so the row breaks between the
+   two switches and the pair rather than stranding one 36px square on a line of
+   its own — see the note in `LeagueMatchup.tsx`. */
+.mup-tool-icons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 /* ---- A matchup's three pages -------------------------------------------

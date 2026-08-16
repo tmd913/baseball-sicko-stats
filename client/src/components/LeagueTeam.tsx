@@ -5,7 +5,7 @@ import type { FantasySlot } from '../hooks';
 import { LoadingBlock } from './Loading';
 import { LiveFeed, FEED_PAGE_SIZE } from './LiveFeed';
 import { SummaryTable } from './SummaryTable';
-import { TeamLogo, record } from './LeagueView';
+import type { ScheduleIndex } from './schedule';
 import type {
   EspnRosterPlayer,
   EspnStandingsTeam,
@@ -14,31 +14,22 @@ import type {
 } from '../types';
 
 /**
- * One manager's team over one matchup period — **the app's own Roster and Feed
- * views, read for somebody else's roster.**
+ * One manager's team over a span the reader picks — **the app's own Roster and
+ * Feed views, read for somebody else's roster.**
  *
- * The Matchup tab answers *how am I doing against him* a category at a time,
- * and the question directly under every row of it is *which of his players is
- * doing that to me*. Nothing on the League page could say it: the Rosters
- * toggle lists who is in each lineup and not one thing any of them has done,
- * and the Roster and Feed views next door are hard-wired to the reader's own
- * team. So each side of the matchup gets a page, and it is not a new reading —
- * it is `SummaryTable` and `LiveFeed`, the same two components the app draws
- * its own roster with, over the same shape of report.
+ * The matchup answers *how am I doing against him* a category at a time, and
+ * the question directly under every row of it is *which of his players is doing
+ * that to me*. Nothing on the League page could say it: the Roster and Feed
+ * views next door are hard-wired to the reader's own team. So each side of the
+ * matchup gets a page, and it is not a new reading — it is `SummaryTable` and
+ * `LiveFeed`, the same two components the app draws its own roster with, over
+ * the same shape of report.
  *
- * **The two are stacked rather than tabbed**, which is where this parts from
- * the app outside the league page. There they are two views because they are
- * two readings of the *whole* app's subject and each wants a page; here they
- * are the two halves of one question about one team over one week, and a third
- * tier of tabs (League tab → matchup side → roster or feed) is a tier of chrome
- * to save a scroll. The table is the week added up and the feed is the week as
- * it happened, in that order, which is the order the two questions come in.
- *
- * **The span is the matchup period's own**, `board.start`…`board.end` — the
- * very days the categories above were summed over, so a row here is the arithmetic
- * behind a cell there. For a week still being played that is the days played so
- * far, which is what makes the two agree rather than the table quietly
- * including a day the score does not.
+ * **Which reading, which kind and which days are all the overlay's**, handed
+ * down rather than held here: they are chrome that sits above both team pages
+ * and must not reset when the reader crosses from one manager to the other —
+ * a date set on one side is a question about the matchup, not about a team. All
+ * this component owns is its own two reads and its feed's paging position.
  */
 
 /**
@@ -64,13 +55,25 @@ export default function LeagueTeam({
   team,
   start,
   end,
+  kind,
+  reading,
+  schedule,
   onOpenDetails,
 }: {
   teamId: number;
   team: EspnStandingsTeam | undefined;
-  /** The matchup period's own days. */
+  /** The days in view, which default to today and are whatever the overlay's
+   *  own date control says — including the whole matchup period, which is the
+   *  preset that makes a row here the arithmetic behind a category above. */
   start: string;
   end: string;
+  kind: PlayerKind;
+  /** The table or the stream: the app's own two roster views, as two tabs. */
+  reading: 'roster' | 'feed';
+  /** The Schedule view's index, or null for the ordinary stat columns — the
+   *  same "the mode is the presence of an index" rule App applies, so a table
+   *  can never be in schedule mode with no schedule in it. */
+  schedule: ScheduleIndex | null;
   /** Open a player's page — the same `${kind}-${id}` key every other route into
    *  it uses, so a name pressed here opens what a name pressed on the roster
    *  table opens. */
@@ -80,14 +83,13 @@ export default function LeagueTeam({
   const [roster, setRoster] = useState<EspnRosterPlayer[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [kind, setKind] = useState<PlayerKind>('batter');
   const shown = useRef<ShownByKind>({});
   const waiting = useDelayedFlag(loading);
 
   /**
    * **No ref guard on this effect**, and that is a rule rather than an
    * omission: marking a request as asked before it is answered is what left the
-   * Rosters toggle spinning for ever under StrictMode — React mounts, tears
+   * old Rosters toggle spinning for ever under StrictMode — React mounts, tears
    * down and re-runs, so the first pass's answer is discarded by its own
    * cleanup and the second pass sees the mark and returns. The dependency array
    * is the whole of the guard, and it names exactly what the answer depends on.
@@ -105,7 +107,7 @@ export default function LeagueTeam({
     setRoster(null);
     Promise.all([
       api.report(start, end, 'fantasy', false, teamId),
-      // The roster **at the end of the period**, which is what a slot is a fact
+      // The roster **at the end of the span**, which is what a slot is a fact
       // about — the same anchor the app's own chips take. A read that fails
       // costs the chips and not the page, so it resolves to null rather than
       // rejecting the pair.
@@ -141,7 +143,7 @@ export default function LeagueTeam({
    */
   const slots = useMemo(() => {
     if (!roster) return null;
-    const owner = possessive(team?.name) ?? 'this team\u2019s';
+    const owner = possessive(team?.name) ?? 'this team’s';
     const map = new Map<string, FantasySlot>();
     for (const p of roster) {
       if (p.mlbId === null) continue;
@@ -149,9 +151,9 @@ export default function LeagueTeam({
         map.set(`${k}-${p.mlbId}`, {
           slot: p.slot,
           starting: p.starting,
-          // Named rather than "today": this page is read for a week that may
-          // have ended, and the day the slot came from is the honest thing to
-          // print whichever week it is.
+          // Named rather than "today": this page is read over a span the reader
+          // picks, and the day the slot came from is the honest thing to print
+          // whichever span that is.
           day: end,
           injuryStatus: p.injuryStatus,
           startedDays: null,
@@ -163,111 +165,54 @@ export default function LeagueTeam({
     return map;
   }, [roster, team, end]);
 
-  const batters = useMemo(() => (report ?? []).filter((r) => r.kind !== 'pitcher'), [report]);
-  const pitchers = useMemo(() => (report ?? []).filter((r) => r.kind === 'pitcher'), [report]);
-  // Only when there is a choice to make, which is the rule the app's own kind
-  // tabs follow — and the shown kind falls back to whichever list exists, so a
-  // team of nothing but pitchers is not an empty page.
-  const bothKinds = batters.length > 0 && pitchers.length > 0;
-  const shownKind: PlayerKind = bothKinds
-    ? kind
-    : pitchers.length > 0 && batters.length === 0
-      ? 'pitcher'
-      : 'batter';
-  const cards = shownKind === 'pitcher' ? pitchers : batters;
-
-  const kindTabs = bothKinds ? (
-    <div className="kind-switch" role="tablist" aria-label="Batters or pitchers">
-      <button
-        type="button"
-        role="tab"
-        aria-selected={shownKind === 'batter'}
-        className={`kind-tab${shownKind === 'batter' ? ' active' : ''}`}
-        onClick={() => setKind('batter')}
-      >
-        Batters
-      </button>
-      <button
-        type="button"
-        role="tab"
-        aria-selected={shownKind === 'pitcher'}
-        className={`kind-tab${shownKind === 'pitcher' ? ' active' : ''}`}
-        onClick={() => setKind('pitcher')}
-      >
-        Pitchers
-      </button>
-    </div>
-  ) : null;
-
-  const head = (
-    <div className="lgt-head">
-      <TeamLogo team={team} />
-      <span className="lgt-id">
-        <span className="lgt-name">{team?.name ?? `Team ${teamId}`}</span>
-        {team && <span className="lgt-sub">{record(team)}</span>}
-      </span>
-      {kindTabs}
-    </div>
+  const cards = useMemo(
+    () => (report ?? []).filter((r) => (kind === 'pitcher' ? r.kind === 'pitcher' : r.kind !== 'pitcher')),
+    [report, kind],
   );
 
-  // Never over data: a re-read (a period change is a different page, so this is
-  // only ever the first read of one) leaves nothing on screen to protect, and
-  // the block wait is behind the app's own delay so a warm answer never flashes
-  // one.
-  if (waiting) {
-    return (
-      <>
-        {head}
-        <LoadingBlock>Reading this team&rsquo;s week</LoadingBlock>
-      </>
-    );
-  }
+  // Never over data: the block wait is behind the app's own delay, so a warm
+  // answer never flashes one, and a span change re-reads with the old rows
+  // still on screen until the new ones land.
+  if (waiting && !report) return <LoadingBlock>Reading this team&rsquo;s games</LoadingBlock>;
   if (error) {
     return (
-      <>
-        {head}
-        <div className="empty-state">
-          <h3>Couldn&rsquo;t read this team</h3>
-          <p>{error}</p>
-        </div>
-      </>
+      <div className="empty-state">
+        <h3>Couldn&rsquo;t read this team</h3>
+        <p>{error}</p>
+      </div>
     );
   }
-  if (!report) return head;
+  if (!report) return null;
   if (cards.length === 0) {
     return (
-      <>
-        {head}
-        <div className="empty-state">
-          <h3>Nobody on this team over these days</h3>
-          <p>
-            ESPN has no roster for {team?.name ?? `team ${teamId}`} over this matchup period.
-          </p>
-        </div>
-      </>
+      <div className="empty-state">
+        <h3>No {kind === 'pitcher' ? 'pitchers' : 'batters'} on this team over these days</h3>
+        <p>
+          {team?.name ?? `Team ${teamId}`} had nobody of this kind on the roster over the days in
+          view. The date control above is what changes them.
+        </p>
+      </div>
     );
   }
 
   return (
     <FantasyRosterContext.Provider value={slots}>
-      {head}
-      {/* The week added up, then the week as it happened. Both are the app's
-          own components, so a row here reads exactly as the same row does on
-          the Roster page — the point of the tab being that it is the same
-          reading of somebody else's team rather than a second one. */}
-      <SummaryTable reports={cards} onOpenDetails={onOpenDetails} chrome={kindTabs} />
-      <LiveFeed
-        /* Keyed on the kind so the stream starts at its first page when the
-           list becomes a different list — the app's own rule for its feed. */
-        key={shownKind}
-        reports={cards}
-        kind={shownKind}
-        onOpenDetails={onOpenDetails}
-        shown={shown.current[shownKind] ?? FEED_PAGE_SIZE}
-        onShowMore={(n) => {
-          shown.current[shownKind] = n;
-        }}
-      />
+      {reading === 'roster' ? (
+        <SummaryTable reports={cards} onOpenDetails={onOpenDetails} schedule={schedule} />
+      ) : (
+        <LiveFeed
+          /* Keyed on the kind so the stream starts at its first page when the
+             list becomes a different list — the app's own rule for its feed. */
+          key={kind}
+          reports={cards}
+          kind={kind}
+          onOpenDetails={onOpenDetails}
+          shown={shown.current[kind] ?? FEED_PAGE_SIZE}
+          onShowMore={(n) => {
+            shown.current[kind] = n;
+          }}
+        />
+      )}
     </FantasyRosterContext.Provider>
   );
 }

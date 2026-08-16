@@ -396,28 +396,40 @@ Driven against the built client and the live 2026 league at **390×844 and
 0.7KB over the wire, for a view, a route, a component and the paragraphs above
 restated where the rules are.
 
-### Four tabs, because they are four questions
+### Three tabs, because they are three questions
 
-**The page above is described as two blocks and is now four tabs** —
-`Matchup`, `Scoreboard`, `Rankings`, `Transactions` — and the passage before
-this one is kept as written because its argument for the *page* is unchanged:
-this is still the one view about the fantasy league rather than about players,
-and it still earns a pill rather than an entry in the fantasy popover. What
-changed is that one page holding a scoreboard with a season table stacked under
-it was a page with one question and a half, and it has four:
+**The page above is described as two blocks and is now three tabs** —
+`Scoreboard`, `Rankings`, `Transactions` — and the passage before this one is
+kept as written because its argument for the *page* is unchanged: this is still
+the one view about the fantasy league rather than about players, and it still
+earns a pill rather than an entry in the fantasy popover. What changed is that
+one page holding a scoreboard with a season table stacked under it was a page
+with one question and a half, and it has three:
 
-1. **Matchup** — one matchup, category by category, with each side's figure
-   beside its own name. *Am I beating **him**.*
-2. **Scoreboard** — every matchup of one period, the category line under both
+1. **Scoreboard** — every matchup of one period, the category line under both
    sides. *Is anybody winning.*
-3. **Rankings** — every team's figure in every category and where that figure
+2. **Rankings** — every team's figure in every category and where that figure
    stands, over a span the reader picks. *Why.*
-4. **Transactions** — who added, dropped and traded whom. *What has been going
+3. **Transactions** — who added, dropped and traded whom. *What has been going
    on.*
 
 **The season table moved into Rankings rather than staying beside the
 scoreboard**, which is what makes the split three questions rather than two and
 a leftover: it *is* the answer to "why", read the other way round.
+
+**It was four for a while**, a `Matchup` tab leading them, and that is the one
+of the four that did not belong: the other three are three readings of *the
+league*, where a matchup is **one row of the first of them opened up**. A tab
+row is a set of siblings, and one of the four sat at a different depth from the
+rest — which showed in what the strip could not name. A tab has to say what its
+page is about, and `Matchup` could not say *which*: the page answered that with
+a dropdown of ten pairs of team names, sitting above the very thing it selected.
+
+It is a **page over this view** now, opened from the scoreboard card that names
+it — see *A matchup is a page, not a tab* below. `lt=` goes back to omitting
+`scoreboard`, and an older `lt=matchup` is read as the board that matchup was
+always a row of (checked: the link opens on the Scoreboard with `lt` dropped
+from the URL, and one carrying `mup=` as well opens the page over it).
 
 ### The period arrows live inside the Scoreboard tab
 
@@ -435,6 +447,9 @@ it qualifies and is hidden on the research board it does not. So the arrows, the
 
 **`mp=` is therefore the Scoreboard tab's parameter alone**, and nothing about it
 moved: absent still means the period being played, and `‹` still writes `mp=18`.
+The matchup page has no arrows of its own for the same reason read the other
+way — it is opened on one week's matchup, and *which week* is a question the
+board it was opened from asks.
 
 ### Which tab is open is in the URL, and so is the span
 
@@ -443,6 +458,12 @@ moved: absent still means the period being played, and `‹` still writes `mp=18
 that leaves one out describes a different page. The Scoreboard is the default and
 is omitted, so a bare `?view=league` opens where the page always opened; `season`
 is the span default and is omitted the same way.
+
+**`mup=` is on that list too and is not a tab**: it names the matchup whose
+*page* is open over the view, the way `player=` names the player whose page is
+open over everything. So it is written whatever tab is behind it, and it is what
+makes a matchup shareable — which is the whole reason the page needs no picker
+of its own. Stepping the period clears it, a matchup id belonging to one week.
 
 **`lspan=` is deliberately not `win=`.** That one is the research board's own
 window and means five different spans of a different thing; one parameter meaning
@@ -546,11 +567,13 @@ while the read is out where a null left it empty until the reader navigated away
 and came back. Only when there is a feed to refresh: a reader who has never
 opened the League page is not made to pay for one by pressing it.
 
-### The Matchup tab: the categories down the middle
+### The matchup's Summary: the categories down the middle
 
 **One matchup read the way a manager reads one**, and the shape is the whole of
 it: the categories run **down the middle** with each side's figure beside its
-own name, left and right.
+own name, left and right. (It was a *tab* of the League view when this was
+written and is the middle page of a matchup's own now — see *A matchup is a
+page, not a tab* below. Everything here about the shape is unchanged.)
 
 **Why that is not the scoreboard's card enlarged.** The Scoreboard answers *is
 anybody winning* — ten cards, each a headline and a category line squeezed into
@@ -577,13 +600,13 @@ its own `result` only once a matchup is over, so a live week would say nothing �
 and the two are deliberately the same arithmetic, which `espn.ts` has checked
 against ESPN's answer on 1,080 finished categories.
 
-**Any matchup in the league**, which is what the tab is *for*: the picker lists
-every matchup of the period as `A vs B` with the reader's own marked `— yours`,
-and every scoreboard card carries a **`Breakdown →`** door through to its own.
-A native `<select>` rather than a row of pills, because ten pairs of team names
-is a list at 1920 as much as at 390 — which is the one thing this control does
-not share with the four other selects it is folded onto, each of those being the
-phone half of a pills-on-desktop pair and so defaulting to `display: none`.
+**Any matchup in the league**, and **the scoreboard card is what names it**:
+every card carries a **`Breakdown →`** door through to its own page. There was a
+`<select>` here as well, listing every matchup of the period with the reader's
+own marked `— yours`, and it went with the tab — a picker for *which page you
+are on*, sitting on the page it selected. The board behind it is that picker,
+and it is a better one: it shows the score of each matchup rather than only its
+two names.
 
 **The door is a text link at the foot of each card rather than the card itself
 made pressable**, which is the idiom the player page's Overview already uses for
@@ -598,174 +621,173 @@ the name and no empty headline. The roster view still applies there: there is
 one team, and a reader on a bye week has more use for it than for anything else
 on the page.
 
-### A matchup is three pages: one team, the comparison, the other team
+### A matchup is a page, not a tab
 
-**The tab answered *how am I doing against him* and could not answer the
-question directly under every row of it — *which of his players is doing that to
-me*.** Nothing on the League page could: the `Rosters` toggle it has since
-replaced listed who was in each lineup and not one thing any of them had done,
-and the Roster and Feed views next door are hard-wired to the reader's own
-team. So each side of the
-matchup gets a page of its own, and the strip that selects them is **the away
-team, `Summary`, the home team** — two teams with the comparison between them,
-which is the shape of the thing being read and is the same arrangement each
-category already has on the page below.
+**It was the League view's first tab and is a full-screen page over it**, opened
+from the scoreboard card that names it, with a Back button rather than a tab to
+leave by. The tab could not say *which* matchup it was about and answered that
+with a dropdown of ten pairs of team names sitting above the thing it selected;
+a card pressed is what names a matchup, the way a research-board row names the
+player its page opens on.
 
-**Summary is the middle one and the default.** It is the question the tab is
-opened with, and the app's own rule is that the tab you land on is that question
-(`Overview` on the player page, `Roster` on the view switch); each manager's
-roster is then one press either way, in the direction his own figures are on.
+**It takes `PlayerDetails`' shape wholesale** — `.mup-view` is folded onto
+`.details-view` in the stylesheet, so the fixed box, its own scroller,
+`overscroll-behavior: none`, the reserved scrollbar gutter, the gutters and the
+`--table-bleed` its two wide tables take back are all one definition. And the
+same conventions in the component: `useLockBodyScroll`, `useOverlayFocus` (focus
+in on open, back out on close, the background `inert`), and an Escape handler
+that goes through `answersEscape` so a ladder unwinds one rung per press.
 
-**A team page is not a new reading — it is the app's own two.**
-`components/LeagueTeam.tsx` draws `SummaryTable` and `LiveFeed`, the very
+**It sits at `z-index: 48`** — below the player page's 50 and above the
+full-page table box's 45 — which is what makes the stack behave with no special
+case at all: a name pressed on a team page opens the player *over* this, a
+dialog opened inside here takes 49 from `DialogLayerContext`, and the how-to and
+league-settings overlays keep their 60. `.mup-view` joins `OVERLAYS` so the
+stacking test both consults it and sees it. Measured: the player page at 50 over
+the matchup at 48 with the matchup `inert`, one press of Escape closing the
+player and a second closing the matchup, `mup=` cleared and no `inert` left.
+
+**No week selector and no matchup picker**, which were both controls over
+*which matchup* — a question this page no longer asks, being opened on one from
+the board that lists them all. The week is **printed** rather than navigable
+(`Week 19 · Aug 10 – Aug 16 · Live`), because the numbers are meaningless
+without it and a live period's totals cover the days played so far; the arrows
+stay on the Scoreboard, which is the page about which week.
+
+**Three pages inside it**: the away team, the comparison, the home team — two
+teams with the comparison between them, which is the shape of the thing being
+read and the same arrangement each category has on the card. **Summary is the
+middle one and the default**, being the question the page is opened with; each
+manager's roster is one press away, in the direction his own figures are on. A
+**bye** has one team and so two pages, and **its card carries the door too** —
+on a week the reader's own team is on a bye, which in a 12-team league's first
+playoff round is eight of the ten cards, leaving it off would put his own team
+out of reach entirely. That door reads `Team →` rather than `Breakdown →`, there
+being no breakdown to open.
+
+### A team page is the app's own Roster and Feed views
+
+**`components/LeagueTeam.tsx` draws `SummaryTable` and `LiveFeed`**, the very
 components the Roster and Feed views are made of, over a `PlayerReport[]` of
-exactly the shape those views get. That is the whole point of the feature: a row
-on a leaguemate's page reads as the same row does on your own, down to the
-opponent cell, the lineup pip, the IL code and the clip under an at-bat, because
-it *is* the same component and not a second drawing of one.
+exactly their shape. A row on a leaguemate's page therefore reads as the same
+row does on your own: opponent cell, lineup pip, IL code, slot chip, clips in
+the feed, `Load more`, full-page mode, and a name that opens the player page.
 
-**The two are stacked rather than tabbed**, which is where this parts from the
-app outside the league page. There they are two views because they are two
-readings of the whole app's subject and each wants a page; here they are the two
-halves of one question about one team over one week, and a third tier of tabs
-(League tab → matchup side → roster or feed) would be a tier of chrome bought to
-save a scroll. The table is the week added up and the feed is the week as it
-happened, in that order — the order the two questions come in.
+**Roster and Feed are two tabs rather than a stack.** They were stacked, on the
+reasoning that they are two halves of one question about one team over one week
+where a third tier of tabs would be chrome bought to save a scroll. What that
+missed is that they are not one question at a time: the table is *what his week
+came to* and the stream is *what happened in it*, which is exactly the split the
+app makes one tier up — and stacking them put a feed of thirty clips under a
+table nobody had finished reading. They are the app's own `.view-switch`, so the
+two read as the two views they are.
 
-**The span is the matchup period's own**, `board.start`…`board.end`, which are
-the very days the categories above were summed over — so a row on a team page is
-the arithmetic behind a cell on the Summary one. For a week still being played
-that is **the days played so far**, which is what makes the two agree rather
-than the table quietly including a day the score does not.
+**And a team page carries the roster views' own controls**, because it *is*
+those views: which reading, which kind, the Schedule view and its span, and the
+dates. The date pieces are `components/DateControls.tsx` — extracted from
+`App.tsx` rather than copied, which is the rule this codebase applies to a
+control drawn twice, so `Today` cannot come to mean two things and every rule in
+the stylesheet that decides how they read (the pills above 640, the `<select>`
+below it, the range bubble on the toggle's corner) applies to both callers by
+construction. What each caller keeps is the *state*, that being the only half
+the two answer differently.
 
-**A period with no dates gets no team tabs at all.** A team page is a week of
-games, and with no anchor to date the period by there is no week; a tab leading
-to an empty one is worse than a tab that is not there. That is the rule the
-Rankings tab's span strip already follows for a half with no matchup period in
-it. **A bye gets two tabs rather than three**, for the same reason and by the
-same test: there is one team.
+**The days start at today**, not at the matchup's week — that is the reading a
+manager arrives with (*what is his team doing right now*) and it is what the
+app's own roster views open on, which is the point of these pages being those
+views. The week is one press away as a preset of its own: **`Matchup` leads the
+list**, and it is the one named range that means something only here — the days
+the categories on the Summary page were summed over, so picking it makes every
+row the arithmetic behind a category. It is absent where the period has no dates
+to name, the rule the Rankings span strip already follows for a half with no
+matchup period in it.
 
-**The chosen side is stored against the matchup it was chosen for**, so changing
-matchup or stepping a week lands back on Summary — by then `away` names a
-different manager, and the strip would be silently pointing somewhere else. It
-is derived from that pair rather than reset in an effect, which would render the
-old side for a frame first. Measured: switching the picker from `Baldy's Bozos
-vs Sho me the Parlay` to `The Homewreckers vs Cochabamba Crushers` relabels both
-team tabs and selects `Summary`.
+**The Schedule view is on the roster table alone**, there being nothing in a
+stream of things that have happened for a fixture list to replace, and it reads
+the **same fortnight the app's own copy of the mode reads**: that data takes no
+parameters at all — one window for every club, sliced per reader — so App holds
+the one read and this page asks for it (`onNeedSchedule`) rather than making a
+second. Each surface keeps its own span, since 7 or 14 is a slice of a window
+already in hand.
 
-**Which side is open is deliberately not in the URL**, unlike `lt=` and `mp=`
-above it. It is the footing the player page's own tabs are on: a sub-selection
-*within* a thing the URL already names (`mup=` names the matchup), and one that
-resets on the parameter that does. `mup=` is what a shared link needs to open on the right matchup, and
-it does.
+**What a team page does *not* carry is the `Starters` filter**, and that is a
+scope line rather than an oversight: that control reads the day-by-day lineup
+map, which the app has for the reader's own team and no route returns for
+anybody else's. It would be a server change to add, and the page is honest
+without it — the slot chip on every row says who was in the lineup on the day
+the span ends.
 
-**The label is the team's name, truncated rather than abbreviated.** ESPN's
-`abbrev` is manager-chosen and often opaque (`HOME`, `PIRA`), where the first
-dozen characters of a real name are recognisable at a glance and the whole of it
-is on the tab's `title`. The truncation is on a **span inside the tab** rather
-than on the tab: a tab is `inline-flex`, and `text-overflow` does not apply to a
-flex container's anonymous inline content, so before that span a 17-character
-name clipped mid-letter at 124px of 137 with no ellipsis to say it had.
+**The chrome sits on the page rather than in the pinned head**, which holds the
+way back and the week alone: this row belongs to two of the three pages and
+would be an empty band on the third. **The two icon buttons travel as a pair**
+(`.mup-tool-icons`), which is `.view-bar-tabs`' own rule one page down — a group
+breaks to the next line whole. Measured at 390 the four groups come to 382
+against the 358 the box has, so the row wraps, and left loose it wrapped the
+*date* button by itself: a lone 36px square under two full-width switches with
+its range bubble hanging over nothing.
 
-**A tab is as wide as what is written on it, within bounds** — where it started
-out sharing the card column between the two team tabs (`flex: 1 1 0`), which
-made each of them **351px at 1200**: a segmented control the width of a
-paragraph with a short name adrift in the middle of its own pill, and nothing
-like the rest of `.view-switch`, every other member of which hugs its label. The
-strip is `width: fit-content` and centred over the card it selects, and the two
-team labels carry a **min of 4.5em and a max of 12em**. The max is what stops
-one manager's essay of a team name setting the width of the strip (12em is about
-twenty characters of this face, longer than every name on the live league); the
-min is what stops the other end, since shrunk to a 320px screen the two would
-otherwise race each other to nothing. **`Summary` carries neither and does not
-shrink at all**: it is a word of ours rather than a name of unknown length, it
-is the tab a reader lands on and has to be able to find, and letting it give way
-clipped it to `Summ…` at 320 while the two names beside it kept their minimum.
-
-Measured, `Baldy's Bozos · Summary · Sho me the Parlay`: **112 / 83 / 137** from
-480px up (a 346px strip centred in the window, against 351 / 83 / 351 filling
-800), shrinking to 106 / 83 / 128 at 375 and 81 / 83 / 97 at 320 — one row at
-every width, with **0 horizontal overflow of the page body** at each.
+**One trap worth recording**: `.date-control` is `display: none` by default and
+undone only by `.app.date-open`, which is a class on the app's own shell and
+reaches nothing inside this overlay. Measured before the rule that fixes it, the
+row rendered at **0 × 0** with `flex: 1 1 100%` computing correctly and nothing
+on screen — a control that is laid out and invisible, which no amount of reading
+the flex rules would have found.
 
 **The slot chip says whose lineup it is.** `FantasySlot` gained an optional
 `owner` — the team name in the possessive, null for the reader's own — because
 the chip has read `In your fantasy lineup` since it was written and over a
 leaguemate's bench that is a lie of exactly the kind the `day` field was added
 to stop for a day. A name already ending in `s` takes the bare apostrophe
-(`Baldy's Bozos’`), which a plain `+ "'s"` got wrong on the live league and
-which read as a typo on every chip of that manager's page. Every other caller
-passes nothing and the chip reads exactly as it always has — checked on the
-reader's own Roster view: `In your fantasy lineup today at C`.
+(`Baldy's Bozos’`), which a plain `+ "'s"` got wrong on the live league. Every
+other caller passes nothing and the chip reads exactly as it always has —
+checked on the reader's own Roster view: `In your fantasy lineup today at C`.
 
 **`startedDays`/`rangeDays` are null on a team page**, which is honest rather
 than lazy: that count comes off a per-day lineup map and this page reads one
-day's roster (the period's last, which is what a slot is a fact about). The chip
+day's roster (the span's last, which is what a slot is a fact about). The chip
 then simply does not claim a count, which is what it already does on a
 single-day range and against an older server.
 
 **The two reads are one `Promise.all`** — the report the tables draw and the
 roster the chips come from — because they are one page, and drawing the first
 without the second would put every chip on it a beat after the rows they sit in.
-A failed roster read costs the chips and not the page (it resolves to null
-rather than rejecting the pair). And **no ref guard on the effect**, which is
-the rule the `Rosters` toggle below had to learn the hard way: the dependency
-array is the whole of the guard, and marking a request answered before it is
-answered is what leaves a spinner up for ever under StrictMode.
+A failed roster read costs the chips and not the page. And **no ref guard on the
+effect**: the dependency array is the whole of the guard, and marking a request
+answered before it is answered is what leaves a spinner up for ever under
+StrictMode (below).
 
-**The server change is one optional parameter.** `/api/report?source=fantasy`
-takes a **`teamId`**, absent meaning the reader's own — which is what every
-caller but this one asks for. `fantasyWatchlist` reads that team out of the same
-`getOwnership` payload it already reads the reader's own out of (that call
-returns *every* team's roster in the league, and has since free agency was first
-read as the complement of ownership), so the per-day rosters, the held days and
-the roster order all come for free and a leaguemate's week is built by exactly
-the code that builds your own. A team id is not a credential, so the check that
-matters is **membership**: an id this league has no team for is a 409 rather
-than an empty roster, which would read as a manager who had dropped everybody.
-Measured through the route: `teamId=999` → `409 No team 999 in this league.`,
-`teamId=abc` → `400 teamId must be a positive integer`.
+**The page is keyed on the team alone**, so the span, the kind and the reading
+change what is drawn without remounting it — only crossing to the other manager
+is a fresh page rather than one team's rows under the other's name while the
+read is out.
+
+### The server change is one optional parameter
+
+`/api/report?source=fantasy` takes a **`teamId`**, absent meaning the reader's
+own — which is what every caller but this one asks for. `fantasyWatchlist` reads
+that team out of the same `getOwnership` payload it already reads the reader's
+own out of (that call returns *every* team's roster in the league, and has since
+free agency was first read as the complement of ownership), so the per-day
+rosters, the held days and the roster order all come for free and a leaguemate's
+week is built by exactly the code that builds your own. A team id is not a
+credential, so the check that matters is **membership**: an id this league has
+no team for is a 409 rather than an empty roster, which would read as a manager
+who had dropped everybody. Measured through the route: `teamId=999` → `409 No
+team 999 in this league.`, `teamId=abc` → `400 teamId must be a positive
+integer`.
 
 **What it costs: a report per team page, and the second one is free.** Measured
 against the live 12-team league over the live week (7 days, 27 players):
 **4.24s** for a team nothing had read before and **10ms** warm — so a reader
 crossing between the two managers and back pays once, and the block wait behind
-`WAIT_DELAY` never appears on the way back. The wait names what is being read
-(`Reading this team's week`), as every wait in the app does.
+`WAIT_DELAY` never appears on the way back.
 
-**And the `Rosters` toggle went**, the team pages being what it was reaching
-for: see *`Rosters` is gone, because the team tabs are it* below.
-
-**Measured on the live 12-team league at 320 / 390 / 640 / 1200 / 1920**, on the
-live week's `Baldy's Bozos vs Sho me the Parlay`: the strip is **one row at
-every width** (tabs 89/83/89 at 320, 124/83/124 at 390, 351/83/351 from 1200)
-with **no horizontal overflow of the page body** at any of them, on the Summary
-tab and on both team pages. A team page draws its head, its kind switch, a
-**14-row** batting table with 13 slot chips (the fourteenth row being a man held
-earlier in the week and off the period's last roster, which is the report's own
-range-of-rosters rule and correctly chips nothing) and a **30-item** feed that
-`Load more` takes to 50; the kind switch takes the table to the pitching
-columns (`IP · H · R · ER · BB · K · HR · W · SV · HLD · ERA`) and the stream to
-the outings. A name in either opens the player page over it
-(`?…player=batter-668939`, `.details-view` at z-index 50). Switching the matchup
-picker relabels both team tabs and returns to `Summary`. **The bye case** draws
-two tabs (`Summary`, `Brian&Tom’s Excellent
-Adventure`) and the team page under the second of them. **The full-page mode
-comes along with the table**, being the table's own: the corner button takes it
-to `z-index: 45` with the kind switch in `.expanded-chrome`, and one press of
-Escape leaves it standing on the team page. And the reader's own
-Roster and Feed views are untouched — 12 rows, the four-item legend, and a chip
-reading `In your fantasy lineup today at C`.
-
-**Bundle: 509.85 → 513.68 KB of JS** (150.28 → 151.22 gzipped) and **121.96 →
-122.62 KB of CSS** (21.62 → 21.71) — 3.8KB and 0.7KB raw, 0.9KB and 0.1KB over
-the wire, for a component, a tab strip, a route parameter and the paragraphs
-above restated where the rules are.
-
-**And the round that followed it gives most of that back: 513.68 → 512.11 KB of
-JS** (151.22 → 150.86 gzipped) and **122.62 → 121.41 KB of CSS** (21.71 →
-21.56), both *down* — which is what dropping the `Rosters` component and its
-~90 lines of CSS costs against a bounded tab strip, a scrolling League strip and
-one layout effect.
+**And a stale dev server is what "both teams show my roster" looks like**, which
+is worth recording because it will happen again: an old server ignores an
+unknown query param and answers with the reader's own team, so the two pages
+draw the same roster with nothing on screen to say why. Reproduced against a
+process that predated the parameter; the current build answers three teams with
+three rosters.
 
 ### `Rosters` is gone, because the team tabs are it
 
@@ -946,10 +968,15 @@ feed 207/159/159/159/111/115/115/115, research 347/255/255/207/159/207/207/161).
   the two names are unclipped from 900.
 - **The picker moves the matchup**: option 0 gives `mup=103` and
   `The Homewreckers / THE BRONX FLOATERS`, option 4 `mup=107` and the reader's
-  own. A `mup=999999` falls back to the reader's own with no error.
+  own. A `mup=999999` falls back to the reader's own with no error. *(The picker
+  is gone with the tab, and so is that fallback — an id this period has no row
+  for now draws an honest empty state with a Back button rather than quietly
+  showing a different matchup. Measured: `That matchup isn't in week 19`.)*
 - **The door works**: pressing the third card's `Breakdown →` on the Scoreboard
   writes `mup=104`, selects the Matchup tab and draws `Pirates Cove / Sho me the
-  Parlay`.
+  Parlay`. *(It opens the page over the board now; measured, the second card's
+  door writes `mup=111` and draws `The Homewreckers · Summary · Cochabamba
+  Crushers` at `z-index: 48`.)*
 - **Stepping the period clears it**: `‹` from `mp=18&mup=104` gives `mp=17` with
   no `mup`, on the reader's own matchup for that week.
 - **Rosters**: 28 and 25 players, 20 and 19 in a lineup, 53 of the 53 names a
@@ -963,6 +990,46 @@ feed 207/159/159/159/111/115/115/115, research 347/255/255/207/159/207/207/161).
 121.64 KB of CSS** (20.76 → 21.54) — 9.8KB and 4.8KB raw, 2.4KB and 0.8KB over
 the wire, for a tab, a route, a component and the paragraphs above restated
 where the rules are.
+
+### Measured — the matchup page
+
+**Driven against the built client and the live 12-team league at 320 / 390 /
+640 / 1200 / 1920**, on the live week (19):
+
+- **0 horizontal overflow of the page body and of the overlay's own scroller at
+  every width**, on the Summary page and on both team pages.
+- **The strip**: `Baldy's Bozos · Summary · Sho me the Parlay` at 87/83/104 at
+  320 and 112/83/137 from 390 up, one row at each.
+- **A team page**: the tools row is `Roster · Feed`, `Batters · Pitchers`,
+  Schedule and the date button reading **`Today`** — one row from 640 up and two
+  below it, the two icon buttons paired on the second. 13 rows with **13 slot
+  chips**, and the feed 18 items.
+- **The date row** opens on a line of its own under the button, offering
+  **`Matchup · Today · Tomorrow · Yesterday · This week · Last 15 days`**;
+  picking `Matchup` takes the label to `Matchup`, the table to **14 rows** (the
+  week's union of rosters against today's 13) and closes the row.
+- **The Schedule view** swaps the stat columns for `G · Today 8/16 · Mon 8/17 ·
+  …` with its `Next 7 / Next 14` spans, and is absent on the Feed tab.
+- **The stack**: a name on a team table opens the player page at **50** over the
+  matchup at **48** with the matchup `inert`; one press of Escape closes the
+  player, a second closes the matchup, leaving `mup=` cleared, the scoreboard's
+  10 cards behind it and **0 `inert`** anywhere.
+- **Back** does the same as that second press.
+- **A bye** draws two pages (`Summary`, `Brian&Tom's Excellent Adventure`) and
+  its card's own `Team →` door.
+- **Legacy links**: `?lt=matchup` opens the Scoreboard with `lt` dropped;
+  `?lt=matchup&mup=110` opens the page over it.
+- **The app's own date control is untouched** by the extraction, checked at 1200
+  and 390: the toggle reads `Today` with an `8/16` bubble, the row opens on its
+  own line with the five presets and the range picker, picking `Yesterday`
+  writes `?preset=Yesterday` and closes the row, and below 640 the pills give
+  way to the `<select>`.
+
+**Bundle: 512.11 → 512.20 KB of JS** (150.86 → 151.29 gzipped) and **121.41 →
+122.47 KB of CSS** (21.56 → 21.78) — **90 bytes** of JS and 1.1KB of CSS raw,
+0.4KB and 0.2KB over the wire. The JS is flat because the change is mostly a
+*move*: a tab became a page, and extracting the date controls took two copies of
+that markup down to one.
 
 ### The Transactions tab wears a dot when there are moves you haven't seen
 

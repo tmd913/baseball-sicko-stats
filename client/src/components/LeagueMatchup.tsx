@@ -1,38 +1,69 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { answersEscape, useLockBodyScroll, useOverlayFocus } from '../hooks';
+import { DialogLayerContext } from './Modal';
+import { DateRow, DateToggle } from './DateControls';
+import type { DatePreset } from './DateControls';
 import LeagueTeam from './LeagueTeam';
+import { ScheduleSpanTabs, ScheduleToggle } from './ScheduleControl';
+import { buildScheduleIndex } from './schedule';
+import type { ScheduleSpan } from './schedule';
 import { catScore, categoryGroups, fmtValue, prettyDate, record, TeamLogo } from './LeagueView';
 import type {
   EspnCategory,
-  EspnMatchup,
   EspnMatchupSide,
   EspnScoreboard,
   EspnStandingsTeam,
+  PlayerKind,
+  ScheduleWindow,
 } from '../types';
 
 /**
- * The **Matchup** tab: one matchup read the way a manager reads one, and any
- * matchup in the league rather than only the reader's own.
+ * One matchup, as a **full-screen page over the League view** rather than a tab
+ * inside it.
  *
- * **Why this is a page and not the scoreboard card enlarged.** The Scoreboard
- * answers *how is everybody doing* — ten cards, each a headline and a category
- * line squeezed into five columns a side — and it is read by scanning. This
- * answers *how am I doing against him*, which is read one category at a time,
- * down: is he beating me in saves, by how much, and is it worth chasing. Those
- * are two questions about the same numbers and they want two shapes, which is
- * the same argument that made Rankings its own tab rather than a block under
- * the scoreboard.
+ * **Why it left the tab row.** It was the League view's first tab, and it did
+ * not belong there: the other three — Scoreboard, Rankings, Transactions — are
+ * three readings of *the league*, where this is one row of the first of them
+ * opened up. A tab row is a set of siblings, and one of the four was a
+ * different depth from the other three; it also meant the strip carried a page
+ * whose subject the strip could not name (which matchup?), and answered it with
+ * a dropdown of ten pairs of team names sitting above the thing it selected.
  *
- * **So the categories run down the middle and each side's figure is beside its
- * own name**, left and right. That is what makes the comparison a glance rather
- * than an arithmetic: the two numbers a reader is comparing are on one line
- * with the thing they measure between them, where the scoreboard's card puts
- * them in two rows several categories apart and asks the eye to hold a column.
+ * As a page opened *from* a scoreboard card, all of that goes: **the card is
+ * what names the matchup**, the way a row of the research board names the
+ * player its page opens on, and the way back is a Back button rather than a
+ * control that has to be found again. It is the shape `PlayerDetails` has, and
+ * it takes that shape's whole vocabulary — a fixed box with its own scroller,
+ * the body pinned behind it, the background `inert`, focus in on open and back
+ * out on close, and Escape undoing exactly one thing.
  *
- * **Batters first, then pitchers**, in the same order as the Scoreboard and the
- * Rankings table — `categoryGroups`, which is the one place in the client that
- * splits them and reads the server's own `side`/`order` rather than guessing
- * from a label (`H` is a hit and a hit allowed; see `LeagueView.tsx`).
+ * **No week selector and no matchup picker.** Both were controls over *which
+ * matchup*, which is a question this page no longer asks: it is opened on one,
+ * from the board that lists them all. The week is printed rather than
+ * navigable, because the numbers on the page are meaningless without it and
+ * because a live week's totals cover the days played so far — the arrows are
+ * back on the Scoreboard, which is the page about which week.
+ *
+ * **Three pages inside it**: the away team, the comparison, the home team —
+ * two teams with the comparison between them, which is the shape of the thing
+ * being read and is the same arrangement each category has on the card below.
+ * Summary is the middle one and the default.
  */
+
+/**
+ * The layer this overlay paints on.
+ *
+ * **Below the player page (50), above the full-page table box (45)** — which is
+ * what makes the stack behave without a single special case: a player page
+ * opened from a team page's table sits over this one and answers Escape first,
+ * and a dialog opened *inside* here (a feed item's at-bat card) takes 49 from
+ * the context below, which is above this box and below that page. The how-to
+ * and league-settings overlays keep their 60 and cover everything.
+ */
+const MATCHUP_LAYER = 48;
+
+/** Which of the three pages of a matchup is on screen. */
+type MatchupSideTab = 'away' | 'summary' | 'home';
 
 /** The winner of one category, from the two figures. `outcome`'s twin in
  *  `LeagueView.tsx` and deliberately the same arithmetic: ESPN fills its own
@@ -45,15 +76,6 @@ function winnerOf(
   if (typeof left !== 'number' || typeof right !== 'number') return null;
   if (left === right) return 'tie';
   return (cat.lowerBetter ? left < right : left > right) ? 'left' : 'right';
-}
-
-/** How a matchup reads in a picker: "Pirates Cove vs The Homewreckers". */
-function matchupLabel(
-  m: EspnMatchup,
-  teams: Map<number, EspnStandingsTeam>,
-): string {
-  const name = (id: number) => teams.get(id)?.name ?? `Team ${id}`;
-  return m.away ? `${name(m.away.teamId)} vs ${name(m.home.teamId)}` : `${name(m.home.teamId)} — bye`;
 }
 
 function SideHead({
@@ -81,126 +103,174 @@ function SideHead({
   );
 }
 
-/**
- * Which of the three pages of a matchup is on screen: one manager's team, the
- * category comparison, or the other manager's.
- *
- * **Summary is the middle one and the default**, which is the whole shape of
- * the strip: a matchup is two teams with a comparison between them, so the
- * comparison sits between them here exactly as each category sits between the
- * two figures it names on the page below. Landing on it is the app's own rule
- * that the tab you open on is the question the page is opened with — *how am I
- * doing against him* — with each side's roster one press either way.
- */
-type MatchupSideTab = 'away' | 'summary' | 'home';
-
-export default function LeagueMatchupTab({
+export default function LeagueMatchupView({
   board,
   matchupId,
-  onMatchup,
-  onPeriod,
+  onClose,
   onOpenDetails,
+  presets,
+  maxDate,
+  today,
+  scheduleWindow,
+  scheduleLoading,
+  onNeedSchedule,
 }: {
   board: EspnScoreboard;
-  matchupId: number | null;
-  onMatchup: (id: number) => void;
-  onPeriod: (period: number) => void;
-  /** Open a player's page by the app's `${kind}-${id}` key — which is how the
-   *  two team pages' tables and feeds name a player, and what every other
-   *  route into that page uses. */
+  matchupId: number;
+  onClose: () => void;
   onOpenDetails: (key: string) => void;
+  /** The app's own named spans, handed down rather than rebuilt here — one
+   *  definition of what `Today` means, and the matchup's own span is added to
+   *  them below. */
+  presets: DatePreset[];
+  maxDate: string;
+  today: string;
+  /** Every club's next fortnight, read once per session by App and shared: the
+   *  Schedule view's own data takes no parameters, so a second read here would
+   *  buy a wait and nothing else. Null until somebody asks for it. */
+  scheduleWindow: ScheduleWindow | null;
+  scheduleLoading: boolean;
+  onNeedSchedule: () => void;
 }) {
+  useLockBodyScroll();
+  const viewRef = useRef<HTMLDivElement | null>(null);
+  useOverlayFocus(viewRef);
+
+  const [sideTab, setSideTab] = useState<MatchupSideTab>('summary');
+  const [reading, setReading] = useState<'roster' | 'feed'>('roster');
+  const [kind, setKind] = useState<PlayerKind>('batter');
+  const [dateOpen, setDateOpen] = useState(false);
+  const [scheduleSpan, setScheduleSpan] = useState<ScheduleSpan | null>(null);
   /**
-   * **The chosen side is stored against the matchup it was chosen for**, so
-   * changing matchup or stepping a week lands back on Summary rather than on
-   * "away" — which by then names a different manager, and would be the strip
-   * silently pointing somewhere else. Derived rather than reset in an effect:
-   * an effect would render the old side for a frame first.
+   * **The days a team page reports on, and they start at today** rather than at
+   * the matchup's week.
+   *
+   * That is the reading a manager arrives with — *what is his team doing right
+   * now* — and it is what the app's own roster views open on, which is the
+   * whole point of these pages being those views. The week is one press away as
+   * a preset of its own (below), and picking it makes every row the arithmetic
+   * behind a category on the Summary page.
    */
-  const [sideChoice, setSideChoice] = useState<{ id: number; side: MatchupSideTab } | null>(null);
+  const [span, setSpan] = useState<{ start: string; end: string; preset: string | null }>({
+    start: today,
+    end: today,
+    preset: 'Today',
+  });
+
+  /**
+   * The app's presets plus **this matchup's own span**, which is the one named
+   * range that means something only here: `Matchup` is the days the categories
+   * next door were summed over — for a week still being played, the days played
+   * so far, so the two agree rather than the table quietly including a day the
+   * score does not.
+   *
+   * It leads, being the reason a reader is on this page at all, and it is
+   * absent where the period has no dates to name — an anchor the schedule could
+   * not be read for, where offering a span with no days in it would be worse
+   * than not offering it.
+   */
+  const spanPresets = useMemo<DatePreset[]>(
+    () =>
+      board.start && board.end
+        ? [{ label: 'Matchup', start: board.start, end: board.end }, ...presets]
+        : presets,
+    [board.start, board.end, presets],
+  );
+
   const teams = useMemo(() => new Map(board.teams.map((t) => [t.id, t])), [board.teams]);
   const groups = useMemo(() => categoryGroups(board.categories), [board.categories]);
+  const matchup = board.matchups.find((m) => m.id === matchupId) ?? null;
 
-  // Which matchup. A `mup=` naming one this period has no row for — an older
-  // link, or the reader stepping back a week — falls back to the reader's own,
-  // then to the first, rather than to an empty page: the same direction every
-  // parameter in this app fails in.
-  const mine = useMemo(
+  // The Schedule view's index, or null while the mode is off or its one read is
+  // still out — "the mode is the presence of an index rather than a flag beside
+  // one", which is what makes "on but still reading" impossible to draw.
+  const scheduleIndex = useMemo(
     () =>
-      board.myTeamId == null
-        ? null
-        : (board.matchups.find(
-            (m) => m.home.teamId === board.myTeamId || m.away?.teamId === board.myTeamId,
-          ) ?? null),
-    [board],
+      scheduleSpan !== null && scheduleWindow
+        ? buildScheduleIndex(scheduleWindow, scheduleSpan)
+        : null,
+    [scheduleSpan, scheduleWindow],
   );
-  const matchup =
-    board.matchups.find((m) => m.id === matchupId) ?? mine ?? board.matchups[0] ?? null;
 
-  const span =
-    board.start && board.end
-      ? board.start === board.end
-        ? prettyDate(board.start)
-        : `${prettyDate(board.start)} – ${prettyDate(board.end)}`
-      : null;
+  /**
+   * Escape closes this page — **once**, and only when nothing is stacked above
+   * it. `answersEscape` marks the press so a ladder unwinds one rung per key,
+   * and the subtree test in front of it is `PlayerDetails`' own: a full-page
+   * table box lives *inside* this overlay and answers for itself.
+   */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (viewRef.current?.querySelector('.is-expanded')) return;
+      if (!answersEscape(e, viewRef.current)) return;
+      onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
 
-  const head = (
-    <div className="lg-head">
-      <div className="lg-period">
-        <button
-          type="button"
-          className="lg-nav"
-          disabled={board.prevPeriod == null}
-          onClick={() => board.prevPeriod != null && onPeriod(board.prevPeriod)}
-          aria-label="Previous matchup period"
-          title="Previous matchup period"
-        >
-          ‹
-        </button>
-        <span className="lg-period-label">
-          <span className="lg-period-n">Week {board.matchupPeriod}</span>
-          {span && <span className="lg-period-dates">{span}</span>}
+  // Turning the Schedule view on is what asks App for the fortnight; it is one
+  // read per session, shared with the roster views' own copy of this mode.
+  useEffect(() => {
+    if (scheduleSpan !== null) onNeedSchedule();
+  }, [scheduleSpan, onNeedSchedule]);
+
+  // Crossing between the three pages puts this one back at the top: a page is a
+  // different reading of the matchup, not a place in one — the rule the player
+  // page's own tabs follow.
+  useEffect(() => {
+    viewRef.current?.scrollTo({ top: 0 });
+  }, [sideTab, reading]);
+
+  const period = (
+    <span className="mup-week">
+      <span className="mup-week-n">Week {board.matchupPeriod}</span>
+      {board.start && board.end && (
+        <span className="mup-week-dates">
+          {board.start === board.end
+            ? prettyDate(board.start)
+            : `${prettyDate(board.start)} – ${prettyDate(board.end)}`}
         </span>
-        <button
-          type="button"
-          className="lg-nav"
-          disabled={board.nextPeriod == null}
-          onClick={() => board.nextPeriod != null && onPeriod(board.nextPeriod)}
-          aria-label="Next matchup period"
-          title="Next matchup period"
-        >
-          ›
-        </button>
-      </div>
+      )}
       <span className={`lg-state${board.live ? ' lg-state-live' : ''}`}>
         {board.live ? 'Live' : 'Final'}
       </span>
+    </span>
+  );
+
+  const head = (
+    <div className="mup-chrome">
+      <div className="mup-bar">
+        {/* The way back, and the only one this page needs: it was opened from a
+            card on the Scoreboard and returns to it. `.details-back`'s own
+            shape, so the two overlays leave by the same door. */}
+        <button type="button" className="details-back" onClick={onClose}>
+          ‹ Back
+        </button>
+        {/* Printed rather than navigable. The arrows are the Scoreboard's,
+            which is the page about *which* week; here the week is context the
+            numbers cannot be read without — a live period's totals cover the
+            days played so far, which is why the dates and the state are
+            together. */}
+        {period}
+      </div>
     </div>
   );
 
-  if (board.format === 'standings' || board.format === 'unknown') {
-    return (
-      <>
-        {head}
-        <div className="empty-state">
-          <h3>No matchups in this league</h3>
-          <p>
-            ESPN scores it as <code>{board.scoringType}</code> — there is no matchup to break
-            down. The Rankings tab is the league.
-          </p>
-        </div>
-      </>
-    );
-  }
   if (!matchup) {
     return (
-      <>
-        {head}
-        <div className="empty-state">
-          <h3>No matchups in week {board.matchupPeriod}</h3>
-          <p>ESPN has no schedule for this period yet.</p>
+      <DialogLayerContext.Provider value={MATCHUP_LAYER}>
+        <div ref={viewRef} tabIndex={-1} className="mup-view">
+          {head}
+          <div className="empty-state">
+            <h3>That matchup isn&rsquo;t in week {board.matchupPeriod}</h3>
+            <p>
+              ESPN has no row for it — the link may be for another week. Go back and pick one off
+              the scoreboard.
+            </p>
+          </div>
         </div>
-      </>
+      </DialogLayerContext.Provider>
     );
   }
 
@@ -213,119 +283,173 @@ export default function LeagueMatchupTab({
         ? String(Math.round(side.points * 100) / 100)
         : '—'
       : catScore(side);
+
   /**
-   * **The three pages of a matchup**, away on the left and home on the right —
-   * the same order the card below puts them in, so the strip and the comparison
-   * cannot disagree about which side is which.
-   *
-   * The team pages are a **week of games**, so they are offered only when the
-   * period has days to draw them over: with no anchor to date it by there is no
-   * week, and a tab leading to an empty one would be worse than a tab that
-   * isn't there. That is the rule the Rankings tab's own span strip follows for
-   * a half with no matchup period in it.
+   * **The three pages**, away on the left and home on the right — the same
+   * order the card below puts them in, so the strip and the comparison cannot
+   * disagree about which side is which. A bye has one team and so two pages.
    */
   const sides: { tab: MatchupSideTab; label: string; title: string }[] = [];
-  const canReadTeams = Boolean(board.start && board.end);
-  if (canReadTeams && away) {
-    const t = teams.get(away.teamId);
+  const teamTitle = (id: number) =>
+    `${teams.get(id)?.name ?? `Team ${id}`} — his roster and his feed`;
+  if (away) {
     sides.push({
       tab: 'away',
-      label: t?.name ?? `Team ${away.teamId}`,
-      title: `${t?.name ?? `Team ${away.teamId}`} — this week's roster and feed`,
+      label: teams.get(away.teamId)?.name ?? `Team ${away.teamId}`,
+      title: teamTitle(away.teamId),
     });
   }
   sides.push({ tab: 'summary', label: 'Summary', title: 'The two teams, category by category' });
-  if (canReadTeams) {
-    const t = teams.get(home.teamId);
-    sides.push({
-      tab: 'home',
-      label: t?.name ?? `Team ${home.teamId}`,
-      title: `${t?.name ?? `Team ${home.teamId}`} — this week's roster and feed`,
-    });
-  }
-  const sideTab: MatchupSideTab =
-    sideChoice && sideChoice.id === matchup.id && sides.some((s) => s.tab === sideChoice.side)
-      ? sideChoice.side
-      : 'summary';
-  const sideTeamId =
-    sideTab === 'away' ? away?.teamId ?? null : sideTab === 'home' ? home.teamId : null;
+  sides.push({
+    tab: 'home',
+    label: teams.get(home.teamId)?.name ?? `Team ${home.teamId}`,
+    title: teamTitle(home.teamId),
+  });
+  const active = sides.some((s) => s.tab === sideTab) ? sideTab : 'summary';
+  const sideTeamId = active === 'away' ? away?.teamId ?? null : active === 'home' ? home.teamId : null;
+
+  /**
+   * A team page's own controls — **the roster views' controls, because a team
+   * page is those views**. Which reading, which kind, the Schedule view and its
+   * span, and the dates: the same set, drawn from the same components, so a
+   * reader who knows the Roster page knows this one.
+   *
+   * They sit on the page rather than in the pinned head, which holds the way
+   * back and the week alone: this row belongs to two of the three pages and
+   * would be an empty band on the third.
+   */
+  const tools = (
+    <div className={`mup-tools${dateOpen ? ' date-open' : ''}`}>
+      <div className="view-switch mup-reading" role="tablist" aria-label="Roster or feed">
+        {(['roster', 'feed'] as const).map((r) => (
+          <button
+            key={r}
+            type="button"
+            role="tab"
+            aria-selected={reading === r}
+            className={`view-tab${reading === r ? ' active' : ''}`}
+            onClick={() => setReading(r)}
+          >
+            {r === 'roster' ? 'Roster' : 'Feed'}
+          </button>
+        ))}
+      </div>
+      <div className="kind-switch" role="tablist" aria-label="Batters or pitchers">
+        {(['batter', 'pitcher'] as const).map((k) => (
+          <button
+            key={k}
+            type="button"
+            role="tab"
+            aria-selected={kind === k}
+            className={`kind-tab${kind === k ? ' active' : ''}`}
+            onClick={() => setKind(k)}
+          >
+            {k === 'batter' ? 'Batters' : 'Pitchers'}
+          </button>
+        ))}
+      </div>
+      {/* **The two icon buttons travel as a pair**, which is `.view-bar-tabs`'
+          own rule one page down: a group breaks to the next line whole rather
+          than one member of it going alone. Measured at 390, the four groups
+          come to 382 against the 358 this box has, so the row wraps — and left
+          loose it wrapped the *date* button by itself, a lone 36px square under
+          two full-width switches with its range bubble hanging over nothing.
+          Paired, the second line is the two icons together. */}
+      <div className="mup-tool-icons">
+        {/* The Schedule view, on the roster table alone — it swaps that table's
+            stat columns for a column per day, and there is nothing in a stream
+            of things that have happened for a fixture list to replace. */}
+        {reading === 'roster' && (
+          <ScheduleToggle
+            on={scheduleSpan !== null}
+            loading={scheduleLoading}
+            onToggle={() => setScheduleSpan((s) => (s === null ? 7 : null))}
+          />
+        )}
+        <DateToggle
+          open={dateOpen}
+          onToggle={() => setDateOpen((v) => !v)}
+          start={span.start}
+          end={span.end}
+          activePreset={span.preset}
+        />
+      </div>
+      {/* Its own group, so a span strip that only exists while the mode is on
+          cannot push the pair above it about. */}
+      {reading === 'roster' && scheduleSpan !== null && (
+        <ScheduleSpanTabs span={scheduleSpan} onChange={setScheduleSpan} />
+      )}
+      {dateOpen && (
+        <DateRow
+          presets={spanPresets}
+          activePreset={span.preset}
+          start={span.start}
+          end={span.end}
+          max={maxDate}
+          onPick={(p) => {
+            setSpan({ start: p.start, end: p.end, preset: p.label });
+            setDateOpen(false);
+          }}
+          onRange={(s, e) => setSpan({ start: s, end: e, preset: null })}
+        />
+      )}
+    </div>
+  );
 
   return (
-    <>
-      {head}
+    <DialogLayerContext.Provider value={MATCHUP_LAYER}>
+      <div ref={viewRef} tabIndex={-1} className="mup-view">
+        {head}
 
-      {/* Any matchup in the league, which is what this tab is *for* — the
-          Scoreboard's own cards press through to here, and the picker is how
-          you get to one you did not press. A native select rather than a row of
-          pills: ten pairs of team names is a list, and the app already answers
-          "more options than fit a row" with a select in four other places. */}
-      <div className="mup-controls">
-        <label className="mup-pick">
-          <span className="mup-pick-label">Matchup</span>
-          <select
-            className="date-presets-select mup-select"
-            value={matchup.id}
-            onChange={(e) => onMatchup(Number(e.target.value))}
-          >
-            {board.matchups.map((m) => (
-              <option key={m.id} value={m.id}>
-                {matchupLabel(m, teams)}
-                {mine && m.id === mine.id ? ' — yours' : ''}
-              </option>
+        {sides.length > 1 && (
+          <div className="view-switch mup-sides" role="tablist" aria-label="Matchup">
+            {sides.map((s) => (
+              <button
+                key={s.tab}
+                type="button"
+                role="tab"
+                aria-selected={s.tab === active}
+                className={`view-tab${s.tab === active ? ' active' : ''}${
+                  s.tab === 'summary' ? '' : ' mup-side-team'
+                }`}
+                title={s.title}
+                onClick={() => setSideTab(s.tab)}
+              >
+                {/* The label is a span of its own so it can ellipsize: a tab is
+                    `inline-flex`, and `text-overflow` has no effect on a flex
+                    container's anonymous item — a 17-character team name
+                    clipped mid-letter with no ellipsis to say it had. */}
+                <span className="mup-side-label">{s.label}</span>
+              </button>
             ))}
-          </select>
-        </label>
-      </div>
+          </div>
+        )}
 
-      {/* Two teams with the comparison between them, which is the shape of the
-          thing being read. Drawn only where there is a second page to reach —
-          a bye has one team, and a period with no dates has no week to draw
-          either of them over. */}
-      {sides.length > 1 && (
-        <div className="view-switch mup-sides" role="tablist" aria-label="Matchup">
-          {sides.map((s) => (
-            <button
-              key={s.tab}
-              type="button"
-              role="tab"
-              aria-selected={s.tab === sideTab}
-              className={`view-tab${s.tab === sideTab ? ' active' : ''}${
-                s.tab === 'summary' ? '' : ' mup-side-team'
-              }`}
-              title={s.title}
-              onClick={() => setSideChoice({ id: matchup.id, side: s.tab })}
-            >
-              {/* The label is a span of its own so it can ellipsize: a tab is
-                  `inline-flex`, and `text-overflow` has no effect on a flex
-                  container's anonymous item — measured on the live league, a
-                  17-character team name clipped hard at 124px of 137 with no
-                  ellipsis to say it had. The span is a block container for its
-                  own text and truncates properly. */}
-              <span className="mup-side-label">{s.label}</span>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {sideTeamId !== null && board.start && board.end ? (
-        <LeagueTeam
-          /* Keyed on the team and the week, so crossing from one manager to the
-             other is a fresh page rather than one team's rows under the other's
-             name while the read is out. */
-          key={`${sideTeamId}:${board.start}:${board.end}`}
-          teamId={sideTeamId}
-          team={teams.get(sideTeamId)}
-          start={board.start}
-          end={board.end}
-          onOpenDetails={onOpenDetails}
-        />
-      ) : (
-        <>
-          {!away ? (
-          // A bye is a real shape rather than a failed read — the live league's
-          // first playoff round is two matchups and eight of them — so it says so
-          // plainly. The roster view still applies: there is one team, and a
-          // reader on a bye week has more use for it than for anything else here.
+        {sideTeamId !== null ? (
+          <>
+            {tools}
+            <LeagueTeam
+              /* Keyed on the team alone: the span, the kind and the reading are
+                 the chrome's and must not remount the page — only crossing to
+                 the other manager is a fresh page rather than one team's rows
+                 under the other's name while the read is out. */
+              key={sideTeamId}
+              teamId={sideTeamId}
+              team={teams.get(sideTeamId)}
+              start={span.start}
+              end={span.end}
+              kind={kind}
+              reading={reading}
+              schedule={reading === 'roster' ? scheduleIndex : null}
+              onOpenDetails={onOpenDetails}
+            />
+          </>
+        ) : !away ? (
+          // A bye is a real shape rather than a failed read — a 12-team
+          // league's first playoff round is two matchups and eight of them — so
+          // it says so plainly. The team page still applies: there is one team,
+          // and a reader on a bye week has more use for it than for anything
+          // else here.
           <div className="mup-card">
             <div className="mup-heads mup-heads-bye">
               <SideHead
@@ -370,8 +494,8 @@ export default function LeagueMatchupTab({
                     const l = away.scores[c.statId];
                     const r = home.scores[c.statId];
                     const w = winnerOf(l, r, c);
-                    const state = (side: 'left' | 'right') =>
-                      w === null ? '' : w === side ? ' mup-win' : w === 'tie' ? ' mup-tie' : ' mup-loss';
+                    const state = (s: 'left' | 'right') =>
+                      w === null ? '' : w === s ? ' mup-win' : w === 'tie' ? ' mup-tie' : ' mup-loss';
                     return (
                       <div className="mup-row" key={c.statId}>
                         <span className={`mup-val mup-val-left${state('left')}`}>
@@ -394,8 +518,7 @@ export default function LeagueMatchupTab({
             )}
           </div>
         )}
-        </>
-      )}
-    </>
+      </div>
+    </DialogLayerContext.Provider>
   );
 }
