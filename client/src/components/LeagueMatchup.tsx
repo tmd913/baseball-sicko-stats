@@ -665,6 +665,10 @@ export default function LeagueMatchupView({
    */
   const awayMoves = away ? movesFor(away, transactions, board.start, board.end) : null;
   const homeMoves = movesFor(home, transactions, board.start, board.end);
+  /** Whether the section has anything to say at all beyond a count — which is
+   *  what keeps it on screen for a league ESPN reports no counter for, where
+   *  the two figures are dashes and the lists are the whole of it. */
+  const hasMoves = (awayMoves?.length ?? 0) > 0 || (homeMoves?.length ?? 0) > 0;
 
   /**
    * What the head carries under the Back button: the strip, or — on a bye — the
@@ -1016,26 +1020,27 @@ export default function LeagueMatchupView({
 
             {/* Under the categories, because it is what a manager does *about*
                 them rather than one of them — and at the foot rather than the
-                head for the same reason. */}
-            {(home.acquisitions !== null || away.acquisitions !== null) && (
+                head for the same reason.
+
+                **The counts are in the heading and there is no `Acq` row.**
+                They were a category row of their own — `5/10 · ACQ · 7/10`
+                under a `MOVES` label — which is one row spent on a heading and
+                a subtitle for the same section, and which drew a *category*'s
+                shape around the one figure on this card that is not one:
+                nobody is winning acquisitions, so the row had no bar, no
+                colour and two deliberately empty track cells holding its
+                figures in place. The heading is the row now, exactly as
+                `BATTERS` carries its side's won-lost-tied at the same two
+                edges — one line, the same grid, and the lists start where the
+                row used to. */}
+            {(home.acquisitions !== null || away.acquisitions !== null || hasMoves) && (
               <div className="mup-group mup-acq">
                 <div className="mup-group-head">
-                  <span className="mup-group-label">Moves</span>
-                </div>
-                <div className="mup-row" title="Acquisitions used this matchup period">
-                  <span className="mup-val mup-val-left" title={acqTitle(away)}>
+                  <span className="mup-group-tally" title={acqTitle(away)}>
                     {acqCell(away)}
                   </span>
-                  {/* The two track columns are **empty rather than railed**:
-                      nobody is winning acquisitions, and a rail says a
-                      comparison is being drawn. The cells are still here
-                      because the grid places by order, and without them the
-                      label would land in a track's column and this row's
-                      figures would sit under nothing. */}
-                  <span />
-                  <span className="mup-cat">Acq</span>
-                  <span />
-                  <span className="mup-val mup-val-right" title={acqTitle(home)}>
+                  <span className="mup-group-label">Moves</span>
+                  <span className="mup-group-tally" title={acqTitle(home)}>
                     {acqCell(home)}
                   </span>
                 </div>
