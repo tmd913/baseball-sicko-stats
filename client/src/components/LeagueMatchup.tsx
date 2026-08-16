@@ -6,7 +6,7 @@ import { DateRow, DateToggle } from './DateControls';
 import type { DatePreset } from './DateControls';
 import LeagueTeam from './LeagueTeam';
 import { ScheduleSpanTabs, ScheduleToggle } from './ScheduleControl';
-import { buildScheduleIndex } from './schedule';
+import { buildScheduleIndex, defaultScheduleSpan } from './schedule';
 import type { ScheduleSpan } from './schedule';
 import { catScore, categoryGroups, fmtValue, prettyDate, record, TeamLogo } from './LeagueView';
 import type {
@@ -14,6 +14,7 @@ import type {
   EspnMatchupSide,
   EspnScoreboard,
   EspnStandingsTeam,
+  MatchupWindow,
   PlayerKind,
   ScheduleWindow,
 } from '../types';
@@ -114,6 +115,7 @@ export default function LeagueMatchupView({
   today,
   scheduleWindow,
   scheduleLoading,
+  matchupWindow,
   onNeedSchedule,
 }: {
   board: EspnScoreboard;
@@ -126,11 +128,16 @@ export default function LeagueMatchupView({
   presets: DatePreset[];
   maxDate: string;
   today: string;
-  /** Every club's next fortnight, read once per session by App and shared: the
+  /** Every club's next four weeks, read once per session by App and shared: the
    *  Schedule view's own data takes no parameters, so a second read here would
    *  buy a wait and nothing else. Null until somebody asks for it. */
   scheduleWindow: ScheduleWindow | null;
   scheduleLoading: boolean;
+  /** The league's own two matchup periods — the Schedule view's named spans.
+   *  Shared from App like the window beside it rather than derived from
+   *  `board`, whose `start`/`end` are the *observed* span and truncate at today
+   *  for the week being played (see `espn.ts::getMatchupWindow`). */
+  matchupWindow: MatchupWindow | null;
   onNeedSchedule: () => void;
 }) {
   useLockBodyScroll();
@@ -188,9 +195,9 @@ export default function LeagueMatchupView({
   const scheduleIndex = useMemo(
     () =>
       scheduleSpan !== null && scheduleWindow
-        ? buildScheduleIndex(scheduleWindow, scheduleSpan)
+        ? buildScheduleIndex(scheduleWindow, scheduleSpan, matchupWindow)
         : null,
-    [scheduleSpan, scheduleWindow],
+    [scheduleSpan, scheduleWindow, matchupWindow],
   );
 
   /**
@@ -210,7 +217,7 @@ export default function LeagueMatchupView({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  // Turning the Schedule view on is what asks App for the fortnight; it is one
+  // Turning the Schedule view on is what asks App for the window; it is one
   // read per session, shared with the roster views' own copy of this mode.
   useEffect(() => {
     if (scheduleSpan !== null) onNeedSchedule();
@@ -460,7 +467,9 @@ export default function LeagueMatchupView({
           <ScheduleToggle
             on={scheduleSpan !== null}
             loading={scheduleLoading}
-            onToggle={() => setScheduleSpan((s) => (s === null ? 7 : null))}
+            onToggle={() =>
+              setScheduleSpan((s) => (s === null ? defaultScheduleSpan(matchupWindow) : null))
+            }
           />
         )}
         <DateToggle
@@ -474,7 +483,11 @@ export default function LeagueMatchupView({
       {/* Its own group, so a span strip that only exists while the mode is on
           cannot push the pair above it about. */}
       {reading === 'roster' && scheduleSpan !== null && (
-        <ScheduleSpanTabs span={scheduleSpan} onChange={setScheduleSpan} />
+        <ScheduleSpanTabs
+          span={scheduleSpan}
+          matchup={matchupWindow}
+          onChange={setScheduleSpan}
+        />
       )}
       {dateOpen && (
         <DateRow

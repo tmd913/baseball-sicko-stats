@@ -5,7 +5,7 @@ import { ExpandButton } from './ExpandButton';
 import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
 import { PlayerIdentity } from './PlayerIdentity';
 import { PlayerNewsMark } from './NewsMark';
-import { DayHead, ScheduleCell, gameCount, gamesOn, startCount } from './schedule';
+import { DayHead, ScheduleCell, gameCount, gamesOn, spanPhrase, startCount } from './schedule';
 import type { ScheduleIndex } from './schedule';
 import { useEligible, useFullPage } from '../hooks';
 import type { BattingLine, PitchingLine, PlayerGame, PlayerReport } from '../types';
@@ -256,14 +256,18 @@ function RowIdentity({ r, children }: { r: PlayerReport; children: ReactNode }) 
 function ScheduleHeadCells({ index, kind }: { index: ScheduleIndex; kind: 'batter' | 'pitcher' }) {
   return (
     <>
-      <th className="sum-num" scope="col" title={`Games his club plays in the next ${index.span} days — postponements excluded`}>
+      <th
+        className="sum-num"
+        scope="col"
+        title={`Games his club plays ${spanPhrase(index)} — postponements excluded`}
+      >
         G
       </th>
       {kind === 'pitcher' && (
         <th
           className="sum-num"
           scope="col"
-          title={`Starts his club has announced in the next ${index.span} days — clubs name a probable about three days out, so this counts the announced front of the span`}
+          title={`Starts his club has announced ${spanPhrase(index)} — clubs name a probable about three days out, so this counts the announced front of the span`}
         >
           GS
         </th>
@@ -302,7 +306,7 @@ function ScheduleCells({
               className={starts >= 2 ? 'sched-two' : undefined}
               title={
                 starts >= 2
-                  ? `Two announced starts in the next ${index.span} days`
+                  ? `Two announced starts ${spanPhrase(index)}`
                   : undefined
               }
             >

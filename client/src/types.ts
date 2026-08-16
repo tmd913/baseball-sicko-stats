@@ -1377,6 +1377,26 @@ export interface ScheduleGame {
 }
 
 /** The whole window, as `/api/schedule` answers it. */
+/**
+ * **The days this fantasy matchup period covers, and the days the next one
+ * covers** — the Schedule view's two named spans, and the whole of what a
+ * connected league adds to that control.
+ *
+ * Mirrors `server/src/espn.ts::EspnMatchupWindow` by hand, as everything here
+ * does. The dates are the **whole** period rather than the part of it that has
+ * been played — see there for why the scoreboard's own `start`/`end` are the
+ * wrong two dates for a forward-looking view, and what the derivation was
+ * checked against.
+ */
+export interface MatchupWindow {
+  period: number;
+  /** `YYYY-MM-DD`, inclusive. */
+  start: string;
+  end: string;
+  /** Absent past the last matchup period the league has. */
+  next: { period: number; start: string; end: string } | null;
+}
+
 export interface ScheduleWindow {
   /** First ET day, inclusive — the server's own `baseballToday()`. */
   start: string;

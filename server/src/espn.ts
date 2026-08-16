@@ -2903,6 +2903,114 @@ export async function getScoreboard(
   };
 }
 
+/**
+ * **The days this matchup period covers, and the days the next one covers** —
+ * what the Schedule view's two named spans are, and the one league fact that
+ * neither the scoreboard nor the status route can answer.
+ *
+ * `getScoreboard` publishes a `start` and an `end` and they are the wrong
+ * dates for this: they are the **observed** span, the scoring periods
+ * `pointsByScoringPeriod` actually reports, which for the period being played
+ * **truncates at ESPN's own current day**. A forward-looking view asked for
+ * "this matchup" and would have been handed a window ending today. And
+ * `nextPeriod` is null on the current period by construction — ESPN
+ * materialises no future matchup period at all — so next matchup is not in
+ * that payload in any form.
+ *
+ * **So both are derived, by `acquisitionLimitFor`'s own rule one step further
+ * on**: a period is at least as long as the larger of what has been observed
+ * of it (a lower bound, since it truncates) and what the league declares
+ * (`scheduleSettings.matchupPeriods`, which maps a period to the *weeks* it
+ * covers — `{"19": [19, 20]}` is a fortnight). The next period then begins on
+ * the day after this one ends, because **matchup periods are contiguous**, and
+ * runs for its own declared weeks.
+ *
+ * **Checked against the live league rather than reasoned about.** Over its 19
+ * materialised periods the observed spans are contiguous with **0 gaps**
+ * (`first(p+1) === last(p) + 1` on all 18 joins), and the declaration never
+ * overstates an observation — 7 against 7 on the ordinary weeks, 7 against the
+ * 12 of period 1 (the season opened mid-week) and the 14 of period 15 (the
+ * All-Star break falls inside it). So `max(observed, declared)` reproduces
+ * **every settled period exactly**, and on the live one it is the declaration
+ * that corrects the truncation: period 19 observed 139–145 (seven days, cut at
+ * today) and declared a fortnight reads 139–152, which is Aug 10 – Aug 23.
+ *
+ * **Which is also the honest failure**, and it is worth naming: a period that
+ * is *longer* than it declares and is still being played — period 15's
+ * fortnight, mid-break — reads short until observation catches it up. It errs
+ * toward showing fewer days than the period has, never more, and it corrects
+ * itself day by day.
+ *
+ * `matchupPeriods` declares **every period of the season** (1…21 on the live
+ * league, past the 19 the schedule has materialised), so whether there *is* a
+ * next matchup is that key existing rather than a guess.
+ */
+export interface EspnMatchupWindow {
+  /** The period being played. */
+  period: number;
+  /** Its first and last ET day, `YYYY-MM-DD` — the whole period, not the part
+   *  of it that has been played. */
+  start: string;
+  end: string;
+  /** The one after it, absent past the last period the league has. */
+  next: { period: number; start: string; end: string } | null;
+}
+
+/** A period's declared length in scoring periods — its weeks × 7, and 7 for a
+ *  period the settings do not name (which is the ordinary week and the safe
+ *  reading of a payload that has left one out). */
+function declaredDays(
+  settings: EspnScoreboardResponse['settings'] | null,
+  period: number,
+): number {
+  const weeks = settings?.scheduleSettings?.matchupPeriods?.[String(period)]?.length;
+  return (typeof weeks === 'number' && weeks > 0 ? weeks : 1) * 7;
+}
+
+export async function getMatchupWindow(
+  creds: EspnCreds,
+  force = false,
+): Promise<EspnMatchupWindow | null> {
+  const meta = await leagueMeta(creds, force);
+  const current =
+    meta.currentPeriod ??
+    (meta.periods.length > 0 ? meta.periods[meta.periods.length - 1].period : null);
+  if (current === null) return null;
+  const span = meta.periods.find((p) => p.period === current);
+  if (!span || !span.first) return null;
+
+  const len = Math.max(span.last - span.first + 1, declaredDays(meta.settings, current));
+  const last = span.first + len - 1;
+  // A period past the season's own last scoring period is a period that does
+  // not exist — the same clamp `finalScoringPeriod` is published for.
+  const final = meta.settings?.scheduleSettings?.matchupPeriods
+    ? Object.prototype.hasOwnProperty.call(
+        meta.settings.scheduleSettings.matchupPeriods,
+        String(current + 1),
+      )
+    : false;
+  const nextFirst = last + 1;
+  const nextLast = nextFirst + declaredDays(meta.settings, current + 1) - 1;
+
+  const [start, end, nextStart, nextEnd] = await Promise.all([
+    dateForPeriod(span.first),
+    dateForPeriod(last),
+    final ? dateForPeriod(nextFirst) : Promise.resolve(null),
+    final ? dateForPeriod(nextLast) : Promise.resolve(null),
+  ]);
+  // The anchor is what dates any of this, and it answers with a pair or with
+  // null — so a failed schedule read costs the two spans and nothing else, the
+  // rule the whole of this file's period arithmetic follows.
+  if (!start || !end) return null;
+  return {
+    period: current,
+    start,
+    end,
+    next:
+      nextStart && nextEnd ? { period: current + 1, start: nextStart, end: nextEnd } : null,
+  };
+}
+
 // ---- The Rankings tab: where each team stands, category by category ------
 //
 // **The season table the League page opened with was the raw values, and a

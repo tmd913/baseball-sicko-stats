@@ -650,6 +650,52 @@ with no poller running: the live period is **536ms** at the first ask past the
 minute and **3.7ms** inside it, and a settled week is **271ms** — which is its
 `leagueMeta` and not its matchups, those coming off the frozen blob — and 1.4ms.
 
+### The matchup window: which days this week is, and which days next week is
+
+**The Schedule view offers a fantasy *matchup* as a span, and the two dates it
+needs are the two the scoreboard cannot give.** `getScoreboard` publishes a
+`start` and an `end` and they are the **observed** span — the scoring periods
+`pointsByScoringPeriod` actually reports, which for the period being played
+**truncates at ESPN's own current day**. A forward-looking view asked for "this
+matchup" and would have been handed a window ending today. And `nextPeriod` is
+null on the current period by construction, ESPN materialising no future matchup
+period at all, so next matchup is not in that payload in any form.
+
+**So both are derived, by `acquisitionLimitFor`'s own rule one step further
+on**: a period is at least as long as the larger of what has been *observed* of
+it (a lower bound, since it truncates) and what the league *declares* —
+`scheduleSettings.matchupPeriods`, which maps a period to the **weeks** it
+covers, `{"19": [19, 20]}` being a fortnight. The next period then begins on the
+day after this one ends, because **matchup periods are contiguous**, and runs
+for its own declared weeks. `dateForPeriod` turns both ends into ET days off the
+period anchor.
+
+**Checked against the live league rather than reasoned about.** Over its 19
+materialised periods the observed spans are contiguous with **0 gaps**
+(`first(p+1) === last(p) + 1` on all 18 joins), and the declaration never
+overstates an observation — 7 against 7 on the ordinary weeks, 7 against period
+1's **12** (the season opened mid-week) and period 15's **14** (the All-Star
+break falls inside it). So `max(observed, declared)` reproduces **every settled
+period exactly**, and on the live one it is the declaration that corrects the
+truncation: period 19 observed 139–145 (seven days, cut at today) and declared a
+fortnight reads 139–152, which through the route is **Aug 10 – Aug 23**, with
+next reading **period 20, Aug 24 – Sep 6**.
+
+**Which is also the honest failure, and it is worth naming**: a period that is
+*longer* than it declares and is still being played — period 15's fortnight,
+mid-break — reads short until observation catches it up. It errs toward showing
+fewer days than the period has, never more, and it corrects itself day by day.
+
+**`matchupPeriods` declares every period of the season** (1…21 on the live
+league, past the 19 the schedule has materialised), so whether there *is* a next
+matchup is that key existing rather than a guess.
+
+**It costs no new upstream.** `leagueMeta` is the two reads the League page
+already makes (49,749 + 70,794 bytes, cached per league on `LIVE_TTL_MS`), so
+this is those two dates falling out of a payload the file already parses;
+measured through the route, **103 bytes**. The client reads it once per session
+on a connected league, the terms the ownership map is on.
+
 ### The Rankings tab, and the five spans
 
 **The season table the League page opened with was the raw values, and a value
