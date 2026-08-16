@@ -17,10 +17,17 @@ import { getSeasonArsenal } from './pitcherArsenal.js';
 import { getPitcherXera } from './expectedStats.js';
 import { getResearch, getPlayerWindows } from './research.js';
 import { getScheduleWindow } from './schedule.js';
+import { getTeamHitting } from './teamHitting.js';
 import type { Arsenal } from './pitcherArsenal.js';
 import { getLeaguePitchAverage } from './pitchLeague.js';
-import { RESEARCH_INCLUDE_KEYS, RESEARCH_WINDOWS } from './types.js';
-import type { PlayerKind, ResearchIncludeKey, ResearchWindow, SeasonArsenalPitch } from './types.js';
+import { RESEARCH_INCLUDE_KEYS, RESEARCH_WINDOWS, TEAM_HITTING_WINDOWS } from './types.js';
+import type {
+  PlayerKind,
+  ResearchIncludeKey,
+  ResearchWindow,
+  SeasonArsenalPitch,
+  TeamHittingWindow,
+} from './types.js';
 import { getPitcherStats, getPlayerStats, getSeasonPlayers, resolveVideoUrl } from './mlbStats.js';
 import {
   addRosterPlayer,
@@ -1210,6 +1217,35 @@ app.get(
     }
     const kind = req.query.type === 'pitcher' ? 'pitcher' : 'batter';
     res.json(await getPlayerWindows(playerId, kind));
+  }),
+);
+
+/**
+ * How one team has hit over a window — whole, at home, on the road, and each of
+ * those by the hand on the mound. The opponent table on a pitcher's game.
+ *
+ * The report already carries the **season, all games** cut for every opponent a
+ * watched pitcher has in view, so the table draws its opening state with no
+ * request at all; this serves the four other windows, and it serves all nine
+ * cuts of whichever one is asked for so that changing the *venue* costs nothing.
+ * `window` is shape-checked against the board's own five and anything else is
+ * the season, the rule `/api/research` follows for the same parameter: it is a
+ * view preference in a shareable URL, and an older link should still open.
+ */
+app.get(
+  '/api/teams/:teamId/hitting',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const teamId = Number(req.params.teamId);
+    if (!Number.isInteger(teamId) || teamId <= 0) {
+      res.status(400).json({ error: 'invalid teamId' });
+      return;
+    }
+    const asked = Number(req.query.window);
+    const window: TeamHittingWindow = TEAM_HITTING_WINDOWS.includes(asked as TeamHittingWindow)
+      ? (asked as TeamHittingWindow)
+      : 'season';
+    res.json(await getTeamHitting(teamId, window));
   }),
 );
 

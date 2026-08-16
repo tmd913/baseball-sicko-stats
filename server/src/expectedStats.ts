@@ -2,7 +2,7 @@ import { parse } from 'csv-parse/sync';
 import { readJsonBlob, writeJsonBlob } from './storage.js';
 
 // Keep in sync with hfSea in savant.ts, CURRENT_SEASON in percentiles.ts, and
-// SEASON in xwoba.ts / pitcherArsenal.ts / teamStats.ts.
+// SEASON in xwoba.ts / pitcherArsenal.ts / teamHitting.ts.
 const SEASON = 2026;
 
 // Savant recomputes these nightly at most, and this is every pitcher in one blob.

@@ -41,7 +41,7 @@ import { mapLimit } from './limit.js';
 import { getTeamAbbrevs } from './mlbStats.js';
 
 // Keep in sync with hfSea in savant.ts, CURRENT_SEASON in percentiles.ts, and
-// SEASON in xwoba.ts / pitcherArsenal.ts / teamStats.ts / expectedStats.ts /
+// SEASON in xwoba.ts / pitcherArsenal.ts / teamHitting.ts / expectedStats.ts /
 // research.ts.
 const SEASON = 2026;
 
@@ -3060,7 +3060,7 @@ function halvesOf(
 }
 
 /** Competition ranking — 1 is best, ties share a rank and the next distinct
- *  figure skips (1, 2, 2, 4) — which is `teamStats.ts::rankAll`'s convention
+ *  figure skips (1, 2, 2, 4) — which is `teamHitting.ts::rankAll`'s convention
  *  and, more to the point, the one every league table in the world uses. */
 function rankBy(
   entries: { teamId: number; value: number }[],

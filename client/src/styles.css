@@ -2292,34 +2292,59 @@ body {
 .ars-name .ars-rnote {
   margin-left: 7px;
 }
-/* The opponent head's "5.02 R/G" plus its rank. `.ars-name` clips its overflow
-   (it ellipsizes a long pitch name on the arsenal rows), and the badge is a
-   bordered pill taller than the 13px line box it sits in — so it came out with
-   its top and bottom sheared flat. This text is a fixed width and never needs
-   the ellipsis, so lay the pair out as a flex line and stop clipping. */
-.opp-rg {
+/* ---- The opponent table ---------------------------------------------------
+   Was three stat strips (`.opp-rg`, `.opp-results` and their shared grid) and
+   is now a table: the same nine categories asked three ways, which a reader
+   wants to run their eye *down*, and which three strips of label-and-value
+   pairs made you do by memory.
+
+   The table itself is folded into `.glog-table` / `.glog-scroll`'s selector
+   lists rather than restyled to resemble them — one set of paddings, one gutter
+   clamp, one zebra stripe, one pinned left edge, one sticky header. What it
+   deliberately does **not** take is the log's `cursor: pointer` and row hover,
+   which are that table's own and say a row is a press: nothing here is. */
+.opp-block {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  gap: 10px;
+}
+/* The two controls on one wrapping line — the span, then which games. That is
+   the order the questions come in, and it is the roster row's own order: which
+   reading of them, then which days. Each is `flex: none` so a narrow card
+   breaks *between* the two rather than inside one, the rule `.view-bar-tabs`
+   already applies one tier up. */
+.opp-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.opp-controls .view-switch {
   flex: none;
-  overflow: visible;
 }
-/* The opponent's two strips — Season and vs RHP/LHP — carry the same stats in
-   the same order, so they share one grid template rather than wrapping as flex:
-   every column lines up between them, and a rank badge that widens one cell
-   can't shunt the strip below it out of step. `auto-fill`, not `auto-fit`, so a
-   row with fewer stats than columns keeps the column width the other strip is
-   using; the leading `.ars-rtag` takes the first cell in both, which is what
-   keeps the two in register from the second cell on. */
-.opp-results {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-  gap: 8px 12px;
+/* The row label column holds words rather than a date, so it parts from the log
+   exactly where the Stats tab's span column does: left-aligned, and wide enough
+   for "Overall" without the stat columns waiting on it. */
+.opp-table .opp-rowhead {
+  min-width: 72px;
 }
-/* The tag takes a cell like any stat, but it's a pill: hug the text rather than
-   stretching to the column, and sit on the row's centre line. */
-.opp-results .ars-rtag {
-  justify-self: start;
-  align-self: center;
+/* The row the pitcher's own hand makes relevant, marked the way the Splits card
+   marks the half that applies to a game: the accent on the label, and the
+   reason in the title rather than a third line of text. The cells keep the
+   zebra ground — a wash across the row would be a second colour system beside
+   the rank badges, which is the argument the League table's own row wash lost.
+   `!important` is not needed: this rule sits after the zebra stripe and names
+   one more class. */
+.opp-table tbody tr.opp-row-on .opp-rowhead {
+  color: var(--accent);
+}
+/* A status line where the table would be — a span with no plate appearance in
+   it, or a read that failed. Not an `.empty-state` box: this is one line inside
+   a card section, and a bordered card inside a bordered card is two edges a few
+   pixels apart. */
+.opp-status {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 2px 0;
 }
 .ars-rval {
   font-size: 15px;
@@ -4133,6 +4158,7 @@ body {
    is a caption and the "no games in this span" cell (below). */
 .glog-scroll,
 .stats-scroll,
+.opp-scroll,
 .league-scroll {
   overflow-x: auto;
   /* Both axes: this pane scrolls sideways always and vertically in
@@ -4148,6 +4174,7 @@ body {
 }
 .glog-table,
 .stats-table,
+.opp-table,
 .league-table {
   border-collapse: separate;
   border-spacing: 0;
@@ -4166,7 +4193,8 @@ body {
    wide at 390 — the width being paid in a pane that already scrolls sideways at
    every phone width there is. */
 .glog-table,
-.stats-table {
+.stats-table,
+.opp-table {
   /* Named rather than repeated, because two rules read it now: the cells
      below, and the Stats tab's sort buttons, which zero the `th`'s padding and
      have to re-apply exactly this gutter or a header would line up differently
@@ -4179,10 +4207,26 @@ body {
      same 15px for the same reason. */
   --research-head-line: 15px;
 }
+/* **The gutter reads the container, not the viewport**, which is the one place
+   this table has to part from the log's own clamp. Every other wide table in
+   the app grows with the window, so `vw` is the right signal for them; this one
+   lives in a dialog capped at `--card-column`, so at 1920 the shared clamp
+   opened to its full 28px and pushed eleven columns 204px past a pane that had
+   stopped growing at 800. `cqi` against `.app-dialog-body` — already a
+   container for the plate-appearance detail's own queries — tracks the box the
+   table is actually in. Capped at 13px rather than 28 for the research board's
+   reason: eleven columns and no slack, so every pixel of padding is a stat off
+   the right edge. Measured at 1920, that takes the table 972 → 706px inside a
+   770px pane, i.e. from 204px of sideways scroll to none. */
+.opp-table {
+  --row-gutter: clamp(5px, 1.6cqi, 13px);
+}
 .glog-table th,
 .glog-table td,
 .stats-table th,
-.stats-table td {
+.stats-table td,
+.opp-table th,
+.opp-table td {
   padding: 13px var(--row-gutter);
   line-height: 1.35;
   white-space: nowrap;
@@ -4192,7 +4236,9 @@ body {
 .glog-table tbody tr:nth-child(even) td,
 .glog-table tbody tr:nth-child(even) .glog-date,
 .stats-table tbody tr:nth-child(even) td,
-.stats-table tbody tr:nth-child(even) .glog-date {
+.stats-table tbody tr:nth-child(even) .glog-date,
+.opp-table tbody tr:nth-child(even) td,
+.opp-table tbody tr:nth-child(even) .glog-date {
   background: var(--panel);
 }
 /* **A row is a press now, so it looks like one.** It carried no hover tint for
@@ -4233,7 +4279,8 @@ body {
   box-shadow: inset 0 2px 0 var(--accent), inset 0 -2px 0 var(--accent);
 }
 .glog-table thead th,
-.stats-table thead th {
+.stats-table thead th,
+.opp-table thead th {
   /* Sticky against .glog-scroll, which is the scroll container in both axes —
      which is the whole reason the Game Log tab reshapes the overlay below. */
   position: sticky;
@@ -4256,7 +4303,8 @@ body {
    sat in a huddle at the right of the overlay with the opponent column holding
    a third of the window and nothing in it. */
 .glog-table .glog-num,
-.stats-table .glog-num {
+.stats-table .glog-num,
+.opp-table .glog-num {
   width: auto;
   min-width: clamp(28px, 4.4vw, 46px);
   text-align: right;
@@ -4266,7 +4314,8 @@ body {
 /* The date column pins to the left edge as the stats scroll under it — without
    it a row a few columns in belongs to no game in particular. */
 .glog-table .glog-date,
-.stats-table .glog-date {
+.stats-table .glog-date,
+.opp-table .glog-date {
   position: sticky;
   left: 0;
   z-index: 1;
@@ -4279,7 +4328,8 @@ body {
 /* The top-left corner: above both the sticky header row and the sticky date
    column, so neither slides over it. */
 .glog-table thead .glog-date,
-.stats-table thead .glog-date {
+.stats-table thead .glog-date,
+.opp-table thead .glog-date {
   z-index: 3;
   background: var(--panel-2);
 }

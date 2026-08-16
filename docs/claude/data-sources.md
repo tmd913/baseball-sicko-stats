@@ -76,3 +76,82 @@ A third source: `server/src/percentiles.ts` **scrapes the Savant player page** f
 - `getSeasonPlayers` (roster for the add-player search) cached with a 1h TTL.
 
 **`getDay(date, filter?)`** takes an optional `DayFilter` (`dayFilterFor(players)`). A day holds a report for *every* player who appeared — ~600, several MB — so `getReport` narrows each day to the rostered players as it parses. The filter carries **names as well as ids**, because `findPlayerDay` falls back to a same-kind `savantName` match when an id isn't present that day; filtering on ids alone would silently break that. Frozen, filtered days are memoized in a bounded `projectedCache` keyed by date + roster; only still-mutable days are kept whole in `memCache`. `mapLimit` (`limit.ts`) caps the fan-out at `DAY_CONCURRENCY` (6) and `GAME_CONCURRENCY` (8) — this bounds peak heap as much as it bounds sockets.
+
+### Team hitting: nine cuts a window, and why MLB cannot be asked for them
+
+**`server/src/teamHitting.ts` is how every team has hit** — over one of the
+research board's five windows, at home or away or both, and against each hand
+on the mound. Nine cuts, which is what a watched pitcher's opponent table is
+made of (see **Pitchers on the roster**).
+
+**MLB publishes five of the nine for the season and none of the rest, and every
+way of asking was tried.** A team's season line, its `vl`/`vr` platoon splits
+and its `h`/`a` home-road splits each come back exactly and for free — and
+there is **no combination and no window**. Probed rather than assumed:
+`stats=byDateRange` answers for a team over a range and **ignores `sitCodes`
+entirely** (the same 30 unsplit rows come back), while `stats=statSplits`
+accepts a `startDate`/`endDate` and **ignores the range** — 109 games on a
+14-day query, i.e. the whole season. There is no compound situation code
+either: the 602 codes `/api/v1/situationCodes` lists include `h`, `a`, `vl` and
+`vr` and nothing that crosses them, and the `vls`/`vrs` starter splits return
+**nothing at all** for a team. So a windowed or home-only platoon split cannot
+be asked for, only summed.
+
+**So it is summed a day at a time from the per-date Savant export**, which is
+`statcastWindow.ts`'s own answer to the same problem and reuses the same file:
+`downloadDayCsv`, kept forever, so a day already on disk for the research board
+is never fetched twice. The rule is that file's rule — everything stored per day
+is a **count**, never a rate, and the rates are computed once at the end from
+the summed counts. A day reduces to at most **30 × 4 buckets** (team, hand,
+venue) plus one game count per team per venue, from which all nine cuts fall out
+by addition, so the leaves cannot come to disagree with the rows drawn from them.
+
+**Game counts are the one quantity that does not fall out of the leaves**, and
+the reason is worth stating because it is easy to get wrong: nearly every game
+features both hands, so adding the two hand leaves' game counts tells a club it
+has played twice as often as it has. `DayHitting` therefore carries a second,
+per-venue tally, and the `all`-hand rows read that where the hand rows keep
+their own leaf count — which is "games in which they faced this hand", and is
+exactly what their runs-per-game divides by.
+
+**Runs are read off the score progression, not off each pitch's own delta**, and
+that is what makes them exact. A run that scores on a play with **no pitch** — a
+balk, a steal of home, defensive indifference — is in no row of a pitch-level
+export, so summing `post_bat_score − bat_score` loses it: measured before the
+fix, **30 runs league-wide (0.2%), always short and never over**. Taking the
+score *since this side's last pitch* picks those up on the next pitch thrown,
+which is also the right leaf — whoever was on the mound gave them up. It is why
+`parseDay` sorts its rows: a progression needs an order, and `at_bat_number` is
+game-wide and sequential across both sides, so that sort is scorebook order.
+
+**Checked against MLB's own published numbers rather than spot-checked.**
+Against `stats=byDateRange` over the same span, all 30 teams: **plate
+appearances, games, runs, home runs, walks and strikeouts are exact on every
+one — 0 deltas** — and the only residue is **16 hits league-wide out of ~41,000
+(0.04%)**, signed both ways, which is what an official-scoring change looks like
+from here: a hit later ruled an error is corrected in MLB's aggregate while the
+frozen daily export we cached still carries the original ruling. It moves a team
+average by at most .001. And **an independent recompute of all nine cuts**, off
+the same day files, matches the route on **3,239 of 3,240 cells for the season
+and 9,595 of 9,600 across the season, 30-day and 7-day boards** — every one of
+the residue a `.125`-style rounding tie between JS's half-away and Python's
+half-to-even, not a disagreement about a number.
+
+**Cached the way the research board is**: a day's counts are a blob
+(`team-hitting-{date}-v1.json`, bumped whenever `HitCounts` gains a field, a
+bump costing a re-parse off CSVs already on disk rather than a re-download), and
+a window's whole board is another (`team-hitting-board-{window}-v1.json`, 81KB
+on a checked season, six hours in memory and in the storage tier with an
+`inFlight` guard). The `season` window starts at **1 March of the end date's own
+year** rather than opening day, which is what keeps this file off the list of
+places a season rolls over in: `savant.ts` asks Savant for `hfGT=R|`, so a
+spring date reduces to an empty day, and `dayHitting` writes its counts blob
+either way — so the pre-season dates cost one headers-only request each, once
+ever.
+
+**Measured through the route**: the season board **12.3s genuinely cold** (167
+days reduced, the CSVs already on disk), **26ms** off its blob in a fresh
+process and **10ms** warm. That cold figure is why `warmer.ts` builds all five
+nightly: `/api/report` reads this for every opponent a watched pitcher has, so a
+reader must never be the one paying for it.
+
