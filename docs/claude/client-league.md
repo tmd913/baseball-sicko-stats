@@ -925,10 +925,22 @@ different box:
   unscrolled. Measured at 390 with only the first: `.view-bar` 346 against a 377
   scroll width, **9px of page overflow** (79 at 320, 24 at 375).
 
-**It is `flex: 1 1 100%`, so the strip takes a row of its own** — below 640 it
-cannot share one with the view switch anyway (289px + 377 against 346), so the
-row is honest rather than spent, and taking the full width is what makes the
-overflow the strip's rather than the page's.
+**It hugs its pills rather than taking the row**, and that is a correction to
+what stood here. It was `flex: 1 1 100%` — a full row of its own — argued from
+four tabs and **377px** of content against a 346px phone, where the strip could
+not share a line with the view switch anyway and the full width was what made
+the overflow the strip's rather than the page's. With the Matchup tab gone it
+has three tabs and **295px**, which fits every width from 375 up, and a basis of
+100% then stretched the *shell* of a segmented control across the whole row with
+its three pills bunched at the left end: measured, a **596px** band at 640 and
+346 at 390 standing in for a control 295 wide.
+
+`flex: 0 1 auto` is the row's own rule with the shrink left on: the group
+travels whole and breaks between groups, and below its content width it gives
+way rather than pushing the page. Measured after, the strip is **297px at 375
+through 1920** and shrinks to 276 with a scroll at 320 — which is the one width
+it still genuinely overflows — with **0 page overflow at every one**, and the
+pinned chrome unchanged at 159px at 390.
 
 **And the selected tab is scrolled into view**, by hand rather than with
 `scrollIntoView`, which walks up every scrollable ancestor and would drag the
@@ -938,8 +950,9 @@ and all. `espnConnected` is in that effect's dependency list because it is what
 already their final values when the effect first runs and the row does not exist
 yet, so without it the effect ran once against a null ref and never again.
 Measured at 390 before: `scrollLeft` 0 with `Transactions` off the right edge;
-after, `scrollLeft` 31 with it fully visible, and the other three tabs
-untouched at 0.
+after, `scrollLeft` 31 with it fully visible, and the other three tabs untouched
+at 0. (With three tabs the strip only scrolls at 320, and it still holds there:
+`?lt=transactions` opens with `scrollLeft` 21 and the tab fully visible.)
 
 **Measured, wrapping → scrolling**, on the live league: the pinned chrome goes
 **232 → 207px at 320** and **184 → 159 at 375 and 390** — a row of pills back on

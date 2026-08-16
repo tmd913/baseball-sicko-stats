@@ -11611,11 +11611,21 @@ body {
     min-width: 0;
   }
   .view-bar-tabs .lg-tabs {
-    flex: 1 1 100%;
-    /* Without this the strip cannot shrink to the row it was just given: a
-       flex item's automatic minimum is its `min-content`, so a 377px strip
-       overflowed a 346px phone by 9px (and a 320px one by 79) and never
-       scrolled, its box having simply grown to its content. */
+    /* **It hugs its pills and shrinks only when it has to**, where it took
+       `flex: 1 1 100%` — a full row of its own — while it had four tabs and
+       377px of content against a 346px phone. It has three and **295px** now,
+       which fits every width from 375 up, and a basis of 100% then stretched
+       the *shell* of a segmented control across the whole row with its three
+       pills bunched at the left end: a band of panel the width of the screen
+       standing in for a control a third that wide.
+
+       `0 1 auto` is the row's own rule with the shrink left on — the group
+       travels whole and breaks between groups, and below its content width it
+       gives way rather than pushing the page. */
+    flex: 0 1 auto;
+    /* Without this it cannot shrink at all: a flex item's automatic minimum is
+       its `min-content`, so the strip overflowed a 320px phone by 79px and
+       never scrolled, its box having simply grown to its content. */
     min-width: 0;
     flex-wrap: nowrap;
     overflow-x: auto;
