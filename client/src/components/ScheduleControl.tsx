@@ -78,13 +78,18 @@ export function ScheduleToggle({
 /**
  * How far ahead, offered only while the mode is on.
  *
- * **Four spans where there were two, and the two that were added are what a
- * fantasy manager actually plans in.** `Next 7` and `Next 14` answer *how far
- * ahead*; `This Matchup` and `Next Matchup` answer *which fantasy week*, which
- * is rarely the same span — on the live league today this matchup is a
- * fortnight's playoff round with eight days left and next runs a fortnight
- * after that. They lead the run, and `This Matchup` is what the mode opens on
- * (`defaultScheduleSpan`), because it is the question the view is opened with.
+ * **A connected league is offered `This Matchup` and `Next Matchup` and nothing
+ * else; everyone else gets `Next 7` and `Next 14`.** The named pair is what a
+ * fantasy manager actually plans in — a matchup period rather than a rolling
+ * week that starts today and ends in the middle of one — and on the live league
+ * today the two are nowhere near the same span: this matchup is a fortnight's
+ * playoff round with eight days left, and next runs a fortnight after that.
+ * `This Matchup` is what the mode opens on (`defaultScheduleSpan`), because it
+ * is the question the view is opened with.
+ *
+ * The numeric pair is a **fallback rather than a fifth and sixth option** — see
+ * `scheduleSpans` for why the test is *both* named spans and not merely the
+ * league, and what the last matchup period of a season is offered.
  *
  * They are offered **only where there is a league to define them**: a matchup
  * period is a fact about an ESPN league rather than about which list the roster
@@ -105,11 +110,15 @@ export function ScheduleToggle({
  * board's window tabs and its position row all make the same swap at 640, and
  * `.schedule-span-select` is folded onto `.date-presets-select` so all of them
  * are one control by construction. Both are rendered and the media query picks,
- * rather than a JS media test that could drift from the CSS. Two pills fitted a
- * phone; four — two of them two words long — do not: measured at 390 the run is
- * **367px against the 346** the app's gutters leave, so it takes a line of its
- * own and the pinned chrome goes 207px to 255. The select is **134px** and
- * shares the line with the two icon buttons beside it.
+ * rather than a JS media test that could drift from the CSS.
+ *
+ * It swaps at one width whatever the run holds, and that is the point rather
+ * than a simplification: **how many spans a reader is offered is a fact about
+ * his league**, so the pill row's width is not ours to know — the fallback run
+ * measures **367px at 390 against the 346** the app's gutters leave, taking a
+ * line of its own and the pinned chrome from 207px to 255. A control whose
+ * shape depended on what somebody's league happened to publish would be the
+ * one thing worse than a control that is always a dropdown on a phone.
  */
 export function ScheduleSpanTabs({
   span,

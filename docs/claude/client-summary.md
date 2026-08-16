@@ -188,11 +188,15 @@ The board's population is defined by five controls — the three include buttons
 
 What it costs is the honest half, and it is worth stating rather than glossing: the span really is a different one (forward rather than back), and the summary table's date control keeps a second job it always had — see below.
 
-#### Four spans: this matchup, next matchup, and seven days or fourteen
+#### Two spans, and which two depends on the league
 
-**The two named spans came later and are what a fantasy manager actually plans in.** The numeric pair answers *how far ahead*; `This Matchup` and `Next Matchup` answer *which fantasy week*, and those are rarely the same span — on the live league today this matchup is a fortnight's playoff round with eight days left (Aug 16–23 drawn, of a period running Aug 10–23) and next runs Aug 24 – Sep 6. A manager setting a lineup is setting it for a **matchup period**, and until now the view could only offer him a rolling week that starts today and ends in the middle of one.
+**A connected league is offered `This Matchup` and `Next Matchup` and nothing else; everyone else gets `Next 7` and `Next 14`.** The named pair answers *which fantasy week* where the numeric pair answers *how far ahead*, and those are rarely the same span — on the live league today this matchup is a fortnight's playoff round with eight days left (Aug 16–23 drawn, of a period running Aug 10–23) and next runs Aug 24 – Sep 6. A manager setting a lineup is setting it for a **matchup period**, and the view could previously only offer him a rolling week that starts today and ends in the middle of one.
 
-**`This Matchup` leads the run and is what the mode opens on** (`defaultScheduleSpan`), because it is the question the view is opened with; `Next Matchup` follows it, then the two numeric spans, which are unchanged.
+**The numeric pair is a fallback rather than two more options.** They were offered alongside the named pair for one round and are not: four pills where two will do is a control asking the reader to decide which *kind* of week he means every time he reads the table, and a manager whose league runs matchup periods plans in matchup periods. `This Matchup` is what the mode opens on (`defaultScheduleSpan`), because it is the question the view is opened with.
+
+**The test is both named spans, not the league**, and that is what keeps a one-option control off the screen: the last matchup period of a season has no `next`, and there the run is `This Matchup · Next 7 · Next 14` so the reader still has somewhere to go. A segmented control holding a single option is a control with no choice in it — the argument the matchup page's own strip already makes for a bye.
+
+**A span this reader is not offered falls back to the one that is** (`effectiveSpan`), which is one rule where there were two: a `sched=7` link opened by somebody whose league names both its weeks draws `This Matchup`, exactly as a `sched=matchup` link opened without a league draws `Next 7`. Either way the control marks the span the table is actually drawing — the one thing it must not get wrong — and the URL keeps what it was handed, the rule `cols=` follows. Measured both ways: `?sched=7` with the live league marks `This Matchup` and draws its eight columns, and with the matchup read blocked `?sched=matchup` marks `Next 7` and draws seven.
 
 **`This Matchup` starts today rather than at the period's own start**, for the reason every other span here does: the days already played are not days anybody can plan for, and every other column in this view is a day still to come. The pill's tooltip names the whole period (`The rest of matchup period 19 — 8/10 – 8/23`) so the reader can see which fantasy week it is as well as which days are drawn.
 
@@ -222,11 +226,11 @@ So the mode carries **its own span**, and the precedent is the research board's 
 
 #### On a phone the run is a dropdown
 
-Two pills fitted a phone and four do not. Measured at 390 the run is **367px against the 346** the app's gutters leave, so it takes a line of its own and the pinned chrome goes **207px to 255**; the `<select>` is **134px** and shares its line with the `Starters` and calendar buttons beside it.
+**How many spans a reader is offered is a fact about his league**, so the pill row's width is not ours to know: the fallback run measures **367px at 390 against the 346** the app's gutters leave, taking a line of its own and the pinned chrome from 207px to 255. The `<select>` is **134px** whatever the run holds and shares its line with the `Starters` and calendar buttons beside it. A control whose shape depended on what somebody's league happened to publish would be worse than one that is simply a dropdown on a phone.
 
 It is the app's own swap rather than a new one — the date presets, the research board's window tabs and its position row all become a `<select>` at 640, and `.schedule-span-select` is folded onto `.date-presets-select` so every "pills on a desktop, dropdown on a phone" control in the app is one control by construction. **Both are rendered and the media query picks**, rather than a JS media test that could drift from the CSS. The hide rule is written as the two classes the pill row actually has (`.schedule-span.view-switch`) rather than scoped to a parent, because this run is drawn in three of them — the roster row, the board's tools and a team page's — and `.view-switch`'s own `display: inline-flex` is later in the file and would otherwise leave both on screen at once. That is the trap `.date-row .date-presets` already documents, met from a third direction.
 
-**On a desktop the two extra pills cost one row at exactly one width.** Measured on both tables with the mode on, the run goes 144.3 → 367.3px and the pinned chrome is **unchanged at 640, 900 and 1920** and grows one row at **1200** (the roster row 115 → 161px, the board 161 → 207) — and only while the mode is on, which is the same bargain the mode's own span tabs already made.
+**On a desktop the trim gave the roster row its line back.** The run measures **228px** for the named pair against 367.3 for the four that were briefly offered and 144.3 for the numeric pair alone; the roster row's pinned chrome at 1200 goes **161 → 115px**, back to what it was before the mode had a named span at all. The **board is unchanged at 207** there — 228px does not fit that bar's line where 144 does — and both are unchanged at 640, 900 and 1920. The cost is paid only while the mode is on either way.
 
 #### The counts, and the two-start week that cannot be announced
 
