@@ -598,6 +598,155 @@ the name and no empty headline. The roster view still applies there: there is
 one team, and a reader on a bye week has more use for it than for anything else
 on the page.
 
+### A matchup is three pages: one team, the comparison, the other team
+
+**The tab answered *how am I doing against him* and could not answer the
+question directly under every row of it — *which of his players is doing that to
+me*.** Nothing on the League page could: the `Rosters` toggle below lists who is
+in each lineup and not one thing any of them has done, and the Roster and Feed
+views next door are hard-wired to the reader's own team. So each side of the
+matchup gets a page of its own, and the strip that selects them is **the away
+team, `Summary`, the home team** — two teams with the comparison between them,
+which is the shape of the thing being read and is the same arrangement each
+category already has on the page below.
+
+**Summary is the middle one and the default.** It is the question the tab is
+opened with, and the app's own rule is that the tab you land on is that question
+(`Overview` on the player page, `Roster` on the view switch); each manager's
+roster is then one press either way, in the direction his own figures are on.
+
+**A team page is not a new reading — it is the app's own two.**
+`components/LeagueTeam.tsx` draws `SummaryTable` and `LiveFeed`, the very
+components the Roster and Feed views are made of, over a `PlayerReport[]` of
+exactly the shape those views get. That is the whole point of the feature: a row
+on a leaguemate's page reads as the same row does on your own, down to the
+opponent cell, the lineup pip, the IL code and the clip under an at-bat, because
+it *is* the same component and not a second drawing of one.
+
+**The two are stacked rather than tabbed**, which is where this parts from the
+app outside the league page. There they are two views because they are two
+readings of the whole app's subject and each wants a page; here they are the two
+halves of one question about one team over one week, and a third tier of tabs
+(League tab → matchup side → roster or feed) would be a tier of chrome bought to
+save a scroll. The table is the week added up and the feed is the week as it
+happened, in that order — the order the two questions come in.
+
+**The span is the matchup period's own**, `board.start`…`board.end`, which are
+the very days the categories above were summed over — so a row on a team page is
+the arithmetic behind a cell on the Summary one. For a week still being played
+that is **the days played so far**, which is what makes the two agree rather
+than the table quietly including a day the score does not.
+
+**A period with no dates gets no team tabs at all.** A team page is a week of
+games, and with no anchor to date the period by there is no week; a tab leading
+to an empty one is worse than a tab that is not there. That is the rule the
+Rankings tab's span strip already follows for a half with no matchup period in
+it. **A bye gets two tabs rather than three**, for the same reason and by the
+same test: there is one team.
+
+**The chosen side is stored against the matchup it was chosen for**, so changing
+matchup or stepping a week lands back on Summary — by then `away` names a
+different manager, and the strip would be silently pointing somewhere else. It
+is derived from that pair rather than reset in an effect, which would render the
+old side for a frame first. Measured: switching the picker from `Baldy's Bozos
+vs Sho me the Parlay` to `The Homewreckers vs Cochabamba Crushers` relabels both
+team tabs and selects `Summary`.
+
+**Which side is open is deliberately not in the URL**, unlike `lt=` and `mp=`
+above it. It is the footing the player page's own tabs are on and the one the
+`Rosters` toggle beside it is on: a sub-selection *within* a thing the URL
+already names (`mup=` names the matchup), and one that resets on the parameter
+that does. `mup=` is what a shared link needs to open on the right matchup, and
+it does.
+
+**The label is the team's name, truncated rather than abbreviated.** ESPN's
+`abbrev` is manager-chosen and often opaque (`HOME`, `PIRA`), where the first
+dozen characters of a real name are recognisable at a glance and the whole of it
+is on the tab's `title`. The two team tabs share whatever `Summary` leaves,
+which keeps the middle tab — the default, and the one a reader has to be able to
+find — the same width at every screen. The truncation is on a **span inside the
+tab** rather than on the tab: a tab is `inline-flex`, and `text-overflow` does
+not apply to a flex container's anonymous inline content, so before that span a
+17-character name clipped mid-letter at 124px of 137 with no ellipsis to say it
+had.
+
+**The slot chip says whose lineup it is.** `FantasySlot` gained an optional
+`owner` — the team name in the possessive, null for the reader's own — because
+the chip has read `In your fantasy lineup` since it was written and over a
+leaguemate's bench that is a lie of exactly the kind the `day` field was added
+to stop for a day. A name already ending in `s` takes the bare apostrophe
+(`Baldy's Bozos’`), which a plain `+ "'s"` got wrong on the live league and
+which read as a typo on every chip of that manager's page. Every other caller
+passes nothing and the chip reads exactly as it always has — checked on the
+reader's own Roster view: `In your fantasy lineup today at C`.
+
+**`startedDays`/`rangeDays` are null on a team page**, which is honest rather
+than lazy: that count comes off a per-day lineup map and this page reads one
+day's roster (the period's last, which is what a slot is a fact about). The chip
+then simply does not claim a count, which is what it already does on a
+single-day range and against an older server.
+
+**The two reads are one `Promise.all`** — the report the tables draw and the
+roster the chips come from — because they are one page, and drawing the first
+without the second would put every chip on it a beat after the rows they sit in.
+A failed roster read costs the chips and not the page (it resolves to null
+rather than rejecting the pair). And **no ref guard on the effect**, which is
+the rule the `Rosters` toggle below had to learn the hard way: the dependency
+array is the whole of the guard, and marking a request answered before it is
+answered is what leaves a spinner up for ever under StrictMode.
+
+**The server change is one optional parameter.** `/api/report?source=fantasy`
+takes a **`teamId`**, absent meaning the reader's own — which is what every
+caller but this one asks for. `fantasyWatchlist` reads that team out of the same
+`getOwnership` payload it already reads the reader's own out of (that call
+returns *every* team's roster in the league, and has since free agency was first
+read as the complement of ownership), so the per-day rosters, the held days and
+the roster order all come for free and a leaguemate's week is built by exactly
+the code that builds your own. A team id is not a credential, so the check that
+matters is **membership**: an id this league has no team for is a 409 rather
+than an empty roster, which would read as a manager who had dropped everybody.
+Measured through the route: `teamId=999` → `409 No team 999 in this league.`,
+`teamId=abc` → `400 teamId must be a positive integer`.
+
+**What it costs: a report per team page, and the second one is free.** Measured
+against the live 12-team league over the live week (7 days, 27 players):
+**4.24s** for a team nothing had read before and **10ms** warm — so a reader
+crossing between the two managers and back pays once, and the block wait behind
+`WAIT_DELAY` never appears on the way back. The wait names what is being read
+(`Reading this team's week`), as every wait in the app does.
+
+**The `Rosters` toggle stays and is drawn on the Summary tab alone.** It is the
+one thing the team pages do not subsume — they are one manager's week in depth
+where it is both managers' *lineups against each other* — and on a team page
+there is one team on screen while the control would offer two.
+
+**Measured on the live 12-team league at 320 / 390 / 640 / 1200 / 1920**, on the
+live week's `Baldy's Bozos vs Sho me the Parlay`: the strip is **one row at
+every width** (tabs 89/83/89 at 320, 124/83/124 at 390, 351/83/351 from 1200)
+with **no horizontal overflow of the page body** at any of them, on the Summary
+tab and on both team pages. A team page draws its head, its kind switch, a
+**14-row** batting table with 13 slot chips (the fourteenth row being a man held
+earlier in the week and off the period's last roster, which is the report's own
+range-of-rosters rule and correctly chips nothing) and a **30-item** feed that
+`Load more` takes to 50; the kind switch takes the table to the pitching
+columns (`IP · H · R · ER · BB · K · HR · W · SV · HLD · ERA`) and the stream to
+the outings. A name in either opens the player page over it
+(`?…player=batter-668939`, `.details-view` at z-index 50). Switching the matchup
+picker relabels both team tabs and returns to `Summary`. The `Rosters` toggle
+opens its two panels on Summary, is absent on a team page, and is still open on
+the way back. **The bye case** draws two tabs (`Summary`, `Brian&Tom’s Excellent
+Adventure`) and the team page under the second of them. **The full-page mode
+comes along with the table**, being the table's own: the corner button takes it
+to `z-index: 45` with the kind switch in `.expanded-chrome`, and one press of
+Escape leaves it standing on the team page. And the reader's own
+Roster and Feed views are untouched — 12 rows, the four-item legend, and a chip
+reading `In your fantasy lineup today at C`.
+
+**Bundle: 509.85 → 513.68 KB of JS** (150.28 → 151.22 gzipped) and **121.96 →
+122.62 KB of CSS** (21.62 → 21.71) — 3.8KB and 0.7KB raw, 0.9KB and 0.1KB over
+the wire, for a component, a tab strip, a route parameter and the paragraphs
+above restated where the rules are.
+
 ### Both rosters, behind a toggle
 
 **`Rosters` opens both teams' rosters side by side**, slot by slot, with each

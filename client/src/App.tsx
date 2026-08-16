@@ -4219,6 +4219,11 @@ export default function App() {
           rosterPct={rosterPct}
           eligibility={eligibility}
           onOpenPlayer={openLeaguePlayer}
+          /* The Matchup tab's two team pages draw the app's own roster table
+             and feed, so a name in one of them names a player the way the rest
+             of the app does — by key, and through the one setter every other
+             route into that page uses. */
+          onOpenDetails={setDetailsKey}
           connected={espnConnected}
           onConnect={openEspnSettings}
         />

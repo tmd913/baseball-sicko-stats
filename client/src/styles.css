@@ -11252,6 +11252,88 @@ body {
   padding: 1px 6px;
 }
 
+/* ---- A matchup's three pages -------------------------------------------
+   The strip that selects one manager's team, the comparison, or the other
+   manager's — and the head each team page carries.
+
+   **Folded onto `.view-switch`/`.view-tab` in the markup rather than styled
+   here**, which is this stylesheet's standing rule: this is the app's own
+   segmented control one tier further down, exactly as the League tabs above it
+   are the view switch one tier down, so it is that control and only its
+   placement and its labels are its own.
+
+   Centred over the card it selects, and at the card's own width so the strip
+   and the thing under it are one object rather than a control floating over a
+   page. */
+.mup-sides {
+  display: flex;
+  max-width: var(--card-column);
+  margin: 0 auto 10px;
+}
+/* **The label is the team's name, truncated rather than abbreviated.** ESPN's
+   `abbrev` is manager-chosen and often opaque (`HOME`, `PIRA`), where the first
+   dozen characters of a real name are recognisable at a glance; the whole of it
+   is on the tab's `title`. The two team tabs share whatever is left after
+   `Summary`, which is what keeps the middle tab — the default, and the one a
+   reader has to be able to find — the same width at every screen. */
+.mup-sides .view-tab {
+  min-width: 0;
+  overflow: hidden;
+  flex: 1 1 0;
+}
+/* The truncation is on the label rather than on the tab, because a tab is
+   `inline-flex` and `text-overflow` does not apply to a flex container's
+   anonymous inline content — it clipped mid-letter with no ellipsis. */
+.mup-side-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mup-sides .view-tab:nth-child(2) {
+  flex: none;
+}
+
+/* The team page's own head: whose week this is, and the kind switch that
+   decides which half of the roster the table and the feed below are about. It
+   keeps the card column — it is a heading rather than a table, and the two
+   tables under it give the gutters back on their own account
+   (`--table-bleed`). */
+.lgt-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: var(--card-column);
+  margin: 0 auto 12px;
+}
+.lgt-id {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.lgt-name {
+  font-weight: 800;
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lgt-sub {
+  font-size: 11px;
+  color: var(--muted);
+}
+/* The kind switch to the right end of the row, which is where every other
+   control in this app's own tab rows sits relative to the label beside it. */
+.lgt-head .kind-switch {
+  margin-left: auto;
+  flex: none;
+}
+/* The week added up, then the week as it happened. The gap is the app's own
+   step between two blocks on one page. */
+.league-view .summary-view {
+  margin-bottom: 18px;
+}
+
 /* ---- The Rankings table -------------------------------------------------
    **Modelled on the research board rather than on the game log**, which is
    what it was folded onto before and is the whole of what was wrong with it.

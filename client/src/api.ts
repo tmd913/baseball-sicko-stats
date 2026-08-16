@@ -174,11 +174,19 @@ export const api = {
   /** `refresh` is only meaningful alongside `source=fantasy`: it skips the
    *  server's ten-minute read of the ESPN league, so the players this report is
    *  about follow a lineup change made a moment ago. */
+  /**
+   * `teamId` names **whose** fantasy team, and absent means the reader's own —
+   * which is what every caller but one wants. The exception is the League
+   * page's Matchup tab, whose two team pages are these same roster views read
+   * for the two managers in one matchup. It rides only with `source=fantasy`,
+   * there being no other roster a team id could name.
+   */
   async report(
     start: string,
     end: string,
     source: RosterSource = 'saved',
     refresh = false,
+    teamId?: number | null,
   ): Promise<{
     start: string;
     end: string;
@@ -188,7 +196,8 @@ export const api = {
   }> {
     const src = source === 'fantasy' ? '&source=fantasy' : '';
     const fresh = refresh && source === 'fantasy' ? '&refresh=1' : '';
-    return request(`/api/report?start=${start}&end=${end}${src}${fresh}`);
+    const team = source === 'fantasy' && teamId != null ? `&teamId=${teamId}` : '';
+    return request(`/api/report?start=${start}&end=${end}${src}${fresh}${team}`);
   },
   // What this user has customised, saved server-side against their id. One
   // request on boot; the research board's columns are the only entry so far.

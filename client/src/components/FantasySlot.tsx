@@ -32,11 +32,14 @@ import { prettyGameDate } from '../lib';
  */
 function dayTitle(spot: FantasySlot): string {
   const when = spot.day === null ? 'today' : `on ${prettyGameDate(spot.day)}`;
+  // Whose lineup, possessive — `your` unless the table is drawing somebody
+  // else's team, which only the League page's Matchup tab does.
+  const who = spot.owner ?? 'your';
   return spot.starting
-    ? `In your fantasy lineup ${when} at ${spot.slot}`
+    ? `In ${who} fantasy lineup ${when} at ${spot.slot}`
     : spot.slot === 'IL'
-      ? `On your fantasy injured list ${when}`
-      : `On your fantasy bench ${when}`;
+      ? `On ${who} fantasy injured list ${when}`
+      : `On ${who} fantasy bench ${when}`;
 }
 
 /**
@@ -48,7 +51,7 @@ function dayTitle(spot: FantasySlot): string {
 function rangeTitle(spot: FantasySlot): string {
   const { startedDays, rangeDays } = spot;
   if (startedDays === null || rangeDays === null || rangeDays < 2) return '';
-  return ` · in your lineup on ${startedDays} of the ${rangeDays} days in view`;
+  return ` · in ${spot.owner ?? 'your'} lineup on ${startedDays} of the ${rangeDays} days in view`;
 }
 
 export function FantasySlotTag({ playerKey }: { playerKey: string }) {

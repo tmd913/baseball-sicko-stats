@@ -318,6 +318,29 @@ app.get(
     // morning still has his week. See **The roster is a range of rosters** in
     // `auth-and-storage.md` for the whole of that rule.
     const fantasy = req.query.source === 'fantasy';
+    /**
+     * **Whose fantasy team**, and absent means the reader's own — which is what
+     * every caller but one asks for. The exception is the League page's Matchup
+     * tab, whose two team pages are the same roster views read for the two
+     * managers in a matchup, so they name a team.
+     *
+     * Shape-checked here and **membership-checked in `fantasyWatchlist`**
+     * against the league the reader is actually connected to, which is the
+     * check that matters: a team id is not a credential, so the only thing
+     * worth enforcing is that it belongs to a league this user can already read
+     * whole (`getOwnership` returns every team's roster in it, and has since
+     * the free-agent set was first read as the complement of ownership).
+     */
+    const teamParam = req.query.teamId;
+    let teamId: number | null = null;
+    if (typeof teamParam === 'string' && teamParam !== '') {
+      const n = Number(teamParam);
+      if (!Number.isInteger(n) || n <= 0) {
+        res.status(400).json({ error: 'teamId must be a positive integer' });
+        return;
+      }
+      teamId = n;
+    }
     let watched: WatchPlayer[];
     let held: HeldDays | undefined;
     let teamName: string | null = null;
@@ -328,10 +351,13 @@ app.get(
         // told which of them each player was on. A read that fails leaves
         // `held` null, which is the old behaviour — today's team over every day
         // of the range.
-        const fan = await fantasyWatchlist(userId(req), req.query.refresh === '1', end, {
-          start,
+        const fan = await fantasyWatchlist(
+          userId(req),
+          req.query.refresh === '1',
           end,
-        });
+          { start, end },
+          teamId,
+        );
         watched = fan.players;
         teamName = fan.teamName;
         held = fan.held ?? undefined;
@@ -675,6 +701,7 @@ async function fantasyWatchlist(
   refresh = false,
   date?: string | null,
   range?: { start: string; end: string } | null,
+  teamIdOverride?: number | null,
 ): Promise<{
   players: WatchPlayer[];
   teamName: string | null;
@@ -685,7 +712,14 @@ async function fantasyWatchlist(
 }> {
   const espn = await getEspnLeague(user);
   if (!espn) throw new EspnAuthError('No ESPN league connected');
-  if (espn.teamId == null) {
+  // **Whose team**, and the override is what makes this answer for a
+  // leaguemate's. Without one it is the reader's own and every rule below is
+  // unchanged; with one it is any team in the league the reader is connected
+  // to, which is what the Matchup tab's two team pages read. The "pick a team"
+  // error is the reader's own case alone: naming somebody else's team is not a
+  // thing they need a team of their own to do.
+  const teamId = teamIdOverride ?? espn.teamId;
+  if (teamId == null) {
     throw new EspnAuthError(
       'No fantasy team chosen in this league — pick yours on the Fantasy league page.',
     );
@@ -693,8 +727,14 @@ async function fantasyWatchlist(
   const creds = await getEspnCreds(user);
   if (!creds) throw new EspnAuthError('No ESPN league connected');
   const own = await getOwnership(creds, refresh, date);
-  const roster = own.rosters[espn.teamId] ?? [];
-  const team = own.teams.find((t) => t.id === espn.teamId);
+  // A team id this league has never heard of is the caller's mistake and is
+  // said so rather than answered with an empty roster, which would read as a
+  // manager who has dropped everybody.
+  if (!own.teams.some((t) => t.id === teamId)) {
+    throw new EspnAuthError(`No team ${teamId} in this league.`);
+  }
+  const roster = own.rosters[teamId] ?? [];
+  const team = own.teams.find((t) => t.id === teamId);
   // **One read per day answers both questions**, where it used to answer one.
   // *Which players do the views report on* is the union of every day's roster —
   // your team as it stood over those days, the man you dropped on Tuesday
@@ -710,7 +750,7 @@ async function fantasyWatchlist(
     const seedDate = date && date > baseballToday() ? date : baseballToday();
     byDate = await getTeamRosters(
       creds,
-      espn.teamId,
+      teamId,
       range.start,
       range.end,
       { date: seedDate, roster },
