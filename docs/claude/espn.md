@@ -756,9 +756,57 @@ below carry `NONE`. So `halvesOf` takes `regularPeriods` and filters to it, and
 today, growing to 21 as the bracket is played, so a round nobody has reached is
 absent rather than offered empty.
 
-**The order is `Season · Current matchup · First half · Second half ·
-Playoffs`**, which is the order a manager reads them in: the whole year, then
-the week being played, then the year cut up. `season` is also the default.
+**The order is `Current matchup · Season · First half · Second half ·
+Playoffs`**, and the week being played is also the **default**. Season led for a
+while, on the argument that a manager reads the whole year first and then the
+narrowing — which is how a *reference* table reads and is not what this is. The
+Rankings tab is opened in the middle of a matchup to find out which categories
+are being lost **this week** and what can still be done about it; the season
+line is the context for that rather than the question. The two are one decision
+in the code: `asked` falls back to whichever span leads the list (`spans[0]`)
+rather than to a named constant, so the order and the default cannot come to
+disagree. `season` is the floor under that, being the one span every league has
+— it is ESPN's own line and needs no matchup period at all.
+
+### One column per side of the ball: how a team stands at batting, and at pitching
+
+**A column of ten ranks cannot say how a team is doing overall**, and that is
+the question a manager reads a league table with: `2nd · 5th · 1st · 9th · 3rd`
+down a batting run is arithmetic he is doing in his head. So each side of the
+ball gets a column of its own (`EspnRankSideTotal`, one per side the league
+actually scores), drawn at the head of its own group.
+
+**The figure is roto points** — `n + 1 − rank` summed over that side's
+categories, so first in a twelve-team category is worth 12 and last is worth 1.
+That rather than a mean of ranks for three reasons: it is the currency every
+categories league already keeps its standings in; it goes **up** with quality
+like every other value in the table, where a mean of ranks would be the one
+column reading backwards; and it needs no case for a tie. The direction is
+already baked in by `rankBy`, so a `lowerBetter` category needs no case of its
+own either — 1 is the best ERA and the most home runs alike, and both are worth
+the same points.
+
+**A tie shares the better points, deliberately**, where roto's own convention
+splits them (two teams tied for first take 11.5 each). This column is computed
+from the ranks printed beside it, and those share a rank and skip the next
+(1, 2, 2, 4) because that is what every league table does — so a reader adding
+up the ranks he can see has to get the number the column shows. The visible cost
+is that a side's points no longer sum to a fixed `categories × n(n+1)/2`:
+measured on the live league, batting comes to **408** against that formula's 390
+and pitching to **404**, and both excesses are *exactly* the `k(k−1)/2` their tie
+groups predict (**18** and **14**). That is the arithmetic agreeing with the
+table rather than drifting from it.
+
+**A team not ranked in a category earns nothing there**, the direction every
+absent figure here fails in, and `categories`/`of` ride along so a short total
+says so in the cell's own tooltip rather than looking like a bad one. A team
+ranked in none of a side's categories has **no total at all** rather than a
+total of nought.
+
+**Checked against an independent recompute through the route**, over every span
+the live league offers: `matchup`, `season`, `first` and `playoffs` each
+reproduce **24 of 24 side totals** — the points, the rank, and the count of
+categories scored in — with 0 mismatches.
 
 **`current` is ESPN's own pointer now**, not "the last period the schedule
 mentions". Those agree today only because the rounds past the current one are

@@ -477,8 +477,11 @@ board it was opened from asks.
 **`lt=` for the tab and `lspan=` for the Rankings span**, both by the rule
 `view=`, `win=` and `mp=` follow: each decides what data is on screen, so a link
 that leaves one out describes a different page. The Scoreboard is the default and
-is omitted, so a bare `?view=league` opens where the page always opened; `season`
-is the span default and is omitted the same way.
+is omitted, so a bare `?view=league` opens where the page always opened; the
+span default is **`matchup`** and is omitted the same way — which also means a
+link shared without one opens on the *recipient's* own current matchup rather
+than on the sharer's, the rule a date preset already follows by carrying its
+label rather than two dates.
 
 **`mup=` is on that list too and is not a tab**: it names the matchup whose
 *page* is open over the view, the way `player=` names the player whose page is
@@ -1322,6 +1325,51 @@ the loser goes quiet, because ten red cells down one side of a card would be the
 row shouting where the job is to mark a winner. A twelve-row table of ranks is
 that same picture turned on its side.
 
+### An overall column leads each group
+
+**Each side of the ball gets one column — `BAT` and `PIT` — carrying that
+team's roto points over the side's categories with its rank under them, like
+every category beside it.** It is the question a column of ten ranks cannot
+answer at a glance: a manager reading `2nd · 5th · 1st · 9th · 3rd` down his
+batting run is doing arithmetic in his head. Where the number comes from, why it
+is points rather than a mean of ranks, and what a tie does to it is in **ESPN
+fantasy league**, *One column per side of the ball*.
+
+**It leads its group rather than trailing it.** A totals column usually trails,
+and here it is what the run under it *comes to* — read left to right, the
+summary introduces the five columns that make it. It also puts the two overalls
+at fixed positions, one straight after the name and one straight after the
+batting run, so a reader finds them without counting columns.
+
+**`BAT` and `PIT` rather than `Batting` and `Pitching`**, because the header row
+reads `R · HR · RBI · SB · OPS` and a word among them would be the one column
+shouting. What the abbreviation cannot say, the header's own `title` does
+(`Batters · overall — points from all 5 batting categories, current matchup`),
+which is the same job that row's titles already do for `H` and `K` on a league
+scoring both sides. A stat id `STAT_META` has never been read against falls into
+its own `other` group and is headed `OTH` — the same honesty the group ordering
+already has.
+
+**It is set a shade stronger than the columns it totals** (`.lg-side-col` —
+`--text` at weight 800 against the categories' 600) and takes **no rule down its
+left edge**. A hairline between two runs is exactly what this table removed when
+the spanning `BATTERS` / `PITCHERS` header row went, on the grounds that a bare
+seam says there is a break here without saying what is on either side of it;
+reintroducing one for the same two runs would be that argument lost by default.
+
+**It sorts like any other column, and on its rank** — which is the one order the
+whole table shares. Sorting on the points would be the same order said in a
+second currency, and would break the rule that every column of this table opens
+on first place. Measured: one press of `BAT` gives `Swaggy Latinos 60 · 1st`,
+`Let's Go Mets 53 · 2nd`, `Baldy's Bozos 44 · 3rd`, a second press reverses it,
+and `aria-sort` reads `ascending` on the first.
+
+**Measured at 320 / 390 / 640 / 1200 / 1920**, both spans: **14 columns** (two
+identity, two overall, ten categories), the table 904.6 → 1920px inside a pane
+of the window's width, the badge column pinned at **0** with the pane scrolled
+to its far right, the header row **1px** inside it (the border) with it scrolled
+down, and **no horizontal overflow of the page body at any width**.
+
 ### The Rankings table groups its columns and does not label them
 
 **The two sections order the columns and are not drawn.** The `<thead>` was two
@@ -1970,10 +2018,11 @@ Driven against the built client and the live 2026 league at **390×844 and
   ERA · SB · WHIP · K · OPS · SVHD`; the pane bleeds to **0 from both edges**;
   the team column pins at **0** with the pane scrolled to its far right; rows are
   **58.55px** and the header row **36.00** at every width.
-- **The five spans read**: `Season` (`ESPN's own season line`), `Current matchup`
-  (`Week 19 · Aug 10 – Aug 15 · so far`), `First half` (`Weeks 1–9 · Mar 25 –
-  May 31`) and `Second half` (`Weeks 10–18 · Jun 1 – Aug 9`), each writing its
-  own `lspan=`. **The halves are an even division of the regular season by
+- **The five spans read**: `Current matchup` (`Week 19 · Aug 10 – Aug 16 · so
+  far`, and the one the tab opens on), `Season` (`ESPN's own season line`),
+  `First half` (`Weeks 1–9 · Mar 25 – May 31`) and `Second half` (`Weeks 10–18 ·
+  Jun 1 – Aug 9`), each writing its own `lspan=` except the default, which is
+  omitted. **The halves are an even division of the regular season by
   matchup period** — nine weeks each of an eighteen-week season, where they were
   cut on the All-Star break and ran 15 and 3; see **ESPN fantasy league**, *The
   halves are an even division*.

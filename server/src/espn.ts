@@ -3059,7 +3059,8 @@ export async function getMatchupWindow(
 // average, runs created — which comes back null and is dashed rather than
 // summed as though it were a count.
 
-/** The four cuts the Rankings tab offers. */
+/** The five cuts the Rankings tab offers, in the order it lists them —
+ *  `matchup` leads and is the default. */
 export type EspnRankSpan = 'season' | 'matchup' | 'first' | 'second' | 'playoffs';
 
 /** One span, as the tab strip needs it: what it is called and what it covers. */
@@ -3077,6 +3078,55 @@ export interface EspnRankSpanInfo {
   live: boolean;
 }
 
+/**
+ * **How a team stands across one whole side of the ball**, which is the one
+ * question a column of ten ranks cannot answer at a glance: a manager reading
+ * `2nd · 5th · 1st · 9th · 3rd` down his batting run is doing the arithmetic in
+ * his head, and the arithmetic has a name.
+ *
+ * **`points` is the league's own currency** — roto points, `n + 1 − rank`
+ * summed over that side's categories, so first place in a twelve-team category
+ * is worth 12 and last is worth 1. It is the right number rather than a mean of
+ * ranks for three reasons: it is what every categories league already scores
+ * its standings in, it goes **up** with quality like every other value in this
+ * table (a rank goes down, which would put one column in the table reading
+ * backwards), and it handles a tie without a special case, two teams sharing a
+ * rank sharing its points.
+ *
+ * **The direction is already baked in**, so a `lowerBetter` category needs no
+ * case of its own: `rankBy` has made 1 the best ERA and the most home runs
+ * alike, and `n + 1 − rank` is worth the same either way.
+ *
+ * **A tie shares the better points, and that is deliberate rather than a
+ * rounding of roto's own convention** — which splits them, giving two teams
+ * tied for first 11.5 each. This column is computed from the ranks printed
+ * beside it, and those share a rank and skip the next (1, 2, 2, 4) because that
+ * is what every league table does; a reader adding up the ranks he can see has
+ * to get the number this column shows. The visible cost is that a side's points
+ * no longer sum to a fixed `categories × n(n+1)/2`: measured on the live league,
+ * batting comes to 408 against that formula's 390 and pitching to 404, and both
+ * excesses are **exactly** the `k(k−1)/2` its tie groups predict (18 and 14).
+ * That is the arithmetic being consistent with the table, not drifting from it.
+ *
+ * **A team not ranked in a category earns nothing there**, which is the same
+ * direction `values` itself fails in — absent rather than invented — and is why
+ * `categories` rides along: it is how many of that side's categories the team
+ * actually scored in, so a total that is short says so rather than looking like
+ * a bad one. In practice it cannot differ across a league, a category having a
+ * figure for every team or for none.
+ */
+export interface EspnRankSideTotal {
+  /** Roto points over that side's categories — larger is better. */
+  points: number;
+  /** 1 is best. Competition ranking over the points, like every other rank
+   *  here, so ties share a rank and the next distinct total skips. */
+  rank: number;
+  /** How many of that side's categories this team scored in, and how many
+   *  there were — the pair that says whether `points` is a full total. */
+  categories: number;
+  of: number;
+}
+
 /** One team's row: its figure in each category and where that figure stands. */
 export interface EspnRankRow {
   teamId: number;
@@ -3087,6 +3137,10 @@ export interface EspnRankRow {
   /** 1 is best, whichever direction the category runs. Absent exactly where
    *  the value is: a team with no figure has not got the worst one. */
   ranks: Record<number, number>;
+  /** The whole of one side of the ball, per side the league actually scores.
+   *  Absent for a side with no categories in it, so a pitching-only league
+   *  draws no batting column rather than a column of noughts. */
+  sides: Partial<Record<EspnCategorySide, EspnRankSideTotal>>;
 }
 
 export interface EspnRankings {
@@ -3351,7 +3405,7 @@ function rankBy(
 
 /**
  * The Rankings tab: every team's figure and standing in each of the league's
- * scoring categories, over one of four spans.
+ * scoring categories, over one of five spans.
  *
  * **`matchup` and `season` are ESPN's own numbers and the two halves are ours**
  * — the current period's `scoreByStat` and `valuesByStat` respectively, drawn
@@ -3399,12 +3453,18 @@ export async function getRankings(
     return { start, end };
   };
 
-  // **Season leads**, then the week being played, then the season cut into its
-  // two halves, then the bracket. That is the order a manager reads them in —
-  // the whole year first, then the narrowing — and it is why `season` is also
-  // the default rather than the first thing in the array.
+  // **The week being played leads**, then the whole year, then the season cut
+  // into its two halves, then the bracket.
+  //
+  // Season led for a while and the argument for it was "the whole year first,
+  // then the narrowing", which is how a *reference* table reads. This is not
+  // one: a manager opens the Rankings tab in the middle of a matchup to find
+  // out which categories he is losing **this week** and what he can still do
+  // about it, and the season line is the context for that rather than the
+  // question. The order is also the default — `asked` falls back to whichever
+  // span leads the list — so the two cannot come to disagree about which span
+  // the tab is about.
   const spans: EspnRankSpanInfo[] = [];
-  spans.push({ span: 'season', label: 'Season', periods: null, start: null, end: null, live: false });
   if (current != null && meta.categories.length > 0) {
     const { start, end } = await dated(current, current);
     spans.push({
@@ -3416,6 +3476,7 @@ export async function getRankings(
       live: true,
     });
   }
+  spans.push({ span: 'season', label: 'Season', periods: null, start: null, end: null, live: false });
   for (const [key, label, list] of [
     ['first', 'First half', halves?.first ?? []],
     ['second', 'Second half', halves?.second ?? []],
@@ -3433,7 +3494,12 @@ export async function getRankings(
     });
   }
 
-  const asked = span && spans.some((s) => s.span === span) ? span : 'season';
+  // A span this league cannot be asked for falls back to the one that leads
+  // the list rather than to a named constant — which is what keeps the default
+  // and the order one decision. `season` is the floor because it is the one
+  // span every league has: it is ESPN's own line and needs no matchup period.
+  const asked =
+    span && spans.some((s) => s.span === span) ? span : (spans[0]?.span ?? 'season');
 
   // The values, by team. Three sources for four spans, and each is the
   // cheapest honest answer to its own question.
@@ -3531,16 +3597,61 @@ export async function getRankings(
     teamId: t.id,
     values: values[t.id] ?? {},
     ranks: {},
+    sides: {},
   }));
   const byTeam = new Map(rows.map((r) => [r.teamId, r]));
+  /** How many teams are ranked in each category — the denominator a roto point
+   *  is worth, and per category rather than per league because a category
+   *  nobody has a figure for ranks nobody. */
+  const rankedIn = new Map<number, number>();
   for (const cat of meta.categories) {
     const entries = rows
       .filter((r) => typeof r.values[cat.statId] === 'number')
       .map((r) => ({ teamId: r.teamId, value: r.values[cat.statId] }));
     if (entries.length === 0) continue;
+    rankedIn.set(cat.statId, entries.length);
     for (const [teamId, rank] of Object.entries(rankBy(entries, cat.lowerBetter))) {
       const row = byTeam.get(Number(teamId));
       if (row) row.ranks[cat.statId] = rank;
+    }
+  }
+
+  // **One side of the ball as a single figure**, per side the league scores.
+  // Roto points over that side's categories, then ranked like any other column
+  // — see `EspnRankSideTotal` for why points rather than a mean of ranks, and
+  // why `lowerBetter` needs no case of its own here.
+  for (const side of ['batting', 'pitching', 'other'] as const) {
+    const cats = meta.categories.filter((c) => c.side === side);
+    if (cats.length === 0) continue;
+    const totals: { teamId: number; value: number; scored: number }[] = [];
+    for (const row of rows) {
+      let points = 0;
+      let scored = 0;
+      for (const cat of cats) {
+        const rank = row.ranks[cat.statId];
+        const n = rankedIn.get(cat.statId);
+        if (typeof rank !== 'number' || !n) continue;
+        points += n + 1 - rank;
+        scored++;
+      }
+      // A team ranked in none of a side's categories has no total rather than
+      // a total of nought — the rule every absent figure on this table follows.
+      if (scored > 0) totals.push({ teamId: row.teamId, value: points, scored });
+    }
+    if (totals.length === 0) continue;
+    const ranked = rankBy(
+      totals.map((t) => ({ teamId: t.teamId, value: t.value })),
+      false,
+    );
+    for (const t of totals) {
+      const row = byTeam.get(t.teamId);
+      if (!row) continue;
+      row.sides[side] = {
+        points: t.value,
+        rank: ranked[t.teamId],
+        categories: t.scored,
+        of: cats.length,
+      };
     }
   }
 

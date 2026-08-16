@@ -1499,7 +1499,7 @@ export interface EspnScoreboard {
 
 /**
  * The League page's **Rankings** tab — every team's figure in each scoring
- * category and where that figure stands, over one of four spans.
+ * category and where that figure stands, over one of five spans.
  *
  * Mirrors `EspnRankings` and its parts in the server's `espn.ts`.
  */
@@ -1518,6 +1518,26 @@ export interface EspnRankSpanInfo {
   live: boolean;
 }
 
+/**
+ * **One whole side of the ball as a single figure** — the question a column of
+ * ten ranks cannot answer at a glance.
+ *
+ * `points` is roto points, `n + 1 − rank` summed over that side's categories,
+ * so first place in a twelve-team category is worth 12 and last is worth 1;
+ * `rank` is where that total stands. Mirrors
+ * `server/src/espn.ts::EspnRankSideTotal`, where the whole of why it is points
+ * rather than a mean of ranks — and why a tie shares the better points — is set
+ * out.
+ */
+export interface EspnRankSideTotal {
+  points: number;
+  rank: number;
+  /** How many of that side's categories this team scored in, of how many there
+   *  were: the pair that says whether `points` is a full total. */
+  categories: number;
+  of: number;
+}
+
 export interface EspnRankRow {
   teamId: number;
   /** Keyed by stat id. A category with no honest figure for this span is
@@ -1526,6 +1546,9 @@ export interface EspnRankRow {
   /** 1 is best whichever way the category runs, ties sharing a rank. Absent
    *  exactly where the value is. */
   ranks: Record<number, number>;
+  /** The whole of one side of the ball, per side the league scores. Absent for
+   *  a side with no categories in it. */
+  sides: Partial<Record<EspnCategorySide, EspnRankSideTotal>>;
 }
 
 export interface EspnRankings {

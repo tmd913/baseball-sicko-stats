@@ -11662,6 +11662,22 @@ body {
   font-weight: 600;
 }
 
+/* The overall column that leads each group — one side of the ball as roto
+   points, with its rank under it like every category beside it.
+
+   **The value is `--text` where a category's is `--muted`-adjacent by weight
+   alone**, which is the whole of the distinction: a totals column is set a
+   shade stronger than the columns it totals, and that is convention rather
+   than invention. Deliberately **no rule down its left edge** — a hairline
+   between two runs is exactly what this table removed when the spanning
+   `BATTERS` / `PITCHERS` header row went, on the grounds that a bare seam says
+   there is a break here without saying what is on either side of it. What says
+   which side this is, is the header (`BAT` / `PIT`) and its own `title`. */
+.league-table .lg-side-col {
+  font-weight: 800;
+  color: var(--text);
+}
+
 /* ---- The three tabs, and the Rankings span --------------------------------
    Both strips are **folded onto `.view-switch` / `.view-tab`** up beside the
    app's own view switch rather than restyled to resemble it, which is this

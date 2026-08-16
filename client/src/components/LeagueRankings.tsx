@@ -1,6 +1,6 @@
 /**
  * The League page's **Rankings** tab — where every team stands in each of the
- * league's own scoring categories, over one of four spans.
+ * league's own scoring categories, over one of five spans.
  *
  * **This is the season table the page opened with, read the other way round.**
  * That table was the raw values, and a value on its own is only half of what a
@@ -21,12 +21,26 @@
 import { useMemo, useState } from 'react';
 import type {
   EspnCategory,
+  EspnCategorySide,
   EspnRankSpan,
   EspnRankSpanInfo,
   EspnRankings,
 } from '../types';
 import { LoadingBlock } from './Loading';
 import { TeamLogo, categoryGroups, fmtValue, prettyDate, record } from './LeagueView';
+
+/**
+ * What the overall column is called in a header of two- and three-letter
+ * abbreviations. `BAT` and `PIT` rather than `Batting` and `Pitching`: this row
+ * reads `R · HR · RBI · SB · OPS`, and a word among them would be the one
+ * column shouting. `other` is the bucket a stat id `STAT_META` has never been
+ * read against falls into, and it says so rather than guessing a side.
+ */
+const SIDE_ABBR: Record<EspnCategorySide, string> = {
+  batting: 'BAT',
+  pitching: 'PIT',
+  other: 'OTH',
+};
 
 /** `1st`, `2nd`, `3rd`, `12th` — the ordinal a league table is read in. */
 function ordinal(n: number): string {
@@ -135,11 +149,16 @@ export function spanDetail(info: EspnRankSpanInfo | undefined): string {
   return parts.join(' · ');
 }
 
-type SortKey = { kind: 'team' } | { kind: 'cat'; statId: number };
+type SortKey =
+  | { kind: 'team' }
+  | { kind: 'cat'; statId: number }
+  | { kind: 'side'; side: EspnCategorySide };
 
 function sameKey(a: SortKey, b: SortKey): boolean {
   if (a.kind !== b.kind) return false;
-  return a.kind !== 'cat' || b.kind !== 'cat' || a.statId === b.statId;
+  if (a.kind === 'cat' && b.kind === 'cat') return a.statId === b.statId;
+  if (a.kind === 'side' && b.kind === 'side') return a.side === b.side;
+  return true;
 }
 
 /**
@@ -173,7 +192,6 @@ function RankTable({
   // the league's own array, so a cell, its header and the group head above it
   // cannot come to disagree about which column is which.
   const groups = useMemo(() => categoryGroups(categories), [categories]);
-  const shown = useMemo(() => groups.flatMap((g) => g.categories), [groups]);
 
   // How many teams are ranked in each category — the badge's denominator and
   // the wash's, computed once rather than per cell.
@@ -185,6 +203,16 @@ function RankTable({
     return out;
   }, [categories, rankings.rows]);
 
+  // The same denominator for the two overall columns: how many teams have a
+  // total on that side at all, which is what its badge is a rank *of*.
+  const rankedSide = useMemo(() => {
+    const out = new Map<EspnCategorySide, number>();
+    for (const g of groups) {
+      out.set(g.side, rankings.rows.filter((r) => r.sides[g.side]).length);
+    }
+    return out;
+  }, [groups, rankings.rows]);
+
   const rows = useMemo(() => {
     const out = [...rankings.rows];
     out.sort((a, b) => {
@@ -192,8 +220,14 @@ function RankTable({
       if (sort.kind === 'team') {
         d = ((teams.get(a.teamId)?.seed || 99) - (teams.get(b.teamId)?.seed || 99)) as number;
       } else {
-        const ar = a.ranks[sort.statId];
-        const br = b.ranks[sort.statId];
+        // Both column kinds sort on their **rank**, which is the one order the
+        // whole table shares — an overall column is a rank like any other, and
+        // sorting it on the points would be the same order said in a second
+        // currency.
+        const ar =
+          sort.kind === 'cat' ? a.ranks[sort.statId] : a.sides[sort.side]?.rank;
+        const br =
+          sort.kind === 'cat' ? b.ranks[sort.statId] : b.sides[sort.side]?.rank;
         // Nulls to the bottom in **both** directions, the board's own rule: a
         // team with no figure has not got the worst one.
         const an = typeof ar !== 'number';
@@ -270,8 +304,22 @@ function RankTable({
                 identity belongs on its name. */}
             <th scope="col" className="lg-logo-col" aria-label="Team badge" />
             {head({ kind: 'team' }, 'Team', 'The league standing', 'lg-name-col')}
-            {groups.flatMap((g) =>
-              g.categories.map((c) =>
+            {groups.flatMap((g) => [
+              /* **The group's own overall, leading it.** A manager reading
+                 `2nd · 5th · 1st · 9th · 3rd` down his batting run is doing
+                 arithmetic in his head, and the arithmetic has a name: roto
+                 points over that side's categories, ranked like any other
+                 column. It leads rather than trails because it is what the run
+                 under it comes to, and because two summaries at fixed positions
+                 — one after the name, one after the batting run — are what a
+                 reader can find without counting columns. */
+              head(
+                { kind: 'side', side: g.side },
+                SIDE_ABBR[g.side],
+                `${g.label} · overall — points from all ${g.categories.length} ${g.label.toLowerCase()} categories, ${spanWords}`,
+                'lg-side-col',
+              ),
+              ...g.categories.map((c) =>
                 head(
                   { kind: 'cat', statId: c.statId },
                   c.label,
@@ -282,7 +330,7 @@ function RankTable({
                   }`,
                 ),
               ),
-            )}
+            ])}
           </tr>
         </thead>
         <tbody>
@@ -315,36 +363,62 @@ function RankTable({
                     <span className="lg-row-sub">{t ? record(t) : ''}</span>
                   </span>
                 </th>
-                {shown.map((c) => {
-                  const v = r.values[c.statId];
-                  const rank = r.ranks[c.statId];
-                  const n = ranked.get(c.statId) ?? 0;
-                  const badge = rankBadge(rank, n);
-                  return (
-                    <td
-                      key={c.statId}
-                      className="lg-num"
-                    >
-                      {fmtValue(v, c)}
-                      {/* The rank under the value, in the slot the research
-                          board's own percentile badge takes — `.col-rank`,
-                          folded onto rather than restyled, so a second line
-                          under a number is one object in this app. What this
-                          table adds is the fill: the scale rides as a custom
-                          property, so the colour is computed here (where the
-                          rank and its population are) and painted there (where
-                          the chip's shape and its contrast rule live). */}
-                      {typeof rank === 'number' && (
+                {groups.flatMap((g) => {
+                  const tot = r.sides[g.side];
+                  const sideN = rankedSide.get(g.side) ?? 0;
+                  return [
+                    /* **The group's own overall, leading it**, drawn as the
+                       same cell shape as every category beside it — a value
+                       with its rank under it — so the reader learns one thing
+                       rather than two. The value goes **up** with quality like
+                       every other value in the table, which is what points buy
+                       over a mean of ranks. */
+                    <td key={`side-${g.side}`} className="lg-num lg-side-col">
+                      {tot ? tot.points : '—'}
+                      {tot && (
                         <span
                           className="col-rank"
-                          style={badge}
-                          title={`${c.name}: ${ordinal(rank)} of ${n} — ${spanWords}`}
+                          style={rankBadge(tot.rank, sideN)}
+                          title={`${g.label} overall: ${ordinal(tot.rank)} of ${sideN} — ${
+                            tot.points
+                          } points from ${
+                            tot.categories === tot.of ? `all ${tot.of}` : `${tot.categories} of ${tot.of}`
+                          } ${g.label.toLowerCase()} categories, ${spanWords}`}
                         >
-                          {ordinal(rank)}
+                          {ordinal(tot.rank)}
                         </span>
                       )}
-                    </td>
-                  );
+                    </td>,
+                    ...g.categories.map((c) => {
+                      const v = r.values[c.statId];
+                      const rank = r.ranks[c.statId];
+                      const n = ranked.get(c.statId) ?? 0;
+                      const badge = rankBadge(rank, n);
+                      return (
+                        <td key={c.statId} className="lg-num">
+                          {fmtValue(v, c)}
+                          {/* The rank under the value, in the slot the research
+                              board's own percentile badge takes — `.col-rank`,
+                              folded onto rather than restyled, so a second line
+                              under a number is one object in this app. What this
+                              table adds is the fill: the scale rides as a custom
+                              property, so the colour is computed here (where the
+                              rank and its population are) and painted there
+                              (where the chip's shape and its contrast rule
+                              live). */}
+                          {typeof rank === 'number' && (
+                            <span
+                              className="col-rank"
+                              style={badge}
+                              title={`${c.name}: ${ordinal(rank)} of ${n} — ${spanWords}`}
+                            >
+                              {ordinal(rank)}
+                            </span>
+                          )}
+                        </td>
+                      );
+                    }),
+                  ];
                 })}
               </tr>
             );
