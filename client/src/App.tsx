@@ -2923,6 +2923,39 @@ export default function App() {
       </div>
     ) : null;
   const kindTabs = kindSwitch(showKindTabs, shownKind);
+  /**
+   * **The selected League tab is scrolled into view on a phone**, where that
+   * strip scrolls sideways rather than wrapping. Four tabs are 377px against
+   * the 346 a 390px screen leaves, so `Transactions` sits off the right edge —
+   * and a `?lt=transactions` link, or the red dot being pressed after a poll,
+   * would open the page with the tab it is on nowhere to be seen.
+   *
+   * Scrolled **by hand rather than with `scrollIntoView`**, which walks up
+   * every scrollable ancestor and would drag the page with it — the rule the
+   * research board's position row already follows, along with the peek that
+   * lands a pill inside the edge rather than flush with it, so the strip says
+   * there is more of itself to swipe to.
+   */
+  const leagueTabsRef = useRef<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    const row = leagueTabsRef.current;
+    const tab = row?.querySelector<HTMLElement>('.lg-tab.active');
+    if (!row || !tab) return;
+    const left = tab.offsetLeft - row.offsetLeft;
+    const overLeft = left - row.scrollLeft;
+    const overRight = left + tab.offsetWidth - (row.scrollLeft + row.clientWidth);
+    const PEEK = 44;
+    if (overLeft < 0) row.scrollLeft += overLeft - PEEK;
+    else if (overRight > 0) row.scrollLeft += overRight + PEEK;
+    // `espnConnected` is in the list because it is what *draws* the strip: on a
+    // `?lt=transactions` deep link the tab and the view are already their final
+    // values when this first runs, and the row does not exist yet — the ESPN
+    // status not having landed — so without it the effect ran once against a
+    // null ref and never again, and the page opened with the tab it is on off
+    // the right edge. Measured at 390 before: `scrollLeft` 0 with
+    // `Transactions` not fully visible.
+  }, [leagueTab, view, espnConnected]);
+
   /* The League page's own three tabs, in the app's tab row rather than on the
      page below it. They are the same kind of statement as every other group in
      `.view-bar-tabs` — which page, then which reading of it — and the row is
@@ -2933,7 +2966,7 @@ export default function App() {
      for it. */
   const leagueTabs =
     view === 'league' && espnConnected ? (
-      <div className="lg-tabs" role="tablist" aria-label="League">
+      <div className="lg-tabs" role="tablist" aria-label="League" ref={leagueTabsRef}>
         {LEAGUE_TABS.map((t) => {
           /* The one mark in this row: moves have landed that this reader has
              not seen. It is **absolutely positioned in the tab's own padding**

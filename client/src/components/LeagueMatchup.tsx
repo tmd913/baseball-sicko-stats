@@ -1,14 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
-import { api } from '../api';
-import { useDelayedFlag } from '../hooks';
-import { LoadingBlock } from './Loading';
+import { useMemo, useState } from 'react';
 import LeagueTeam from './LeagueTeam';
 import { catScore, categoryGroups, fmtValue, prettyDate, record, TeamLogo } from './LeagueView';
 import type {
   EspnCategory,
   EspnMatchup,
   EspnMatchupSide,
-  EspnRosterPlayer,
   EspnScoreboard,
   EspnStandingsTeam,
 } from '../types';
@@ -86,131 +82,6 @@ function SideHead({
 }
 
 /**
- * Both teams' rosters, side by side.
- *
- * **Behind a toggle rather than always drawn**, and the reason is a request
- * rather than a taste: it is two ESPN reads of ~198KB each, and the categories
- * above are what the tab is for. Read once per matchup and kept — a settled
- * week's roster is a fact and the server holds it on a blob, and a live week's
- * is the ten minutes the ownership map already runs on.
- */
-function Rosters({
-  away,
-  home,
-  teams,
-  date,
-  onOpenPlayer,
-}: {
-  /** Null on a bye, which has one team and is still worth reading. */
-  away: EspnMatchupSide | null;
-  home: EspnMatchupSide;
-  teams: Map<number, EspnStandingsTeam>;
-  date: string;
-  onOpenPlayer: (mlbId: number) => void;
-}) {
-  const [rosters, setRosters] = useState<Record<string, EspnRosterPlayer[] | null> | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(false);
-  const waiting = useDelayedFlag(loading);
-  const sides = away ? [away, home] : [home];
-  const ids = sides.map((s) => s.teamId);
-  const key = `${ids.join(',')}:${date}`;
-
-  /**
-   * **The dependency array is the whole of the guard, and a ref beside it was
-   * a bug.** This effect used to mark the request as asked *before* firing it
-   * and bail on a second pass that found the mark — which is fatal under
-   * `StrictMode`: React mounts, tears down and re-runs, so pass one set the
-   * mark and had its result thrown away by the teardown (`live` false, so
-   * neither `setRosters` nor `setLoading(false)` ever ran), and pass two saw
-   * the mark and returned. `loading` stayed true for ever and the spinner never
-   * resolved. It reproduced only under `npm run dev`, React double-invoking in
-   * development builds alone, which is why it survived being driven against the
-   * built client.
-   *
-   * The ref bought nothing the deps do not: `key` is the two team ids and the
-   * date, so an unrelated re-render re-runs nothing, and a genuine change is
-   * exactly when a re-read is wanted. The double invoke now costs a second
-   * request in development and nothing in production — and not even a second
-   * ESPN read, `getTeamRoster`'s `inFlight` map deduping the pair server-side.
-   *
-   * The same mistake, in the same shape, is recorded on the opponent table's
-   * own read; the rule to carry away is **never mark a request answered before
-   * it is answered**, or unmark it in the cleanup.
-   */
-  useEffect(() => {
-    let live = true;
-    setLoading(true);
-    setError(false);
-    setRosters(null);
-    api
-      .espnRosters(ids, date)
-      .then((r) => live && setRosters(r.rosters))
-      .catch(() => live && setError(true))
-      .finally(() => live && setLoading(false));
-    return () => {
-      live = false;
-    };
-    // `ids` is derived from the two team ids `key` already names, so the key is
-    // the whole of what this effect depends on.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
-
-  if (waiting) return <LoadingBlock>Reading both rosters</LoadingBlock>;
-  if (error) {
-    return <div className="mup-note">Couldn&rsquo;t read the rosters — press Rosters again to retry.</div>;
-  }
-  if (!rosters) return null;
-
-  return (
-    <div className="mup-rosters">
-      {sides.map((side) => {
-        const list = rosters[String(side.teamId)];
-        const team = teams.get(side.teamId);
-        return (
-          <div className="mup-roster" key={side.teamId}>
-            <div className="mup-roster-head">
-              <TeamLogo team={team} />
-              <span className="mup-roster-name">{team?.name ?? `Team ${side.teamId}`}</span>
-            </div>
-            {!list ? (
-              <div className="mup-note">ESPN wouldn&rsquo;t answer for this team.</div>
-            ) : (
-              <ul className="mup-roster-list">
-                {list.map((p) => (
-                  <li
-                    key={`${p.espnId}-${p.slotId}`}
-                    className={`mup-player${p.starting ? '' : ' mup-benched'}`}
-                  >
-                    {/* The slot leads, as it does on the summary table's own
-                        rows: a fantasy roster is scanned by slot. Accent for a
-                        lineup spot, muted for the bench and the IL — starting
-                        or not is the question, not which slot. */}
-                    <span className={`mup-slot${p.starting ? ' mup-slot-on' : ''}`}>{p.slot}</span>
-                    {p.mlbId !== null ? (
-                      <button
-                        type="button"
-                        className="mup-player-name"
-                        onClick={() => onOpenPlayer(p.mlbId!)}
-                      >
-                        {p.name}
-                      </button>
-                    ) : (
-                      <span className="mup-player-name mup-player-plain">{p.name}</span>
-                    )}
-                    {p.injuryStatus && <span className="mup-inj">{p.injuryStatus.replace(/_/g, ' ')}</span>}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-/**
  * Which of the three pages of a matchup is on screen: one manager's team, the
  * category comparison, or the other manager's.
  *
@@ -228,22 +99,17 @@ export default function LeagueMatchupTab({
   matchupId,
   onMatchup,
   onPeriod,
-  onOpenPlayer,
   onOpenDetails,
 }: {
   board: EspnScoreboard;
   matchupId: number | null;
   onMatchup: (id: number) => void;
   onPeriod: (period: number) => void;
-  onOpenPlayer: (mlbId: number) => void;
-  /** Open a player's page by the app's `${kind}-${id}` key — what the two team
-   *  pages' tables and feeds do with a name, and what every other route into
-   *  that page uses. The roster list beside them names a player by MLB id
-   *  alone and so keeps `onOpenPlayer`; the two are the same page reached from
-   *  two shapes of fact. */
+  /** Open a player's page by the app's `${kind}-${id}` key — which is how the
+   *  two team pages' tables and feeds name a player, and what every other
+   *  route into that page uses. */
   onOpenDetails: (key: string) => void;
 }) {
-  const [showRosters, setShowRosters] = useState(false);
   /**
    * **The chosen side is stored against the matchup it was chosen for**, so
    * changing matchup or stepping a week lands back on Summary rather than on
@@ -347,12 +213,6 @@ export default function LeagueMatchupTab({
         ? String(Math.round(side.points * 100) / 100)
         : '—'
       : catScore(side);
-  // The roster view reads the **last day of the period**, which for a week
-  // still being played is today: a settled week shows the team that finished it
-  // and a live one shows the team as it stands. That is the same anchor the
-  // summary table's slot chips take, one level up.
-  const rosterDate = board.end ?? '';
-
   /**
    * **The three pages of a matchup**, away on the left and home on the right —
    * the same order the card below puts them in, so the strip and the comparison
@@ -415,22 +275,6 @@ export default function LeagueMatchupTab({
             ))}
           </select>
         </label>
-        {/* The side-by-side lineups belong to the comparison rather than to the
-            page: on a team tab there is one team on screen and the control
-            would offer two. It is the one thing the team pages do *not*
-            subsume — they are one manager's week in depth where this is both
-            managers' lineups against each other. */}
-        {sideTab === 'summary' && (
-          <button
-            type="button"
-            className={`research-toggle mup-roster-btn${showRosters ? ' on' : ''}`}
-            aria-pressed={showRosters}
-            onClick={() => setShowRosters((v) => !v)}
-            title="Both teams' rosters for the last day of this period"
-          >
-            Rosters
-          </button>
-        )}
       </div>
 
       {/* Two teams with the comparison between them, which is the shape of the
@@ -445,7 +289,9 @@ export default function LeagueMatchupTab({
               type="button"
               role="tab"
               aria-selected={s.tab === sideTab}
-              className={`view-tab${s.tab === sideTab ? ' active' : ''}`}
+              className={`view-tab${s.tab === sideTab ? ' active' : ''}${
+                s.tab === 'summary' ? '' : ' mup-side-team'
+              }`}
               title={s.title}
               onClick={() => setSideChoice({ id: matchup.id, side: s.tab })}
             >
@@ -547,16 +393,6 @@ export default function LeagueMatchupTab({
               ))
             )}
           </div>
-        )}
-
-        {showRosters && rosterDate && (
-          <Rosters
-            away={away}
-            home={home}
-            teams={teams}
-            date={rosterDate}
-            onOpenPlayer={onOpenPlayer}
-          />
         )}
         </>
       )}

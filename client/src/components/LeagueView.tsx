@@ -685,7 +685,6 @@ export default function LeagueView({
           matchupId={matchupId}
           onMatchup={onMatchup}
           onPeriod={onPeriod}
-          onOpenPlayer={onOpenPlayer}
           onOpenDetails={onOpenDetails}
         />
       ) : (
