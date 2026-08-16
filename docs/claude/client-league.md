@@ -779,11 +779,24 @@ caveat the points card on the Scoreboard already carries.
 **It is the one thing a category matchup turns on that is not a category.** A
 manager two behind in saves with `2/10` left has a move to make and one at
 `10/10` has not, and the page said nothing about it. So the comparison ends on a
-`Moves` group with one row — `5/10 · Acq · 7/10` — in the same `1fr auto 1fr` as
-every category above it, so each figure lands under the name it belongs to. It
-is **at the foot rather than the head** because it is what a manager does
-*about* the categories rather than one of them, and it takes **no colour**:
-neither side is winning acquisitions.
+`Moves` group, its two counts at the ends of its **heading** — `5/10 · MOVES ·
+7/10` — in the same grid as every category above it, so each figure lands under
+the name it belongs to. It is **at the foot rather than the head** because it is
+what a manager does *about* the categories rather than one of them, and it takes
+**no colour**: neither side is winning acquisitions.
+
+**The counts are the heading and there is no `Acq` row.** They were a category
+row of their own under a bare `MOVES` label, which is two lines spent on a
+heading and a subtitle for one section — and which drew a *category*'s shape
+around the one figure on this card that is not one: nobody is winning
+acquisitions, so that row had no bar, no colour, and two deliberately empty
+track cells whose only job was to hold its figures in the right columns. The
+heading is the row now, exactly as `BATTERS` carries its own side's
+won-lost-tied at the same two edges — one line, the same grid, the same
+`.mup-group-tally`, and the lists start where the row used to. Measured at 320,
+390 and 1100: the two figures land in the same columns as every category figure
+above them (x=163, right=937 at 1100 against a first row's 163 and 883), the
+card is one row shorter, and nothing clips at the narrowest width.
 
 **`5/10` where the league limits them per period and a bare count where it does
 not**, which is the honest reading of a league with no cap — the number is still
@@ -797,9 +810,9 @@ acquisitions a manager gets*.
 **`5/10` says a manager has moved five times and not whom he moved**, which on a
 page about two teams' week is the more interesting half by some way: a category
 swinging back is usually somebody's pickup, and this is where the pickup gets a
-name. Under the count are two columns — mirrored like every other pair on this
-card, each hugging the edge its own team's figures are on — of the players that
-side took **In** and let **Out**.
+name. Under the heading that carries those counts are two columns — mirrored
+like every other pair on this card, each hugging the edge its own team's figures
+are on — of the players that side took **In** and let **Out**.
 
 **Grouped by direction rather than labelled per row.** The Transactions tab's
 own shape is the move's word before each name, and it fails on the one case this
