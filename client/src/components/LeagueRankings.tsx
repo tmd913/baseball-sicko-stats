@@ -330,7 +330,7 @@ function RankTable({
                 { kind: 'overall' },
                 'OVR',
                 `Overall — points from all ${categories.length} scoring categories, ${spanWords}`,
-                'lg-side-col lg-ovr-col',
+                'lg-side-col',
               )}
             {groups.flatMap((g) => [
               /* **The group's own overall, leading it.** A manager reading
@@ -392,7 +392,7 @@ function RankTable({
                   </span>
                 </th>
                 {hasOverall && (
-                  <td className="lg-num lg-side-col lg-ovr-col">
+                  <td className="lg-num lg-side-col">
                     {r.overall ? r.overall.points : '—'}
                     {r.overall && (
                       <span

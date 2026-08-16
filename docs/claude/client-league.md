@@ -1338,10 +1338,18 @@ them for that reason: the three read as a summary and its two parts rather than
 as three peers, and a reader can check the derived figure by adding the two
 columns beside it. It is drawn only where there is more than one side to
 combine — the server declines to compute it otherwise, and the client reads that
-decision rather than repeating the test. It takes the **accent** where the two
-side totals take `--text`, which is the same one-step ladder the identity block
-already uses (a name over a record) rather than a new device; its badge is
-untouched, being on the same red-to-blue scale as every other rank on the table.
+decision rather than repeating the test. **It takes no colour of its own**, which is a reversal: it
+had the accent for a round, on the argument that the summary of a row should be
+a shade louder than the two halves it is made of. That lost to the rule this
+table already states at length — **colour here is the rank badge's**, a
+red-to-blue scale over twelve teams, and it is the one thing on the page
+carrying meaning in hue. An accent column beside it is a second colour system in
+the same row, saying *this column is important* where everything else coloured
+is saying *this figure is good*. What marks `OVR` is where it sits and the
+weight `.lg-side-col` gives all three summary columns, which is what a summary
+needs. Measured after: the `OVR` cell computes `rgb(232, 238, 252)` at weight
+800 — identical to `BAT` beside it, against a category cell's 600 — while its
+badge still carries the scale.
  It is the question a column of ten ranks cannot
 answer at a glance: a manager reading `2nd · 5th · 1st · 9th · 3rd` down his
 batting run is doing arithmetic in his head. Where the number comes from, why it
