@@ -1357,6 +1357,43 @@ the spanning `BATTERS` / `PITCHERS` header row went, on the grounds that a bare
 seam says there is a break here without saying what is on either side of it;
 reintroducing one for the same two runs would be that argument lost by default.
 
+**And it is the one thing on this table that needs a key**, which is why the
+caption line above the table now carries an ⓘ. Every other column is a figure
+and its standing, and both explain themselves; `BAT` and `PIT` are a figure the
+app *made up* out of the ranks beside them, and a number nobody can derive by
+looking at the page is a number that has to be explained somewhere. It is the
+app's own `InfoKey` — the same disclosure the Splits tab and the Charts tab open
+— rather than a paragraph under the strip, for that component's stated reason: a
+key is read once and is in the way ever after.
+
+**It is written from the league rather than about one.** The team count and the
+category counts come off the rankings themselves, so a twelve-team 5×5 reads
+*"1st of 12 is worth 12"* and *"the 5 categories on that side"* and closes on
+*"60 is first in every one of them and 5 is last in every one"*, where an
+eight-team league reads its own numbers. A worked example in the reader's own
+figures beats a formula, and it costs one `useMemo`-free pass over data already
+in hand. The tie rule is the fourth sentence, being the one thing the table
+cannot show: *a tie takes the better points, exactly as it shares a rank*.
+
+**The panel is anchored to the caption row, not to its button**, which is
+`.roll-key`'s trick and is here for the same measured reason: the ⓘ sits after a
+caption that is 200px of dates, so at 390 the button lands at **x=223** and a
+320px panel opening from it would run to −97. `position: static` on the key
+hands the containing block back to the row, and `left: 0` then means the row's
+own left edge — measured, the panel opens at **x=22 and ends at 342 of 390**,
+inside the viewport at every width.
+
+**What it costs is 15px of table**: the caption row goes 15 → 30px, the button's
+own height, and the pane under it 732 → 717 on a 900px window. That is the price
+of a real 30px touch target rather than a bare glyph, which is the rule
+`InfoKey` already states.
+
+**Driven rather than assumed**: a press opens it and a second closes it, Escape
+closes it and leaves the League view standing, an outside press closes it and is
+spent on the dismissal alone (`useDismissable`'s own rule — the press that
+dismissed it does not also press the table underneath), and the button carries
+`aria-expanded` and a real accessible name (`How BAT and PIT are worked out`).
+
 **It sorts like any other column, and on its rank** — which is the one order the
 whole table shares. Sorting on the points would be the same order said in a
 second currency, and would break the rule that every column of this table opens

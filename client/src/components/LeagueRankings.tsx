@@ -26,6 +26,7 @@ import type {
   EspnRankSpanInfo,
   EspnRankings,
 } from '../types';
+import { InfoKey } from './InfoKey';
 import { LoadingBlock } from './Loading';
 import { TeamLogo, categoryGroups, fmtValue, prettyDate, record } from './LeagueView';
 
@@ -429,6 +430,51 @@ function RankTable({
   );
 }
 
+/**
+ * What `BAT` and `PIT` are, in the fewest words that leave nothing out.
+ *
+ * **Written from the league rather than about a league**, which is what keeps
+ * it honest and short at once: the team count and the two category counts come
+ * off the rankings themselves, so a twelve-team 5×5 reads "1st of 12 is worth
+ * 12" and "5 batting categories" while somebody else's eight-team league reads
+ * its own. A worked example in the reader's own numbers beats a formula.
+ *
+ * **Three sentences and the tie rule.** The scale, the sum, and what the two
+ * ends of it look like — plus the one thing that is not obvious from the table
+ * (a tie takes the better points, because the ranks it is computed from share
+ * a rank). Everything else about the method is in `espn.ts`, where the argument
+ * for points over a mean of ranks lives; a key is not the place for it.
+ */
+function RankKey({ rankings }: { rankings: EspnRankings }) {
+  const n = rankings.rows.length;
+  const groups = categoryGroups(rankings.categories);
+  const bat = groups.find((g) => g.side === 'batting')?.categories.length ?? 0;
+  const pit = groups.find((g) => g.side === 'pitching')?.categories.length ?? 0;
+  // The two sides almost always have the same count (a 5×5 league is five and
+  // five), and where they do the sentence says it once rather than twice.
+  const counts =
+    bat && pit && bat !== pit
+      ? `${bat} batting or ${pit} pitching categories`
+      : `${bat || pit} categories on that side`;
+  return (
+    <InfoKey label="How BAT and PIT are worked out" className="lg-rank-key">
+      <p>
+        <strong>BAT</strong> and <strong>PIT</strong> are how a team stands across one whole
+        side of the ball.
+      </p>
+      <p>
+        Each category is worth points by where you rank in it — <strong>1st of {n} is
+        worth {n}</strong>, last is worth 1 — and the column is those points added up over
+        the {counts}. The badge under it ranks those totals.
+      </p>
+      <p>
+        So {n * (bat || pit)} is first in every one of them and {bat || pit} is last in
+        every one. A tie takes the better points, exactly as it shares a rank.
+      </p>
+    </InfoKey>
+  );
+}
+
 export default function LeagueRankings({
   rankings,
   span,
@@ -466,7 +512,17 @@ export default function LeagueRankings({
           where the research board keeps its own count line and for the same
           reason — the sentence describes what is under it, so it belongs
           against it rather than an inch away among the buttons. */}
-      <p className="lg-span-detail">{spanDetail(info)}</p>
+      <div className="lg-span-detail">
+        {spanDetail(info)}
+        {/* **The one thing on this table a reader cannot work out by looking.**
+            Every other column is a figure and its standing, which explain
+            themselves; `BAT` and `PIT` are a figure this app *made up* out of
+            the ranks beside them, and a number nobody can derive from the page
+            is a number that needs a key. It is the app's own ⓘ rather than a
+            paragraph under the strip, for `InfoKey`'s stated reason: a key is
+            read once and then in the way. */}
+        <RankKey rankings={rankings} />
+      </div>
 
       {rankings.categories.length === 0 ? (
         <div className="empty-state">

@@ -11786,6 +11786,31 @@ body {
   font-size: 12px;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+  /* The caption and the ⓘ beside it are one row, and **the row is the anchor**
+     — see the panel rule below. `flex-start` rather than `center` because the
+     button is 30px against a 15px line and centring it would push the sentence
+     off the top of the row on a narrow screen where the caption wraps. */
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  position: relative;
+}
+/* This caller's own half of `InfoKey`, which is one anchor rule per caller by
+   that component's own design. `static` hands the containing block back to the
+   caption row, so `left: 0` on the panel means the row's left edge rather than
+   the 30px button's — the trick `.roll-key` already uses and for the same
+   measured reason: the button sits partway along a line (after a caption that
+   is 200px of dates), and a 320px panel opening leftward from there would run
+   off the screen at 390. Opening from the row's own edge it lands inside the
+   viewport at every width. */
+.lg-rank-key {
+  position: static;
+  display: inline-flex;
+}
+.lg-rank-key .info-key-panel {
+  left: 0;
+  right: auto;
 }
 
 /* ---- Rankings -------------------------------------------------------------
