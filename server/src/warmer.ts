@@ -3,7 +3,8 @@ import { getSeasonArsenal } from './pitcherArsenal.js';
 import { getPercentiles } from './percentiles.js';
 import { getPitcherStats, getPlayerStats, getSeasonPlayers } from './mlbStats.js';
 import { getResearch } from './research.js';
-import { RESEARCH_WINDOWS } from './types.js';
+import { warmTeamHitting } from './teamHitting.js';
+import { RESEARCH_WINDOWS, TEAM_HITTING_WINDOWS } from './types.js';
 import { getAllRosterPlayers } from './store.js';
 import { mapLimit } from './limit.js';
 import { baseballToday } from './etDate.js';
@@ -122,6 +123,20 @@ export async function warm(event: WarmEvent = {}): Promise<{ mode: string; dates
             console.error(`research ${kind} ${window} warm failed:`, err),
           ),
         ),
+      );
+    }
+    // The opponent table's boards: how every team has hit over each of the same
+    // five windows, whole, at home, on the road and against each hand. Same
+    // shape as the research board above and the same reason to be here — it is
+    // built by summing the per-date exports, so the *first* pass over the
+    // season has up to 167 days to reduce, which is 12 seconds on a warm cache
+    // and far more on a cold one. Every day it touches is a blob for ever
+    // after, and the boards themselves are the ones `/api/report` reads for
+    // every opponent a watched pitcher has, so a reader must never be the one
+    // paying for a cold build. Sequential for the reason the boards above are.
+    for (const window of TEAM_HITTING_WINDOWS) {
+      await warmTeamHitting(window).catch((err) =>
+        console.error(`team hitting ${window} warm failed:`, err),
       );
     }
     // ESPN ownership: one 940KB request whose *point* here is the side effect —

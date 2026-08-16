@@ -29,6 +29,8 @@ import type {
   WatchPlayer,
   XwobaSeries,
   ResearchWindow,
+  TeamHitting,
+  TeamHittingWindow,
 } from './types';
 
 /** An API failure that still knows its HTTP status — the app needs to tell an
@@ -469,6 +471,13 @@ export const api = {
    */
   async playerWindows(playerId: number, kind: PlayerKind): Promise<PlayerWindows> {
     return request(`/api/players/${playerId}/windows?type=${kind}`);
+  },
+  /** One team's nine hitting cuts over a window — the opponent table on a
+   *  pitcher's game. The season is already on the report, so this is only ever
+   *  called for the other four windows; it answers with all three venues, so
+   *  changing that control costs nothing. */
+  async teamHitting(teamId: number, window: TeamHittingWindow): Promise<TeamHitting | null> {
+    return request(`/api/teams/${teamId}/hitting?window=${window}`);
   },
   // The season line plus the platoon splits — the platoon card at the foot of
   // the details view's **Stats** tab. Still the only reader of that route.

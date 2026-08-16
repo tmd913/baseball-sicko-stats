@@ -7,7 +7,7 @@ import { RESEARCH_WINDOWS } from './types.js';
 import type { PlayerKind, ResearchRow, ResearchWindow } from './types.js';
 
 // Keep in sync with hfSea in savant.ts, CURRENT_SEASON in percentiles.ts, and
-// SEASON in xwoba.ts / pitcherArsenal.ts / teamStats.ts / expectedStats.ts.
+// SEASON in xwoba.ts / pitcherArsenal.ts / teamHitting.ts / expectedStats.ts.
 const SEASON = 2026;
 
 const UA = { 'User-Agent': 'statcast-sicko/1.0' };

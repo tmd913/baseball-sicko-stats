@@ -6,7 +6,7 @@ import type { NewsItem } from './types.js';
 const UA = { 'User-Agent': 'statcast-sicko/1.0' };
 
 // Keep in sync with hfSea in savant.ts, CURRENT_SEASON in percentiles.ts, and
-// SEASON in xwoba.ts, pitcherArsenal.ts, teamStats.ts, expectedStats.ts,
+// SEASON in xwoba.ts, pitcherArsenal.ts, teamHitting.ts, expectedStats.ts,
 // research.ts and espn.ts. This one is the season RotoWire's own player tables
 // are asked for, and the parameter is **required** — without it the table
 // answers `{"error":"The LEAGUE parameter is required."}` in 45 bytes rather

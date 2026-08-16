@@ -547,8 +547,14 @@ export interface PitcherSeasonStats {
   xera: string | null;
 }
 
-/** Where a team places among all 30 in each category. 1 is always the **best
- *  offence**, so the fewest strikeouts ranks 1st. Null where there's no value. */
+/**
+ * Where a team places among all 30 in each category — 1 is always the **best
+ * offence**, so a low strikeout rate ranks 1st, not 30th. Computed here rather
+ * than read off the API, which ranks by its own default sort and doesn't rank
+ * splits at all. Each cut ranks within **its own** population: a 30-day
+ * home-vs-LHP line is placed against the other 29 teams' 30-day home-vs-LHP
+ * lines, not against the season board.
+ */
 export interface TeamHittingRanks {
   runsPerGame: number | null;
   avg: number | null;
@@ -556,17 +562,16 @@ export interface TeamHittingRanks {
   slg: number | null;
   ops: number | null;
   homeRuns: number | null;
-  stolenBases: number | null;
   kRate: number | null;
   bbRate: number | null;
 }
 
-/** One batting line for a team — the whole season, or against one pitcher hand. */
+/** One batting line for a team, over one window / venue / pitcher hand. */
 export interface TeamHittingLine {
   pa: number;
   games: number;
   runs: number;
-  runsPerGame: string | null; // null on a split, which carries no runs
+  runsPerGame: string | null;
   avg: string;
   obp: string;
   slg: string;
@@ -574,19 +579,41 @@ export interface TeamHittingLine {
   homeRuns: number;
   strikeOuts: number;
   baseOnBalls: number;
-  stolenBases: number;
-  kRate: string;
+  kRate: string; // K / PA, ".231"
   bbRate: string;
   ranks: TeamHittingRanks | null;
 }
 
-/** How the opposing lineup has hit this season, whole and by pitcher hand
- *  (`vsLeft`/`vsRight` are their lines against left/right-handed pitching). */
-export interface TeamHitting {
-  teamId: number;
-  season: TeamHittingLine;
+/** The three rows of the opponent table: everyone, then by the hand on the
+ *  mound. A cut a team has no plate appearance in is null rather than a line of
+ *  zeroes — a fortnight in which nobody started a lefty against them is an
+ *  absence, not an 0-for. */
+export interface TeamHittingSplit {
+  all: TeamHittingLine | null;
   vsLeft: TeamHittingLine | null;
   vsRight: TeamHittingLine | null;
+}
+
+/** Which spans the opponent table offers. Deliberately the research board's own
+ *  five, so "last 30 days" means one thing everywhere in the app. */
+export type TeamHittingWindow = 'season' | 7 | 15 | 30 | 60;
+export const TEAM_HITTING_WINDOWS: TeamHittingWindow[] = ['season', 7, 15, 30, 60];
+
+/** Which games a cut counts. */
+export type TeamHittingVenue = 'all' | 'home' | 'away';
+
+/**
+ * How a team has hit over one window — whole, at home, on the road, and each of
+ * those three by the hand on the mound. Nine cuts, because the reader picks the
+ * venue and reads all three hands at once, so a venue change must cost no
+ * request.
+ */
+export interface TeamHitting {
+  teamId: number;
+  window: TeamHittingWindow;
+  all: TeamHittingSplit;
+  home: TeamHittingSplit;
+  away: TeamHittingSplit;
 }
 
 export interface PlayerGame {

@@ -1,7 +1,7 @@
 import { parse } from 'csv-parse/sync';
 import { readJsonBlob, writeJsonBlob } from './storage.js';
 
-// Keep in sync with hfSea in savant.ts, SEASON in xwoba.ts / teamStats.ts /
+// Keep in sync with hfSea in savant.ts, SEASON in xwoba.ts / teamHitting.ts /
 // expectedStats.ts, and CURRENT_SEASON in percentiles.ts.
 const SEASON = 2026;
 

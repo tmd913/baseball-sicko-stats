@@ -735,7 +735,7 @@ the row, so a server-side ranking could reach only the raw half. Nothing on this
 table is derived in the client: the server holds the values, the `lowerBetter`
 flag and the population, so there is no half it cannot reach. Competition
 ranking, 1 is best whichever way the category runs, ties share a rank and the
-next distinct figure skips — `teamStats.ts::rankAll`'s convention. A team with
+next distinct figure skips — `teamHitting.ts::rankAll`'s convention. A team with
 no figure is **out of the ranking entirely** rather than at the bottom of it,
 the rule `sideFrom` already follows for a category a side is ineligible for.
 Checked against an independent recompute over all **five** spans: **600 of 600

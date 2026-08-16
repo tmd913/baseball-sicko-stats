@@ -2,7 +2,7 @@ import { parse } from 'csv-parse/sync';
 import { readBlob, readGzipBlob, writeBlob, writeGzipBlob } from './storage.js';
 import { mapLimit } from './limit.js';
 import { baseballToday } from './etDate.js';
-import { getTeamHitting } from './teamStats.js';
+import { getTeamHitting } from './teamHitting.js';
 import { fipLike, ipToOuts, LEAGUE_HR_PER_FB } from './leagueRates.js';
 import {
   getAllRosterStatuses,
