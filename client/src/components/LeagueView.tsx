@@ -52,6 +52,7 @@ import type {
 import { LoadingBlock } from './Loading';
 import LeagueRankings from './LeagueRankings';
 import LeagueTransactions from './LeagueTransactions';
+import LeagueMatchupTab from './LeagueMatchup';
 
 /* ---- Formatting ---------------------------------------------------------
  *
@@ -264,6 +265,7 @@ function MatchupCard({
   myTeamId,
   format,
   live,
+  onOpen,
 }: {
   matchup: EspnMatchup;
   categories: EspnCategory[];
@@ -271,6 +273,7 @@ function MatchupCard({
   myTeamId: number | null;
   format: EspnScoreboard['format'];
   live: boolean;
+  onOpen: (id: number) => void;
 }) {
   const { home, away } = matchup;
   const mine = myTeamId != null && (home.teamId === myTeamId || away?.teamId === myTeamId);
@@ -392,6 +395,17 @@ function MatchupCard({
           ))}
         </div>
       )}
+
+      {/* The way through to the Matchup tab for *this* matchup — a text door in
+          the accent rather than the whole card made pressable, which is the
+          idiom the player page's Overview already uses for `Stats →` and
+          `News →`. A card is not made a button here for a stated reason: every
+          cell in the grid above carries its own `title`, and wrapping the lot
+          in one control would put a hundred titled cells inside a single tab
+          stop and one accessible name. */}
+      <button type="button" className="lg-open-matchup" onClick={() => onOpen(matchup.id)}>
+        Breakdown →
+      </button>
     </div>
   );
 }
@@ -422,9 +436,11 @@ export function prettyDate(iso: string | null): string {
 function Scoreboard({
   board,
   onPeriod,
+  onOpenMatchup,
 }: {
   board: EspnScoreboard;
   onPeriod: (period: number) => void;
+  onOpenMatchup: (id: number) => void;
 }) {
   const teamMap = useMemo(() => new Map(board.teams.map((t) => [t.id, t])), [board.teams]);
 
@@ -521,6 +537,7 @@ function Scoreboard({
               myTeamId={board.myTeamId}
               format={board.format}
               live={board.live}
+              onOpen={onOpenMatchup}
             />
           ))}
         </div>
@@ -530,7 +547,7 @@ function Scoreboard({
 }
 
 /** Which of the three pages of this view is on screen. */
-export type LeagueTab = 'scoreboard' | 'rankings' | 'transactions';
+export type LeagueTab = 'matchup' | 'scoreboard' | 'rankings' | 'transactions';
 
 /** The three pages of the League view.
  *
@@ -543,6 +560,13 @@ export type LeagueTab = 'scoreboard' | 'rankings' | 'transactions';
  * than as one tier down of the same one. So `App` draws it there and this file
  * keeps only the vocabulary. */
 export const LEAGUE_TABS: { tab: LeagueTab; label: string; title: string }[] = [
+  // **First, and the default with it.** The one matchup a manager is in is the
+  // question the page is opened with, and the app's own convention is that the
+  // first tab is the one you land on (`Overview` on the player page, `Roster`
+  // on the view switch). It costs `lt=`'s omitted value, which was
+  // `scoreboard`: a link carrying no `lt` now opens here, and every other tab
+  // writes itself out as it always did.
+  { tab: 'matchup', label: 'Matchup', title: 'One matchup, category by category' },
   { tab: 'scoreboard', label: 'Scoreboard', title: "This period's matchups" },
   { tab: 'rankings', label: 'Rankings', title: 'Where every team stands in each category' },
   { tab: 'transactions', label: 'Transactions', title: 'Who has added, dropped and traded whom' },
@@ -551,6 +575,9 @@ export const LEAGUE_TABS: { tab: LeagueTab; label: string; title: string }[] = [
 export default function LeagueView({
   tab,
   board,
+  matchupId,
+  onMatchup,
+  onOpenMatchup,
   loading,
   error,
   onPeriod,
@@ -570,6 +597,10 @@ export default function LeagueView({
 }: {
   tab: LeagueTab;
   board: EspnScoreboard | null;
+  matchupId: number | null;
+  onMatchup: (id: number) => void;
+  /** A press on a scoreboard card: open that matchup on the Matchup tab. */
+  onOpenMatchup: (id: number) => void;
   loading: boolean;
   error: string | null;
   onPeriod: (period: number) => void;
@@ -641,8 +672,16 @@ export default function LeagueView({
         loading ? (
           <LoadingBlock>Reading your league's scoreboard</LoadingBlock>
         ) : null
+      ) : tab === 'matchup' ? (
+        <LeagueMatchupTab
+          board={board}
+          matchupId={matchupId}
+          onMatchup={onMatchup}
+          onPeriod={onPeriod}
+          onOpenPlayer={onOpenPlayer}
+        />
       ) : (
-        <Scoreboard board={board} onPeriod={onPeriod} />
+        <Scoreboard board={board} onPeriod={onPeriod} onOpenMatchup={onOpenMatchup} />
       )}
     </div>
   );

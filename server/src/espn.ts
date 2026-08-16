@@ -1638,6 +1638,33 @@ async function getTeamRoster(
   return job;
 }
 
+/**
+ * One team's roster on one day — **any** team in the league, not only the
+ * reader's own.
+ *
+ * The Matchup tab's roster view is the first thing to want somebody else's
+ * team, and it wants both sides at once, which is why the route above it takes
+ * a list. Everything under it is `getTeamRoster`'s: the same `forTeamId` read
+ * (198KB against the league's 2.2MB), the same ten-minute memory cache on a
+ * mutable day, and the same **frozen** rule for a day gone by — a finished
+ * day's roster is a fact, so it reads back off its blob with no freshness test
+ * and every leaguemate reading the same settled week shares one entry.
+ *
+ * A day ESPN cannot be asked about — one before the season's first scoring
+ * period — answers **null rather than throwing**, which is the rule the whole
+ * of this file's roster fan-out follows: a roster is context, and a caller that
+ * asked for two teams should get the one it can have.
+ */
+export async function getRosterOn(
+  creds: EspnCreds,
+  teamId: number,
+  date: string,
+): Promise<EspnRosterPlayer[] | null> {
+  const period = await lineupPeriodFor(creds, date);
+  if (period === null) return null;
+  return getTeamRoster(creds, teamId, period, date < baseballToday());
+}
+
 /** Which MLB ids a roster read already in hand has in its lineup — the seed
  *  below, and the one place the per-day map and the slot chips are guaranteed
  *  to agree because they are the same read. */
