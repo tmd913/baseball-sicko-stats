@@ -1,6 +1,7 @@
 import { SpinningBaseball } from './Loading';
-import { SCHEDULE_SPANS } from './schedule';
+import { effectiveSpan, scheduleSpans, spanLabel, toScheduleSpan } from './schedule';
 import type { ScheduleSpan } from './schedule';
+import type { MatchupWindow } from '../types';
 
 /**
  * The Schedule view's one control, drawn in two places.
@@ -77,40 +78,90 @@ export function ScheduleToggle({
 /**
  * How far ahead, offered only while the mode is on.
  *
- * **`Next 7` and `Next 14`, spelled out, and that wording is load-bearing on
+ * **Four spans where there were two, and the two that were added are what a
+ * fantasy manager actually plans in.** `Next 7` and `Next 14` answer *how far
+ * ahead*; `This Matchup` and `Next Matchup` answer *which fantasy week*, which
+ * is rarely the same span — on the live league today this matchup is a
+ * fortnight's playoff round with eight days left and next runs a fortnight
+ * after that. They lead the run, and `This Matchup` is what the mode opens on
+ * (`defaultScheduleSpan`), because it is the question the view is opened with.
+ *
+ * They are offered **only where there is a league to define them**: a matchup
+ * period is a fact about an ESPN league rather than about which list the roster
+ * views happen to be reading, which is why the gate is a connected league
+ * rather than `rosterSource` — the same gate `Ros%` and the eligibility chip
+ * are on, and the same reason the research board gets them too. A board of free
+ * agents read for *next* matchup is exactly the pickup question.
+ *
+ * **`Next 7` and `Next 14` are spelled out, and that wording is load-bearing on
  * the research board**: the board already carries a run of spans reading
  * `Season · 7d · 15d · 30d · 60d`, and those name the days the *stats* are
  * drawn from — the opposite direction in time. Two controls both reading `7d`
  * an inch apart, meaning last week on one and next week on the other, is the
- * one thing this row must not say.
+ * one thing that row must not say.
  *
- * Two spans rather than one because they are two questions. Seven is the
- * fantasy week and the default — *who plays how many games this week* is the
- * question the view exists for — and fourteen is the planning horizon, which is
- * also as far as the schedule can usefully be read (see `SCHEDULE_DAYS`).
+ * **On a phone it is a `<select>`**, which is the app's own answer for every
+ * strip of pills that outgrows a narrow screen — the date presets, the research
+ * board's window tabs and its position row all make the same swap at 640, and
+ * `.schedule-span-select` is folded onto `.date-presets-select` so all of them
+ * are one control by construction. Both are rendered and the media query picks,
+ * rather than a JS media test that could drift from the CSS. Two pills fitted a
+ * phone; four — two of them two words long — do not: measured at 390 the run is
+ * **367px against the 346** the app's gutters leave, so it takes a line of its
+ * own and the pinned chrome goes 207px to 255. The select is **134px** and
+ * shares the line with the two icon buttons beside it.
  */
 export function ScheduleSpanTabs({
   span,
+  matchup,
   onChange,
 }: {
   span: ScheduleSpan;
+  /** The league's own two periods, or null with no league — which is what
+   *  decides whether the named pair is offered at all. */
+  matchup: MatchupWindow | null;
   onChange: (s: ScheduleSpan) => void;
 }) {
+  const spans = scheduleSpans(matchup);
+  // What is *selected* is the span in force rather than the one asked for: a
+  // `sched=next` link opened without a league draws seven days, and the control
+  // has to agree with the table under it.
+  const active = effectiveSpan(span, matchup);
   return (
-    <div className="schedule-span view-switch" role="tablist" aria-label="How far ahead">
-      {SCHEDULE_SPANS.map((s) => (
-        <button
-          key={s}
-          type="button"
-          role="tab"
-          aria-selected={span === s}
-          className={`view-tab${span === s ? ' active' : ''}`}
-          onClick={() => onChange(s)}
-          title={`The next ${s} days`}
-        >
-          Next {s}
-        </button>
-      ))}
-    </div>
+    <>
+      <div className="schedule-span view-switch" role="tablist" aria-label="How far ahead">
+        {spans.map((s) => {
+          const { label, title } = spanLabel(s, matchup);
+          return (
+            <button
+              key={String(s)}
+              type="button"
+              role="tab"
+              aria-selected={active === s}
+              className={`view-tab${active === s ? ' active' : ''}`}
+              onClick={() => onChange(s)}
+              title={title}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+      <select
+        className="schedule-span-select"
+        aria-label="How far ahead"
+        value={String(active)}
+        onChange={(e) => onChange(toScheduleSpan(e.target.value) ?? 7)}
+      >
+        {spans.map((s) => {
+          const { label, title } = spanLabel(s, matchup);
+          return (
+            <option key={String(s)} value={String(s)} title={title}>
+              {label}
+            </option>
+          );
+        })}
+      </select>
+    </>
   );
 }

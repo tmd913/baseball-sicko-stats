@@ -16,6 +16,7 @@ import type {
   RecentNews,
   ResearchRow,
   ResearchWindow,
+  MatchupWindow,
   RosterSource,
   ScheduleWindow,
   SeasonPlayer,
@@ -49,7 +50,7 @@ import { toStatsColumnKeys } from './components/PlayerWindowTable';
 import { DateToggle, DateRow } from './components/DateControls';
 import type { DatePreset } from './components/DateControls';
 import { ScheduleSpanTabs, ScheduleToggle } from './components/ScheduleControl';
-import { buildScheduleIndex, toScheduleSpan } from './components/schedule';
+import { buildScheduleIndex, defaultScheduleSpan, toScheduleSpan } from './components/schedule';
 import type { ScheduleSpan } from './components/schedule';
 import {
   EligibilityContext,
@@ -488,7 +489,32 @@ export default function App() {
     toScheduleSpan(initialParams.get('sched')),
   );
   /**
-   * The window itself — every club's next fortnight, read **once per session
+   * **Which days this matchup period covers, and which the next one covers** —
+   * the two named spans the Schedule view offers, and null with no league.
+   *
+   * Read once per session on a connected league, the terms the ownership map is
+   * on and for the same two reasons: the answer moves once a week, and the
+   * server holds the league it is derived from on its own cache, so a second
+   * read would buy a wait and nothing else. **The effect is down beside that
+   * map's** — `espnConnected` is declared between here and there — and what is
+   * up here is the state, because the schedule index below is built from it.
+   *
+   * **A failed read is not an error anybody is shown.** It costs the control
+   * its two named spans and leaves the two numeric ones, which is the whole of
+   * what a reader with no league has always had — the direction every optional
+   * league fact in this app fails in (`rosterPct` costs a column, eligibility
+   * costs a chip).
+   */
+  const [matchupWindow, setMatchupWindow] = useState<MatchupWindow | null>(null);
+  /* Asked-once rather than a terminal-state guard, and safe because there is no
+     cleanup: StrictMode's second pass finds the flag and returns while the
+     first pass's answer still lands. The trap this codebase records (*the
+     roster read hung under StrictMode*) is marking a request answered **and**
+     cancelling its result with a `live` flag the teardown flips. */
+  const matchupWindowAsked = useRef(false);
+
+  /**
+   * The window itself — every club's next four weeks, read **once per session
    * and kept**, exactly as the research blob is and for the same two reasons:
    * it is one upstream shared by every user and every row (see
    * `server/src/schedule.ts`), and the server holds it for half an hour anyway,
@@ -502,7 +528,7 @@ export default function App() {
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [scheduleError, setScheduleError] = useState<string | null>(null);
   /**
-   * **A second surface asks for the same fortnight.** The matchup page's team
+   * **A second surface asks for the same window.** The matchup page's team
    * pages carry the Schedule view too, and its data takes no parameters at all
    * — one window for every club, sliced per reader — so the two share this one
    * read rather than each making it. The flag is what lets that page ask
@@ -542,8 +568,11 @@ export default function App() {
    * from.
    */
   const scheduleIndex = useMemo(
-    () => (scheduleSpan !== null && scheduleWindow ? buildScheduleIndex(scheduleWindow, scheduleSpan) : null),
-    [scheduleSpan, scheduleWindow],
+    () =>
+      scheduleSpan !== null && scheduleWindow
+        ? buildScheduleIndex(scheduleWindow, scheduleSpan, matchupWindow)
+        : null,
+    [scheduleSpan, scheduleWindow, matchupWindow],
   );
   // The filter is about *today*, so it can only act on a range that contains
   // today. Over "Yesterday" or a custom week in July there is nobody it could
@@ -1775,6 +1804,16 @@ export default function App() {
     if (!espnConnected || ownership || espnLoading || espnError) return;
     loadOwnership();
   }, [espnConnected, ownership, espnLoading, espnError, loadOwnership]);
+
+  useEffect(() => {
+    if (!espnConnected || matchupWindowAsked.current) return;
+    matchupWindowAsked.current = true;
+    api
+      .espnMatchupWindow()
+      .then(setMatchupWindow)
+      .catch((e: Error) => console.warn('matchup window read failed:', e.message));
+  }, [espnConnected]);
+
 
   /**
    * What the league has to say about each player today — his roster status, and
@@ -3166,10 +3205,16 @@ export default function App() {
       <ScheduleToggle
         on={scheduleSpan !== null}
         loading={scheduleLoading}
-        onToggle={() => setScheduleSpan((s) => (s === null ? 7 : null))}
+        onToggle={() =>
+          setScheduleSpan((s) => (s === null ? defaultScheduleSpan(matchupWindow) : null))
+        }
       />
       {scheduleSpan !== null && (
-        <ScheduleSpanTabs span={scheduleSpan} onChange={setScheduleSpan} />
+        <ScheduleSpanTabs
+          span={scheduleSpan}
+          matchup={matchupWindow}
+          onChange={setScheduleSpan}
+        />
       )}
     </>
   );
@@ -4202,6 +4247,7 @@ export default function App() {
           /* One flag and one span for both wide tables — see `scheduleSpan`. */
           scheduleSpan={scheduleSpan}
           onScheduleSpanChange={setScheduleSpan}
+          matchupWindow={matchupWindow}
           schedule={scheduleIndex}
           include={researchInclude}
           onIncludeChange={setResearchInclude}
@@ -4336,6 +4382,7 @@ export default function App() {
           today={baseballToday()}
           scheduleWindow={scheduleWindow}
           scheduleLoading={scheduleLoading}
+          matchupWindow={matchupWindow}
           onNeedSchedule={needSchedule}
         />
       )}

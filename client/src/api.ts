@@ -1,6 +1,7 @@
 import type {
   BatterGameLog,
   EspnOwnership,
+  MatchupWindow,
   EspnRoster,
   EspnRankings,
   EspnRankSpan,
@@ -108,12 +109,12 @@ export const api = {
     return request('/api/players');
   },
   /**
-   * Every club's next fortnight, with whoever each side has announced — what
+   * Every club's next four weeks, with whoever each side has announced — what
    * the Schedule view draws on both wide tables.
    *
    * No parameters: the server names the window off its own `baseballToday()`
    * and the client slices it to the span on screen, so one answer serves every
-   * user, every row and both spans. Fetched once per session and kept, the way
+   * user, every row and every span. Fetched once per session and kept, the way
    * the research blob is.
    */
   async schedule(): Promise<ScheduleWindow> {
@@ -373,6 +374,18 @@ export const api = {
    *  made a move and wants the board to agree with ESPN. */
   async espnOwnership(refresh = false): Promise<EspnOwnership> {
     return request(`/api/espn/ownership${refresh ? '?refresh=1' : ''}`);
+  },
+
+  /** **Which days this matchup period covers, and which the next one covers.**
+   *  Two dates each, and null for a league whose period arithmetic could not be
+   *  read — which is what makes the Schedule view fall back to its two numeric
+   *  spans rather than offering one it cannot fill.
+   *
+   *  Read once per session on a connected league, like the ownership map: the
+   *  answer moves once a week, and the server holds the league it is derived
+   *  from on its own minute. */
+  async espnMatchupWindow(): Promise<MatchupWindow | null> {
+    return request('/api/espn/matchup-window');
   },
 
   /** The league's scoreboard: one matchup period's matchups, plus every team's

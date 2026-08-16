@@ -496,6 +496,7 @@ body {
 .date-presets-select,
 .research-window-select,
 .research-pos-select,
+.schedule-span-select,
 .lg-span-select,
 .mup-select {
   display: none;
@@ -521,6 +522,7 @@ body {
 .date-presets-select:hover,
 .research-window-select:hover,
 .research-pos-select:hover,
+.schedule-span-select:hover,
 .lg-span-select:hover,
 .mup-select:hover {
   border-color: var(--accent);
@@ -539,11 +541,23 @@ body {
   .date-row .date-presets {
     display: none;
   }
+  /* Same trap, same fix: `.schedule-span` carries `.view-switch`, whose
+     `display: inline-flex` is later in the file and would otherwise leave the
+     pills and their dropdown on screen at once. Written as the two classes it
+     actually has rather than scoped to a parent, because this run is drawn in
+     three of them — the roster row, the board's tools and a team page's. Two
+     pills fitted a phone and four do not: measured at 390 the run is 367px
+     against the 346 the app's gutters leave, which costs the pinned chrome a
+     row (207px → 255) where the select is 134 and shares its line. */
+  .schedule-span.view-switch {
+    display: none;
+  }
   .date-presets-select {
     display: block;
   }
   .research-window-select,
   .research-pos-select,
+  .schedule-span-select,
   .lg-span-select {
     display: block;
     /* In a wrapping flex bar rather than the header's grid — each must be only

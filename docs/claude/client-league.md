@@ -796,11 +796,20 @@ scrolls, with 25 items in it.
 
 **The Schedule view is on the roster table alone**, there being nothing in a
 stream of things that have happened for a fixture list to replace, and it reads
-the **same fortnight the app's own copy of the mode reads**: that data takes no
+the **same window the app's own copy of the mode reads**: that data takes no
 parameters at all — one window for every club, sliced per reader — so App holds
 the one read and this page asks for it (`onNeedSchedule`) rather than making a
-second. Each surface keeps its own span, since 7 or 14 is a slice of a window
+second. Each surface keeps its own span, since every span is a slice of a window
 already in hand.
+
+**Its span run carries `This Matchup` and `Next Matchup` like everywhere else**,
+and it is a connected league that puts them there rather than this page: the two
+dates come from App's own once-per-session read (`matchupWindow`), shared down
+exactly as the schedule window beside it is. Deliberately **not** derived from
+`board.start`/`board.end`, which are the *observed* span and truncate at today
+for the week being played — the same two dates this page prints in its head and
+the wrong two to draw a forward-looking grid from (see **ESPN fantasy league**,
+*The matchup window*).
 
 **What a team page does *not* carry is the `Starters` filter**, and that is a
 scope line rather than an oversight: that control reads the day-by-day lineup

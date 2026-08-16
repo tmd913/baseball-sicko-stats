@@ -1,6 +1,12 @@
 import type { ReactNode } from 'react';
 import type { Column } from './researchColumns';
-import type { PlayerKind, ResearchRow, ScheduleGame, ScheduleWindow } from '../types';
+import type {
+  MatchupWindow,
+  PlayerKind,
+  ResearchRow,
+  ScheduleGame,
+  ScheduleWindow,
+} from '../types';
 
 /**
  * ---------------------------------------------------------------------------
@@ -20,13 +26,96 @@ import type { PlayerKind, ResearchRow, ScheduleGame, ScheduleWindow } from '../t
  * the same day read on the board cannot come to say two things.
  */
 
-/** The two spans offered. See `ScheduleSpanTabs` for why there are two. */
-export type ScheduleSpan = 7 | 14;
+/**
+ * The spans offered. **Two of them are days and two are a fantasy matchup**,
+ * and the pair is what a connected league adds to this control.
+ *
+ * The numeric two answer *how far ahead*, and they are unchanged: seven is a
+ * planning week and fourteen is as far as the schedule can usefully be read.
+ * The named two answer a different question and the one a fantasy manager
+ * actually asks — *how many games do I get **this week**, and how many next* —
+ * where "week" is his league's own matchup period rather than seven days from
+ * today. Those two are rarely the same span: on the live league today, this
+ * matchup runs Aug 10–23 (a fortnight's playoff round, of which eight days are
+ * left) and next runs Aug 24 – Sep 6.
+ *
+ * `matchup` starts **today** rather than at the period's own start, for the
+ * reason the numeric spans do: the days already played are not days anybody can
+ * plan for, and every other column in this view is a day still to come.
+ */
+export type ScheduleSpan = 7 | 14 | 'matchup' | 'next';
+/** The two that need no league. Kept as its own list because it is what the
+ *  control offers when there isn't one — the named pair is spliced in front. */
 export const SCHEDULE_SPANS: ScheduleSpan[] = [7, 14];
 
-/** `sched=7` / `sched=14`; anything else (including absence) is off. */
+/** `sched=7` / `sched=14` / `sched=matchup` / `sched=next`; anything else
+ *  (including absence) is off. A named span on a page with no league resolves
+ *  to `7` when it is *drawn* rather than being dropped here — see
+ *  `effectiveSpan`, and the rule `cols=` follows: a link says what it meant
+ *  even where this reader cannot honour it yet. */
 export function toScheduleSpan(v: string | null): ScheduleSpan | null {
-  return v === '7' ? 7 : v === '14' ? 14 : null;
+  return v === '7' ? 7 : v === '14' ? 14 : v === 'matchup' ? 'matchup' : v === 'next' ? 'next' : null;
+}
+
+/** Which spans this reader can actually be offered, in reading order: the
+ *  matchup pair leads where there is a league to define it, since that is the
+ *  question the view is opened with and the one the mode now defaults to. */
+export function scheduleSpans(matchup: MatchupWindow | null): ScheduleSpan[] {
+  if (!matchup) return SCHEDULE_SPANS;
+  return matchup.next
+    ? ['matchup', 'next', ...SCHEDULE_SPANS]
+    : ['matchup', ...SCHEDULE_SPANS];
+}
+
+/** What the mode opens on. **This matchup where there is one**, which is the
+ *  fantasy week the reader is in; seven days otherwise. */
+export function defaultScheduleSpan(matchup: MatchupWindow | null): ScheduleSpan {
+  return matchup ? 'matchup' : 7;
+}
+
+/** The span actually in force — a named one asked for by a link or by a league
+ *  that has since gone falls back to seven days rather than drawing nothing. */
+export function effectiveSpan(
+  span: ScheduleSpan,
+  matchup: MatchupWindow | null,
+): ScheduleSpan {
+  if (span === 'matchup' && !matchup) return 7;
+  if (span === 'next' && !matchup?.next) return 7;
+  return span;
+}
+
+/** `8/16 – 8/23` — a span's own dates, which is what makes a named one
+ *  readable: "this matchup" is a phrase until it says which days it is. */
+function shortDate(date: string): string {
+  const d = new Date(`${date}T12:00:00`);
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
+export interface SpanLabel {
+  /** What the pill and the `<option>` read. */
+  label: string;
+  /** The dates it covers, and for a numeric span the days it is. */
+  title: string;
+}
+
+export function spanLabel(span: ScheduleSpan, matchup: MatchupWindow | null): SpanLabel {
+  const range = (from: string, to: string) => `${shortDate(from)} – ${shortDate(to)}`;
+  if (span === 'matchup' && matchup) {
+    return {
+      label: 'This Matchup',
+      // The period's own dates rather than the days drawn: the columns start
+      // today, and what the reader is being told is which fantasy week this is.
+      title: `The rest of matchup period ${matchup.period} — ${range(matchup.start, matchup.end)}`,
+    };
+  }
+  if (span === 'next' && matchup?.next) {
+    return {
+      label: 'Next Matchup',
+      title: `Matchup period ${matchup.next.period} — ${range(matchup.next.start, matchup.next.end)}`,
+    };
+  }
+  const days = span === 14 ? 14 : 7;
+  return { label: `Next ${days}`, title: `The next ${days} days` };
 }
 
 /**
@@ -39,8 +128,14 @@ export function toScheduleSpan(v: string | null): ScheduleSpan | null {
  * one number this view exists to give and would be wrong.
  */
 export interface ScheduleIndex {
+  /** The span **in force** — a named one that could not be resolved has already
+   *  fallen back here, so everything downstream (the count columns' own
+   *  sentence above all) describes the days actually drawn. */
   span: ScheduleSpan;
-  /** The ET days the columns are, in order — `span` of them, from today. */
+  /** The ET days the columns are, in order. From today for every span but
+   *  `next`, which starts on the next matchup period's own first day; a
+   *  numeric span is that many of them and a named one is however many the
+   *  period has. */
   dates: string[];
   /**
    * Today, as the **server** named it, rather than as the client would.
@@ -54,17 +149,48 @@ export interface ScheduleIndex {
    * league-wide off day.
    */
   today: string;
+  /**
+   * **The span runs past the window the server answered for**, so the columns
+   * stop short of the period and every count on the row is short with them.
+   *
+   * It cannot happen in a league whose periods are a week or a fortnight — the
+   * window is 28 days and the widest *this matchup + next* such a league can
+   * ask for is 14 + 14 (see `SCHEDULE_DAYS`) — so this is here for the league
+   * that runs three-week rounds, and for the honesty rule rather than for the
+   * likelihood: a cap this view cannot avoid is one it has to *say*, which the
+   * count columns' own titles do. A span that merely runs out of **games** —
+   * the end of the regular season — is not short: the schedule really has no
+   * more days, and drawing the ones it has is the truth.
+   */
+  short: boolean;
   /** club id → date → that club's games that day. */
   byTeam: Map<number, Map<string, ScheduleGame[]>>;
 }
 
-export function buildScheduleIndex(win: ScheduleWindow, span: ScheduleSpan): ScheduleIndex {
+export function buildScheduleIndex(
+  win: ScheduleWindow,
+  span: ScheduleSpan,
+  matchup: MatchupWindow | null = null,
+): ScheduleIndex {
   // The dates are taken from the games rather than generated from `start`, so
   // the columns are the days the server actually answered for — a short window
-  // (a season ending inside the fortnight) then draws the days it has instead
-  // of a run of empty columns claiming the schedule has run out.
+  // (a season ending inside it) then draws the days it has instead of a run of
+  // empty columns claiming the schedule has run out.
   const all = [...new Set(win.games.map((g) => g.date))].sort();
-  const dates = all.slice(0, span);
+  // A **named** span is a date range and a numeric one is a count of days, and
+  // the difference is the whole of what a matchup span is: `Next 7` is the
+  // first seven days with games, where `This Matchup` is every day up to the
+  // period's own last, however many that is. Both then intersect the window,
+  // which is what keeps a span the schedule cannot reach drawing the days it
+  // has rather than inventing the rest — and the window is now long enough to
+  // cover both by construction (see `SCHEDULE_DAYS`).
+  const eff = effectiveSpan(span, matchup);
+  const dates =
+    eff === 'matchup' && matchup
+      ? all.filter((d) => d <= matchup.end)
+      : eff === 'next' && matchup?.next
+        ? all.filter((d) => d >= matchup.next!.start && d <= matchup.next!.end)
+        : all.slice(0, eff === 14 ? 14 : 7);
   const inSpan = new Set(dates);
   const byTeam = new Map<number, Map<string, ScheduleGame[]>>();
   const put = (teamId: number, g: ScheduleGame) => {
@@ -79,7 +205,33 @@ export function buildScheduleIndex(win: ScheduleWindow, span: ScheduleSpan): Sch
     put(g.homeId, g);
     put(g.awayId, g);
   }
-  return { span, dates, today: win.start, byTeam };
+  // The window's own last day rather than the last day with a game in it: the
+  // question is whether the *server* was asked far enough ahead, not whether
+  // anybody is playing.
+  const wants = eff === 'matchup' && matchup ? matchup.end : eff === 'next' && matchup?.next ? matchup.next.end : null;
+  return { span: eff, dates, today: win.start, short: wants !== null && wants > win.end, byTeam };
+}
+
+/**
+ * How the count columns name their own span in a sentence — **exported,
+ * because both tables draw those columns and each writes its own header.** The
+ * summary table restated `the next N days` by hand, which read `the next
+ * matchup days` the moment a span stopped being a number; one function is what
+ * stops a day counted here and the same day counted there being described two
+ * ways.
+ *
+ * The index carries the *effective* span, so a named one that fell back reads
+ * as the days it actually drew rather than as the matchup it could not.
+ */
+export function spanPhrase(index: ScheduleIndex): string {
+  // A span the window could not reach says so rather than under-counting in
+  // silence — see `ScheduleIndex.short`.
+  const cut = index.short
+    ? `, as far as the schedule reaches (to ${index.dates[index.dates.length - 1] ?? '—'})`
+    : '';
+  if (index.span === 'matchup') return `in the rest of this matchup period${cut}`;
+  if (index.span === 'next') return `in the next matchup period${cut}`;
+  return `in the next ${index.span} days`;
 }
 
 /** A club's games on one day of the span — empty on an off day. */
@@ -261,7 +413,7 @@ export function scheduleColumns(index: ScheduleIndex, kind: PlayerKind): Column[
   const games: Column = {
     key: SCHED_GAMES_KEY,
     label: 'G',
-    title: `Games his club plays in the next ${index.span} days — postponements excluded`,
+    title: `Games his club plays ${spanPhrase(index)} — postponements excluded`,
     format: (r) => gameCount(index, r.teamId),
     value: (r) => gameCount(index, r.teamId),
     group: 'Schedule',
@@ -269,7 +421,7 @@ export function scheduleColumns(index: ScheduleIndex, kind: PlayerKind): Column[
   const starts: Column = {
     key: SCHED_STARTS_KEY,
     label: 'GS',
-    title: `Starts his club has announced in the next ${index.span} days — clubs name a probable about three days out, so this counts the announced front of the span`,
+    title: `Starts his club has announced ${spanPhrase(index)} — clubs name a probable about three days out, so this counts the announced front of the span`,
     format: (r) => {
       const n = startCount(index, r.teamId, r.id);
       return n === 0 ? '—' : <span className={n >= 2 ? 'sched-two' : undefined}>{n}</span>;

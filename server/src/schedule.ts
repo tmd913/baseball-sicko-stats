@@ -8,15 +8,31 @@ const UA = { 'User-Agent': 'statcast-sicko/1.0' };
  * How far ahead the window reaches, and so the widest span the Schedule view
  * can offer.
  *
- * Fourteen is `nextGame.ts`'s number and it is the same argument arriving from
- * the other side: a rotation turn is five days, an off day either side of the
- * All-Star break is the widest gap a club's own schedule has, and a fantasy
+ * **Fourteen was the number and it is 28, because the view now offers a
+ * *matchup* as a span.** The old figure was `nextGame.ts`'s and the argument
+ * was sound as far as it went — a rotation turn is five days, an off day either
+ * side of the All-Star break is the widest gap a club's own schedule has, and a
  * manager planning past a fortnight is planning past anything the schedule can
- * tell him. It is also **one window rather than two**: the client picks 7 or 14
- * and slices, so there is exactly one cache entry per baseball day for the
- * whole app rather than one per span.
+ * tell him. What it did not have to cover is *next* matchup, which begins where
+ * this one ends: `remaining(this) + length(next)`, and a league whose playoff
+ * rounds run a fortnight (`playoffMatchupPeriodLength: 2` on the live one) can
+ * ask for **14 + 14**. At 14 days that span was answerable for an ordinary
+ * seven-day week and silently short exactly when a manager cares most, which is
+ * the failure this codebase least wants — a count of games that is quietly
+ * missing half of them.
+ *
+ * **It costs about three kilobytes.** Measured against MLB with this file's own
+ * `fields`: 14 days is 47,570 bytes raw / **3,129 gzipped** and 189 games, 28
+ * days is 91,776 / **5,444** and 376. Our own response to a client goes 35,834
+ * raw / 3,110 gzipped to roughly double that — once per baseball day for the
+ * whole app, since this is one shared read.
+ *
+ * It is still **one window rather than one per span**: the client picks a span
+ * and slices, so there is exactly one cache entry per baseball day whatever
+ * anybody asks for. The numeric spans are unchanged at 7 and 14 — this is how
+ * far the window *reaches*, not how much of it is ever drawn at once.
  */
-export const SCHEDULE_DAYS = 14;
+export const SCHEDULE_DAYS = 28;
 
 /**
  * How long the window stays fresh.
@@ -131,7 +147,7 @@ async function fetchWindow(from: string, to: string): Promise<ScheduleWindow> {
 }
 
 /**
- * Every club's next fortnight, with whoever each side has announced.
+ * Every club's next four weeks, with whoever each side has announced.
  *
  * One upstream for all thirty clubs rather than one per club or one per player:
  * the two tables that read it draw hundreds of rows at once, and the answer for

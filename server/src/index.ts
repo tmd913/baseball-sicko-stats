@@ -63,6 +63,7 @@ import { randomBytes } from 'node:crypto';
 import {
   EspnAuthError,
   getLeagueInfo,
+  getMatchupWindow,
   getOwnership,
   getRankings,
   getRosterOn,
@@ -163,13 +164,14 @@ app.get(
 );
 
 /**
- * Every club's next fortnight, with whoever each side has announced — what the
- * Schedule view on the summary table and the research board both draw.
+ * Every club's next four weeks, with whoever each side has announced — what
+ * the Schedule view on the summary table and the research board both draw.
  *
  * **No parameters at all, which is the point.** The window is the server's own
  * `baseballToday()` plus `SCHEDULE_DAYS`, so there is exactly one answer for
  * the whole app on a given day and exactly one cache entry behind it; the
- * client picks 7 or 14 and slices what it was given. A `days=` parameter would
+ * client picks a span — 7 days, 14, this matchup or next — and slices what it
+ * was given. A `days=` parameter would
  * buy nothing a slice doesn't and cost a second entry of the same upstream —
  * the same reasoning `getPlayerPool` follows for its cookie-free player list.
  *
@@ -1067,6 +1069,46 @@ app.get(
       }
       const own = await getOwnership(creds, req.query.refresh === '1');
       res.json(own);
+    } catch (err) {
+      if (!espnError(err, res)) throw err;
+    }
+  }),
+);
+
+// **Which days this matchup period covers, and which the next one covers** —
+// the two named spans the Schedule view offers a connected league, and nothing
+// else. Two dates and a period number each; see `espn.ts::getMatchupWindow`
+// for why they are *derived* rather than read off the scoreboard, whose own
+// `start`/`end` truncate at today for the period being played and whose
+// `nextPeriod` is null on it by construction.
+//
+// **A route of its own rather than a field on `/api/espn`**, which is
+// assembled from the stored record alone and makes no ESPN read: a status
+// every user fetches on boot has no business acquiring an upstream. And rather
+// than a field on `/api/espn/ownership`, which is a *per-player* map on a
+// ten-minute cache where this is a fact about the league's calendar on
+// `leagueMeta`'s own minute — two answers with two lifetimes, and folding them
+// would give the shorter one to both.
+//
+// 409 `espn-auth` on a rejected cookie like every route in this family, and a
+// league whose period arithmetic cannot be read answers **null** rather than
+// failing: the Schedule view then offers the two numeric spans it always had.
+app.get(
+  '/api/espn/matchup-window',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const espn = await getEspnLeague(userId(req));
+    if (!espn) {
+      res.status(409).json({ error: 'No ESPN league connected', code: 'espn-missing' });
+      return;
+    }
+    try {
+      const creds = await getEspnCreds(userId(req));
+      if (!creds) {
+        res.status(409).json({ error: 'No ESPN league connected', code: 'espn-missing' });
+        return;
+      }
+      res.json(await getMatchupWindow(creds, req.query.refresh === '1'));
     } catch (err) {
       if (!espnError(err, res)) throw err;
     }

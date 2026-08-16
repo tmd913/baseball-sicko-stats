@@ -9,7 +9,13 @@ import { createPortal } from 'react-dom';
 import { ColumnPicker, ColumnsButton } from './ColumnPicker';
 import { RankBadge, RanksButton, rankScales } from './columnRanks';
 import { ScheduleSpanTabs, ScheduleToggle } from './ScheduleControl';
-import { SCHED_GAMES_KEY, scheduleColumns } from './schedule';
+import {
+  defaultScheduleSpan,
+  effectiveSpan,
+  SCHED_GAMES_KEY,
+  scheduleColumns,
+  spanLabel,
+} from './schedule';
 import type { ScheduleIndex, ScheduleSpan } from './schedule';
 import {
   PlayerStatusContext,
@@ -18,6 +24,7 @@ import {
 } from '../hooks';
 import { RESEARCH_INCLUDE_KEYS, RESEARCH_WINDOWS } from '../types';
 import type {
+  MatchupWindow,
   PlayerKind,
   ResearchIncludeKey,
   ResearchRow,
@@ -571,6 +578,11 @@ interface Props {
   scheduleSpan: ScheduleSpan | null;
   onScheduleSpanChange: (s: ScheduleSpan | null) => void;
   schedule: ScheduleIndex | null;
+  /** The league's own two matchup periods, or null with no league — what the
+   *  span run offers past `Next 7` / `Next 14`, and what the mode opens on.
+   *  Threaded rather than read here for the reason `trendWindows` is: it is a
+   *  per-user league fact, and this table is otherwise the league's. */
+  matchupWindow: MatchupWindow | null;
   /** Which of the three sets of players the board includes. Lifted to App with
    *  the other cross-board controls, and in the URL for the same reason the
    *  window is: it changes the population the table describes, not the
@@ -833,6 +845,7 @@ export function ResearchTable({
   onWindowChange,
   scheduleSpan,
   onScheduleSpanChange,
+  matchupWindow,
   schedule,
   include,
   onIncludeChange,
@@ -1647,7 +1660,16 @@ export function ResearchTable({
                   : 'The days ahead, still loading'
               }
             >
-              Schedule · next {scheduleSpan} days
+              {/* The span in its own words — a named one reads `Schedule ·
+                  this matchup` where a numeric one reads `next 7 days`, since
+                  a badge saying "next matchup days" would be nonsense and a
+                  badge saying "7" over a fortnight of columns would be a lie.
+                  `spanLabel` is the same wording the pills carry, lower-cased
+                  into the badge's own sentence. */}
+              Schedule ·{' '}
+              {spanLabel(effectiveSpan(scheduleSpan, matchupWindow), matchupWindow)
+                .label.replace(/^Next (\d+)$/, 'next $1 days')
+                .toLowerCase()}
             </span>
           )}
           <span className="research-badge">{windowLabel(statWindow)}</span>
@@ -1932,7 +1954,11 @@ export function ResearchTable({
                  and hands it down only once it has landed, so this needs no
                  fourth prop to know it. */
               loading={scheduleSpan !== null && !schedule}
-              onToggle={() => onScheduleSpanChange(scheduleSpan === null ? 7 : null)}
+              onToggle={() =>
+                onScheduleSpanChange(
+                  scheduleSpan === null ? defaultScheduleSpan(matchupWindow) : null,
+                )
+              }
             />
             {!schedule && (
               <>
@@ -1969,7 +1995,11 @@ export function ResearchTable({
                 because the window tabs an inch away read `7d` and mean the
                 opposite direction in time — see `ScheduleSpanTabs`. */}
             {scheduleSpan !== null && (
-              <ScheduleSpanTabs span={scheduleSpan} onChange={onScheduleSpanChange} />
+              <ScheduleSpanTabs
+                span={scheduleSpan}
+                matchup={matchupWindow}
+                onChange={onScheduleSpanChange}
+              />
             )}
           </div>
 
