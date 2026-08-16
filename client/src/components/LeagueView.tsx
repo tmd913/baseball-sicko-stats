@@ -278,45 +278,39 @@ function MatchupCard({
   const mine = myTeamId != null && (home.teamId === myTeamId || away?.teamId === myTeamId);
   const groups = useMemo(() => categoryGroups(categories), [categories]);
 
-  // A bye is a real shape rather than a failed read — a 12-team league's first
-  // playoff round had two matchups and eight of them — so it says so plainly
-  // instead of drawing a grid with one row in it.
-  if (!away) {
-    return (
-      <div className={`lg-matchup lg-bye${mine ? ' lg-mine' : ''}`}>
-        {mine && <div className="lg-mine-tag">Your matchup</div>}
-        <div className="lg-side">
-          <TeamLogo team={teams.get(home.teamId)} />
-          <SideIdentity team={teams.get(home.teamId)} teamId={home.teamId} />
-          <span className="lg-bye-tag">Bye</span>
-        </div>
-        {/* **A bye gets the door too**, and it has to: a matchup page is the
-            only way to that manager's roster and feed, and on the week the
-            reader's own team is on a bye — which in a 12-team league's first
-            playoff round is eight of the ten cards — leaving it off would put
-            his own team out of reach entirely. The page draws a bye as one
-            team, which is what it is. */}
-        <button type="button" className="lg-open-matchup" onClick={() => onOpen(matchup.id)}>
-          Team →
-        </button>
-      </div>
-    );
-  }
+  /**
+   * **A bye is one side rather than a different card.**
+   *
+   * It drew a name, the word `Bye` and nothing else, on the reasoning that a
+   * category grid with one row in it is not a comparison. True, and it threw
+   * away the thing a manager on a bye week actually wants: **his own numbers**.
+   * ESPN fills `cumulativeScore` for a bye exactly as it does for a matchup —
+   * checked on the live league, all 23 stats with the period's own figures
+   * (24 R, 7 HR, .677 OPS over the week rather than the season) — so the line
+   * was there all along and the card simply declined to draw it.
+   *
+   * So the card is one shape with one or two sides: the grid draws a row per
+   * side, and what a bye loses is only what it genuinely hasn't got — an
+   * opponent to be winning or losing against, and a headline triple, which is a
+   * count of categories won and is nothing at all with nobody to win them from.
+   */
+  const sides = away ? [away, home] : [home];
 
   /** The headline beside each name — and in a categories league it is a
    *  **triple rather than a number**: won, lost and tied, which is what a side
    *  of a category matchup actually has. See `catScore`. A points league has
-   *  one number a side and takes it. */
+   *  one number a side and takes it. Null on a bye, there being no categories
+   *  won from anybody. */
   const score = (side: typeof home) =>
-    format === 'h2h-points' ? fmtPoints(side.points) : catScore(side);
+    !away ? null : format === 'h2h-points' ? fmtPoints(side.points) : catScore(side);
 
   const leading =
-    matchup.winner === 'home' ? home.teamId : matchup.winner === 'away' ? away.teamId : null;
+    matchup.winner === 'home' ? home.teamId : matchup.winner === 'away' ? away?.teamId : null;
 
   return (
-    <div className={`lg-matchup${mine ? ' lg-mine' : ''}`}>
+    <div className={`lg-matchup${away ? '' : ' lg-bye'}${mine ? ' lg-mine' : ''}`}>
       {mine && <div className="lg-mine-tag">Your matchup</div>}
-      {[away, home].map((side) => {
+      {sides.map((side) => {
         const team = teams.get(side.teamId);
         return (
           <div
@@ -325,7 +319,12 @@ function MatchupCard({
           >
             <TeamLogo team={team} />
             <SideIdentity team={team} teamId={side.teamId} />
-            <span className="lg-side-score">{score(side)}</span>
+            {/* The triple, or — on a bye — the word for why there isn't one. */}
+            {away ? (
+              <span className="lg-side-score">{score(side)}</span>
+            ) : (
+              <span className="lg-bye-tag">Bye</span>
+            )}
           </div>
         );
       })}
@@ -357,8 +356,11 @@ function MatchupCard({
                   </span>
                 ))}
               </div>
-              {[away, home].map((side, i) => {
-                const other = i === 0 ? home : away;
+              {sides.map((side, i) => {
+                // Nobody to compare against on a bye, which is what makes the
+                // figures plain: a category is neither won nor lost, so the
+                // cells take no colour and say only what he did.
+                const other = away ? (i === 0 ? home : away) : null;
                 const team = teams.get(side.teamId);
                 return (
                   <div className="lg-cat-row" role="row" key={side.teamId}>
@@ -376,7 +378,7 @@ function MatchupCard({
                     </span>
                     {g.categories.map((c) => {
                       const v = side.scores[c.statId];
-                      const state = outcome(v, other.scores[c.statId], c);
+                      const state = other ? outcome(v, other.scores[c.statId], c) : null;
                       return (
                         <span
                           key={c.statId}
@@ -411,8 +413,14 @@ function MatchupCard({
           cell in the grid above carries its own `title`, and wrapping the lot
           in one control would put a hundred titled cells inside a single tab
           stop and one accessible name. */}
+      {/* **A bye gets the door too**, and it has to: a matchup page is the only
+          way to a manager's roster and feed, and on the week the reader's own
+          team is on a bye — eight of the ten cards in a 12-team league's first
+          playoff round — leaving it off would put his own team out of reach
+          entirely. It reads `Team →` there, since there is no breakdown to
+          open: the page goes straight to his roster. */}
       <button type="button" className="lg-open-matchup" onClick={() => onOpen(matchup.id)}>
-        Breakdown →
+        {away ? 'Breakdown →' : 'Team →'}
       </button>
     </div>
   );
