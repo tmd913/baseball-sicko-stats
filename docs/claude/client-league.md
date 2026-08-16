@@ -610,6 +610,12 @@ rows several categories apart and the eye has to hold a column to compare them;
 here the two numbers being compared are on one line with the thing they measure
 between them.
 
+**A rule under each heading** (`BATTERS`, `PITCHERS`, `MOVES`), at the same
+weight as the one under the two team names — the card's own divider. The rows
+below carry a 55% hairline each, so a full-weight line reads as the start of a
+section rather than as one more row boundary, which is what a heading with
+nothing under it left the eye to infer from spacing alone.
+
 **Batters first, then pitchers**, in the same order as the Scoreboard and the
 Rankings table — `categoryGroups`, the one place in the client that splits them,
 which reads the server's own `side`/`order` rather than guessing from a label
@@ -1061,6 +1067,14 @@ reaches nothing inside this overlay. Measured before the rule that fixes it, the
 row rendered at **0 × 0** with `flex: 1 1 100%` computing correctly and nothing
 on screen — a control that is laid out and invisible, which no amount of reading
 the flex rules would have found.
+
+**And the row's gap is 12px, which is the app's own view bar's** — the same
+wrapping row of the same controls one page down. The number matters for one of
+them: the date toggle's range bubble hangs 8px above its button, so at the 8px
+gap this row used to carry, a wrapped second row put the bubble **1px** under
+the switches above it and it read as clipped. Measured, 12 gives it the **5px**
+the app's own row gives it, and costs no wrap at any width — 2 rows at 320 and
+390, 1 from 480 up, before and after.
 
 **The slot chip says whose lineup it is.** `FantasySlot` gained an optional
 `owner` — the team name in the possessive, null for the reader's own — because

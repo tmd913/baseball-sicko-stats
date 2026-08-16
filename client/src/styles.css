@@ -11163,7 +11163,13 @@ body {
     minmax(0, 1fr) var(--mup-val-w);
   align-items: center;
   gap: 8px;
-  padding: 14px 0 5px;
+  padding: 14px 0 6px;
+  /* A rule under the heading, at the same weight as the one under the two team
+     names — the card's own divider. The rows below carry a 55% hairline each,
+     so a full-weight line reads as the start of a section rather than as one
+     more row boundary, which is what a heading with nothing under it was
+     leaving the eye to infer from spacing alone. */
+  border-bottom: 1px solid var(--border);
 }
 .mup-group-label {
   /* Across the middle three columns rather than inside the category column
@@ -11620,7 +11626,14 @@ span.mup-move-name:hover {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  /* **12px, which is the app's own view bar's** — the same wrapping row of the
+     same controls one page down, and the number matters for one of them: the
+     date toggle's range bubble hangs 8px above its button, so at an 8px row gap
+     a wrapped second row put the bubble 1px under the switches above it and it
+     read as clipped. Measured, 12 gives it the **5px** the app's own row gives
+     it, and costs no wrap at any width — 2 rows at 320 and 390, 1 from 480 up,
+     before and after. */
+  gap: 12px;
   max-width: var(--card-column);
   margin: 0 auto 12px;
 }
