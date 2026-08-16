@@ -1385,3 +1385,44 @@ export function finalSwingBatSpeed(pa: PlateAppearance): number | null {
   if (!last || !isSwing(last.description) || last.batSpeed === null) return null;
   return last.batSpeed;
 }
+
+/**
+ * **The baseball day an instant falls in**, as `YYYY-MM-DD`.
+ *
+ * Both halves of that are the app's own rule rather than the machine's. MLB's
+ * days are anchored to US Eastern, so an evening user on the west coast gets an
+ * off-by-one from a local or a UTC date — and a baseball day does not end at
+ * midnight either: a 10pm ET first pitch out west finishes around 1am, so at
+ * 12:30am the day this should name is still the one whose games are ending.
+ * The day turns at **3am ET**: later than any game realistically runs, earlier
+ * than anything the next day starts. `server/src/etDate.ts` mirrors the pair
+ * (the two workspaces cannot share code, and the API's default date has to land
+ * where the client's presets do) — change both.
+ *
+ * It lives here rather than in `App.tsx`, which held it for as long as it was
+ * the only caller: the matchup page needs the day an ESPN transaction happened
+ * on to say which week it belongs to, and a second copy of a rule this precise
+ * is a second copy that will one day differ from the first.
+ */
+export const DAY_ROLLOVER_HOUR = 3;
+
+const ET_ZONE = 'America/New_York';
+const ET_DAY = new Intl.DateTimeFormat('en-US', {
+  timeZone: ET_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+/** The Eastern calendar date of an instant, midnight to midnight. */
+export function easternDate(d: Date): string {
+  const parts = ET_DAY.formatToParts(d);
+  const get = (t: string) => parts.find((p) => p.type === t)!.value;
+  return `${get('year')}-${get('month')}-${get('day')}`;
+}
+
+/** The **baseball** day of an instant — the Eastern date of a clock set back to
+ *  the rollover hour, so the small hours still belong to the night before. */
+export function baseballDay(ms: number): string {
+  return easternDate(new Date(ms - DAY_ROLLOVER_HOUR * 3_600_000));
+}
