@@ -31,6 +31,7 @@ import type {
   ResearchWindow,
   TeamHitting,
   TeamHittingWindow,
+  EspnRosterPlayer,
 } from './types';
 
 /** An API failure that still knows its HTTP status — the app needs to tell an
@@ -476,6 +477,15 @@ export const api = {
    *  pitcher's game. The season is already on the report, so this is only ever
    *  called for the other four windows; it answers with all three venues, so
    *  changing that control costs nothing. */
+  /** Both sides of a matchup, as rosters, on one day — the Matchup tab's roster
+   *  view. One call rather than two, because the reader opens both at once and
+   *  two round trips to draw one thing is two chances for half of it to land. */
+  async espnRosters(
+    teamIds: number[],
+    date: string,
+  ): Promise<{ date: string; rosters: Record<string, EspnRosterPlayer[] | null> }> {
+    return request(`/api/espn/rosters?teams=${teamIds.join(',')}&date=${date}`);
+  },
   async teamHitting(teamId: number, window: TeamHittingWindow): Promise<TeamHitting | null> {
     return request(`/api/teams/${teamId}/hitting?window=${window}`);
   },

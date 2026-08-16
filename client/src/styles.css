@@ -496,7 +496,8 @@ body {
 .date-presets-select,
 .research-window-select,
 .research-pos-select,
-.lg-span-select {
+.lg-span-select,
+.mup-select {
   display: none;
   /* Custom chevron (native arrow can't be inset from the edge): draw it as a
      background image positioned 14px in, and reserve room for it on the right. */
@@ -520,7 +521,8 @@ body {
 .date-presets-select:hover,
 .research-window-select:hover,
 .research-pos-select:hover,
-.lg-span-select:hover {
+.lg-span-select:hover,
+.mup-select:hover {
   border-color: var(--accent);
 }
 /* On phones the header wraps and the date control spans the full width. Swap the
@@ -10897,6 +10899,359 @@ body {
   color: var(--faint);
 }
 
+/* The way through from a scoreboard card to that matchup's own page. A text
+   door in the accent rather than the whole card made pressable — the idiom the
+   player page's Overview uses for `Stats →` and `News →`, and the right one
+   here for a stated reason: every cell of the category grid above carries its
+   own `title`, so wrapping the card in one control would put a hundred titled
+   cells inside a single tab stop and one accessible name. Right-aligned, which
+   is where a door goes when the thing above it is a table read left to right. */
+.lg-open-matchup {
+  display: block;
+  margin: 8px 0 0 auto;
+  padding: 2px 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  cursor: pointer;
+}
+.lg-open-matchup:hover {
+  text-decoration: underline;
+}
+
+/* ---- The Matchup tab ------------------------------------------------------
+   One matchup read the way a manager reads one: the categories down the middle
+   with each side's figure beside its own name. That is the whole shape, and it
+   is what the scoreboard's card cannot be — there the two sides are two rows
+   several categories apart and the eye has to hold a column to compare them.
+
+   `.mup-card` takes the same panel gradient and radius the scoreboard's own
+   card does, so the two read as the same object at two magnifications. */
+.mup-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  max-width: var(--card-column);
+  margin: 0 auto 10px;
+}
+.mup-pick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 220px;
+}
+.mup-pick-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  flex: none;
+}
+/* Folded onto `.date-presets-select`'s rule so this is the app's one dropdown
+   rather than a second that resembles it. **It is a select at every width**,
+   where every other member of that list is the phone half of a pills-on-desktop
+   pair and so defaults to `display: none` — ten pairs of team names is a list
+   at 1920 as much as at 390, which is the one thing this control does not share
+   with them. Hence the explicit `display: block`, and the room to grow. */
+.mup-select {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.mup-roster-btn {
+  flex: none;
+}
+
+.mup-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, var(--panel), var(--bg-2));
+  padding: 12px;
+  max-width: var(--card-column);
+  margin: 0 auto;
+}
+/* The two names, with the categories' own middle column between them: `1fr auto
+   1fr` so the two sides are the same width whatever their names are, which is
+   what keeps the figures under them in two straight columns. */
+.mup-heads {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.mup-heads-bye {
+  grid-template-columns: 1fr auto;
+  /* Nothing follows a bye, so the rule under the names would be an edge closing
+     on empty card. */
+  padding-bottom: 0;
+  border-bottom: none;
+}
+.mup-side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.mup-side-right {
+  flex-direction: row-reverse;
+  text-align: right;
+}
+.mup-side-id {
+  display: flex;
+  flex-direction: column;
+  /* **Shrinks rather than wraps**, which is what the phone layout below turns
+     on: `.mup-side` wraps there so the score can take its own line, and without
+     this the name block was the thing that wrapped instead — the logo alone on
+     one row and the name under it, with the two sides then starting at
+     different heights. */
+  flex: 1 1 0;
+  min-width: 0;
+}
+.mup-side-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mup-side-rec {
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+/* The headline triple, in the accent for the side ahead and muted for the other
+   — the scoreboard's own rule, which marks a winner rather than shouting a
+   loser. */
+.mup-side-score {
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  margin-left: auto;
+  flex: none;
+}
+.mup-side-right .mup-side-score {
+  margin-left: 0;
+  margin-right: auto;
+}
+.mup-leading .mup-side-score,
+.mup-leading .mup-side-name {
+  color: var(--accent);
+}
+.mup-vs {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+/* **On a phone the headline drops under the name rather than beside it.**
+   `1fr auto 1fr` with a score on each side leaves a team about 120px at 390,
+   which truncates every name in this league to three characters — and the name
+   is what the row is *about*. Stacked, each side has the full half (about
+   150px) and the score reads under it; the `vs` goes with the column it was
+   filling, the two headlines being unmistakable once they are the only numbers
+   on the row. 480 rather than 640 because it is measured: at 640 the names fit
+   whole. */
+@media (max-width: 480px) {
+  .mup-heads {
+    grid-template-columns: 1fr 1fr;
+  }
+  .mup-vs {
+    display: none;
+  }
+  .mup-side {
+    flex-wrap: wrap;
+    align-items: baseline;
+  }
+  .mup-side-score {
+    flex-basis: 100%;
+    margin: 2px 0 0;
+    font-size: 14px;
+  }
+  .mup-side-right .mup-side-score {
+    margin: 2px 0 0;
+    text-align: right;
+  }
+}
+
+/* Batters, then pitchers — `categoryGroups`' own order, which is the server's
+   `side`/`order` and the same one the scoreboard and the Rankings table read.
+   A heading rather than a rule between the two, because the reader is looking
+   for one half of the list rather than for a break in it. */
+.mup-group-head {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 12px 0 4px;
+}
+/* The same `1fr auto 1fr` as the heads above, so a figure lands under the name
+   it belongs to. The middle column is the category, which is what makes the
+   comparison a glance: the two numbers being compared are on one line with the
+   thing they measure between them. */
+.mup-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+}
+.mup-row:last-child {
+  border-bottom: none;
+}
+.mup-cat {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--muted);
+  min-width: 52px;
+  text-align: center;
+}
+.mup-val {
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.mup-val-left {
+  text-align: right;
+}
+.mup-val-right {
+  text-align: left;
+}
+/* Green takes the category and the loser goes muted, which is the scoreboard's
+   own pair (`.lg-cat-win` / `.lg-cat-loss`) rather than a second one — a red
+   loser would be half the page shouting where the job is to mark a winner. */
+.mup-win {
+  color: var(--hit);
+  font-weight: 800;
+}
+.mup-loss {
+  color: var(--muted);
+}
+.mup-tie {
+  color: var(--faint);
+}
+.mup-note {
+  max-width: var(--card-column);
+  margin: 10px auto 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Both teams' rosters, side by side on a desktop and stacked on a phone —
+   `auto-fit` with a 260px floor, so the break is decided by the room rather
+   than by a width written down here. */
+.mup-rosters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  max-width: var(--card-column);
+  margin: 12px auto 0;
+}
+.mup-roster {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  padding: 10px 12px;
+  min-width: 0;
+}
+.mup-roster-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.mup-roster-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mup-roster-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.mup-player {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  min-width: 0;
+}
+/* The slot leads, as it does on the summary table's own rows — a fantasy roster
+   is scanned by slot. What the colour marks is **starting or not** rather than
+   which slot: `BE` against `2B/SS` is not a distinction the eye makes at a
+   glance, and "is he accruing anything today" is the question being asked. */
+.mup-slot {
+  flex: none;
+  min-width: 34px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+.mup-slot-on {
+  color: var(--accent);
+}
+.mup-benched .mup-player-name {
+  color: var(--muted);
+}
+.mup-player-name {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.mup-player-name:hover {
+  color: var(--accent);
+}
+/* A player the name join could not place opens no page, so he is not a press —
+   the rule the Transactions feed's own names already follow. */
+.mup-player-plain {
+  cursor: default;
+}
+.mup-player-plain:hover {
+  color: var(--text);
+}
+.mup-inj {
+  flex: none;
+  margin-left: auto;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: var(--hr);
+  border: 1px solid color-mix(in srgb, var(--hr) 45%, transparent);
+  border-radius: 999px;
+  padding: 1px 6px;
+}
+
 /* ---- The Rankings table -------------------------------------------------
    **Modelled on the research board rather than on the game log**, which is
    what it was folded onto before and is the whole of what was wrong with it.
@@ -11105,6 +11460,20 @@ body {
 .lg-tabs,
 .lg-span-row {
   flex-wrap: wrap;
+}
+/* **And the League strip is allowed to shrink so that wrap can happen.** Every
+   group in `.view-bar-tabs` is `flex: none`, which is that row's own rule and
+   the right one: a group travels whole and the line breaks *between* two rather
+   than inside one. Four tabs is where that stops fitting — measured, the strip
+   is 377px against the 346 a 390px phone leaves inside the app's gutters, and
+   `flex: none` meant it overflowed the page by 9px rather than wrapping. Below
+   640 it gives up the `none` and wraps within itself, which is the lesser evil
+   `.research-tools` already names for a run of buttons that has outgrown a
+   phone. Above that it fits on one line and keeps the row's rule. */
+@media (max-width: 640px) {
+  .view-bar-tabs .lg-tabs {
+    flex: 0 1 auto;
+  }
 }
 .lg-tab,
 .lg-span-tab {

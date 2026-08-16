@@ -396,21 +396,23 @@ Driven against the built client and the live 2026 league at **390×844 and
 0.7KB over the wire, for a view, a route, a component and the paragraphs above
 restated where the rules are.
 
-### Three tabs, because they are three questions
+### Four tabs, because they are four questions
 
-**The page above is described as two blocks and is now three tabs** —
-`Scoreboard`, `Rankings`, `Transactions` — and the passage before this one is
-kept as written because its argument for the *page* is unchanged: this is still
-the one view about the fantasy league rather than about players, and it still
-earns a pill rather than an entry in the fantasy popover. What changed is that
-one page holding a scoreboard with a season table stacked under it was a page
-with one question and a half, and it has three:
+**The page above is described as two blocks and is now four tabs** —
+`Matchup`, `Scoreboard`, `Rankings`, `Transactions` — and the passage before
+this one is kept as written because its argument for the *page* is unchanged:
+this is still the one view about the fantasy league rather than about players,
+and it still earns a pill rather than an entry in the fantasy popover. What
+changed is that one page holding a scoreboard with a season table stacked under
+it was a page with one question and a half, and it has four:
 
-1. **Scoreboard** — every matchup of one period, the category line under both
-   sides. *Am I winning.*
-2. **Rankings** — every team's figure in every category and where that figure
+1. **Matchup** — one matchup, category by category, with each side's figure
+   beside its own name. *Am I beating **him**.*
+2. **Scoreboard** — every matchup of one period, the category line under both
+   sides. *Is anybody winning.*
+3. **Rankings** — every team's figure in every category and where that figure
    stands, over a span the reader picks. *Why.*
-3. **Transactions** — who added, dropped and traded whom. *What has been going
+4. **Transactions** — who added, dropped and traded whom. *What has been going
    on.*
 
 **The season table moved into Rankings rather than staying beside the
@@ -447,14 +449,20 @@ window and means five different spans of a different thing; one parameter meanin
 two things in two views is exactly the trap `cols=` avoids by being scoped to the
 board `pos=` names. Neither name can collide: the app's other params are
 `preset`, `start`, `end`, `player`, `view`, `kind`, `sim`, `hideil`, `starters`,
-`sched`, `roster`, `pos`, `cols`, `inc`, `scope`, `watch`, `win`, `help`, `mp`
-and `league`.
+`sched`, `roster`, `pos`, `cols`, `inc`, `scope`, `watch`, `win`, `help`, `mp`,
+`mup` and `league`.
 
 **Each tab's data is read on its first open and kept**, the way the player page's
-tabs are — the scoreboard read is gated on `leagueTab === 'scoreboard'` and the
-rankings on `leagueTab === 'rankings'`, and each of the three responses carries
-its own `teams`, so no tab depends on another having been opened. Nobody who only
-looks at the scoreboard pays for a 300KB aggregation of the first half.
+tabs are — the rankings read is gated on `leagueTab === 'rankings'`, and each of
+the responses carries its own `teams`, so no tab depends on another having been
+opened. Nobody who only looks at the scoreboard pays for a 300KB aggregation of
+the first half.
+
+**Matchup and Scoreboard share one read**, which is `isBoardTab`'s whole job: a
+matchup breakdown *is* one card of that board turned on its side, so the tab
+needs no fetch of its own, switching between the two costs nothing, and the two
+can never disagree about a figure. The live poll below is gated on the same
+test.
 
 **The transactions feed is the exception and is read on entry to the *view***,
 any tab of it, and then kept (a `transactionsRef`, so the effect does not re-run
@@ -537,6 +545,150 @@ and it **sets** the answer rather than blanking first, so the tab stays readable
 while the read is out where a null left it empty until the reader navigated away
 and came back. Only when there is a feed to refresh: a reader who has never
 opened the League page is not made to pay for one by pressing it.
+
+### The Matchup tab: the categories down the middle
+
+**One matchup read the way a manager reads one**, and the shape is the whole of
+it: the categories run **down the middle** with each side's figure beside its
+own name, left and right.
+
+**Why that is not the scoreboard's card enlarged.** The Scoreboard answers *is
+anybody winning* — ten cards, each a headline and a category line squeezed into
+five columns a side — and it is read by scanning. This answers *am I beating
+him*, which is read one category at a time, down: is he ahead in saves, by how
+much, and is it worth chasing. Those are two questions about the same numbers
+and they want two shapes, which is the same argument that made Rankings its own
+tab rather than a block under the scoreboard. On the card the two sides are two
+rows several categories apart and the eye has to hold a column to compare them;
+here the two numbers being compared are on one line with the thing they measure
+between them.
+
+**Batters first, then pitchers**, in the same order as the Scoreboard and the
+Rankings table — `categoryGroups`, the one place in the client that splits them,
+which reads the server's own `side`/`order` rather than guessing from a label
+(`H` is a hit and a hit allowed; see *Which side a category is on*). On the live
+league that is `R · HR · RBI · SB · OPS` then `K · W · ERA · WHIP · SVHD`.
+
+**Green takes the category and the loser goes quiet**, which is the scoreboard's
+own pair rather than a second one: a red loser would be half the page shouting
+where the job is to mark a winner. The winner is computed here from the two
+figures (`winnerOf`, `outcome`'s twin) for the reason that one is — ESPN fills
+its own `result` only once a matchup is over, so a live week would say nothing —
+and the two are deliberately the same arithmetic, which `espn.ts` has checked
+against ESPN's answer on 1,080 finished categories.
+
+**Any matchup in the league**, which is what the tab is *for*: the picker lists
+every matchup of the period as `A vs B` with the reader's own marked `— yours`,
+and every scoreboard card carries a **`Breakdown →`** door through to its own.
+A native `<select>` rather than a row of pills, because ten pairs of team names
+is a list at 1920 as much as at 390 — which is the one thing this control does
+not share with the four other selects it is folded onto, each of those being the
+phone half of a pills-on-desktop pair and so defaulting to `display: none`.
+
+**The door is a text link at the foot of each card rather than the card itself
+made pressable**, which is the idiom the player page's Overview already uses for
+`Stats →` and `News →` and is the right one here for a stated reason: every cell
+of the category grid carries its own `title`, so wrapping the card in one
+control would put a hundred titled cells inside a single tab stop and one
+accessible name.
+
+**A bye is a real shape** — the live league's first playoff round is two
+matchups and eight of them — so it says so plainly, with no dangling rule under
+the name and no empty headline. The roster view still applies there: there is
+one team, and a reader on a bye week has more use for it than for anything else
+on the page.
+
+### Both rosters, behind a toggle
+
+**`Rosters` opens both teams' rosters side by side**, slot by slot, with each
+name a press through to that player's page.
+
+**Behind a toggle rather than always drawn**, and that is a cost rather than a
+taste: it is two ESPN reads of ~198KB, and the categories above are what the tab
+is for. Read once per matchup and kept — a settled week's roster is a fact the
+server holds on a blob with no freshness test, and a live week's is the ten
+minutes the ownership map already runs on.
+
+**One request for both sides** (`/api/espn/rosters?teams=6,1&date=`), because
+the reader opens both at once and two round trips to draw one thing is two
+chances for half of it to arrive. **A team ESPN cannot answer for is `null` in
+the map rather than an error**, so one side failing costs that side and leaves
+the other standing — the rule the whole roster fan-out follows.
+
+**Which day's roster is the last day of the period**, which for a week still
+being played is today: a settled week shows the team that finished it and a live
+one shows the team as it stands. That is the same anchor the summary table's
+slot chips take one level up (*The slot chip and the order are the range end's,
+not today's*).
+
+**The slot leads and the colour marks starting or not**, as it does on the
+summary table's own rows: a fantasy roster is scanned by slot, and `BE` against
+`2B/SS` is not a distinction the eye makes at a glance where "is he accruing
+anything" is. ESPN's injury designation rides at the right end of the row in the
+amber `.roster-status` reserves for one. **A player the name join could not
+place is not a press**, there being no page to open — the rule the Transactions
+feed's own names already follow.
+
+**Stacked on a phone and side by side on a desktop**, by `auto-fit` with a 260px
+floor, so the break is decided by the room rather than by a width written down
+here.
+
+### The headline stacks under the name on a phone
+
+`1fr auto 1fr` with a score on each side leaves a team about **120px at 390**,
+which truncates every name in the live league to three characters — and the name
+is what the row is about. Below **480** the headline drops to its own line
+inside each side, the `vs` goes with the column it was filling, and each name
+has the full half. 480 rather than 640 because it is measured: at 640 the names
+fit whole.
+
+**And `.mup-side-id` shrinks rather than wraps**, which is what that layout
+turns on. `.mup-side` wraps there so the score can take its own line, and
+without `flex: 1 1 0` the *name block* was the thing that wrapped instead — the
+logo alone on one row with the name under it, and the two sides then starting at
+different heights.
+
+### A fourth tab is where the League strip stops fitting a phone
+
+Every group in `.view-bar-tabs` is `flex: none`, which is that row's own rule and
+the right one: a group travels whole and the line breaks *between* two rather
+than inside one. Four tabs is where that stops fitting — measured, the strip is
+**377px against the 346** a 390px phone leaves inside the app's gutters, and
+`flex: none` meant it **overflowed the page by 9px** rather than wrapping. Below
+640 it gives up the `none` and wraps within itself, which is the lesser evil
+`.research-tools` already names for a run of buttons that has outgrown a phone.
+Above that it fits on one line and keeps the row's rule.
+
+### Measured — the Matchup tab
+
+**Driven against the built client and the live 12-team league at 320 / 390 / 480
+/ 560 / 640 / 900 / 1200 / 1920**, on a settled week (18) and the live one (19):
+
+- **Page-body overflow 0 at every width**, on all four tabs, before and after.
+- The breakdown reads `9-1-0` / `1-9-0` over **`Batters` then `Pitchers`** and
+  ten rows — `R 48/32 · HR 10/7 · RBI 44/31 · SB 6/9 · OPS .859/.837` then
+  `K 60/22 · W 3/2 · ERA 2.98/7.67 · WHIP 1.13/1.81 · SVHD 10/3` — with the
+  winning figure green in each, `SB` correctly going the other way.
+- The card is **346px at 390 and 800 at 900 up**, ten rows at every width, and
+  the two names are unclipped from 900.
+- **The picker moves the matchup**: option 0 gives `mup=103` and
+  `The Homewreckers / THE BRONX FLOATERS`, option 4 `mup=107` and the reader's
+  own. A `mup=999999` falls back to the reader's own with no error.
+- **The door works**: pressing the third card's `Breakdown →` on the Scoreboard
+  writes `mup=104`, selects the Matchup tab and draws `Pirates Cove / Sho me the
+  Parlay`.
+- **Stepping the period clears it**: `‹` from `mp=18&mup=104` gives `mp=17` with
+  no `mup`, on the reader's own matchup for that week.
+- **Rosters**: 28 and 25 players, 20 and 19 in a lineup, 53 of the 53 names a
+  press, injury chips on the ten who carry one; one column at 390 and two at
+  1200.
+- The reader's own matchup in the **live** period is a bye, and draws as one —
+  no headline, no rule under the name, and the roster view still offered.
+
+**Bundle: 500.20 → 510.02 KB of JS** (147.93 → 150.32 gzipped) and **116.82 →
+121.64 KB of CSS** (20.76 → 21.54) — 9.8KB and 4.8KB raw, 2.4KB and 0.8KB over
+the wire, for a tab, a route, a component and the paragraphs above restated
+where the rules are.
 
 ### The Transactions tab wears a dot when there are moves you haven't seen
 

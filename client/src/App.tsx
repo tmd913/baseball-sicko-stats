@@ -1022,16 +1022,23 @@ export default function App() {
   const showScoreboardWait = useDelayedFlag(scoreboardLoading);
 
   /**
-   * Which of the League page's three tabs is open, and — for the Rankings tab
-   * — which span it is cut on.
+   * Which of the League page's four tabs is open, which matchup the Matchup tab
+   * is on, and — for the Rankings tab — which span it is cut on.
    *
-   * **Both are in the URL because both decide what data is on screen**, the
-   * rule `view=`, `win=` and `mp=` follow. `lt=` is the tab (the Scoreboard is
-   * the default and is omitted, so a bare `?view=league` opens where the page
-   * always opened) and `lspan=` the span. Neither can collide: the app's other
-   * params are `preset`, `start`, `end`, `player`, `view`, `kind`, `sim`,
-   * `hideil`, `starters`, `sched`, `roster`, `pos`, `cols`, `inc`, `scope`,
-   * `watch`, `win`, `help`, `mp` and `league`.
+   * **All three are in the URL because all three decide what data is on
+   * screen**, the rule `view=`, `win=` and `mp=` follow. `lt=` is the tab
+   * (**Matchup** is the default and is omitted, the app's own convention being
+   * that the first tab is the one you land on — so a bare `?view=league` opens
+   * on the reader's own matchup and `lt=scoreboard` is written out like every
+   * other tab), `mup=` is which matchup, and `lspan=` the span. None can
+   * collide: the app's other params are `preset`, `start`, `end`, `player`,
+   * `view`, `kind`, `sim`, `hideil`, `starters`, `sched`, `roster`, `pos`,
+   * `cols`, `inc`, `scope`, `watch`, `win`, `help`, `mp` and `league`.
+   *
+   * **`mup=` is absent for the reader's own matchup**, which is a *rule* rather
+   * than a value — the same reasoning that keeps a date preset in the URL as
+   * its label: a link shared without one opens on the recipient's own matchup
+   * rather than on the sender's.
    *
    * `lspan=` is deliberately **not** `win=`, which is the research board's own
    * window and means five different spans of a different thing; one param
@@ -1040,7 +1047,17 @@ export default function App() {
    */
   const [leagueTab, setLeagueTab] = useState<LeagueTab>(() => {
     const raw = initialParams.get('lt');
-    return raw === 'rankings' || raw === 'transactions' ? raw : 'scoreboard';
+    return raw === 'rankings' || raw === 'transactions' || raw === 'scoreboard'
+      ? raw
+      : 'matchup';
+  });
+  // The two tabs the scoreboard read serves. A matchup breakdown *is* one card
+  // of that board turned on its side, so the two share the fetch, the poll and
+  // the period.
+  const isBoardTab = (t: LeagueTab) => t === 'matchup' || t === 'scoreboard';
+  const [matchupId, setMatchupId] = useState<number | null>(() => {
+    const raw = Number(initialParams.get('mup'));
+    return Number.isInteger(raw) && raw > 0 ? raw : null;
   });
   const [rankSpan, setRankSpan] = useState<EspnRankSpan>(() => {
     const raw = initialParams.get('lspan');
@@ -1235,7 +1252,10 @@ export default function App() {
    * view's block wait is gated on there being nothing to show yet.
    */
   useEffect(() => {
-    if (view !== 'league' || leagueTab !== 'scoreboard' || !espnConnected) return;
+    // **Both tabs read it**, and they read the same object: a matchup breakdown
+    // is one card of the scoreboard drawn the other way up, so the Matchup tab
+    // needs no fetch of its own and switching between the two costs nothing.
+    if (view !== 'league' || !isBoardTab(leagueTab) || !espnConnected) return;
     let cancelled = false;
     setScoreboardLoading(true);
     setScoreboardError(null);
@@ -1370,7 +1390,7 @@ export default function App() {
   const pollLeague = useCallback(() => {
     const quiet = (what: string) => (e: Error) =>
       console.error(`league poll (${what}) failed:`, e.message);
-    if (leagueTab === 'scoreboard' && scoreboardLive) {
+    if (isBoardTab(leagueTab) && scoreboardLive) {
       api.espnScoreboard(matchupPeriod).then(setScoreboard).catch(quiet('scoreboard'));
     }
     if (leagueTab === 'rankings' && rankSpanLive) {
@@ -2030,7 +2050,10 @@ export default function App() {
     // Which of the League page's three tabs, and the Rankings span. Written
     // only on that view and only off their defaults, the rule every other
     // param here follows.
-    if (view === 'league' && leagueTab !== 'scoreboard') p.set('lt', leagueTab);
+    if (view === 'league' && leagueTab !== 'matchup') p.set('lt', leagueTab);
+    if (view === 'league' && leagueTab === 'matchup' && matchupId != null) {
+      p.set('mup', String(matchupId));
+    }
     if (view === 'league' && leagueTab === 'rankings' && rankSpan !== 'season') {
       p.set('lspan', rankSpan);
     }
@@ -2060,6 +2083,7 @@ export default function App() {
     researchKind,
     matchupPeriod,
     leagueTab,
+    matchupId,
     rankSpan,
     simulate,
     hideInjured,
@@ -4164,9 +4188,22 @@ export default function App() {
         <LeagueView
           tab={leagueTab}
           board={scoreboard}
+          matchupId={matchupId}
+          onMatchup={setMatchupId}
+          onOpenMatchup={(id) => {
+            setMatchupId(id);
+            setLeagueTab('matchup');
+          }}
           loading={showScoreboardWait}
           error={scoreboardError}
-          onPeriod={setMatchupPeriod}
+          onPeriod={(period) => {
+            // A matchup id belongs to one period, so stepping to another has to
+            // let go of it: `mup=` from last week names a row this board has
+            // no match for, and the tab would silently fall back to the
+            // reader's own anyway. Clearing it says so in the URL too.
+            setMatchupId(null);
+            setMatchupPeriod(period);
+          }}
           rankings={rankings}
           rankSpan={rankSpan}
           rankingsLoading={showRankingsWait}

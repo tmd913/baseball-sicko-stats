@@ -65,6 +65,7 @@ import {
   getLeagueInfo,
   getOwnership,
   getRankings,
+  getRosterOn,
   getScoreboard,
   getTransactions,
   lineupsFrom,
@@ -1058,6 +1059,66 @@ app.get(
         return;
       }
       res.json(await getScoreboard(creds, period, req.query.refresh === '1'));
+    } catch (err) {
+      if (!espnError(err, res)) throw err;
+    }
+  }),
+);
+
+/**
+ * The rosters of two teams on one day — the Matchup tab's roster view.
+ *
+ * **A list rather than a route per team**, because the reader opens both sides
+ * at once and two round trips to draw one thing is two chances for half of it
+ * to arrive. Capped at `MATCHUP_TEAMS` (2, which is what a matchup has) so a
+ * hand-edited query cannot fan out across the league; ids past it are ignored
+ * rather than a 400, the same direction every other parameter here fails in.
+ *
+ * `?date=` is which day's roster — the end of the matchup period the client is
+ * looking at, clamped to today for a week still being played, so a settled week
+ * shows the team that finished it and a live one shows the team as it stands.
+ * Shape-checked and otherwise trusted, exactly as `/api/espn/roster` treats its
+ * own; absent means today. **A team ESPN cannot answer for is `null` in the
+ * map rather than an error**, so one side failing costs that side and leaves
+ * the other standing — the rule the whole roster fan-out follows.
+ */
+const MATCHUP_TEAMS = 2;
+
+app.get(
+  '/api/espn/rosters',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const raw = typeof req.query.teams === 'string' ? req.query.teams : '';
+    const teams = raw
+      .split(',')
+      .map((t) => Number(t))
+      .filter((t) => Number.isInteger(t) && t > 0)
+      .slice(0, MATCHUP_TEAMS);
+    if (teams.length === 0) {
+      res.status(400).json({ error: 'teams must be a comma-separated list of team ids' });
+      return;
+    }
+    const asked = req.query.date;
+    const date =
+      typeof asked === 'string' && DATE_RE.test(asked) ? asked : baseballToday();
+    try {
+      const creds = await getEspnCreds(userId(req));
+      if (!creds) {
+        res.status(409).json({ error: 'No ESPN league connected', code: 'espn-missing' });
+        return;
+      }
+      const rosters: Record<string, EspnRosterPlayer[] | null> = {};
+      await Promise.all(
+        teams.map(async (teamId) => {
+          try {
+            rosters[teamId] = await getRosterOn(creds, teamId, date);
+          } catch (err) {
+            console.error(`ESPN roster for team ${teamId} on ${date} unavailable:`, err);
+            rosters[teamId] = null;
+          }
+        }),
+      );
+      res.json({ date, rosters });
     } catch (err) {
       if (!espnError(err, res)) throw err;
     }
