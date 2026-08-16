@@ -74,8 +74,12 @@ function stamp(ms: number, now: number): string {
 /** The word for the move, in the manager's own vocabulary rather than ESPN's
  *  message-type numbering. A waiver claim is worth telling from a free pickup:
  *  one cost him a bid and his place in the order and the other cost him
- *  nothing. */
-function moveLabel(p: EspnTransactionPlayer): string {
+ *  nothing.
+ *
+ *  Exported because the matchup page's Moves section names the same four moves
+ *  and must name them the same way — one vocabulary rather than two lists of
+ *  words that will one day disagree about what a claim is called. */
+export function moveLabel(p: EspnTransactionPlayer): string {
   if (p.via === 'trade') return 'Traded';
   if (p.move === 'drop') return 'Dropped';
   return p.via === 'waiver' ? 'Claimed' : 'Added';

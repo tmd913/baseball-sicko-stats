@@ -10,11 +10,15 @@ import { ScheduleSpanTabs, ScheduleToggle } from './ScheduleControl';
 import { buildScheduleIndex, defaultScheduleSpan } from './schedule';
 import type { ScheduleSpan } from './schedule';
 import { catScore, categoryGroups, fmtValue, prettyDate, record, TeamLogo } from './LeagueView';
+import { moveLabel } from './LeagueTransactions';
+import { easternDate } from '../lib';
 import type {
   EspnCategory,
   EspnMatchupSide,
   EspnScoreboard,
   EspnStandingsTeam,
+  EspnTransactionPlayer,
+  EspnTransactions,
   MatchupWindow,
   PlayerKind,
   ScheduleWindow,
@@ -111,6 +115,192 @@ function barShare(left: number | undefined, right: number | undefined): number {
   return Math.min(1, Math.abs(left - right) / total);
 }
 
+/**
+ * **What each manager did about it** — the players he took in and let go of
+ * inside this matchup period, under the count of how many acquisitions that
+ * spent.
+ *
+ * The count was the whole of the section and is the half a reader can act on
+ * least: `5/10` says a manager has moved five times and not *who*, which on a
+ * page about two teams' week is the more interesting half by some way — a
+ * category swinging back is usually somebody's pickup, and this is where the
+ * pickup is named.
+ *
+ * ### Which moves belong to this week, and the boundary that decides it
+ *
+ * ESPN's activity feed carries no scoring period on a topic, only an instant,
+ * so the span is the period's own days and the test is the day a move happened
+ * on. Which *day* that is, is the whole of the difficulty, and it was measured
+ * against ESPN's own acquisition counter rather than assumed — the counter is
+ * the one number on this section that ESPN publishes, so a list under it that
+ * counts differently is a contradiction the reader can see.
+ *
+ * **A matchup period's moves run from 13:00 ET on the day before its first day
+ * to 13:00 ET on its last.** Which is to say ESPN books an acquisition against
+ * the *next* scoring period once the day's games have started — invisible on
+ * six days of seven, because the next scoring period is still this matchup
+ * period, and decisive on the seventh, where a Sunday-afternoon pickup spends
+ * next week's allowance.
+ *
+ * **Measured, not guessed.** Sweeping the boundary hour against the counter
+ * over seven matchup periods and 84 team-periods of the live league: the app's
+ * own baseball day (3am ET) and the plain calendar day both reproduce **67 of
+ * 84**, and a 13:00 ET boundary reproduces **84 of 84**. The 24 topics the two
+ * rules disagree about are **every one of them on a Sunday after 13:00**, and
+ * the knee is bracketed to **12:55–13:23 ET** by the 51 topics filed on the
+ * seven last-days — 12:55, 12:05, 12:03, 11:58 and 11:22 stay put; 13:23 and
+ * 13:46 move. 13:00 ET is when a Sunday slate starts, which is the mechanism
+ * that reading implies.
+ *
+ * The honest caveat is that this is one league's seven weeks and ESPN
+ * documents none of it, so the constant is a **measurement rather than a spec**
+ * — and where it is ever wrong, the count above is ESPN's own and is the
+ * authority.
+ *
+ * ### A trade is an add and is not an acquisition
+ *
+ * The counter counts free-agent and waiver pickups; a trade spends none of the
+ * allowance, which is measured too — team 11's seven adds in period 15 are
+ * seven trade arrivals and ESPN's counter for that week is **0**. They are
+ * still players the manager took in, so they are in the list, and the row that
+ * came by trade says so: without the tag a week with a trade in it is a list
+ * of seven names under a count of nought with nothing on screen to reconcile
+ * them.
+ *
+ * ### Attribution is per player, not per topic
+ *
+ * A topic is one act by one manager and can move players in both directions and
+ * between three teams, so a side's list is built from `toTeamId`/`fromTeamId`
+ * on each **player** rather than from the topic's `teamIds`. That gives a
+ * trade both of its halves for free: the man who came the other way is a drop
+ * on one list and an add on the other, with no case of its own.
+ *
+ * ### It does not say green
+ *
+ * The Transactions tab draws an add in `--hit`, which is right on a page whose
+ * only colour it is. Here green means **ahead in this category** — the winning
+ * figure, its bar, and the leader's run of the meter — and an add is not a
+ * category anybody is winning, so the section stays the one part of this card
+ * with no colour in it. What separates the two directions is the heading over
+ * each run and the weight under it: a man coming in reads at full strength,
+ * one going out reads muted.
+ */
+const PERIOD_ROLLOVER_HOUR = 13;
+
+/** The matchup-period day a move falls on — see the boundary measurement above.
+ *  Shifting the instant forward by what is left of the day after the rollover
+ *  and taking the ET date is the same test written without a comparison. */
+function periodDay(ms: number): string {
+  return easternDate(new Date(ms + (24 - PERIOD_ROLLOVER_HOUR) * 3_600_000));
+}
+
+function movesFor(
+  side: EspnMatchupSide,
+  feed: EspnTransactions | null,
+  from: string | null,
+  to: string | null,
+): { player: EspnTransactionPlayer; date: number }[] | null {
+  // No feed, or a period whose own dates could not be derived — the header
+  // above says the same thing by printing no dates, and a list of moves with
+  // no week to belong to is not a list worth drawing.
+  if (!feed || !from || !to) return null;
+  const inSpan = feed.transactions.filter((t) => {
+    const day = periodDay(t.date);
+    return day >= from && day <= to;
+  });
+  // **Does the feed even reach this week?** It is read at the server's own
+  // limit — 250 topics against a season of 770 on the live league — so an old
+  // period is simply not in it, and drawing an empty list under a count of five
+  // would be the page saying nobody moved when what it means is that it cannot
+  // see that far. The oldest topic in hand is the horizon: past it, the section
+  // says so instead.
+  const oldest = feed.transactions[feed.transactions.length - 1];
+  if (feed.capped && (!oldest || periodDay(oldest.date) > from)) return null;
+  const out: { player: EspnTransactionPlayer; date: number }[] = [];
+  for (const t of inSpan) {
+    for (const p of t.players) {
+      if (p.toTeamId === side.teamId || p.fromTeamId === side.teamId) out.push({ player: p, date: t.date });
+    }
+  }
+  return out;
+}
+
+/**
+ * One side's moves, **grouped by direction rather than labelled per row**.
+ *
+ * The alternative was the Transactions tab's own shape — the move's word before
+ * each name — and it fails on the one case this page has that the tab does not:
+ * a trade between *these two teams* puts the same man in both columns, and
+ * `Traded` on both says nothing about which way he went. Naming the direction
+ * per row instead (`Traded away`) is the widest label on the card in the
+ * narrowest column on the page, on a phone where each side has about 150px.
+ * The group heading says it once for every row under it, and a trade needs no
+ * case of its own.
+ *
+ * What the grouping costs is the claim-against-pickup distinction the tab
+ * spends a word on; the row's tooltip carries it, with the day and the bid.
+ *
+ * Newest first, the feed's own order, which is also the tab's.
+ */
+function MovesColumn({
+  moves,
+  teamId,
+  onOpenPlayer,
+}: {
+  moves: { player: EspnTransactionPlayer; date: number }[];
+  teamId: number;
+  onOpenPlayer?: (mlbId: number) => void;
+}) {
+  const dir = (out: boolean) => moves.filter((m) => (m.player.fromTeamId === teamId) === out);
+  const runs: { label: string; out: boolean; rows: typeof moves }[] = [
+    { label: 'In', out: false, rows: dir(false) },
+    { label: 'Out', out: true, rows: dir(true) },
+  ];
+  if (moves.length === 0) return <div className="mup-move-none">No moves</div>;
+  return (
+    <>
+      {runs
+        .filter((r) => r.rows.length > 0)
+        .map((r) => (
+          <div className={`mup-move-run${r.out ? ' mup-move-run-out' : ''}`} key={r.label}>
+            <div className="mup-move-dir">{r.label}</div>
+            <ul className="mup-move-list">
+              {r.rows.map(({ player, date }, i) => {
+                const detail = [
+                  moveLabel(player),
+                  // The day it actually happened, which is what ESPN's own
+                  // activity page shows — the 13:00 boundary above decides
+                  // which *week* it counts toward and has no business
+                  // renaming the day.
+                  prettyDate(easternDate(new Date(date))),
+                  player.bid != null && player.bid > 0 ? `$${player.bid}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ');
+                return (
+                  <li className="mup-move" key={`${date}-${player.espnId}-${i}`} title={detail}>
+                    {player.mlbId !== null && onOpenPlayer ? (
+                      <button
+                        type="button"
+                        className="mup-move-name"
+                        onClick={() => onOpenPlayer(player.mlbId as number)}
+                      >
+                        {player.name}
+                      </button>
+                    ) : (
+                      <span className="mup-move-name">{player.name}</span>
+                    )}
+                    {player.via === 'trade' && <span className="mup-move-tag">Trade</span>}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
+    </>
+  );
+}
+
 function SideHead({
   side,
   team,
@@ -141,6 +331,8 @@ export default function LeagueMatchupView({
   matchupId,
   onClose,
   onOpenDetails,
+  transactions,
+  onOpenPlayer,
   presets,
   maxDate,
   today,
@@ -153,6 +345,15 @@ export default function LeagueMatchupView({
   matchupId: number;
   onClose: () => void;
   onOpenDetails: (key: string) => void;
+  /** The League view's own transactions feed, read on entry to that view and
+   *  kept — this page is opened from it, so the Moves section costs no read of
+   *  its own. Null until it lands, and while it is null the section is the
+   *  count alone, which is what it has always been. */
+  transactions: EspnTransactions | null;
+  /** Opens a transacted player's page by MLB id, the Transactions tab's own
+   *  route in: the kind is resolved from the season roster up in App, a
+   *  transaction saying a player moved and not whether he pitches. */
+  onOpenPlayer?: (mlbId: number) => void;
   /** The app's own named spans, handed down rather than rebuilt here — one
    *  definition of what `Today` means, and the matchup's own span is added to
    *  them below. */
@@ -457,6 +658,13 @@ export default function LeagueMatchupView({
       : board.acquisitionLimit === null
         ? `${side.acquisitions} acquisitions this matchup period`
         : `${side.acquisitions} of ${board.acquisitionLimit} acquisitions used this matchup period`;
+
+  /**
+   * The two lists under the count. Null means the feed cannot answer for this
+   * week — see `movesFor`, which is where that is decided and why.
+   */
+  const awayMoves = away ? movesFor(away, transactions, board.start, board.end) : null;
+  const homeMoves = movesFor(home, transactions, board.start, board.end);
 
   /**
    * What the head carries under the Back button: the strip, or — on a bye — the
@@ -831,6 +1039,45 @@ export default function LeagueMatchupView({
                     {acqCell(home)}
                   </span>
                 </div>
+                {/* **Who those moves were**, which is the half of this section a
+                    reader can actually act on: `5/10` says a manager has moved
+                    five times and not whom he moved, and on a page about two
+                    teams' week the pickup behind a category swinging back is
+                    the more interesting fact by some way.
+
+                    Two columns under the two counts, mirrored the way every
+                    other pair on this card is — each list hugging the edge its
+                    own team's figures are on. */}
+                {awayMoves && homeMoves ? (
+                  <div className="mup-moves">
+                    <div className="mup-moves-side">
+                      <MovesColumn
+                        moves={awayMoves}
+                        teamId={away.teamId}
+                        onOpenPlayer={onOpenPlayer}
+                      />
+                    </div>
+                    <div className="mup-moves-side mup-moves-right">
+                      <MovesColumn
+                        moves={homeMoves}
+                        teamId={home.teamId}
+                        onOpenPlayer={onOpenPlayer}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  transactions &&
+                  board.start &&
+                  board.end && (
+                    // The feed is in hand, the week has dates, and the feed
+                    // does not reach that far back —
+                    // said rather than drawn as two empty columns under a count
+                    // of five, which would read as nobody having moved.
+                    <div className="mup-move-none mup-moves-gap">
+                      ESPN&rsquo;s activity feed doesn&rsquo;t reach back to this week.
+                    </div>
+                  )
+                )}
               </div>
             )}
           </div>

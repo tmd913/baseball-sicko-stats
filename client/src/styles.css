@@ -11291,6 +11291,126 @@ body {
 .mup-tie {
   color: var(--faint);
 }
+/* ---- The Moves section's two lists ---------------------------------------
+   **Who the week's acquisitions actually were.** The count above says a manager
+   has moved five times and not whom he moved, which on a page about two teams'
+   week is the more interesting half by some way: a category swinging back is
+   usually somebody's pickup, and this is where the pickup is named.
+
+   Two columns under the two counts, **mirrored** the way every other pair on
+   this card is — each list hugging the edge its own team's figures are on, so
+   a reader never has to work out which column belongs to whom. */
+.mup-moves {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 16px;
+  padding: 10px 0 2px;
+}
+.mup-moves-right {
+  text-align: right;
+}
+.mup-move-run + .mup-move-run {
+  margin-top: 9px;
+}
+/* `In` and `Out` — the direction said **once over a run** rather than per row.
+   The alternative was the Transactions tab's own shape, a word before each
+   name, and it fails on the one case this page has that the tab has not: a
+   trade between these two teams puts the same man in both columns, where
+   `Traded` on both says nothing about which way he went. */
+.mup-move-dir {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--faint);
+  padding-bottom: 3px;
+}
+.mup-move-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+/* A flex row so the mirrored column can reverse it: the **name** belongs at the
+   card's outer edge in both columns — that is what the mirroring is for — and
+   left to inline flow the trade tag took that edge on the right-hand side. */
+.mup-move {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+.mup-moves-right .mup-move {
+  flex-direction: row-reverse;
+}
+/* **Not `.lg-tx-name`'s accent**, although it is the same kind of control. On
+   this card the accent is *the side that is ahead* and green is *winning this
+   category*; a column of blue names would be a third meaning for a colour that
+   already has one here. So the name carries the app's plain text colour, the
+   press is said by the hover and the focus ring, and the direction is said by
+   the heading above and the weight below.
+
+   It wraps rather than ellipsizing: at 320 a column is about 120px and a
+   truncated name hides the one thing the row exists to say. */
+.mup-move-name {
+  min-width: 0;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+  text-align: inherit;
+  white-space: normal;
+}
+.mup-move-name:hover {
+  text-decoration: underline;
+}
+.mup-move-name:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+span.mup-move-name {
+  cursor: default;
+}
+span.mup-move-name:hover {
+  text-decoration: none;
+}
+/* A man going out reads quieter than one coming in — the same "louder is the
+   answer" the winning figure in every row above takes, without claiming that
+   an add is a win. */
+.mup-move-run-out .mup-move-name {
+  color: var(--muted);
+  font-weight: 600;
+}
+/* A trade arrival or departure, marked because it is the one move that does
+   **not** spend an acquisition: without it a week with a trade in it is a list
+   of seven names under a count of nought, with nothing on screen to reconcile
+   them. Faint and small — it qualifies the row rather than competing with the
+   name. */
+.mup-move-tag {
+  flex: none;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+/* A side that made no move, and the week the feed cannot reach — said rather
+   than drawn as an empty column, which would read as nobody having moved. */
+.mup-move-none {
+  font-size: 12px;
+  color: var(--faint);
+}
+.mup-moves-gap {
+  padding: 10px 0 2px;
+}
+
 /* ---- The matchup meter --------------------------------------------------
    **The whole matchup as one bar**, under the two records it is made of: the
    categories each side holds with the ties between them, so the boundary

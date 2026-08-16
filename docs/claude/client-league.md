@@ -792,6 +792,98 @@ no counter for at all is a dash. Where the limit comes from, and the 185
 team-periods it was checked against, is in **ESPN fantasy league**, *How many
 acquisitions a manager gets*.
 
+### And it names them
+
+**`5/10` says a manager has moved five times and not whom he moved**, which on a
+page about two teams' week is the more interesting half by some way: a category
+swinging back is usually somebody's pickup, and this is where the pickup gets a
+name. Under the count are two columns — mirrored like every other pair on this
+card, each hugging the edge its own team's figures are on — of the players that
+side took **In** and let **Out**.
+
+**Grouped by direction rather than labelled per row.** The Transactions tab's
+own shape is the move's word before each name, and it fails on the one case this
+page has that the tab has not: a trade between *these two teams* puts the same
+man in both columns, and `Traded` on both says nothing about which way he went.
+Naming the direction per row instead (`Traded away`) is the widest label on the
+card in the narrowest column on the page. A heading says it once for every row
+under it, and a trade needs no case of its own. What the grouping gives up is
+the claim-against-pickup distinction that tab spends a word on; the row's
+tooltip carries it, with the day and the bid.
+
+**No colour, which is this card's own rule rather than a new one.** That tab
+draws an add in `--hit`, right on a page whose only colour it is; here green
+means **ahead in this category** and the accent means **the side that is
+ahead**, so a green `Added` or a column of blue names would each be a second
+meaning for a colour that already has one. The direction is said by the heading
+and by the weight under it: a man coming in reads at full strength, one going
+out reads muted. Every name that joined to exactly one major leaguer opens his
+page on the app's one route in, which on the live league is 412 of 415 rows —
+`matchMlbPlayer`'s standing rule, and the same one the tab draws.
+
+### Which week a move belongs to, measured against ESPN's own counter
+
+**The count above is the one number ESPN publishes here, so a list under it that
+counts differently is a contradiction the reader can see.** ESPN's activity feed
+carries no scoring period on a topic, only an instant, so the span has to be the
+period's own days and the whole difficulty is *which day* an instant falls on.
+
+**A matchup period's moves run from 13:00 ET on the day before its first day to
+13:00 ET on its last.** Which is to say ESPN books an acquisition against the
+next scoring period once the day's games have started — invisible on six days of
+seven, because the next scoring period is still this matchup period, and
+decisive on the seventh, where a Sunday-afternoon pickup spends next week's
+allowance.
+
+**Swept rather than assumed.** Against the counter over **seven matchup periods
+and 84 team-periods** of the live league: the app's own baseball day (3am ET)
+and the plain calendar day both reproduce **67 of 84**, and a 13:00 ET boundary
+reproduces **84 of 84**. The 24 topics the two rules disagree about are **every
+one of them on a Sunday after 13:00**, and the knee is bracketed to
+**12:55–13:23 ET** by the 51 topics filed on the seven last-days: 12:55, 12:05,
+12:03, 11:58 and 11:22 stay put, 13:23 and 13:46 move. 13:00 ET is when a Sunday
+slate starts, which is the mechanism that reading implies. The honest caveat is
+that this is one league's seven weeks and ESPN documents none of it, so the
+constant is a **measurement rather than a spec** — and where it is ever wrong,
+the count is ESPN's own and is the authority.
+
+**A trade is an add and is not an acquisition**, which the same sweep measured:
+team 11's seven adds in period 15 are seven trade arrivals and ESPN's counter
+for that week is **0**. They are still players the manager took in, so they are
+in the list, and the row that came by trade wears a faint `Trade` tag — without
+it a week with a trade in it is a list of seven names under a count of nought
+with nothing on screen to reconcile them.
+
+**Attribution is per player rather than per topic.** A topic is one act by one
+manager and can move players in both directions and between three teams, so a
+side's list is built from `toTeamId`/`fromTeamId` on each **player**. That gives
+a trade both of its halves for free: the man who came the other way is a drop on
+one list and an add on the other, with no case of its own.
+
+**The feed does not reach the whole season, and the section says so.** It is
+read at the server's own limit — 250 topics against a season of 770 on the live
+league, reaching back about two months — so an old period is simply not in it,
+and drawing two empty columns under a count of five would be the page saying
+nobody moved when what it means is that it cannot see that far. The oldest topic
+in hand is the horizon; past it the section reads `ESPN's activity feed doesn't
+reach back to this week.` A side that genuinely made no move reads `No moves`,
+which is a different sentence for a different fact.
+
+**It costs no read.** The feed is the League view's own, fetched on entry to that
+view and kept, and this page is opened from it.
+
+**Measured in a browser against the live league.** On every matchup checked the
+list reconciles with the count the page itself prints — the non-trade `In` count
+equals the `Acq` figure on **12 of 12 sides** over four matchup periods,
+including the trade week (10 in, 6 of them non-trade, under `6/10`). The three
+states draw: a quiet week `No moves` on both sides under `0/5`, a week past the
+feed's reach its own sentence, and a trade week nine `Trade` tags. At 390 the
+columns are 158px, names wrap rather than truncate, and the page body overflows
+by **0** at 320, 390, 1100 and 1200. A name opens the player page over the
+matchup (`?player=pitcher-702070`, the matchup going `inert` beneath it) and
+**Escape unwinds one rung per press** — the player, then the matchup, `[inert]`
+back to 0.
+
 **A bye carries it in its head instead**, and that is not a flourish: the
 Summary page is where the two counts are compared and **a bye has no Summary
 page**, so without this the one manager most likely to be reading his own bye

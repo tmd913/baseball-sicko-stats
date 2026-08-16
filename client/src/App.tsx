@@ -23,7 +23,7 @@ import type {
   TrendWindow,
   WatchPlayer,
 } from './types';
-import { isInjured, isStartingOn } from './lib';
+import { baseballDay, isInjured, isStartingOn } from './lib';
 import { takeInvite } from './invite';
 import { BaseballMark } from './components/BaseballMark';
 import { PlayerAdder } from './components/PlayerAdder';
@@ -145,30 +145,10 @@ function isRosterView(v: View): boolean {
 // app has no notion of yet) is all it takes to restore the menu entry.
 const SHOW_SIMULATE_TOGGLE = false;
 
-// MLB days are anchored to US Eastern time, computed in America/New_York rather
-// than UTC or the machine's local zone — otherwise an evening US user gets an
-// off-by-one.
-const ET_ZONE = 'America/New_York';
-
-// And a baseball day doesn't end at midnight: a 10pm ET first pitch on the West
-// Coast finishes around 1am, so at 12:30am the day "Today" should mean is still
-// the one whose games are ending — rolling over on the calendar would swap the
-// user onto an empty slate mid-game. The day turns at 3am ET instead: later
-// than any game realistically runs, earlier than anything the next day starts.
-// `server/src/etDate.ts` mirrors this (the two workspaces can't share code, and
-// the API's default date has to land where the presets do) — change both.
-const DAY_ROLLOVER_HOUR = 3;
-
-function easternDate(d: Date): string {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: ET_ZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(d);
-  const get = (t: string) => parts.find((p) => p.type === t)!.value;
-  return `${get('year')}-${get('month')}-${get('day')}`;
-}
+// The Eastern zone and the 3am rollover that decide what "today" means are
+// `lib.ts::baseballDay`'s now — moved there when the matchup page needed the
+// baseball day of an ESPN transaction to say which week it belongs to, and one
+// copy of a rule that precise is the most there should be.
 
 function addDays(date: string, delta: number): string {
   const [y, m, day] = date.split('-').map(Number);
@@ -200,7 +180,7 @@ function startedOn(
 /** Today's baseball date — the Eastern date of a clock set back to the rollover
  *  hour, so the small hours still belong to the night before. */
 function baseballToday(): string {
-  return easternDate(new Date(Date.now() - DAY_ROLLOVER_HOUR * 3_600_000));
+  return baseballDay(Date.now());
 }
 
 function previousDay(): string {
@@ -4392,6 +4372,11 @@ export default function App() {
           scheduleLoading={scheduleLoading}
           matchupWindow={matchupWindow}
           onNeedSchedule={needSchedule}
+          /* The League view's own feed, already in hand: this page is opened
+             from that view, which reads it on entry and keeps it, so the Moves
+             section names the week's pickups with no read of its own. */
+          transactions={transactions}
+          onOpenPlayer={openLeaguePlayer}
         />
       )}
 
