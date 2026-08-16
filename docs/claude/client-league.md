@@ -654,6 +654,126 @@ matchups and eight of them — and it is now the one card that draws its team's
 own week rather than announcing that there is no matchup: see *A bye card shows
 his week* above.
 
+### The Summary page is drawn, not just listed
+
+**Everything above was true of the page and the page still read as a column of
+numbers.** Twenty figures in the middle third of an 800px card, each pair a
+subtraction the reader had to do in their head, ten times over — and the two
+ends of the card, which is where the two teams are named, empty. The numbers
+were right and the page did not say what they came to.
+
+**The figures moved to the edges and a bar went between them.** A category row
+is now `value · track · CATEGORY · track · value`, so each figure sits under the
+team it belongs to and the bar between them runs **from the label toward
+whoever is ahead**. That is the shape a duel wants: the direction is who, the
+length is by how much, and the reader is left with the one question a
+comparison actually asks rather than with its inputs.
+
+**The length is `|a−b| / (|a|+|b|)`, and the point of it is that it needs no
+calibration.** The Splits card's own diverging bar — the app's precedent for
+this shape, and where the flat inner cap comes from (*a bar grows out of its
+zero*) — measures a platoon gap against `full`, the 90th percentile of the
+league's real gaps in that stat, because one hitter's split means nothing until
+you know what a big split is. Here the comparison is already complete: two
+teams, one week, one category. So the pair is measured against itself, the
+result is in [0, 1] by construction (nothing can clamp, and a full bar means one
+side has the lot), and what it says is **how close the category is** — which is
+what a manager reads a matchup for. On the live league: `K 64–66` is a 2%
+sliver and is a coin flip with three days to go; `HR 12–2` is a 71% bar and is
+gone. It is deliberately not a probability and not a projection, and the two
+figures are printed either side of it.
+
+**Green and only green**, which is the page's existing rule rather than a new
+one: the winning figure in a row is green, so the bar that says the same thing
+is the same green, and the loser's track stays empty rather than taking a red.
+A tie fills neither side. The track itself is `--border` at **32%** — measured
+down from 50 because there are twenty of these and only one of each pair is
+ever filled, and at full weight the empty halves were the loudest thing on the
+card. What the rail is for is the *scale*, and that survives at a third of it.
+
+**The whole matchup is one bar under the two records** (`.mup-meter`) — the
+categories each side holds with the ties between them, so the boundary sitting
+left or right of centre is the week at a glance. Only the **leader's** run is
+green; the trailing run is `--faint` and the ties are dimmer again, which is the
+honest ordering, a tied category being one nobody holds. The counts are the
+**server's own tally** (`side.wins/losses/ties`), the one checked against ESPN
+on all 1,080 category comparisons of the league's settled weeks, and the triples
+in the heads read those same three numbers — so the bar and the score cannot
+come to disagree.
+
+**Who is *ahead* is not who *won*, and reading the second for the first left the
+live page marked with neither.** `matchup.winner` is null for the whole of the
+week being played — the server sets it only once the period is settled
+(`espn.ts`: `else if (live) winner = null`), because a winner is a settled fact
+and ESPN's own field says `UNDECIDED` until it is one. Taken straight, that gave
+the *live* matchup — the one anybody is looking at — two grey triples, an
+unmarked pair of names and a meter with no green in it. So the page reads the
+tally instead (`ahead`), which is the same comparison the server makes when it
+does settle one (`hw > aw ? 'home' : …`) and which agrees with ESPN's own
+`winner` on every one of the league's 108 settled matchups. `away.losses` is
+`home.wins` by construction, so the two tests cannot both hold and a dead-level
+week marks neither.
+
+**Each side of the ball carries its own tally** — `5-0-0` and `0-5-0` at the two
+ends of the `BATTERS` heading — which is the one thing this page could not say
+before and the thing a manager acts on: *you are winning the bats and losing the
+arms*. It is `winnerOf` over that group alone, the same function the rows
+themselves use, so a heading and the green figures under it are one arithmetic;
+the server publishes a tally for the matchup and not for half of it.
+
+**The heading takes the row's own grid**, so the label centres over the column
+of category names it heads and each tally lands in the column its own figures
+are in. It was a left-aligned word at the card's edge, which named the group and
+pointed at nothing in it.
+
+**And the two columns are numbers rather than `auto`, which is what makes them
+columns at all.** Each row is a grid of its own, so under `1fr auto 1fr` every
+row sized its own middle column to its own label and `SVHD` pushed its figures
+further out than `R` did — measured at 1200, `31` at x=927 against `.769` at
+x=913. `--mup-val-w` (54px) and `--mup-cat-w` (46px) are declared on the card
+because four things have to agree about them, and they hold the widest figure a
+matchup period can produce at this size (five tabular characters, ~45) and the
+widest label the league scores (`SVHD`, ~34). A figure past either overflows
+into the track beside it, which is a legible overlap rather than a clipped
+number.
+
+**The `Moves` row draws no rails**, its two track cells being empty spans that
+hold the grid's shape: nobody is winning acquisitions, and a rail says a
+comparison is being drawn.
+
+**One ⓘ covers both bars**, at the right of the meter — the app's own `InfoKey`,
+for that component's stated reason (a `title` is invisible on a phone, a `Modal`
+is ceremony two sentences cannot pay for, an inline reveal fails on distance).
+The panel is anchored to the **meter row** rather than to its own 30px button,
+which is the trick `.roll-key .info-key-panel` records: a shrink-to-fit resolved
+against 30px, and at 390 a panel hanging off that button is the only edge a
+320px box does not fit inside from.
+
+**And the headline went 15px → 19px.** It was the same size as a category figure
+ten rows below it, on the page whose whole subject it is.
+
+**Measured at 320 / 390 / 900 / 1200 / 1920, live and settled.** No horizontal
+overflow of the page body or of the overlay's own scroller at any width
+(**0** everywhere); the card is 288 at 320, 358 at 390 and 800 from 900 up; the
+page head is unchanged at 43px (74 at 320, where the Back row wraps); eleven
+rows on the live league's ten categories plus `Acq`. The bars are the arithmetic
+above, read off the rendered boxes: `R 31–23` fills 44 of a 294px track (15%),
+`HR 12–2` 210 (71%), `RBI 28–27` the 2px floor, and on a settled week `SVHD 0–2`
+the full 294. The meter is 512/220 on the live 7-3-0 and 146 / 219 tied / 365
+green on a settled 2-5-3. Ties draw no fill on either side (`HR 6–6`, `RBI
+24–24`, `W 1–1`), the leading team's name computes `rgb(56, 189, 248)` and the
+other `rgb(232, 238, 252)`, and the group tallies read `0-3-2` / `3-0-2` and
+`2-2-1` / `2-2-1`. The ⓘ opens a 320 × 173 panel at x=29 of a 390px screen
+(fully inside), and **Escape unwinds one rung per press** — the key first, the
+matchup page second, `[inert]` back to 0. A bye page draws no card, no meter and
+no strip, as it always did.
+
+**One state is guarded rather than measured**: a **points** league has one number
+a side, so the meter is null there twice over (`away && board.format !==
+'h2h-points'`, and the render tests both) and the page draws its existing note.
+There is one league to test against and it is a category league — the same
+caveat the points card on the Scoreboard already carries.
+
 ### The Summary page ends on the acquisitions
 
 **It is the one thing a category matchup turns on that is not a category.** A
