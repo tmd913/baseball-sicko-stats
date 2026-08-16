@@ -974,6 +974,84 @@ steps `Season 124 → 30d 28 → Away 16 → 7d 2` games on dev and `30d 28 → 
 still work: a stubbed failure draws its own line and pressing the control again
 lands the read (`opponent 60d → 52 games`, `rosters → 2 / 53`).
 
+### The strip sat on the band's own hairline
+
+**The head's bottom spacing was a `margin` and margins collapse.** `.mup-sides`
+said `margin: 0 auto 16px` and `.mup-chrome` had **no bottom padding and no
+bottom border**, so that margin collapsed straight out of the band: the chrome
+ended *on* the pills, its `inset 0 -1px 0 var(--border)` hairline ran along the
+bottom edge of a segmented control, and the 16px it was supposed to spend landed
+outside the sticky box as the gap to the card. Measured at 390 before: the strip
+occupied **y=63…99** in a chrome **99px** tall — 0px of head under it — with the
+card at 115.
+
+**The bye head next door never had it**, and that is what makes the fault worth
+one note rather than two: `.mup-team-head` said the same thing with
+`padding-bottom: 16px`, which cannot collapse, so one of the two branches had a
+band and the other did not.
+
+**So the number lives on `.mup-chrome` and neither child carries one**:
+`padding: 20px 16px 12px`, which is `.mup-bar`'s own gap to the strip, so the
+band reads **20 / 12 / 12** down. The 16px gap to the content stays where it was
+— outside the sticky box, on `.details-chrome`'s argument that it must not ride
+down the page with it.
+
+**The player page's tabs are the counter-example and are deliberately
+untouched.** `.details-tabs` sits *on* its chrome's rule with 0 below it, and
+that is right there: those are underline tabs whose active one draws a 2px
+accent on that very line. These are pills, which have no business touching it.
+
+**Measured at 320 / 390 / 480 / 640 / 1200**, before → after: the chrome grows
+by the 12 it now holds (**99 → 111px** at 390, 130 → 142 at 320 where the Back
+row wraps), the strip ends **12px** above the band's hairline at every one of
+them, the card follows at the same 16px gap (115 → 127), and the page overflows
+by **0** at each. The bye head reads the same 12 (its 16 inside the band became
+the chrome's 12) with its own row unchanged: logo, name, `Bye`, `Acq`.
+
+### The headline sits beside the badge on a phone, where it stacked under the name
+
+**This reverses the passage below it, which is kept because its measurement is
+still the reason the layout breaks at all.** What it said: `1fr auto 1fr` with a
+score on each side leaves a team about **120px at 390**, which truncates every
+name in the live league to three characters — so below **480** the headline
+dropped to its own line, the `vs` went with the column it was filling, and each
+name had the full half. The breakpoint is measured and unchanged: at 640 the
+names fit whole.
+
+**What that arrangement left was the name still sharing its line with the
+badge**, which is where the 120px went — and it was sharing it with the one
+thing on the row that does not need width. So the wrap is the other way round
+now: **badge and headline on the first line, name and record on the second**,
+which are the two things read at a glance and the two things read after them.
+The name gets the whole half — **162px against 120 at 390** — and stops
+truncating: `Sho me the Parlay` reads whole where it read `Sho me the Par…`.
+
+**It is an `order`, so the markup stays written for the wide case.** The DOM is
+badge / name / score, which is what a row that fits wants; the phone gives the
+score `order: 1` and the identity block `order: 2` with `flex-basis: 100%`.
+`.mup-side-right` is `row-reverse`, so the right team mirrors for free — its
+badge at the outer edge with the triple beside it.
+
+**And the auto margins come off there.** `margin-left: auto` exists to push the
+triple to the far end of a row the *name* is sharing; with the name gone from
+that row it would have stranded the two headlines in the middle of the card,
+against the `vs` column that is not drawn at this width. Off, each sits beside
+the badge it belongs to.
+
+**The rule that reorders is scoped to `.mup-heads`, and that was a real bug for
+one round.** `.mup-side-id` is the **bye head's** block too, where there is no
+score to make room for — measured unscoped, `order: 2` put the team's name
+*after* the `Bye` and `Acq` tags that trail it (`logo · BYE · ACQ 5/10 ·
+Brian&Tom's Excellent Advent…`). Scoped, the bye head is byte-identical to what
+it was: logo at 16, name at 58, `Bye` at 284, `Acq` at 316.
+
+**Measured at 320 and 390**, before → after: the score moves from its own line
+under the name (y=180) to beside the badge (y=145, x=71 — the badge's 26px and
+the row's 8px gap), the identity block drops to y=170 at the half's full 162px,
+the head is **80 → 71px** tall, and neither name clips at either width. 481 and
+up is untouched: the same `1fr auto 1fr` row, badge / name / score, measured
+identical.
+
 ### The headline stacks under the name on a phone
 
 `1fr auto 1fr` with a score on each side leaves a team about **120px at 390**,
