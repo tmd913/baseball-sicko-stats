@@ -44,27 +44,41 @@ import type {
  * plan for, and every other column in this view is a day still to come.
  */
 export type ScheduleSpan = 7 | 14 | 'matchup' | 'next';
-/** The two that need no league. Kept as its own list because it is what the
- *  control offers when there isn't one — the named pair is spliced in front. */
+/** The two that need no league, and the **fallback** rather than the base of
+ *  the run: they are what the control offers where a league cannot name both
+ *  of its own weeks. See `scheduleSpans`. */
 export const SCHEDULE_SPANS: ScheduleSpan[] = [7, 14];
 
 /** `sched=7` / `sched=14` / `sched=matchup` / `sched=next`; anything else
- *  (including absence) is off. A named span on a page with no league resolves
- *  to `7` when it is *drawn* rather than being dropped here — see
+ *  (including absence) is off. A span this reader is not offered resolves to
+ *  the one that *is* when it is **drawn** rather than being dropped here — see
  *  `effectiveSpan`, and the rule `cols=` follows: a link says what it meant
- *  even where this reader cannot honour it yet. */
+ *  even where this reader cannot honour it. */
 export function toScheduleSpan(v: string | null): ScheduleSpan | null {
   return v === '7' ? 7 : v === '14' ? 14 : v === 'matchup' ? 'matchup' : v === 'next' ? 'next' : null;
 }
 
-/** Which spans this reader can actually be offered, in reading order: the
- *  matchup pair leads where there is a league to define it, since that is the
- *  question the view is opened with and the one the mode now defaults to. */
+/**
+ * Which spans this reader can actually be offered, in reading order.
+ *
+ * **A league that can name both of its own weeks is offered those two and
+ * nothing else** — `Next 7` and `Next 14` are a *fallback*, not a fifth and
+ * sixth thing to choose between. A manager whose league runs matchup periods
+ * plans in matchup periods, and a rolling week that starts today and ends in
+ * the middle of one answers a question he is not asking; four pills where two
+ * will do is a control asking him to think about which kind of week he means
+ * every time he reads the table.
+ *
+ * **The numeric pair comes back the moment the named one is incomplete**, which
+ * is the whole of the fallback and is why the test is on both spans rather than
+ * on the league: the last matchup period of a season has no `next`, and a
+ * segmented control holding a single option is a control with no choice in it
+ * — the argument the matchup page's own strip makes for a bye. There the run is
+ * `This Matchup · Next 7 · Next 14` and the reader keeps somewhere to go.
+ */
 export function scheduleSpans(matchup: MatchupWindow | null): ScheduleSpan[] {
   if (!matchup) return SCHEDULE_SPANS;
-  return matchup.next
-    ? ['matchup', 'next', ...SCHEDULE_SPANS]
-    : ['matchup', ...SCHEDULE_SPANS];
+  return matchup.next ? ['matchup', 'next'] : ['matchup', ...SCHEDULE_SPANS];
 }
 
 /** What the mode opens on. **This matchup where there is one**, which is the
@@ -73,15 +87,23 @@ export function defaultScheduleSpan(matchup: MatchupWindow | null): ScheduleSpan
   return matchup ? 'matchup' : 7;
 }
 
-/** The span actually in force — a named one asked for by a link or by a league
- *  that has since gone falls back to seven days rather than drawing nothing. */
+/**
+ * The span actually in force — **whatever was asked for if this reader is
+ * offered it, and the default if not**.
+ *
+ * One rule where there were two, and it had to become one when the numeric pair
+ * stopped always being offered: a `sched=7` link opened by somebody whose
+ * league names both its weeks now falls back to `This Matchup` exactly as a
+ * `sched=matchup` link opened without a league falls back to `Next 7`. Either
+ * way the control marks the span the table is actually drawing, which is the
+ * one thing it must not get wrong; the URL keeps what it was handed, the rule
+ * `cols=` follows.
+ */
 export function effectiveSpan(
   span: ScheduleSpan,
   matchup: MatchupWindow | null,
 ): ScheduleSpan {
-  if (span === 'matchup' && !matchup) return 7;
-  if (span === 'next' && !matchup?.next) return 7;
-  return span;
+  return scheduleSpans(matchup).includes(span) ? span : defaultScheduleSpan(matchup);
 }
 
 /** `8/16 – 8/23` — a span's own dates, which is what makes a named one
