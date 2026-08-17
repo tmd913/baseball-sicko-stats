@@ -661,6 +661,95 @@ export function teamLogoUrl(teamId: number): string {
   return `https://www.mlbstatic.com/team-logos/team-cap-on-dark/${teamId}.svg`;
 }
 
+/**
+ * **The ground a cap mark is drawn on, in the club's own colour.**
+ *
+ * `teamLogoUrl` above asks MLB for the **`on-dark`** cut, and the note there
+ * says why: the light cut is drawn in the club's own navy for half the league,
+ * which is a smudge at 15px. What that note also assumed — in as many words —
+ * is that "this app has one palette and it is dark", so the page supplied the
+ * dark ground the cut needs. It no longer does: **Powder Blue is a light
+ * theme**, and thirteen of the thirty marks are drawn in white *alone* (CIN,
+ * DET, KC, LAD, WSH, ATH, PHI, ATL, CWS, NYY among them, checked by reading
+ * every SVG), so on a powder page they were invisible. The Yankees' is the one
+ * that gets reported: a white NY on white.
+ *
+ * So the mark brings its own ground rather than borrowing the page's, and the
+ * ground is the club's — which is also what a cap *is*, so the row gains a
+ * picture rather than a patch.
+ *
+ * **It is a curated table because no upstream publishes one**, which is the same
+ * answer `STAT_META` and `pitchLeague.ts` give to the same question. Probed
+ * rather than assumed: `statsapi.mlb.com/api/v1/teams/{id}` carries `name`,
+ * `abbreviation`, `venue`, `league`, `division` and no colour field of any kind,
+ * and `hydrate=team(colors)` changes nothing about the response.
+ *
+ * **Deriving it from the `on-light` cut was tried and gets 24 of 30.** That cut
+ * is drawn in the club's own dark colours, so its darkest ink is a fair proxy —
+ * NYY yields `#132448`, DET `#0a2240`, KC `#004687`, ATH `#003831`. It breaks on
+ * the six clubs whose cap colour appears in neither cut (CWS's carries no hex at
+ * all, and PIT, SF, BAL, AZ and MIA are drawn in a bright secondary), and a rule
+ * that is right four times in five is worse than a table, because nothing on
+ * screen would say which five were wrong.
+ *
+ * **What is mechanical is the check.** Every colour in every mark was read out
+ * of the thirty SVGs and measured against the ground below, requiring the
+ * mark's *best* ink to clear **4.5:1** — the best rather than the worst, because
+ * a cap really is red-on-navy in places and the question is whether the mark
+ * reads, not whether every part of it does. All thirty pass; the tightest are
+ * PHI **4.57** (a white P on Phillies red, which is their cap exactly), SF 4.86
+ * and NYM 4.93, and the median is over 10.
+ *
+ * **Two clubs are not on their primary, and both for the same reason**: the
+ * mark contains that primary, so it would have vanished into it. NYM sits on
+ * `#00205b`, a shade under their `#002D72`, which takes the orange NY from 4.13
+ * to 4.93; STL sits on the navy of their own cap rather than on Cardinal red,
+ * which takes the mark from 5.84 to 15.79.
+ *
+ * A club this table has never seen — a minor-league id, which is what a rehab
+ * assignment resolves to — takes a neutral dark, because the *cut* is the thing
+ * that needs a dark ground and that is true whoever the club is.
+ */
+const TEAM_COLOR: Record<number, string> = {
+  108: '#ba0021', // LAA
+  109: '#000000', // AZ
+  110: '#000000', // BAL
+  111: '#0c2340', // BOS
+  112: '#0e3386', // CHC
+  113: '#c6011f', // CIN
+  114: '#0c2340', // CLE
+  115: '#33006f', // COL
+  116: '#0c2340', // DET
+  117: '#002d62', // HOU
+  118: '#004687', // KC
+  119: '#005a9c', // LAD
+  120: '#14225a', // WSH
+  121: '#00205b', // NYM — a shade under their own blue; see above
+  133: '#003831', // ATH
+  134: '#27251f', // PIT
+  135: '#2f241d', // SD
+  136: '#0c2c56', // SEA
+  137: '#27251f', // SF
+  138: '#0c2340', // STL — the navy of the cap, not Cardinal red; see above
+  139: '#092c5c', // TB
+  140: '#003278', // TEX
+  141: '#134a8e', // TOR
+  142: '#002b5c', // MIN
+  143: '#e81828', // PHI
+  144: '#13274f', // ATL
+  145: '#27251f', // CWS
+  146: '#000000', // MIA
+  147: '#0c2340', // NYY
+  158: '#12284b', // MIL
+};
+
+/** A neutral dark for a club the table has never seen — see above. */
+const TEAM_COLOR_FALLBACK = '#1f2733';
+
+export function teamColor(teamId: number): string {
+  return TEAM_COLOR[teamId] ?? TEAM_COLOR_FALLBACK;
+}
+
 const PITCH_ABBR: Record<string, string> = {
   '4-Seam Fastball': 'FF',
   Sinker: 'SI',

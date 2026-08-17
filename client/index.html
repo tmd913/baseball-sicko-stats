@@ -39,8 +39,8 @@
          `client/src/theme.ts` mirrors the chosen theme into localStorage purely
          so this can run: the saved preference is the server's, and it arrives a
          round trip after the page has painted, so without a local copy the app
-         would open dark and turn lavender a moment later on every single load.
-         The values below are the two themes' own `--bg`, and they are the one
+         would open in the wrong palette and swap a moment later on every load.
+         The values below are each theme's own `--bg`, and they are the one
          place in the app a palette colour is written outside the stylesheet.
 
          Deliberately inline, blocking and tiny: it has to have finished before
@@ -55,8 +55,8 @@
          length. -->
     <script>
       (function () {
-        var BG = { midnight: '#0b1220', lavender: '#f3f1f8' };
-        var SCHEME = { midnight: 'dark', lavender: 'light' };
+        var BG = { midnight: '#0b1220', lavender: '#1c1b22', maroon: '#1d1319', powder: '#ffffff' };
+        var SCHEME = { midnight: 'dark', lavender: 'dark', maroon: 'dark', powder: 'light' };
         var id = 'midnight';
         try {
           var saved = localStorage.getItem('sicko:theme');
