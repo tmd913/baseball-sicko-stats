@@ -77,6 +77,17 @@ pitches. The exact figure is printed beside every bar, so the relative scale
 hides nothing. **One scale across all three columns**, so a bar reaching further
 really is a pitch thrown more often.
 
+**Its separators are single lines**, which took a fix at each end. The rule
+under the headers was a `border-bottom` on each of the three head cells with a
+margin either side of the middle one — drawn in three segments with two gaps in
+it, a separator that looks like it is made of pieces; it is one border on the
+container now, with the breathing room moved onto the cells so the verticals
+still reach it. And the two vertical dividers were on a `.pu-mid` inside a row
+carrying 2px of its own padding, so every row put a 2px break in them: the
+padding moved inside the cell and the cell stretches to the row, so consecutive
+boxes touch. Measured: four inter-row gaps at **0px**, and 1px from the header,
+which is the rule itself.
+
 **Selected, the badge grows into the pitch's full name and takes the figure's
 place**, which is Savant's own move. The middle column is a fixed width, so
 nothing either side of it shifts while that happens.
@@ -139,10 +150,24 @@ browser against a left-hander: a RHP's four-seam at `hBreak +11` sits up and to
 the right on both, and **Chris Sale's at −14.6 sits up and to the left**, which
 is where a left-hander's arm-side run belongs. No flip, no per-hand branch.
 
-**The two bottom corners carry the arm and the key**, which is what the circle
-leaves for them: below the widest point each corner opens up, and at the height
-these sit at there is ~100 viewBox units of clear space either side. Measured on
-both hands at four widths, **no dot of the cloud falls under either mark**.
+**The two bottom corners carry the arm and the key**, and where they sit is
+**solved rather than nudged** — because "in the corner" is not the same as
+"clear of the circle", and the first pass was neither.
+
+A mark is clear when the corner of its box **nearest the plot's centre** is
+further than the disc's radius away — the top-*inner* corner, both marks sitting
+low and outboard. That gives the arm a shoulder no further in than x ≈ 319; it
+was at 314, **six units inside**, and the key's *text* was running to x = 100 and
+18 units in. The check that passed the first version measured the key's
+**anchor** rather than the end of its text, and asked only whether a *dot* fell
+under the marks rather than whether the **chart** did — which is how "0 dots
+under either mark" was true of marks that were clipping the disc.
+
+**Measured now on both hands at four widths, over every drawn part of each mark**
+— each line, the ball, both labels, the swatch: **0 of them intersect the
+plot**, the arm clearing by 10–25px and the key by 23–37px, with every part
+inside the SVG. The tightest case is the ball at a 70° slot, the highest the
+leaderboard carries.
 
 **His arm slot is drawn as the arm** — a horizontal reference from the shoulder,
 the arm itself at the measured angle, and the ball at the end of it — so the
@@ -191,7 +216,9 @@ the marker. The marker itself stays: it is where the pitch *is*.
 **`1B ◀ MOVES TOWARD ▶ 3B` reads under the plot**, not over it. It names the
 horizontal axis, and the axis is where the reader's eye already is by the time
 they want it — above the circle it was a line of chrome between the title and
-the thing the title names.
+the thing the title names. It sits close to the plot and **16px clear of the
+legend**: it belongs to the picture above it, and hard against the pitch names
+below it read as their heading.
 
 **And the box is cropped to what is in it.** A disc in a 400×400 viewBox leaves
 ~33 units of nothing above it and ~40 below, which at the width this renders is
@@ -403,8 +430,8 @@ and `stand` went with their last reader when the split tabs did (the rule
 per-dot tooltip or a per-hand cloud ever wants it. **3,109 → 1,718 bytes
 gzipped**, measured through the route.
 
-**Bundle: 529.65 → 539.72 KB of JS** (156.66 → 159.81 gzipped) and **134.44 →
-141.54 KB of CSS** (23.64 → 25.03) — 7.6KB and 6.3KB raw, 2.4KB and 1.2KB over
+**Bundle: 529.65 → 539.76 KB of JS** (156.66 → 159.84 gzipped) and **134.44 →
+141.60 KB of CSS** (23.64 → 25.04) — 7.6KB and 6.3KB raw, 2.4KB and 1.2KB over
 the wire, for two charts, a shared selection, an explainer and the paragraphs
 above restated where the rules are; stripping the rows and the split plumbing
 gave 2.4KB of it back.
