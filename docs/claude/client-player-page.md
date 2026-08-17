@@ -408,42 +408,83 @@ the script feeding Kris Bubic his leaderboard *stint* club instead of his
 current one; against LAD the two agree on `new-club`, which is the answer this
 file already records for him).
 
-**What it refuses to guess**, which is four different facts about the pitcher and
-so four different sentences (`ProjectionRefusal`). `not-a-starter` — he has
-started nothing. `too-few-starts` — under three, too thin a median to read a
-cadence off. **`new-club`** — he has a full season of starts and every one of them
-is the club that has since traded him, so he holds no slot in this one yet;
-checked on the live season, Kris Bubic's nine starts are Kansas City's and his
-club is now the Dodgers, and reading that as `not-a-starter` would have printed
-"he hasn't started a game this season" over a man with twenty-odd turns behind
-him. And `out-of-rotation` — his last start was more than two turns ago, which is
-a man something has happened to rather than a man with a slot; measured against
-the announcements, the one pitcher on the live board in that state is also the one
-whose projection missed. **Whatever is announced still comes back in every one of
-those cases**, because an announcement is a fact whatever we can or cannot infer
-around it — and where a refusal sits under a list rather than instead of one, the
-sentence is drawn under the rows so a reader is not left wondering where the other
-four went.
+**A thin record is no longer a refusal — it is his club's rotation, marked as
+such.** `too-few-starts` used to mean "under three starts of his own, too thin a
+median", and that pitcher — a call-up, a man traded in last week, a fifth starter
+two turns into the job — got his one announced row and a shrug. He now takes the
+cadence pooled over **his club's** recent starters and a third tier of row saying
+so. It is a good stand-in and measured twice: where a pitcher has both, the club's
+figure equals his own for **207 of 225** (92.0%), and blinded against real
+announcements the club cadence lands his actual next start **9 of 9**, against the
+own cadence's 41 of 51 exact and 51 of 51 within a day. What survives under the
+old name is the case where *neither* can be read, which past the opening week of a
+season is a club whose games we have not got.
 
-**A rehabbing starter's club is his org, not his rehab club.** `getRosterInfo`
-answers with `currentTeam`, which for a man on a rehab assignment is a
-minor-league club — checked: Edward Cabrera's is the Knoxville Smokies — so the
-schedule read came back empty and the block said `Couldn't read his club's
-schedule`, which is true of the id and a lie about him. `parentOrgOf` is the
-fallback, fired only when the schedule is empty and cached for a day; with it he
-reads his announced start and the projections off it, which is exactly the
-pitcher this block is most worth drawing for.
+**What it refuses to guess**, which is five different facts about the pitcher and
+so five different sentences (`ProjectionRefusal`). `not-a-starter` — he has
+started nothing. **`off-roster`** — he is on the IL, in the minors or otherwise off
+the active roster, so he is not making a start his slot happens to fall on; that
+is the feed's Upcoming rule (*"someone off the active roster — hurt, suspended,
+optioned — is in none of them"*) and it earns its keep, 10 of the 170 pitchers with
+a slot on a checked board being in that state. **`new-club`** — he has a full season
+of starts, every one of them is the club that has since traded him, and this one
+has not named him, so there is nothing to anchor on here yet; checked on the live
+season, Kris Bubic's nine starts are Kansas City's and his club is now the Dodgers,
+and reading that as `not-a-starter` would have printed "he hasn't started a game
+this season" over a man with twenty-odd turns behind him. `out-of-rotation` — his
+last start was more than two turns ago, which is a man something has happened to
+rather than a man with a slot. And `too-few-starts`, above. **Whatever is announced
+still comes back in every one of those cases**, because an announcement is a fact
+whatever we can or cannot infer around it — a club naming a returning starter
+before the transaction posts is ordinary — and where a refusal sits under a list
+rather than instead of one, the sentence is drawn under the rows so a reader is not
+left wondering where the other four went.
 
-**Announced and projected are never drawn alike**, which is the app's standing
-rule that an estimate is marked as one — the percentile card's dotted bubble and
-the Splits card's hatched fill are the same rule on two other surfaces. It used
-to be **said three ways over** and is now said two: the row's text goes muted,
-and the tag says the word. The row itself is **folded onto `.ovw-next-line`'s
-rule**: the block above draws exactly this sentence for exactly this kind of
-fact, so the two are one object. And the opposing starter is by **surname**,
-where that single line prints the whole name — this is a list scanned down rather
-than one sentence read across, which is the same reason the summary table's
-opponent cell and the feed's Upcoming bar cut theirs.
+**A rehabbing starter's club is his org, and `parentOrgOf` is gone.** The
+paragraph here used to record the bug and its fix: `getRosterInfo` answers with
+`currentTeam`, which for a man on a rehab assignment is a minor-league club —
+checked, Edward Cabrera's is the Knoxville Smokies — so the schedule read came
+back empty and the block said `Couldn't read his club's schedule`, true of the id
+and a lie about him; a `parentOrgId` lookup was the fallback. That case is now
+handled by **`clubFor`**, the one club rule this block shares with the Schedule
+view's grid: the roster's club where we have a schedule for it, and otherwise the
+club he was most recently *named to start* for. Which for a rehabbing pitcher is
+the major-league club he last pitched for — the right answer, arrived at from
+where he has actually pitched rather than from a farm system's parentage, and with
+no special case to maintain.
+
+**And `clubFor` exists because two readers had two club rules and drifted**, which
+is worth recording as the shape of mistake this whole arrangement is built to
+prevent: the grid resolved a pitcher to the club he last pitched for and this
+block to the club his roster spot is on, and on the one pitcher where those
+differed — Miles Mikolas, on Washington's roster with his starts behind him at St.
+Louis — the block drew five projected starts and the grid drew none.
+
+**The three tiers are never drawn alike**, which is the app's standing rule that
+an estimate is marked as one — the percentile card's dotted bubble and the Splits
+card's hatched fill are the same rule on two other surfaces. A row's text goes
+muted for either guess, and the tag says the word: `Announced` in the accent with
+a solid border, `Projected` muted with a solid border, `Estimated` muted with a
+**dashed** one. That is the same ladder the Schedule view's grid draws as chip
+weights, read from the outside in — a fact, our measurement of *him*, a
+measurement of his *club* standing in for one of him — and the two surfaces
+deliberately differ in one way only: a row here has the width for a word where a
+grid cell has room for two characters, so there the weight carries it alone and
+the sentence is on the chip's title.
+
+**The ink stays `--muted` on both guesses rather than stepping down to `--faint`
+on the third**, and that is measured: `--faint` puts a 10px uppercase tag at
+**3.18:1 on Midnight's zebra stripe**, under what a label a reader has to read
+owes them, where `--muted` is 6.08. So the border style is what separates the two
+guesses and all three stay legible. It is the same measurement the grid's chip
+records, and the same conclusion.
+
+The row itself is **folded onto `.ovw-next-line`'s rule**: the block above draws
+exactly this sentence for exactly this kind of fact, so the two are one object.
+And the opposing starter is by **surname**, where that single line prints the
+whole name — this is a list scanned down rather than one sentence read across,
+which is the same reason the summary table's opponent cell and the feed's Upcoming
+bar cut theirs.
 
 **The third way was a left rail and it is gone, with the announced one beside
 it.** The paragraph above used to read *"the row's rail goes from solid accent to
@@ -475,7 +516,12 @@ the **whole sentence as that phrase's `title`**:
   sentence was for. It names *his own pace* rather than saying "estimated",
   because the number is what tells a reader how much to trust the muted rows —
   five club games is a settled rotation and six is a club running a six-man — and
-  it is still drawn only when something on screen is actually a guess.
+  it is still drawn only when something on screen is actually a guess. **On the
+  `estimated` tier it names whose pace it is**, reading `his club's turn: every 6
+  club games`: the same phrase would otherwise be the same phrase whether it was
+  measured off his own starts or borrowed, and which of those it is is precisely
+  what decides how much the rows below are worth. `estimated` wins where a list
+  holds both tiers, being the weaker.
 - **A refusal with rows above it** → `nothing past what his club has named`. That
   one is not decoration: a pitcher can have an announced start and no cadence to
   project past it (Skubal today, `too-few-starts`), and a block that showed the
@@ -491,7 +537,16 @@ margin of its own, and `.ovw-starts .ovw-head-row` overrides that row's
 written for the `News →` / `Stats →` doors would push it 800px away and make it
 read as a link. It wraps under the heading on a phone where the two don't fit.
 
-**Validated three ways, and the honest one is the middle number.**
+**Validated three ways, and the honest one is the middle number.** All three
+below were run against the *previous* implementation — the one that read a club's
+season and his game log per pitcher — and the first of them has been re-run
+against the shared engine that replaced it: an independent re-implementation
+reproduces the whole **league-wide** map, **335 of 335** pitchers, on the projected
+`gamePk` list, the tier and the cadence; this route agrees with its own former
+answers on **58 of 60** starters, the two differences being the `estimated` tier
+it gained; and the two surfaces agree with each other on **40 of 40** sampled
+pitchers. The second and third bullets are properties of the *method* rather than
+of the source and are unaffected by the swap.
 
 - **The implementation against an independent recompute.** The whole method was
   written a second time in Python off the raw upstreams and run against the

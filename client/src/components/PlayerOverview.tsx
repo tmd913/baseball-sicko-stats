@@ -18,6 +18,7 @@ import type {
   ProjectedStart,
   ProjectedStarts,
   SeasonStats,
+  StartTier,
   TeamHitting,
 } from '../types';
 import { useDelayedFlag } from '../hooks';
@@ -675,14 +676,21 @@ function headNote(
       title: refusalText(info, false, name),
     };
   }
-  const projected = starts.filter((s) => !s.announced).length;
-  if (projected === 0 || info.cadence == null) return null;
+  const guesses = starts.filter((s) => s.tier !== 'announced');
+  if (guesses.length === 0 || info.cadence == null) return null;
   const games = `${info.cadence} club ${info.cadence === 1 ? 'game' : 'games'}`;
+  // **Whose pace it is, not just what it is.** A turn every five club games is
+  // the same phrase whether it was measured off his own starts or borrowed from
+  // his club's rotation, and which of those it is decides how much the muted rows
+  // are worth — so the phrase names the source. `estimated` wins where the list
+  // holds both, being the weaker.
+  const estimated = guesses.some((s) => s.tier === 'estimated');
+  const whose = estimated ? "his club's rotation" : 'his own pace this season';
   return {
-    text: `a turn every ${games}`,
+    text: estimated ? `his club's turn: every ${games}` : `a turn every ${games}`,
     title:
-      `${projected === 1 ? 'One start is' : `${projected} starts are`} projected from his last ` +
-      `one, at a turn every ${games} — his own pace this season. Nobody has named them yet.`,
+      `${guesses.length === 1 ? 'One start is' : `${guesses.length} starts are`} projected from ` +
+      `his last one, at a turn every ${games} — ${whose}. Nobody has named them yet.`,
   };
 }
 
@@ -699,13 +707,48 @@ function refusalText(info: ProjectedStarts | null, failed: boolean, name: string
     case 'new-club':
       return `${name} hasn’t started for his new club yet, so there’s no slot to place him in — nothing past what they have named.`;
     case 'too-few-starts':
-      return `Too few starts this season to read a rotation slot off — nothing past what his club has named.`;
+      // It now means *nobody's* turn could be read — neither his own record nor
+      // his club's — which past the opening week of a season is a club whose
+      // games we haven't got. See `ProjectionRefusal`.
+      return `No rotation to read a slot off yet — nothing past what his club has named.`;
     case 'out-of-rotation':
       return `${name} has missed more than a turn, so his rotation slot isn’t his to project from — nothing past what his club has named.`;
+    case 'off-roster':
+      // He may well hold a slot; he is not available to fill it. See
+      // `ProjectionRefusal`, and the feed's Upcoming section, which drops an
+      // off-active-roster player for the same reason.
+      return `${name} isn’t on the active roster, so he isn’t making a start his rotation slot falls on — nothing past what his club has named.`;
     default:
       return 'Nothing left on his club’s schedule.';
   }
 }
+
+/**
+ * The word each tier wears, and the sentence behind it.
+ *
+ * **Three where there were two**, and the third is the one worth explaining: a
+ * pitcher too new to his club to have a rotation record of his own is placed on
+ * his club's rotation instead, which is a real answer and a weaker one. The words
+ * are the app's own — `estimated` is what the percentile card has called a
+ * fallback since its first dotted bar — and the *title* carries which cadence it
+ * was, since `Projected` and `Estimated` are near enough synonyms in ordinary
+ * English to need saying once.
+ *
+ * See `StartTier` for the three, and `server/src/rotations.ts` for what each was
+ * measured against.
+ */
+const TIER_TAG: Record<StartTier, string> = {
+  announced: 'Announced',
+  projected: 'Projected',
+  estimated: 'Estimated',
+};
+
+const TIER_LEAD: Record<StartTier, string> = {
+  announced: 'Announced by his club',
+  projected: 'Projected from his rotation slot at his own pace this season — nobody has named it yet',
+  estimated:
+    "Estimated from his club's rotation, his own record being too thin to read one off — nobody has named it yet",
+};
 
 /**
  * One start. The parts are a when, a matchup, whoever the other side has named,
@@ -761,15 +804,14 @@ function StartRow({
   const expandable = !(known && opp.board == null);
 
   const title =
-    (start.announced
-      ? `Announced by his club: ${when}${time ? ` at ${time}` : ''} ${matchup}`
-      : `Projected from his rotation slot — nobody has named this start yet: ${when} ${matchup}`) +
+    `${TIER_LEAD[start.tier]}: ${when}${time ? ` at ${time}` : ''} ${matchup}` +
     (sp ? ` · against ${handThrows(sp.hand)} ${sp.name}` : '') +
     (expandable ? ' · open to see how that lineup has hit' : '');
 
   // The line itself, drawn the same whether or not it is a press: the row's own
-  // muting and its `Announced` / `Projected` tag already say what kind of fact
-  // it is, and a second treatment for "you can open this" would be a third.
+  // muting and its `Announced` / `Projected` / `Estimated` tag already say what
+  // kind of fact it is, and a second treatment for "you can open this" would be
+  // a third.
   const line = (
     <>
       <span className="ovw-next-when">
@@ -782,14 +824,12 @@ function StartRow({
           vs {handThrows(sp.hand)} {surname(sp.name)}
         </span>
       )}
-      <span className="start-tag">{start.announced ? 'Announced' : 'Projected'}</span>
+      <span className="start-tag">{TIER_TAG[start.tier]}</span>
     </>
   );
 
   return (
-    <li
-      className={`start-row${start.announced ? ' start-row--announced' : ' start-row--projected'}`}
-    >
+    <li className={`start-row start-row--${start.tier}`}>
       {expandable ? (
         // No caret: the row is the affordance, which is the rule this app
         // restates wherever a bar opens something (see `pitchers.md`).

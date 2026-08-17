@@ -5,7 +5,16 @@ import { ExpandButton } from './ExpandButton';
 import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
 import { PlayerIdentity } from './PlayerIdentity';
 import { PlayerNewsMark } from './NewsMark';
-import { DayHead, ScheduleCell, gameCount, gamesOn, spanPhrase, startCount } from './schedule';
+import {
+  DayHead,
+  ScheduleCell,
+  gameCount,
+  gamesOn,
+  spanPhrase,
+  startTally,
+  tallyTier,
+  tallyWords,
+} from './schedule';
 import type { ScheduleIndex } from './schedule';
 import { useEligible, useFullPage } from '../hooks';
 import type { BattingLine, PitchingLine, PlayerGame, PlayerReport } from '../types';
@@ -267,7 +276,10 @@ function ScheduleHeadCells({ index, kind }: { index: ScheduleIndex; kind: 'batte
         <th
           className="sum-num"
           scope="col"
-          title={`Starts his club has announced ${spanPhrase(index)} — clubs name a probable about three days out, so this counts the announced front of the span`}
+          title={
+            `Turns he gets ${spanPhrase(index)} — the ones his club has announced, plus the ` +
+            `ones his rotation slot puts him in. A cell says which it is made of.`
+          }
         >
           GS
         </th>
@@ -289,28 +301,27 @@ function ScheduleCells({
   index: ScheduleIndex;
   r: PlayerReport;
 }) {
-  const starts = r.kind === 'pitcher' ? startCount(index, r.teamId, r.id) : 0;
+  const tally = r.kind === 'pitcher' ? startTally(index, r.teamId, r.id) : null;
+  const tier = tally && tallyTier(tally);
   return (
     <>
       <td className="sum-num">{gameCount(index, r.teamId)}</td>
       {r.kind === 'pitcher' && (
         <td className="sum-num">
-          {starts === 0 ? (
+          {!tally || tally.total === 0 || !tier ? (
             '—'
           ) : (
             /* **The two-start marker**, which is the single most actionable
-               thing this table can say — and it says it only where his club
-               has actually named him twice. See `startCount` for the measured
-               reason it is an announcement rather than a projection. */
+               thing this table can say — and it can now say it about a projected
+               pair as well as an announced one. See `startTally` for why the
+               announcement-only rule it used to keep could not answer the
+               question this column is read with. The tier is the *weakest* of
+               the turns counted, so a `2` resting on a guess is drawn as one. */
             <span
-              className={starts >= 2 ? 'sched-two' : undefined}
-              title={
-                starts >= 2
-                  ? `Two announced starts ${spanPhrase(index)}`
-                  : undefined
-              }
+              className={`sched-gs sched-gs-${tier}${tally.total >= 2 ? ' sched-two' : ''}`}
+              title={`${tally.total} ${tally.total === 1 ? 'turn' : 'turns'} ${spanPhrase(index)} — ${tallyWords(tally)}`}
             >
-              {starts}
+              {tally.total}
             </span>
           )}
         </td>
@@ -344,7 +355,10 @@ function ScheduleTotalCells({
   kind: 'batter' | 'pitcher';
 }) {
   const games = players.reduce((n, r) => n + gameCount(index, r.teamId), 0);
-  const starts = players.reduce((n, r) => n + startCount(index, r.teamId, r.id), 0);
+  // The `Total` row counts every turn the roster gets, announced or projected —
+  // the same arithmetic as the rows above it, and the sum a manager plans a week
+  // of pitching around.
+  const starts = players.reduce((n, r) => n + startTally(index, r.teamId, r.id).total, 0);
   return (
     <>
       <td className="sum-num">{games}</td>

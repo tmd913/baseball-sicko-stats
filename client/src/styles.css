@@ -4126,14 +4126,17 @@ button.start-line:focus-visible {
    neither, the rows share one left edge and the hairline between them is what
    groups the list, which is the `.news-item` device this block already borrows
    for its rows. */
-.start-row--projected {
+.start-row--projected,
+.start-row--estimated {
   color: var(--muted);
 }
-/* The muted row's own cells have to give up their colours, or the three ways of
-   saying "guess" come down to two: `.ovw-next-when` and `.ovw-next-opp` are
+/* The muted row's own cells have to give up their colours, or the two ways of
+   saying "guess" come down to one: `.ovw-next-when` and `.ovw-next-opp` are
    `--text` on the block above and would keep it here. */
 .start-row--projected .ovw-next-when,
-.start-row--projected .ovw-next-opp {
+.start-row--projected .ovw-next-opp,
+.start-row--estimated .ovw-next-when,
+.start-row--estimated .ovw-next-opp {
   color: var(--muted);
   font-weight: 600;
 }
@@ -4155,12 +4158,29 @@ button.start-line:focus-visible {
   border: 1px solid var(--faint);
   color: var(--faint);
 }
+/* **Three weights, the same ladder the Schedule view's `SP` chip draws** — read
+   from the outside in: an accent tag is a fact, a solid muted one is our
+   measurement of *him*, and a dashed one is a measurement of his *club* standing
+   in for one of him. It is the progression the percentile card's
+   solid-against-dotted bar already draws; the words differ too (`Announced` /
+   `Projected` / `Estimated`), since a row here has the width for one where a grid
+   cell does not.
+
+   Both guesses keep `--muted` text for the reason the chip does — a 10px
+   uppercase tag at `--faint` measures 3.18:1 on Midnight's zebra stripe — so the
+   border style is what separates the two. */
 .start-row--announced .start-tag {
   border-color: color-mix(in srgb, var(--accent) 50%, transparent);
   color: var(--accent);
 }
 .start-row--projected .start-tag {
+  border-color: color-mix(in srgb, var(--muted) 55%, transparent);
+  color: var(--muted);
+}
+.start-row--estimated .start-tag {
+  color: var(--muted);
   border-style: dashed;
+  border-color: color-mix(in srgb, var(--faint) 85%, transparent);
 }
 
 /* ---- News ------------------------------------------------------------
@@ -10787,23 +10807,84 @@ button.start-line:focus-visible {
 .sched-off {
   color: var(--faint);
 }
-/* His club has announced him to start. A chip rather than a colour on the
-   opponent, because the opponent's colour is already spoken for by the game's
-   own state above and a starter can be announced for a game that is live. */
+/* He is starting this game. A chip rather than a colour on the opponent, because
+   the opponent's colour is already spoken for by the game's own state above and a
+   starter can be announced for a game that is live.
+
+   **Three weights, because the chip now says three things** — his club has named
+   him, his own rotation slot puts him there, or his club's rotation does (see
+   `startTierOn`, and `server/src/rotations.ts` where each is measured). A grid
+   cell has room for two characters and not for a word, so the *weight* carries
+   how sure it is and the chip's own title carries the sentence.
+
+   The ladder is the app's own and is read from the outside in: **filled** is a
+   fact, **outlined** is our measurement of him, **dashed** is a measurement of
+   his club standing in for one of him. That is exactly the progression the
+   percentile card's solid-against-dotted bar already draws and the Splits card's
+   solid-against-hatched fill, so a reader who has learned it anywhere in this app
+   reads it here. Ink stays at full strength on all three: the *number* is not
+   less legible for being less certain, and dimming it would have the reader
+   squinting at the thing they most need to check. */
 .sched-sp {
   margin-top: 1px;
   padding: 0 4px;
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
   border-radius: 999px;
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.04em;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
 }
-/* Two announced starts in the span — the single most actionable thing this
-   view can say, and it says it only where his club has actually named him
-   twice (see `startCount`, which measures how far ahead that reaches). */
+/* Our own measurement of his slot: the fill goes, so the chip reads as an
+   outline against the announced one's solid ground. `--muted` rather than the
+   accent, which is this view's colour for a fact. */
+.sched-sp-projected {
+  color: var(--muted);
+  background: none;
+  border-color: color-mix(in srgb, var(--muted) 55%, transparent);
+}
+/* His club's rotation, not his own record — the border goes **dashed**, which is
+   what this app has meant by "estimated" since the percentile card's first dotted
+   bar.
+
+   **The ink stays `--muted`, and that is measured rather than a preference.** A
+   third step down to `--faint` is the obvious way to draw the third tier and it
+   puts a 9px bold label at **3.18:1 on the zebra stripe** in Midnight (3.72 on
+   the page) — under what a chip a reader has to *read* owes them, where the
+   percentile card's own `--faint` badge is a quiet secondary number beside a
+   value. `--muted` measures 6.08:1 on that stripe and 7.11 on the page, and 6.67
+   in Lavender. So the ladder is carried by the two structural properties — fill,
+   then border style — and the text of all three stays legible. */
+.sched-sp-estimated {
+  color: var(--muted);
+  background: none;
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--faint) 85%, transparent);
+}
+
+/* The `GS` count takes the same three weights, so the column and the cells it
+   sums cannot disagree about how sure a turn is. It is the **weakest** tier among
+   the turns counted (`tallyTier`): a 2 built on one announcement and one guess is
+   a guess, and drawing it as a fact would be the one thing this column must not
+   do. Only the border is spent here — a count is a number in a table and a filled
+   pill would shout down every stat column beside it. */
+.sched-gs {
+  padding: 0 3px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+}
+.sched-gs-projected {
+  border-color: color-mix(in srgb, var(--muted) 45%, transparent);
+}
+.sched-gs-estimated {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--faint) 60%, transparent);
+}
+/* Two turns in the span — the single most actionable thing this view can say,
+   and it can now say it about a projected pair as well as an announced one (see
+   `startTally` for why the announcement-only rule could not). The accent is the
+   emphasis; the border beside it is what says how sure the pair is. */
 .sched-two {
   color: var(--accent);
   font-weight: 800;

@@ -599,11 +599,40 @@ async function getTeamRosterStatus(teamId: number): Promise<Map<number, RosterSt
  * no status rather than leaving the caller with no map.
  */
 export async function getAllRosterStatuses(): Promise<Map<number, RosterStatus>> {
-  const teamIds = [...(await getTeamNamesById()).keys()];
-  const rosters = await Promise.all(teamIds.map((id) => getTeamRosterStatus(id)));
   const byPlayer = new Map<number, RosterStatus>();
-  for (const roster of rosters) {
-    for (const [id, status] of roster) byPlayer.set(id, status);
+  for (const [id, m] of await getAllRosterMembers()) byPlayer.set(id, m.status);
+  return byPlayer;
+}
+
+/** One 40-man member: whose club he is on, and his status on it. */
+export interface RosterMember {
+  teamId: number;
+  status: RosterStatus;
+}
+
+/**
+ * Every 40-man player in the league, with **both** his club and his status.
+ *
+ * `getAllRosterStatuses` is this with the club thrown away, and it is the older
+ * of the two; this exists because `schedule.ts` needs the pair for one reader and
+ * would otherwise make the same thirty reads twice to get them separately. Which
+ * club a pitcher is on decides which schedule his rotation slot is projected
+ * against, and his status decides whether he is available to fill it — see
+ * `rotations.ts`.
+ *
+ * It is the same thirty reads on the same 30-minute per-team cache, so on a warm
+ * server this is thirty map merges. A team whose roster fails to fetch is simply
+ * absent, which leaves its players with no club *here* and the schedule's own
+ * answer standing.
+ */
+export async function getAllRosterMembers(): Promise<Map<number, RosterMember>> {
+  const teamIds = [...(await getTeamNamesById()).keys()];
+  const rosters = await Promise.all(
+    teamIds.map(async (teamId) => [teamId, await getTeamRosterStatus(teamId)] as const),
+  );
+  const byPlayer = new Map<number, RosterMember>();
+  for (const [teamId, roster] of rosters) {
+    for (const [id, status] of roster) byPlayer.set(id, { teamId, status });
   }
   return byPlayer;
 }
