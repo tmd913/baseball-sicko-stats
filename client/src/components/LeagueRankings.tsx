@@ -181,10 +181,16 @@ function sameKey(a: SortKey, b: SortKey): boolean {
 function RankTable({
   rankings,
   categories,
+  matchupTeams,
+  onOpenTeamMatchup,
   corner,
 }: {
   rankings: EspnRankings;
   categories: EspnCategory[];
+  /** Which teams have a matchup this period and which one. Null until the
+   *  board lands — see `openFor` below, which is the whole of the gate. */
+  matchupTeams: Map<number, number> | null;
+  onOpenTeamMatchup: (teamId: number, matchupId: number) => void;
   /** The full-page button, which goes in the badge column's header cell — the
    *  one cell of this table pinned on both axes, so the way back out is on
    *  screen wherever the reader has scrolled to. The three wide tables put it
@@ -375,32 +381,83 @@ function RankTable({
         <tbody>
           {rows.map((r) => {
             const t = teams.get(r.teamId);
+            const name = t?.name ?? `Team ${r.teamId}`;
+            const identity = t
+              ? `${name} — ${record(t)}${r.teamId === rankings.myTeamId ? ' — your team' : ''}`
+              : name;
+            /**
+             * **A team's identity is a press, and it opens that team's own page
+             * of this week's matchup.**
+             *
+             * `matchupTeams` is null until the board lands and holds no key for
+             * a team this period has no row for, and either way the identity
+             * draws as it always did — plain text, no pointer, no hover, no tab
+             * stop. That is deliberate rather than a fallback: a control that
+             * leads nowhere is worse than none, and the board is read on entry
+             * to this tab (see `App`), so the presses arrive with the table
+             * rather than after a reader could have pressed one.
+             */
+            const matchupId = matchupTeams?.get(r.teamId);
+            const open = matchupId == null ? null : () => onOpenTeamMatchup(r.teamId, matchupId);
+            const pressLabel = `${name} — open this week's matchup on his page`;
+            const pressTitle = `${identity} · open this week's matchup on his page`;
+            /**
+             * A real `<button>` inside the cell rather than `role="button"` on
+             * the cell itself, which is the reverse of the Game Log's rows and
+             * of a scoreboard card — and for the reason those two record: *"a
+             * `<tr>` cannot hold a button without leaving table layout and the
+             * whole row is the target"*. Neither clause holds here. The target
+             * is a cell's contents, which a button can be, and putting one
+             * there keeps the `<td>` a cell and the `<th scope="row">` a row
+             * header for a screen reader. Enter and Space are then the
+             * browser's own, which is what the reorder chips already prefer
+             * over a keydown handler.
+             */
+            const press = (cls: string, inner: ReactNode) =>
+              open ? (
+                <button
+                  type="button"
+                  className={`lg-team-press ${cls}`}
+                  onClick={open}
+                  title={pressTitle}
+                  aria-label={pressLabel}
+                >
+                  {inner}
+                </button>
+              ) : (
+                inner
+              );
             return (
               <tr key={r.teamId} className={r.teamId === rankings.myTeamId ? 'lg-row-mine' : undefined}>
                 {/* Two cells, because only the badge pins. The name scrolls
                     away with the stats, which is the board's own rule for a
                     phone: what has to stay is the least that identifies the
                     row, and 168px of team name is paid for out of the
-                    categories beside it. */}
+                    categories beside it.
+
+                    **Both are presses**, which is the app's own answer wherever
+                    a row names a person: the Transactions feed makes a headshot
+                    and the name beside it two doors to one page, having
+                    overturned exactly the "the name is 8px away, so a second
+                    target is redundant" argument. Here the two are not 8px
+                    apart at all — the badge is *pinned* and the name *scrolls*,
+                    so whichever of them is on screen is the door, which is the
+                    one thing neither alone could give. */}
                 {/* The badge is where the reader's own row is marked, the accent
                     ring having replaced the wash that used to run across all
                     twelve cells — so the title names it too, a ring being a
                     thing you see rather than a thing you can read. */}
-                <td
-                  className="lg-logo-col"
-                  title={
-                    t
-                      ? `${t.name} — ${record(t)}${r.teamId === rankings.myTeamId ? ' — your team' : ''}`
-                      : undefined
-                  }
-                >
-                  <TeamLogo team={t} />
+                <td className="lg-logo-col" title={open ? undefined : identity}>
+                  {press('lg-logo-press', <TeamLogo team={t} />)}
                 </td>
                 <th scope="row" className="lg-name-col">
-                  <span className="lg-row-name">
-                    <span className="lg-row-title">{t?.name ?? `Team ${r.teamId}`}</span>
-                    <span className="lg-row-sub">{t ? record(t) : ''}</span>
-                  </span>
+                  {press(
+                    'lg-name-press',
+                    <span className="lg-row-name">
+                      <span className="lg-row-title">{name}</span>
+                      <span className="lg-row-sub">{t ? record(t) : ''}</span>
+                    </span>,
+                  )}
                 </th>
                 {hasOverall && (
                   <td className="lg-num lg-side-col">
@@ -553,11 +610,17 @@ export default function LeagueRankings({
   span,
   loading,
   error,
+  matchupTeams,
+  onOpenTeamMatchup,
 }: {
   rankings: EspnRankings | null;
   span: EspnRankSpan;
   loading: boolean;
   error: string | null;
+  /** Threaded from App, which holds the board this tab does not read. Null
+   *  until it lands, which is what gates the press on a row. */
+  matchupTeams: Map<number, number> | null;
+  onOpenTeamMatchup: (teamId: number, matchupId: number) => void;
 }) {
   /**
    * **The page, for the widest table on this view.** It is fifteen columns on
@@ -627,6 +690,8 @@ export default function LeagueRankings({
         <RankTable
           rankings={rankings}
           categories={rankings.categories}
+          matchupTeams={matchupTeams}
+          onOpenTeamMatchup={onOpenTeamMatchup}
           corner={<ExpandButton isFull={isFull} onToggle={toggle} what="table" />}
         />
       )}

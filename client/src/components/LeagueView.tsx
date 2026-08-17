@@ -664,6 +664,8 @@ export default function LeagueView({
   tab,
   board,
   onOpenMatchup,
+  matchupTeams,
+  onOpenTeamMatchup,
   loading,
   error,
   onPeriod,
@@ -687,6 +689,14 @@ export default function LeagueView({
    *  over this view. The card is what names the matchup, which is why this view
    *  no longer carries a picker for one. */
   onOpenMatchup: (id: number) => void;
+  /** Which teams are in a matchup this period and which one — the Rankings
+   *  tab's own door, threaded through rather than derived here: App holds the
+   *  board and this view holds none of its own. Null until it lands, which is
+   *  what makes a row's press appear with the data behind it rather than
+   *  before it. */
+  matchupTeams: Map<number, number> | null;
+  /** A press on a Rankings row: open that matchup, on *that team's* page. */
+  onOpenTeamMatchup: (teamId: number, matchupId: number) => void;
   loading: boolean;
   error: string | null;
   onPeriod: (period: number) => void;
@@ -736,6 +746,8 @@ export default function LeagueView({
           span={rankSpan}
           loading={rankingsLoading}
           error={rankingsError}
+          matchupTeams={matchupTeams}
+          onOpenTeamMatchup={onOpenTeamMatchup}
         />
       ) : tab === 'transactions' ? (
         <LeagueTransactions

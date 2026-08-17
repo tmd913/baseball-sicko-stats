@@ -489,13 +489,29 @@ open over everything. So it is written whatever tab is behind it, and it is what
 makes a matchup shareable — which is the whole reason the page needs no picker
 of its own. Stepping the period clears it, a matchup id belonging to one week.
 
+**And `mt=` beside it names which page *of* that matchup is open**, as the team
+whose page it is — absent meaning the Summary in the middle. It is written only
+alongside `mup=`, since a side with no matchup to be a side of says nothing, and
+it is **a running record rather than an opening**: the page reports its strip
+back up (`onSideTeam`) so the link describes what is in front of the reader
+rather than only what it was opened on. Pressing `Summary` therefore drops it,
+and a link that names a team this matchup has no side for self-corrects to the
+Summary and drops it too. See *A Rankings row opens that team's matchup* below,
+which is what needed it.
+
+**A team id rather than `away`/`home`**, because a team id is what every caller
+knows: a scoreboard card knows the pair and names neither, a Rankings row knows
+one team and nothing about which side of a matchup he is. Working that out is
+the page's job, it being the one thing holding the matchup — and the id survives
+a reading a side never could, a **bye** having a home and no away at all.
+
 **`lspan=` is deliberately not `win=`.** That one is the research board's own
 window and means five different spans of a different thing; one parameter meaning
 two things in two views is exactly the trap `cols=` avoids by being scoped to the
-board `pos=` names. Neither name can collide: the app's other params are
-`preset`, `start`, `end`, `player`, `view`, `kind`, `sim`, `hideil`, `starters`,
-`sched`, `roster`, `pos`, `cols`, `inc`, `scope`, `watch`, `win`, `help`, `mp`,
-`mup` and `league`.
+board `pos=` names. Neither name can collide, nor does `mt=`: the app's other
+params are `preset`, `start`, `end`, `player`, `view`, `kind`, `sim`, `hideil`,
+`starters`, `sched`, `roster`, `pos`, `cols`, `inc`, `scope`, `watch`, `win`,
+`help`, `mp`, `mup` and `league`.
 
 **Each tab's data is read on its first open and kept**, the way the player page's
 tabs are — the rankings read is gated on `leagueTab === 'rankings'`, and each of
@@ -2046,13 +2062,18 @@ Transactions are card lists and keep the ordinary scrolling page (measured: the
 `-mode` class is absent on both, and the document scrolls 275px and 1,668px
 where Rankings scrolls 0 and its pane scrolls instead).
 
-**No row hover and no pointer.** The log's rows carry both because a press there
-opens that game; nothing in this table is pressable, so a tint following the
-cursor offers something that is not there — and on touch, where `:hover` has no
-way to end, it leaves the last row a finger crossed looking selected, which is
-the app-wide rule set out in **Client**, *A card doesn't highlight when you
-scroll past it*. The header buttons keep their own hover: those really are
-controls.
+**No row hover and no pointer**, on the **category** cells — which is every cell
+but the two that identify the team, and that qualifier is new: this passage read
+*"nothing in this table is pressable"* until the identity became a door into
+that team's matchup (see *A Rankings row opens that team's matchup* below). The
+argument is unchanged where it still applies. The log's rows carry both because
+a press there opens that game; a figure is not pressable, so a tint following
+the cursor across ten of them offers something that is not there — and on touch,
+where `:hover` has no way to end, it leaves the last row a finger crossed
+looking selected, which is the app-wide rule set out in **Client**, *A card
+doesn't highlight when you scroll past it*. The header buttons keep their own
+hover: those really are controls. So do the two presses, scoped to
+`(hover: hover)` by that same rule.
 
 **The pinned column is capped, because it is paid for out of the stats beside
 it.** The board makes this trade explicitly — it pins the 42px headshot at every
@@ -2177,6 +2198,146 @@ clipped. It takes the table's own gutter on both sides now — measured 22.8px a
 were bought when the name was *pinned* and every pixel of it was paid for out of
 the categories held beside it. That argument died with the pin and the rules
 outlived it.
+
+### A Rankings row opens that team's matchup
+
+**The table says where twelve managers stand and gave the reader nowhere to go
+with it.** A column of ranks answers *who is winning the home runs*; the next
+thing anybody asks is *what has he got* — and the only door into a matchup was a
+press on a scoreboard card, one tab away, where the reader then had to find the
+manager they had just been reading about. So a press on a team's **badge or
+name** opens that team's current matchup, **on his own page** rather than on the
+Summary.
+
+**On his page rather than on Summary, which is the whole of the point.** A card
+on the Scoreboard names a *pair* and knows nothing about which of the two the
+reader cares about, so it opens in the middle; a Rankings row names **one team**,
+and landing on the comparison would be the page throwing away the one thing the
+press knew. The Summary is one press of the strip away either way.
+
+**Both cells are the press, and this is the app's own answer rather than a new
+one.** The Transactions feed makes a headshot and the name beside it two doors
+to one page, having overturned in as many words the argument that *"the name is
+8px away, so a second target is redundant"*. Here they are not 8px apart at all:
+the badge column is **pinned** and the name column **scrolls** (see *Only the
+badge pins*), so out at `SVHD` the name has gone and the badge is the only door,
+and on a phone with the pane at its left edge the name is the bigger target.
+Whichever is on screen is the way in, which is the one thing neither alone
+could give. The cost is the one every other table in the app already pays: two
+tab stops a row, 24 on a twelve-team league.
+
+**A real `<button>` inside each cell**, which is the reverse of the Game Log's
+rows and of a scoreboard card — and for the reason those two record: *"a `<tr>`
+cannot hold a button without leaving table layout and the whole row is the
+target"*. Neither clause holds here. The target is a **cell's contents**, which a
+button can be, so the `<td>` stays a cell and the `<th scope="row">` stays a row
+header for a screen reader — and Enter and Space come from the browser rather
+than from a keydown handler, which is what the Columns dialog's reorder chips
+already prefer for the same reason (*"the press is the browser's own"*). Space
+does not scroll the pane, a button swallowing it by construction. Each carries
+an `aria-label` naming the team and what the press does (`Baldy's Bozos — open
+this week's matchup on his page`) rather than reading the row's twelve figures
+out, which is the fix the scoreboard card's own label already makes.
+
+**Which matchup is a map from App, and it is the gate.** `matchupTeams` is team
+id → matchup id off `scoreboard.matchups`, derived where the board lives rather
+than inside the table: `LeagueRankings` holds one span's rows and has never been
+handed a scoreboard, and giving it one to search would be a second reader of a
+payload App already parses. **A bye is in the map like any other matchup** (the
+`home` side alone), which is what makes the press work in a playoff round —
+eight of the live league's ten matchups are byes, and the page a bye row opens
+goes straight to that manager's roster with no strip at all.
+
+**Null until the board lands, and a team the period has no row for is simply not
+in it** — either way the identity draws exactly as it always did: plain text, no
+pointer, no hover, no tab stop, its own `title` back on the cell. That is the
+gate, and it is deliberately a gate rather than a wait. A control that leads
+nowhere is worse than no control, and the alternative — draw the press always
+and hold the reader while the board arrives — needs an overlay with nothing in
+it, on a page that has no board to draw one from. Measured, there is nothing to
+hold for: both reads fire together on entry to the tab, and the presses arrive
+**within one 25ms sample of the table** (three runs: 0ms, 27ms, 0ms).
+
+**And it degrades coherently rather than by luck.** The two reads share a
+credential, so a league that cannot be read has no rankings *and* no board — a
+table of twelve names with silent identities is not a state a reader can reach.
+Measured with `/api/espn/scoreboard` blocked: **0 presses on 12 rows**, `cursor:
+auto`, the identity's own title on the cell, and the table byte-identical at
+1463.45px with the page overflowing by 0.
+
+### The Rankings tab reads the board, and it is the cheapest read on this view
+
+`App`'s scoreboard effect was gated on `leagueTab === 'scoreboard'` (plus the
+matchup page, which shares that read). It now answers a boolean —
+`needsScoreboard`, true on the Scoreboard **or the Rankings tab** or with a
+matchup open — and the Rankings tab is in it because **its rows are doors into
+the board**: the map above cannot be built without it.
+
+**What that costs is one 10KB read on entry to a tab**, cached a minute per
+league on the server and ~2ms warm (measured through the route, in **ESPN
+fantasy league**). It is an order of magnitude less than the **transactions**
+feed, which this view already reads on entry to *any* tab so the dot on its tab
+can be drawn — so the laziness this spends is the smallest on the page. The
+Transactions tab is untouched and reads no board (measured: **0**
+`/api/espn/scoreboard` requests on entry to it).
+
+**A boolean rather than the three tests it is made of**, which is what keeps it
+one request: with `matchupId` in the dependency list, opening a matchup from a
+tab that already needed the board would re-run the effect and spend a request to
+be handed the board it is holding. Measured on entry to Rankings and then
+opening a matchup from a row: **1 read, then 1** — the same one.
+
+**The poll widened by the same clause**, which is *"poll what is on screen"* read
+honestly now that a matchup page can be opened from a tab that is not the
+Scoreboard: `(leagueTab === 'scoreboard' || matchupId != null) && scoreboardLive`.
+Its two rules are untouched — the week has to be live, and the tick goes through
+the server's own minute — and without it a matchup opened from Rankings would
+sit still for as long as it was open, which is exactly the staleness *The page
+updates itself* was written to remove.
+
+### Measured — the Rankings press
+
+**Driven against the built client and the live 12-team league at 1200×900 and
+390×844.**
+
+- **The table does not move.** Before → after, with the pane scrolled to its far
+  right and its foot: rows **61.55px**, header row **47px**, table **1463.45 /
+  996.81px**, badge column **79.59 / 48.81**, badge pinned at **0**, header row
+  at **1px** (the border), page-body overflow **0** — every figure byte-identical
+  either side of the change, at both widths. 12 rows, **24 presses**.
+- **The press works with a mouse, a real touch tap and the keyboard.** A press on
+  a **name** writes `mup=111&mt=4` and opens with `WAXM` active; on a **badge**,
+  `mup=110&mt=12` with `BOZO` active and 13 roster rows drawn. **Enter** on a
+  focused name and **Space** on a focused badge both open (`mup=109&mt=6` and
+  `mup=110&mt=5`) with `window.scrollY` still 0, and the focus ring is the app's
+  own `rgb(56, 189, 248) solid 2px`. At 390 a genuine `touchStart`/`touchEnd` on
+  the **pinned** badge opens `mup=111&mt=4` with the page overflowing by 0.
+- **A bye opens as a bye**: `mup=112&mt=9`, no strip at all, the head naming
+  `Pirates Cove`.
+- **Hover is scoped and was audited out of the CSSOM.** With a mouse at 1200 the
+  name goes `rgb(232, 238, 252)` → **`rgb(56, 189, 248)`** and the badge takes a
+  55% accent ring; under touch emulation at 390 both stay at their resting
+  values with `matchMedia('(hover: hover)')` **false**, and both rules resolve
+  `inside (hover: hover)`. On the reader's **own** row the `.lg-row-mine` ring
+  wins the cascade and stays the flat accent, which is the right way round: a
+  standing fact about the row beats a passing one about the pointer.
+- **The URL says which page is open, live.** `?mup=110&mt=5` opens on `BETS`;
+  pressing `Summary` drops `mt=`; pressing the other team writes `mt=12`; a
+  hand-made `mt=999` opens the Summary and **drops the param**; a scoreboard card
+  still opens with no `mt=` at all.
+- **The Escape ladder is unmoved.** A player page opened from a team page's table
+  sits at **50** over the matchup at **48** (which goes `inert`), and one press
+  per rung unwinds `player → matchup`, clearing `mup=` and `mt=` and leaving
+  **0** `inert` marks. Inside the **full-page** box the presses are all 24, a
+  press opens the matchup *over* the expanded table (48 against 45), and two
+  presses close the matchup and then the box.
+- **The other three views are untouched**: Roster, Feed and Research all draw,
+  with the chrome at 115 / 115 / 207px and 0 page overflow.
+
+**Bundle: 522.29 → 523.52 KB of JS** (154.38 → 154.79 gzipped) and **126.34 →
+126.82 KB of CSS** (22.44 → 22.51) — 1.2KB and 0.5KB raw, 0.4KB and 0.07KB over
+the wire, for a map, two buttons a row, a URL param and the paragraphs above
+restated where the rules are.
 
 ### The span strip is in the tab row, and its caption is on the table
 
