@@ -4138,8 +4138,18 @@ body {
 /* The details view's Arsenal tab (pitchers): the same .arsenal rows the pitcher
    card uses, over the whole season instead of one game. Boxed to the reading
    width the other tabs use, and given a container so the rows' @container
-   queries (metric columns, break-point layout) still fire here. */
-.details-arsenal {
+   queries (metric columns, break-point layout) still fire here.
+
+   **The outing page's tab body is folded onto it** rather than declaring the
+   same three lines again: it is the same object — the widest reading column the
+   app gives a tabbed page, holding the same arsenal rows among other things.
+   The container is what that page needs rather than merely likes, and for a
+   second reason beyond the arsenal's own queries: `.opp-table`'s gutter is
+   `clamp(5px, 1.6cqi, 13px)`, and a `cqi` with no container resolves against
+   the *small viewport*, so the opponent table's eleven columns would be sized
+   against the window rather than against the box they are in. */
+.details-arsenal,
+.outing-tab {
   max-width: 860px;
   margin: 18px auto 0;
   container-type: inline-size;
@@ -7366,12 +7376,6 @@ body {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
-/* An arsenal table is wider than four runs of column chips, so the breakdown
-   takes its own width off the shared box. Still `min(…, 100%)`, so a phone is
-   unaffected and the padding around it holds. */
-.outing-breakdown-box {
-  width: min(860px, 100%);
-}
 /* Every dialog holding a piece of the feed takes the width the feed itself is
    capped at — `--card-column`, which is set by what a card actually holds (a
    name at one end of a header and a line of stats at the other) rather than by
@@ -7380,21 +7384,21 @@ body {
    the accordion-to-popup swap being a change of *place* rather than of drawing.
 
    `.player-day-box` is a game read whole (the Game Log's row, an Overview
-   card); `.outing-box` is a pitcher's innings; `.inning-box` is one of those
-   innings read as a feed; `.play-detail-box` is one at-bat or one Upcoming
-   row's detail. Four names for one width because each says what it holds, and a
-   box that later wants its own number can take one without disturbing the
-   others. */
+   card); `.inning-box` is one inning of a pitcher's outing read as a feed;
+   `.play-detail-box` is one at-bat or one Upcoming row's detail. Three names
+   for one width because each says what it holds, and a box that later wants its
+   own number can take one without disturbing the others. (`.outing-box` was a
+   fourth — a pitcher's innings — and went when the outing became a page.) */
 .player-day-box,
-.outing-box,
 .inning-box,
 .play-detail-box {
   width: min(var(--card-column), 100%);
 }
-/* The way into it, under the innings. A quiet full-width bar rather than a
-   button floating at one end: it closes the opened outing the way `Load more`
-   closes the feed's own list, and at that width it is a thumb target on a phone
-   without being a second accent competing with the credit chip above it. */
+/* The way into the outing page, under the innings the Game Log's popup draws
+   inline. A quiet full-width bar rather than a button floating at one end: it
+   closes that list the way `Load more` closes the feed's own, and at that width
+   it is a thumb target on a phone without being a second accent competing with
+   the credit chip above it. */
 .outing-breakdown-btn {
   align-self: stretch;
   padding: 9px 12px;
@@ -7415,6 +7419,73 @@ body {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
+
+/* ---- The outing page ----------------------------------------------------
+   One pitcher's outing as a full-screen page over whatever opened it: his line,
+   his innings, the lineup he faced and his arsenal, one per tab. It replaced a
+   dialog of innings whose `Full breakdown` button opened a second dialog of the
+   other three — four readings of one thing split three-and-one across two
+   boxes, which is a tab strip (see `OutingPage.tsx`).
+
+   **Folded onto `.details-view` for everything about being a page** — the fixed
+   box, its own scroller, `overscroll-behavior: none`, the reserved scrollbar
+   gutter, the gutters and the `--table-bleed` the opponent table takes back —
+   and onto `.details-chrome` / `.details-tabs` for the pinned head, which is
+   the same statement one page along: *whose outing, and which reading of it*.
+   `.mup-view` sets the precedent for the first of those and duplicates its own
+   chrome; this folds both, there being nothing about this head that the player
+   page's is not.
+
+   **What is its own is the layer, and it is the one that cannot be fixed.** An
+   outing bar is drawn on the page (the feed), inside `.details-view` (the
+   Overview tab, 50), inside a `Modal` inside that page (the Game Log's popup,
+   51) and inside `.mup-view` (a team page's feed, 48) — so 46 here is only the
+   *floor*, what a box opened from the page sits on, and `OutingPage` writes the
+   rung inline whenever `DialogLayerContext` says it was opened from something
+   higher. Declared here rather than only inline for `Modal`'s own reason: the
+   ordinary case stays in the stylesheet and `overlayAbove` reads one number
+   either way. */
+.outing-view {
+  z-index: 46;
+}
+/* **The head and the strip take the body's column rather than the player
+   page's 680.** There the head sits over eight tabs of which six are 680px
+   cards, so the two widest (Arsenal, Game Log) are the exception and the head
+   is right to hold the common width; here *every* tab is the 860 column, so a
+   680 head would be indented 90px from the content under it on all four and the
+   active tab's underline would stop short of the table it names. `.details-head`
+   is otherwise unchanged — a wrapping flex row, centred by its own auto
+   margins — and all this adds is the wrap and the two-line identity stack. */
+.outing-head,
+.outing-view .details-tabs {
+  max-width: 860px;
+}
+.outing-head {
+  flex-wrap: wrap;
+}
+.outing-id {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.outing-sub {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+/* The bar's own strip in the head — the role chip, the credit, the line and the
+   status badge, drawn by the very `outingBar` the row that opened this page
+   draws. `margin-left: auto` puts it at the far end of the head row on a
+   desktop and it wraps under the name on a phone, which is what the row already
+   does with everything in it. */
+.outing-head-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  margin-left: auto;
+}
+/* The tab's own body is `.details-arsenal`, folded onto rather than copied —
+   see the rule there, which is where the container it carries is argued. */
 /* The one scroller, and it takes `none` like everything else in the app.
    It landed as `contain` reasoning from `.details-view` and `.reel-view`,
    which were page-like boxes that kept their own give; those two have since

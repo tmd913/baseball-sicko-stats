@@ -827,8 +827,14 @@ export function useFullPage<T extends HTMLElement = HTMLDivElement>() {
  * renamed its rules `.app-dialog-*`. A selector that matches nothing is a test
  * that quietly always passes, so the board's dialog and an expanded table were
  * both answering the one press.)
+ *
+ * **`.outing-view` is the one member whose layer is not fixed**, and it has to
+ * be listed for both halves of that sentence above: it declines Escape while
+ * its own inning dialog is over it, and — the half a page opened *from a
+ * dialog* needs — the box underneath has to see it, or a player page at 50 with
+ * an outing page at 51 over it answers the key and closes them both.
  */
-const OVERLAYS = '.details-view, .reel-view, .mup-view, .app-dialog';
+const OVERLAYS ='.details-view, .reel-view, .mup-view, .outing-view, .app-dialog';
 
 /**
  * The stacking layer an element sits on: the nearest ancestor's declared
