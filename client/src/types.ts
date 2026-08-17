@@ -148,16 +148,33 @@ export interface NextGameInfo {
 }
 
 /**
+ * How much of a guess a start is — one vocabulary for the player page's
+ * Projected Starts block and the Schedule view's grid, which draw all three
+ * differently.
+ *
+ * - `announced` — MLB has named him for it. A fact.
+ * - `projected` — placed on **his own** measured pace this season: the median
+ *   gap between his consecutive starts, in club games.
+ * - `estimated` — placed on **his club's** rotation instead, because his own
+ *   record is too thin to read one off (a call-up, a man traded in last week, a
+ *   fifth starter two turns into the job). One step less certain again, and
+ *   marked as such wherever it is drawn.
+ *
+ * See `server/src/rotations.ts`, where each is measured.
+ */
+export type StartTier = 'announced' | 'projected' | 'estimated';
+
+/**
  * One start on a pitcher's next month — the player page's **Projected Starts**
  * block.
  *
- * **`announced` is the field the whole thing turns on.** A club names its
- * probables a few days out and that is a fact; everything past it is
- * `projectedStarts.ts` placing him on his club's remaining schedule at the
- * cadence his own season has been pitched at, which is a guess. The two ride on
- * one list because they answer one question, and the flag is what stops them
- * reading as one kind of thing — the client draws a projected row differently,
- * the app's standing rule that an estimate is marked as one.
+ * **`tier` is the field the whole thing turns on.** A club names its probables a
+ * few days out and that is a fact; everything past it is a rotation slot stepped
+ * forward over the club's remaining schedule, which is a guess — and, since the
+ * slot may be read off his own record or borrowed from his club's, a guess of two
+ * strengths. The three ride on one list because they answer one question, and the
+ * tier is what stops them reading as one kind of thing: the client draws all
+ * three differently, the app's standing rule that an estimate is marked as one.
  */
 export interface ProjectedStart {
   gamePk: number;
@@ -167,8 +184,12 @@ export interface ProjectedStart {
   opponent: string; // "TOR" — the abbreviation, as everywhere else
   opponentId: number;
   /** True where MLB has named him for this game, false where we have placed
-   *  him. Never a shade in between: a row is a fact or it is a guess. */
+   *  him. Kept beside `tier` rather than derived from it: it is the one
+   *  distinction every older client reads, and `tier === 'announced'` is the
+   *  same test. */
   announced: boolean;
+  /** Which of the three this row is — see `StartTier`. */
+  tier: StartTier;
   /** The **other** side's announced starter — his counterpart. Null until that
    *  club names one, which on a projected row it never has. */
   probablePitcher: ProbablePitcher | null;
@@ -179,20 +200,30 @@ export interface ProjectedStart {
  * sentence on screen, because they are different facts about the pitcher:
  *
  * - `not-a-starter` — he has started nothing this season, so there is no slot.
- * - `too-few-starts` — under three, which is too thin a median to read a
- *   cadence off.
- * - `new-club` — he has started this season and every one of them was for the
- *   club that has since traded him, so he holds no slot in this one yet.
+ * - `too-few-starts` — **no turn could be read at all**, his own or his club's,
+ *   which past the first week of a season means a club whose games we haven't
+ *   got. It used to mean "under three starts of his own", and no longer does:
+ *   that pitcher now takes his club's rotation and an `estimated` row.
+ * - `new-club` — he has started this season, every one of them was for the club
+ *   that has since traded him, and this one has not named him — so there is
+ *   nothing to anchor a slot on here yet.
  * - `out-of-rotation` — his last start was more than two turns ago, so whatever
  *   slot he held is not his to be projected into now.
+ * - `off-roster` — he is not on the active roster (the IL, the minors, a
+ *   paternity list), so he is not making a start whatever his slot says. The
+ *   feed's Upcoming section keeps the same rule for the same reason: *"someone
+ *   off the active roster — hurt, suspended, optioned — is in none of them"*. An
+ *   announcement still stands, a club naming a returning starter before the
+ *   transaction posts being ordinary.
  * - `no-schedule` — his club couldn't be placed, or its schedule couldn't be
- *   read. The only one of the four that is our failure rather than his.
+ *   read. The only one of the six that is our failure rather than his.
  */
 export type ProjectionRefusal =
   | 'not-a-starter'
   | 'too-few-starts'
   | 'new-club'
   | 'out-of-rotation'
+  | 'off-roster'
   | 'no-schedule';
 
 export interface ProjectedStarts {
@@ -1433,7 +1464,6 @@ export interface ScheduleGame {
   awayProbableId: number | null;
 }
 
-/** The whole window, as `/api/schedule` answers it. */
 /**
  * **The days this fantasy matchup period covers, and the days the next one
  * covers** — the Schedule view's two named spans, and the whole of what a
@@ -1454,6 +1484,31 @@ export interface MatchupWindow {
   next: { period: number; start: string; end: string } | null;
 }
 
+/**
+ * One pitcher's rotation slot over the window — what lets the Schedule view mark
+ * the turns nobody has announced yet.
+ *
+ * **Only the unannounced turns are in `starts`.** An announced one is already on
+ * the wire as `ScheduleGame.homeProbableId`/`awayProbableId`, so repeating it
+ * here would be one fact in two places; the client reads `announced` off the
+ * game and these off the map, and they cannot overlap because a projected turn is
+ * never placed on a game somebody is named for.
+ */
+export interface RotationProjection {
+  /** How many of his club's games a turn takes — 5 for an ordinary five-man. */
+  cadence: number;
+  /**
+   * True where that cadence is **his club's** rather than his own record's, so
+   * the row is one step less certain — `StartTier`'s `estimated` against its
+   * `projected`. A pitcher with three starts of his own reads his own pace; a
+   * call-up reads the rotation he has just joined.
+   */
+  estimated: boolean;
+  /** The `gamePk`s of his projected turns, in date order. */
+  starts: number[];
+}
+
+/** The whole window, as `/api/schedule` answers it. */
 export interface ScheduleWindow {
   /** First ET day, inclusive — the server's own `baseballToday()`. */
   start: string;
@@ -1462,6 +1517,14 @@ export interface ScheduleWindow {
   /** How many days that is, so a client can tell a short answer from a full one. */
   days: number;
   games: ScheduleGame[];
+  /**
+   * Player id → his projected turns inside the window, for every pitcher who has
+   * one. **A pitcher with nothing to project is absent** rather than present and
+   * empty, the rule `/api/statuses` follows for a player with nothing true of
+   * him: on a checked board that is 165 of the 335 pitchers who have started a
+   * game this season, and sending them would be payload saying nothing.
+   */
+  rotations: Record<string, RotationProjection>;
 }
 
 /**

@@ -1,9 +1,14 @@
-import type { ProjectedStart, ProjectedStarts, ProjectionRefusal, ProbablePitcher } from './types.js';
+import type {
+  ProjectedStart,
+  ProjectedStarts,
+  ProbablePitcher,
+  ScheduleGame,
+  StartTier,
+} from './types.js';
 import { baseballToday } from './etDate.js';
-import { getPitcherStarts, type StartedGame } from './gameLog.js';
 import { getRosterInfo, getTeamAbbrevs } from './mlbStats.js';
-
-const UA = { 'User-Agent': 'statcast-sicko/1.0' };
+import { getSeasonRead } from './schedule.js';
+import { clubFor, projectStarts, startPositions } from './rotations.js';
 
 /**
  * How many starts to answer with. **Five again, where this briefly said
@@ -14,280 +19,43 @@ const UA = { 'User-Agent': 'statcast-sicko/1.0' };
  * third**, then **39.1% and 33.5%** for the fourth and fifth (81.0% down to
  * 45.4% over the 40 busiest starters). That decay is real and the two extra
  * rows are read with it in view rather than hidden from it — a projected row
- * is muted and tagged `Projected` exactly like the third, and the block's own
- * note names the cadence it was built from rather than claiming a date. A row
- * that is right a third of the time is still worth having: it is the row
- * most likely to be the one a manager actually needed, since a two-start
- * week five turns out is the thing worth seeing a month ahead, not a
- * fortnight.
+ * is muted and tagged, and the block's own note names the cadence it was built
+ * from rather than claiming a date.
  *
- * **The upstream cost the trim was written to avoid turns out not to be
- * paid.** `getRosterInfo` reads one 40-man roster per distinct club of the
- * ids it is handed, so a fourth or fifth row carrying a named opposing
- * probable is a genuine extra read, not a free one — and it was a reasonable
- * worry to have. Checked against the live 2026 season, every row counted by
- * position: **151 first rows, 142 apiece at second through fifth** (a pitcher
- * who clears the anchor keeps a row at every position this deep into the
- * season; the shortfall is the nine refusals that draw one announced row and
- * stop). The opposing probable is on **39 of the 151 first rows (25.8%) and
- * on 0 of the 568 rows behind it**: MLB names one about three days out, and a
- * fourth or fifth turn on an ordinary five-day cadence is three to four weeks
- * off — nowhere near where any club has named anybody. The cost was
- * theoretical when the trim was written and measures as theoretical now.
- * `WANT` still gates all three places at once — the announced slice, the
- * projection loop and the final `rows` — so it is one constant either way.
+ * **The upstream cost the trim was written to avoid is not paid at all now.**
+ * It was one club-season read plus one game-log read per pitcher, and both are
+ * gone: the whole projection comes off the league-wide schedule `schedule.ts`
+ * already holds for the Schedule view (see `rotations.ts`). What is left is the
+ * opposing starters' hands, which is one batched `people` lookup — and measured
+ * against the live season the opposing probable is on **39 of 151 first rows
+ * (25.8%) and 0 of the 568 rows behind them**, MLB naming one about three days
+ * out where a fifth turn is three to four weeks off.
  */
 const WANT = 5;
 
 /**
- * The fewest starts we will read a cadence off. Two consecutive gaps is a thin
- * median and it is what a mid-season call-up has after three turns; measured
- * against the season, raising the bar to five starts moves the next-start hit
- * rate by three tenths of a point (80.7% against 81.0%), so the stricter rule
- * buys nothing and costs the call-up — who is exactly the player somebody is
- * looking this up about — his whole block.
- */
-const MIN_STARTS = 3;
-
-/**
- * The widest gap between two starts we will treat as **consecutive turns**. A
- * rotation turn is four to seven club games; anything longer is an IL stint, a
- * demotion or a spell in the bullpen, and folding it into the median would
- * invent a cadence nobody pitches on. Nine leaves room for a six-man stretch and
- * an off-day week without letting a fortnight in.
- */
-const MAX_TURN_GAP = 9;
-
-/**
- * How many turns he may have missed and still be placed. His slot is a fact
- * about the rotation *as it stands*, and a man whose last start was two turns
- * ago is a man something has happened to — measured on the live board, the one
- * pitcher in that state (Edward Cabrera, nine turns since his last start) is
- * also the one whose projection missed the start MLB had actually named him for.
- * An announcement re-anchors him and this guard never applies; without one,
- * refusing is the honest answer.
- */
-const MAX_TURNS_MISSED = 2;
-
-/**
- * How many club games in a row may have somebody else announced before we stop
- * projecting. One is an ordinary shuffle (a bullpen game, a spot start, a
- * doubleheader); three in a row past his own slot means the rotation has been
- * re-ordered and we no longer know his phase — at which point a shorter list is
- * better than a longer wrong one.
- */
-const MAX_SLIP = 3;
-
-/**
- * A club's schedule does not move; what moves is who has been named for it, and
- * clubs name their probables through the day. Thirty minutes is what the game
- * log and `nextGame.ts` already settle on for exactly that reason.
- */
-const CLUB_TTL = 30 * 60 * 1000;
-
-/**
- * **In memory only, and deliberately no `storage.ts` blob** — the same rule
- * `nextGame.ts` states and for the same reason. Everything this app persists is
- * a *finished* fact (a day whose games are all final, a scoring period gone by);
- * a club's remaining fixtures with their probables filled in as they are
- * announced is the opposite, and a blob would be a stored answer to a question
- * that changes by the hour with a freshness test that could only ever be the TTL
- * beside it.
- */
-const clubCache = new Map<string, { games: ClubGame[]; fetchedAt: number }>();
-
-/** One game of a club's regular season, as far as this file reads it. */
-interface ClubGame {
-  gamePk: number;
-  date: string;
-  startTime: string | null;
-  /** Postponed and cancelled games are dropped before this file sees them — see
-   *  `counts()`, and note a postponement comes back later as its own gamePk. */
-  homeId: number;
-  awayId: number;
-  homeProbableId: number | null;
-  awayProbableId: number | null;
-  homeProbableName: string | null;
-  awayProbableName: string | null;
-}
-
-interface ScheduleResponse {
-  dates?: {
-    date?: string;
-    games?: {
-      gamePk?: number;
-      gameDate?: string;
-      officialDate?: string;
-      status?: { detailedState?: string };
-      teams?: {
-        away?: { team?: { id?: number }; probablePitcher?: { id?: number; fullName?: string } };
-        home?: { team?: { id?: number }; probablePitcher?: { id?: number; fullName?: string } };
-      };
-    }[];
-  }[];
-}
-
-/**
- * A game consumes a rotation turn unless it was never played on the day it was
- * listed for. A **postponement is rescheduled under a new `gamePk`**, so counting
- * the original would put a phantom game in the club's run and shift every slot
- * after it by one. Measured league-wide on the 2026 season, `detailedState` takes
- * eight values — Final, Scheduled, Postponed, In Progress, Completed Early, Game
- * Over, Warmup, Pre-Game — of which only Postponed (27 games) is one of these;
- * Cancelled is refused as well because MLB does use it and a cancelled game is
- * the same fact with no replacement.
- */
-function counts(state: string | undefined): boolean {
-  const s = state ?? '';
-  return !s.startsWith('Postponed') && !s.startsWith('Cancelled');
-}
-
-/**
- * One club's whole regular season in one call, with whoever each side has been
- * named for.
+ * His club's abbreviation for a game, and which end of it he is on.
  *
- * **The whole season rather than a forward window**, which is where this parts
- * from `nextGame.ts`: a rotation slot is a position in the club's *run* of
- * games, so placing him needs the games he has already started as well as the
- * ones he has not. And it is **one club rather than the league**, which is where
- * it parts from `gameLog.ts::getSchedule`: that read is 650KB because it carries
- * every club's lineups, where this is **53KB measured** with the fields cut to
- * the six things a projection reads. Hydrating probables over a whole season
- * costs almost nothing, a club having named nobody past the next few days.
+ * `announced` rides alongside `tier` rather than being derived from it: it is
+ * the one distinction every older client reads, and `tier === 'announced'` is
+ * the same test.
  */
-async function fetchClubSeason(teamId: number, season: number): Promise<ClubGame[]> {
-  const key = `${teamId}-${season}`;
-  const hit = clubCache.get(key);
-  if (hit && Date.now() - hit.fetchedAt < CLUB_TTL) return hit.games;
-  const url =
-    `https://statsapi.mlb.com/api/v1/schedule?sportId=1&teamId=${teamId}` +
-    `&season=${season}&gameType=R&hydrate=probablePitcher` +
-    `&fields=dates,date,games,gamePk,gameDate,officialDate,status,detailedState,` +
-    `teams,away,home,team,id,probablePitcher,fullName`;
-  try {
-    const res = await fetch(url, { headers: UA });
-    if (!res.ok) throw new Error(`schedule returned ${res.status}`);
-    const data = (await res.json()) as ScheduleResponse;
-    const games: ClubGame[] = [];
-    for (const d of data.dates ?? []) {
-      for (const g of d.games ?? []) {
-        if (!g.gamePk || !counts(g.status?.detailedState)) continue;
-        games.push({
-          gamePk: g.gamePk,
-          // `officialDate` is the day the game counts on, which is what every
-          // other date in this app means.
-          date: g.officialDate ?? d.date ?? '',
-          startTime: g.gameDate ?? null,
-          homeId: g.teams?.home?.team?.id ?? 0,
-          awayId: g.teams?.away?.team?.id ?? 0,
-          homeProbableId: g.teams?.home?.probablePitcher?.id ?? null,
-          awayProbableId: g.teams?.away?.probablePitcher?.id ?? null,
-          homeProbableName: g.teams?.home?.probablePitcher?.fullName ?? null,
-          awayProbableName: g.teams?.away?.probablePitcher?.fullName ?? null,
-        });
-      }
-    }
-    // Date order, and a doubleheader in game order. MLB sends them that way and
-    // nothing promises it, and the whole method here is an index into this list.
-    games.sort((a, b) => a.date.localeCompare(b.date) || a.gamePk - b.gamePk);
-    clubCache.set(key, { games, fetchedAt: Date.now() });
-    return games;
-  } catch (err) {
-    console.error('projected-starts schedule fetch failed:', err);
-    return hit?.games ?? [];
-  }
-}
-
-/**
- * A minor-league club's parent organisation, for the one case that needs it.
- *
- * **A pitcher on a rehab assignment has a minor-league club as his current
- * team** — checked on the live season: Edward Cabrera's `currentTeam` is the
- * Knoxville Smokies, whose `parentOrgId` is the Cubs — so `getRosterInfo`, which
- * every roster badge in the app goes through, hands back a team id that has no
- * major-league schedule at all. That is exactly the pitcher this block is most
- * worth drawing for: a man working his way back, whose club has already named
- * him for a start. Left alone he read `Couldn't read his club's schedule`, which
- * is true of the id and a lie about him.
- *
- * It is a **fallback rather than the primary read**: the ordinary path is
- * `getRosterInfo`, warm from every other page and shared with every roster
- * badge, and this fires only when the schedule it points at comes back empty.
- * Cached for a day, a farm system's parentage being the least volatile thing
- * this app reads, and a failure answers null, which leaves the refusal where it
- * was.
- */
-const orgCache = new Map<number, { orgId: number | null; fetchedAt: number }>();
-const ORG_TTL = 24 * 60 * 60 * 1000;
-
-async function parentOrgOf(teamId: number): Promise<number | null> {
-  const hit = orgCache.get(teamId);
-  if (hit && Date.now() - hit.fetchedAt < ORG_TTL) return hit.orgId;
-  try {
-    const res = await fetch(
-      `https://statsapi.mlb.com/api/v1/teams/${teamId}?fields=teams,id,parentOrgId`,
-      { headers: UA },
-    );
-    if (!res.ok) throw new Error(`teams returned ${res.status}`);
-    const data = (await res.json()) as { teams?: { parentOrgId?: number }[] };
-    const orgId = data.teams?.[0]?.parentOrgId ?? null;
-    orgCache.set(teamId, { orgId, fetchedAt: Date.now() });
-    return orgId;
-  } catch (err) {
-    console.error('parent org lookup failed:', err);
-    return null;
-  }
-}
-
-/** The middle of an odd list, the mean of the middle two of an even one. */
-function median(xs: number[]): number {
-  const s = [...xs].sort((a, b) => a - b);
-  const m = s.length >> 1;
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-}
-
-/**
- * How many club games a turn takes, off the gaps between the starts he has
- * actually made — 5 for an ordinary five-man rotation, 6 for a club running six,
- * 4 for a club that has been leaning on four.
- *
- * **Counted in team games rather than days**, which is the whole trick: an off
- * day, a rain-out and the All-Star break all push a rotation back by exactly the
- * days they take out of the calendar, and none of them takes a turn out of the
- * run of games. Days would have to model every one of those; an index into the
- * club's own schedule models none of them and gets them all right.
- *
- * **The median rather than the mean**, because the outliers are the interesting
- * half of a pitcher's season: one IL stint of a month is a single gap of twenty
- * team games, which drags a mean off any real rotation and leaves the median
- * where it was. Gaps past `MAX_TURN_GAP` are dropped outright rather than
- * trusted to the median, so a man with three starts either side of a stint is
- * still placed off the two turns that really were consecutive.
- */
-function cadenceOf(positions: number[]): number | null {
-  const gaps: number[] = [];
-  for (let i = 1; i < positions.length; i += 1) {
-    const gap = positions[i] - positions[i - 1];
-    if (gap >= 1 && gap <= MAX_TURN_GAP) gaps.push(gap);
-  }
-  if (gaps.length < MIN_STARTS - 1) return null;
-  return Math.max(1, Math.round(median(gaps)));
-}
-
-/** His club's abbreviation for a game, and which end of it he is on. */
 function toStart(
-  g: ClubGame,
+  g: ScheduleGame,
   teamId: number,
-  announced: boolean,
-  abbrevs: Map<number, string>,
+  tier: StartTier,
+  names: Map<number, string>,
   hands: Map<number, string | null>,
+  abbrevs: Map<number, string>,
 ): ProjectedStart {
   const home = g.homeId === teamId;
   const opponentId = home ? g.awayId : g.homeId;
   const oppId = home ? g.awayProbableId : g.homeProbableId;
-  const oppName = home ? g.awayProbableName : g.homeProbableName;
+  const oppName = oppId === null ? undefined : names.get(oppId);
   const probablePitcher: ProbablePitcher | null =
-    oppId !== null && oppName ? { id: oppId, name: oppName, hand: hands.get(oppId) ?? null } : null;
+    oppId !== null && oppName
+      ? { id: oppId, name: oppName, hand: hands.get(oppId) ?? null }
+      : null;
   return {
     gamePk: g.gamePk,
     date: g.date,
@@ -295,192 +63,85 @@ function toStart(
     home,
     opponentId,
     opponent: abbrevs.get(opponentId) ?? '—',
-    announced,
+    announced: tier === 'announced',
+    tier,
     probablePitcher,
   };
 }
 
 /**
- * A pitcher's next several starts — the ones his club has named him for, and,
- * past those, the ones his own rotation slot puts him in.
+ * A pitcher's next five starts — the ones his club has named him for, and, past
+ * those, the ones his rotation slot puts him in.
  *
- * **What is announced is a fact and what is projected is a guess, and the two are
- * never mixed on one row.** MLB names probables a few days out; everything past
- * that is this file placing him on his club's remaining schedule at the cadence
- * his season has been pitched at. `ProjectedStart.announced` is what says which
- * a row is, and the client draws the two differently — the app's standing rule
- * that an estimate is marked as one, which the percentile card's dotted bubbles
- * and the Splits card's hatched fills already follow.
+ * **The method, the constants and the refusals are all `rotations.ts`'s**, and
+ * that is the point rather than an implementation detail: the Schedule view's
+ * grid draws the same projection for six hundred pitchers at once, and the two
+ * can only be *known* to agree while they are one function over one payload. A
+ * reader who sees a projected turn on a board row and opens the player page
+ * behind it gets the same date because there is only one place the date comes
+ * from. What is left in this file is the shape the player page wants: five rows,
+ * the opposing starter's hand, and the club abbreviations.
  *
- * **The method, in one paragraph.** Take the club's regular season as an ordered
- * run of games (postponements dropped, since one is rescheduled under a new id).
- * Find the positions in it of the games he has started; the median gap between
- * consecutive ones is his cadence. Anchor on the latest start we know of — an
- * announced future one if there is one, otherwise his last actual start — and
- * step forward a cadence at a time over the games still to be played. A slot
- * MLB has already given to somebody else is not his, so it is skipped and the
- * rest re-phased from wherever he lands, because a missed turn shifts everything
- * after it.
- *
- * **What it refuses to guess.** A pitcher with fewer than three starts has no
- * cadence to read (`too-few-starts`); a pitcher whose starts all belong to the
- * club that traded him has no slot in this one yet (`new-club`); and a pitcher
- * whose last start was more than two turns ago is a pitcher something has
- * happened to and whose slot is no longer his to project from
- * (`out-of-rotation`) — unless his club has named him for a game, which settles
- * it. In both cases whatever *is* announced still
- * comes back, because an announcement is a fact whatever we can or cannot infer
- * around it. Absence beats a wrong answer, which is this codebase's standing
- * preference and the one thing a projection must not get wrong.
+ * **Which club he is on** is `getRosterInfo`'s answer where it names a
+ * major-league one, and the club he was most recently named to start for
+ * otherwise. That second half is what makes a **rehab assignment** work with no
+ * case of its own: a pitcher on one has a minor-league `currentTeam` (checked on
+ * the live season — Edward Cabrera's is the Knoxville Smokies), which has no
+ * major-league schedule at all, and the club he last started for is exactly the
+ * club to project against. It replaces a `parentOrgId` lookup that existed for
+ * that one case and is better than it, being derived from where he has actually
+ * pitched rather than from a farm system's parentage.
  */
 export async function getProjectedStarts(playerId: number): Promise<ProjectedStarts> {
   const today = baseballToday();
-  // The season off the app's own definition of today rather than a constant:
-  // this is a date-window read and `CLAUDE.md` lists nine places the season is
-  // already pinned, none of which this needs to become a tenth of.
-  const season = Number(today.slice(0, 4));
-  const info = (await getRosterInfo([playerId])).get(playerId) ?? null;
-  let teamId = info?.teamId ?? null;
-  if (teamId === null) return { starts: [], cadence: null, refusal: 'no-schedule' };
-
-  const [firstTry, starts] = await Promise.all([
-    fetchClubSeason(teamId, season),
-    getPitcherStarts(playerId, season).catch((err) => {
-      console.error('projected-starts game log failed:', err);
-      return [] as StartedGame[];
-    }),
+  const [read, info] = await Promise.all([
+    getSeasonRead(),
+    getRosterInfo([playerId])
+      .then((m) => m.get(playerId) ?? null)
+      .catch((err) => {
+        // His club is a nicety here rather than a requirement — the schedule
+        // itself says which club he has been pitching for.
+        console.error('projected-starts roster lookup failed:', err);
+        return null;
+      }),
   ]);
-  // No major-league schedule under that id means it is not a major-league club —
-  // he is on a rehab assignment, and the club to project against is the org that
-  // sent him there. See `parentOrgOf`.
-  let games = firstTry;
-  if (games.length === 0) {
-    const orgId = await parentOrgOf(teamId);
-    if (orgId !== null && orgId !== teamId) {
-      teamId = orgId;
-      games = await fetchClubSeason(orgId, season);
-    }
-  }
-  if (games.length === 0) return { starts: [], cadence: null, refusal: 'no-schedule' };
+  const { season, byPk, names } = read;
 
-  const at = new Map(games.map((g, i) => [g.gamePk, i]));
-  const mine = (g: ClubGame): number | null =>
-    g.homeId === teamId ? g.homeProbableId : g.awayProbableId;
+  // Which club's schedule to place him on — `clubFor`'s rule, shared with the
+  // grid so the two cannot resolve the same pitcher to two clubs and draw two
+  // different sets of dates. See there; it is a mistake this once made.
+  const teamId = clubFor(season, playerId, info?.teamId ?? null);
+  const run = teamId === null ? undefined : season.runs.get(teamId);
+  if (teamId === null || !run) return { starts: [], cadence: null, refusal: 'no-schedule' };
 
-  // **His starts for *this* club only.** A traded pitcher's earlier starts sit in
-  // another club's run of games and say nothing about the slot he holds now, so
-  // an id this schedule has never heard of drops out rather than being placed.
-  const positions = starts
-    .map((s) => at.get(s.gamePk))
-    .filter((p): p is number => p !== undefined)
-    .sort((a, b) => a - b);
+  const positions = startPositions(run, playerId, today);
+  const p = projectStarts({
+    run,
+    playerId,
+    today,
+    positions,
+    clubTurn: season.cadences.get(teamId) ?? null,
+    startedElsewhere: (season.startsAnywhere.get(playerId) ?? 0) > positions.length,
+    // **Off the active roster is not projectable** — the same rule the grid
+    // applies league-wide, off the status this route was already fetching for
+    // his club. A status we could not read leaves him projectable, which is the
+    // direction every join in this file fails in.
+    projectable: info?.status == null || info.status.code === 'A',
+    want: WANT,
+  });
 
-  // **Everything his club has named him for, today's start included** — which
-  // is a wider set than the rows, and the distinction is the whole of it.
-  //
-  // This was one list read `g.date > today`, doing two jobs with one test: it
-  // seeded the rows *and* it was the anchor the projection stepped forward
-  // from. The `> today` is right for the rows (see `announcedAt` below) and
-  // wrong for the anchor, because **a start today is the most recent thing
-  // known about his rotation slot and the one the anchor most needs.** It is
-  // also invisible everywhere else: `positions` comes off his game log, which
-  // has no row for a game he has not finished pitching, so on the afternoon of
-  // a start there was nothing at all to see it by.
-  //
-  // What that cost, measured on the live season: Logan Webb, announced for
-  // 2026-08-15 and last logged on 08-09, anchored on 08-09 instead. His cadence
-  // (5 club games) then landed the next turn on today's own game, which the
-  // loop skips as past; the game after it is Tidwell's, which it counts as a
-  // slip; and it settled on **08-18, three days after a start he is making
-  // today** — a rotation nobody pitches. Anchored on today it steps five club
-  // games on to 08-21, which is where a five-man turn lands once the 08-17 off
-  // day is counted.
-  //
-  // `>= today` rather than `> today` is the whole fix, and it is idempotent
-  // where the two sources agree: once his game log catches up, today's index is
-  // in `positions` as well and the anchor is the same either way.
-  const namedAt = games
-    .map((g, i) => (g.date >= today && mine(g) === playerId ? i : -1))
-    .filter((i) => i >= 0);
-  // **The rows are the future ones alone.** A start today is the day block's
-  // own business directly above this one on the page, and printing it twice is
-  // what the `> today` test was really written for — it is kept here, where it
-  // is about what to draw, and dropped above, where it was about what to know.
-  const announcedAt = namedAt.filter((i) => games[i].date > today);
-
-  const cadence = cadenceOf(positions);
-  const lastPlayed = games.reduce((acc, g, i) => (g.date <= today ? i : acc), -1);
-
-  const chosen: { index: number; announced: boolean }[] = announcedAt
-    .slice(0, WANT)
-    .map((index) => ({ index, announced: true }));
-
-  let refusal: ProjectionRefusal | null = null;
-  if (positions.length === 0) {
-    // **He has started games and none of them are this club's**, which is a
-    // trade rather than a career: checked on the live season, Kris Bubic's nine
-    // starts are Kansas City's and his club is now the Dodgers, and Spencer
-    // Arrighetti's seventeen are Houston's against a Toronto farm club. Reading
-    // that as `not-a-starter` would print "he hasn't started a game this
-    // season" over a man with a full rotation season behind him.
-    refusal = starts.length === 0 ? 'not-a-starter' : 'new-club';
-  } else if (positions.length < MIN_STARTS || cadence === null) {
-    refusal = 'too-few-starts';
-  } else {
-    // The latest start we know of. An announcement outranks his own history: it
-    // is his club saying where he is in the rotation *now*, which is the very
-    // thing the cadence is being used to infer — and `namedAt` rather than
-    // `announcedAt`, so **today's start anchors him**, which is the fix set out
-    // above. A man his club has named for a game is by that fact in the
-    // rotation, so a name of any date clears the missed-turns guard too: it is
-    // there for a pitcher nobody has named at all, whose last start is the only
-    // evidence there is.
-    const anchor = namedAt.length ? namedAt[namedAt.length - 1] : positions[positions.length - 1];
-    const missed = namedAt.length ? 0 : Math.max(0, lastPlayed - anchor) / cadence;
-    if (missed > MAX_TURNS_MISSED) {
-      refusal = 'out-of-rotation';
-    } else {
-      let pos = anchor + cadence;
-      let slips = 0;
-      while (chosen.length < WANT && pos < games.length) {
-        const g = games[pos];
-        // Only games still to be played: one today is the day block's business
-        // (a start today is his day), and one already behind us is not a start.
-        if (g.date <= today) {
-          pos += 1;
-          continue;
-        }
-        const named = mine(g);
-        if (named !== null && named !== playerId) {
-          // Somebody else has the ball. His turn slid rather than vanished, so
-          // step one game on and re-phase from wherever he actually lands —
-          // until it is clear the rotation has been re-ordered under us, at
-          // which point a shorter list beats a longer wrong one.
-          if (slips >= MAX_SLIP) break;
-          slips += 1;
-          pos += 1;
-          continue;
-        }
-        slips = 0;
-        chosen.push({ index: pos, announced: named === playerId });
-        pos += cadence;
-      }
-    }
-  }
-
-  chosen.sort((a, b) => a.index - b.index);
-  const rows = chosen.slice(0, WANT);
-  // One batched lookup for the opposing starters' hands — the schedule carries
-  // no hand at all, hydrated or not, so it comes off the same `people` join
-  // every roster status in the app already goes through. A failure costs the
-  // rows their "RHP" and nothing else.
+  const rows = p.turns.flatMap(({ index, tier }) => {
+    const g = byPk.get(run[index].gamePk);
+    return g ? [{ g, tier }] : [];
+  });
+  // One batched lookup for the opposing starters' hands — the schedule carries a
+  // name and no hand, hydrated or not, so it comes off the same `people` join
+  // every roster status in the app already goes through. A failure costs the rows
+  // their counterpart's "RHP" and nothing else.
   const oppIds = [
     ...new Set(
       rows
-        .map(({ index }) => {
-          const g = games[index];
-          return g.homeId === teamId ? g.awayProbableId : g.homeProbableId;
-        })
+        .map(({ g }) => (g.homeId === teamId ? g.awayProbableId : g.homeProbableId))
         .filter((id): id is number => id !== null),
     ),
   ];
@@ -494,10 +155,8 @@ export async function getProjectedStarts(playerId: number): Promise<ProjectedSta
   ]);
 
   return {
-    starts: rows.map(({ index, announced }) =>
-      toStart(games[index], teamId, announced, abbrevs, hands),
-    ),
-    cadence: refusal === null ? cadence : null,
-    refusal,
+    starts: rows.map(({ g, tier }) => toStart(g, teamId, tier, names, hands, abbrevs)),
+    cadence: p.cadence,
+    refusal: p.refusal,
   };
 }

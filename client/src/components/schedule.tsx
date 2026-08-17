@@ -4,8 +4,10 @@ import type {
   MatchupWindow,
   PlayerKind,
   ResearchRow,
+  RotationProjection,
   ScheduleGame,
   ScheduleWindow,
+  StartTier,
 } from '../types';
 
 /**
@@ -187,6 +189,16 @@ export interface ScheduleIndex {
   short: boolean;
   /** club id → date → that club's games that day. */
   byTeam: Map<number, Map<string, ScheduleGame[]>>;
+  /**
+   * Player id → the `gamePk`s of his projected turns, and how much of a guess
+   * they are.
+   *
+   * **A `Set` per pitcher rather than a list**, because the question this answers
+   * is asked once per row per column — 275 rows by 14 days is 3,850 lookups on
+   * one draw of the board, and a linear scan of five gamePks each is the kind of
+   * thing that is free until it isn't.
+   */
+  rotations: Map<number, { starts: Set<number>; cadence: number; estimated: boolean }>;
 }
 
 export function buildScheduleIndex(
@@ -231,7 +243,28 @@ export function buildScheduleIndex(
   // question is whether the *server* was asked far enough ahead, not whether
   // anybody is playing.
   const wants = eff === 'matchup' && matchup ? matchup.end : eff === 'next' && matchup?.next ? matchup.next.end : null;
-  return { span: eff, dates, today: win.start, short: wants !== null && wants > win.end, byTeam };
+  // The server keys these by player id and sends only the **unannounced** turns:
+  // an announced one is already on the game as `homeProbableId`/`awayProbableId`,
+  // so repeating it would be one fact in two places (see `RotationProjection`).
+  // They are not cut to the span — a `Set` membership test is what reads them and
+  // a pk outside the drawn columns is never asked about.
+  const rotations = new Map<number, { starts: Set<number>; cadence: number; estimated: boolean }>();
+  for (const [id, r] of Object.entries(win.rotations ?? {})) {
+    const p = r as RotationProjection;
+    rotations.set(Number(id), {
+      starts: new Set(p.starts),
+      cadence: p.cadence,
+      estimated: p.estimated,
+    });
+  }
+  return {
+    span: eff,
+    dates,
+    today: win.start,
+    short: wants !== null && wants > win.end,
+    byTeam,
+    rotations,
+  };
 }
 
 /**
@@ -262,9 +295,35 @@ export function gamesOn(index: ScheduleIndex, teamId: number | null, date: strin
   return index.byTeam.get(teamId)?.get(date) ?? [];
 }
 
-/** Is this the game his club has **announced** him to start? */
-function startsIt(g: ScheduleGame, teamId: number, playerId: number): boolean {
-  return (g.homeId === teamId ? g.homeProbableId : g.awayProbableId) === playerId;
+/**
+ * Is he starting this game, and how sure is that?
+ *
+ * **Three answers where this used to have two**, and the middle two are the
+ * whole of what the view gained: `announced` is his club naming him, `projected`
+ * is his own rotation slot stepped over the schedule, and `estimated` is his
+ * club's rotation standing in where his own record is too thin to read. Null is
+ * "not his game". See `StartTier`, and `server/src/rotations.ts` for how each is
+ * arrived at and what it was measured against.
+ *
+ * The announced test comes first and cannot tie with the other two: the server
+ * never places a projected turn on a game somebody is named for, so a game he is
+ * announced for is never in his `starts` set.
+ */
+export function startTierOn(
+  index: ScheduleIndex,
+  g: ScheduleGame,
+  teamId: number,
+  playerId: number,
+): StartTier | null {
+  if ((g.homeId === teamId ? g.homeProbableId : g.awayProbableId) === playerId) return 'announced';
+  const r = index.rotations.get(playerId);
+  if (!r || !r.starts.has(g.gamePk)) return null;
+  return r.estimated ? 'estimated' : 'projected';
+}
+
+/** His rotation slot, for the sentence a count or a chip says about it. */
+export function rotationOf(index: ScheduleIndex, playerId: number) {
+  return index.rotations.get(playerId) ?? null;
 }
 
 /**
@@ -284,33 +343,77 @@ export function gameCount(index: ScheduleIndex, teamId: number | null): number {
   return n;
 }
 
+/** How many turns he gets in the span, split by how sure each one is. */
+export interface StartTally {
+  announced: number;
+  projected: number;
+  estimated: number;
+  /** All three — what the `GS` column prints. */
+  total: number;
+}
+
 /**
- * Starts his club has **announced** for him in the span, which is the two-start
- * marker and is deliberately not a projection.
+ * Turns he gets in the span: the ones his club has named, and the ones his
+ * rotation slot puts him in.
  *
- * Clubs name a probable about three days out — measured on the live 2026
- * season: 28/28 slots filled today, 27/30 tomorrow, 30/30 at two days, then
- * **3/22 at three, 1/30 at four and none at all beyond**. So over a week this
- * counts the announced front of it and reads 1 for most starters, and a 2 is a
- * fact rather than an inference. Projecting the rest off a rotation slot is the
- * thing the feed's Upcoming section already refuses to do — *"an announcement
- * is the only thing that puts him there"* — and for the same measured reason:
- * four starters in five are not pitching, so a guess is right about one of them
- * and states the other four as facts.
+ * **This used to count announcements alone, and the reason it did no longer
+ * holds.** The old rule was the feed's — *"an announcement is the only thing that
+ * puts him there"* — on the measured grounds that clubs name a probable about
+ * three days out (28/28 today, 30/30 at two days, then **3/22 at three, 1/30 at
+ * four and none beyond**), so over a week a projection is "right about one of
+ * them and states the other four as facts". What that measurement actually says
+ * is that *an announcement cannot answer this column's question*: a `GS` of 1 for
+ * every starter in the league is a column of noise, and **which of my starters
+ * gets two turns** — the single most actionable thing this view can say — was
+ * unanswerable by construction.
+ *
+ * So the count is all three tiers and the **tally says which**, because the
+ * projection is now measured rather than guessed: against real announcements,
+ * hidden and re-derived, a pitcher's own cadence lands his next start **38 of 48
+ * exact and 48 of 48 within a day**, and his club's cadence 9 of 9. The column's
+ * own title names the split, and a count carrying a projected turn is drawn
+ * differently from one that is all fact.
  */
-export function startCount(
+export function startTally(
   index: ScheduleIndex,
   teamId: number | null,
   playerId: number,
-): number {
-  if (teamId === null) return 0;
+): StartTally {
+  const tally: StartTally = { announced: 0, projected: 0, estimated: 0, total: 0 };
+  if (teamId === null) return tally;
   const days = index.byTeam.get(teamId);
-  if (!days) return 0;
-  let n = 0;
+  if (!days) return tally;
   for (const list of days.values()) {
-    for (const g of list) if (g.state !== 'postponed' && startsIt(g, teamId, playerId)) n += 1;
+    for (const g of list) {
+      if (g.state === 'postponed') continue;
+      const tier = startTierOn(index, g, teamId, playerId);
+      if (tier === null) continue;
+      tally[tier] += 1;
+      tally.total += 1;
+    }
   }
-  return n;
+  return tally;
+}
+
+/**
+ * The weakest tier in a tally — what its cell is drawn as, so a `2` made of one
+ * announcement and one estimate reads as the estimate it partly is rather than
+ * as two facts.
+ */
+export function tallyTier(t: StartTally): StartTier | null {
+  if (t.estimated > 0) return 'estimated';
+  if (t.projected > 0) return 'projected';
+  if (t.announced > 0) return 'announced';
+  return null;
+}
+
+/** `1 announced · 2 projected` — the tally in words, for a cell's own title. */
+export function tallyWords(t: StartTally): string {
+  const parts: string[] = [];
+  if (t.announced) parts.push(`${t.announced} announced`);
+  if (t.projected) parts.push(`${t.projected} projected from his own pace`);
+  if (t.estimated) parts.push(`${t.estimated} estimated from his club's rotation`);
+  return parts.join(' · ');
 }
 
 /** `@ LAD` / `vs SEA` — what a cell says, and what its column sorts on. */
@@ -330,6 +433,28 @@ export function dayText(
   return games.map((g) => opponentText(g, teamId as number)).join(' · ');
 }
 
+/** What each tier's chip says on hover, in the cell and in the `GS` column
+ *  alike — one sentence per tier so the grid and the count cannot describe the
+ *  same fact two ways. */
+export const TIER_TITLE: Record<StartTier, string> = {
+  announced: 'his club has announced him to start',
+  projected: 'projected to start — his own rotation slot, which nobody has announced yet',
+  estimated: "estimated to start — his club's rotation, his own record being too thin to read one off",
+};
+
+/** `SP` / `SP` outlined / `SP` dashed — the chip, and the class that grades it. */
+export function StartChip({ tier, cadence }: { tier: StartTier; cadence?: number | null }) {
+  const turn =
+    tier === 'announced' || cadence == null
+      ? ''
+      : ` (a turn every ${cadence} club ${cadence === 1 ? 'game' : 'games'})`;
+  return (
+    <span className={`sched-sp sched-sp-${tier}`} title={`${TIER_TITLE[tier]}${turn}`}>
+      SP
+    </span>
+  );
+}
+
 /**
  * One day's cell.
  *
@@ -345,6 +470,13 @@ export function dayText(
  * already **final** goes muted, so today's column says at a glance which of its
  * games are still to come. An off day is a faint dash — quiet on purpose, so a
  * row's games are what the eye lands on when it scans across.
+ *
+ * **A starting pitcher's own game carries an `SP` chip, in one of three
+ * weights** — filled where his club has named him, outlined where his own
+ * rotation slot puts him there, dashed where his club's rotation does. That is
+ * the app's own ladder for how sure a number is (the percentile card's dotted
+ * bubble, the Splits card's hatched fill), applied to a grid cell where a word
+ * would not fit; the sentence is on the chip's own title.
  */
 export function ScheduleCell({
   index,
@@ -365,28 +497,26 @@ export function ScheduleCell({
       </span>
     );
   }
+  const rotation = rotationOf(index, playerId);
   // A doubleheader draws both matchups stacked; they are almost always the same
   // opponent, and saying so twice is cheaper than a "×2" the reader has to
   // decode — and where a club splits a day between two clubs it is the truth.
   return (
     <>
       {games.map((g) => {
-        const start = teamId !== null && startsIt(g, teamId, playerId);
         const ppd = g.state === 'postponed';
+        // A postponed game is not a turn — the projection never places one on it
+        // and an announcement for it means nothing now.
+        const tier = ppd || teamId === null ? null : startTierOn(index, g, teamId, playerId);
+        const opp = opponentText(g, teamId as number);
         return (
           <span
             key={g.gamePk}
-            className={`sched-cell sched-${g.state}${start ? ' sched-start' : ''}`}
-            title={
-              ppd
-                ? `${opponentText(g, teamId as number)} — postponed`
-                : `${opponentText(g, teamId as number)}${
-                    start ? ' — his club has announced him to start' : ''
-                  }`
-            }
+            className={`sched-cell sched-${g.state}${tier ? ` sched-start sched-start-${tier}` : ''}`}
+            title={ppd ? `${opp} — postponed` : tier ? `${opp} — ${TIER_TITLE[tier]}` : opp}
           >
-            <span className="sched-opp">{ppd ? 'PPD' : opponentText(g, teamId as number)}</span>
-            {start && !ppd && <span className="sched-sp">SP</span>}
+            <span className="sched-opp">{ppd ? 'PPD' : opp}</span>
+            {tier && <StartChip tier={tier} cadence={rotation?.cadence ?? null} />}
           </span>
         );
       })}
@@ -443,12 +573,27 @@ export function scheduleColumns(index: ScheduleIndex, kind: PlayerKind): Column[
   const starts: Column = {
     key: SCHED_STARTS_KEY,
     label: 'GS',
-    title: `Starts his club has announced ${spanPhrase(index)} — clubs name a probable about three days out, so this counts the announced front of the span`,
+    title:
+      `Turns he gets ${spanPhrase(index)} — the ones his club has announced, plus the ones ` +
+      `his rotation slot puts him in. A cell says which it is made of.`,
     format: (r) => {
-      const n = startCount(index, r.teamId, r.id);
-      return n === 0 ? '—' : <span className={n >= 2 ? 'sched-two' : undefined}>{n}</span>;
+      const t = startTally(index, r.teamId, r.id);
+      if (t.total === 0) return '—';
+      const tier = tallyTier(t) as StartTier;
+      // **Two turns is the thing this column exists to say**, and it now says it
+      // about a projected pair as well as an announced one — the reason it could
+      // not before is measured under `startTally`. The tier is the *weakest* of
+      // the turns counted, so a `2` built on a guess is drawn as a guess.
+      return (
+        <span
+          className={`sched-gs sched-gs-${tier}${t.total >= 2 ? ' sched-two' : ''}`}
+          title={`${t.total} ${t.total === 1 ? 'turn' : 'turns'} ${spanPhrase(index)} — ${tallyWords(t)}`}
+        >
+          {t.total}
+        </span>
+      );
     },
-    value: (r) => startCount(index, r.teamId, r.id),
+    value: (r) => startTally(index, r.teamId, r.id).total,
   };
   const days: Column[] = index.dates.map((date) => ({
     key: schedDayKey(date),

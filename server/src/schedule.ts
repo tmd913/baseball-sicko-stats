@@ -1,6 +1,7 @@
 import type { ScheduleGame, ScheduleWindow } from './types.js';
 import { addDays, baseballToday } from './etDate.js';
-import { getTeamAbbrevs } from './mlbStats.js';
+import { getAllRosterMembers, getTeamAbbrevs } from './mlbStats.js';
+import { buildRotations, buildSeasonRuns, type SeasonRuns } from './rotations.js';
 
 const UA = { 'User-Agent': 'statcast-sicko/1.0' };
 
@@ -59,8 +60,36 @@ const WINDOW_TTL = 30 * 60 * 1000;
  * so a single entry serves the whole app. Hence the `inFlight` guard — a cold
  * Lambda with three readers must send one request, not three.
  */
-let cached: { window: ScheduleWindow; fetchedAt: number } | null = null;
-let inFlight: Promise<ScheduleWindow> | null = null;
+/**
+ * What one read of the season yields — the window that goes on the wire, and the
+ * three server-side lookups the player page's own projections read.
+ *
+ * They are kept together because they come out of one payload and must not be
+ * rebuilt from another: a rotation slot is a position in a club's run of games
+ * *including the ones already played*, so `projectedStarts.ts` needs exactly the
+ * season the grid's own projections were built from. None of the three goes on
+ * the wire — no client has any use for April, and this is 694KB of it.
+ */
+interface Entry {
+  window: ScheduleWindow;
+  /** The clubs' runs and cadences, parsed once rather than per request. */
+  season: SeasonRuns;
+  /** `gamePk` → the game, so a projected turn can name its opponent. */
+  byPk: Map<number, ScheduleGame>;
+  /**
+   * Player id → his name, for the opposing starters a projected row names.
+   *
+   * A map rather than two fields on every `ScheduleGame`, which is what it would
+   * be if the names rode on the games: nobody needs a name *per game*, the same
+   * pitcher being named for many, and `ScheduleGame` is the wire type — a field
+   * there would be payload no client reads.
+   */
+  names: Map<number, string>;
+  fetchedAt: number;
+}
+
+let cached: Entry | null = null;
+let inFlight: Promise<Entry> | null = null;
 
 interface StatusFields {
   abstractGameState?: string;
@@ -77,8 +106,8 @@ interface ScheduleResponse {
       officialDate?: string;
       status?: StatusFields;
       teams?: {
-        away?: { team?: { id?: number }; probablePitcher?: { id?: number } };
-        home?: { team?: { id?: number }; probablePitcher?: { id?: number } };
+        away?: { team?: { id?: number }; probablePitcher?: { id?: number; fullName?: string } };
+        home?: { team?: { id?: number }; probablePitcher?: { id?: number; fullName?: string } };
       };
     }[];
   }[];
@@ -102,28 +131,93 @@ function stateOf(s: StatusFields | undefined): ScheduleGame['state'] {
   return 'scheduled';
 }
 
-async function fetchWindow(from: string, to: string): Promise<ScheduleWindow> {
+/**
+ * The season, once, and the window sliced out of it.
+ *
+ * **The whole season rather than the 28 days the view draws**, which is the one
+ * decision in this file worth arguing. The window needs the days ahead; the
+ * *rotation slots* the view now marks need the days behind — a turn is the median
+ * gap between a pitcher's consecutive starts, so placing him needs the games he
+ * has already started (see `rotations.ts`). Those could have been two reads, and
+ * one read is better for a reason beyond the saving: **the two halves cannot
+ * disagree about who is announced.** A projected turn is never placed on a game
+ * somebody is named for, and that guarantee only holds if the grid's `SP` chips
+ * and the projections behind them come off one payload.
+ *
+ * **It costs about 36KB gzipped, once per baseball day, for the whole app.**
+ * Measured against MLB with this file's own `fields`: the 28-day window is
+ * 91,418 bytes raw / **5,256 gzipped** and 376 games in 278ms, where the season
+ * is 693,688 / **41,382** and 2,458 games in 434ms. That is one shared read
+ * behind a 30-minute cache, against a per-club read of 53KB that the player
+ * page's own projections used to make one at a time.
+ */
+/**
+ * The two things the 40-man rosters tell a projection: **whose club** each player
+ * is on, and **whether he is available** to take a turn on it.
+ *
+ * League-wide the 40-man carries exactly eight status codes and only one of them
+ * is on the active roster — measured: `A Active` 782, `RM Reassigned to Minors`
+ * 300, `D60` 171, `D15` 51, `D10` 51, `D7` 3, `PL Paternity List` 1, `NYR Not
+ * Yet Reported` 1. So the test is `code === 'A'`, and everything else is a man who
+ * is not taking the ball this week.
+ *
+ * A player the map has **no entry for at all** keeps both defaults — his club is
+ * the schedule's own answer and he stays projectable — so the set handed on is
+ * the players positively *off* an active roster rather than the ones on it. A
+ * pitcher on no 40-man is either released or a club whose read failed, and those
+ * cannot be told apart here; see `projectStarts`'s `projectable`.
+ */
+async function rosterFacts(): Promise<{ offRoster: Set<number>; clubs: Map<number, number> }> {
+  const members = await getAllRosterMembers();
+  const offRoster = new Set<number>();
+  const clubs = new Map<number, number>();
+  for (const [id, m] of members) {
+    clubs.set(id, m.teamId);
+    if (m.status.code !== 'A') offRoster.add(id);
+  }
+  return { offRoster, clubs };
+}
+
+async function fetchSeason(from: string, to: string): Promise<Entry> {
+  const year = Number(from.slice(0, 4));
   const url =
-    `https://statsapi.mlb.com/api/v1/schedule?sportId=1&startDate=${from}&endDate=${to}` +
+    `https://statsapi.mlb.com/api/v1/schedule?sportId=1&season=${year}` +
     `&gameType=R&hydrate=probablePitcher` +
     `&fields=dates,date,games,gamePk,gameDate,officialDate,status,abstractGameState,` +
-    `codedGameState,detailedState,teams,away,home,team,id,probablePitcher`;
-  const [res, abbrevs] = await Promise.all([
+    `codedGameState,detailedState,teams,away,home,team,id,probablePitcher,fullName`;
+  const [res, abbrevs, roster] = await Promise.all([
     fetch(url, { headers: UA }),
     // A missing abbreviation costs a cell its club's short name, not the
     // window — the rule every join in this file follows.
     getTeamAbbrevs().catch(() => new Map<number, string>()),
+    // **Whose club each pitcher is on, and whether he is available to pitch for
+    // it.** A man on the IL or in the minors is not making a start his rotation
+    // slot happens to fall on, which is the feed's own Upcoming rule (see
+    // `projectStarts`'s `projectable`); and the roster is what knows about a
+    // trade before he has pitched for the new club (see `clubFor`). It is the
+    // same 30 forty-man rosters `/api/statuses` and every roster badge already
+    // read, on the same 30-minute per-team cache, so on any warm server this is
+    // thirty map merges — and a failure answers **null**, which keeps every
+    // projection rather than emptying the grid.
+    rosterFacts().catch((err) => {
+      console.error('schedule roster read failed:', err);
+      return null;
+    }),
   ]);
   if (!res.ok) throw new Error(`schedule returned ${res.status}`);
   const data = (await res.json()) as ScheduleResponse;
-  const games: ScheduleGame[] = [];
+  const all: ScheduleGame[] = [];
+  const names = new Map<number, string>();
   for (const d of data.dates ?? []) {
     for (const g of d.games ?? []) {
       if (!g.gamePk) continue;
       const homeId = g.teams?.home?.team?.id ?? 0;
       const awayId = g.teams?.away?.team?.id ?? 0;
       if (!homeId || !awayId) continue;
-      games.push({
+      for (const side of [g.teams?.home?.probablePitcher, g.teams?.away?.probablePitcher]) {
+        if (side?.id && side.fullName) names.set(side.id, side.fullName);
+      }
+      all.push({
         gamePk: g.gamePk,
         // `officialDate` is the day the game counts on, which is what every
         // other date in this app means; `dates[].date` agrees with it and is
@@ -141,35 +235,79 @@ async function fetchWindow(from: string, to: string): Promise<ScheduleWindow> {
     }
   }
   // Date order, and a doubleheader in game order. The API returns them that way
-  // and nothing promises it, and the client draws a day's games left to right.
-  games.sort((a, b) => a.date.localeCompare(b.date) || a.gamePk - b.gamePk);
-  return { start: from, end: to, days: SCHEDULE_DAYS, games };
+  // and nothing promises it; both the client's left-to-right day and
+  // `rotations.ts`'s whole coordinate system are an index into this list.
+  all.sort((a, b) => a.date.localeCompare(b.date) || a.gamePk - b.gamePk);
+  const games = all.filter((g) => g.date >= from && g.date <= to);
+  // The runs are read off the **whole** season and the projections bounded to the
+  // window the client will draw: the days behind are what a cadence is measured
+  // from, and the days ahead are what the grid has columns for.
+  const season = buildSeasonRuns(all, from);
+  const rotations = Object.fromEntries(
+    buildRotations(season, from, to, roster?.offRoster ?? null, roster?.clubs ?? null),
+  );
+  return {
+    window: { start: from, end: to, days: SCHEDULE_DAYS, games, rotations },
+    season,
+    byPk: new Map(all.map((g) => [g.gamePk, g])),
+    names,
+    fetchedAt: Date.now(),
+  };
 }
 
 /**
- * Every club's next four weeks, with whoever each side has announced.
+ * Every club's next four weeks, with whoever each side has announced — and, for
+ * every pitcher with a rotation slot, the turns nobody has announced yet.
  *
  * One upstream for all thirty clubs rather than one per club or one per player:
  * the two tables that read it draw hundreds of rows at once, and the answer for
  * a row is entirely a function of the club its player is on — so a per-player
  * read would be the same 43KB fetched six hundred times to be sliced six
  * hundred ways.
+ */
+export async function getScheduleWindow(): Promise<ScheduleWindow> {
+  return (await current()).window;
+}
+
+/** The clubs' runs, the game lookup and the probables' names, all off the same
+ *  read and the same cache entry the window comes from — see `Entry`. */
+export interface SeasonRead {
+  season: SeasonRuns;
+  byPk: Map<number, ScheduleGame>;
+  names: Map<number, string>;
+}
+
+/**
+ * The season as `projectedStarts.ts` reads it, for one pitcher's rotation slot.
+ *
+ * **One read for both surfaces, which is what stops them disagreeing.** The
+ * player page and the Schedule view's grid draw the same projection, and they
+ * are only *provably* the same while the games and the cadences under them are
+ * the same objects.
+ */
+export async function getSeasonRead(): Promise<SeasonRead> {
+  const { season, byPk, names } = await current();
+  return { season, byPk, names };
+}
+
+/**
+ * The cache entry, fetched if it is stale.
  *
  * **Keyed by the baseball day**, so the entry rolls over with the app's own
  * calendar rather than drifting off it: a window still keyed to yesterday would
  * quietly draw yesterday's first column for half an hour after 3am ET.
  */
-export async function getScheduleWindow(): Promise<ScheduleWindow> {
+async function current(): Promise<Entry> {
   const from = baseballToday();
   if (cached && cached.window.start === from && Date.now() - cached.fetchedAt < WINDOW_TTL) {
-    return cached.window;
+    return cached;
   }
   if (inFlight) return inFlight;
   const to = addDays(from, SCHEDULE_DAYS - 1);
-  inFlight = fetchWindow(from, to)
-    .then((window) => {
-      cached = { window, fetchedAt: Date.now() };
-      return window;
+  inFlight = fetchSeason(from, to)
+    .then((entry) => {
+      cached = entry;
+      return entry;
     })
     .catch((err: unknown) => {
       console.error('schedule window fetch failed:', err);
@@ -177,7 +315,7 @@ export async function getScheduleWindow(): Promise<ScheduleWindow> {
       // where a throw costs the view its whole table. With nothing cached at
       // all the throw stands and `asyncRoute` answers 502, which is what the
       // client's own error line is for.
-      if (cached) return cached.window;
+      if (cached) return cached;
       throw err;
     })
     .finally(() => {
