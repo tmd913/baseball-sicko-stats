@@ -402,7 +402,12 @@ function PitcherGameBlock({
           {/* The lineup on the other side. Once he's thrown a pitch this is
               background rather than the headline, so it sits under the outing
               itself and collapses like every section around it. */}
-          <OpponentSection game={game} throws={throws} collapsible />
+          <OpponentSection
+            hitting={game.opponentHitting}
+            opponent={game.opponent}
+            hand={game.stand ?? throws ?? null}
+            collapsible
+          />
 
           {/* Arsenal: velo/spin/break per pitch type, vs season & league */}
           <ArsenalSection pg={pg} />
@@ -602,7 +607,11 @@ export function PitcherCard({
                   </div>
                 </div>
               )}
-              <OpponentSection game={g} throws={report.throws} />
+              <OpponentSection
+                hitting={g.opponentHitting}
+                opponent={g.opponent}
+                hand={g.stand ?? report.throws ?? null}
+              />
             </div>
           ))}
       </div>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import {
   formatStartTime,
@@ -18,10 +18,13 @@ import type {
   ProjectedStart,
   ProjectedStarts,
   SeasonStats,
+  TeamHitting,
 } from '../types';
 import { useDelayedFlag } from '../hooks';
-import { LoadingLine } from './Loading';
+import { LoadingBlock, LoadingLine } from './Loading';
 import { GameLogPreview } from './GameLog';
+import { Modal } from './Modal';
+import { OpponentSection } from './OpponentTable';
 import { NewsList } from './PlayerNews';
 import { PlayerDay, playerDayLine } from './PlayerDay';
 
@@ -155,7 +158,9 @@ export function OverviewTab({
 
       {/* Second, because "when does he pitch next" is the forward half of the
           question the block above answers — see this file's own head. */}
-      {wantStart && <ProjectedStartsBlock playerId={playerId} name={name} />}
+      {wantStart && (
+        <ProjectedStartsBlock playerId={playerId} name={name} throws={report.throws} />
+      )}
 
       <NewsPreview
         news={news}
@@ -510,16 +515,41 @@ function NextGameBlock({ playerId, name }: { playerId: number; name: string }) {
  * warm answer never flashes a wait, and the spinning baseball over a line naming
  * what is being read.
  */
-function ProjectedStartsBlock({ playerId, name }: { playerId: number; name: string }) {
+/**
+ * What this block knows about one opposing club's season line: nothing yet, a
+ * read in flight, a read that threw, or an answer — which may itself be `null`,
+ * the server's honest "no board for that club".
+ */
+type OppRead = { board?: TeamHitting | null; loading?: boolean; error?: boolean };
+
+function ProjectedStartsBlock({
+  playerId,
+  name,
+  throws,
+}: {
+  playerId: number;
+  name: string;
+  /** His own throwing hand, which decides which row of the opponent table is
+   *  accented. A start nobody has played has no `game.stand` to read it off. */
+  throws: string | null;
+}) {
   const [info, setInfo] = useState<ProjectedStarts | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const wait = useDelayedFlag(loading);
+  // One opposing club's season line per team id, read on the press that opens a
+  // row and then held for the life of the block — see `loadOpponent`.
+  const [opps, setOpps] = useState<Record<number, OppRead>>({});
+  const asked = useRef<Set<number>>(new Set());
   useEffect(() => {
     let live = true;
     setLoading(true);
     setInfo(null);
     setFailed(false);
+    // A different pitcher is a different list of clubs; the ids would collide
+    // harmlessly (a team's line is a team's line) but the block is about him.
+    asked.current = new Set();
+    setOpps({});
     api
       .projectedStarts(playerId)
       .then((d) => {
@@ -537,6 +567,34 @@ function ProjectedStartsBlock({ playerId, name }: { playerId: number; name: stri
       live = false;
     };
   }, [playerId]);
+
+  /**
+   * **Lazily, on the press, and held.** Five rows against up to five clubs, and
+   * a reader who opens none of them should cost the server nothing — so nothing
+   * is read until a row is pressed. The answer is kept at *block* level rather
+   * than inside the row so that a three-game series (two starts against one
+   * club) costs one read, and so that closing a dialog and reopening it costs
+   * none.
+   *
+   * **The mark comes off on failure**, which is the one departure from the rule
+   * this codebase states at length elsewhere — *never mark a request answered
+   * before it is answered*. Here the mark says "asked", the answer always lands
+   * (this is a press handler, not an effect with a cleanup that could discard
+   * it), and unmarking in the `catch` is what makes the dialog's `Try again`
+   * a retry rather than a no-op.
+   */
+  const loadOpponent = useCallback((teamId: number) => {
+    if (asked.current.has(teamId)) return;
+    asked.current.add(teamId);
+    setOpps((p) => ({ ...p, [teamId]: { loading: true } }));
+    api
+      .teamHitting(teamId, 'season')
+      .then((board) => setOpps((p) => ({ ...p, [teamId]: { board } })))
+      .catch(() => {
+        asked.current.delete(teamId);
+        setOpps((p) => ({ ...p, [teamId]: { error: true } }));
+      });
+  }, []);
 
   const starts = info?.starts ?? [];
   const note = headNote(info, starts, name);
@@ -565,7 +623,14 @@ function ProjectedStartsBlock({ playerId, name }: { playerId: number; name: stri
       {starts.length > 0 ? (
         <ol className="start-list">
           {starts.map((s) => (
-            <StartRow key={s.gamePk} start={s} />
+            <StartRow
+              key={s.gamePk}
+              start={s}
+              name={name}
+              throws={throws}
+              opp={opps[s.opponentId]}
+              onLoad={loadOpponent}
+            />
           ))}
         </ol>
       ) : wait ? (
@@ -664,32 +729,167 @@ function refusalText(info: ProjectedStarts | null, failed: boolean, name: string
  * cell and the feed's Upcoming bar cut theirs. The full name is on the row's
  * tooltip.
  */
-function StartRow({ start }: { start: ProjectedStart }) {
+function StartRow({
+  start,
+  name,
+  throws,
+  opp,
+  onLoad,
+}: {
+  start: ProjectedStart;
+  name: string;
+  throws: string | null;
+  /** What the block has learned about this club, if anything yet. */
+  opp: OppRead | undefined;
+  onLoad: (teamId: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
   const when = prettyGameDate(start.date);
   const time = formatStartTime(start.startTime);
-  const opp = `${start.home ? 'vs' : '@'} ${start.opponent}`;
+  const matchup = `${start.home ? 'vs' : '@'} ${start.opponent}`;
   const sp = start.probablePitcher;
-  return (
-    <li
-      className={`start-row${start.announced ? ' start-row--announced' : ' start-row--projected'}`}
-      title={
-        (start.announced
-          ? `Announced by his club: ${when}${time ? ` at ${time}` : ''} ${opp}`
-          : `Projected from his rotation slot — nobody has named this start yet: ${when} ${opp}`) +
-        (sp ? ` · against ${handThrows(sp.hand)} ${sp.name}` : '')
-      }
-    >
+
+  // **A row with nothing behind it is not a press**, which is the feed's own
+  // rule (`expandable = !!game.opponentHitting`) arriving one read later. There
+  // it is decided up front because the report already carries the line; here it
+  // cannot be known until the club has been read, so a row goes static only once
+  // the server has answered *with no board for that club* — the state
+  // `getTeamHitting` returns for a team its own board has no row for. A read
+  // that **threw** keeps the press, since a retry is a different thing from an
+  // absence and the dialog offers one.
+  const known = opp !== undefined && 'board' in opp;
+  const expandable = !(known && opp.board == null);
+
+  const title =
+    (start.announced
+      ? `Announced by his club: ${when}${time ? ` at ${time}` : ''} ${matchup}`
+      : `Projected from his rotation slot — nobody has named this start yet: ${when} ${matchup}`) +
+    (sp ? ` · against ${handThrows(sp.hand)} ${sp.name}` : '') +
+    (expandable ? ' · open to see how that lineup has hit' : '');
+
+  // The line itself, drawn the same whether or not it is a press: the row's own
+  // muting and its `Announced` / `Projected` tag already say what kind of fact
+  // it is, and a second treatment for "you can open this" would be a third.
+  const line = (
+    <>
       <span className="ovw-next-when">
         {when}
         {time ? ` · ${time}` : ''}
       </span>
-      <span className="ovw-next-opp">{opp}</span>
+      <span className="ovw-next-opp">{matchup}</span>
       {sp && (
         <span className="ovw-next-vs">
           vs {handThrows(sp.hand)} {surname(sp.name)}
         </span>
       )}
       <span className="start-tag">{start.announced ? 'Announced' : 'Projected'}</span>
+    </>
+  );
+
+  return (
+    <li
+      className={`start-row${start.announced ? ' start-row--announced' : ' start-row--projected'}`}
+    >
+      {expandable ? (
+        // No caret: the row is the affordance, which is the rule this app
+        // restates wherever a bar opens something (see `pitchers.md`).
+        <button
+          type="button"
+          className="start-line"
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          title={title}
+          onClick={() => {
+            onLoad(start.opponentId);
+            setOpen(true);
+          }}
+        >
+          {line}
+        </button>
+      ) : (
+        <div className="start-line static" title={title}>
+          {line}
+        </div>
+      )}
+      {/* `open` alone rather than `expandable && open`, which is not the tidier
+          spelling of the same thing: the answer that makes a row static arrives
+          *while its own dialog is up*, so gating on both unmounted the box in
+          front of the reader the moment the read landed — a press that flashed
+          and shut with nothing said. Only a press can set `open`, and a static
+          row has none, so the two states cannot contradict each other. */}
+      {open && (
+        <Modal
+          title={`${name} — ${when} ${matchup}`}
+          titleId={`start-opponent-${start.gamePk}`}
+          className="play-detail-box"
+          onClose={() => setOpen(false)}
+        >
+          <div className="start-detail">
+            {/* **A projected row's dialog must not read as a claim about a game
+                he has been named for.** The row says `Projected` and goes muted;
+                inside the box that context is gone, so the sentence is repeated
+                where the reader is — and it says what the lineup below it *is*,
+                which is who he would face rather than who he will. An announced
+                row needs none of it: his club has named him. */}
+            {!start.announced && (
+              <p className="ovw-none">
+                Projected from his rotation slot — nobody has named this start yet, so this is the
+                lineup he <em>would</em> face.
+              </p>
+            )}
+            <StartOpponent opp={opp} start={start} throws={throws} onRetry={onLoad} />
+          </div>
+        </Modal>
+      )}
     </li>
   );
+}
+
+/**
+ * The dialog's body: the same `OpponentSection` a pitcher's Upcoming row opens
+ * in the feed, over the club's season line once it has landed.
+ *
+ * **The same component rather than a thinner one**, which is the whole point of
+ * the change — nine cuts, three rows, ten columns, the span and venue controls
+ * and the accented hand row are drawn once in the app and read the same wherever
+ * a pitcher's opponent is. What this caller supplies that the feed's does not is
+ * the *season* board itself, there being no `PlayerGame` here to have carried it.
+ *
+ * The three states before the table are the app's own loading discipline:
+ * nothing at all under `WAIT_DELAY` (a club already read comes back in a tick,
+ * and a wait that flashes reads as the page breaking), then the block wait, then
+ * an error line with the retry the press has to offer — the row behind the
+ * dialog being `inert` while it is open, so there is nowhere else to put one.
+ */
+function StartOpponent({
+  opp,
+  start,
+  throws,
+  onRetry,
+}: {
+  opp: OppRead | undefined;
+  start: ProjectedStart;
+  throws: string | null;
+  onRetry: (teamId: number) => void;
+}) {
+  const board = opp && 'board' in opp ? opp.board : undefined;
+  const waiting = useDelayedFlag(board === undefined && !opp?.error);
+  if (board) {
+    return <OpponentSection hitting={board} opponent={start.opponent} hand={throws} />;
+  }
+  if (opp?.error) {
+    return (
+      <div className="details-error opp-status">
+        Couldn&rsquo;t read the opponent&rsquo;s line.{' '}
+        <button type="button" className="ovw-link" onClick={() => onRetry(start.opponentId)}>
+          Try again
+        </button>
+      </div>
+    );
+  }
+  // A board that came back `null` — the server has no row for that club. The row
+  // behind this dialog goes static on the same answer, so this is what a reader
+  // sees once and never again.
+  if (board === null) return <div className="opp-status">No line for {start.opponent}.</div>;
+  return waiting ? <LoadingBlock>Reading the opponent&rsquo;s line</LoadingBlock> : null;
 }

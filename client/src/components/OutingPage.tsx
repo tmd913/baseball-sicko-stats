@@ -200,7 +200,18 @@ export function OutingPage({
           {tab === 'innings' && (
             <InningsList game={game} pitcherId={report.id} pitcherName={report.name} />
           )}
-          {tab === 'opponent' && <OpponentSection game={game} throws={report.throws} bare />}
+          {tab === 'opponent' && (
+            <OpponentSection
+              hitting={game.opponentHitting}
+              opponent={game.opponent}
+              // A team's split is by the hand they faced, and before he has thrown a
+              // pitch the game has no `stand` — so his report's hand stands in. The
+              // fallback is the caller's because only a caller knows whether it has a
+              // game to read a `stand` off; see `OpponentBody`.
+              hand={game.stand ?? report.throws ?? null}
+              bare
+            />
+          )}
           {tab === 'arsenal' && <ArsenalSection pg={pg} bare />}
         </div>
       </div>
