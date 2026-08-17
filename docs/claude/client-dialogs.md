@@ -35,7 +35,7 @@ are in `client-player-page.md`; the feed items that open into these dialogs are 
 
 **Measured, and the bundle barely moved**: **436.13 → 436.64 KB** of JS (129.23 gzipped either way) and **96.75 → 96.64 KB** of CSS (17.33 → 17.29 gzipped) — a net *loss* of CSS, and of gzipped CSS, for a change that removed two rule blocks and a float button and added three.
 
-**Driven in a browser at 1200×900 and 390×844** against a real roster and a live slate, and with `sim=1` for the live states: the at-bat dialog (title `Pete Crow-Armstrong — Strikeout · Top 9`, 800px box at 1200 and 358 at 390, pitch table and strike zone both in it), the live at-bat's (`Willson Contreras — In Progress · Top 9`), the outing's (innings `1st…5th`, `Full breakdown` under them), a base event's (`Stole 2nd · Bot 5 · Dylan Crews`, with its clip), an Upcoming row's (`Pete Crow-Armstrong — CHC vs STL` over the vs-LHP split), the Overview tab's game card and its dialog, and the Game Log's row popup for a batter (plays `2, 4, 6, 8`) and a pitcher (a **static** outing bar over innings `1st…5th`). No horizontal overflow of the page body at either width in any state.
+**Driven in a browser at 1200×900 and 390×844** against a real roster and a live slate, and with `sim=1` for the live states: the at-bat dialog (title `Pete Crow-Armstrong — Strikeout · Top 9`, 800px box at 1200 and 358 at 390, pitch table and strike zone both in it), the live at-bat's (`Willson Contreras — In Progress · Top 9`), the outing's (innings `1st…5th`, `Full breakdown` under them), a base event's (`Stole 2nd · Bot 5 · Dylan Crews`, with its clip), an Upcoming row's (`Pete Crow-Armstrong — CHC vs STL` over the vs-LHP split), the Overview tab's game card and its dialog, and the Game Log's row popup for a batter (plays `2, 4, 6, 8`) — a pitcher's row opened the same popup then, over a **static** outing bar and innings `1st…5th`, and opens the outing page itself now. No horizontal overflow of the page body at either width in any state.
 
 ### A popup covers the pointer and had to be made to cover the keyboard
 
@@ -106,14 +106,22 @@ host it was written inside.** `OutingPage` is the first that is neither: it is a
 `useOverlayFocus`, `answersEscape`, a `BackButton` and a pinned head — and its
 z-index is read from `DialogLayerContext` like a dialog's.
 
-**It has to be, because the control that opens it is drawn at four depths.** A
-pitcher's outing bar appears in the feed stream (nothing above it), on a matchup
-team page (`.mup-view`, 48), inside the player page's Overview tab behind a game
-dialog (51), and inside the Game Log's per-game popup (also 51, inside the
-player page at 50). A fixed z-index serves none of those four: `.details-view`'s
-own 50 would sit *under* the popup that opened it. So the page takes `host + 1`
-— **46 / 49 / 52 / 52** — and provides its own layer downward, so the inning
-dialog inside it climbs one more and a faced batter one more again.
+**It has to be, because the control that opens it is drawn at three depths.** A
+pitcher's outing is reached from the feed stream (nothing above it), from a
+matchup team page (`.mup-view`, 48), and from inside the player page (50) —
+where the Overview tab's game card and a Game Log row both open it directly. A
+fixed z-index serves none of those three: `.details-view`'s own 50 would sit
+level with the page it is opened from. So it takes `host + 1` — **46 / 49 /
+51** — and provides its own layer downward, so the inning dialog inside it
+climbs one more and a faced batter one more again.
+
+**It was four depths and the two deepest were the same one twice.** Both
+player-page routes used to go through `PlayerDayModal` at 51, so the page opened
+at **52** with a box in between holding a static outing bar and nothing else;
+for a pitcher that popup is not drawn at all now, which took a rung off each and
+a case off this list. See **Client — the player page**, *A pitcher's game opens
+the outing, not a box in front of it*. A **batter's** game is still a feed and
+still a dialog, so `PlayerDayModal` and its 51 are exactly where they were.
 
 **`.outing-view` is therefore in `OVERLAYS`, and it is the one member of that
 list whose number is not in the stylesheet.** `layerOf` walks up reading the
@@ -129,14 +137,14 @@ a page opened from inside a dialog does.
 rather than about this ladder: `.app-dialog-body` declares `container-type:
 inline-size` for the plate-appearance detail's own container queries, and layout
 containment makes a box a containing block for `position: fixed` descendants —
-so a page rendered where the Game Log's popup draws its outing would be laid out
-inside that popup.
+so a page rendered inside any of them — as the Game Log's popup drew its outing
+until that route became the page itself — would be laid out inside that dialog.
 
-**Driven from all four entry points at 1200×900 and 390×844**, one press of
+**Driven from every entry point at 1200×900 and 390×844**, one press of
 Escape undoing one thing at every rung, the top box never itself inert, and no
 `inert` attribute surviving any of them: feed **46 → 47 → 48**; matchup team
-page **48 → 49 → 50**; Overview tab **50 → 51 → 52**; Game Log popup **50 → 51
-→ 52 → 53 → 54** (five presses). Focus is handed back at each step — checked
+page **48 → 49 → 50**; and the player page's Overview tab and Game Log alike
+**50 → 51 → 52 → 53** (four presses, where the Game Log's was five). Focus is handed back at each step — checked
 with a real dispatched mouse press, since `HTMLElement.click()` does not focus
 its target and so restores to the body, which is a property of the test rather
 than of the hook.

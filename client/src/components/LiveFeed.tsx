@@ -29,7 +29,6 @@ import { InlineVideoClip, PlateAppearanceCard } from './PlateAppearanceCard';
 import { BatterSplitsTab } from './PlatoonSplits';
 import { OpponentSection, PitchingTag, outingBar } from './PitcherCard';
 import { OutingPage } from './OutingPage';
-import { InningsList } from './Innings';
 
 /** How many stream items the Recent section shows at a time — a day of at-bats
  * across a roster runs to hundreds, and every one of them mounts a card. */
@@ -586,7 +585,6 @@ function FeedPitcherGame({
   onOpenDetails,
   grouped = false,
   multiGame = false,
-  detailInline = false,
 }: {
   report: PlayerReport;
   game: PlayerGame;
@@ -601,32 +599,17 @@ function FeedPitcherGame({
    * it does, the matchup is the only thing saying which game a play belongs to
    * (the game blocks that used to say it went with the Games view). */
   multiGame?: boolean;
-  /** Draw the innings under the bar instead of behind a press.
-   *
-   * A press is right in the *stream*, where an outing is one item among dozens
-   * and its innings are several screens of them. It was wrong inside a box that
-   * is already about this one game — the Game Log's per-game popup — where a
-   * press opened a second dialog holding the only thing the first one had to
-   * show. Same reasoning as `grouped` one line up: a container that has already
-   * said something does not make its contents say it again.
-   *
-   * **The press opens more than the box holds now, so the original argument no
-   * longer reaches the whole of it**, and the honest reading is the one the
-   * Overview tab's own five-game preview already makes: the popup's innings are
-   * a *preview* — one of the outing page's four readings, drawn where the reader
-   * already is — and the page under `Full breakdown` is the whole. That is
-   * exactly the relationship `GameLogTable` has with itself (`shown={5}` on the
-   * Overview against the tab's paging 25), and the same answer: the narrow
-   * reading stays where it is and the door beside it goes to the wide one. The
-   * alternative — dropping the inline innings so the popup is a bar and a press
-   * — makes the popup a shim, which is a worse thing for a reader to meet than
-   * a list they will see again. */
-  detailInline?: boolean;
+  /* There was a third prop here — `detailInline`, which drew the innings under
+     a *static* bar with a `Full breakdown` button through to the page, for the
+     one box that was already about this game: the Game Log's per-game popup.
+     That popup is gone for a pitcher (a row opens the outing page directly, see
+     `useGameOpen`), so the flag had no reader left and went with it, along with
+     `.feed-item-toggle.static` and the button's own rule. The bar is always a
+     press now, which is what it always was everywhere a reader could see it. */
 }) {
   const pg = game.pitching!;
-  // Whether the outing page is open over everything. One flag for both routes
-  // in — the bar in the stream, and the `Full breakdown` door under the inline
-  // innings — since it is one page either way.
+  // Whether the outing page is open over everything. The bar is the one route
+  // in, everywhere this item is drawn.
   const [open, setOpen] = useState(false);
   // The rail. Every other item shape in this feed groups itself with one — the
   // outcome's colour on an at-bat, the role's on a live entry, the event's on a
@@ -644,25 +627,6 @@ function FeedPitcherGame({
   // is what says a group is happening now, and a decision he hasn't got yet is
   // the lesser fact.
   const rail = role ? undefined : { borderLeftColor: decisionColor(pg.decision) };
-  // The innings and the way to the whole outing — drawn under the bar in a box
-  // that is already about this game, where the bar itself is the door
-  // everywhere else.
-  const body = (
-    <>
-      <InningsList game={game} pitcherId={report.id} pitcherName={report.name} />
-      {/* Below the innings rather than on the bar above them: the bar is
-          static in this mode precisely because the box has already named the
-          game, so the door is where a reader wanting more detail already is. */}
-      <button
-        type="button"
-        className="outing-breakdown-btn"
-        onClick={() => setOpen(true)}
-        title={`${report.name} — the full line, the lineup he faced and his arsenal for this outing`}
-      >
-        Full breakdown
-      </button>
-    </>
-  );
   return (
     <div
       className={`feed-item feed-pitcher${role ? ` live-entry role-${role}` : ' feed-outing'}`}
@@ -699,23 +663,18 @@ function FeedPitcherGame({
       {/* The card under that header: tags and the line, and the whole bar is the
           control — the batter's `PlateAppearanceCard` in the same slot. It holds
           no links, so every pixel of it opens the outing. */}
-      {detailInline ? (
-        <div className="feed-item-toggle static">{outingBar(game, pg)}</div>
-      ) : (
-        <button
-          type="button"
-          className="feed-item-toggle"
-          /* No `aria-haspopup` and no `aria-expanded`: what this opens is a
-             page rather than a popup, and it is not an expansion of this
-             element — the same reason the research board's row and the
-             scoreboard's card, which each open a page, carry neither. */
-          title="Open outing"
-          onClick={() => setOpen(true)}
-        >
-          {outingBar(game, pg)}
-        </button>
-      )}
-      {detailInline ? body : null}
+      <button
+        type="button"
+        className="feed-item-toggle"
+        /* No `aria-haspopup` and no `aria-expanded`: what this opens is a
+           page rather than a popup, and it is not an expansion of this
+           element — the same reason the research board's row and the
+           scoreboard's card, which each open a page, carry neither. */
+        title="Open outing"
+        onClick={() => setOpen(true)}
+      >
+        {outingBar(game, pg)}
+      </button>
       {open && <OutingPage report={report} game={game} onClose={() => setOpen(false)} />}
     </div>
   );
@@ -958,14 +917,11 @@ export function FeedItem({
   onOpenDetails,
   grouped = false,
   multiGame = false,
-  detailInline = false,
 }: {
   entry: FeedEntry;
   onOpenDetails: (key: string) => void;
   grouped?: boolean;
   multiGame?: boolean;
-  /** Only a pitcher's outing reads it — see `FeedPitcherGame`. */
-  detailInline?: boolean;
 }) {
   if (entry.type === 'base') {
     return (
@@ -987,7 +943,6 @@ export function FeedItem({
         onOpenDetails={onOpenDetails}
         grouped={grouped}
         multiGame={multiGame}
-        detailInline={detailInline}
       />
     );
   }

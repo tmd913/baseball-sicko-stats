@@ -32,31 +32,40 @@ the league it doesn't. Its items open into dialogs whose rules are in
   **Two events off one play are one item** (`groupBaseEvents`): a steal of home is a stolen base *and* a run, and the feed listed them twice — same line, same clip, one directly above the other — where it is one thing that happened. They are keyed on `playId`, the play event both were read off, with the timestamp standing in when a play has no clip id (every event of a play carries that play's `endTime`, which is why `playOrder` exists); an event with neither stays on its own rather than joining every other keyless one. Whatever moved him leads and the run follows, cause before effect, and each badge keeps its own tone — so the badge rules key off the **badge's** tone rather than the item's, while the rail splits at its middle in the same order. One badge per *kind*, and the meta line is merged and de-duplicated the same way, every event of one play naming the same battery and the same batter. Both of those were written for the pitcher's copy of a play as much as the runner's — one wild pitch that moves two runners is two events on his list — and only a runner's item survives to use them, his side of it being read inside his outing now; a runner's play is never two of the same kind, but a steal of home is genuinely two *kinds*, so the rule stands where it is. What went with the pitcher's item is the half of the naming rule that named the **runner** rather than the man on the mound, on the grounds that "off Luzardo" on a Luzardo item tells him nothing — and it is not really lost, being exactly what an inning row states when it names the runner and no pitcher at all. And because none of it opens, the grouping is a **rail rather than a box** (`.feed-base-item`): who it was, what happened and the clip of it are one thing to read, and they were three detached blocks — the name loose above a bordered panel, the video in a second box below. The rail runs the whole item, header to clip, the same device `.live-entry` uses and at the same 3px/11px. It is deliberately not a card: a box in this feed means something you can open.
 
 
-### `detailInline` keeps its innings, and its `Full breakdown` becomes a door
+### `detailInline` is gone, and the popup with it — for a pitcher
 
-**One caller of the outing item does not open anything: the Game Log's per-game
-popup.** `PlayerDay` passes `detailInline` there, and what that means is exactly
-what it says — a box that is already about one game has no business asking for a
-second press to reach the only thing in it, so the bar goes static
-(`.feed-item-toggle.static`) and the innings read underneath.
-
-**With the outing now a page rather than a dialog, that case had two answers and
-the quieter one is right.** The alternative was to drop the inline innings and
-make the popup a bar with a press on it, which would have been tidy — one shape
-everywhere — and would have made the popup a **shim**: a dialog whose whole
+**This reverses the section that stood here, and the reversal is worth reading
+rather than deleting.** What it said was: *one caller of the outing item does not
+open anything — the Game Log's per-game popup, where `PlayerDay` passes
+`detailInline`, so the bar goes static (`.feed-item-toggle.static`) and the
+innings read underneath; the alternative was to drop the inline innings and make
+the popup a bar with a press on it, which would have been tidy — one shape
+everywhere — and would have made the popup a **shim**, a dialog whose whole
 content is a control opening a second box, on a row the reader has already
-pressed once to get there.
+pressed once to get there.*
 
-**So the popup keeps its innings and its `Full breakdown` button becomes the door
-to the page**, which is the same split `GameLogTable` already makes for its own
-two drawings: five rows on the Overview tab's preview against the paging tab, one
-component with `shown` set differently. The popup's innings are the preview and
-the page is the whole; the button is the way from one to the other, and it is now
-the only place in the app that button survives.
+**It was right about the shim and wrong about which box to keep.** It took the
+popup as given and asked what should be *in* it; asked the other way — what
+should the row **open** — the answer is the page, and the popup is a shim
+whichever way it is filled. For a pitcher it was a box holding one static bar
+over a list of innings, in front of a page holding that same list under a tab
+strip with the Line, the Opponent and the Arsenal beside it. A Game Log row and
+an Overview game card now open the page directly; see **Client — the player
+page**, *A pitcher's game opens the outing, not a box in front of it*, for the
+whole of that argument and its measurements.
 
-**Measured**: the popup draws its 6 inline inning bars and exactly **1**
-`.outing-breakdown-btn`, and pressing it opens the page at **52** over the popup
-at 51 and the player page at 50 — five Escape presses to unwind, one thing each.
+**So `detailInline` has no caller and is gone**, which is the rule this repo
+already applies to `teamProbablePitcher` — *a field nobody reads is a field
+nobody misses*. Three things went with it: `.feed-item-toggle.static`, which
+nothing sets any more; the `Full breakdown` button, the door having become the
+row; and `.outing-breakdown-btn`'s rules. Measured app-wide after, at both
+widths: **0** `.feed-item-toggle.static` and **0** `.outing-breakdown-btn`.
+
+**The feed's own item is untouched**, and is what it always was — a bar that
+opens the page. Its ladder is unchanged: outing **46** → inning 47 → faced
+batter 48, one press of Escape per rung, `#root` inert throughout. So is a
+matchup team page's feed, where the same bar opens the page at **49** over
+`.mup-view`'s 48, unwinding page → matchup on two presses.
 
 ### The Upcoming dialog is the Splits card, and it names the man in full
 
