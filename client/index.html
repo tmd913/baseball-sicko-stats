@@ -44,7 +44,15 @@
          place in the app a palette colour is written outside the stylesheet.
 
          Deliberately inline, blocking and tiny: it has to have finished before
-         the first paint, and a failed read simply leaves the default. -->
+         the first paint, and a failed read simply leaves the default.
+
+         It paints the **root**, and `styles.css` clears the root again
+         (`html { background: none }`) so that the real background — which is
+         `body`'s, and is propagated to the canvas only while the root has none
+         — takes over the whole window the moment the stylesheet lands. Without
+         that clearing this paint outlives its purpose and clips the page's
+         gradient to the height of its content; the rule beside it says so at
+         length. -->
     <script>
       (function () {
         var BG = { midnight: '#0b1220', lavender: '#f3f1f8' };
