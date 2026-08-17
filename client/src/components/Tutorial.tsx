@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { answersEscape, useLockBodyScroll, useOverlayFocus } from '../hooks';
+import { BackButton } from './BackButton';
 
 /**
  * The how-to page: a full-screen overlay in the same shape as PlayerDetails —
@@ -845,22 +846,7 @@ export function Tutorial({ onClose }: { onClose: () => void }) {
   return (
     <div className="details-view tutorial-view" ref={scrollRef} tabIndex={-1}>
       <div className="tut-head">
-        <button type="button" className="details-back" onClick={onClose}>
-          <svg
-            viewBox="0 0 24 24"
-            width="18"
-            height="18"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-          Back
-        </button>
+        <BackButton onClose={onClose} />
         <div className="tut-title-block">
           <h1 className="tut-title">
             How to use <span className="brand-sicko">Statcast Sicko</span>

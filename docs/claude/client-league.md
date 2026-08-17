@@ -936,6 +936,21 @@ stacking test both consults it and sees it. Measured: the player page at 50 over
 the matchup at 48 with the matchup `inert`, one press of Escape closing the
 player and a second closing the matchup, `mup=` cleared and no `inert` left.
 
+**The Back button is the app's own**, which it looked like and was not. Four
+overlays — the player page, the how-to page, the ESPN league page and the
+highlight reel — carried an inline SVG chevron copied between them, and this
+page carried the text `‹ Back` under the same `.details-back` class: measured, a
+**65.03 × 31** button beside an **80.08 × 34** one, a different width and a
+different *height*, an 18px icon's line box being taller than a text glyph's.
+That class's padding (`7px 14px 7px 10px`, less on the leading side) is written
+for an icon, so the text one was sitting in a box tuned for something it hadn't
+got. It is `components/BackButton.tsx` now and all five draw it — extracted
+rather than fixed in place, the rule that pulled `Modal` out of the Columns
+dialog and `InfoKey` out of the Splits card, four copies of an eight-line path
+being four chances for the next change to reach three of them. Re-measured,
+every one of the five is **80.08 × 34**; the head's bar grows 43 → 46px with the
+taller button (74 → 77 at 320, where it wraps) and nothing overflows.
+
 **No week selector and no matchup picker**, which were both controls over
 *which matchup* — a question this page no longer asks, being opened on one from
 the board that lists them all. The week is **printed** rather than navigable

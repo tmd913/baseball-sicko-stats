@@ -5,6 +5,7 @@ import { eventLabel, outcomeKind } from '../lib';
 import { answersEscape, useLockBodyScroll, useOverlayFocus } from '../hooks';
 import { ClipVideo } from './ClipVideo';
 import { LoadingBlock, SpinningBaseball } from './Loading';
+import { BackButton } from './BackButton';
 
 /** A resolved clip in the reel: its playable URL plus the caption metadata. */
 interface ReelClip {
@@ -130,22 +131,7 @@ export function GameReel({
   return (
     <div className="reel-view" ref={viewRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`${title} — highlights`}>
       <div className="reel-head">
-        <button type="button" className="details-back" onClick={onClose}>
-          <svg
-            viewBox="0 0 24 24"
-            width="18"
-            height="18"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-          Back
-        </button>
+        <BackButton onClose={onClose} />
         <div className="reel-id">
           <span className="reel-title">{title}</span>
           <span className="reel-sub">{subtitle} · Highlights</span>
