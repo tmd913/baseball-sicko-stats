@@ -72,6 +72,14 @@ really is a pitch thrown more often.
 place**, which is Savant's own move. The middle column is a fixed width, so
 nothing either side of it shifts while that happens.
 
+**It is drawn tight.** The table is five rows of one number each and had been
+laid out like a card — a 26px badge in a 36px row, 13px figures, a 22px bar —
+which spent most of a screen saying very little. At a 22px badge in a **26px**
+row, 12px figures and an 18px bar it says the same thing in **177px against
+228**, and the chart under it comes up the page by the difference. Nothing was
+removed to get there: the same five rows, the same three columns, the same
+figures.
+
 **The badge's ink is computed, not chosen** (`inkOn`). The palette spans a
 crimson four-seamer and a near-yellow slider, so no single ink serves it — white
 on `#c9b200` measures **2.0:1**, well under what an 11px bold badge owes
@@ -152,6 +160,28 @@ so `Usage` lines up with the usage figures without either side hard-coding the
 other's height. The labels **stay on a phone**, at a smaller size: three
 unlabelled numbers under a swatch are not a legend.
 
+**A column is headed by the pitch's abbreviation, and by its whole name when it
+is the one being read.** Five full names across a 470px chart wraps `4-Seam
+Fastball` onto two lines and pushes the numbers under it apart, and only one
+column is ever the answer to a question — so `FF` at rest and `4-Seam Fastball`
+selected, which is the move the usage badge already makes one chart up. The full
+name is **absolutely placed**, so the grid holds still while it appears and it is
+free to overhang the columns either side, which are dimmed at that moment anyway.
+Checked at the narrowest width the app draws: at 320px every one of the five
+names stays inside both the chart and the viewport when selected (`4-Seam
+Fastball` runs x=34…123 of a 16…304 chart), and a name forced longer than any in
+the vocabulary still fits.
+
+**The abbreviation is *not* in the pitch's own colour**, which is worth writing
+down because it is the obvious thing to try and it cannot be made to work. That
+palette is built to be a **fill** with computed ink over it (`inkOn`); as *text*
+it fails on one scheme or the other for nearly every pitch — measured against the
+two page grounds, **6 of 9 land under 3:1 on Lavender** (the slider at 1.90, the
+curve at 1.65) **and FC and KC under 3:1 on Midnight**, with no value clearing
+4.5:1 in both. There is no per-pitch colour that reads on both themes, so the
+abbreviation takes the app's own ink and the swatch directly below it carries the
+colour, which is what a legend swatch is for.
+
 **An `InfoKey` carries what the chart cannot say for itself** — that the rings
 are inches, that the vertical axis is *induced* break rather than total drop,
 and what the hatching means. The app's own disclosure, for that component's
@@ -204,8 +234,9 @@ title.
 900 / 1400: **0 horizontal overflow of the page body and of the player-page view
 at every width**, 0 clipped cells in either chart, the legend's row labels drawn
 at every one, and **the plot's top identical before and after selecting a
-pitch** at all six (659 / 603 / 576 / 576 / 522 / 522 with the tab stripped to
-the charts; 698 / 642 / 615 / 615 / 561 / 561 before it was). The SVG is 288px at 320
+pitch** at all six (570 / 516 / 489 / 489 / 435 / 435 once the usage table was
+condensed; 659 / 603 / 576 / 576 / 522 / 522 before that, and 698 / 642 / 615 /
+615 / 561 / 561 when the tab still carried the rows and the split control). The SVG is 288px at 320
 and caps at 470. 246 dots, 5 usage rows, 5 legend columns on a five-pitch
 arsenal; the split tabs cut the cloud to **146 dots vs LHB and 100 vs RHB**,
 matching the `stand` counts on the wire, with the legend re-sorting to that
@@ -222,8 +253,8 @@ with nothing dimmed: 246 dots and 5 hatched blobs on a five-pitch right-hander,
 lights one type and dims the rest (26/246 dots, 1/5 blobs, the AVG marker in);
 deselecting restores all 246 with the marker gone.
 
-**Bundle: 529.65 → 537.12 KB of JS** (156.66 → 159.06 gzipped) and **134.44 →
-140.40 KB of CSS** (23.64 → 24.81) — 7.5KB and 6.0KB raw, 2.4KB and 1.2KB over
+**Bundle: 529.65 → 537.27 KB of JS** (156.66 → 159.08 gzipped) and **134.44 →
+140.71 KB of CSS** (23.64 → 24.86) — 7.6KB and 6.3KB raw, 2.4KB and 1.2KB over
 the wire, for two charts, a shared selection, an explainer and the paragraphs
 above restated where the rules are; stripping the rows and the split plumbing
 gave 2.4KB of it back.
