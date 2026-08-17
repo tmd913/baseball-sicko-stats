@@ -68,6 +68,7 @@ import type { FantasySlot } from './hooks';
 import { LoadingBlock, LoadingLine, SpinningBaseball } from './components/Loading';
 import { Tutorial } from './components/Tutorial';
 import { EspnSettings } from './components/EspnSettings';
+import { LeagueOnboarding } from './components/LeagueOnboarding';
 import LeagueView, { LEAGUE_TABS } from './components/LeagueView';
 import LeagueMatchupView from './components/LeagueMatchup';
 import { spanDetail } from './components/LeagueRankings';
@@ -1203,6 +1204,14 @@ export default function App() {
   const [seenTx, setSeenTx] = useState<{ leagueId: number; ts: number } | null>(null);
 
   const [espnOpen, setEspnOpen] = useState(false);
+  /**
+   * The invite-link onboarding page — the league you have just joined, its
+   * teams, and one button. Deliberately its own flag rather than a mode of
+   * `espnOpen`: they are two different pages for two different people (see
+   * `LeagueOnboarding`), and the settings page is the one thing an invited
+   * user should *not* be dropped into.
+   */
+  const [espnOnboard, setEspnOnboard] = useState(false);
   const [espnStatus, setEspnStatus] = useState<EspnStatus | null>(null);
   const [ownership, setOwnership] = useState<EspnOwnership | null>(null);
   const [espnLoading, setEspnLoading] = useState(false);
@@ -1261,12 +1270,18 @@ export default function App() {
       .then((s) => {
         if (cancelled) return;
         setEspnStatus(s);
-        setEspnOpen(true);
+        // The onboarding page, not the settings page: what this reader has to
+        // do is name their team, and everything else on that page is written
+        // for whoever connected the league in the first place.
+        setEspnOnboard(true);
       })
       .catch((e: Error) => {
         if (cancelled) return;
-        // Opened anyway, with the reason: an expired link that does nothing at
-        // all leaves someone staring at an app that ignored what they clicked.
+        // A link that didn't work is not an onboarding flow — there is no
+        // league to name a team in — so this falls back to the settings page
+        // with the reason on it, which is also the way to connect one by hand.
+        // An expired link that does nothing at all leaves someone staring at an
+        // app that ignored what they clicked.
         setEspnJoinError(e.message);
         setEspnOpen(true);
       })
@@ -4656,6 +4671,19 @@ export default function App() {
           onStatusChange={onEspnStatusChange}
           onRefresh={refreshFantasy}
           onClose={() => setEspnOpen(false)}
+        />
+      )}
+
+      {/* Last, so that at one layer it is over everything: an invite link is
+          the only thing that opens it, and it is the whole of what the person
+          who clicked one is shown. The settings page behind it is reachable
+          the moment it closes — from the fantasy button, where the rest of the
+          league's apparatus lives. */}
+      {espnOnboard && espnStatus?.connected === true && (
+        <LeagueOnboarding
+          status={espnStatus}
+          onStatusChange={onEspnStatusChange}
+          onDone={() => setEspnOnboard(false)}
         />
       )}
     </div>

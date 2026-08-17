@@ -10686,6 +10686,106 @@ button.start-line:focus-visible {
   font-size: 12.5px;
 }
 
+/* --- The invite-link onboarding page ------------------------------------- *
+
+   The page an invite lands on: a league name, a picker and a button. It rides
+   on the settings page's own parts — `.tut-head` for the head, `.espn-field`,
+   `.espn-select`, `.espn-submit` and `.espn-error` for the form — rather than a
+   second set that resembles them, so a form here is not a second look. What it
+   adds is only what a one-question page needs: the kicker over the league name,
+   and the quiet way out beside the button.
+
+   `z-index: 60` is the guide's and the settings page's, and this is rendered
+   after both, so at equal layers it is over them. It cannot in practice be open
+   with either — a join opens exactly one of the two — but a page whose whole
+   job is to be the first thing a new user sees should not depend on that. */
+.onboard-view {
+  padding: 0 0 64px;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+}
+/* Centred in the window rather than hung off the top of it. This page is one
+   question and its answer — some 340px of it on a desktop — and at the top left
+   of a 900px viewport that reads as a page whose rest failed to load, where the
+   two overlays it borrows from are long documents that top-align naturally.
+
+   `margin: auto 0` on the block rather than `justify-content: center` on the
+   box, and the difference is what happens when the content is taller than the
+   window: centring the *container* overflows equally in both directions, so the
+   top of the block goes above the scrollport's start and is unreachable — a
+   short phone in landscape would have lost the league's name. Auto margins in a
+   flex container resolve to 0 against negative free space, so this centres when
+   there is room and top-aligns when there isn't. */
+.onboard-inner {
+  margin: auto 0;
+  width: 100%;
+}
+/* No Back button in this head, unlike the three pages it borrows from: the
+   button below is the way on and `Not now` is the way out, and a chevron in the
+   corner of the first screen somebody sees would be a third answer to a
+   question they have not been asked yet. So the block leads rather than
+   sitting under a control. */
+.onboard-head {
+  padding-top: 34px;
+}
+.onboard-kicker {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+/* The league's name is the subject of the page rather than a page title, so it
+   is given the room a subject gets — a step over `.tut-title`, which heads a
+   guide whose chapters are the content. */
+.onboard-title {
+  font-size: clamp(26px, 6vw, 36px);
+  margin-bottom: 12px;
+}
+.onboard-body {
+  padding-top: 8px;
+  padding-bottom: 40px;
+}
+.onboard-field {
+  margin-bottom: 18px;
+}
+.onboard-actions {
+  margin-bottom: 22px;
+}
+.onboard-note {
+  max-width: 52ch;
+}
+/* The way out, and deliberately the quietest thing on the page: skipping leaves
+   the league connected and the team unnamed, which is a real state and a poor
+   default. Text on the page's own ground rather than a second button — an
+   outlined box beside the filled one reads as a choice between two things
+   rather than as an action and its escape hatch. */
+.espn-skip {
+  background: none;
+  border: none;
+  padding: 9px 4px;
+  min-height: var(--control-h);
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.14s ease;
+}
+.espn-skip:hover:not(:disabled) {
+  color: var(--text);
+}
+.espn-skip:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.espn-skip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--control-radius);
+}
+
 /* Roster % under the player's name on the details page. Sits with the Savant
    link in the identity block, and reads as a caption rather than a stat pill —
    the page is full of numbers and this one is context, not a measurement. */
