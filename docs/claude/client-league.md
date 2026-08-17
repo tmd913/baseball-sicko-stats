@@ -752,12 +752,19 @@ pointed at nothing in it.
 columns at all.** Each row is a grid of its own, so under `1fr auto 1fr` every
 row sized its own middle column to its own label and `SVHD` pushed its figures
 further out than `R` did — measured at 1200, `31` at x=927 against `.769` at
-x=913. `--mup-val-w` (54px) and `--mup-cat-w` (46px) are declared on the card
-because four things have to agree about them, and they hold the widest figure a
-matchup period can produce at this size (five tabular characters, ~45) and the
-widest label the league scores (`SVHD`, ~34). A figure past either overflows
-into the track beside it, which is a legible overlap rather than a clipped
-number.
+x=913. `--mup-val-w` and `--mup-cat-w` are declared on the card because four
+things have to agree about them, and **each is re-derived whenever the type
+moves** rather than carried forward — which is what the scale below made
+necessary. They are **64px** and **52px**, measured by rendering the widest
+strings this card can hold into the real cells at the real weights: the widest
+figure a matchup period can produce is five tabular characters, and `1.024` and
+`10.50` come to **53.53px** at 18px/700, leaving 10.5px of slack; the widest
+label the league scores is `SVHD` at **39.16px** at 13px/700. The group tallies
+share the figure column and are well inside it (`5-0-0` 38.4px, `10/10` 38.9 at
+13px), so they never decide the width. They were 54 and 46 against a 15px figure
+and an 11px label, i.e. the same slack at the smaller size. A figure past either
+overflows into the track beside it, which is a legible overlap rather than a
+clipped number.
 
 **The `Moves` row draws no rails**, its two track cells being empty spans that
 hold the grid's shape: nobody is winning acquisitions, and a rail says a
@@ -771,30 +778,199 @@ which is the trick `.roll-key .info-key-panel` records: a shrink-to-fit resolved
 against 30px, and at 390 a panel hanging off that button is the only edge a
 320px box does not fit inside from.
 
-**And the headline went 15px → 19px.** It was the same size as a category figure
-ten rows below it, on the page whose whole subject it is.
+**And the headline went 15px → 19px**, and has since gone to **26px** with
+everything else on the card — see *The card reads a size up* below, which is
+where the whole scale is argued and measured. It was the same size as a category
+figure ten rows below it, on the page whose whole subject it is.
 
 **Measured at 320 / 390 / 900 / 1200 / 1920, live and settled.** No horizontal
 overflow of the page body or of the overlay's own scroller at any width
-(**0** everywhere); the card is 288 at 320, 358 at 390 and 800 from 900 up; the
-page head is unchanged at 43px (74 at 320, where the Back row wraps); eleven
-rows on the live league's ten categories plus `Acq`. The bars are the arithmetic
-above, read off the rendered boxes: `R 31–23` fills 44 of a 294px track (15%),
-`HR 12–2` 210 (71%), `RBI 28–27` the 2px floor, and on a settled week `SVHD 0–2`
-the full 294. The meter is 512/220 on the live 7-3-0 and 146 / 219 tied / 365
-green on a settled 2-5-3. Ties draw no fill on either side (`HR 6–6`, `RBI
-24–24`, `W 1–1`), the leading team's name computes `rgb(56, 189, 248)` and the
-other `rgb(232, 238, 252)`, and the group tallies read `0-3-2` / `3-0-2` and
-`2-2-1` / `2-2-1`. The ⓘ opens a 320 × 173 panel at x=29 of a 390px screen
-(fully inside), and **Escape unwinds one rung per press** — the key first, the
-matchup page second, `[inert]` back to 0. A bye page draws no card, no meter and
-no strip, as it always did.
+(**0** everywhere); the card is 288 at 320, 358 at 390, **868 at 900 and 896
+from 1100 up**; ten category rows plus the `Moves` heading that carries the two
+acquisition counts. The bars are the arithmetic above, read off the rendered
+boxes at 1200: `R 31–23` fills **47.5 of a 321px track** (15%), `HR 12–2`
+**229.3** (71%), `RBI 28–27` **5.8** (1.8%, the honest fraction rather than the
+2px floor), and on a settled week `ERA 0.96–3.12` **170.2**. The meter is
+571 / 163 tied / 82 on the live 5-2-3 and 573 / 245 on a settled 5-5-0. Ties
+draw no fill on either side (`K 66–66`, `W 5–5`), the leading team's name
+computes `rgb(56, 189, 248)` and the other `rgb(232, 238, 252)`, and the group
+tallies read `5-0-0` / `0-5-0` and `2-1-2` / `1-2-2`. The ⓘ opens a 320 × 173
+panel at x=29 of a 390px screen (fully inside), and **Escape unwinds one rung
+per press** — the key first, the matchup page second, `[inert]` back to 0. A bye
+page draws no card, no meter and no strip, as it always did.
 
 **One state is guarded rather than measured**: a **points** league has one number
 a side, so the meter is null there twice over (`away && board.format !==
 'h2h-points'`, and the render tests both) and the page draws its existing note.
 There is one league to test against and it is a category league — the same
 caveat the points card on the Scoreboard already carries.
+
+### The card reads a size up
+
+**Reported as "everything looks a bit small", and the diagnosis is that nothing
+on this page was ever sized for the page it became.** Every figure, label and
+rail on it was inherited from a *scoreboard card* — one of ten in a list, where
+10px labels and a 6px rail are right — and then reused on a page whose whole
+content is that one card. Measured before: the headline 19px, a category figure
+15, a category label 11, the group heading 10, its tally 11, a Moves name 13, the
+category rails **6px** and the whole-matchup meter **10**; and the card capped at
+the app's own `--card-column` (800px), which is the width of a column of *prose*.
+So the loudest thing on a page about two teams was 1.27× the smallest, and the
+bars — which are what the page was redrawn around — were hairlines.
+
+**The scale is spent on the reading order rather than evenly**, which is the
+whole of the judgement. What a manager reads in this order gets the room in that
+order:
+
+- **The headline triple `19 → 26px`** — the one number the page is about, and now
+  1.44× the category figure under it rather than 1.27×.
+- **The category figure `15 → 18px`** and its label `11 → 13`, which are the pair
+  the eye runs down; the figure keeps its lead over the label.
+- **The two bars, which is where the picture actually lives.** A category rail
+  `6 → 9px` and the whole-matchup meter `10 → 14`. Those are the largest
+  proportional moves on the card (1.5× and 1.4×) and they are the point: the
+  bars carry the comparison, and at 6px a fill of a few percent was a mark you
+  had to look for.
+- **The group heading `10 → 12` and its tally `11 → 13`**, which is what makes
+  `BATTERS 5-0-0` read as a section rather than as small print.
+- **The Moves names `13 → 15`** and their direction headings `11 → 12`, the one
+  block on the card that is a list of people rather than of numbers.
+
+**And the rhythm grows with the type**, because scaling the ink alone would have
+tightened the card rather than opening it: a category row's padding `6 → 9px`
+(the row itself 31 → 40), the group heading's `14/6 → 18/8`, the meter row's
+`12/4 → 16/4`, the card's own padding `14 → 16`, and every gap on the head from 8
+to 10.
+
+**The card's own cap is derived rather than raised by eye.** `--card-column` is
+the app's *prose* width and this card is a two-column comparison, so it is
+`--mup-card-w` now, and the number falls out of the one thing on the card that
+can genuinely run out of room: the team name in the wide head, which is
+`0.5 × card − 176` (the badge, the headline column and the gaps). Swept in 10px
+steps, the longest name in the live league — `Brian&Tom's Excellent Adventure`,
+**268.9px** at 17px/700 — needs a card of **890**, where 848 gives it 247.8 and
+880 gives it 263.8 and clips by five pixels. **896** is that with 2.9px in hand
+and is what the token holds. It takes the category tracks from 294 to **321px**,
+which is the same 27px the name got, spent twice over on the picture.
+
+**The head is scaled inside `.mup-heads` alone, and that scoping is load-bearing
+rather than tidy.** The team badge goes **34 × 26 → 44 × 34** (`--lg-logo-w` /
+`-h` / `-glyph`, redeclared on the comparison head), the name `15 → 17px` and the
+record `12 → 13`. The **bye** head is `.mup-team-head` and lives in the pinned
+chrome above a *roster table* rather than over this card — it is one line naming
+a team, not the subject of a page — so it keeps the scoreboard's own sizes and is
+byte-identical: measured, `.mup-chrome` is **145px at 320 and 114 above it before
+and after**, with the badge still 34 × 26. That is also why the name and record
+rules are written `.mup-heads .mup-side-name`, two classes deep: `.mup-side-id`
+is the bye head's block too, which is the same trap the phone reorder already
+records one section down.
+
+**The phone reorder moved 480 → 640, and it is a re-derivation rather than a
+tidy-up.** That breakpoint was measured against a head whose badge was 26px wide
+and whose headline was 19px; at 44px and 26px the wide head spends 44 more
+pixels on the badge and about 30 on the triple, so the name column runs out
+sooner. Measured with the old 480 in place, `Sho me the Parlay` (146px) clipped
+into a 128px column at **640** and stayed clipped down to 481 — i.e. the old
+breakpoint had become 160px of new clipping. At 640 the stacked head gives the
+name **207px at 641 and 282 at 900**, and the only widths that still clip are
+**650–670**, and only the two longest names in the league. 640 is also the app's
+own narrow threshold, which is what the block was reaching for in the first
+place.
+
+### The narrow-screen blocks had never applied, and measuring them is what found it
+
+**Five of the ten declarations in `@media (max-width: 480px)` had been dead since
+they were written**, and nothing on screen said so. A media query adds no
+specificity, so a rule inside one loses to a later rule of equal specificity —
+and that block sat *above* `.mup-group-head`, `.mup-row`, `.mup-cat`, `.mup-val`
+and `.mup-move`, every one of which is declared further down the file. So the
+≤480 tier was drawing the **desktop** figure and label sizes, the **base** row
+gap, and a category track 8–9px narrower than the tier intended, on the one width
+class the block exists for. Measured at 320 before the move: the row gap resolved
+to the base 8px against the block's 6, and `--mup-val-w` / `--mup-cat-w` to the
+desktop pair.
+
+**It is the same trap this stylesheet already documents three times** — the
+narrow-screen rhythm block being last in the file, `.date-row .date-presets`
+going two classes deep, and the `.starters-toggle` glyph rules that had to move
+below `.research-toggle`. The fix here is the file-order one rather than the
+specificity one, because it is a whole block rather than a rule: both media
+blocks now sit **after `.mup-note`**, which is the last `.mup-*` rule they
+override, with a comment at the top of them saying so.
+
+**What that fixes is a tier nobody had seen**, so the ≤480 numbers are set
+against the new scale rather than restored: `--mup-val-w` 52 / `--mup-cat-w` 42
+(the same slack the desktop pair has, at 16px and 12px type), `--mup-track-h` 8,
+the card's padding 12, the row and heading gaps 6, the figure 16, the label 12,
+the Moves name 14, the headline 18 and the head's name / record 14 / 12.
+
+**The narrow tier scales less than the wide one, and both places it stops short
+are measured.** The **tracks**: at 320 the card has 264px of content, so three
+fixed columns and four gaps take 170 and each track keeps **47px** against the
+54 it had — seven pixels, where matching the desktop's 64/52 would have cost 20
+and left a bar too short to read a share off. And the **name**, which is the one
+thing here that cannot grow at all: the reorder buys it a **161px** column at
+390, and against the live league's twelve names that column holds all but **one
+at 13px and 14px and all but three from 15px up** — so the desktop's 17 would
+ellipsize a quarter of the league where 14 ellipsizes only the name no phone can
+hold at any size (`Brian&Tom's Excellent Adventure`, 268.9px at 17px, which is
+the same measurement `--mup-card-w` is derived from). The phone was never the
+complaint and its budget was already spent to the pixel.
+
+### Measured — the scale
+
+**At 320 / 375 / 390 / 640 / 900 / 1200 / 1920, before → after**, on the live
+league's Summary page (`mup=110`), each figure read off the rendered boxes:
+
+| | 320 | 390 | 640 | 1200 |
+| --- | --- | --- | --- | --- |
+| card | 288 → 288 | 358 → 358 | 608 → 608 | **800 → 896** |
+| category row | 31 → **37** | 31 → **37** | 31 → **40** | 31 → **40** |
+| category track | 49.0 → 46.0 | 84.0 → 81.0 | 198 → **177** | 294 → **321** |
+| track height | 6 → **8** | 6 → **8** | 6 → **9** | 6 → **9** |
+| meter height | 10 → **14** | 10 → **14** | 10 → **14** | 10 → **14** |
+| figure / label | 15/11 → **16/12** | 15/11 → **16/12** | 15/11 → **18/13** | 15/11 → **18/13** |
+| headline | 14 → **18** | 14 → **18** | 19 → **26** | 19 → **26** |
+| group label / tally | 10/11 → **12/13** | 10/11 → **12/13** | 10/11 → **12/13** | 10/11 → **12/13** |
+| heads block | 71 → **85** | 71 → **85** | 41 → **89** | 41 → **51** |
+| name column | 127 → 126 | 162 → 161 | 169.5 → **282** | 265.5 → **271.8** |
+| page overflow | 0 → **0** | 0 → **0** | 0 → **0** | 0 → **0** |
+
+The two narrow columns *lose* three pixels of track, which is the tier's own
+larger figure column paid for out of the rail — the right way round on a screen
+where the figures are what is read and the bar is a hint. **640 is the width the
+reorder moved**, which is why its heads block and name column jump: it draws the
+stacked head now, and the name goes from 169.5px to 282.
+
+**Clipping, which is what the widths are actually for.** Over the ten category
+figures, the two names, the two records, the two headlines, the group labels and
+the tallies, at every one of the seven widths: **0 clipped cells after**, against
+2 at 481 and 1 at 520 before (the two longest names, in the wide head the old
+breakpoint left them in). The bye page is unchanged in both builds — its own head
+clips `Brian&Tom's Excellent Adventure` at 320 / 375 / 390 exactly as it did, that
+name being longer than any phone can hold and the head carrying a `title` for it.
+
+**The pinned chrome does not move**, which is the thing a scale change most
+easily breaks: `.mup-chrome` is **145px at 320 and 114 at every other width,
+before and after**, on the Summary page and on a bye page alike.
+
+**And the interactions were driven rather than reasoned about**, at 1200×900 and
+390×844: the ⓘ opens a **320 × 173.13** panel at x=169 and x=29 — inside the
+viewport at both — Escape closes the key and then the matchup page (`inert` back
+to `[]`), a Moves name opens the player page over the matchup and Escape unwinds
+`player → matchup → nothing`, and page and view overflow are 0 in every state. A
+trade week (`mp=15`) draws its 21 `Trade` tags with no row overflow at 320, 390
+or 1200, and a week past the feed's reach draws its own sentence.
+
+**The rest of the League view is untouched, checked rather than assumed.** The
+scoreboard's cards are 800 / 346 with `.lg-side` at 37.98 and **0 overflow on all
+20 category blocks**; the Rankings table is 1463.45px; the Transactions tab
+overflows by 0. None of those reads a `.mup-*` rule.
+
+**Bundle: JS unchanged at 526.70 KB** (155.69 gzipped) and **CSS 127.38 → 127.90
+KB** (22.59 → 22.69) — 0.52KB raw and 0.10KB over the wire, nearly all of it the
+comments arguing the two derivations and the cascade fix. The JS is flat because
+nothing about the components moved: this is `styles.css` alone.
 
 ### The Summary page ends on the acquisitions
 
@@ -815,10 +991,11 @@ acquisitions, so that row had no bar, no colour, and two deliberately empty
 track cells whose only job was to hold its figures in the right columns. The
 heading is the row now, exactly as `BATTERS` carries its own side's
 won-lost-tied at the same two edges — one line, the same grid, the same
-`.mup-group-tally`, and the lists start where the row used to. Measured at 320,
-390 and 1100: the two figures land in the same columns as every category figure
-above them (x=163, right=937 at 1100 against a first row's 163 and 883), the
-card is one row shorter, and nothing clips at the narrowest width.
+`.mup-group-tally`, and the lists start where the row used to. Re-measured at
+320, 390 and 1100 after the card was scaled up: the two figures land in **exactly
+the columns every category figure above them lands in** (x=119 and right=981 at
+1100, against a first row's 119 and 981; x=29 and right=291 at 320), the card is
+one row shorter, and **nothing clips at any of the three**.
 
 **`5/10` where the league limits them per period and a bare count where it does
 not**, which is the honest reading of a league with no cap — the number is still
@@ -912,9 +1089,10 @@ list reconciles with the count the page itself prints — the non-trade `In` cou
 equals the `Acq` figure on **12 of 12 sides** over four matchup periods,
 including the trade week (10 in, 6 of them non-trade, under `6/10`). The three
 states draw: a quiet week `No moves` on both sides under `0/5`, a week past the
-feed's reach its own sentence, and a trade week nine `Trade` tags. At 390 the
-columns are 158px, names wrap rather than truncate, and the page body overflows
-by **0** at 320, 390, 1100 and 1200. A name opens the player page over the
+feed's reach its own sentence, and a trade week nine `Trade` tags. Re-measured
+after the card was scaled up: the columns are **121 / 156 / 421px** at 320 / 390
+/ 1200, **0 names clipped** at any of them (they wrap rather than truncate), and
+the page body overflows by **0** at 320, 390, 1100 and 1200. A name opens the player page over the
 matchup (`?player=pitcher-702070`, the matchup going `inert` beneath it) and
 **Escape unwinds one rung per press** — the player, then the matchup, `[inert]`
 back to 0.
@@ -1395,6 +1573,15 @@ the head is **80 → 71px** tall, and neither name clips at either width. 481 an
 up is untouched: the same `1fr auto 1fr` row, badge / name / score, measured
 identical.
 
+**The 480 in both paragraphs above is now 640**, and it is the same measurement
+taken again against a bigger head rather than a change of mind: the badge is
+44px wide where it was 26 and the headline 26px where it was 19, so the wide
+row spends about 74 more pixels before the name, and at 640 the longest names in
+the league clipped again. See *The card reads a size up*, where the sweep is set
+out — the arrangement, the `order`, the auto margins and the `.mup-heads`
+scoping are all exactly as described here, and only the width they turn at has
+moved.
+
 ### The headline stacks under the name on a phone
 
 `1fr auto 1fr` with a score on each side leaves a team about **120px at 390**,
@@ -1491,7 +1678,10 @@ feed 207/159/159/159/111/115/115/115, research 347/255/255/207/159/207/207/161).
   `K 60/22 · W 3/2 · ERA 2.98/7.67 · WHIP 1.13/1.81 · SVHD 10/3` — with the
   winning figure green in each, `SB` correctly going the other way.
 - The card is **346px at 390 and 800 at 900 up**, ten rows at every width, and
-  the two names are unclipped from 900.
+  the two names are unclipped from 900. *(Both figures are the tab's: on the page
+  it became, the card takes the page's own gutters at 358 and its own
+  `--mup-card-w` at 896 — see* The card reads a size up*, where the width is
+  derived and the names are re-measured against it.)*
 - **The picker moves the matchup**: option 0 gives `mup=103` and
   `The Homewreckers / THE BRONX FLOATERS`, option 4 `mup=107` and the reader's
   own. A `mup=999999` falls back to the reader's own with no error. *(The picker
