@@ -300,14 +300,19 @@ export function OpponentSection({
   throws,
   collapsible = false,
   defaultOpen = false,
+  bare = false,
 }: {
   game: PlayerGame;
   throws?: string | null;
   collapsible?: boolean;
   defaultOpen?: boolean;
+  /** No heading at all — for the outing page, whose tab strip has already said
+   *  `Opponent`. See `CardSection`, where the three modes are argued. */
+  bare?: boolean;
 }) {
   if (!game.opponentHitting) return null;
   const body = <OpponentBody game={game} throws={throws} />;
+  if (bare) return <div className="card-section">{body}</div>;
   return collapsible ? (
     <CardSection title="Opponent" defaultOpen={defaultOpen}>
       {body}

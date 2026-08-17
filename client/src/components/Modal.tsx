@@ -23,8 +23,15 @@ import { answersEscape, useLockBodyScroll, useOverlayFocus } from '../hooks';
  */
 export const DialogLayerContext = createContext<number | null>(null);
 
-/** `.app-dialog`'s own z-index, as declared in the stylesheet. */
-const BASE_LAYER = 46;
+/**
+ * `.app-dialog`'s own z-index, as declared in the stylesheet — and the rung a
+ * box opened from the *page* sits on, whether it is a dialog or a page of its
+ * own (`.outing-view` declares the same 46 for exactly that reason). Exported
+ * so a second host can hand it down as its children's floor without writing
+ * `46` a second time.
+ */
+export const DIALOG_LAYER = 46;
+const BASE_LAYER = DIALOG_LAYER;
 
 /** `.details-view`'s, for the three overlays that ride on it. */
 export const OVERLAY_LAYER = 50;
