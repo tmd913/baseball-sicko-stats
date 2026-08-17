@@ -293,6 +293,30 @@
    declaration on it would say nothing. */
 html {
   overscroll-behavior: none;
+  /* **The root paints nothing, and saying so is load-bearing.**
+
+     The page's background is `body`'s (below), and it reaches the whole window
+     rather than only the body's own box because a background on `body` is
+     *propagated to the canvas* — but only while the root element has none of
+     its own. `index.html`'s boot script gives the root one: a flat `--bg` in the
+     reader's own theme, painted before the stylesheet has loaded so a reload
+     does not flash the other palette.
+
+     Left standing, that paint-ahead outlives its purpose and breaks the
+     propagation for the life of the page: `body` then paints its gradient
+     inside its own box, which is as tall as the content, and every page shorter
+     than the window showed a hard seam at the foot of the content with the flat
+     root colour below it. Measured on the League view at 900×3000 under
+     Lavender, before this rule: `rgb(235, 232, 244)` at the last row of content
+     and `rgb(243, 241, 248)` — a whiter band — for the 720px under it. Midnight
+     hid it, its gradient ending on the very `--bg` the boot script paints.
+
+     So the stylesheet clears the root the moment it arrives, which is exactly
+     when the real background is available to replace it. It must stay *after*
+     the injected `<style>` in document order to win the tie, and it is: the
+     boot script appends its style while parsing `<head>`, and Vite's stylesheet
+     link is the last thing in it. */
+  background: none;
 }
 
 /* ---------------------------------------------------------------------------

@@ -219,6 +219,34 @@ users and auth**.
 stylesheet** — two `--bg` values and two `color-scheme` words — and it is inline,
 blocking and tiny because it has to have finished before the first paint.
 
+**And it paints the root, so the stylesheet has to clear the root again**
+(`html { background: none }`, declared beside the `overscroll-behavior` rule
+that is the document's other one-line statement). The page's background is
+`body`'s, and it covers the window rather than only the body's own box because a
+background on `body` is **propagated to the canvas** — but only while the root
+element has none of its own. The paint-ahead gives the root one, and left
+standing it outlives its purpose for the life of the page: `body` then paints
+its gradient inside its own box, which is as tall as the content, so every page
+shorter than the window ended on a hard seam with the flat root colour under it.
+Reported as *"the bottom of the page is white when there isn't enough content"*
+and measured on the League view at 900×3000 under Lavender: `rgb(235, 232, 244)`
+at the last row of content and **`rgb(243, 241, 248)`** — `--bg`, a whiter band —
+for the 720px beneath it, with the bottom-left cool glow clipped away with it.
+
+**Midnight hid it, which is why it went unnoticed**: that gradient's own foot is
+`--bg` at its 55% stop, which is exactly the colour the boot script paints, so
+the seam had nothing to show. Measured after the fix, Midnight is
+`rgb(11, 18, 32)` from the last row of content to the foot of the window —
+byte-identical to before — while Lavender continues its gradient and its glow to
+the bottom edge.
+
+**The rule has to sit after the injected `<style>` in document order to win the
+tie, and it does**: the boot script appends its style while `<head>` is being
+parsed, and the stylesheet link is the last thing in it (checked in the built
+`index.html`; in dev Vite injects its styles at runtime, which appends later
+still). A stylesheet that somehow lost that tie would paint a flat page rather
+than a broken one.
+
 ### The picker
 
 A **row of swatches** in the settings menu, under the two toggles, rather than a
