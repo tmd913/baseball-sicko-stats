@@ -9,6 +9,15 @@ The roster holds both batters and pitchers, discriminated by `WatchPlayer.kind` 
 - **Opposing lineup**: `PlayerGame.opponentId` rides on every game, and `getReport` attaches `opponentHitting` to a *pitcher's* games (`teamHitting.ts::getTeamHitting`) — the **season, all games** cut, which is the opponent table's opening state and is why that table draws with no request of its own. What that module answers with is **nine cuts** rather than three: a window, a venue and a hand, whole league, each ranked within its own population. It is computed from the per-date Savant exports rather than read from MLB, and the whole of that — why MLB cannot be asked for a windowed or home-only platoon split, how a day reduces to four leaves plus a game count, why runs are read off the score progression, and the validation against MLB's own numbers — is in **Data sources**, *Team hitting: nine cuts a window*. Two rules of the old module survive unchanged: **ranks are computed here, not read off the API**, which ranks by its own default sort and doesn't rank splits at all (ties share a rank, and **1st is always the best offence** — so the fewest strikeouts ranks 1st, not 30th); and **a failed lookup resolves to null**, the opponent's line being context on a card that must never 502 a report which already has the outing. Note a **team's** hand split is by the hand of the pitcher they faced, so a lefty's card marks `vsLeft`.
 ### The Arsenal tab's two charts
 
+**The tab is third on a pitcher, directly after the percentile card**, where it
+used to trail the Game Log. Same argument that put Splits there: the card and
+these two charts are both a picture of *what kind of pitcher this is* — what he
+throws and where it moves — where Stats and the Game Log are the numbers he has
+put up, and a reader deciding about a stranger takes the pictures first. It also
+stops the one pitcher-only tab being the one furthest along a strip that scrolls
+on a phone: measured at 390px, Arsenal is now fully in view at `scrollLeft 0`
+where it was the seventh of eight.
+
 **`components/ArsenalCharts.tsx` recreates the two pictures a Baseball Savant
 pitcher page leads with** — **Pitch Usage** and **Movement Profile (Induced
 Break)** — and they are now the whole of the tab. They are what a reader opens
@@ -95,6 +104,18 @@ Every dot is a real pitch. **That is the whole point of the server shipping
 samples** — the spread *within* a pitch type is what a reader is looking at, and
 a slider that sometimes cuts and sometimes sweeps is two clusters under one
 average that a single bubble would hide.
+
+**Each dot is outlined in a darker version of its own colour** (`darken`, the
+fill's channels at 0.62). Without an edge, sixty-four overlapping four-seamers
+are a single blob whose shape says how *far* the pitches spread and nothing
+about how many are stacked where — which is half of what a cloud is for. The
+outline is the dot's **own** colour rather than a neutral: a grey or black ring
+would be a second thing to look at on a chart already carrying five colours, and
+it reads as ink rather than as the edge of the mark. It is multiplied in JS
+rather than mixed toward black in CSS because this is an SVG `stroke`
+**attribute**, where `color-mix()` is not something to lean on. The fill went
+**0.75 → 0.82** with it: the outline does the separating now, so the fill no
+longer has to be see-through to do it.
 
 **One dot per percent of his pitches**, so a pitch he throws a tenth of the time
 gets ten dots and the cloud's densities *are* his usage — countable, not just

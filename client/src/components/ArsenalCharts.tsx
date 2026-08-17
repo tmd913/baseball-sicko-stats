@@ -45,6 +45,31 @@ function inkOn(hex: string): string {
   return 1.05 / (L + 0.05) >= (L + 0.05) / 0.05 ? '#ffffff' : '#11161f';
 }
 
+/**
+ * The same colour, darker — what a movement dot is outlined in.
+ *
+ * A cloud is a hundred overlapping circles of one colour, and without an edge a
+ * dense cluster is a single blob whose shape says how *far* the pitches spread
+ * and nothing about how many are stacked where. The outline is a darker version
+ * of the dot's **own** colour rather than a neutral: a grey or a black ring
+ * would be a second thing to look at on a chart already carrying five colours,
+ * and it reads as ink rather than as the edge of the mark.
+ *
+ * Multiplied rather than mixed toward black in CSS, because this is an SVG
+ * `stroke` **attribute** — `color-mix()` is fine in a stylesheet and is not
+ * something to rely on in a presentation attribute.
+ */
+function darken(hex: string, factor = 0.62): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return hex;
+  const v = parseInt(m[1], 16);
+  const ch = (shift: number) =>
+    Math.round(((v >> shift) & 255) * factor)
+      .toString(16)
+      .padStart(2, '0');
+  return `#${ch(16)}${ch(8)}${ch(0)}`;
+}
+
 /** How wide a usage capsule can get, as a share of its track. */
 const TRACK_MAX = 1;
 
@@ -460,6 +485,7 @@ export function MovementChart({
                   cy={CY - px(s.vBreak)}
                   r="5.5"
                   fill={color}
+                  stroke={darken(color)}
                 />
               );
             })}

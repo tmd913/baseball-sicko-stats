@@ -555,7 +555,7 @@ line and doesn't any more — is in **Client — the Feed view**, *The Upcoming
 dialog is the Splits card*.
 
 **Where it sits**: directly after **Percentile Rankings**, so the strip reads
-`Overview · Percentile Rankings · Splits · Stats · Game Log · [Arsenal] ·
+`Overview · Percentile Rankings · [Arsenal] · Splits · Stats · Game Log ·
 Charts`. That is a **seventh** tab on a pitcher and needed nothing:
 `.details-tabs` already scrolls sideways and scrolls the active tab into view
 with a 24px peek (checked at 390 on a batter and a pitcher — every one of the six
