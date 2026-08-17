@@ -3,8 +3,9 @@
 Split out of `client.md`. These are app-wide rules rather than one surface's:
 every dialog in the app rides on `components/Modal.tsx`, and the ladder they form
 is what keeps one press of Escape undoing one thing. The player page's own tabs
-are in `client-player-page.md`; the feed items that open into these dialogs are in
-`client-feed.md`.
+are in `client-player-page.md` and the two files it was split into
+(`client-player-tabs.md`, `client-player-splits.md`); the feed items that open
+into these dialogs are in `client-feed.md`.
 
 ### Details are popups, not accordions
 

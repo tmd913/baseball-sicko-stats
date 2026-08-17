@@ -64,13 +64,33 @@ letting it grow past it.
 
 @docs/claude/client-research.md
 
-**Client — the player page** — `PlayerDetails` and its tabs (Overview, Percentile Rankings, Splits, News, Stats, Game Log, Arsenal, Charts), plus the reorder screen and the how-to page. It opens on **anybody**, which is the fact most of its design follows from.
+**Client — the player page** — `PlayerDetails`, the reorder screen, the how-to page, and the **Overview** tab: his day, his next game, his projected starts, his latest news and his last five games. It opens on **anybody**, which is the fact most of its design follows from.
 
 @docs/claude/client-player-page.md
 
-**Client — the League view** — the fantasy league's own page: the matchup scoreboard, the season table, the four ESPN league formats and which two of them it refuses to guess at.
+**Client — the player page's reading tabs** — **News** (and the eleven dead ends behind it), **Stats** (the research board transposed onto one man), **Game Log** (and the outing a pitcher's row opens) and **Charts**.
+
+@docs/claude/client-player-tabs.md
+
+**Client — the player page's Splits tab** — the platoon comparison, its diverging bar, and the five rounds of measured geometry that bar has taken.
+
+@docs/claude/client-player-splits.md
+
+**Client — the League view** — the fantasy league's own page: why it earns a pill, its three tabs and their strip, the poll, the four ESPN league formats and which two of them it refuses to guess at, and the **Scoreboard** tab.
 
 @docs/claude/client-league.md
+
+**Client — a league matchup** — the page opened from a scoreboard card: the Summary page's categories down the middle, its scale, the acquisitions and moves under it, and the two team pages.
+
+@docs/claude/client-league-matchup.md
+
+**Client — the League view's Rankings tab** — every team against every category over one of five spans, the three summary columns, and the rank badge that colours it.
+
+@docs/claude/client-league-rankings.md
+
+**Client — the League view's Transactions tab** — who added, dropped and traded whom, and the dot on the tab.
+
+@docs/claude/client-league-transactions.md
 
 **Client — popups** — the app-wide dialog rules: why details are popups rather than accordions, the layer ladder, what a popup has to cover, and why one press of Escape undoes exactly one thing.
 
