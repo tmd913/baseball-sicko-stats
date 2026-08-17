@@ -96,6 +96,21 @@ export interface UserPrefs {
    *  this is a habit of reading rather than a setting on a table. */
   statRanks?: boolean;
   /**
+   * The colour scheme, by id — `'midnight'` (the dark original) or
+   * `'lavender'`. Absent means the default, which is the convention every
+   * toggle above follows and is the right one here for the same reason: the
+   * default can change without anyone's record needing revisiting.
+   *
+   * A string rather than a boolean because there can be a third theme, and an
+   * id the client does not recognise is read as the default rather than
+   * rejected — so a record written by a newer build opens an older tab on
+   * Midnight instead of on nothing. Which ids exist is the **client's**
+   * business (`client/src/theme.ts`): this is the same split `researchColumns`
+   * makes, where the route validates the shape of a key and the vocabulary
+   * lives where the thing is drawn.
+   */
+  theme?: string;
+  /**
    * Read the roster views off the user's **ESPN fantasy team** instead of the
    * list they built here.
    *
@@ -438,9 +453,49 @@ async function fileDb(): Promise<FileDb> {
   return { __legacy: obj };
 }
 
+/**
+ * Write the dev record **atomically**, and one write at a time.
+ *
+ * `fs.writeFile` over an existing path truncates and rewrites **in place**, so
+ * a write that is shorter than what is already there leaves the tail of the old
+ * document behind — and a JSON document with a byte of another one after it
+ * does not parse. That is not a lost update, which this backend has always been
+ * documented as risking; it is a **corrupted file**, and once it happens every
+ * read *and* every write fails until somebody repairs it by hand.
+ *
+ * It was reproduced rather than guessed at: two preference writes fired back to
+ * back from one settings menu (a theme and a toggle) left `watchlist.json` as a
+ * valid 8,056-byte document followed by a single stray `}`, and both writes then
+ * came back **502** — as did every one after them. The roster, the watchlist and
+ * the league's ESPN credential were all in that file.
+ *
+ * Two lines fix it and each answers a different half:
+ *
+ * - **A temp file and a rename.** `rename(2)` is atomic within a filesystem, so
+ *   a reader sees either the whole old document or the whole new one and never a
+ *   splice of the two. The temp name carries the pid so two processes sharing a
+ *   `server/data/` cannot collide on it.
+ * - **A promise chain**, so two writes *in this process* cannot interleave at
+ *   all. `client/src/App.tsx::queueUserWrite` does the same one tier up and is
+ *   the reason a single tab is orderly; this is what makes two tabs, a tab and a
+ *   `curl`, or anything else pointed at the same file safe as well.
+ *
+ * What it deliberately does **not** do is give this backend the versioned,
+ * conditional write DynamoDB gets. A concurrent read-modify-write here can still
+ * *lose* an update, which is the documented shape and is what `mutate`'s replay
+ * handles where it can; what it can no longer do is destroy the file.
+ */
+let fileWrites: Promise<unknown> = Promise.resolve();
 async function fileWriteDb(db: FileDb): Promise<void> {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  await fs.writeFile(FILE, JSON.stringify({ records: db }, null, 2), 'utf8');
+  const run = async () => {
+    await fs.mkdir(DATA_DIR, { recursive: true });
+    const tmp = `${FILE}.${process.pid}.tmp`;
+    await fs.writeFile(tmp, JSON.stringify({ records: db }, null, 2), 'utf8');
+    await fs.rename(tmp, FILE);
+  };
+  const next = fileWrites.then(run, run);
+  fileWrites = next.catch(() => undefined);
+  return next;
 }
 
 async function fileLoad(userId: string): Promise<Versioned> {
@@ -862,6 +917,25 @@ export async function setMuteAudio(userId: string, mute: boolean): Promise<UserP
     const prefs = { ...cur.prefs };
     if (mute) prefs.muteAudio = true;
     else delete prefs.muteAudio;
+    return { prefs };
+  });
+  return next.prefs;
+}
+
+/**
+ * Save the reader's colour scheme.
+ *
+ * Absence is the default theme, so switching *back* to it deletes the entry —
+ * the same convention as the three toggles above, and the same benefit: nobody's
+ * record has to be revisited if the default ever moves. The id is length-capped
+ * and otherwise trusted, the vocabulary being the client's; the worst a bad one
+ * can do is give this reader the default palette.
+ */
+export async function setTheme(userId: string, theme: string | null): Promise<UserPrefs> {
+  const next = await mutate(userId, (cur) => {
+    const prefs = { ...cur.prefs };
+    if (theme) prefs.theme = theme;
+    else delete prefs.theme;
     return { prefs };
   });
   return next.prefs;

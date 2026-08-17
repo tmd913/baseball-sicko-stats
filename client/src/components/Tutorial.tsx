@@ -765,9 +765,19 @@ const CHAPTERS: Chapter[] = [
             <strong>
               <GearIcon /> Settings
             </strong>{' '}
-            — beside the title: hiding injured players, muting clip audio, editing
-            your player order, this guide, and sign out. The two toggles are saved to
-            your account, so they follow you to another device.
+            — beside the title: hiding injured players, muting clip audio, the
+            colour scheme, editing your player order, this guide, and sign out. The
+            two toggles and the scheme are saved to your account, so they follow you
+            to another device.
+          </li>
+          <li>
+            <strong>Two colour schemes.</strong> <Ui>Midnight</Ui> is the dark
+            original and <Ui>Lavender</Ui> is light gray and violet; pick one under{' '}
+            <Ui>
+              <GearIcon /> Settings
+            </Ui>
+            . Each is a swatch of the palette it selects, and the change is
+            immediate — the whole app, every view.
           </li>
           <li>
             <strong>Expanding scrolls.</strong> Whatever you open — a card, a game, an

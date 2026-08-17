@@ -25,6 +25,8 @@ import type {
 } from './types';
 import { baseballDay, isInjured, isStartingOn } from './lib';
 import { takeInvite } from './invite';
+import { applyTheme, DEFAULT_THEME, readStoredTheme, storeTheme, THEMES, toThemeId } from './theme';
+import type { ThemeId } from './theme';
 import { BaseballMark } from './components/BaseballMark';
 import { PlayerAdder } from './components/PlayerAdder';
 import { PlayerOrderEditor } from './components/PlayerOrderEditor';
@@ -399,6 +401,39 @@ export default function App() {
   // reachable by hand as `?sim=1`; only its settings-menu entry is hidden (see
   // SHOW_SIMULATE_TOGGLE).
   const [simulate, setSimulate] = useState<boolean>(() => initialParams.get('sim') === '1');
+  /**
+   * Writes to the user's own record, one at a time.
+   *
+   * **Everything the app saves about a person lands on one item** — the roster,
+   * the watchlist, the search history, the transactions marker and every entry
+   * in `UserPrefs` — so two of them in flight at once is a read-modify-write
+   * race whatever the two are. The deployed backend survives it (`store.ts`'s
+   * `mutate` re-reads and replays a lost update against a version-conditional
+   * put); the dev file backend has no version to check.
+   *
+   * It was one press of ＋ that first needed this — the roster and the search
+   * history, measured losing the pick on the very machine it was made on — and
+   * the **settings menu** is the same shape one press further: the colour
+   * scheme and the two toggles sit in one popover and are pressed in sequence
+   * by the same person. Driven back to back before this covered them, a theme
+   * and a mute-audio press left the dev record **corrupt** and both writes
+   * 502ing (see `store.ts::fileWriteDb`, which is the other half of that fix).
+   *
+   * A promise chain is the whole of it, and it costs nothing worth having: each
+   * write is a few hundred bytes against one small item, and nothing on screen
+   * is waiting for the second — the state has already moved, which is what
+   * makes every one of these safe to queue rather than await.
+   *
+   * `then(run, run)` rather than `then(run)`: a failed write must not stop the
+   * queue, or one dropped request would silently swallow every later one.
+   */
+  const userWrites = useRef<Promise<unknown>>(Promise.resolve());
+  const queueUserWrite = useCallback(<T,>(run: () => Promise<T>): Promise<T> => {
+    const next = userWrites.current.then(run, run);
+    userWrites.current = next.catch(() => undefined);
+    return next;
+  }, []);
+
   // Keep players on the IL off the players view. The summary table hides them
   // whatever this says (see `visibleReports`); this is the one view where the
   // choice is the user's, since a card can still show what he did before he got
@@ -418,10 +453,10 @@ export default function App() {
   const setHideInjured = useCallback((hide: boolean) => {
     hideInjuredTouched.current = true;
     setHideInjuredState(hide);
-    api
-      .saveHideInjured(hide)
-      .catch((e: Error) => console.error('saving hide-injured failed:', e.message));
-  }, []);
+    queueUserWrite(() => api.saveHideInjured(hide)).catch((e: Error) =>
+      console.error('saving hide-injured failed:', e.message),
+    );
+  }, [queueUserWrite]);
   /**
    * Narrow the summary table to the players who are actually starting today —
    * a hitter in the posted lineup, a pitcher named as today's starter.
@@ -565,6 +600,7 @@ export default function App() {
     const today = baseballToday();
     return start <= today && today <= end;
   }, [start, end]);
+
   // Play every clip with the sound off. Saved per user like the toggle above,
   // but deliberately **not** in the URL: hide-injured is there because it
   // changes which players a view is reporting on, and a link that says so is
@@ -578,10 +614,47 @@ export default function App() {
   const setMuteAudio = useCallback((mute: boolean) => {
     muteAudioTouched.current = true;
     setMuteAudioState(mute);
-    api
-      .saveMuteAudio(mute)
-      .catch((e: Error) => console.error('saving mute-audio failed:', e.message));
-  }, []);
+    queueUserWrite(() => api.saveMuteAudio(mute)).catch((e: Error) =>
+      console.error('saving mute-audio failed:', e.message),
+    );
+  }, [queueUserWrite]);
+  /**
+   * **The colour scheme.** Saved per user like the two toggles above and, like
+   * them, deliberately **not in the URL**: it is a fact about this person and
+   * this room rather than about the view a link describes — the line `muteAudio`
+   * is on, and one step further from the data than `hideil=1`, which is in the
+   * URL precisely because it changes which players a view reports on.
+   *
+   * It is the one preference in the app that is *also* mirrored into
+   * localStorage, and `theme.ts` argues why: the server's answer arrives a round
+   * trip after the page has painted, so without a local copy every load would
+   * open on one palette and change to the other in front of the reader. The
+   * mirror is a paint-ahead cache and the record is the source of truth — which
+   * is what makes the choice follow them to another device.
+   *
+   * Seeded from the mirror rather than from the default, so the first React
+   * render agrees with what `index.html`'s boot script has already painted.
+   */
+  const [theme, setThemeState] = useState<ThemeId>(() => readStoredTheme() ?? DEFAULT_THEME);
+  const themeTouched = useRef(false);
+  const setTheme = useCallback((next: ThemeId) => {
+    themeTouched.current = true;
+    setThemeState(next);
+    storeTheme(next);
+    // Through `queueUserWrite`, like every other write to this item: the
+    // scheme is picked in the same popover as the two toggles above, so two
+    // presses a moment apart are two writes to one record. `null` is "back to
+    // the default", which the server stores as the absence of the entry.
+    queueUserWrite(() => api.saveTheme(next === DEFAULT_THEME ? null : next)).catch(
+      (e: Error) => console.error('saving theme failed:', e.message),
+    );
+  }, [queueUserWrite]);
+  // The one line that puts a palette on the page. A layout effect so the
+  // attribute is stamped before the browser paints the commit that changed it,
+  // and idempotent, so re-running it costs nothing.
+  useLayoutEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
   /**
    * **Draw a percentile rank under every value** on the research board and on
    * the player page's Stats tab — one flag for both, because they are one
@@ -603,32 +676,10 @@ export default function App() {
   const setShowRanks = useCallback((on: boolean) => {
     showRanksTouched.current = true;
     setShowRanksState(on);
-    api
-      .saveStatRanks(on)
-      .catch((e: Error) => console.error('saving stat-ranks failed:', e.message));
-  }, []);
-  /**
-   * Writes to the user's own record, one at a time.
-   *
-   * One press of ＋ now writes to that record **twice** — the roster and the
-   * search history — and the two must not race. The deployed backend survives
-   * it (`store.ts::mutate` re-reads and replays a lost update against a
-   * version-conditional put), but the dev file backend has no version to check
-   * and the second writer simply overwrites the first: measured locally, an
-   * added player reached the roster and his pick vanished from the history on
-   * the very machine it was made on. A promise chain is the whole of the fix,
-   * and it costs nothing worth having — both writes are a few hundred bytes
-   * against one small item, and nothing on screen is waiting for the second.
-   *
-   * `then(run, run)` rather than `then(run)`: a failed write must not stop the
-   * queue, or one dropped request would silently swallow every later one.
-   */
-  const userWrites = useRef<Promise<unknown>>(Promise.resolve());
-  const queueUserWrite = useCallback(<T,>(run: () => Promise<T>): Promise<T> => {
-    const next = userWrites.current.then(run, run);
-    userWrites.current = next.catch(() => undefined);
-    return next;
-  }, []);
+    queueUserWrite(() => api.saveStatRanks(on)).catch((e: Error) =>
+      console.error('saving stat-ranks failed:', e.message),
+    );
+  }, [queueUserWrite]);
 
   /**
    * The players most recently picked out of the header search, newest first —
@@ -821,6 +872,14 @@ export default function App() {
         // source there is, so it applies unless the user has already spoken.
         if (!muteAudioTouched.current && prefs.muteAudio) setMuteAudioState(true);
         if (!showRanksTouched.current && prefs.statRanks) setShowRanksState(true);
+        // The record is the source of truth and the localStorage mirror is
+        // only a paint-ahead cache, so what lands here wins — and is written
+        // back, which is how a theme picked on one device reaches this one.
+        if (!themeTouched.current) {
+          const saved = toThemeId(prefs.theme);
+          setThemeState(saved);
+          storeTheme(saved);
+        }
         // Merged rather than applied, which is why this needs no touched ref:
         // anyone picked in the second before this landed leads, and the saved
         // list fills in under him — which is the same list the server has
@@ -3651,6 +3710,46 @@ export default function App() {
                   <span className="settings-dot" aria-hidden="true" />
                   Mute clip audio
                 </button>
+                {/* **The colour scheme**, as a row of swatches rather than as a
+                    third toggle. Two reasons, and the second is the one that
+                    decides it. A toggle can only ever hold two, and there is
+                    no reason a third palette should mean re-drawing this
+                    control; and a colour scheme is the one preference in this
+                    menu whose *answer* can be shown rather than described —
+                    each button is three stops of the palette it selects, which
+                    is a truer statement of what it does than any name.
+
+                    A radio group rather than menu items: this is one question
+                    with one answer, and `menuitemradio` is what says so to a
+                    screen reader, where a row of `menuitemcheckbox`es would
+                    claim as many independent switches. The menu deliberately **stays
+                    open** across a press, the way `Refresh from ESPN` does and
+                    for the same reason: the result is a change in the page
+                    behind it, so shutting the menu would hide the thing the
+                    press was for. */}
+                <div className="theme-picker" role="group" aria-label="Colour scheme">
+                  <span className="settings-popover-label">Colour scheme</span>
+                  <div className="theme-swatches">
+                    {THEMES.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        className={`theme-swatch${theme === t.id ? ' active' : ''}`}
+                        role="menuitemradio"
+                        aria-checked={theme === t.id}
+                        onClick={() => setTheme(t.id)}
+                        title={t.hint}
+                      >
+                        <span className="theme-chips" aria-hidden="true">
+                          {t.swatch.map((c) => (
+                            <span key={c} style={{ background: c }} />
+                          ))}
+                        </span>
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 {/* The fantasy entries used to sit here — the roster-source
                     toggle and the league page — and have moved out to their own
                     button beside the gear, where the state they control can be
