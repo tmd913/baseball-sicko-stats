@@ -178,6 +178,46 @@ async function rosterFacts(): Promise<{ offRoster: Set<number>; clubs: Map<numbe
   return { offRoster, clubs };
 }
 
+/**
+ * One entry per `gamePk`, preferring the copy that is not postponed.
+ *
+ * **MLB lists a rescheduled game twice, under one id.** A game called off on 24
+ * May and made up on 17 August comes back as *two* entries with the **same
+ * `gamePk`** and the same `officialDate` (the makeup day): one filed under the
+ * original calendar date and marked `Postponed`, one under the makeup date and
+ * marked as whatever it now is. Measured on the 2026 season: **28 duplicated ids
+ * across the year, 5 inside a 28-day window.**
+ *
+ * This is the one thing the season-wide read had to learn that the date-range
+ * read it replaced never had to. Asked for 17 Aug – 13 Sep, MLB returns only the
+ * makeup copy, the postponed one being filed under a `dates[].date` outside the
+ * range — so `games` was 376 rows with no duplicates and is 381 with five until
+ * they are collapsed. Left alone, a cell drew a spurious `PPD` beside the real
+ * game and a projected turn appeared to land on a postponed one.
+ *
+ * **It also corrects a claim this file used to make.** `countsAsTurn` says a
+ * postponement is dropped from a club's run because *"MLB reschedules one under a
+ * new `gamePk`"* — the dropping is right and the reason was wrong: the id is
+ * **reused**, and what makes the run correct is this collapse plus that filter,
+ * not a fresh id.
+ *
+ * Preferring the non-postponed copy is what makes a genuinely postponed game with
+ * no makeup yet survive as postponed: it appears once, so there is nothing to
+ * prefer over it.
+ */
+function dedupe(games: ScheduleGame[]): ScheduleGame[] {
+  const byPk = new Map<number, ScheduleGame>();
+  for (const g of games) {
+    const seen = byPk.get(g.gamePk);
+    if (!seen || (seen.state === 'postponed' && g.state !== 'postponed')) byPk.set(g.gamePk, g);
+  }
+  // `games` arrived sorted and a Map keeps insertion order, but a replacement
+  // keeps the *original* slot — which for a makeup is the right one anyway, both
+  // copies carrying the same `officialDate`. Re-sorting makes that independent of
+  // the order MLB happened to send.
+  return [...byPk.values()].sort((a, b) => a.date.localeCompare(b.date) || a.gamePk - b.gamePk);
+}
+
 async function fetchSeason(from: string, to: string): Promise<Entry> {
   const year = Number(from.slice(0, 4));
   const url =
@@ -237,19 +277,21 @@ async function fetchSeason(from: string, to: string): Promise<Entry> {
   // Date order, and a doubleheader in game order. The API returns them that way
   // and nothing promises it; both the client's left-to-right day and
   // `rotations.ts`'s whole coordinate system are an index into this list.
-  all.sort((a, b) => a.date.localeCompare(b.date) || a.gamePk - b.gamePk);
-  const games = all.filter((g) => g.date >= from && g.date <= to);
+  // One entry per game before anything reads them — see `dedupe`, which is where
+  // the season-wide read differs from the date-range one it replaced.
+  const season = dedupe(all);
+  const games = season.filter((g) => g.date >= from && g.date <= to);
   // The runs are read off the **whole** season and the projections bounded to the
   // window the client will draw: the days behind are what a cadence is measured
   // from, and the days ahead are what the grid has columns for.
-  const season = buildSeasonRuns(all, from);
+  const runs = buildSeasonRuns(season, from);
   const rotations = Object.fromEntries(
-    buildRotations(season, from, to, roster?.offRoster ?? null, roster?.clubs ?? null),
+    buildRotations(runs, from, to, roster?.offRoster ?? null, roster?.clubs ?? null),
   );
   return {
     window: { start: from, end: to, days: SCHEDULE_DAYS, games, rotations },
-    season,
-    byPk: new Map(all.map((g) => [g.gamePk, g])),
+    season: runs,
+    byPk: new Map(season.map((g) => [g.gamePk, g])),
     names,
     fetchedAt: Date.now(),
   };

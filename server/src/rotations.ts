@@ -232,9 +232,17 @@ export function clubCadence(run: RunGame[], today: string): number | null {
 }
 
 /**
- * A postponement is not a turn. **MLB reschedules one under a new `gamePk`**, so
- * counting the original would put a phantom game in the club's run and shift
- * every slot after it by one.
+ * A postponement is not a turn: nobody pitched, so it consumed nobody's slot, and
+ * counting it would put a phantom game in the club's run and shift every slot
+ * after it by one.
+ *
+ * **The makeup is the same game under the same id**, which is worth stating
+ * because the obvious assumption is the other one: MLB reuses the `gamePk` and
+ * lists the entry twice, once under the original date marked `Postponed` and once
+ * under the makeup date. `schedule.ts::dedupe` collapses that pair before this
+ * file sees it, keeping the copy that is not postponed — so a made-up game is one
+ * game in the run, on the day it was actually played, and only a game called off
+ * with no makeup yet reaches this filter.
  */
 function countsAsTurn(g: ScheduleGame): boolean {
   return g.state !== 'postponed';
