@@ -325,6 +325,7 @@ function ArsenalTab({ arsenal }: { arsenal: SeasonArsenal }) {
         <MovementChart
           season={arsenal.season ?? null}
           hand={arsenal.hand ?? null}
+          armAngle={arsenal.armAngle ?? null}
           pitches={arsenal.pitches}
           // `?? []` because a response is not a promise: `samples` is declared
           // non-optional and the two `types.ts` are mirrored by hand, so
