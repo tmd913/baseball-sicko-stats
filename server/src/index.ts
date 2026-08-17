@@ -1650,7 +1650,7 @@ app.get(
       const total = [...arsenal.values()].reduce((sum, p) => sum + p.count, 0);
       return [...arsenal.entries()]
         .map(([pitchType, p]) => {
-          const lg = getLeaguePitchAverage(pitchType);
+          const lg = getLeaguePitchAverage(pitchType, arsenals.hand);
           // League hBreak is a magnitude; orient it to this pitcher's own
           // direction so the signed comparison reads correctly (same as the
           // per-game baselines in savant.ts::attachArsenalBaselines).
@@ -1693,6 +1693,12 @@ app.get(
       // way the rolling-xwOBA payload names its own, rather than the client
       // keeping a second copy of the constant.
       season: ARSENAL_SEASON,
+      // Which arm he throws with, so the chart can label its league line
+      // `RHP AVG` / `LHP AVG` rather than a blended "League" — and so that line
+      // is actually the one it names (a right-hander throws 0.9–2.0 mph harder
+      // at every pitch type, so a blended figure marks a lefty down for being
+      // left-handed).
+      hand: arsenals.hand,
       // One array carrying the batter's side per pitch, rather than three — the
       // client cuts it for the split tabs, so the three views cannot come to
       // disagree about where a pitch broke.

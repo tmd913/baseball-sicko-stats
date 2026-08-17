@@ -733,8 +733,16 @@ export function withEstimators(
 }
 
 /** Fill one mix's rows with season (his own) and league baselines, orienting
- * the league horizontal-break magnitude to his own break direction. */
-function fillBaselines(mix: PitchMix[], season: Arsenal, fallback: Arsenal): void {
+ * the league horizontal-break magnitude to his own break direction. The league
+ * line is the one for **his own hand** where the arsenal knows it: a
+ * right-hander throws 0.9–2.0 mph harder than a left-hander at every pitch
+ * type, so a blended figure marks a lefty down for being left-handed. */
+function fillBaselines(
+  mix: PitchMix[],
+  season: Arsenal,
+  fallback: Arsenal,
+  hand: 'R' | 'L' | null,
+): void {
   for (const m of mix) {
     // A split arsenal can be missing a pitch he's thrown only a handful of
     // times to that hand; his season-wide row is a better baseline than none.
@@ -752,7 +760,7 @@ function fillBaselines(mix: PitchMix[], season: Arsenal, fallback: Arsenal): voi
       m.seasonWhiff = sea.whiff;
       m.seasonPutAway = sea.putAway;
     }
-    const lg = getLeaguePitchAverage(m.pitchType);
+    const lg = getLeaguePitchAverage(m.pitchType, hand);
     if (lg) {
       m.leagueVelo = lg.velo;
       m.leagueSpin = lg.spin;
@@ -774,9 +782,11 @@ function fillBaselines(mix: PitchMix[], season: Arsenal, fallback: Arsenal): voi
  * still was comparing two different populations.
  */
 function attachArsenalBaselines(pitching: PitcherGame, season: SeasonArsenals): void {
-  fillBaselines(pitching.pitchMix, season.all, season.all);
-  if (pitching.vsRight) fillBaselines(pitching.vsRight.pitchMix, season.vsRight, season.all);
-  if (pitching.vsLeft) fillBaselines(pitching.vsLeft.pitchMix, season.vsLeft, season.all);
+  // The hand rides on the arsenal itself, so no caller had to learn about it.
+  const hand = season.hand;
+  fillBaselines(pitching.pitchMix, season.all, season.all, hand);
+  if (pitching.vsRight) fillBaselines(pitching.vsRight.pitchMix, season.vsRight, season.all, hand);
+  if (pitching.vsLeft) fillBaselines(pitching.vsLeft.pitchMix, season.vsLeft, season.all, hand);
 }
 
 // ---- Primary day builder (MLB Stats API) ---------------------------------

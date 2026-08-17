@@ -88,6 +88,12 @@ export interface SeasonArsenals {
   /** A bounded, evenly-spread selection of the season's pitches for the
    *  movement plot. See `sampleMovement` for why it is sampled at all. */
   samples: MovementSample[];
+  /** Which arm he throws with, off the CSV's own `p_throws` rather than
+   *  inferred from the sign of his break. It picks the per-hand league line
+   *  (`pitchLeague.ts`), and it is what lets the Arsenal tab label that line
+   *  `RHP AVG` / `LHP AVG` instead of a blended "league". Null only if every
+   *  row is missing the column. */
+  hand: 'R' | 'L' | null;
 }
 
 /**
@@ -170,6 +176,7 @@ interface StoredArsenals {
   battedBalls?: BattedBallMix;
   appearances?: Record<string, Appearance>;
   samples?: MovementSample[];
+  hand?: 'R' | 'L' | null;
 }
 
 // v2 carries the batted-ball mix; a v1 blob would deserialize with no fly balls
@@ -182,8 +189,11 @@ interface StoredArsenals {
 // is the subtler version of the same hazard: a v4 blob deserializes perfectly
 // and holds the *old* allocation — 240 points with a floor of ten under every
 // pitch type — so the plot would go on overstating a rare pitch tenfold for six
-// hours, correctly, off a blob nothing could tell was stale.
-const storeKey = (pitcherId: number) => `arsenal-${pitcherId}-${SEASON}-v5.json`;
+// hours, correctly, off a blob nothing could tell was stale. v6 is his throwing
+// hand, which picks the per-hand league line — a v5 blob deserializes with it
+// null, which falls the chart back to the blended figure and the word "League",
+// so that one degrades rather than lying.
+const storeKey = (pitcherId: number) => `arsenal-${pitcherId}-${SEASON}-v6.json`;
 
 const NO_BATTED_BALLS: BattedBallMix = { total: 0, fly: 0, ground: 0, line: 0 };
 
@@ -195,6 +205,7 @@ function toStored(a: SeasonArsenals): StoredArsenals {
     battedBalls: a.battedBalls,
     appearances: Object.fromEntries(a.appearances),
     samples: a.samples,
+    hand: a.hand,
   };
 }
 
@@ -208,6 +219,7 @@ function fromStored(s: StoredArsenals): SeasonArsenals {
       Object.entries(s.appearances ?? {}).map(([pk, a]) => [Number(pk), a]),
     ),
     samples: s.samples ?? [],
+    hand: s.hand ?? null,
   };
 }
 
@@ -243,6 +255,28 @@ function battedBallMix(records: Record<string, string>[]): BattedBallMix {
  * bubble each.
  */
 const DOTS_PER_ARSENAL = 100;
+
+/**
+ * Which arm he throws with, off the CSV's own `p_throws`.
+ *
+ * Read rather than inferred: the sign of his four-seam's horizontal break gives
+ * the same answer nearly always and is an inference where an exact column is
+ * sitting in the rows already being parsed. Taken as the **majority** of the
+ * season rather than the first row, so one mislabelled row cannot flip a
+ * pitcher's hand — and so a genuine switch-pitcher (Pat Venditte is the whole
+ * population) resolves to the arm he mostly uses rather than to whichever row
+ * came back first.
+ */
+function pitcherHand(records: Record<string, string>[]): 'R' | 'L' | null {
+  let r = 0;
+  let l = 0;
+  for (const rec of records) {
+    if (rec.p_throws === 'R') r++;
+    else if (rec.p_throws === 'L') l++;
+  }
+  if (!r && !l) return null;
+  return r >= l ? 'R' : 'L';
+}
 
 /**
  * Reduce the season's pitches to a bounded set of movement points.
@@ -394,6 +428,7 @@ export async function getSeasonArsenal(pitcherId: number): Promise<SeasonArsenal
     battedBalls: battedBallMix(records),
     appearances: appearanceMap(records),
     samples: sampleMovement(records),
+    hand: pitcherHand(records),
   };
   cache.set(pitcherId, { data, fetchedAt: Date.now() });
   await writeJsonBlob(storeKey(pitcherId), toStored(data));

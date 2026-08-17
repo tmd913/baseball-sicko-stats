@@ -9,7 +9,7 @@ import type { ArsenalPitch } from './pitcherArsenal.js';
  * (see savant.ts). These are stable year-to-year benchmarks for "above / below
  * average"; keyed by the same full pitch names the feed reports.
  */
-const LEAGUE: Record<string, ArsenalPitch> = {
+const LEAGUE_ALL: Record<string, ArsenalPitch> = {
   '4-Seam Fastball': { velo: 94.0, spin: 2300, vBreak: 15.5, hBreak: 8.0 },
   Sinker: { velo: 93.4, spin: 2130, vBreak: 8.5, hBreak: 15.0 },
   Cutter: { velo: 89.0, spin: 2400, vBreak: 8.0, hBreak: 2.5 },
@@ -25,6 +25,50 @@ const LEAGUE: Record<string, ArsenalPitch> = {
   Screwball: { velo: 82.0, spin: 2000, vBreak: 4.0, hBreak: 14.0 },
   'Knuckleball': { velo: 68.0, spin: 1200, vBreak: 3.0, hBreak: 6.0 },
   Eephus: { velo: 55.0, spin: 1400, vBreak: 0.0, hBreak: 6.0 },
+};
+
+/**
+ * The same table split by the **pitcher's** hand, off Savant's own league
+ * movement figures for 2026.
+ *
+ * **Velocity is the reason this exists.** A right-hander throws harder than a
+ * left-hander at every pitch type — measured, 0.9 to 2.0 mph — so a lefty
+ * judged against a blended average is marked down about two miles an hour for
+ * being left-handed. The **break** magnitudes barely move by comparison (0.05
+ * to 0.74" horizontally, 0.10 to 0.95" vertically), which is why the blended
+ * table served for as long as it did; splitting it costs nothing and stops the
+ * chart's "RHP AVG" / "LHP AVG" label being a claim the numbers can't back.
+ *
+ * `hBreak` is a MAGNITUDE here exactly as in `LEAGUE_ALL` — the sign is which
+ * way the arm goes, so the caller orients it to the pitcher's own direction.
+ * Spin is not split: it is a property of the pitch rather than of the arm, and
+ * Savant publishes no per-hand figure this could be read from.
+ */
+const LEAGUE_BY_HAND: Record<'R' | 'L', Record<string, Partial<ArsenalPitch>>> = {
+  R: {
+    '4-Seam Fastball': { velo: 94.9, vBreak: 15.1, hBreak: 7.8 },
+    Sinker: { velo: 94.4, vBreak: 8.7, hBreak: 14.7 },
+    Cutter: { velo: 90.0, vBreak: 7.9, hBreak: 1.8 },
+    Slider: { velo: 85.9, vBreak: 1.9, hBreak: 3.9 },
+    Sweeper: { velo: 83.0, vBreak: 1.3, hBreak: 13.4 },
+    Curveball: { velo: 79.9, vBreak: -9.4, hBreak: 8.2 },
+    'Knuckle Curve': { velo: 82.0, vBreak: -7.0, hBreak: 7.5 },
+    Changeup: { velo: 87.0, vBreak: 4.0, hBreak: 13.8 },
+    Splitter: { velo: 87.1, vBreak: 3.8, hBreak: 10.8 },
+    Slurve: { velo: 80.9, vBreak: -6.0, hBreak: 10.2 },
+  },
+  L: {
+    '4-Seam Fastball': { velo: 93.2, vBreak: 14.9, hBreak: 7.6 },
+    Sinker: { velo: 92.6, vBreak: 8.5, hBreak: 14.8 },
+    Cutter: { velo: 88.0, vBreak: 7.3, hBreak: 1.1 },
+    Slider: { velo: 85.0, vBreak: 2.0, hBreak: 4.1 },
+    Sweeper: { velo: 81.0, vBreak: 0.6, hBreak: 13.5 },
+    Curveball: { velo: 79.0, vBreak: -9.3, hBreak: 7.6 },
+    'Knuckle Curve': { velo: 81.0, vBreak: -7.0, hBreak: 7.5 },
+    Changeup: { velo: 84.9, vBreak: 4.7, hBreak: 13.6 },
+    Splitter: { velo: 85.3, vBreak: 4.8, hBreak: 9.1 },
+    Slurve: { velo: 80.0, vBreak: -6.0, hBreak: 10.2 },
+  },
 };
 
 /**
@@ -69,8 +113,22 @@ export function getLeaguePitchSpread(pitchName: string): { hRange: number; vRang
   return LEAGUE_SPREAD[pitchName] ?? DEFAULT_SPREAD;
 }
 
-/** The MLB league-average line for a pitch type (by full name), or null if the
- * pitch type isn't in the table (the card then shows no league arrow for it). */
-export function getLeaguePitchAverage(pitchName: string): ArsenalPitch | null {
-  return LEAGUE[pitchName] ?? null;
+/**
+ * The MLB league-average line for a pitch type (by full name), or null if the
+ * pitch type isn't in the table (the card then shows no league arrow for it).
+ *
+ * **`hand` narrows it to pitchers who throw with that arm**, which matters most
+ * for velocity (see `LEAGUE_BY_HAND`). It is optional and falls back to the
+ * blended figure field by field, so a caller that does not know the hand — or a
+ * pitch type the split table has never been read against — gets exactly what it
+ * got before rather than nothing.
+ */
+export function getLeaguePitchAverage(
+  pitchName: string,
+  hand?: 'R' | 'L' | null,
+): ArsenalPitch | null {
+  const all = LEAGUE_ALL[pitchName];
+  if (!all) return null;
+  const split = hand ? LEAGUE_BY_HAND[hand]?.[pitchName] : undefined;
+  return split ? { ...all, ...split } : all;
 }

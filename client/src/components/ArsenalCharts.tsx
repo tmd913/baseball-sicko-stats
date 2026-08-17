@@ -2,6 +2,7 @@ import { useId, useMemo } from 'react';
 import type { MovementSample, SeasonArsenalPitch } from '../types';
 import { pitchStyle } from '../lib';
 import { InfoKey } from './InfoKey';
+import { pitchDirections } from './Arsenal';
 
 /**
  * The Arsenal tab's two pictures: **Pitch Usage** (how often he throws each
@@ -69,6 +70,10 @@ function darken(hex: string, factor = 0.62): string {
       .padStart(2, '0');
   return `#${ch(16)}${ch(8)}${ch(0)}`;
 }
+
+/** `--rank-hot` / `--rank-cold`, or nothing where "better" has no meaning. */
+const toneClass = (tone: 'better' | 'worse' | null): string =>
+  tone === null ? '' : ` tone-${tone}`;
 
 /** How wide a usage capsule can get, as a share of its track. */
 const TRACK_MAX = 1;
@@ -227,6 +232,21 @@ const VIEW = 400;
 const CX = VIEW / 2;
 const CY = 196;
 const R_PX = 156;
+/**
+ * The drawn box, cropped to what is actually in it.
+ *
+ * A disc in a 400×400 square leaves ~33 units of nothing above it and ~40
+ * below, which at the width this renders is about 70px of empty SVG between the
+ * title and the top of the circle — space no margin can take back, because it
+ * is inside the picture. **The crop is measured against the soft disc**, which
+ * is the outermost thing drawn — y = 24.4…367.6, being `R_PX` plus 2.4" of
+ * margin either side of centre — so 22…370 keeps all of it with the ring
+ * labels (y≈44 and y≈356) comfortably inside. A first pass cut at 26 and
+ * clipped 1.6 units off the top of the disc; it took a check on the *painted*
+ * pixels to see it, which is the only kind that can.
+ */
+const VIEW_TOP = 22;
+const VIEW_H = 348;
 const SCALE = R_PX / DOMAIN_IN; // px per inch
 
 const px = (inches: number) => inches * SCALE;
@@ -250,12 +270,15 @@ const inches1 = (n: number) => `${n >= 0 ? '' : '−'}${Math.abs(n).toFixed(1)}"
  */
 export function MovementChart({
   season,
+  hand,
   pitches,
   samples,
   hovered,
   onHover,
 }: {
   season: number | null;
+  /** His throwing arm, which names the league line he is measured against. */
+  hand: 'R' | 'L' | null;
   pitches: SeasonArsenalPitch[];
   samples: MovementSample[];
   hovered: string | null;
@@ -281,6 +304,13 @@ export function MovementChart({
 
   if (!shown.length) return null;
 
+  // What the league line is called on this page. `pitchLeague.ts` is split by
+  // the pitcher's hand, so where the server knows it the label names the
+  // population the figures actually come from; where it doesn't, the blended
+  // table is what is being shown and the label says so.
+  const avgLabel = hand === 'R' ? 'RHP AVG' : hand === 'L' ? 'LHP AVG' : 'LEAGUE AVG';
+  // The same fact in the legend's own sentence case, beside `Usage` and `MPH`.
+  const rowAvgLabel = hand === 'R' ? 'RHP avg' : hand === 'L' ? 'LHP avg' : 'Lg avg';
   const hot = hovered !== null && types.has(hovered) ? hovered : null;
   const focus = hot ? (shown.find((p) => p.pitchType === hot) ?? null) : null;
 
@@ -295,6 +325,43 @@ export function MovementChart({
     focus && focus.leagueVBreak !== null && focus.vBreak !== null
       ? focus.vBreak - focus.leagueVBreak
       : null;
+
+  // **Tail or break**, which is a fact about his arm rather than about the
+  // number: a pitch moving to his throwing side tails, one moving to his glove
+  // side breaks. Arm side is toward third base for a right-hander (positive
+  // `hBreak`) and toward first for a left-hander. With no hand on the wire
+  // there is no way to tell, and "break" is the word that is true either way.
+  const armSide =
+    focus === null || focus.hBreak === null || hand === null
+      ? null
+      : hand === 'R'
+        ? focus.hBreak > 0
+        : focus.hBreak < 0;
+  const hWord = armSide ? 'tail' : 'break';
+
+  // **Red is better and blue is worse**, which is the diverging scale the
+  // League table's rank badge already uses (`--rank-hot` / `--rank-cold`) and
+  // the one Savant's own percentile card reads in. Which *way* is better is not
+  // ours to assume: a four-seamer wants more ride and a curveball wants more
+  // drop, so it comes off `pitchDirections` — the same per-pitch table the
+  // arsenal rows colour their ▲▼ with, rather than a second opinion beside it.
+  // A metric that table calls `none` (a slider's induced break sits near zero
+  // by design) takes no colour at all.
+  const better = focus ? pitchDirections(focus.pitchType) : null;
+  const vTone =
+    better === null || vDiff === null || better.ivb === 'none'
+      ? null
+      : (better.ivb === 'up') === vDiff >= 0
+        ? 'better'
+        : 'worse';
+  // Horizontal is judged on magnitude — its sign is only which way the arm
+  // goes — and more movement is the better way for every type that reads it.
+  const hTone =
+    better === null || hDiff === null || better.hb === 'none'
+      ? null
+      : hDiff >= 0
+        ? 'better'
+        : 'worse';
 
   const fx = focus?.hBreak !== null && focus?.hBreak !== undefined ? CX + px(focus.hBreak) : 0;
   const fy = focus?.vBreak !== null && focus?.vBreak !== undefined ? CY - px(focus.vBreak) : 0;
@@ -313,33 +380,48 @@ export function MovementChart({
             labelled and the dashed ones halve them.
           </p>
           <p>
-            The hatched blob behind each colour is where the <b>MLB average</b> of that
-            pitch sits, drawn as wide as the league's own spread — average is a cloud too,
-            so daylight narrower than the blob is not a difference.
+            The hatched blob behind each colour is where the average of that pitch
+            sits for pitchers of <b>his own hand</b>, drawn as wide as the league's own
+            spread — average is a cloud too, so daylight narrower than the blob is not a
+            difference. (A right-hander throws about two miles an hour harder than a
+            left-hander at every pitch type, which is why the comparison is split.)
           </p>
           <p>Pick a pitch below to single it out and see how it compares.</p>
         </InfoKey>
       </figcaption>
 
-      {/* The row holds its own height with a hidden copy of a real pitch's chips
-          rather than a declared `min-height`: they wrap to two rows on a phone
-          and one on a desktop, so any fixed number would be wrong at one of
-          those widths and would shift the plot under the reader's finger the
-          moment they picked a pitch.
+      {/* **Two blocks, and they answer two different questions.** On the left,
+          what the pitch actually does — its rise or drop, its tail or break.
+          On the right, how that compares with the same pitch thrown by the rest
+          of his own hand. They were one run of chips saying both at once
+          (`Break 3.5" · 3.0" less than league`), which reads as one fact and is
+          two.
 
-          The ghost and the live text share **one grid cell** — the trick the
-          Columns dialog's hint line uses for exactly this — so at rest the space
-          the chips will need carries the sentence that says how to get them,
-          rather than sitting empty. */}
+          The row holds its own height with a hidden copy of a real pitch's
+          chips rather than a declared `min-height`: they wrap differently on a
+          phone and a desktop, so any fixed number would be wrong at one of
+          those widths and would shift the plot under the reader's finger the
+          moment they picked a pitch. The ghost and the live text share **one
+          grid cell** — the Columns dialog's own hint-line trick — so at rest
+          the space carries the sentence that says how to fill it. */}
       <div className="mv-callouts">
         <span className="mv-callouts-ghost" aria-hidden="true">
-          <span className="mv-callout">
-            Break <b>0.0"</b>
-            <em> · 0.0" more than league</em>
+          <span className="mv-cal-group">
+            <span className="mv-cal">
+              <b>0.0"</b> break
+            </span>
+            <span className="mv-cal">
+              <b>0.0"</b> rise
+            </span>
           </span>
-          <span className="mv-callout">
-            Rise <b>0.0"</b>
-            <em> · 0.0" more than league</em>
+          <span className="mv-cal-group mv-cal-vs">
+            <span className="mv-cal-tag">vs {avgLabel}</span>
+            <span className="mv-cal">
+              <b>0.0"</b> less break
+            </span>
+            <span className="mv-cal">
+              <b>0.0"</b> less rise
+            </span>
           </span>
         </span>
         <span className="mv-callouts-live">
@@ -347,39 +429,40 @@ export function MovementChart({
             <span className="mv-hint">Pick a pitch to compare it with the league</span>
           ) : (
             <>
-              {focus.hBreak !== null && (
-                <span className="mv-callout">
-                  Break <b>{Math.abs(focus.hBreak).toFixed(1)}"</b>
-                  {hDiff !== null && (
-                    <em>
-                      {' '}
-                      · {Math.abs(hDiff).toFixed(1)}" {hDiff >= 0 ? 'more' : 'less'} than league
-                    </em>
-                  )}
-                </span>
-              )}
-              {focus.vBreak !== null && (
-                <span className="mv-callout">
-                  {focus.vBreak >= 0 ? 'Rise' : 'Drop'} <b>{Math.abs(focus.vBreak).toFixed(1)}"</b>
-                  {vDiff !== null && (
-                    <em>
-                      {' '}
-                      {/* "more" and "less" are said of the quantity just named,
-                          which flips with the pitch: a curveball above the
-                          league's induced break has LESS drop, not more rise. */}
-                      · {Math.abs(vDiff).toFixed(1)}"{' '}
-                      {(focus.vBreak >= 0 ? vDiff >= 0 : vDiff < 0) ? 'more' : 'less'} than league
-                    </em>
-                  )}
-                </span>
-              )}
+              <span className="mv-cal-group">
+                {focus.hBreak !== null && (
+                  <span className="mv-cal">
+                    <b>{Math.abs(focus.hBreak).toFixed(1)}"</b> {hWord}
+                  </span>
+                )}
+                {focus.vBreak !== null && (
+                  <span className="mv-cal">
+                    <b>{Math.abs(focus.vBreak).toFixed(1)}"</b>{' '}
+                    {focus.vBreak >= 0 ? 'rise' : 'drop'}
+                  </span>
+                )}
+              </span>
+              <span className="mv-cal-group mv-cal-vs">
+                <span className="mv-cal-tag">vs {avgLabel}</span>
+                {hDiff !== null && (
+                  <span className={`mv-cal${toneClass(hTone)}`}>
+                    <b>{Math.abs(hDiff).toFixed(1)}"</b> {hDiff >= 0 ? 'more' : 'less'} {hWord}
+                  </span>
+                )}
+                {vDiff !== null && focus.vBreak !== null && (
+                  <span className={`mv-cal${toneClass(vTone)}`}>
+                    <b>{Math.abs(vDiff).toFixed(1)}"</b>{' '}
+                    {/* "more" and "less" are said of the quantity just named,
+                        which flips with the pitch: a curveball above the
+                        league's induced break has LESS drop, not more rise. */}
+                    {(focus.vBreak >= 0 ? vDiff >= 0 : vDiff < 0) ? 'more' : 'less'}{' '}
+                    {focus.vBreak >= 0 ? 'rise' : 'drop'}
+                  </span>
+                )}
+              </span>
             </>
           )}
         </span>
-      </div>
-
-      <div className="mv-axis-top" aria-hidden="true">
-        <span>1B ◀</span> MOVES TOWARD <span>▶ 3B</span>
       </div>
 
       <div className="mv-plot-wrap">
@@ -392,7 +475,7 @@ export function MovementChart({
 
         <svg
           className="mv-svg"
-          viewBox={`0 0 ${VIEW} ${VIEW}`}
+          viewBox={`0 ${VIEW_TOP} ${VIEW} ${VIEW_H}`}
           role="img"
           aria-label={`Movement profile: ${shown
             .map((p) => `${p.pitchType} breaks ${inches1(p.hBreak ?? 0)} horizontally and ${inches1(p.vBreak ?? 0)} vertically`)
@@ -531,15 +614,26 @@ export function MovementChart({
         </svg>
       </div>
 
+      {/* Under the plot rather than over it: it names the horizontal axis, and
+          the axis is at the bottom of the reader's eye by the time they want
+          it — where above the circle it was a line of chrome between the title
+          and the thing the title names. */}
+      <div className="mv-axis-foot" aria-hidden="true">
+        <span>1B ◀</span> MOVES TOWARD <span>▶ 3B</span>
+      </div>
+
+      {/* Named for the same population the figures come from: the blob sits at
+          the average for *his* hand, so calling it "MLB average" would be the
+          one label on the chart that was still blended. */}
       <div className="mv-legend-note" aria-hidden="true">
-        <span className="mv-legend-hatch" /> MLB average
+        <span className="mv-legend-hatch" /> {avgLabel}
       </div>
 
       <div className="mv-legend">
         <div className="mv-legend-labels" aria-hidden="true">
           <span>Usage</span>
           <span>MPH</span>
-          <span>Lg avg</span>
+          <span>{rowAvgLabel}</span>
         </div>
         <div className="mv-legend-cols">
           {shown.map((p) => {

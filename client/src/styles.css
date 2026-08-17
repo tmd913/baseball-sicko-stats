@@ -13434,18 +13434,64 @@ html[data-theme='lavender'] .league-table thead th {
   display: grid;
   margin-bottom: 6px;
 }
+/* Overall at the left, the comparison at the right — two questions, two
+   corners, and the circle below rises into the gap between them (see
+   `.mv-plot-wrap`'s negative margin). */
 .mv-callouts-ghost,
 .mv-callouts-live {
   grid-area: 1 / 1;
   display: flex;
   flex-wrap: wrap;
-  align-content: center;
-  justify-content: center;
-  gap: 6px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px 10px;
+}
+.mv-cal-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: flex-start;
+  min-width: 0;
+}
+.mv-cal-vs {
+  align-items: flex-end;
+  text-align: right;
+}
+.mv-cal {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.mv-cal b {
+  color: var(--text);
+  font-weight: 800;
+}
+/* Red is better, blue is worse — the League table's own rank scale, and the one
+   Savant's percentile card reads in. Which way is better is per pitch type and
+   comes from `pitchDirections`; a metric that table calls neutral takes neither. */
+.mv-cal.tone-better b {
+  color: var(--rank-hot);
+}
+.mv-cal.tone-worse b {
+  color: var(--rank-cold);
+}
+.mv-cal-tag {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+  white-space: nowrap;
 }
 /* Laid out and invisible — it is holding the row open, not saying anything. */
 .mv-callouts-ghost {
   visibility: hidden;
+}
+/* Alone in a `space-between` row it would sit at the left; it is a sentence
+   about the whole chart and belongs under the middle of the title. */
+.mv-callouts-live:has(> .mv-hint) {
+  justify-content: center;
 }
 .mv-hint {
   font-size: 11px;
@@ -13453,33 +13499,42 @@ html[data-theme='lavender'] .league-table thead th {
   color: var(--faint);
   text-align: center;
 }
-.mv-callout {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--muted);
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 3px 9px;
-}
-.mv-callout b {
-  color: var(--text);
-  font-weight: 800;
-}
-.mv-axis-top {
+
+.mv-axis-foot {
   text-align: center;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--faint);
+  margin-top: 2px;
 }
-.mv-axis-top span {
+.mv-axis-foot span {
   color: var(--muted);
 }
 
+/* **The circle rises into the row above it.** The plot is a disc in a square
+   box, so the top of that box is empty across its whole width and stays empty
+   at the edges a long way down — at 40 viewBox units below the top the disc
+   still occupies only the middle half. The callouts sit in the two corners it
+   never reaches, so the SVG is pulled up under them rather than clearing a row
+   it does not need. The value is in viewBox units of headroom (the disc's top
+   sits 33 units down) scaled to the widest the chart is drawn, and it is
+   deliberately short of that: measured, the chips clear the painted disc by
+   16px at 1400 and 12px at 320. */
 .mv-plot-wrap {
   position: relative;
+  /* The viewBox is cropped to the disc, so the SVG's own top edge is now very
+     nearly the top of the circle — and the circle is a *point* there, widening
+     slowly. The callouts sit in the two corners it never reaches, so it is
+     pulled up under them by a little rather than clearing a whole row. */
+  margin-top: -40px;
+}
+/* Over the SVG, which comes after it in the DOM and would otherwise paint on
+   top of the two corners it is sharing. */
+.mv-callouts {
+  position: relative;
+  z-index: 1;
 }
 .mv-axis-side {
   position: absolute;
@@ -13725,6 +13780,13 @@ html[data-theme='lavender'] .league-table thead th {
   .pu-pct {
     font-size: 12px;
   }
+  /* The circle rises less far here. The SVG shrinks with the container and the
+     chips do not, so the two corners the disc tucks into close up: at 320px a
+     40px lift puts a chip *inside* the painted disc, where 18 leaves clearance
+     at every width the app is checked at. Measured, not guessed. */
+  .mv-plot-wrap {
+    margin-top: -18px;
+  }
   /* The row labels stay — three unlabelled numbers under a swatch are not a
      legend — and give up type size instead, which is the cheaper thing here. */
   .mv-legend {
@@ -13762,9 +13824,4 @@ html[data-theme='lavender'] .league-table thead th {
   width: 320px;
   max-width: calc(100vw - 32px);
   text-align: left;
-}
-.mv-callout em {
-  font-style: normal;
-  color: var(--faint);
-  font-weight: 600;
 }
