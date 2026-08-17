@@ -723,18 +723,26 @@ export default function LeagueMatchupView({
         <span className="mup-side-id">
           <span className="mup-side-name">{homeTeam?.name ?? `Team ${home.teamId}`}</span>
           {homeTeam && <span className="mup-side-rec">{record(homeTeam)}</span>}
+          {/* **And his acquisitions**, which on a bye have nowhere else to go:
+              the Summary page is where the two managers' counts are compared,
+              and a bye has no Summary page.
+
+              **Under the record rather than at the far end of the row**, which
+              is where it sat: that put it opposite nothing — a scoreboard card
+              has a headline triple to sit against and this head has no second
+              column — so it read as a figure adrift at the other side of the
+              page from the team it belongs to. Under the record it is a third
+              line of the same block, which is what it is: another fact about
+              this manager's week. With a line of its own there is room to say
+              the word rather than `ACQ`. */}
+          {home.acquisitions !== null && (
+            <span className="mup-acq-tag" title={acqTitle(home)}>
+              <span className="mup-acq-label">Acquisitions:</span> {acqCell(home)}
+            </span>
+          )}
         </span>
         {/* Why there is one team here and not two. */}
         <span className="lg-bye-tag">Bye</span>
-        {/* **And his acquisitions**, which on a bye have nowhere else to go: the
-            Summary page is where the two managers' counts are compared, and a
-            bye has no Summary page. It is the one number on this head that is
-            about the week rather than about the season. */}
-        {home.acquisitions !== null && (
-          <span className="mup-acq-tag" title={acqTitle(home)}>
-            <span className="mup-acq-label">Acq</span> {acqCell(home)}
-          </span>
-        )}
       </div>
     );
 
