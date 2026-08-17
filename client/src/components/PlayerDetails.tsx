@@ -16,9 +16,7 @@ import type {
   XwobaSeries,
 } from '../types';
 import { headshotUrl, savantPlayerUrl, statusCorner } from '../lib';
-import { SeasonArsenalRow, SplitTabs } from './Arsenal';
 import { MovementChart, PitchUsageChart } from './ArsenalCharts';
-import type { SplitKey } from './Arsenal';
 import { RemoveButton } from './RemoveButton';
 import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
 import { BaseballMark } from './BaseballMark';
@@ -284,61 +282,41 @@ type DetailsTab =
   | 'charts';
 
 /**
- * The Arsenal tab: a pitcher's season pitch mix, overall or against one batter
- * handedness. Usage share is relative to the selected view, so a split's shares
- * still add to 100% — that's the point of the split, since who he faces changes
- * what he throws.
+ * The Arsenal tab: a pitcher's season pitch mix, as the two pictures a Baseball
+ * Savant player page leads with — what he throws, and where it moves.
+ *
+ * **The tab is the charts and nothing else.** It carried a `SplitTabs` row and a
+ * `SeasonArsenalRow` per pitch above them for a while, and both were saying
+ * again, in a table, what the pictures say better:
+ *
+ * - The **split tabs** are subsumed by the Pitch Usage chart, which draws vs LHH
+ *   and vs RHH side by side *always*. A control that switches the whole tab
+ *   between two of the three columns already on screen is a second, narrower way
+ *   to ask a question the chart has answered — and it made the movement cloud a
+ *   third of itself for no stated reason. (`SplitTabs` itself stays: the pitcher
+ *   card's Line and Arsenal sections are its live callers.)
+ * - The **per-pitch rows** are the velo/spin/break/results table, which is what
+ *   the movement plot, the legend under it and the callouts now carry between
+ *   them.
+ *
+ * The samples are handed over whole for the same reason: with no split control
+ * there is nothing to cut them by, and the cloud is the pitcher's season.
  */
-function ArsenalTab({
-  arsenal,
-  split,
-  onSplit,
-}: {
-  arsenal: SeasonArsenal;
-  split: SplitKey;
-  onSplit: (v: SplitKey) => void;
-}) {
+function ArsenalTab({ arsenal }: { arsenal: SeasonArsenal }) {
   // The two charts share one selection, so picking out the slider in the usage
   // butterfly picks it out in the movement cloud as well — they are two views of
   // one arsenal, and a selection each would be two answers to "which pitch am I
-  // looking at" on one screen. Held here rather than in either chart for the
-  // same reason `PlayerDetails` holds the split.
+  // looking at" on one screen.
   const [hovered, setHovered] = useState<string | null>(null);
-  const pitches =
-    (split === 'R' ? arsenal.vsRight : split === 'L' ? arsenal.vsLeft : null) ?? arsenal.pitches;
-  // The samples carry the batter's side, so the cloud follows the split tabs off
-  // the one array the server sent rather than three that could disagree.
-  //
-  // **`?? []` because a response is not a promise.** `SeasonArsenal.samples` is
-  // declared non-optional and the two `types.ts` are mirrored by hand, so
-  // TypeScript cannot catch a server that doesn't send it — and one won't, in
-  // the window where a new client is already at the edge and the Lambda is
-  // still on the older build. Without the fallback that window is not a chart
-  // with no dots, it is `undefined.filter` unmounting the whole app: measured
-  // against a stale dev server, `#root` went to **0 children** on the press.
-  // The rest of the tab is drawn from fields that server does send, so an
-  // absent cloud costs the movement plot and nothing else.
-  const allSamples = arsenal.samples ?? [];
-  const samples =
-    split === 'all' ? allSamples : allSamples.filter((s) => s.stand === split);
   if (arsenal.pitches.length === 0) {
     return <div className="details-status">No Statcast pitches this season.</div>;
   }
   return (
     <div className="details-arsenal">
-      <SplitTabs
-        hasRight={!!arsenal.vsRight}
-        hasLeft={!!arsenal.vsLeft}
-        value={split}
-        onChange={onSplit}
-      />
-      {/* The pictures lead: what he throws and where it moves are the two things
-          a reader opens an arsenal for, and the per-pitch tables under them are
-          the detail behind both. */}
       <div className="arsenal-charts">
         <PitchUsageChart
           season={arsenal.season ?? null}
-          pitches={pitches}
+          pitches={arsenal.pitches}
           vsRight={arsenal.vsRight}
           vsLeft={arsenal.vsLeft}
           hovered={hovered}
@@ -346,21 +324,19 @@ function ArsenalTab({
         />
         <MovementChart
           season={arsenal.season ?? null}
-          pitches={pitches}
-          samples={samples}
+          pitches={arsenal.pitches}
+          // `?? []` because a response is not a promise: `samples` is declared
+          // non-optional and the two `types.ts` are mirrored by hand, so
+          // TypeScript cannot catch a server that doesn't send it — and one
+          // won't, in the window where a new client is at the edge and the
+          // Lambda is still on the older build. Without it that window is not a
+          // chart with no dots, it is `undefined.filter` unmounting the whole
+          // app (measured against a stale dev server: `#root` went to 0
+          // children on the press).
+          samples={arsenal.samples ?? []}
           hovered={hovered}
           onHover={setHovered}
         />
-      </div>
-      <p className="details-note">
-        Season averages per pitch type. <span className="am-arrow">▲▼</span> compares him to the
-        league average for that pitch — green means better for that pitch, so a four-seamer wants
-        more ride and a changeup more drop.
-      </p>
-      <div className="arsenal">
-        {pitches.map((p) => (
-          <SeasonArsenalRow key={p.pitchType} p={p} />
-        ))}
       </div>
     </div>
   );
@@ -655,7 +631,6 @@ export function PlayerDetails({
   const [gameLogError, setGameLogError] = useState<string | null>(null);
   const [gameLogLoading, setGameLogLoading] = useState(false);
   const [arsenal, setArsenal] = useState<SeasonArsenal | null>(null);
-  const [arsenalSplit, setArsenalSplit] = useState<SplitKey>('all');
   const [arsenalError, setArsenalError] = useState<string | null>(null);
   const [arsenalLoading, setArsenalLoading] = useState(false);
   const arsenalReq = useRef<number | null>(null);
@@ -797,7 +772,6 @@ export function PlayerDetails({
     arsenalReq.current = null;
     setArsenal(null);
     setArsenalError(null);
-    setArsenalSplit('all');
     gameLogReq.current = null;
     setGameLog(null);
     setGameLogError(null);
@@ -1311,7 +1285,7 @@ export function PlayerDetails({
         <div className="details-status details-error">⚠ {arsenalError}</div>
       )}
       {tab === 'arsenal' && arsenal && !arsenalLoading && (
-        <ArsenalTab arsenal={arsenal} split={arsenalSplit} onSplit={setArsenalSplit} />
+        <ArsenalTab arsenal={arsenal} />
       )}
 
       {tab === 'gamelog' && gameLogWait && <LoadingBlock>Reading the game log</LoadingBlock>}
