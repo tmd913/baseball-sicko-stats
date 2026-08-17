@@ -110,6 +110,33 @@ four wide tables that reads as a header.
 scrolling table would slide against its own rows, and the zebra stripe is already
 doing the work a wash would do.
 
+**The header gradient has to be set through `--cell-bg`, and setting
+`background` instead was a shipped bug.** The summary table — and the research
+board, whose table carries `.summary-table` too — draws a **6px strip of
+`var(--cell-bg)` straddling every cell's left edge**, the cover for the sub-pixel
+seam between two cell grounds (see **Client — the Roster view**, where that
+mechanism is argued at length). Assigning `background` directly left the strip on
+the *solid* colour the token still held while the cell had become a gradient, so
+every column boundary in the header wore a vertical bar of `--panel-2` over a
+ground that had darkened to `--bg-2` by the bottom of the row: **ten light bars
+across the header of every roster page**, measured at `rgb(241,236,250)` against
+`rgb(233,229,243)`, and nineteen colour steps along a text-free row of the header
+where there should be one.
+
+The token's own comment says exactly what went wrong — *"two things need the same
+colour and must not be able to disagree: the cell's own background, and the
+hairline of it drawn just outside its left edge"* — so the fix is to set the name
+rather than to paint behind it. A `background` shorthand takes an image, so the
+token holds a gradient happily, and because the strip spans `top: 0; bottom: 0`
+of the very cell it sits in, a **vertical** gradient lands on the same stops in
+both. Measured after: **one** colour step along that row on the roster and the
+game log and the league table, **two** on the research board — each of them a
+pinned column's own edge shadow, which is meant to be there.
+
+**The rule to take from it**: a theme may only ever set the *tokens* a component
+names. Where one is declared, something is reading it, and painting past it is
+how two halves of one surface come to disagree.
+
 ### The preference, and why it is the one thing in localStorage
 
 `UserPrefs.theme` is a **string id** rather than a boolean — there can be a third

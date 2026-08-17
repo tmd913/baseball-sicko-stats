@@ -13112,12 +13112,36 @@ html[data-theme='lavender'] .order-row {
 /* The three wide tables keep a flat ground on purpose: a gradient down a
    scrolling table would slide against its own rows, and the zebra stripe is
    already doing the work a wash would do. What they take instead is a header
-   row that reads as a header. */
+   row that reads as a header.
+
+   **It sets `--cell-bg` rather than `background`, and the first pass set
+   `background`.** That was a reported bug and a good lesson in why the token is
+   named at all: the summary table (and the research board, whose table carries
+   `.summary-table` as well) draws a **6px strip of `var(--cell-bg)` straddling
+   every cell's left edge** — the cover for the sub-pixel seam between two cell
+   grounds, argued in full up beside that rule. Painting `background` directly
+   left that strip on the *solid* colour the token still held while the cell
+   itself had become a gradient, so each column boundary in the header wore a
+   vertical bar of `--panel-2` over a ground that had darkened to `--bg-2` by the
+   bottom of the row: ten light bars across the header of every roster page,
+   measured at `rgb(241,236,250)` against `rgb(233,229,243)`.
+
+   The stylesheet's own comment on `--cell-bg` says exactly what went wrong —
+   *"two things need the same colour and must not be able to disagree: the
+   cell's own background, and the hairline of it drawn just outside its left
+   edge"* — so the fix is to set the name rather than to paint behind it. A
+   `background` shorthand takes an image, so the token holds the gradient
+   happily, and because the strip spans `top: 0; bottom: 0` of the very cell it
+   sits in, a **vertical** gradient lands on exactly the same stops in both. The
+   explicit `background` below is for the two tables that do not read the token
+   (the game log and its siblings); on the two that do it is what the base rule
+   already says, to the character. */
 html[data-theme='lavender'] .summary-table thead th,
 html[data-theme='lavender'] .research-table thead th,
 html[data-theme='lavender'] .glog-table thead th,
 html[data-theme='lavender'] .league-table thead th {
-  background: linear-gradient(180deg, var(--panel-2) 0%, var(--bg-2) 100%);
+  --cell-bg: linear-gradient(180deg, var(--panel-2) 0%, var(--bg-2) 100%);
+  background: var(--cell-bg);
 }
 
 @media (max-width: 640px) {
