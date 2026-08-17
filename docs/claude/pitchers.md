@@ -77,16 +77,27 @@ pitches. The exact figure is printed beside every bar, so the relative scale
 hides nothing. **One scale across all three columns**, so a bar reaching further
 really is a pitch thrown more often.
 
-**Its separators are single lines**, which took a fix at each end. The rule
-under the headers was a `border-bottom` on each of the three head cells with a
+**Its one separator is the rule under the headers.** That took a fix of its own
+and keeps it: it was a `border-bottom` on each of the three head cells with a
 margin either side of the middle one — drawn in three segments with two gaps in
-it, a separator that looks like it is made of pieces; it is one border on the
-container now, with the breathing room moved onto the cells so the verticals
-still reach it. And the two vertical dividers were on a `.pu-mid` inside a row
-carrying 2px of its own padding, so every row put a 2px break in them: the
-padding moved inside the cell and the cell stretches to the row, so consecutive
-boxes touch. Measured: four inter-row gaps at **0px**, and 1px from the header,
-which is the rule itself.
+it, a separator that looks like it is made of pieces — and is one border on the
+container now.
+
+**The two vertical dividers down the Pitch column are gone**, and the round of
+work that got them drawing unbroken is the argument for it. They ran the full
+height of the table either side of the badges, and keeping them continuous took a
+`padding: 0` on the row button and a `.pu-mid` stretched to it (a 2px button
+padding had put a 2px break in them, drawing each divider as a dashed line) plus
+the header rule above being one border rather than three segments so the two
+separators met. All of that was in service of a line that was **boxing the middle
+column into a table-within-a-table** — on the one chart in the app whose whole
+device is that a row *is* one pitch, read across from its share against lefties
+to its share against righties. What they were separating needs no line: the `vs.
+LHH` / `vs. RHH` heads and the bars' own direction already say which side of the
+plate a figure belongs to. The rhythm the fixes moved onto `.pu-mid` stays, since
+that cell is what sets the row height — measured after, a **28px row with 0px
+between consecutive rows** and the header rule still 1px, which is now the only
+rule on the chart.
 
 **Selected, the badge grows into the pitch's full name and takes the figure's
 place**, which is Savant's own move. The middle column is a fixed width, so
@@ -184,6 +195,116 @@ reads instantly: Sale's 11° is a nearly flat line at the bottom left.
 arm sweeps through, and at a low slot the arm passes straight through where a
 number would go — measured at 30°, the degrees and the arm line were touching.
 
+### The mark is a press, and what it opens is the release point
+
+**The mark drew half of what the leaderboard says about a slot and its whole
+affordance was an SVG `<title>`** — which is the two failures this app has
+already written down once, met a third time. A native tooltip is **invisible on a
+phone**, where roughly half the traffic is; and it wants the pointer on the
+*painted stroke*, which here is **2.5 units of arm 34 long**. So there was nothing
+to see on touch and next to nothing to hit with a mouse, which is exactly how it
+was reported: *not seeing the overlay when clicking or hovering the arm angle*.
+
+**And the missing half was already on the wire.** `ArmAngleInfo` has carried
+`releaseHeight` and `releaseSide` since it was written — Savant publishes the
+release point beside the angle, which is what its own arm-angle page leads with —
+and **nothing in either workspace read either field**. The angle is where his arm
+is; the release point is where the ball actually leaves it, which is the fact a
+reader is chasing when they reach for this corner at all.
+
+So the group is a real target — `role="button"` with a `tabIndex`, the rule the
+Game Log's rows and a scoreboard card already follow for an element that cannot
+hold a `<button>` — and the reveal is the app's own **popover**
+(`.settings-popover`, literally the box `InfoKey` and the settings gear open)
+rather than a second box that resembles one. A pointer opens it by hovering and
+closes it by leaving, a finger presses it, the keyboard opens it on focus and
+toggles it with Enter or Space, and an outside press or Escape closes it through
+`useDismissable`.
+
+**The hit area is two transparent shapes, not one box, and that is forced.** A
+single rect containing both the shoulder (low and inboard) and the ball at the
+steepest slot the leaderboard carries (70°, high and outboard) has a top-*inner*
+corner at (316, 314), which is **165.5 units from the disc's centre against its
+171.6 radius** — inside it, which is the one thing the geometry above is written
+to avoid. A 16-unit-wide transparent line along the arm clears the disc by 190
+(its closest approach is its own shoulder at 198, less 8 of half-width) and a box
+over the two labels by 198.4. `pointer-events: all` rather than leaving a
+transparent paint to `visiblePainted`, which hit-tests where a paint is *drawn*.
+
+**The press only ever opens, and that took measuring the event order.** Filtering
+the hover on `pointerType` — rather than binding `onMouseEnter`, which Chrome
+dispatches *after* a tap — is necessary and not sufficient: a tap's real order is
+`pointerenter:touch → … → mouseenter → mousedown → **focus** → mouseup → click`,
+so opening on focus and *toggling* on the click cancel out. Measured before the
+fix, **the first tap on the mark did nothing at all and the second opened it**,
+because by then the element was already focused and only the click fired. Both
+handlers now say `onOpen(true)`, which cannot depend on their order; what that
+gives up is closing by pressing the mark again, and closing is the popover
+contract instead.
+
+**The panel carries the figures and the ⓘ carries the definitions**, which is the
+split the app already makes between a reveal and a key: what 0° and 90° *mean* is
+needed once and in the way ever after, so it went into the chart's own `InfoKey`
+alongside a sentence saying the arm is his slot and opens onto his release point.
+Two lines rather than four, and every line of the panel is a dot in the cloud the
+reader cannot see while it is open — measured, **101 → 101 dots** behind a
+250 × 102px box.
+
+**`role="img"` on the `<svg>` does not prune it, which was checked rather than
+assumed.** The spec makes an `img`'s children presentational, so a focusable
+widget inside one is the kind of thing that silently disappears from the
+accessibility tree; Chrome exposes the group as **`role: button`, focusable,
+under `role="img"` and `role="group"` alike**, so the chart keeps the image role
+that makes its cloud read as one labelled thing. The group's `aria-label` carries
+the whole fact in words — *"Arm angle 26° above horizontal, against an MLB average
+of 37°. Released 5.6 feet off the ground, 2.2 feet to his arm side of the
+shoulder"* — so nothing rides on the panel being reachable.
+
+**Whole degrees in both places**, which is what Savant's own page prints: the
+corner label has no room for a decimal, so a panel carrying one would be the same
+fact reading two ways an inch apart. A **missing** release figure reaches us as 0
+(the server writes that where the leaderboard's column would not parse) and as
+`undefined` from a build older than the field; nobody releases a ball at ground
+level, so either way there is no height to state and the line is dropped rather
+than printed as `0.0`.
+
+**Driven in a browser at 1200×900 and 390×844, on a right-hander (Skenes, 26°), a
+left-hander (Skubal, 47°) and a steep slot (Verlander, 57°).** With a mouse:
+hovering the arm *or* its label box opens the panel and the mark takes the accent
+(`--muted` → accent on the line, the ball and both labels), a click while hovered
+leaves it open, and leaving closes it. On touch (`hover: none`, `pointer:
+coarse`): **one tap opens it** where before the first tap did nothing, a second
+tap leaves it open, and a tap on a legend column dismisses it *and* still selects
+that column. From the keyboard: **20 tabs into the page** reaches the mark, focus
+opens it with a `:focus-visible` outline, Enter and Space toggle it, Space does
+not scroll the tab (`viewScroll moved: 0`), and Tab away closes it. **Escape
+undoes one thing** — the panel first with the player page standing, the page on
+the second press, and no `inert` attribute left. Geometry: the panel is
+**250 × 102px** anchored to the arm's own side (`right: 4px` for a right-hander at
+x=581 of a 470px chart, `left: 4px` for a left-hander), **above the highest the
+ball can reach at any angle**, inside the viewport at both widths, with **page
+and view overflow 0** everywhere.
+
+**And the two states that draw no mark were driven with the response stubbed**,
+since both are reachable: `armAngle: null` (a pitcher Savant's board has no row
+for, or a failed read) draws **no `.mv-arm` at all** with both charts otherwise
+intact and no error line, and a pitcher who has faced only one hand takes the
+usage chart's `solo` layout — no head row, so no rule and nothing that could have
+carried a divider — with the arm mark and its press unaffected. 0 page overflow in
+both.
+
+**Bundle: 539.76 → 541.63 KB of JS** (159.84 → 160.49 gzipped) and **141.60 →
+142.05 KB of CSS** (25.04 → 25.16) — 1.9KB and 0.45KB raw, 0.6KB and 0.12KB over
+the wire, for a hit area, a popover, the release point it carries and the
+paragraphs above restated where the rules are.
+
+**Two of `.settings-popover`'s own offsets have to be given back**, and each was a
+real fault rather than a tidy-up: it anchors `top: calc(100% + 8px)` because it
+hangs *below* a button, so a `bottom` beside it over-constrained the box and
+squashed two paragraphs into **26px below the plot**; and its `left: 0` beat the
+`right` on the rule below it, which put a right-hander's panel at the chart's
+**left** edge (x=365 against the 581 it wants).
+
 **`armAngle.ts` is where it comes from, and this is the one thing on the chart
 the pitch-level CSV cannot give.** Savant measures the angle against an estimate
 of the **shoulder**, which is in no per-pitch export — so the figure is read off
@@ -197,7 +318,7 @@ count `CLAUDE.md` keeps from eight to nine.
 
 **The league average is one number, not two.** Right-handers average 36.9° and
 left-handers 37.0° over the 2026 board — as close to identical as two
-populations get — so the arm's tooltip names a single MLB average. (The *break*
+populations get — so the arm's panel names a single MLB average. (The *break*
 table next door is split by hand, because velocity genuinely differs; the two
 decisions look inconsistent and are each what their own measurement says.)
 

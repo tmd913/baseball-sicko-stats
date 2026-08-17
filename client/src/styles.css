@@ -13291,12 +13291,8 @@ html[data-theme='lavender'] .league-table thead th {
   /* **One rule, on the container.** It was a `border-bottom` on each of the
      three head cells with a margin either side of the middle one, which drew
      the line in three segments with two gaps in it — a separator that looks
-     like it is made of pieces. The vertical dividers below have the same fix
-     applied the other way round (see `.pu-mid`). */
+     like it is made of pieces. */
   border-bottom: 1px solid var(--border);
-  /* The breathing room goes on the cells, not here: on the container it sits
-     *below* `.pu-head-mid`'s box, so the vertical dividers stopped 5px short of
-     the rule and the two separators did not meet. */
   padding-bottom: 0;
 }
 .pu-head-side,
@@ -13307,12 +13303,17 @@ html[data-theme='lavender'] .league-table thead th {
 .pu-head-side:first-child {
   grid-column: 1 / 3;
 }
+/* **No verticals down the Pitch column.** They ran the height of the table
+   either side of the badges, and what they were separating needs no line: the
+   three columns are one row per pitch read across, and the two `vs LHH` / `vs
+   RHH` heads plus the bars' own direction already say which side of the plate a
+   figure belongs to. What the rules actually did was box the middle column into
+   a table-within-a-table, on the one chart in the app whose whole device is that
+   a row reads as a single pitch. (Two rounds of work went into drawing them
+   unbroken — the segmented header rule, the row padding that dashed them — so
+   what follows is what is left once the thing those fixes were for has gone.) */
 .pu-head-mid {
   grid-column: 3;
-  /* The verticals start at the header rather than a row below it, so the two
-     separators meet. */
-  border-left: 1px solid var(--border);
-  border-right: 1px solid var(--border);
 }
 .pu-head-side:last-child {
   grid-column: 4 / 6;
@@ -13329,10 +13330,8 @@ html[data-theme='lavender'] .league-table thead th {
   appearance: none;
   background: none;
   border: 0;
-  /* No vertical padding on the button: the middle cell carries the dividers,
-     and 2px of button padding put a 2px gap between one row's cell and the
-     next, which drew the verticals as a dashed line. The rhythm moves inside
-     `.pu-mid`, which stretches to the row so the boxes are contiguous. */
+  /* No vertical padding on the button: the rhythm is `.pu-mid`'s, which
+     stretches to the row, so every row is the same height whatever is in it. */
   padding: 0;
   margin: 0;
   font: inherit;
@@ -13397,10 +13396,8 @@ html[data-theme='lavender'] .league-table thead th {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  border-left: 1px solid var(--border);
-  border-right: 1px solid var(--border);
-  /* Stretched to the row and carrying the row's own vertical rhythm, so
-     consecutive cells touch and the dividers read as two unbroken lines. */
+  /* Still the cell that carries the row's vertical rhythm — the row height is
+     this padding and floor, which is why `.pu-row` has none of its own. */
   align-self: stretch;
   padding: 3px 0;
   min-height: 26px;
@@ -13868,6 +13865,83 @@ html[data-theme='lavender'] .league-table thead th {
   fill: var(--text);
   font-size: 13px;
   font-weight: 800;
+}
+/* **The mark is a press**, so it says so: the whole group is `role="button"` and
+   opens the panel that carries his release point. */
+.mv-arm {
+  cursor: pointer;
+}
+/* Its target is two transparent shapes over the mark rather than the 2.5px arm
+   itself — a stroke that thin is a target only a mouse can aim at. `all` rather
+   than leaving it to `visiblePainted`, which hit-tests where a paint is *drawn*
+   and would make a transparent one a matter of the browser's reading. */
+.mv-arm-hit {
+  fill: transparent;
+  stroke: transparent;
+  pointer-events: all;
+}
+/* Open, the arm takes the accent — the same mark the reader has just pressed,
+   saying which of the two corners the panel belongs to. */
+.mv-arm.on .mv-arm-line {
+  stroke: var(--accent);
+}
+.mv-arm.on .mv-arm-ball {
+  fill: var(--accent);
+}
+.mv-arm.on .mv-arm-deg,
+.mv-arm.on .mv-arm-label {
+  fill: var(--accent);
+}
+/* A keyboard ring on an SVG group, which browsers do draw around the union of
+   its children — and where one doesn't, the panel opening on focus is the
+   indication that matters, so nothing essential rides on it. */
+.mv-arm:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* The reveal is `.settings-popover` itself — the box the settings gear and every
+   `InfoKey` in the app open — with this caller's anchor and prose of its own, the
+   split that family already makes (see `.info-key-panel`).
+
+   **Above the mark rather than over it.** The ball reaches viewBox y 320 at the
+   steepest slot the leaderboard carries, which is 18% up from the bottom of a
+   viewBox cropped to 22…384 — so 21% clears it at every angle and the reader has
+   the arm and its figures in one glance. Its side is the arm's side, and the
+   width is capped against the plot because the corner itself is only ~117px wide
+   at the widest this chart is drawn: the panel overhangs inward over the disc,
+   which is what a popover is for. */
+.mv-arm-panel {
+  position: absolute;
+  /* Both of `.settings-popover`'s own offsets have to be given back, and each
+     was a real fault rather than a tidy-up: it anchors `top: calc(100% + 8px)`
+     (it hangs *below* a button), so a `bottom` beside it over-constrained the box
+     and squashed two paragraphs into 26px below the plot; and its `left: 0` beat
+     the `right` below on the same rule, which put a right-hander's panel at the
+     chart's left edge. */
+  top: auto;
+  left: auto;
+  right: auto;
+  bottom: 21%;
+  width: min(250px, calc(100% - 16px));
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+  text-align: left;
+  z-index: 2;
+}
+.mv-arm-panel-right {
+  right: 4px;
+}
+.mv-arm-panel-left {
+  left: 4px;
+}
+.mv-arm-panel p {
+  margin: 0;
+}
+.mv-arm-panel strong {
+  color: var(--text);
+  font-weight: 700;
 }
 .mv-arm-label,
 .mv-hatchkey-text {
