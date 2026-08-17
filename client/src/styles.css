@@ -13825,3 +13825,43 @@ html[data-theme='lavender'] .league-table thead th {
   max-width: calc(100vw - 32px);
   text-align: left;
 }
+
+/* ---- Movement chart: the two corner marks -------------------------------- */
+
+/* His arm slot, drawn as the arm: a horizontal reference, the arm at the
+   measured angle, and the ball at the end of it. The angle between those two
+   lines IS Savant's published figure, so the picture and the number agree by
+   construction rather than by care. */
+.mv-arm-ref {
+  stroke: var(--border);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+.mv-arm-line {
+  stroke: var(--muted);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+.mv-arm-ball {
+  fill: var(--text);
+}
+.mv-arm-deg {
+  fill: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+}
+.mv-arm-label,
+.mv-hatchkey-text {
+  fill: var(--faint);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+/* The hatch swatch is the same 45° pattern the league blobs are filled with,
+   drawn here in the neutral the key wants rather than in any one pitch's
+   colour — it stands for all five. */
+.mv-hatchkey-dot {
+  fill: url(#mv-hatch-key);
+  stroke: var(--border);
+  stroke-width: 1;
+}

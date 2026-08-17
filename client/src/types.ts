@@ -468,6 +468,22 @@ export interface PitcherGame {
 }
 
 /**
+ * How far above horizontal a pitcher's arm is at release, with the league's own
+ * average beside it — what the movement plot draws in its corner. 0° is a true
+ * sidearm slot and 90° would be straight over the top; the league sits near 37°,
+ * and that average is **not** split by hand because it barely differs (36.9°
+ * against 37.0° on the 2026 board).
+ */
+export interface ArmAngleInfo {
+  angle: number;
+  /** Release height in feet — how high the ball leaves his hand. */
+  releaseHeight: number;
+  /** How far to his arm side of the shoulder he releases it, in feet. */
+  releaseSide: number;
+  league: number | null;
+}
+
+/**
  * One pitch as a point on the Arsenal tab's Movement Profile — where it broke,
  * and nothing else: the plot draws a coloured dot at (`hBreak`, `vBreak`) and
  * reads no other field.
@@ -501,6 +517,9 @@ export interface SeasonArsenal {
    *  that line be labelled `RHP AVG` / `LHP AVG` rather than a blended
    *  "League". Null falls both back to the blended figure. */
   hand: 'R' | 'L' | null;
+  /** His arm slot, off Savant's own leaderboard — null where it has no row for
+   *  him, or where that read failed, in which case the chart draws no arm. */
+  armAngle: ArmAngleInfo | null;
 }
 
 /**

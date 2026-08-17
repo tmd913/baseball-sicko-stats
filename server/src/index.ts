@@ -14,6 +14,7 @@ import { getProjectedStarts } from './projectedStarts.js';
 import { getPlayerNews } from './news.js';
 import { getRecentNews } from './recentNews.js';
 import { getSeasonArsenal, SEASON as ARSENAL_SEASON } from './pitcherArsenal.js';
+import { getArmAngle } from './armAngle.js';
 import { getPitcherXera } from './expectedStats.js';
 import { getResearch, getPlayerWindows } from './research.js';
 import { getScheduleWindow } from './schedule.js';
@@ -1645,7 +1646,13 @@ app.get(
       res.status(400).json({ error: 'invalid playerId' });
       return;
     }
-    const arsenals = await getSeasonArsenal(playerId);
+    // Two independent reads: the arm angle is its own league-wide leaderboard
+    // (`armAngle.ts`) on its own cache, so it costs this route nothing on a warm
+    // one and resolves to null rather than throwing on a cold failure.
+    const [arsenals, armAngle] = await Promise.all([
+      getSeasonArsenal(playerId),
+      getArmAngle(playerId),
+    ]);
     const toPitches = (arsenal: Arsenal): SeasonArsenalPitch[] => {
       const total = [...arsenal.values()].reduce((sum, p) => sum + p.count, 0);
       return [...arsenal.entries()]
@@ -1699,6 +1706,7 @@ app.get(
       // at every pitch type, so a blended figure marks a lefty down for being
       // left-handed).
       hand: arsenals.hand,
+      armAngle,
       // One array carrying the batter's side per pitch, rather than three — the
       // client cuts it for the split tabs, so the three views cannot come to
       // disagree about where a pitch broke.

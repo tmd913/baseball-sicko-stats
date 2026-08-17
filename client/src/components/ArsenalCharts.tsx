@@ -1,5 +1,5 @@
 import { useId, useMemo } from 'react';
-import type { MovementSample, SeasonArsenalPitch } from '../types';
+import type { ArmAngleInfo, MovementSample, SeasonArsenalPitch } from '../types';
 import { pitchStyle } from '../lib';
 import { InfoKey } from './InfoKey';
 import { pitchDirections } from './Arsenal';
@@ -224,8 +224,6 @@ export function PitchUsageChart({
  *  ring (checked on a real arsenal: the widest pitch was 21"). */
 const DOMAIN_IN = 24;
 const RINGS_IN = [6, 12, 18, 24];
-/** Past the AVG bubble's own radius, with clearance. */
-const LEG_MIN = 26;
 /** The rings that carry a figure — the solid ones. */
 const LABELLED_IN = [12, 24];
 const VIEW = 400;
@@ -254,6 +252,98 @@ const px = (inches: number) => inches * SCALE;
 /** Round-trip a break in inches to a printable figure. */
 const inches1 = (n: number) => `${n >= 0 ? '' : '−'}${Math.abs(n).toFixed(1)}"`;
 
+/** Where the two corner marks sit, in viewBox units. Below the disc's widest
+ *  point each bottom corner opens up; at this height it is clear by ~100 units
+ *  either side, which is what these are drawn to fit. */
+const CORNER_Y = 300;
+const CORNER_INSET = 12;
+
+/**
+ * His arm slot, drawn as the arm.
+ *
+ * A horizontal reference from the shoulder, the arm itself at the measured
+ * angle, and the ball at the end of it — so the picture *is* the number rather
+ * than an illustration beside it. Savant's own figure is the angle between
+ * exactly those two lines (checked: `atan2` over the shoulder and release points
+ * their leaderboard publishes reproduces the printed `ball_angle` to the
+ * decimal), so a drawn arm and the degrees under it cannot disagree.
+ *
+ * **It goes on his own side.** A right-hander's arm is toward third base, which
+ * is the right of this chart, and the arm points outward from the plate — which
+ * is also the direction that keeps it clear of the disc.
+ */
+function ArmAngleMark({
+  angle,
+  hand,
+  league,
+}: {
+  angle: number;
+  hand: 'R' | 'L' | null;
+  league: number | null;
+}) {
+  const right = hand !== 'L';
+  const dir = right ? 1 : -1;
+  // The shoulder end sits nearest the middle of the chart; the arm reaches out
+  // into the corner, which is the empty part.
+  const sx = right ? VIEW - CORNER_INSET - 74 : CORNER_INSET + 74;
+  const sy = CORNER_Y + 16;
+  const L = 46;
+  const rad = (angle * Math.PI) / 180;
+  const ex = sx + dir * L * Math.cos(rad);
+  const ey = sy - L * Math.sin(rad);
+  return (
+    <g
+      className="mv-arm"
+      // A `<title>` rather than a printed sentence: the corner has room for the
+      // figure and not for the gloss.
+    >
+      <title>
+        {`Arm angle ${angle.toFixed(0)}° above horizontal at release` +
+          (league === null ? '' : ` — the MLB average is ${league.toFixed(0)}°`)}
+      </title>
+      <line className="mv-arm-ref" x1={sx} y1={sy} x2={sx + dir * L} y2={sy} />
+      <line className="mv-arm-line" x1={sx} y1={sy} x2={ex} y2={ey} />
+      <circle className="mv-arm-ball" cx={ex} cy={ey} r="4.5" />
+      {/* Both labels go *below* the horizontal reference. Above it is the
+          opening the arm sweeps through, and at a low slot the arm passes
+          straight through where a number would sit — measured at 30°, the
+          degrees and the arm line were touching. Below the reference is free at
+          every angle the leaderboard can produce. */}
+      <text
+        className="mv-arm-deg"
+        x={sx + dir * 4}
+        y={sy + 16}
+        textAnchor={right ? 'start' : 'end'}
+      >
+        {`${angle.toFixed(0)}°`}
+      </text>
+      <text
+        className="mv-arm-label"
+        x={sx + dir * 4}
+        y={sy + 29}
+        textAnchor={right ? 'start' : 'end'}
+      >
+        ARM ANGLE
+      </text>
+    </g>
+  );
+}
+
+/** The hatched swatch that says what the blobs behind the clouds are, in the
+ *  bottom corner the arm does not want. */
+function HatchKey({ side }: { side: 'left' | 'right' }) {
+  const x = side === 'right' ? VIEW - CORNER_INSET - 74 : CORNER_INSET + 20;
+  const y = CORNER_Y + 12;
+  return (
+    <g className="mv-hatchkey" aria-hidden="true">
+      <circle className="mv-hatchkey-dot" cx={x} cy={y} r="8" />
+      <text className="mv-hatchkey-text" x={x + 13} y={y + 4} textAnchor="start">
+        MLB AVG
+      </text>
+    </g>
+  );
+}
+
 /**
  * Where each pitch breaks, drawn as the pitches themselves.
  *
@@ -271,6 +361,7 @@ const inches1 = (n: number) => `${n >= 0 ? '' : '−'}${Math.abs(n).toFixed(1)}"
 export function MovementChart({
   season,
   hand,
+  armAngle,
   pitches,
   samples,
   hovered,
@@ -279,6 +370,8 @@ export function MovementChart({
   season: number | null;
   /** His throwing arm, which names the league line he is measured against. */
   hand: 'R' | 'L' | null;
+  /** His arm slot, drawn in the corner. Null draws nothing. */
+  armAngle: ArmAngleInfo | null;
   pitches: SeasonArsenalPitch[];
   samples: MovementSample[];
   hovered: string | null;
@@ -482,6 +575,17 @@ export function MovementChart({
             .join('; ')}`}
         >
           <defs>
+            {/* The key's own swatch: the same 45° hatch the blobs carry, but in
+                the neutral, since it stands for all five rather than for one. */}
+            <pattern
+              id="mv-hatch-key"
+              width="5"
+              height="5"
+              patternUnits="userSpaceOnUse"
+              patternTransform="rotate(45)"
+            >
+              <line x1="0" y1="0" x2="0" y2="5" stroke="var(--muted)" strokeWidth="2" opacity="0.6" />
+            </pattern>
             {shown.map((p) => {
               const { color } = pitchStyle(p.pitchType);
               return (
@@ -573,32 +677,13 @@ export function MovementChart({
               );
             })}
 
-          {/* The selected pitch's own average, and the two legs it decomposes
-              into: across to the vertical axis is its break, down to the
-              horizontal axis is its rise.
-
-              **The figures are in the callout row above rather than on the
-              legs.** Savant rotates a label along each leader, which works
-              because its labels are the only thing in that space; here both legs
-              collapse toward nothing as a pitch approaches the origin — a slider
-              at 3.5" break and 2.2" rise left two 80px boxes stacked on top of
-              each other and on the marker, which is a picture of the collision
-              rather than of the pitch. Off the plot they cannot collide at any
-              geometry, and they gain room to carry the league comparison in the
-              same breath. */}
+          {/* The selected pitch's own average. The two dashed legs to the axes
+              went with the figures they were measuring: those read in the
+              callout row above, so the legs were decorating a decomposition
+              nobody had to do on the plot — and near the origin they collapsed
+              into two specks behind the marker. */}
           {focus && focus.hBreak !== null && focus.vBreak !== null && (
             <g className="mv-focus">
-              {/* A leg is drawn only when it is long enough to be seen past the
-                  marker. A pitch near the origin has almost no legs, and the two
-                  stubs that survived behind a 15px bubble read as specks rather
-                  than as a measurement — the callouts above carry the figures
-                  either way, so an absent leg costs nothing. */}
-              {Math.abs(fx - CX) > LEG_MIN && (
-                <line className="mv-leader" x1={fx} y1={fy} x2={CX} y2={fy} />
-              )}
-              {Math.abs(fy - CY) > LEG_MIN && (
-                <line className="mv-leader" x1={CX} y1={fy} x2={CX} y2={CY} />
-              )}
               <circle
                 className="mv-avg"
                 cx={fx}
@@ -611,6 +696,16 @@ export function MovementChart({
               </text>
             </g>
           )}
+
+          {/* **The two corners the circle leaves empty.** The plot is a disc in a
+              box, so below the widest point each bottom corner opens up — about
+              100 viewBox units of clear space at the level these sit at. The arm
+              goes on his own side (a right-hander's arm is toward third base,
+              which is the right of this chart) and the hatch key opposite it. */}
+          {armAngle && (
+            <ArmAngleMark angle={armAngle.angle} hand={hand} league={armAngle.league} />
+          )}
+          <HatchKey side={hand === 'L' ? 'right' : 'left'} />
         </svg>
       </div>
 
@@ -620,13 +715,6 @@ export function MovementChart({
           and the thing the title names. */}
       <div className="mv-axis-foot" aria-hidden="true">
         <span>1B ◀</span> MOVES TOWARD <span>▶ 3B</span>
-      </div>
-
-      {/* Named for the same population the figures come from: the blob sits at
-          the average for *his* hand, so calling it "MLB average" would be the
-          one label on the chart that was still blended. */}
-      <div className="mv-legend-note" aria-hidden="true">
-        <span className="mv-legend-hatch" /> {avgLabel}
       </div>
 
       <div className="mv-legend">

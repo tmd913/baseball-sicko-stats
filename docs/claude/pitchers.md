@@ -139,6 +139,55 @@ browser against a left-hander: a RHP's four-seam at `hBreak +11` sits up and to
 the right on both, and **Chris Sale's at −14.6 sits up and to the left**, which
 is where a left-hander's arm-side run belongs. No flip, no per-hand branch.
 
+**The two bottom corners carry the arm and the key**, which is what the circle
+leaves for them: below the widest point each corner opens up, and at the height
+these sit at there is ~100 viewBox units of clear space either side. Measured on
+both hands at four widths, **no dot of the cloud falls under either mark**.
+
+**His arm slot is drawn as the arm** — a horizontal reference from the shoulder,
+the arm itself at the measured angle, and the ball at the end of it — so the
+picture *is* the number rather than an illustration beside it. Savant's own
+figure is the angle between exactly those two lines: checked, `atan2` over the
+shoulder and release points their leaderboard publishes reproduces the printed
+`ball_angle` to the decimal (Misiorowski 29.9°, which their page prints as 30°).
+
+**It goes on his own side** — a right-hander's arm is toward third base, which is
+the right of this chart — with the hatch key opposite. A near-sidearm left-hander
+reads instantly: Sale's 11° is a nearly flat line at the bottom left.
+
+**Both labels sit *below* the horizontal reference.** Above it is the opening the
+arm sweeps through, and at a low slot the arm passes straight through where a
+number would go — measured at 30°, the degrees and the arm line were touching.
+
+**`armAngle.ts` is where it comes from, and this is the one thing on the chart
+the pitch-level CSV cannot give.** Savant measures the angle against an estimate
+of the **shoulder**, which is in no per-pitch export — so the figure is read off
+their `pitcher-arm-angles` leaderboard rather than reconstructed from an
+assumption about where a shoulder is. One league-wide CSV (~92KB, 780 pitchers),
+`min=1` so the bullpen is not left out, cached six hours in memory and in the
+storage tier with an `inFlight` guard: the class `expectedStats.ts` is in, and it
+costs the arsenal route nothing on a warm cache. A failure resolves to **null**
+and the chart simply draws no arm. It is a **new season constant**, taking the
+count `CLAUDE.md` keeps from eight to nine.
+
+**The league average is one number, not two.** Right-handers average 36.9° and
+left-handers 37.0° over the 2026 board — as close to identical as two
+populations get — so the arm's tooltip names a single MLB average. (The *break*
+table next door is split by hand, because velocity genuinely differs; the two
+decisions look inconsistent and are each what their own measurement says.)
+
+**The hatch key says `MLB AVG`.** The blob it stands for sits at the average for
+his own hand, so `RHP AVG` would be the more precise word — but the row at the
+foot of the chart already carries that split (`RHP avg` / `LHP avg`) against the
+velocities, and a second per-hand label on the same chart reads as a second
+population rather than the same one. The key names the thing at its coarsest
+true description and the `?` explains the rest.
+
+**The dashed legs from the AVG marker are gone.** They measured the two figures
+the callout row now prints, so they were decorating a decomposition nobody has
+to do on the plot — and near the origin they collapsed into two specks behind
+the marker. The marker itself stays: it is where the pitch *is*.
+
 **`1B ◀ MOVES TOWARD ▶ 3B` reads under the plot**, not over it. It names the
 horizontal axis, and the axis is where the reader's eye already is by the time
 they want it — above the circle it was a line of chrome between the title and
@@ -289,10 +338,6 @@ and a 320px panel fits from neither of the button's edges on a phone).
 
 #### What is deliberately not recreated
 
-**The arm-angle figure and its silhouette.** It is a separate Savant dataset
-(`pitcherArmAngles`) this app does not read, and inventing one from the break
-would be a guess drawn as a measurement.
-
 **The "100 pitch sample" toggle.** The cloud is 100 dots by construction now —
 one per percent — so the control would toggle between that and itself.
 
@@ -358,8 +403,8 @@ and `stand` went with their last reader when the split tabs did (the rule
 per-dot tooltip or a per-hand cloud ever wants it. **3,109 → 1,718 bytes
 gzipped**, measured through the route.
 
-**Bundle: 529.65 → 537.27 KB of JS** (156.66 → 159.08 gzipped) and **134.44 →
-140.71 KB of CSS** (23.64 → 24.86) — 7.6KB and 6.3KB raw, 2.4KB and 1.2KB over
+**Bundle: 529.65 → 539.72 KB of JS** (156.66 → 159.81 gzipped) and **134.44 →
+141.54 KB of CSS** (23.64 → 25.03) — 7.6KB and 6.3KB raw, 2.4KB and 1.2KB over
 the wire, for two charts, a shared selection, an explainer and the paragraphs
 above restated where the rules are; stripping the rows and the split plumbing
 gave 2.4KB of it back.
