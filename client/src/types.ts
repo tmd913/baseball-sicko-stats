@@ -496,6 +496,11 @@ export interface SeasonArsenal {
   /** The season these numbers are, named by the server rather than derived here
    *  — the same way the rolling-xwOBA payload carries its own. */
   season: number;
+  /** Which arm he throws with, off the season CSV's own `p_throws`. It picks
+   *  the per-hand league line the charts compare against, and it is what lets
+   *  that line be labelled `RHP AVG` / `LHP AVG` rather than a blended
+   *  "League". Null falls both back to the blended figure. */
+  hand: 'R' | 'L' | null;
 }
 
 /**
