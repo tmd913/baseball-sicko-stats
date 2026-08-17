@@ -721,28 +721,36 @@ export default function LeagueMatchupView({
       <div className="mup-team-head">
         <TeamLogo team={homeTeam} />
         <span className="mup-side-id">
-          <span className="mup-side-name">{homeTeam?.name ?? `Team ${home.teamId}`}</span>
+          {/* The name carries its own `title` here and nowhere else on this
+              page: a bye has no tab strip, so this head is the only thing
+              naming the team, and the longest name in the live league
+              ellipsizes at 390 against the block opposite. Every other surface
+              that truncates a team name has the strip or a card head to fall
+              back on. */}
+          <span className="mup-side-name" title={homeTeam?.name ?? `Team ${home.teamId}`}>
+            {homeTeam?.name ?? `Team ${home.teamId}`}
+          </span>
           {homeTeam && <span className="mup-side-rec">{record(homeTeam)}</span>}
-          {/* **And his acquisitions**, which on a bye have nowhere else to go:
-              the Summary page is where the two managers' counts are compared,
-              and a bye has no Summary page.
+        </span>
+        {/* **The week's two facts, stacked at the right end** — why there is one
+            team here rather than two, and what he has spent of his allowance
+            while there was nobody to spend it against.
 
-              **Under the record rather than at the far end of the row**, which
-              is where it sat: that put it opposite nothing — a scoreboard card
-              has a headline triple to sit against and this head has no second
-              column — so it read as a figure adrift at the other side of the
-              page from the team it belongs to. Under the record it is a third
-              line of the same block, which is what it is: another fact about
-              this manager's week. With a line of its own there is room to say
-              the word rather than `ACQ`. */}
+            A block rather than two loose items, because the head is then two
+            columns that mirror each other: the team's own two lines on the left
+            (who he is, how his season has gone) and the week's two on the right,
+            each pair reading top-down. The acquisitions have nowhere else to go
+            — the Summary page is where the two managers' counts are compared
+            and a bye has no Summary page — and a line of their own is what buys
+            the word rather than `ACQ`. */}
+        <span className="mup-bye-block">
+          <span className="lg-bye-tag">Bye</span>
           {home.acquisitions !== null && (
             <span className="mup-acq-tag" title={acqTitle(home)}>
               <span className="mup-acq-label">Acquisitions:</span> {acqCell(home)}
             </span>
           )}
         </span>
-        {/* Why there is one team here and not two. */}
-        <span className="lg-bye-tag">Bye</span>
       </div>
     );
 
