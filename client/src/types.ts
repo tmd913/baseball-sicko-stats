@@ -467,12 +467,37 @@ export interface PitcherGame {
   decision: PitchingCredit | null;
 }
 
+/**
+ * One pitch as a point on the Arsenal tab's Movement Profile — where it broke,
+ * how hard, and which side the batter stood on (so the plot can follow the
+ * Overall / vs RHB / vs LHB tabs off one array rather than three).
+ *
+ * `hBreak`/`vBreak` are the app's usual convention, inches: positive `hBreak`
+ * breaks toward **third base** and positive `vBreak` is rise. That holds for a
+ * pitcher of either hand with no special case — a RHP's four-seam runs arm-side
+ * to 3B and reads positive, a LHP's runs to 1B and reads negative — which is
+ * also exactly where Savant's own chart puts them.
+ */
+export interface MovementSample {
+  pitchType: string;
+  hBreak: number;
+  vBreak: number;
+  velo: number | null;
+  stand: 'R' | 'L' | null;
+}
+
 /** A pitcher's season arsenal: the whole season, plus the batter-handedness
  * splits (null when he's faced nobody of that hand). */
 export interface SeasonArsenal {
   pitches: SeasonArsenalPitch[];
   vsRight: SeasonArsenalPitch[] | null;
   vsLeft: SeasonArsenalPitch[] | null;
+  /** A bounded, evenly-spread selection of the season's pitches, for the
+   *  Movement Profile's dot cloud. Empty when the arsenal read found none. */
+  samples: MovementSample[];
+  /** The season these numbers are, named by the server rather than derived here
+   *  — the same way the rolling-xwOBA payload carries its own. */
+  season: number;
 }
 
 /**
@@ -494,6 +519,11 @@ export interface SeasonArsenalPitch {
   leagueSpin: number | null;
   leagueHBreak: number | null; // oriented to his own break direction
   leagueVBreak: number | null;
+  /** How wide the league's own average is for this pitch type, in inches — what
+   *  the Movement Profile draws its hatched MLB-average blob from, rather than a
+   *  bare point. Always filled (there is a default), unlike the averages above. */
+  leagueHRange: number;
+  leagueVRange: number;
   // Season outcomes against this pitch (Savant's "Results" columns).
   pa: number | null;
   ba: number | null;

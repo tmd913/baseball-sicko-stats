@@ -27,6 +27,48 @@ const LEAGUE: Record<string, ArsenalPitch> = {
   Eephus: { velo: 55.0, spin: 1400, vBreak: 0.0, hBreak: 6.0 },
 };
 
+/**
+ * How far a league-average pitch of each type strays from that average — the
+ * standard spread of the per-pitcher means, in inches, horizontally and
+ * vertically. Read off Baseball Savant's own league movement table (RHP, 2026;
+ * a left-hander's spreads are the same, only the horizontal *centre* flips,
+ * which `getLeaguePitchAverage`'s caller already orients).
+ *
+ * The one reader is the Arsenal tab's Movement Profile, which draws each pitch
+ * type's league average as a hatched blob rather than a point: "average" is a
+ * cloud too, and a bare dot would invite a reader to treat a half-inch miss as
+ * a difference. Nothing else reads it, so adding it moved no ▲▼ arrow on any
+ * card — deliberately separate from `LEAGUE` above for exactly that reason.
+ */
+const LEAGUE_SPREAD: Record<string, { hRange: number; vRange: number }> = {
+  '4-Seam Fastball': { hRange: 3.7, vRange: 3.5 },
+  Sinker: { hRange: 3.7, vRange: 4.0 },
+  Cutter: { hRange: 3.8, vRange: 4.5 },
+  Slider: { hRange: 3.7, vRange: 4.8 },
+  Sweeper: { hRange: 4.6, vRange: 5.0 },
+  Slurve: { hRange: 4.4, vRange: 4.6 },
+  Curveball: { hRange: 4.1, vRange: 4.9 },
+  'Knuckle Curve': { hRange: 4.1, vRange: 4.9 },
+  'Slow Curve': { hRange: 4.4, vRange: 5.4 },
+  Changeup: { hRange: 4.1, vRange: 4.7 },
+  Splitter: { hRange: 4.5, vRange: 5.0 },
+  Forkball: { hRange: 5.0, vRange: 5.4 },
+  Screwball: { hRange: 4.4, vRange: 5.0 },
+  Knuckleball: { hRange: 7.5, vRange: 9.0 },
+  Eephus: { hRange: 5.0, vRange: 5.4 },
+};
+
+/** Every type in the table sits between 3.5" and 5.4", so a pitch this table has
+ *  never heard of gets the middle of that band rather than nothing — the blob is
+ *  a "roughly here" mark, and omitting it would say the league throws no such
+ *  pitch. (Knuckleballs are the one genuine outlier and are named above.) */
+const DEFAULT_SPREAD = { hRange: 4.3, vRange: 4.8 };
+
+/** How wide the league's own average is for a pitch type, in inches. */
+export function getLeaguePitchSpread(pitchName: string): { hRange: number; vRange: number } {
+  return LEAGUE_SPREAD[pitchName] ?? DEFAULT_SPREAD;
+}
+
 /** The MLB league-average line for a pitch type (by full name), or null if the
  * pitch type isn't in the table (the card then shows no league arrow for it). */
 export function getLeaguePitchAverage(pitchName: string): ArsenalPitch | null {

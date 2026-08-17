@@ -13,13 +13,13 @@ import { getNextGame } from './nextGame.js';
 import { getProjectedStarts } from './projectedStarts.js';
 import { getPlayerNews } from './news.js';
 import { getRecentNews } from './recentNews.js';
-import { getSeasonArsenal } from './pitcherArsenal.js';
+import { getSeasonArsenal, SEASON as ARSENAL_SEASON } from './pitcherArsenal.js';
 import { getPitcherXera } from './expectedStats.js';
 import { getResearch, getPlayerWindows } from './research.js';
 import { getScheduleWindow } from './schedule.js';
 import { getTeamHitting } from './teamHitting.js';
 import type { Arsenal } from './pitcherArsenal.js';
-import { getLeaguePitchAverage } from './pitchLeague.js';
+import { getLeaguePitchAverage, getLeaguePitchSpread } from './pitchLeague.js';
 import { RESEARCH_INCLUDE_KEYS, RESEARCH_WINDOWS, TEAM_HITTING_WINDOWS } from './types.js';
 import type {
   PlayerKind,
@@ -1655,6 +1655,7 @@ app.get(
           // direction so the signed comparison reads correctly (same as the
           // per-game baselines in savant.ts::attachArsenalBaselines).
           const dir = (p.hBreak ?? 0) < 0 ? -1 : 1;
+          const spread = getLeaguePitchSpread(pitchType);
           return {
             pitchType,
             count: p.count,
@@ -1669,6 +1670,8 @@ app.get(
             leagueSpin: lg?.spin ?? null,
             leagueHBreak: lg?.hBreak == null ? null : Math.abs(lg.hBreak) * dir,
             leagueVBreak: lg?.vBreak ?? null,
+            leagueHRange: spread.hRange,
+            leagueVRange: spread.vRange,
             pa: p.pa,
             ba: p.ba,
             slg: p.slg,
@@ -1686,6 +1689,14 @@ app.get(
       // client knows not to offer the tab at all.
       vsRight: arsenals.vsRight.size ? toPitches(arsenals.vsRight) : null,
       vsLeft: arsenals.vsLeft.size ? toPitches(arsenals.vsLeft) : null,
+      // Which season this is, from the one place that decides it — the same
+      // way the rolling-xwOBA payload names its own, rather than the client
+      // keeping a second copy of the constant.
+      season: ARSENAL_SEASON,
+      // One array carrying the batter's side per pitch, rather than three — the
+      // client cuts it for the split tabs, so the three views cannot come to
+      // disagree about where a pitch broke.
+      samples: arsenals.samples,
     });
   }),
 );
