@@ -338,6 +338,8 @@ function SideHead({
 export default function LeagueMatchupView({
   board,
   matchupId,
+  initialTeamId,
+  onSideTeam,
   onClose,
   onOpenDetails,
   transactions,
@@ -352,6 +354,21 @@ export default function LeagueMatchupView({
 }: {
   board: EspnScoreboard;
   matchupId: number;
+  /**
+   * **Which page this opens on, named by the team rather than by the side** —
+   * because a team id is what every caller knows. A scoreboard card knows the
+   * pair and passes null, which is the Summary in the middle; a Rankings row
+   * knows one team, and the page works out which side of the matchup he is.
+   * Read once, at mount: after that the strip is the reader's.
+   */
+  initialTeamId: number | null;
+  /**
+   * Which page is on screen, reported back as the team whose page it is (null
+   * on the Summary). That is what keeps `mt=` describing the page in front of
+   * the reader rather than only the one it opened on — the rule every other
+   * param on this view follows.
+   */
+  onSideTeam?: (teamId: number | null) => void;
   onClose: () => void;
   onOpenDetails: (key: string) => void;
   /** The League view's own transactions feed, read on entry to that view and
@@ -385,7 +402,27 @@ export default function LeagueMatchupView({
   const viewRef = useRef<HTMLDivElement | null>(null);
   useOverlayFocus(viewRef);
 
-  const [sideTab, setSideTab] = useState<MatchupSideTab>('summary');
+  /**
+   * **The page it opens on, resolved from the team the caller named.** A
+   * lazy initialiser rather than an effect: the board and the matchup are
+   * props at mount, so the first paint is already the right page — where an
+   * effect would draw Summary and swap a frame later. After mount the strip
+   * owns it, so a `mt=` that changes underneath (which nothing does today, the
+   * page being unmounted on close) cannot yank the reader off the tab they
+   * pressed.
+   */
+  const [sideTab, setSideTab] = useState<MatchupSideTab>(() => {
+    if (initialTeamId == null) return 'summary';
+    const m = board.matchups.find((x) => x.id === matchupId);
+    if (!m) return 'summary';
+    if (m.away?.teamId === initialTeamId) return 'away';
+    if (m.home.teamId === initialTeamId) return 'home';
+    // A team id this matchup has no side for — a hand-made link, or one
+    // outliving the week it was written in. Summary is the honest answer, and
+    // the effect below then clears `mt=` rather than leaving it claiming a page
+    // that isn't open.
+    return 'summary';
+  });
   const [reading, setReading] = useState<'roster' | 'feed'>('roster');
   const [kind, setKind] = useState<PlayerKind>('batter');
   const [dateOpen, setDateOpen] = useState(false);
@@ -429,6 +466,34 @@ export default function LeagueMatchupView({
   const teams = useMemo(() => new Map(board.teams.map((t) => [t.id, t])), [board.teams]);
   const groups = useMemo(() => categoryGroups(board.categories), [board.categories]);
   const matchup = board.matchups.find((m) => m.id === matchupId) ?? null;
+
+  /**
+   * Which page is on screen, and whose it is.
+   *
+   * Hoisted above the `!matchup` return because the effect that reports it up
+   * is a hook and hooks cannot sit past a conditional return. `active` is the
+   * strip's own answer with the one override a bye forces — one team, so the
+   * page *is* his — and `sideTeamId` is that read as a team, which is exactly
+   * what `mt=` wants and what the team page below already needed.
+   */
+  const active: MatchupSideTab = matchup ? (matchup.away ? sideTab : 'home') : 'summary';
+  const sideTeamId = !matchup
+    ? null
+    : active === 'away'
+      ? matchup.away?.teamId ?? null
+      : active === 'home'
+        ? matchup.home.teamId
+        : null;
+
+  /**
+   * The strip reported up, so the URL keeps saying which page is open. It is a
+   * `setState` at the other end, so the identity is stable and this fires once
+   * per real change; a matchup with no side for the id it was given corrects
+   * itself here, `sideTeamId` being null on the Summary it fell back to.
+   */
+  useEffect(() => {
+    onSideTeam?.(sideTeamId);
+  }, [sideTeamId, onSideTeam]);
 
   // The Schedule view's index, or null while the mode is off or its one read is
   // still out — "the mode is the presence of an index rather than a flag beside
@@ -642,12 +707,6 @@ export default function LeagueMatchupView({
         },
       ]
     : [];
-  const active: MatchupSideTab = !away
-    ? 'home'
-    : sides.some((s) => s.tab === sideTab)
-      ? sideTab
-      : 'summary';
-  const sideTeamId = active === 'away' ? away?.teamId ?? null : active === 'home' ? home.teamId : null;
   const homeTeam = teams.get(home.teamId);
 
   /**

@@ -12004,12 +12004,14 @@ span.mup-move-name:hover {
 .league-table tbody tr:nth-child(even) td {
   --cell-bg: var(--panel);
 }
-/* **No row hover and no pointer.** The log's rows carry both because a press
-   there opens that game; nothing in this table is pressable, so a tint that
-   followed the cursor would offer something that isn't there — and on touch,
-   where `:hover` has no way to end, it would leave the last row a finger
-   crossed looking selected. The header buttons keep their own hover: those
-   really are controls. */
+/* **No row hover and no pointer** — on the *category* cells, which is every
+   cell but the two that identify the team. The log's rows carry both because a
+   press there opens that game; a figure is not pressable, so a tint that
+   followed the cursor across ten of them would offer something that isn't
+   there — and on touch, where `:hover` has no way to end, it would leave the
+   last row a finger crossed looking selected. The header buttons keep their
+   own hover, being controls, and the badge and the name have their own presses
+   and their own scoped hover further down this block. */
 .league-table thead th {
   position: sticky;
   top: 0;
@@ -12105,6 +12107,67 @@ span.mup-move-name:hover {
    a team with no logo is marked as plainly as one with. */
 .league-table tbody tr.lg-row-mine .lg-logo {
   box-shadow: 0 0 0 2px var(--accent);
+}
+
+/* ---- A Rankings row is a door into that team's matchup -------------------
+   **The two identity cells are presses**, and this table's own note two rules
+   up — "no row hover and no pointer … nothing in this table is pressable" — is
+   still true of every *category* cell and no longer true of these two. Both
+   are drawn, for the reason the Transactions feed already gives for its
+   headshot and its name: a row that looks like every other row in the app and
+   is the one that does not answer a press is worse than a duplicated target.
+   Here they are not even a duplicate — the badge is **pinned** and the name
+   **scrolls**, so whichever of the two is on screen is the door, which is the
+   one thing neither alone could give.
+
+   A bare-button reset rather than a class on the cell: a `<button>` inside the
+   cell keeps the `<td>` a cell and the `<th scope="row">` a row header, and
+   gets Enter and Space from the browser rather than from a keydown handler. */
+.lg-team-press {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+/* The badge's own button is the badge and nothing else — `line-height: 0` so
+   the box is the image rather than the image plus a strut, which is the same
+   reset `.sum-photo-wrap` makes for a headshot. */
+.lg-logo-press {
+  display: inline-flex;
+  width: auto;
+  line-height: 0;
+}
+.lg-team-press:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+/* **Scoped to `(hover: hover)`**, the app-wide rule — see the note at the top
+   of this file. It matters more here than on a control: on touch there is no
+   pointer to move away, so a tint would sit on the last row a finger crossed
+   in a table twelve rows long, and an accented *team name* is loud enough to
+   read as a selection this table cannot act on. The headshot circles take the
+   exemption that rule allows and this deliberately does not: those recolour a
+   1px border on a 32px mark, where this is a name.
+
+   The badge's hover ring is a **mix** where `.lg-row-mine`'s is the flat
+   accent, so the two never read as one thing — and where they meet, the "your
+   team" rule wins outright on specificity, which is the right way round: a
+   standing fact about the row beats a passing one about the pointer. */
+@media (hover: hover) {
+  .lg-name-press:hover .lg-row-title {
+    color: var(--accent);
+  }
+  .lg-logo-press:hover .lg-logo {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent);
+  }
 }
 /* The category cells: a share of the slack rather than content width, right
    aligned and tabular, as every stat column in the app is. */

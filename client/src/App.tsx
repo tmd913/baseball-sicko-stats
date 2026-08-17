@@ -1044,10 +1044,11 @@ export default function App() {
    * (**Matchup** is the default and is omitted, the app's own convention being
    * that the first tab is the one you land on — so a bare `?view=league` opens
    * on the reader's own matchup and `lt=scoreboard` is written out like every
-   * other tab), `mup=` is which matchup, and `lspan=` the span. None can
-   * collide: the app's other params are `preset`, `start`, `end`, `player`,
-   * `view`, `kind`, `sim`, `hideil`, `starters`, `sched`, `roster`, `pos`,
-   * `cols`, `inc`, `scope`, `watch`, `win`, `help`, `mp` and `league`.
+   * other tab), `mup=` is which matchup, `mt=` which page *of* it, and
+   * `lspan=` the span. None can collide: the app's other params are `preset`,
+   * `start`, `end`, `player`, `view`, `kind`, `sim`, `hideil`, `starters`,
+   * `sched`, `roster`, `pos`, `cols`, `inc`, `scope`, `watch`, `win`, `help`,
+   * `mp` and `league`.
    *
    * **`mup=` is absent for the reader's own matchup**, which is a *rule* rather
    * than a value — the same reasoning that keeps a date preset in the URL as
@@ -1069,6 +1070,27 @@ export default function App() {
   });
   const [matchupId, setMatchupId] = useState<number | null>(() => {
     const raw = Number(initialParams.get('mup'));
+    return Number.isInteger(raw) && raw > 0 ? raw : null;
+  });
+  /**
+   * **Which page of that matchup is open**, named by the team whose page it is
+   * rather than by `away`/`home` — because a team id is what every caller
+   * actually knows. A Rankings row knows the team it is, a scoreboard card
+   * knows the pair; neither knows which side of the pair a manager is, and the
+   * page resolves that off the board it already holds.
+   *
+   * Absent means **Summary**, which is the middle page and the one a matchup
+   * opened from the scoreboard lands on. Present means a manager's own roster
+   * and feed, which is what a press on the Rankings tab asks for.
+   *
+   * It is a **running record rather than an opening**: the page reports its
+   * side back up here as the reader crosses the strip (`onSideTeam`), so the
+   * link always describes the page in front of them — the rule every other
+   * param on this view follows. `mt` because `mp` is the period and `mup` the
+   * matchup; none of the app's other params can collide with it.
+   */
+  const [matchupTeam, setMatchupTeam] = useState<number | null>(() => {
+    const raw = Number(initialParams.get('mt'));
     return Number.isInteger(raw) && raw > 0 ? raw : null;
   });
   const [rankSpan, setRankSpan] = useState<EspnRankSpan>(() => {
@@ -1259,6 +1281,17 @@ export default function App() {
   }, [espnLeagueId]);
 
   /**
+   * **Which of the League view's readings needs the board**, as one boolean
+   * rather than the three tests it is made of — so the effect below re-runs
+   * when the answer changes and not when a matchup is opened over a tab that
+   * already needed it.
+   */
+  const needsScoreboard =
+    view === 'league' &&
+    espnConnected &&
+    (leagueTab === 'scoreboard' || leagueTab === 'rankings' || matchupId != null);
+
+  /**
    * The scoreboard, read on entry to the League view and whenever the period
    * changes — which is the same laziness the ownership map takes, and for the
    * same reason: nobody who never opens the page should pay for it.
@@ -1272,7 +1305,16 @@ export default function App() {
     // **The matchup page reads it too**, and reads the same object: a matchup
     // breakdown is one card of this board drawn the other way up, so opening
     // one costs no fetch of its own and closing it costs nothing either.
-    if (view !== 'league' || leagueTab !== 'scoreboard' || !espnConnected) return;
+    //
+    // **And the Rankings tab reads it, because its rows are doors into it** —
+    // a press on a team there opens that team's current matchup, which is the
+    // row of `matchups` carrying his id, so the tab cannot offer the press
+    // until the board is in hand. It is the cheapest read on this view (10KB
+    // over the wire, a minute's cache per league on the server, ~2ms warm) —
+    // an order of magnitude less than the transactions feed already read on
+    // entry to the view for the dot on its tab. `matchupId` is in the test so
+    // a `?mup=` link landing on the Transactions tab still has a board to draw.
+    if (!needsScoreboard) return;
     let cancelled = false;
     setScoreboardLoading(true);
     setScoreboardError(null);
@@ -1292,8 +1334,11 @@ export default function App() {
     };
     // Deliberately not `scoreboard` or `scoreboardLoading`, either of which
     // would re-run the effect on its own result and spin — the same dependency
-    // rule the ownership read follows.
-  }, [view, leagueTab, espnConnected, matchupPeriod, espnLeagueId]);
+    // rule the ownership read follows. `needsScoreboard` is a boolean rather
+    // than the three things it is made of, so opening a matchup over a tab that
+    // already needed the board re-runs nothing — where `matchupId` in the list
+    // would spend a request per press to be handed the board it already has.
+  }, [needsScoreboard, matchupPeriod, espnLeagueId]);
 
   /**
    * The Rankings tab, read on its first open and whenever the span changes.
@@ -1368,6 +1413,33 @@ export default function App() {
   }, [view, espnConnected, espnLeagueId]);
 
   /**
+   * **Which matchup each team is in this period**, team id → matchup id — what
+   * a press on a Rankings row opens.
+   *
+   * Derived here rather than in the table because App is where the board
+   * lives: `LeagueRankings` holds one span's rows and has never been handed a
+   * scoreboard, and giving it one so it could search the matchups itself would
+   * be a second reader of a payload this file already parses.
+   *
+   * **A bye is in it like any other matchup** (`away` is null and the map takes
+   * `home` alone), which is what makes the press work in a playoff round: eight
+   * of the live league's ten matchups are byes, and the page those rows open
+   * goes straight to the team's roster with no strip at all.
+   *
+   * Null until the board lands, which is the whole of the gate on the press —
+   * see `client-league.md`, *A Rankings row opens that team's matchup*.
+   */
+  const matchupTeams = useMemo(() => {
+    if (!scoreboard) return null;
+    const m = new Map<number, number>();
+    for (const mu of scoreboard.matchups) {
+      m.set(mu.home.teamId, mu.id);
+      if (mu.away) m.set(mu.away.teamId, mu.id);
+    }
+    return m;
+  }, [scoreboard]);
+
+  /**
    * Which of the League page's three readings can still change, and so are
    * worth polling.
    *
@@ -1407,14 +1479,20 @@ export default function App() {
   const pollLeague = useCallback(() => {
     const quiet = (what: string) => (e: Error) =>
       console.error(`league poll (${what}) failed:`, e.message);
-    if (leagueTab === 'scoreboard' && scoreboardLive) {
+    // **An open matchup page counts as the scoreboard being on screen**, which
+    // is what "poll what is on screen" means once that page can be opened from
+    // the Rankings tab: it draws its every figure off this board, so without
+    // this it would sit still for as long as it was open. The two rules the
+    // poll already has are untouched — the week has to be live, and the read
+    // goes through the server's own minute.
+    if ((leagueTab === 'scoreboard' || matchupId != null) && scoreboardLive) {
       api.espnScoreboard(matchupPeriod).then(setScoreboard).catch(quiet('scoreboard'));
     }
     if (leagueTab === 'rankings' && rankSpanLive) {
       api.espnRankings(rankSpan).then(setRankings).catch(quiet('rankings'));
     }
     api.espnTransactions().then(setTransactions).catch(quiet('transactions'));
-  }, [leagueTab, scoreboardLive, rankSpanLive, matchupPeriod, rankSpan]);
+  }, [leagueTab, matchupId, scoreboardLive, rankSpanLive, matchupPeriod, rankSpan]);
 
   /** The latest tick, so the interval below can be set up once per visit to the
    *  page rather than torn down and rebuilt every time a poll lands — which is
@@ -2082,6 +2160,13 @@ export default function App() {
     // tab — so it is written whatever tab is behind it, and a link carrying it
     // opens that page the way `player=` opens a player's.
     if (view === 'league' && matchupId != null) p.set('mup', String(matchupId));
+    // Which page *of* that matchup: a team id, absent meaning the Summary in
+    // the middle. Written only alongside `mup=`, since it names a page of a
+    // matchup rather than a page of the view — a `mt=` with no matchup to be a
+    // side of would say nothing.
+    if (view === 'league' && matchupId != null && matchupTeam != null) {
+      p.set('mt', String(matchupTeam));
+    }
     // Omitted at the default, which is now the week being played — so a link
     // shared without one opens on the recipient's *own* current matchup rather
     // than on the sharer's, which is the same rule a date preset follows.
@@ -2115,6 +2200,7 @@ export default function App() {
     matchupPeriod,
     leagueTab,
     matchupId,
+    matchupTeam,
     rankSpan,
     simulate,
     hideInjured,
@@ -4183,7 +4269,21 @@ export default function App() {
         <LeagueView
           tab={leagueTab}
           board={scoreboard}
-          onOpenMatchup={setMatchupId}
+          onOpenMatchup={(id) => {
+            // A card names the matchup and nothing more, so it opens on the
+            // Summary in the middle — clearing any side a `mt=` link or an
+            // earlier press from the Rankings tab had named.
+            setMatchupId(id);
+            setMatchupTeam(null);
+          }}
+          /* Which teams have a matchup this period, and which — what a press on
+             a Rankings row opens. Null until the board lands, which is what
+             keeps a row from offering a door with nothing behind it. */
+          matchupTeams={matchupTeams}
+          onOpenTeamMatchup={(teamId, id) => {
+            setMatchupId(id);
+            setMatchupTeam(teamId);
+          }}
           loading={showScoreboardWait}
           error={scoreboardError}
           onPeriod={(period) => {
@@ -4191,6 +4291,7 @@ export default function App() {
             // let go of it: `mup=` from last week names a row this board has no
             // match for, and the page it opens would have nothing to draw.
             setMatchupId(null);
+            setMatchupTeam(null);
             setMatchupPeriod(period);
           }}
           rankings={rankings}
@@ -4360,7 +4461,15 @@ export default function App() {
         <LeagueMatchupView
           board={scoreboard}
           matchupId={matchupId}
-          onClose={() => setMatchupId(null)}
+          /* Which page it opens on, and — while it is open — which page it is
+             on: the effect inside reports the side back so `mt=` describes the
+             page in front of the reader rather than only the one it opened on. */
+          initialTeamId={matchupTeam}
+          onSideTeam={setMatchupTeam}
+          onClose={() => {
+            setMatchupId(null);
+            setMatchupTeam(null);
+          }}
           onOpenDetails={setDetailsKey}
           /* The app's own named spans, so `Today` means one thing in the app —
              the matchup's own week is added to them in there, that being the
