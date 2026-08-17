@@ -771,8 +771,10 @@ const CHAPTERS: Chapter[] = [
             to another device.
           </li>
           <li>
-            <strong>Two colour schemes.</strong> <Ui>Midnight</Ui> is the dark
-            original and <Ui>Lavender</Ui> is light gray and violet; pick one under{' '}
+            <strong>Four colour schemes.</strong> <Ui>Midnight</Ui> is the navy
+            original, <Ui>Lavender</Ui> is dark gray and violet, and{' '}
+            <Ui>Maroon</Ui> and <Ui>Powder Blue</Ui> are the two halves of a 1980
+            road uniform — one dark, one light. Pick one under{' '}
             <Ui>
               <GearIcon /> Settings
             </Ui>

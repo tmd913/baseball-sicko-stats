@@ -470,12 +470,16 @@ the vocabulary still fits.
 **The abbreviation is *not* in the pitch's own colour**, which is worth writing
 down because it is the obvious thing to try and it cannot be made to work. That
 palette is built to be a **fill** with computed ink over it (`inkOn`); as *text*
-it fails on one scheme or the other for nearly every pitch — measured against the
-two page grounds, **6 of 9 land under 3:1 on Lavender** (the slider at 1.90, the
-curve at 1.65) **and FC and KC under 3:1 on Midnight**, with no value clearing
-4.5:1 in both. There is no per-pitch colour that reads on both themes, so the
-abbreviation takes the app's own ink and the swatch directly below it carries the
-colour, which is what a legend swatch is for.
+several of its members fail outright — measured against the two themes' card
+grounds, **4 of the 15 land under 3:1 somewhere**: FC **2.28/2.06**, KC
+**2.23/2.02**, and FF and KN **3.21/2.91**, Midnight against Lavender. Colouring
+the label would leave a cutter and a knuckle curve unreadable to buy the others
+nothing the swatch does not already say, so the abbreviation takes the app's own
+ink and the swatch directly below it carries the colour, which is what a legend
+swatch is for. (It was measured again when Lavender went from a light theme to
+graphite — on the pale page it was **6 of 9** in a real arsenal, with the slider
+at 1.90 and the curve at 1.65 — and the conclusion is the one that survived the
+reversal.)
 
 **An `InfoKey` carries what the chart cannot say for itself** — that the rings
 are inches, that the vertical axis is *induced* break rather than total drop,

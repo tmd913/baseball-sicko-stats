@@ -980,11 +980,16 @@ export function MovementChart({
                 <span className="mv-legend-name">
                   {/* Not in the pitch's own colour: this palette is built to
                       be a *fill* with computed ink over it (see `inkOn`), and as
-                      text it fails on one scheme or the other for nearly every
-                      pitch — measured against the two page grounds, 6 of 9 land
-                      under 3:1 on Lavender and FC/KC under 3:1 on Midnight, with
-                      no value working in both. The swatch directly below is
-                      where the colour belongs. */}
+                      text several of its members fail outright — measured
+                      against the two themes' card grounds, 4 of the 15 land
+                      under 3:1 somewhere (FC 2.28/2.06, KC 2.23/2.02, FF and KN
+                      3.21/2.91 on Midnight/Lavender). Colouring the label would
+                      leave a cutter and a knuckle curve unreadable to buy the
+                      others nothing the swatch below does not already say —
+                      which is where the colour belongs. (Measured again when
+                      Lavender went from a light theme to graphite: on the pale
+                      page it was 6 of 9 in a real arsenal, and the conclusion
+                      is the one that survived.) */}
                   <span className="mv-legend-abbr">{abbr}</span>
                   <span className="mv-legend-full">{p.pitchType}</span>
                 </span>

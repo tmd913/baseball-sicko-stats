@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { teamLogoUrl } from '../lib';
+import { teamColor, teamLogoUrl } from '../lib';
 
 /**
  * A name over its club and positions — the identity block, in the one place
@@ -43,6 +43,11 @@ export function TeamMark({ teamId, team }: { teamId: number | null; team: string
     <img
       className="row-id-logo"
       src={teamLogoUrl(teamId)}
+      /* The club's own colour, inline rather than as a token for the reason the
+         theme picker's swatches are: it is one of thirty values keyed by club,
+         not one value the page has. See `teamColor`, which is also where the
+         `on-dark` cut's need for a dark ground is argued. */
+      style={{ background: teamColor(teamId) }}
       alt={team}
       title={team}
       loading="lazy"

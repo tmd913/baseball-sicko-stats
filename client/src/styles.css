@@ -26,16 +26,34 @@
    --------------------------------------------------------------------------- */
 :root {
   /* The surface ramp, dark to light: the page, the page's second step, a card,
-     and a card's stronger surface (the zebra stripe, a hover). The direction of
-     the last two inverts under a light theme — `--panel` there is white and
-     `--panel-2` a step *down* — and nothing has to be told, because what every
-     rule actually asks for is "the more prominent surface", not "the lighter
-     one". */
+     and a card's stronger surface (the zebra stripe, a hover). Both shipped
+     themes run it in this direction; a light one would invert the last two —
+     `--panel` white and `--panel-2` a step *down* — and nothing would have to be
+     told, because what every rule actually asks for is "the more prominent
+     surface", not "the lighter one". (Lavender *was* that light theme for a
+     spell; see its block at the foot of the file for why it is graphite now.) */
   --bg: #0b1220;
   --bg-2: #111a2e;
   --panel: #16213a;
   --panel-2: #1b2949;
   --border: #26365c;
+
+  /* **The zebra stripe's other row** — the one surface a theme may have to part
+     from `--panel` on, and the third entry on the short list of things a palette
+     is allowed to move (`--win` and `--logo-plate` are the other two).
+
+     On a dark theme the two questions have one answer: a card is a step up from
+     the page, and so is the stripe, so this resolves to `--panel` and none of
+     the three dark palettes has to say anything. **Powder Blue is where they
+     separate.** Its page is white, so a card wants to be white as well — and a
+     stripe cannot be, or there is no stripe. It carries the jersey's own powder
+     here instead, which is the colour its page gave up.
+
+     Read by the zebra rule of all four wide tables — the summary table, the
+     research board (which carries `.summary-table` too), the game log's family
+     and the League table — and by nothing else. */
+  --row-alt: var(--panel);
+
   --text: #e8eefc;
   --muted: #8ea0c4;
   --faint: #5c6f97;
@@ -53,8 +71,9 @@
      `var(--bg)`, which is exactly right on a dark theme (the page's own
      near-black over a bright cyan) and exactly wrong on a light one, where
      `--bg` is the near-white the fill has to be told apart from. A name for the
-     role rather than a reuse of the surface is the whole of the fix, and the
-     dark theme's value is the surface it always was, so nothing here changes.
+     role rather than a reuse of the surface is the whole of the fix, and both
+     shipped themes are dark, so both leave it as `var(--bg)` and each gets its
+     own page colour out of it for nothing.
 
      One rule *did* change and it is worth stating: `.lineup-spot.spot-out` — the
      red "!" pip on a headshot — spelled its ink `#fff` where its five siblings
@@ -70,19 +89,35 @@
      are one statement made four ways and a fifth reader would otherwise have to
      be found and changed with them.
 
-     It is `--hit` here, which is what all four wrote out: green marks the side
+     It was `--hit`, which is what all four rules wrote out: green marks the side
      taking the category and the loser goes muted, since the green/red pair this
      app uses for a *delta* would put ten red cells down the losing side of every
-     card — the whole row shouting rather than the winner being marked. A theme
-     may move it, and Lavender does: on a palette whose whole subject is violet,
-     the app's green is the one loud thing on the page that belongs to no other
-     mark on it. */
-  --win: var(--hit);
+     card — the whole row shouting rather than the winner being marked. That
+     muted-loser half is untouched and is the half that matters; what moved is
+     the winner.
+
+     **It is the theme's own accent now, in all four.** Green was the app's
+     original hero and still reads as one in Midnight; it does not in the three
+     palettes added since, where it is the one loud thing on the page belonging to
+     no other mark on it — Lavender said exactly that while it was a light theme
+     and moved `--win` to its accent, and a bottle-green winner on Powder Blue's
+     maroon-and-sky page is the same observation again. Rather than three themes
+     overriding and one not, the rule is one sentence: **the winner is the theme's
+     hero colour**, which every palette is built to make the loudest thing it has.
+
+     Measured against the `--muted` a losing figure takes, which is the comparison
+     the card actually asks a reader to make: ΔE2000 **17.9** on Midnight, 16.4 on
+     Lavender, 28.2 on Maroon and 16.5 on Powder Blue, at 6.3–8.5:1 on the surface
+     it is printed on — and the winner is **bolder** besides. Green's own gap was
+     35–44, so this is a real narrowing rather than a free lunch; 16 is where the
+     light Lavender shipped it and is a plain difference at a glance. A theme that
+     wants its green back is one line. */
+  --win: var(--accent);
 
   /* Body prose inside a card — the play description under a plate appearance.
      A hand-picked step short of `--text`, so it reads as description rather
-     than as a value; a token because a light theme's step is in the other
-     direction. */
+     than as a value; a token because the step is a hand-picked distance from
+     `--text` rather than a formula, so each theme names its own. */
   --prose: #cdd8f0;
   /* The ink on an `--out`-toned badge, which is the one badge whose own colour
      is too quiet to write in. */
@@ -218,6 +253,20 @@
      media query at the end of the file. */
   --stack-gap: 12px;
 
+  /* **The feed's rail — the coloured bar down the left of an item.** It carries
+     the outcome of a plate appearance, the tone of a base-running play, a
+     pitcher's decision and the live role of whoever is in a game, and it is the
+     smallest coloured thing in the app: at 3px it was reported as hard to tell
+     apart, which is what too little ink of a well-separated colour looks like.
+
+     5px, and the padding gives back the 2 so **nothing moves**: the rail is a
+     border and the content starts at `border + padding`, which is 14px either
+     way. The two are named because five shapes draw this rail (an at-bat, a base
+     event, an outing, an Upcoming row and a live entry) and a bar that is 5px on
+     four of them is worse than one that is 3px on all five. */
+  --rail-w: 5px;
+  --rail-pad: 9px;
+
   --radius: 14px;
   /* The width a column of cards stops growing at. The app itself is uncapped —
      see `.app` — and the three wide tables take the whole window, which is where
@@ -260,9 +309,10 @@
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
   /* The two lifts that are not `--shadow`: a pinned bar sitting flat against
      the page (felt rather than seen), and a popover genuinely floating over it.
-     Tokens because a light theme's shadow is not a darker version of a dark
-     theme's — it is a fraction of the weight, cast in the palette's own hue
-     rather than in black, which on a pale ground reads as dirt. */
+     Tokens because a shadow is not a fixed thing: a light theme's is not a
+     darker version of a dark theme's but a fraction of the weight, cast in the
+     palette's own hue rather than in black, which on a pale ground reads as
+     dirt. Both shipped themes are dark and both take these. */
   --shadow-bar: 0 6px 16px rgba(0, 0, 0, 0.22);
   --shadow-pop: 0 12px 30px rgba(0, 0, 0, 0.45);
   font-synthesis: none;
@@ -306,10 +356,12 @@ html {
      propagation for the life of the page: `body` then paints its gradient
      inside its own box, which is as tall as the content, and every page shorter
      than the window showed a hard seam at the foot of the content with the flat
-     root colour below it. Measured on the League view at 900×3000 under
-     Lavender, before this rule: `rgb(235, 232, 244)` at the last row of content
-     and `rgb(243, 241, 248)` — a whiter band — for the 720px under it. Midnight
-     hid it, its gradient ending on the very `--bg` the boot script paints.
+     root colour below it. Measured on the League view at 900×3000 under the
+     *light* Lavender, before this rule: `rgb(235, 232, 244)` at the last row of
+     content and `rgb(243, 241, 248)` — a whiter band — for the 720px under it.
+     Midnight hid it, its gradient ending on the very `--bg` the boot script
+     paints, and graphite Lavender hides it the same way — so no shipped theme
+     shows the fault this rule fixes, which is the reason to say so here.
 
      So the stylesheet clears the root the moment it arrives, which is exactly
      when the real background is available to replace it. It must stay *after*
@@ -2252,7 +2304,7 @@ body {
   padding-top: 9px;
 }
 .ars-row {
-  background: var(--bg);
+  background: linear-gradient(180deg, var(--panel), var(--bg-2));
   border: 1px solid var(--border);
   border-left: 3px solid var(--faint);
   border-radius: 10px;
@@ -2519,7 +2571,7 @@ body {
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  background: var(--bg);
+  background: linear-gradient(180deg, var(--panel), var(--bg-2));
   border: none;
   font: inherit;
   color: inherit;
@@ -2625,7 +2677,7 @@ body {
   flex-wrap: wrap;
   gap: 8px;
   padding: 11px 12px;
-  background: var(--bg);
+  background: linear-gradient(180deg, var(--panel), var(--bg-2));
   border: 1px solid var(--border);
   border-left-width: 4px;
   border-radius: 12px;
@@ -2666,7 +2718,7 @@ body {
    button — the pitcher's counterpart to a batter's .pa-card, so it carries the
    same radius, left-border accent, hover tint and focus ring. */
 .faced-card {
-  background: var(--bg);
+  background: linear-gradient(180deg, var(--panel), var(--bg-2));
   border: 1px solid var(--border);
   border-left-width: 4px;
   border-radius: 12px;
@@ -2749,8 +2801,15 @@ body {
 }
 
 /* ---- PA card ---- */
+/* **The card ombré.** `--panel` at the top into `--bg-2` at the foot, which is
+   the wash `.player-card`, `.feed-item-toggle`, `.upcoming-head`, `.pday-game`,
+   `.lg-matchup` and `.lg-tx` have always carried. These five were `--bg` — the
+   page's own colour — so on every theme they were a bordered box the same shade
+   as whatever was behind them, which is what "some of the cards look flat" is.
+   They are cards by every other measure (a radius, a border, a tone rail,
+   something you can press), so they take the card surface. */
 .pa-card {
-  background: var(--bg);
+  background: linear-gradient(180deg, var(--panel), var(--bg-2));
   border: 1px solid var(--border);
   border-left-width: 4px;
   border-radius: 12px;
@@ -2782,13 +2841,17 @@ body {
 }
 .pa-card.kind-out,
 .faced-row.kind-out,
-.faced-card.kind-out {
-  border-left-color: var(--out);
-}
+.faced-card.kind-out,
+/* `other` is an at-bat MLB filed no event for at all, and it took `--faint`
+   until the rails were measured: that is 5.5 ΔE2000 from the `--out` beside it
+   on three of the four themes, which is two greys nobody can tell apart drawn
+   for two meanings nobody can tell apart either. One quiet rail for "nothing
+   came of it" says the same thing and leaves one fewer grey in the feed's
+   vocabulary. */
 .pa-card.kind-other,
 .faced-row.kind-other,
 .faced-card.kind-other {
-  border-left-color: var(--faint);
+  border-left-color: var(--out);
 }
 /* A base-running event inside an inning block — the balk, the wild pitch, the
    bag taken off him. It takes `.faced-row` outright so it lines up with the
@@ -4461,7 +4524,7 @@ button.start-line:focus-visible {
 .stats-table tbody tr:nth-child(even) .glog-date,
 .opp-table tbody tr:nth-child(even) td,
 .opp-table tbody tr:nth-child(even) .glog-date {
-  background: var(--panel);
+  background: var(--row-alt);
 }
 /* **A row is a press now, so it looks like one.** It carried no hover tint for
    a long time and the argument was sound while it held: with a pointer the tint
@@ -6455,7 +6518,7 @@ button.start-line:focus-visible {
 .summary-table tbody tr:nth-child(even) td,
 .summary-table tbody tr:nth-child(even) .sum-img-col,
 .summary-table tbody tr:nth-child(even) .sum-name-col {
-  --cell-bg: var(--panel);
+  --cell-bg: var(--row-alt);
 }
 /* Numeric columns take a share of the slack rather than hugging their content,
    which is what makes a wide screen read as a table rather than as a table's
@@ -7110,10 +7173,21 @@ button.start-line:focus-visible {
   gap: 7px;
 }
 /* Tighter than the menu's other entries because it carries a picture as well as
-   a word, and `flex: 1 1 auto` so two of them share the menu's width evenly
-   rather than each hugging the length of its own name. */
+   a word, and **one per row**.
+
+   It was `flex: 1 1 auto` — "so two of them share the menu's width evenly rather
+   than each hugging the length of its own name" — which was written when there
+   were two and which a fourth broke: the labels are different lengths, so a
+   wrapping row packed them **1 / 2 / 1** (Lavender and Maroon happened to fit
+   together) and the picker read as a ragged grid rather than as a list. A
+   two-column grid was the other way out and does not survive the narrow case:
+   at 390px the menu leaves 219px of content, so a column is 106 against the
+   132 `Powder Blue` needs.
+
+   Full width instead, which is what every other entry in this menu already is,
+   and which costs a 390px phone ~38px of a popover that has 500px to spare. */
 .theme-swatch {
-  flex: 1 1 auto;
+  flex: 1 1 100%;
   justify-content: center;
   gap: 8px;
   padding: 7px 10px;
@@ -8534,11 +8608,21 @@ button.start-line:focus-visible {
 /* The cap mark, at the size the line can give it. `object-fit: contain` because
    MLB draws every one of these in a 300×300 box with its own margins — a mark
    that is wide and short (a wordmark cap) and one that is square must sit on
-   the same baseline as the text beside them. */
+   the same baseline as the text beside them.
+
+   **The ground is the club's own and is set inline**, off `lib.ts::teamColor`,
+   because the cut we ask MLB for is the `on-dark` one and a light theme does not
+   supply the dark it needs — thirteen of the thirty marks are white alone. The
+   radius is what turns that ground from a patch into a cap: 3px at 15px is the
+   same proportion `.lg-logo`'s 5px is at 34, so the two logo shapes in this app
+   are one shape at two sizes. No padding — MLB draws each mark inside its own
+   margins in that 300×300 box, so the artwork already stands off the edge, and
+   padding on a `border-box` element would come out of the 15px the mark has. */
 .row-id-logo {
   width: 15px;
   height: 15px;
   object-fit: contain;
+  border-radius: 3px;
   flex: none;
 }
 /* The abbreviation, for a club with no logo to draw — no id on the leaderboard
@@ -9046,9 +9130,9 @@ button.start-line:focus-visible {
 .live-entry {
   /* The role rail runs down the whole entry — header and card together — so the
      group is flagged as live without any one row of it posing as a control. */
-  border-left: 3px solid var(--border);
+  border-left: var(--rail-w) solid var(--border);
   border-radius: 3px;
-  padding-left: 11px;
+  padding-left: var(--rail-pad);
 }
 .live-entry.role-at-bat {
   border-left-color: var(--strikeout);
@@ -9110,9 +9194,9 @@ button.start-line:focus-visible {
    nothing — it groups the item and claims no more than that. The row's own
    layout is `.feed-item`'s, which is what the other four use too. */
 .upcoming-item {
-  border-left: 3px solid var(--muted);
+  border-left: var(--rail-w) solid var(--muted);
   border-radius: 3px;
-  padding-left: 11px;
+  padding-left: var(--rail-pad);
 }
 /* Identity above the bar — headshot and name, both links, and nothing here
    toggles: inside a tappable row a thumb that missed either one navigated off
@@ -9479,9 +9563,9 @@ button.start-line:focus-visible {
    same thing. Scoped to the feed — in the players view the card is the whole
    item and its edge is the only place the outcome's colour can live. */
 .feed-at-bat {
-  border-left: 3px solid var(--border);
+  border-left: var(--rail-w) solid var(--border);
   border-radius: 3px;
-  padding-left: 11px;
+  padding-left: var(--rail-pad);
 }
 .feed-at-bat.kind-hr {
   border-left-color: var(--hr);
@@ -9495,11 +9579,9 @@ button.start-line:focus-visible {
 .feed-at-bat.kind-strikeout {
   border-left-color: var(--strikeout);
 }
-.feed-at-bat.kind-out {
-  border-left-color: var(--out);
-}
+.feed-at-bat.kind-out,
 .feed-at-bat.kind-other {
-  border-left-color: var(--faint);
+  border-left-color: var(--out);
 }
 /* The card's own accent, folded back to the plain border. This has to come
    after `.pa-card.kind-*` (same specificity, later wins) — those rules live up
@@ -9527,12 +9609,12 @@ button.start-line:focus-visible {
 .feed-base-item {
   --rail-a: var(--border);
   --rail-b: var(--rail-a);
-  border-left: 3px solid transparent;
+  border-left: var(--rail-w) solid transparent;
   border-radius: 3px;
-  padding-left: 11px;
+  padding-left: var(--rail-pad);
   background-image: linear-gradient(var(--rail-a) 0 50%, var(--rail-b) 50% 100%);
   background-repeat: no-repeat;
-  background-size: 3px 100%;
+  background-size: var(--rail-w) 100%;
   background-origin: border-box;
 }
 .feed-base-item.rail-take {
@@ -9566,9 +9648,9 @@ button.start-line:focus-visible {
    instead and the role rail wins; `.feed-outing` is only ever set when it
    isn't, so the two never both apply. */
 .feed-outing {
-  border-left: 3px solid var(--muted);
+  border-left: var(--rail-w) solid var(--muted);
   border-radius: 3px;
-  padding-left: 11px;
+  padding-left: var(--rail-pad);
 }
 .feed-base {
   display: flex;
@@ -10877,9 +10959,10 @@ button.start-line:focus-visible {
    puts a 9px bold label at **3.18:1 on the zebra stripe** in Midnight (3.72 on
    the page) — under what a chip a reader has to *read* owes them, where the
    percentile card's own `--faint` badge is a quiet secondary number beside a
-   value. `--muted` measures 6.08:1 on that stripe and 7.11 on the page, and 6.67
-   in Lavender. So the ladder is carried by the two structural properties — fill,
-   then border style — and the text of all three stays legible. */
+   value. `--muted` measures 6.08:1 on that stripe and 7.11 on the page, and
+   5.88/6.94 in Lavender (where `--faint` is 3.35/3.95). So the ladder is carried
+   by the two structural properties — fill, then border style — and the text of
+   all three stays legible in both. */
 .sched-sp-estimated {
   color: var(--muted);
   background: none;
@@ -12418,7 +12501,7 @@ span.mup-move-name:hover {
    cell stripes with its row instead of showing the scrolled columns through. */
 .league-table tbody tr:nth-child(even) th,
 .league-table tbody tr:nth-child(even) td {
-  --cell-bg: var(--panel);
+  --cell-bg: var(--row-alt);
 }
 /* **No row hover and no pointer** — on the *category* cells, which is every
    cell but the two that identify the team. The log's rows carry both because a
@@ -13053,13 +13136,13 @@ span.mup-move-name:hover {
 }
 
 /* ---------------------------------------------------------------------------
-   Lavender — the light theme.
+   Lavender — the graphite theme.
 
-   Light gray surfaces with a violet cast, one deep violet doing the accent's
-   work, and an ombré on every large surface rather than on the pinned bar
-   alone. It is a **redeclaration of the palette and nothing else**: the block
-   below is tokens, then a short run of rules that add gradients the dark theme
-   does not want. No component knows it exists.
+   Dark neutral gray surfaces with the faintest violet cast, one light lavender
+   doing the accent's work, and an ombré on every large surface rather than on
+   the pinned bar alone. It is a **redeclaration of the palette and nothing
+   else**: the block below is tokens, then a short run of rules that add
+   gradients the default theme does not want. No component knows it exists.
 
    Selected by `html[data-theme='lavender']`, which `client/src/theme.ts` stamps
    and `index.html` stamps again before the stylesheet has loaded so a reload
@@ -13067,158 +13150,423 @@ span.mup-move-name:hover {
    app's own root because two things outside React read it: that boot script,
    and `body`, whose gradient is the page.
 
-   **Every number below is measured, and two constraints decide a light theme.**
-   A semantic colour here does three jobs the dark theme lets it do at one
-   lightness: it is printed as *text on the pale page*, it is *filled under white
-   ink*, and — the one that is easy to miss and was missed on the first pass —
-   it is printed as text **on a live-role row**, whose ground is that same
-   palette washed over the page. On a dark theme a 20% wash barely dents a
-   colour sitting 9–11:1 from the page; on a light one it eats most of a 4.5,
-   and the first pass put the live inning's green on a tinted row at **2.90:1**.
+   **It was a light theme and is not any more, and the reversal is worth
+   recording rather than deleting.** What stood here was a near-white page
+   (`--bg: #f3f1f8`, `--panel: #ffffff`) with every semantic hue *deepened* so it
+   could be printed as text on that page, filled under white ink, and — the
+   constraint that decides a light theme — still read as text on a live-role row,
+   whose ground is that same palette washed over the page. All of that
+   arithmetic was right and it answered the wrong question: this app is read for
+   an evening of baseball, mostly in the dark, and a page of white is the one
+   thing a second theme should not be. So the surfaces are graphite and the hues
+   go back to being *light on dark* — which is the polarity `:root` is written
+   in, and is why most of the old block's inversions (`--on-accent` to white,
+   `--pitch-ink` to white, a light `--chip-solid`, a violet-cast shadow set, the
+   `--logo-plate` well behind a team badge) are simply **gone**: each existed to
+   undo something a pale page did, and `:root`'s own value is right again.
 
-   Solving all three is what pushes each hue deeper than its dark-theme twin —
-   the amber lands on a dark gold rather than a sunflower, which is what every
-   light theme's "warning" is, and for exactly this reason. As they render:
+   What survives from that work is the *method*, which is that every number
+   below is measured against Midnight's own figures rather than picked. As they
+   render:
 
-   - **on `--bg`** — text **14.5:1**, muted 6.7, faint 4.0, accent **7.4**, hit
-     6.7, hr 6.7, walk 6.7, strikeout 6.7, on-base 6.8, mound 6.7, out 5.4. The
-     quietest of those is `--faint`, the tone the percentile badge under every
-     value on the research board is drawn in, and the dark theme's own reads
-     **3.72** there — so the deliberately-quiet mark is quieter in the palette
-     this is a light counterpart to than it is here.
-   - **on the worst live-role ground** — text 9.6, accent **4.91**, muted 4.40,
-     hit 4.40, hr 4.41, walk 4.41, strikeout 4.41, on-base 4.47, mound 4.44,
-     out 3.58, faint 2.61. The dark theme's own figures here are muted **4.60**,
-     strikeout 4.38 and faint 2.41, so this set sits where that one sits.
-   - **white on each fill** — accent **8.3**, hit 7.5, hr 7.5, walk 7.5,
-     strikeout 7.5, on-base 7.6, mound 7.5, out 6.1.
+   - **on `--bg`** — text **14.3:1** (Midnight 16.1), muted 6.9 (7.1), faint 4.0
+     (3.7), accent **7.4** (8.7), hit 9.8, hr 10.2, walk 7.8, strikeout 7.4,
+     on-base 6.8, mound 10.3, out 4.8 (3.9). The quietest is `--faint`, the tone
+     the percentile badge under every value on the research board is drawn in,
+     and it is *quieter* in Midnight than here.
+   - **on the worst live-role ground** (on deck) — text 9.0, mound 6.5, hit 6.2,
+     walk 4.9, strikeout 4.7, accent **4.66**, muted 4.37, on-base **4.28**, out
+     3.00, faint 2.49. Midnight's own worst row (on mound) reads accent 5.65,
+     strikeout 4.38, muted 4.60, out 2.54, faint 2.41, so this set sits where
+     that one sits.
+   - **`--on-accent` on each fill** — it is `:root`'s `var(--bg)` again, and the
+     page's own graphite on these fills reads accent **7.4**, hit 9.8, hr 10.2,
+     walk 7.8, strikeout 7.4, on-base 6.8, mound 10.3, out 4.8.
 
    **The four live-role grounds are the other measurement**, because the legend
    under the summary table draws all four side by side and its whole job is to
-   say that these shades differ. They are mixed at **24%/22%** here against the
-   dark theme's 22/20 — a 20% wash of a *deep* colour over a near-white page is
-   still a tint you have to look for — and the six pairwise ΔE2000 distances come
-   to at bat/on deck **14.7**, at bat/on base **12.6**, at bat/on mound **24.7**,
-   on deck/on base **23.8**, on deck/on mound **13.1**, on base/on mound
-   **21.5**: a tightest pair of 12.6 against the dark theme's 12.1.
+   say that these shades differ. They are `:root`'s own 22/20 mixes — this block
+   does not redeclare them at all, and does not have to: a custom property is
+   substituted after the cascade, on the element it is used from, and
+   `html[data-theme='lavender']` *is* `:root`, so the four `color-mix()`es
+   declared up there resolve against the palette declared here. Their six
+   pairwise ΔE2000 distances come to at bat/on deck **14.4**, at bat/on base
+   **12.9**, at bat/on mound 31.7, on deck/on base 25.7, on deck/on mound 20.2,
+   on base/on mound 26.8: a tightest pair of 12.9 against Midnight's own 12.1.
 
-   **Two purples is the one thing this theme buys and pays for.** The accent is
+   **Two violets is the one thing this theme buys and pays for.** The accent is
    the hero lavender and the on-base role is a purple of long standing, so the
-   two share a family: `--accent` #5138ad against `--live-purple` #8605bd is
-   ΔE **10.1**, which is the tightest pair in either palette — the dark theme's
-   own is `--accent`/`--walk` at 11.7 — and it is what is left after the deeper
-   set above pulled the two toward each other. It is taken deliberately: they
+   two share a family: `--accent` #b49cfb against `--live-purple` #dd7bff is
+   ΔE **11.7**, which is the tightest pair in either palette — Midnight's own is
+   `--accent`/`--accent-2` at 11.6 — and it is what is left after the on-base
+   purple was pushed as far from the *at bat* red as the role grounds allow (a
+   pinker on-base takes at bat/on base to 7.8, a bluer one takes accent/on-base
+   to 9.0; #dd7bff is the peak of that trade). It is taken deliberately: they
    never appear in one key (the legend draws the roles and the accent is not
-   among them), they are different objects (chrome against a live mark), and
-   the alternative measured worse where it counts — pushing the purple far
-   enough to clear the accent takes at bat/on base under 12.
+   among them) and they are different objects — chrome against a live mark.
    --------------------------------------------------------------------------- */
 html[data-theme='lavender'] {
-  /* The surface ramp. `--panel` is white and `--panel-2` a step *down* from it,
-     which is the inversion the note on `:root` promises: what a rule asks for is
-     the more prominent surface, and on a pale page that is the darker one. */
-  --bg: #f3f1f8;
-  --bg-2: #e9e5f3;
+  /* The surface ramp, dark to light, in the same direction `:root` runs it: the
+     page, the page's second step, a card, and a card's stronger surface. Neutral
+     gray with a few points of violet in it — enough that the accent reads as
+     belonging to the page rather than as sitting on it, and not so much that the
+     surfaces themselves read as coloured. */
+  --bg: #1c1b22;
+  --bg-2: #232229;
+  --panel: #2a2833;
+  --panel-2: #332f3d;
+  --border: #46415a;
+  --text: #ece9f4;
+  --muted: #a8a2b8;
+  --faint: #7c7690;
+
+  /* The hero, and an orchid to gradient toward. `--accent-2` is the second stop
+     of the brand wordmark (which runs it into `--hr`'s gold) and the hover on a
+     filled button, so it is the *brighter* sibling here exactly as the cyan is
+     in Midnight: 8.8:1 on the page against the accent's 7.4, so a hover moves
+     toward the light rather than sideways. */
+  --accent: #b49cfb;
+  --accent-2: #e3a2f5;
+  --hr: #f2c14e;
+  --hit: #45dd9a;
+  --walk: #7fb0ff;
+  --out: #8a8499;
+  --strikeout: #fb8b7e;
+
+  /* The three inks that are a step off `--text` rather than a hue, each moved
+     the same distance as its Midnight twin and given this palette's own cast. */
+  --prose: #d6d1e4;
+  --out-ink: #d2ccdd;
+  --error-ink: #fecdc7;
+  /* The number inside a pitch dot, and the solid ground under a status code on
+     a headshot. Both are near-blacks here for the reason they are near-blacks
+     in Midnight — the dots are saturated lights, and the chip sits on a
+     photograph and carries its own contrast rather than borrowing the page's.
+     The light theme had to invert both and no longer does. */
+  --pitch-ink: #14121a;
+  --chip-solid: #17151d;
+
+  /* The dimmer behind a dialog, and the lift at the top right of the page's own
+     radial. Both are `:root`'s in kind and this palette's in cast: a graphite
+     scrim rather than a navy one, and a violet-gray glow rather than a blue. */
+  --scrim: rgba(10, 8, 15, 0.66);
+  --page-glow: #2e2940;
+  /* The second stop of the brand mark, which runs `--accent` → this. A rose,
+     so the wordmark still travels rather than sitting in one violet. */
+  --brand-2: #f472b6;
+
+  /* pitch dot colors — the semantic set, separated from each other by ΔE 33.3
+     at the tightest. */
+  --inplay: #45dd9a;
+  --whiff: #fb8b7e;
+  --foul: #f2c14e;
+  --called: #a78bfa;
+  --ball: #585264;
+
+  --live-purple: #dd7bff;
+}
+
+/* ---------------------------------------------------------------------------
+   Maroon — the third theme, and the first taken off a photograph.
+
+   The Phillies' 1980 road uniform: a powder-blue body, a maroon `P` and maroon
+   sleeve stripes, white piping between them. It is a **redeclaration of the
+   palette and nothing else**, on the terms the block above sets out, and it
+   shares that block's ombré rules rather than carrying its own.
+
+   **It is one of two themes off that photograph and it is the dark one**, which
+   is what its name says: the maroon is the page and the powder is what is
+   written on it. `Powder Blue`, the block after next, is the same jersey the
+   other way up — a powder page with the maroon written on *it* — and the two
+   together are why neither is called after the uniform.
+
+   **The three colours are sampled from the jersey rather than remembered.** The
+   image was decoded and its pixels binned: the body reads **#527dae at the 10th
+   percentile, #6d98ce at the median and #86aede at the 90th**, and the maroon of
+   the lettering and the stripes clusters hard on **#66283b** (family #5a2737 to
+   #773548). Those two are what the palette is built from — the powder lifted to
+   carry text on a dark page, the maroon taken down to be one.
+
+   **Which way up was the question, and it now has both answers.** The obvious
+   reading of a powder-blue uniform is a powder-blue *page*, and this app had a
+   light theme until the reader asked for it to stop being one — so this one puts
+   the maroon on the page and the powder on top of it, which is the division the
+   jersey itself makes with its lettering, and which keeps it clear of Midnight's
+   navy: a maroon-cast page with a pale blue on it cannot be mistaken for a navy
+   page with a cyan on it. The white piping is `--text`, warmed a point or two
+   off neutral. The other answer is the block after next, which was asked for
+   once this one existed and could be seen.
+
+   **Every number is measured against Midnight's, as the block above is.**
+
+   - **on `--bg`** — text **15.9:1** (Midnight 16.1), muted 7.8 (7.1), faint 4.4
+     (3.7), accent **9.4** (8.7), hit 10.1, hr 10.7, walk 7.3, strikeout 8.1,
+     on-base 7.2, mound 10.9, out 5.6 (3.9).
+   - **on the worst live-role ground** (on deck) — text 10.1, mound 6.9, hit 6.4,
+     accent 6.0, strikeout 5.2, muted 4.94, walk **4.62**, on-base 4.58, out
+     3.55, faint 2.79, against Midnight's own worst row at strikeout 4.38, muted
+     4.60, out 2.54, faint 2.41.
+   - **the four role grounds** are `:root`'s own 22/20 mixes, resolved against
+     this palette for the reason the block above gives, and their six pairwise
+     ΔE2000 distances bottom out at **12.3** (at bat against on base) against
+     Midnight's 12.1.
+
+   **Two blues is what this theme buys and pays for**, exactly as two violets is
+   what the one above pays for. `--accent` is a blue and so is `--walk`, and on a
+   maroon page they are the pair that wants watching: the powder is left where
+   the jersey has it and the walk is pushed to a **periwinkle** (#989cf6), which
+   holds them ΔE **12.8** apart — wider than Midnight's own `--accent`/`--walk`
+   at 11.7, and wider than the tightest pair in either of the other palettes. The
+   tightest here is `--accent` against `--accent-2` at **10.9**, which is a
+   hover pair and is meant to be adjacent (Midnight's is 11.6).
+   --------------------------------------------------------------------------- */
+html[data-theme='maroon'] {
+  /* The maroon, taken down to a set of surfaces. Sampled #66283b is the hue;
+     what these are is that hue at a page's lightness, running dark to light in
+     `:root`'s own direction. */
+  --bg: #1d1319;
+  --bg-2: #241820;
+  --panel: #2b1d26;
+  --panel-2: #35242f;
+  /* **The piping.** A hairline is the one place a *stated* burgundy fits without
+     competing with the accent, and it is the jersey's own trim: ΔE 11.8 from the
+     card it edges and 15.8 from the page. */
+  --border: #56303f;
+  /* The white of the piping and the `P`'s outline, warmed a couple of points off
+     neutral so it reads as belonging to this page rather than as an import. */
+  --text: #f6eef1;
+  --muted: #bda3ae;
+  --faint: #8f7684;
+
+  /* The hero, and a lighter one to hover into. The accent is the jersey's body
+     colour lifted until it carries text on the page (9.4:1); `--accent-2` is
+     that lift continued, so a hover moves toward the light exactly as Midnight's
+     cyan does over its blue. */
+  --accent: #8fc0ea;
+  --accent-2: #c9e6ff;
+  --hr: #f0c05a;
+  --hit: #4ed99a;
+  /* A periwinkle rather than a blue — see the note above the block. */
+  /* **A periwinkle rather than a blue**, and pushed one step bluer than it was
+     when the rails were measured: `--walk` and `--live-purple` are the *free
+     base* and *took the base* tones of a base-running item, so they can sit a
+     row apart in the feed, and at #989cf6 they were ΔE2000 17.4 — the tightest
+     pair of the four tones in any theme. #8d9df2 takes that to **20.2** and
+     spends it on `--accent`, which goes 12.8 → 11.5: the accent is chrome and is
+     never a rail, so the pair that can be adjacent is the one that gets the
+     room, and 11.5 is Midnight's own `--accent`/`--walk` figure (11.7). */
+  --walk: #8d9df2;
+  --out: #9a8b92;
+  --strikeout: #ff8d84;
+
+  --prose: #e3d5db;
+  --out-ink: #ded1d7;
+  --error-ink: #ffd3cd;
+  --pitch-ink: #14090e;
+  --chip-solid: #190d13;
+
+  --scrim: rgba(20, 8, 13, 0.66);
+  /* The lift at the top right of the page's own radial: the maroon again, a step
+     above the page, so the page reads as lit in its own colour rather than in a
+     borrowed one. */
+  --page-glow: #3a1f2c;
+  /* The second stop of the brand mark, which runs `--accent` → this: the jersey
+     read across, powder blue into maroon. A cranberry rather than #66283b
+     itself, which at a page's own lightness would end the gradient in the dark
+     instead of in a colour. */
+  --brand-2: #e2607f;
+
+  /* pitch dot colors — the semantic set, separated from each other by ΔE 32.7
+     at the tightest. */
+  --inplay: #4ed99a;
+  --whiff: #ff8d84;
+  --foul: #f0c05a;
+  --called: #b49cfb;
+  --ball: #6a5a63;
+
+  --live-purple: #dd7bff;
+}
+
+/* ---------------------------------------------------------------------------
+   Powder Blue — the same jersey the other way up, and the one light theme.
+
+   `Maroon` above puts the uniform's maroon on the page and writes the powder on
+   it. This puts the **piping's white on the page** and writes the maroon on
+   *that*, with the powder carried by everything drawn on it — the zebra stripe,
+   the table headers, every card's own foot, the borders and the logo plate. It
+   was the powder itself on the page for a spell, which is the jersey as you look
+   at it and is what was asked for once the dark one existed to be compared with;
+   what a white page buys instead is set out below, and the short of it is that
+   the header row and the first row of a table stopped being the same colour.
+   The two themes are built from the same sampled colours (see that block for
+   where they came from) and neither is called after the uniform, because either
+   alone would be a poor description of it.
+
+   **It is the app's only light theme, and Lavender's own light incarnation is
+   the record of what that costs.** Every note in that block still applies: a
+   semantic colour here is printed as text **on the page**, filled **under white
+   ink**, and printed as text **on a live-role row** whose ground is that same
+   palette washed over the page — and the third is what a light theme has to be
+   measured for.
+
+   **The page was the jersey's own powder and is now white, and the whole of
+   this block's arithmetic got better for it.** What that page cost was measured
+   when it was chosen rather than assumed: holding the role colours fixed and
+   walking the page from neutral (`#f3f1f8`) to the jersey's body (`#b9d3ec`),
+   the tightest pair of the four role grounds falls **12.6 → 9.2**, because a
+   page with chroma in it leaves less room for four washes to differ in.
+   `#dceaf7` was where that curve was cut, at **12.1** — Midnight's own figure
+   to the decimal — and the block below recorded the second bill in as many
+   words: the worst live-role row bottomed out **~0.2 under** both Midnight's
+   and the light Lavender's. A white page pays neither. The two things that came
+   out of the compromise are kept, because both are still right on their own
+   account: the binding pair is at bat against on base (Midnight's is the same
+   two), and `--hr` stays the amber (#7c4400) it was pushed to from a gold.
+
+   **As it renders, and the middle two lines are the ones that moved:**
+
+   - **on `--bg`** — text **17.8:1**, muted 9.5, faint 5.2, accent **8.5**, hit
+     9.1, hr 7.8, walk 8.4, strikeout 7.8, on-base 8.5, mound 8.1, out 7.1
+     (from 14.5 / 7.7 / 4.2 / 7.0 / 7.4 / 6.4 / 6.8 / 6.4 / 6.9 / 6.6 / 5.2).
+   - **on the worst live-role ground** (at bat, #e9c7c9) — text 11.39, muted
+     6.08, hit 5.83, accent 5.47, on-base 5.45, walk 5.37, mound 5.19, hr and
+     strikeout **5.02**, out 4.55, faint 3.32. That worst figure was **4.17**
+     over the powder page, against Midnight's own worst row at 4.38 and the
+     light Lavender's at 4.40 — so this theme went from a fifth of a point under
+     both to a full two thirds of a point over them.
+   - **the four role grounds** are ΔE2000 **12.8** apart at the tightest (12.1
+     before, and Midnight's own is 12.1), the other five pairs 13.5, 13.9, 22.7,
+     22.8 and 24.5. They are still redeclared at **24/22** rather than `:root`'s
+     22/20, which is the light Lavender's own correction and for its reason: a
+     20% wash of a deep colour over a light page is a tint you have to look for.
+   - **white on each fill** — accent 8.5, hit 9.1, hr 7.8, walk 8.4, strikeout
+     7.8, on-base 8.5, mound 8.1, out 6.4. Unchanged, the fills not having
+     moved, and now the same figures as the line above them: with a white page,
+     "printed on the page" and "white on the fill" are one measurement.
+
+   **The zebra is what a white page threatens, and it is why `--row-alt`
+   exists.** The stripe was `--panel` — right on a coloured page, where the card
+   colour and the stripe are both white against it, and impossible once the page
+   is white too. It is the jersey's own #dceaf7 now: **1.22:1** against the white
+   beside it (light Lavender 1.15, Midnight 1.11), which is the same step the
+   table always had, drawn in the same two colours the other way round.
+   --------------------------------------------------------------------------- */
+html[data-theme='powder'] {
+  /* **The page is white and the jersey is everything drawn on it.** It was the
+     powder itself for a spell, with white cards on top — which is the uniform as
+     you look at it, and is what put the first row of every table in almost the
+     same powder as the header above it: the header's own foot is `--bg-2`
+     (#c7dcf1) and row one was `--bg` (#dceaf7), ΔE2000 **4.6** apart, so a
+     reader could not see where the header stopped. White first fixes that at
+     the boundary that matters (**ΔE 13.0**) and costs the stripe nothing, the
+     two row colours being the same two the other way round.
+
+     So the powder moves off the page and onto the things drawn on it: the
+     stripe (`--row-alt`), the header (`--panel-2` → `--bg-2`), every card's own
+     foot, the borders and the logo plate. `--panel` and `--bg` are both white
+     now — a card is told from the page by its border, its shadow and its own
+     wash down to `--panel-2`, which is how a light theme separates them
+     everywhere — and `--bg-2`/`--panel-2` stop meaning "a step off the page"
+     and mean "the foot of a card, and of the header row".
+
+     **Every measured figure below improved**, which is the page's colour being
+     given back: mixing a role wash into white rather than into a blue leaves
+     more room for four of them to differ in, and dark ink on a lighter ground
+     reads better. */
+  --bg: #ffffff;
+  --bg-2: #c7dcf1;
   --panel: #ffffff;
-  --panel-2: #f1ecfa;
-  --border: #dcd5ee;
-  --text: #231d33;
-  --muted: #585073;
-  --faint: #7b7299;
+  --panel-2: #eef5fc;
+  /* The jersey's own powder, off the page and onto the zebra. It is the colour
+     row one used to be, so the table is the same two colours in the other
+     order — 1.22:1 against the white beside it, a step rather than a band. */
+  --row-alt: #dceaf7;
+  --border: #b4cfe6;
+  /* A maroon-black rather than a neutral one — the darkest thing on the jersey,
+     which is what the lettering is. */
+  --text: #22141a;
+  --muted: #55404a;
+  --faint: #7d6773;
 
-  /* The hero, and a rose to gradient toward. `--accent-2` is the second stop of
-     the brand wordmark and the hover on a filled button; in the dark theme it is
-     a *brighter* cyan, and here it is a warmer, redder violet, so a hover still
-     moves and the wordmark still runs lavender → rose → gold. */
-  --accent: #5138ad;
-  --accent-2: #a13c8e;
-  --hr: #744d00;
-  --hit: #14622b;
-  --walk: #0752ab;
-  --out: #5b636e;
-  --strikeout: #a61b25;
+  /* The maroon, at a lightness that carries on the page (8.5:1) and under white
+     ink (8.5:1 — the same figure twice, the page being white). `--accent-2` is the hover and the wordmark's first stop; on a
+     light theme "brighter" is not available, so it is a *warmer* maroon rather
+     than a lighter one — the same move the light Lavender made — held ΔE 10.2
+     from the accent and 11.8 from `--strikeout`, which is the pair it is
+     otherwise most likely to be mistaken for. */
+  --accent: #8c2545;
+  --accent-2: #b23c50;
+  --hr: #7c4400;
+  --hit: #0d5424;
+  --walk: #0a4d95;
+  /* **A warm neutral, which is what the rails asked for.** #55606d was a cool
+     slate — the same hue family as `--walk` — and as the *out* tone of a base
+     event beside a *free base* one it measured ΔE2000 14.5, the tightest pair of
+     the four in any theme. Off the blue axis it is **28.2** from the walk and
+     7.09:1 on the page, which is the whole trade: a grey has no hue to lose and
+     a light page has no lightness to spare. `--ball`, the
+     pitch dot, keeps the cool slate — it is not a rail, and its own separations
+     from the other four dots were measured where they are. */
+  --out: #5f574f;
+  --strikeout: #a3151f;
 
-  /* White, because every fill above is dark enough to carry it — which is the
-     constraint that set their lightness, together with the tinted-row one. */
+  /* White, because every fill above is dark enough to carry it — which, with the
+     tinted-row constraint, is what set their lightness. */
   --on-accent: #ffffff;
 
-  --prose: #3a3350;
-  --out-ink: #414b57;
+  --prose: #3a2f34;
+  --out-ink: #3f4a56;
   --error-ink: #8b1a1a;
-  /* The number inside a pitch dot **inverts with the dots**. The dark theme's
-     dots are pastels on a near-black plot and take a near-black number; these
-     are deep colours on a pale one, so the number is white — 7.1:1 at worst
-     across the five, against the 2.0:1 a near-black would have managed on the
-     green. */
+  /* Both invert with the polarity: the dots are deep colours on a pale plot, and
+     the status chip on a headshot carries its own contrast rather than the
+     page's — and this theme's semantic inks are dark, so the chip is white. */
   --pitch-ink: #ffffff;
-  /* Still a **solid** chip, for the reason it was solid in the first place — it
-     sits on a photograph rather than on the page, so it carries its own
-     contrast with it rather than borrowing whatever is behind it — but a solid
-     *light* one here, which is the half a light theme has to invert.
-
-     Measured before it was: the code inside is drawn in its own semantic colour
-     (`IL10` in `--strikeout`, `DTD` in `--hr`), and this theme's semantics are
-     **darker** than the dark theme's by construction, so a near-black chip put
-     the red on `#221b33` at **3.08:1** — under the bar for a 9px bold glyph and
-     the one contrast failure this theme's first pass had. On white the same
-     code reads **7.5:1**. */
   --chip-solid: #ffffff;
 
-  /* **Lavender rather than green for a won category.** The four rules that mark
-     one read `--win`, and on this palette the app's green is the one loud thing
-     on a page whose whole subject is violet — it belongs to no other mark here
-     and reads as an import from the other theme. The accent is what the page is
-     already made of, and it is still unmistakably *the* mark: ΔE **15.8** from
-     the `--muted` a losing figure takes, which is half again the widest gap this
-     palette has anywhere else (10.1), and the winner is bolder besides. */
-  --win: var(--accent);
+  /* **The plate behind a team logo, which only a light theme needs.** ESPN lets
+     a manager upload anything, and on a white card a light or white logo has no
+     boundary at all — on the live 12-team league, 6 of its 12 sat within 6/255
+     of the card. The value is measured against what it has to hold: white on it
+     is **1.55:1** where white on `--panel` is 1.00 and on the zebra 1.22, and it
+     reads as a tile against both grounds a table cell can give it (ΔE 14.8 from
+     the white row, 6.7 from the striped one). `.lg-logo-none` is excluded — that is our own fallback
+     baseball, drawn in `--faint`, which the plate would only push toward its own
+     ink. */
+  --logo-plate: #bcd2e8;
 
-  /* **The plate behind a team logo.** ESPN lets a manager upload anything, and
-     on a near-white card a **light or white** logo has no boundary at all: the
-     ESPN cap logos' white panel, and any photo with a pale surround, simply end
-     where the card begins. Measured on the live 12-team league, 6 of its 12
-     logos are transparent or pale enough that a fifth to a half of their box
-     sat within 6/255 of the card.
+  /* No `--page-glow`: the page is flat white here (see the body rule below), so
+     nothing in this theme reads it, and a token nobody reads is a token nobody
+     misses. */
 
-     So a logo gets a well to sit in rather than the page's own colour. The value
-     is measured: white on it is **1.53:1** where white on `--bg` is 1.00 and on
-     `--border` 1.42, and it reads as a tile against both grounds it can land on
-     (1.53 on a card, 1.36 on the zebra). A step further (#cfc6e4, 1.63) starts
-     to read as a coloured chip behind every team rather than as a recess.
+  /* The brand mark runs `--accent` → this, which on this theme is the uniform
+     read across: maroon into the jersey's own sampled powder. */
+  --brand-2: #6d98ce;
 
-     The dark theme has the mirror of this problem — a *black* logo on a
-     near-black card — and is deliberately left alone: nobody has reported it,
-     and `--bg` there is doing the same job this token does here. */
-  --logo-plate: #d5cde9;
+  /* The dimmer behind a dialog. Not a darker version of a dark theme's — that is
+     near-black at two thirds, which over a pale page reads as a muddy brown and
+     swallows the ombré it is dimming. A blue veil at 42% keeps the page
+     recognisable underneath while the card on top of it is unmistakably in
+     front. */
+  --scrim: rgba(16, 28, 46, 0.42);
 
-  --page-glow: #ffffff;
-  --brand-2: #c2429f;
-
-  /* The dimmer behind a dialog. Not a darker version of the dark theme's — that
-     one is near-black at two thirds, which over a pale page reads as a muddy
-     brown rather than as a page held back, and swallows the ombré it is dimming.
-     A violet veil at 42% keeps the page recognisable underneath while the card
-     on top of it is unmistakably in front. */
-  --scrim: rgba(38, 26, 66, 0.42);
-
-  /* Cast in the palette's own violet at a fraction of the weight. Black at 35%
+  /* Cast in the palette's own blue at a fraction of the weight. Black at 35%
      over a pale card reads as dirt rather than as depth. */
-  --shadow: 0 10px 30px rgba(63, 44, 110, 0.12);
-  --shadow-bar: 0 6px 16px rgba(63, 44, 110, 0.09);
-  --shadow-pop: 0 12px 30px rgba(63, 44, 110, 0.18);
-  --pin-edge: 6px 0 8px -6px rgba(63, 44, 110, 0.18);
-  --pin-edge-left: -6px 0 8px -6px rgba(63, 44, 110, 0.18);
+  --shadow: 0 10px 30px rgba(24, 48, 84, 0.14);
+  --shadow-bar: 0 6px 16px rgba(24, 48, 84, 0.10);
+  --shadow-pop: 0 12px 30px rgba(24, 48, 84, 0.20);
+  --pin-edge: 6px 0 8px -6px rgba(24, 48, 84, 0.20);
+  --pin-edge-left: -6px 0 8px -6px rgba(24, 48, 84, 0.20);
 
   /* pitch dot colors — the semantic set, deepened for a pale plot on the rule
-     above them, and separated from each other by ΔE 19.7 at the tightest. */
-  --inplay: #14622b;
-  --whiff: #a61b25;
-  --foul: #744d00;
+     above them, and separated from each other by ΔE 17.8 at the tightest. */
+  --inplay: #0d5424;
+  --whiff: #a3151f;
+  --foul: #7c4400;
   --called: #6d28d9;
-  --ball: #5b636e;
+  --ball: #55606d;
 
-  --live-purple: #8605bd;
-  --mound-teal: #005f5b;
+  --live-purple: #7409b8;
+  --mound-teal: #005a56;
 
   /* 24/22 rather than 22/20 — see the note above the block. */
   --role-at-bat-bg: color-mix(in srgb, var(--strikeout) 24%, var(--bg));
@@ -13227,38 +13575,94 @@ html[data-theme='lavender'] {
   --role-pitching-bg: color-mix(in srgb, var(--mound-teal) 22%, var(--bg));
 }
 
-/* ---- Ombré ----------------------------------------------------------------
-   The dark theme already gradients the things that are *lit* — the page, the
-   pinned bar, a card header — and leaves the rest flat, because on a near-black
-   ground a second flat step is all a gradient can be. On a pale ground it is
-   the opposite: white on white needs an edge, and a two-step wash gives a
-   surface a top and a bottom without spending a border on it.
+/* **The page is flat white, and the ombré it used to carry is gone with the
+   colour it was made of.** It ran a white lift at the top right, a 9% wash of
+   the accent in the bottom-left corner and a linear from `--bg` down to
+   `--bg-2` — three layers, of which the first is now white on white and the
+   third would take the foot of every page to #c7dcf1, which is not a white
+   page by any reading. What is left is the one declaration, and it is still a
+   rule of this theme's own rather than a deletion: the base `body` rule paints
+   `--page-glow` into `--bg`, and without this it would put `:root`'s own blue
+   lift over the white.
 
-   So these rules run only under the lavender theme, and they are deliberately
-   **shallow** — `--panel` to `--panel-2` is about one step of this palette, the
-   same distance the pinned bar has always travelled. Anything deeper and a card
-   reads as a photograph of a card.
-   --------------------------------------------------------------------------- */
-html[data-theme='lavender'] body {
-  /* Warmer at the top right and cooler at the foot, which is the dark theme's
-     own gradient read the other way up. */
+   The card ombré below stays and is the one *token order* flip the polarity
+   forces — the rule in both cases is *lighter at the top*, which on a dark
+   theme is `--panel-2` and here is `--panel` (white). The third shared rule,
+   the wide tables' header row, still needs no version of its own: `--panel-2`
+   is lighter than `--bg-2` in every theme, and on this one that header is what
+   the white first row is read against. */
+html[data-theme='powder'] body {
+  background: var(--bg);
+  background-attachment: fixed;
+}
+html[data-theme='powder'] .pct-card,
+html[data-theme='powder'] .empty-state,
+html[data-theme='powder'] .auth-card,
+html[data-theme='powder'] .app-dialog-box,
+html[data-theme='powder'] .settings-popover,
+html[data-theme='powder'] .drp-popover,
+html[data-theme='powder'] .tut-note,
+html[data-theme='powder'] .espn-status,
+html[data-theme='powder'] .lg-matchup,
+html[data-theme='powder'] .order-row {
+  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+}
+/* The well behind a team logo — see `--logo-plate` above. */
+html[data-theme='powder'] .lg-logo:not(.lg-logo-none) {
+  background: var(--logo-plate);
+}
+
+/* ---- Ombré, shared by the two dark themes above ---------------------------------
+   Midnight gradients the things that are *lit* — the page, the pinned bar, a
+   card header — and leaves the rest flat. Both of the themes above sit a step up
+   from that near-black, which is enough room for a card to have a top and a
+   bottom without spending a border on it, so the wash runs on every large
+   surface instead.
+
+   Every one of them runs **lighter at the top**, which is the light theme's own
+   rule read the other way up: there `--panel` was white and `--panel-2` a step
+   down, so the gradient ran `panel → panel-2`; here `--panel-2` is the *lighter*
+   surface, so it leads. Deliberately shallow — one step of the palette in force,
+   the same distance the pinned bar has always travelled. Anything deeper and a
+   card reads as a photograph of a card.
+
+   **The selectors list both themes and the declarations name only tokens**,
+   which is the whole reason a third theme cost three selector lines rather than
+   thirty rules: what is written here is the *shape* of the wash, and each
+   palette supplies its own colours to it. A fourth theme that wants the ombré
+   joins these lists; one that does not, does not. */
+html[data-theme='lavender'] body,
+html[data-theme='maroon'] body {
+  /* Lit from the top right, cooler toward the foot, with a wash of the theme's
+     own accent in the bottom-left corner — the same three layers the light
+     theme carried, with the linear one the other way up. */
   background:
     radial-gradient(1200px 700px at 80% -10%, var(--page-glow) 0%, transparent 60%),
-    radial-gradient(900px 600px at 0% 100%, color-mix(in srgb, var(--accent) 7%, transparent) 0%, transparent 70%),
-    linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%);
+    radial-gradient(900px 600px at 0% 100%, color-mix(in srgb, var(--accent) 9%, transparent) 0%, transparent 70%),
+    linear-gradient(180deg, var(--bg-2) 0%, var(--bg) 100%);
   background-attachment: fixed;
 }
 html[data-theme='lavender'] .pct-card,
+html[data-theme='maroon'] .pct-card,
 html[data-theme='lavender'] .empty-state,
+html[data-theme='maroon'] .empty-state,
 html[data-theme='lavender'] .auth-card,
+html[data-theme='maroon'] .auth-card,
 html[data-theme='lavender'] .app-dialog-box,
+html[data-theme='maroon'] .app-dialog-box,
 html[data-theme='lavender'] .settings-popover,
+html[data-theme='maroon'] .settings-popover,
 html[data-theme='lavender'] .drp-popover,
+html[data-theme='maroon'] .drp-popover,
 html[data-theme='lavender'] .tut-note,
+html[data-theme='maroon'] .tut-note,
 html[data-theme='lavender'] .espn-status,
+html[data-theme='maroon'] .espn-status,
 html[data-theme='lavender'] .lg-matchup,
-html[data-theme='lavender'] .order-row {
-  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+html[data-theme='maroon'] .lg-matchup,
+html[data-theme='lavender'] .order-row,
+html[data-theme='maroon'] .order-row {
+  background: linear-gradient(180deg, var(--panel-2) 0%, var(--panel) 100%);
 }
 /* The three wide tables keep a flat ground on purpose: a gradient down a
    scrolling table would slide against its own rows, and the zebra stripe is
@@ -13273,9 +13677,8 @@ html[data-theme='lavender'] .order-row {
    grounds, argued in full up beside that rule. Painting `background` directly
    left that strip on the *solid* colour the token still held while the cell
    itself had become a gradient, so each column boundary in the header wore a
-   vertical bar of `--panel-2` over a ground that had darkened to `--bg-2` by the
-   bottom of the row: ten light bars across the header of every roster page,
-   measured at `rgb(241,236,250)` against `rgb(233,229,243)`.
+   vertical bar over a ground that had darkened by the bottom of the row: ten
+   bars across the header of every roster page.
 
    The stylesheet's own comment on `--cell-bg` says exactly what went wrong —
    *"two things need the same colour and must not be able to disagree: the
@@ -13287,18 +13690,18 @@ html[data-theme='lavender'] .order-row {
    explicit `background` below is for the two tables that do not read the token
    (the game log and its siblings); on the two that do it is what the base rule
    already says, to the character. */
-/* The well behind a team logo — see `--logo-plate`. `.lg-logo-none` is excluded
-   because it is **our** mark rather than an uploaded one: a `--faint` baseball
-   drawn on the page's own colour, which the plate would only push toward its
-   own ink (3.98:1 on `--bg` against 2.3 on the plate). It carries a hairline of
-   its own instead, which is what makes it read as a deliberate placeholder. */
-html[data-theme='lavender'] .lg-logo:not(.lg-logo-none) {
-  background: var(--logo-plate);
-}
 html[data-theme='lavender'] .summary-table thead th,
+html[data-theme='maroon'] .summary-table thead th,
+html[data-theme='powder'] .summary-table thead th,
 html[data-theme='lavender'] .research-table thead th,
+html[data-theme='maroon'] .research-table thead th,
+html[data-theme='powder'] .research-table thead th,
 html[data-theme='lavender'] .glog-table thead th,
-html[data-theme='lavender'] .league-table thead th {
+html[data-theme='maroon'] .glog-table thead th,
+html[data-theme='powder'] .glog-table thead th,
+html[data-theme='lavender'] .league-table thead th,
+html[data-theme='maroon'] .league-table thead th,
+html[data-theme='powder'] .league-table thead th {
   --cell-bg: linear-gradient(180deg, var(--panel-2) 0%, var(--bg-2) 100%);
   background: var(--cell-bg);
 }
