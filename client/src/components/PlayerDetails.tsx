@@ -1148,8 +1148,10 @@ export function PlayerDetails({
 
         <div className="details-tabs" role="tablist" ref={tabsRef}>
           {/* First and default: what he is doing today, which is the question
-              this page is opened with on a game day. The five beside it are
-              readings of his season. */}
+              this page is opened with on a game day. The rest are readings of
+              his season, and they run pictures-before-numbers — the percentile
+              card, the arsenal (pitchers) and the splits, then the news, the
+              stats and the games. */}
           <button
             type="button"
             role="tab"
@@ -1168,9 +1170,29 @@ export function PlayerDetails({
           >
             Percentile Rankings
           </button>
-          {/* **Splits reads directly after the percentile card, where it used
-              to read after Stats.** The old order was the order the season is
-              *cut* in — the whole of it, then the same season cut by handedness,
+          {/* **Arsenal is third on a pitcher, directly after the percentile
+              card**, where it used to trail the Game Log. It is the same
+              argument that put Splits there: the card and these two charts are
+              both a picture of *what kind of pitcher this is* — what he throws
+              and where it moves — where Stats and the Game Log are the numbers
+              he has put up. A reader deciding about a stranger takes the
+              pictures first, and for a pitcher the arsenal is the picture. It
+              also stops the one pitcher-only tab being the one furthest along a
+              strip that scrolls on a phone. */}
+          {isPitcher && (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'arsenal'}
+              className={`details-tab${tab === 'arsenal' ? ' is-active' : ''}`}
+              onClick={() => setTab('arsenal')}
+            >
+              Arsenal
+            </button>
+          )}
+          {/* **Splits reads with the percentile card (and, on a pitcher, the
+              Arsenal), where it used to read after Stats.** The old order was
+              the order the season is *cut* in — the whole of it, then the same season cut by handedness,
               then the games it is made of — and this one is the order the two
               are *read* in: the percentile card and the splits are both a
               picture of what kind of player he is, where Stats and the Game Log
@@ -1222,17 +1244,6 @@ export function PlayerDetails({
           >
             Game Log
           </button>
-          {isPitcher && (
-            <button
-              type="button"
-              role="tab"
-              aria-selected={tab === 'arsenal'}
-              className={`details-tab${tab === 'arsenal' ? ' is-active' : ''}`}
-              onClick={() => setTab('arsenal')}
-            >
-              Arsenal
-            </button>
-          )}
           {/* **`Charts`, where this read `Rolling xwOBA`.** The strip names the
               *kind* of reading a tab holds — Overview, Splits, Stats, Game Log —
               and this was the one entry naming a single card instead, which is

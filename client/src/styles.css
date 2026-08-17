@@ -13536,7 +13536,11 @@ html[data-theme='lavender'] .league-table thead th {
   opacity: 0.9;
 }
 .mv-dot {
-  opacity: 0.75;
+  /* Slightly more opaque than it was: the outline is what separates two
+     overlapping pitches now, so the fill no longer has to be see-through to do
+     it, and a denser dot reads as a pitch rather than as a stain. */
+  opacity: 0.82;
+  stroke-width: 1;
 }
 .mv-league.dim,
 .mv-dot.dim {

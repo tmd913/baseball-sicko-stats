@@ -7,8 +7,8 @@ Overview tab. These are the four that read his season and his record — **News*
 card's own table is server-side, in `data-sources.md`.
 
 **It is the eighth tab and it reads before Stats and the Game Log** — the strip
-is `Overview · Percentile Rankings · Splits · News · Stats · Game Log ·
-[Arsenal] · Charts` — which is the Overview's own block order one tier up and
+is `Overview · Percentile Rankings · [Arsenal] · Splits · News · Stats ·
+Game Log · Charts` — which is the Overview's own block order one tier up and
 for the same reason. What has *happened* to a player this week is a different
 kind of fact from what he has *done* this season, and it is the one that changes
 a decision fastest: a reader deciding about a stranger wants to know he went on
@@ -882,7 +882,7 @@ rewritten whole**, which is what that passage asked for rather than the one-line
 fix it declined. It named a `Season` tab that had been `Stats` for some time,
 listed neither `Overview` nor `Splits`, and ended on `Rolling xwOBA` — five
 entries against a strip of six, one of them describing a tab that no longer
-existed. It now runs `Overview · Percentile Rankings · Splits · Stats ·
+existed. It now runs `Overview · Percentile Rankings · Arsenal · Splits · Stats ·
 Game Log · Arsenal · Charts`, in the strip's own order, with a sentence each
 for the three that had never been described at all. That list is the one place
 in the app that tells a new reader what the player page *is*, so it is worth
