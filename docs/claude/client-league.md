@@ -909,29 +909,38 @@ page**, so without this the one manager most likely to be reading his own bye
 week — the reader, on the week his own team has one — could not see his own
 figure at all.
 
-**Under the record, as a third line of the identity block** — `Acquisitions:
-5/10` beneath the team's name and its season record — where it used to sit at
-the right end of the row reading `Acq 5/10`. That placement was the scoreboard
-card's, where `margin-left: auto` puts a figure opposite the headline triple and
-a reader's eye is already at that end; this head has no second column for it to
-sit against, so measured at 1200 it was a number at **x=942 of a 1200px window**
-with the team it belongs to at 242. Under the record it is what it is: another
-fact about this manager's week, beside the one about his season — and a line of
-its own is what buys the word rather than `ACQ`.
+**The two of them are a column at the right end** — `Bye` over `Acquisitions:
+5/10` — which makes this head two blocks that mirror each other: the team's own
+two lines on the left, who he is and how his season has gone, and the week's two
+on the right, why there is one team here and what he has spent of his allowance
+while there was nobody to spend it against. The count read `ACQ 5/10` on the row
+itself for a while and then sat under the record as a third line of the identity
+block; what a line of its own buys either way is the word rather than the
+abbreviation.
 
-**`Bye` came in off the right edge with it**, which was the other half of a
-correction this file had already made once: dropping that tag's own
-`margin-left: auto` was not enough, because `.mup-side-id` grows (`flex: 1 1 0`,
-which is what lets a name shrink and ellipsize beside a headline triple) and so
-took every pixel of free space and pushed the tag out regardless — 910 before,
-976 once the acquisitions were no longer holding the end of the row. It has
-nothing to grow against on this head, so it takes its content's width and keeps
-the shrink: the tag lands next to the name (**478 at 1200, 294 at 390**) and a
-long name still ellipsizes at 320.
+**The block is what carries the `margin-left: auto`** the two items used to
+carry separately — and `.mup-side-id`'s grow goes with them. It is `flex: 1 1 0`
+for its place on a scoreboard card, where a name has to shrink and ellipsize
+beside a headline triple, and on this head it took every pixel of free space and
+left the right-hand pair with none of it: measured at 1200 that put `Bye` at
+**x=910** and then, with the acquisitions no longer holding the end of the row,
+**976**. The name keeps its shrink and its `min-width: 0`, so a long one still
+ellipsizes on a phone.
 
-**Measured before → after** at 390 and 1200: the head is **30 → 45px** and the
-chrome **108 → 123**, which is the one line, and the page overflows by **0** at
-320, 390 and 1200.
+**Measured before → after** at 320, 390 and 1200: the head is **30 → 31px** and
+the chrome **108 → 109** — the right-hand column is two lines against the
+identity block's two, so the head is the same height it was when the count sat
+on the row, and a line shorter than it was under the record (45 / 123). The two
+blocks land at the card's own edges (name at 242, the pair right-aligned to
+1000 at 1200), and the page overflows by **0** at all three.
+
+**The one cost is 28px of name at the narrow end**, and it is paid to the
+longest name in the live league: `Acquisitions: 5/10` is 108px against the 90
+that `Bye` and `ACQ 5/10` took side by side, so `Brian&Tom's Excellent
+Adventure` ellipsizes at 390 where it just fitted. So the name carries a `title`
+here **and nowhere else on this page** — a bye has no tab strip, so this head is
+the only thing naming the team, where every other surface that truncates a team
+name has the strip or a card head to fall back on.
 
 ### A matchup is a page, not a tab
 

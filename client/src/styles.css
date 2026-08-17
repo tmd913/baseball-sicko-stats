@@ -11586,19 +11586,26 @@ span.mup-move-name:hover {
      padding is where that number lives now — see there. */
   margin: 0 auto;
 }
-/* The tag sits beside the name rather than at the far end of the column. On a
-   scoreboard card `margin-left: auto` puts it opposite the headline triple,
-   which is where a reader's eye already is; here there is no second column and
-   it read as a word adrift 700px from the team it belongs to.
+/* **The week's two facts as a column at the right end** — `Bye` over the
+   acquisitions — which makes this head two blocks that mirror each other: the
+   team's own two lines on the left (who he is, how his season has gone) and the
+   week's two on the right.
 
-   **Dropping that margin was only half of it**, and the other half showed once
-   the acquisitions moved off the right end of this row: `.mup-side-id` grows
-   (`flex: 1 1 0`, which is what lets a name shrink and ellipsize beside a
-   headline triple), so it took all the free space and pushed `Bye` out to the
-   right edge regardless — measured at 1200, x=976 of a 1200px window. It has
-   nothing to grow *against* here, so it takes its content's width and keeps the
-   shrink, which is what puts the tag next to the name and still ellipsizes a
-   long one on a phone. */
+   The block is what carries the `margin-left: auto` the two items used to carry
+   separately, so the tag's own card rule is reset inside it. And
+   `.mup-side-id`'s grow goes with them: it is `flex: 1 1 0` for its place on a
+   scoreboard card, where a name has to shrink and ellipsize beside a headline
+   triple, and here it would take every pixel of free space and leave this block
+   with none of it — the name keeps `flex-shrink` and `min-width: 0`, so a long
+   one still ellipsizes on a phone. */
+.mup-bye-block {
+  margin-left: auto;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
 .mup-team-head .lg-bye-tag {
   margin-left: 0;
 }
@@ -11606,12 +11613,10 @@ span.mup-move-name:hover {
   flex: 0 1 auto;
 }
 /* His acquisitions, on the one head that has no Summary page to put them on —
-   **a third line of the identity block, under the record**. It was at the right
-   end of the row on the scoreboard card's reasoning, `margin-left: auto` there
-   putting a figure opposite the headline triple; this head has no second column
-   for it to sit against, so it read as a number adrift at the other side of the
-   page from the team it belongs to. Under the record it is what it is: another
-   fact about this manager's week, beside the one about his season. */
+   **under the `Bye` tag at the right end**, the two of them being the week's
+   facts where the block opposite carries the season's. It read `ACQ 5/10` on
+   the row itself for a while and then sat under the record; what a line of its
+   own buys either way is the word rather than the abbreviation. */
 .mup-acq-tag {
   font-size: 12px;
   font-weight: 700;
