@@ -10,7 +10,15 @@ import LeagueTeam from './LeagueTeam';
 import { ScheduleSpanTabs, ScheduleToggle } from './ScheduleControl';
 import { buildScheduleIndex, defaultScheduleSpan } from './schedule';
 import type { ScheduleSpan } from './schedule';
-import { catScore, categoryGroups, fmtValue, prettyDate, record, TeamLogo } from './LeagueView';
+import {
+  catScore,
+  categoryGroups,
+  fmtValue,
+  prettyDate,
+  record,
+  teamAbbrev,
+  TeamLogo,
+} from './LeagueView';
 import { moveLabel } from './LeagueTransactions';
 import { easternDate } from '../lib';
 import type {
@@ -610,17 +618,26 @@ export default function LeagueMatchupView({
    * what a manager on a bye week came for, and the head names the team where
    * the strip would have been.
    */
+  /**
+   * **The label is the team's short name and the title is its full one.** Three
+   * tabs of `The Stickystackers` and `Brian&Tom's Excellent Adventure` clipped
+   * mid-word at 320 — measured, two of the three — and filled the strip at
+   * every width above it. `teamAbbrev` reads ESPN's own abbreviation where the
+   * manager has set one, which is what ESPN's scoreboard shows and so what a
+   * leaguemate already recognises, and derives one only where the field is
+   * empty. The full name goes on the tab's `title`, where it was already.
+   */
   const sides: { tab: MatchupSideTab; label: string; title: string }[] = away
     ? [
         {
           tab: 'away',
-          label: teams.get(away.teamId)?.name ?? `Team ${away.teamId}`,
+          label: teamAbbrev(teams.get(away.teamId), away.teamId),
           title: `${teams.get(away.teamId)?.name ?? `Team ${away.teamId}`} — his roster and his feed`,
         },
         { tab: 'summary', label: 'Summary', title: 'The two teams, category by category' },
         {
           tab: 'home',
-          label: teams.get(home.teamId)?.name ?? `Team ${home.teamId}`,
+          label: teamAbbrev(teams.get(home.teamId), home.teamId),
           title: `${teams.get(home.teamId)?.name ?? `Team ${home.teamId}`} — his roster and his feed`,
         },
       ]

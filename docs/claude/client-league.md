@@ -960,7 +960,36 @@ stay on the Scoreboard, which is the page about which week.
 
 **Three pages inside it**: the away team, the comparison, the home team — two
 teams with the comparison between them, which is the shape of the thing being
-read and the same arrangement each category has on the card. **Summary is the
+read and the same arrangement each category has on the card.
+
+**The two team tabs are short names** (`BOZO · Summary · BETS`), because full
+ones do not fit: measured at 320, `Baldy's Bozos` and `Sho me the Parlay`
+**both clipped mid-word**, and above that width three full names filled the
+strip at 346px. `LeagueView.tsx::teamAbbrev` reads **ESPN's own abbreviation**
+where the manager has set one, which is what ESPN's own scoreboard shows and so
+what a leaguemate already recognises — and which is often *not* derivable from
+the name (`GREG` for The Homewreckers, `HOFF` for THE BRONX FLOATERS, `BETS`
+for Sho me the Parlay), the strongest argument for reading it rather than
+computing one. On the live league all twelve have one, 2 to 4 characters.
+
+**Derived only where that field is empty**: initials of the significant words,
+or the first four letters where one word is left, with articles and
+conjunctions dropped so `The` cannot be a team's whole abbreviation. Driven
+through the page with the field blanked, name by name: `Baldy's Bozos` → `BB`,
+`Sho me the Parlay` → `SMP`, `Homewreckers` → `HOME`, `Peña's Team` → `PT`,
+`A Team of Four Words Here` → `TFWH`, and a name with no letters or digits in it
+at all (`The`, `⚾🔥`, whitespace) → the team's id, which is what every other
+unnameable team on this view falls back to.
+
+**The full name is on the tab's `title`** and on the two surfaces with room for
+it — the scoreboard card's head and a rankings row — both checked to be
+unchanged. The strip goes **288px clipped (320) / 346px (above) → 262px at
+every width, with 0 clipped labels** and all three tabs the same 83px.
+
+**One consequence worth stating**: on a *team* page the strip is the only thing
+naming the team, so the full name is in the tooltip alone there — the Summary
+page still prints both in full at the head of its card, an inch below the
+strip. **Summary is the
 middle one and the default**, being the question the page is opened with; each
 manager's roster is one press away, in the direction his own figures are on.
 
