@@ -1,4 +1,4 @@
-import { useContext, useLayoutEffect, useMemo, useRef } from 'react';
+import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { BaseballMark } from './BaseballMark';
 import { LockGlyph, LockMark } from './LockMark';
 import { PlayerNewsMark } from './NewsMark';
@@ -677,6 +677,68 @@ export function toResearchWindow(v: string | null): ResearchWindow {
 
 const windowLabel = (w: ResearchWindow) => (w === 'season' ? 'Season' : `${w}d`);
 
+/**
+ * How many rows the board draws at once, and how close to the foot of the pane
+ * the reader has to get before the next lot are added.
+ *
+ * **A page rather than the whole board**, because the board is the whole
+ * league: 600-odd rows, each of them a headshot, an identity block, three
+ * marks and up to 44 cells, and — with `Ranks` on — a percentile badge under
+ * every one of those cells. Every one of them was mounted on the first paint
+ * of a page nobody has scrolled yet.
+ *
+ * **Fifty rather than the feed's twenty**, and the difference is what the two
+ * pages are for: the feed is read down, an item at a time, where this is a
+ * leaderboard that is *scanned* — the leaders are the point, and a page that
+ * runs out ten rows past the fold would be a table that stops in the middle of
+ * the answer. Fifty is comfortably more than any pane can hold (50 × 58px is
+ * 2,900px against a 1,080px screen), which is also what makes the load-ahead
+ * below safe: one page always overfills the pane, so growing can never leave
+ * the foot still in view and chain.
+ *
+ * **And it grows on scroll rather than on a `Load more` button**, unlike the
+ * feed and the game log. Those two are *lists* whose end is a real place — the
+ * button says how many are left and hands the reader the choice. A leaderboard
+ * has no end worth stopping at; the reader is looking for a name or a run of
+ * rows, and a button between row 50 and row 51 is a control asking permission
+ * to carry on doing the one thing the page is for. What the app's "no silent
+ * caps" rule asks for is that nothing be hidden, and nothing is: the count
+ * line above the table still says how many rows the filters left, and every
+ * one of them is one scroll away.
+ */
+const PAGE_SIZE = 50;
+
+/**
+ * How far off the foot of the pane the next page is asked for.
+ *
+ * **Deliberately short — the strip below has to be on screen when it fires.**
+ * The instinct is to prefetch early and never let the reader see the end of the
+ * list, and it is the wrong instinct here for a reason particular to this table:
+ * the rows are already in hand, so the next page appears in the frame after it
+ * is asked for, and a page asked for ten rows early lands 600px below the fold
+ * — the reader gets fifty more rows with nothing anywhere to say where they came
+ * from. Two hundred is the footer strip and a row or two, so the mark that says
+ * the board is growing is in view at the moment it goes up.
+ */
+const LOAD_AHEAD = 200;
+
+/**
+ * How long the mark at the foot of the table stays up before the rows land.
+ *
+ * **Nothing is being fetched, which is exactly why there is a beat at all.**
+ * `visible` is already in memory — the page is a `slice` — so a flag set and
+ * cleared in one commit would be a spinner that never painted, and the reader
+ * would get fifty rows out of nowhere. This is `MIN_SPIN`'s own argument
+ * (a mark a press put up holds a floor so the press leaves a trace) applied to
+ * a scroll instead of a press, and it is the same 450ms: long enough to read as
+ * a beat, short enough that the reader is still scrolling through it.
+ *
+ * It costs nothing in reach. `LOAD_AHEAD` fires while there are still rows
+ * under the fold, so the beat is spent on rows the reader has not got to yet
+ * rather than on a table that has stopped.
+ */
+const PAGE_BEAT = 450;
+
 /** What each board remembers while you are looking at the other one. */
 export type BoardState = {
   search: string;
@@ -728,6 +790,24 @@ export interface ResearchUi {
    *  keystroke rather than a setting. The column it names does belong to one
    *  board, so `draftColumn` falls back when you cross to a board without it. */
   draft: { column: string | null; op: Op; value: string };
+  /**
+   * How many rows of the table are drawn — `PAGE_SIZE`, then a page more each
+   * time the reader reaches the foot of the pane.
+   *
+   * Up here with the rest of the board's settings rather than in the component
+   * for the reason the whole of this object is up here, and the feed's own
+   * `feedShown` is one level up from *it*: the component is unmounted the
+   * moment you leave the page, and this number decides **how tall the table
+   * is**. App restores a scroll offset per view (keyed `'research'`), so a
+   * reader who had scrolled to row 300 and gone to the Roster tab would come
+   * back to fifty rows and to an offset that page had no room for — the one
+   * way that memory can be exactly right and still land wrong.
+   *
+   * It is one number rather than one per board because it is reset by the
+   * board signature anyway, and crossing to the other board is a change of
+   * signature: a page into the batters is not a page into the pitchers.
+   */
+  shown: number;
 }
 
 /** The board as it opens — what App seeds its `useState` with. */
@@ -735,6 +815,7 @@ export const freshResearchUi = (): ResearchUi => ({
   boards: { batter: freshBoard(), pitcher: freshBoard() },
   panels: { search: false, filters: false, columns: false },
   draft: { column: null, op: 'gte', value: '' },
+  shown: PAGE_SIZE,
 });
 
 /**
@@ -1271,6 +1352,20 @@ export function ResearchTable({
     else if (overRight > 0) row.scrollLeft += overRight + PEEK;
   }, [pos]);
 
+  /** The mark at the foot of the table, and the timer holding it up — see
+   *  `PAGE_BEAT`, which is why there is a timer at all when the rows are
+   *  already in memory. */
+  const [loadingMore, setLoadingMore] = useState(false);
+  const beat = useRef<number | null>(null);
+  // A beat outlives nothing: it is cancelled when the table changes under it
+  // (the signature effect below) and when the board goes away.
+  useEffect(
+    () => () => {
+      if (beat.current !== null) clearTimeout(beat.current);
+    },
+    [],
+  );
+
   /**
    * Changing **which players are in the table, or what order they are in**
    * puts the table back at the top.
@@ -1351,6 +1446,19 @@ export function ResearchTable({
     // A layout effect, so the new rows are never painted once at the old
     // offset before being yanked to the top.
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
+    // The reading position goes back to the top with the scroll, and for the
+    // same reason: a page into a table is a fact about *that* table, and this
+    // is a different one. It is also what stops a reader who had 400 rows open
+    // paying for 400 rows of a board they have just narrowed to shortstops.
+    onUiChange((u) => (u.shown === PAGE_SIZE ? u : { ...u, shown: PAGE_SIZE }));
+    // And a beat in flight is a beat about the table that has just gone: left to
+    // fire it would add a page to the one that replaced it, fifty rows into a
+    // board the reader has this second narrowed to shortstops.
+    if (beat.current !== null) {
+      clearTimeout(beat.current);
+      beat.current = null;
+      setLoadingMore(false);
+    }
   }, [boardSignature]);
 
   const visible = useMemo(() => {
@@ -1416,6 +1524,54 @@ export function ResearchTable({
     columnsByKey,
     drawnByKey,
   ]);
+
+  /**
+   * The rows actually mounted — a page of them, growing as the reader reaches
+   * the foot of the pane. See `PAGE_SIZE` for why the board is paged at all
+   * and why it grows on scroll rather than on a button.
+   *
+   * `visible` stays the whole filtered, sorted table, and the count line above
+   * it goes on reading off that: "455 of 622 batters" is a statement about the
+   * board the filters left, not about how far down it anybody has scrolled.
+   */
+  const shown = ui.shown;
+  const drawn = useMemo(() => visible.slice(0, shown), [visible, shown]);
+
+  /**
+   * Ask for the next page if the foot of the pane is within `LOAD_AHEAD`.
+   *
+   * A scroll handler on the pane rather than an `IntersectionObserver` on a
+   * sentinel row, and the axis is why: this is the app's widest table and the
+   * pane scrolls in **both** directions, so a marker element is off the
+   * horizontal viewport whenever the reader is out at Chase% and an observer
+   * would quietly stop loading exactly there. `scrollTop` against
+   * `scrollHeight` asks the vertical question alone and cannot be confused by
+   * the other axis. The read is three layout properties on an event the
+   * browser is already dispatching, which is cheaper than it looks and cheaper
+   * than the row it saves mounting.
+   */
+  const wantMore = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    // One beat at a time: a scroll fires this every frame, and re-arming on each
+    // of them would collapse the beat and stack a page per frame.
+    if (beat.current !== null) return;
+    if (shown >= visible.length) return;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight > LOAD_AHEAD) return;
+    setLoadingMore(true);
+    beat.current = window.setTimeout(() => {
+      beat.current = null;
+      setLoadingMore(false);
+      onUiChange((u) => (u.shown >= visible.length ? u : { ...u, shown: u.shown + PAGE_SIZE }));
+    }, PAGE_BEAT);
+  };
+
+  // And once after each page lands, for the case a scroll event cannot cover:
+  // a pane taller than the page it was given. `PAGE_SIZE` is chosen so that
+  // cannot happen with real rows, so this is a guard rather than a mechanism —
+  // and it terminates either way, `wantMore` stopping dead once every row of
+  // `visible` is drawn.
+  useEffect(wantMore, [shown, visible.length]);
 
   function toggleSort(col: Column) {
     if (activeSortKey === col.key) {
@@ -2194,7 +2350,7 @@ export function ResearchTable({
       {!loading && !error && boardRows.length === 0 && emptyBoard()}
 
       {visible.length > 0 && (
-        <div className="research-scroll" ref={scrollRef}>
+        <div className="research-scroll" ref={scrollRef} onScroll={wantMore}>
           <table className="summary-table research-table">
             <thead>
               <tr>
@@ -2242,7 +2398,7 @@ export function ResearchTable({
               </tr>
             </thead>
             <tbody>
-              {visible.map((r) => {
+              {drawn.map((r) => {
                 const key = `${r.kind}-${r.id}`;
                 const posCell = posCellText(r, posCodes);
                 return (
@@ -2359,6 +2515,28 @@ export function ResearchTable({
               })}
             </tbody>
           </table>
+          {/* The foot of the board: the mark that says the next page is coming.
+              See `PAGE_BEAT` for why it is held up at all — the rows are in
+              memory, so without the beat it would never paint.
+
+              **The strip is reserved whenever there are rows still to come**,
+              rather than appearing with the mark, because it is inside the
+              scroller: a box that came and went would take 44px out of
+              `scrollHeight` under a reader sitting at the very bottom of it,
+              which is a jolt every page. It goes for good on the last page,
+              where it would be a strip promising something that isn't coming.
+
+              **Sticky on the inline axis**, which the two pinned columns beside
+              it already are and for the same reason: this is the app's widest
+              table, and a block child of the scroller is only ever as wide as
+              the pane — left alone it sits off the left edge of the screen the
+              moment the reader is out at Chase%, which is where a mark about
+              the foot of the list would be least use. */}
+          {shown < visible.length && (
+            <div className="research-more">
+              {loadingMore && <LoadingLine>Loading more players</LoadingLine>}
+            </div>
+          )}
         </div>
       )}
     </div>
