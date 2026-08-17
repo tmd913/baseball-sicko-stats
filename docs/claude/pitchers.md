@@ -5,8 +5,207 @@ The roster holds both batters and pitchers, discriminated by `WatchPlayer.kind` 
 - **Role (starter / reliever)**: the pitcher-side mirror of a batter's lineup slot. `PlayerGame.pitchingRole` (`'starting' | 'relief' | null`) + `entryInning` live on `PlayerGame`, not `PitcherGame`, because the pre-game case has no outing to hang off (`rosterGame`'s placeholder). A starter is named by the boxscore — `teams[side].pitchers[0]`, filled from warmup on, else `gamesStarted` (`startingPitchers()` in `mlbStats.ts`, exposed as `StatsApiGame.pitchingStarters` and carried onto each `DayGame` as `pitchingStarterIds`); before first pitch the announced probable stands in, and only then, since a probable who never reaches the boxscore was scratched. Everything else is a reliever, with `entryInning` from the first batter he faced. The client reads it through `pitchingBadge` / `pitchingCorner` (`lib.ts`, alongside `lineupBadge`/`lineupCorner`, sharing the `Corner` type): an **SP** chip / pip, or **RP 7th** with the inning he came in. Rendered by `PitchingTag` on each game block's bar and the feed's outing/Upcoming rows, and as the headshot corner pip on the cards and in `SummaryTable`. **Not in the pitcher card's header summary line** — the pip beside the name already says it, under exactly the same condition (a lone game in view — which on the **no-outing** card is now any range holding one game rather than a lone game on a single day, a pip belonging to a game and not to a date), so a chip there was the same fact twice on one row.
 - **Server**: `getStatsApiGame` builds a `pitchers` map by regrouping the SAME `allPlays` loop on `matchup.pitcher.id` (faced batters + all pitches), and reads `liveData.decisions` for the W/L/S pitcher ids (`StatsApiGame.decisions`); the authoritative per-game line comes from the boxscore (`parsePitchingLines`, needs `stats`/`pitching` in `FEED_FIELDS` — bumping `FEED_CACHE_VERSION` re-fetches cached finals; it's currently **8** — v2 added the boxscore line, v3 added `decisions` + the per-batter pitch sequence, v4 added `runners[].details.earned`, v5 added `responsiblePitcher`, v6 added the rest of the boxscore pitching line: `doubles`/`triples`/`hitBatsmen`/`atBats`/`intentionalWalks`/`wildPitches`/`inheritedRunners(Scored)`, v7 added the per-game `wins`/`saves`/`holds` credits — a win/save duplicates `decisions`, but a **hold** exists nowhere else — v8 added what a base-running event needs to describe itself: `runners[].details.playIndex`, the action events' `actionPlayId`/`description`/score, and `movement.start`). **Widening that vocabulary to all ten kinds needed no v9**, and the reasoning is worth keeping because it is the general rule: `fields` is leaf-matched, so `runners[].details.runner.fullName` and `result.awayScore` were already arriving under names requested for other parents (`fullName` for a batter, `awayScore` for an action event), and `movement.end` was already there beside `start`. Everything new is *derived* from fields a cached final feed already holds — which is exactly why `DAY_SNAPSHOT_VERSION` **did** have to go to 6: the snapshot stores the finished model, not the feed. `deriveLine` (the no-boxscore fallback) counts what it can from the plays and zeroes the rest. Each `FacedBatter` also carries `launchAngle`/`bbType` (the batted-ball trajectory, which powers the card's GB/LD/FB split — the boxscore only counts batted-ball *outs*) and `runs`/`earnedRuns` — the runs that scored on that play, counted from `play.runners[]` where `movement.end === 'score'` (earned via `details.earned !== false`) and **charged to the pitcher who threw it** (`responsiblePitcher.id`, so a reliever isn't billed for inherited runners); the pitcher card sums these per inning. Note this "runs scored while he pitched" differs from the boxscore line when a pitcher leaves runners who score later (the game-total pill uses the authoritative line). **`isBaserunningEvent` now filters the batter's plate appearances too, not just the pitcher's batters faced.** A play whose *result* is a caught stealing or a pickoff carries the batter who was up, and MLB only files one that way when it ended the half-inning — all 31 of them across a checked 111 games were the third out, so the at-bat itself resumes next inning and the row is somebody else's baserunning wearing his name. It was showing in his feed as an out and counting toward his `line.pa`; `buildPitcherGame` has excluded it since it was written, and both sides now do. The outs and bases the loop tracks are still updated from that play — only the two pushes are skipped — and the pitches thrown on it are still his. `getStatsApiGame` also keys a second map, **`pitcherBaseEvents`**, by the man on the mound: the same `StatsApiBaseEvent` objects filed under both parties, narrowed by `PITCHER_BASE_EVENTS` to the ones that happened *between* him and the runner. `savant.ts::buildStatsApiDay` assembles the `PitcherGame` (whiff%/CSW%/pitch-mix from the pitches via `aggregatePitches()`, each `PitchMix` carrying its own `strikes` count via `isStrikePitch()` — the shared "not ruled a ball" test `deriveLine` also uses, so balls are `count - strikes`; `vsRight`/`vsLeft` re-run that same aggregation over just the faced batters of one `stand` (`buildSplit`), null when he faced nobody of that hand — the boxscore doesn't split, so a split's `line` comes from `deriveLine` and its `outs` is 0; `decision` via `pitcherDecision(g, id)` — the official W/L/S from `liveData.decisions`, falling through to **`H`** when his boxscore line carries a hold, which `decisions` has no slot for (checked last, so a real decision can never be demoted to a hold); per-batter `FacedBatter.pitches` via the shared `toClientPitch` helper — the same projection batter PAs use; season/league arsenal filled per-pitcher in `getReport`). New modules: `pitcherArsenal.ts` (per-pitch-type season usage (`PitchUsage`: `count`/`strikes`) and averages — velo/spin/break, **plus the season Results**: PA, BA, SLG, wOBA, xwOBA, whiff%, put-away%, computed from the same CSV by classifying `events`/`description`; note the feed's `breakHorizontal` = `−pfx_x`, `breakVerticalInduced` = `pfx_z`, both ×12 to inches; the arsenal is keyed by the **feed's** pitch names via `feedPitchName()` — Savant's CSV says "Split-Finger" where the feed says "Splitter", and without the mapping a splitter's season baselines and Results never attached to its game row; `SeasonPitch` = movement `ArsenalPitch` + `PitchResults`), `pitchLeague.ts` (a curated league-average table). Those season Results ride along on each `PitchMix` as `season{Pa,Ba,Slg,Woba,Xwoba,Whiff,PutAway}`. `getPitcherStats` mirrors `getPlayerStats` with `group=[pitching]`. `percentiles.ts` has a `PITCHER_SECTIONS` table + the `statcast-r-pitching-mlb` page; `xwoba.ts` takes a `kind` for xwOBA-**against**. The percentile/xwoba/splits routes take `?type=pitcher`.
 - **The record and the credits**: `PitcherSeasonStats` also carries **`wins`/`losses`/`saves`/`holds`**, read straight off the same MLB season line the rest of it comes from (`toPitcherSeasonStats`) rather than derived. They exist for the player page's **Overview** strip, which summarises a pitcher's season as `IP · W-L · SV · HD · ERA · WHIP · K%` — and those four are the half of it no rate can express, a closer's year being his saves and holds. **That last cell is a share and prints as one** (`26.1%`), where `kRate` reaches it as the `.261` string `toPitcherSeasonStats` builds: one conversion, in `lib.ts::ratePercent`, shared with the opposing-lineup section that reads the same field — see **Client**, *A rate is `.xxx` and a share is a percent*. **Not tallied off the game log**, which counts the same credits a game at a time (`decisionOf` there, checked in scorebook order): that is a different question — what he got *that night* — and summing 60 rows of it would be a second arithmetic free to disagree with the line the block already holds. A **split** reports 0 for all four, which is honest in the same way it reports no ERA (neither a decision nor an earned run is split by hand) and is read by nothing. Nothing needed a version bump: `PitcherStats` is memory-cached on a 30-minute TTL and `withEstimators` copies by spread, so the fields flow through it untouched; `client/src/types.ts` mirrors them by hand as ever.
-- **Season estimators**: `PitcherSeasonStats` carries `fip`, `xfip` and `xera` beside ERA. `leagueRates.ts` holds the two curated league constants they need (`FIP_CONSTANT`, `LEAGUE_HR_PER_FB`) plus `fipLike()` and `ipToOuts()` — FIP and xFIP differ only in whether the home-run term is his own or his fly balls at the league rate. FIP is computed in `mlbStats.ts` from the MLB line; **xFIP can't be**, since nothing there counts fly balls (the boxscore has batted-ball *outs* only), so `getSeasonArsenal` now also returns a `BattedBallMix` off the same season CSV it already downloads and `getReport::withXfip` fills it in on a copy of the cached line. Both are null under 3 innings, where the number is noise. The arsenal's storage key is `-v3` because a stale blob deserializes with the newer fields missing and silently costs every pitcher what they feed — v2 added the fly balls behind his xFIP, v3 the per-game `appearances` (see the game log). **xERA is neither computed nor per-pitcher**: it's Statcast's own model, so `expectedStats.ts` reads Savant's expected-statistics leaderboard — every pitcher in one CSV (`min=1`, or the September call-up and most of the bullpen would be filtered out), cached 6h in memory and in the storage tier the way `teamHitting.ts` caches the league's hitting, and a failed fetch resolves to an empty map rather than 502ing a report that already has the outing. `getReport::withEstimators` fills both it and xFIP onto a copy of the cached season line; a **split** gets neither, the leaderboard not splitting and a split's line having no innings.
+- **Season estimators**: `PitcherSeasonStats` carries `fip`, `xfip` and `xera` beside ERA. `leagueRates.ts` holds the two curated league constants they need (`FIP_CONSTANT`, `LEAGUE_HR_PER_FB`) plus `fipLike()` and `ipToOuts()` — FIP and xFIP differ only in whether the home-run term is his own or his fly balls at the league rate. FIP is computed in `mlbStats.ts` from the MLB line; **xFIP can't be**, since nothing there counts fly balls (the boxscore has batted-ball *outs* only), so `getSeasonArsenal` now also returns a `BattedBallMix` off the same season CSV it already downloads and `getReport::withXfip` fills it in on a copy of the cached line. Both are null under 3 innings, where the number is noise. The arsenal's storage key is `-v4` because a stale blob deserializes with the newer fields missing and silently costs every pitcher what they feed — v2 added the fly balls behind his xFIP, v3 the per-game `appearances` (see the game log), and v4 the movement samples the Arsenal tab's dot cloud is drawn from (a v3 blob would leave that plot empty for six hours with its legend and its league blobs intact, which reads as a pitcher who threw nothing rather than as a stale blob). **xERA is neither computed nor per-pitcher**: it's Statcast's own model, so `expectedStats.ts` reads Savant's expected-statistics leaderboard — every pitcher in one CSV (`min=1`, or the September call-up and most of the bullpen would be filtered out), cached 6h in memory and in the storage tier the way `teamHitting.ts` caches the league's hitting, and a failed fetch resolves to an empty map rather than 502ing a report that already has the outing. `getReport::withEstimators` fills both it and xFIP onto a copy of the cached season line; a **split** gets neither, the leaderboard not splitting and a split's line having no innings.
 - **Opposing lineup**: `PlayerGame.opponentId` rides on every game, and `getReport` attaches `opponentHitting` to a *pitcher's* games (`teamHitting.ts::getTeamHitting`) — the **season, all games** cut, which is the opponent table's opening state and is why that table draws with no request of its own. What that module answers with is **nine cuts** rather than three: a window, a venue and a hand, whole league, each ranked within its own population. It is computed from the per-date Savant exports rather than read from MLB, and the whole of that — why MLB cannot be asked for a windowed or home-only platoon split, how a day reduces to four leaves plus a game count, why runs are read off the score progression, and the validation against MLB's own numbers — is in **Data sources**, *Team hitting: nine cuts a window*. Two rules of the old module survive unchanged: **ranks are computed here, not read off the API**, which ranks by its own default sort and doesn't rank splits at all (ties share a rank, and **1st is always the best offence** — so the fewest strikeouts ranks 1st, not 30th); and **a failed lookup resolves to null**, the opponent's line being context on a card that must never 502 a report which already has the outing. Note a **team's** hand split is by the hand of the pitcher they faced, so a lefty's card marks `vsLeft`.
+### The Arsenal tab's two charts
+
+**`components/ArsenalCharts.tsx` recreates the two pictures a Baseball Savant
+pitcher page leads with** — **Pitch Usage** and **Movement Profile (Induced
+Break)** — above the per-pitch rows the tab already had. The rows are the
+detail; these are what a reader opens an arsenal *for*: what he throws, and
+where it moves.
+
+**They share one selection, held by the tab.** Picking out the slider in one
+picks it out in the other, because they are two views of one arsenal — a
+selection each would be two answers to "which pitch am I looking at" on one
+screen. `ArsenalTab` owns `hovered` for the same reason it owns the split.
+
+**Hover is for pointers and the press is for everyone.** Every highlightable
+thing is a real `<button>` — the usage rows, the legend columns — so a touch
+reader taps to select and taps again to clear, and the `:hover` tints sit
+inside `@media (hover: hover)`. That is the app-wide rule (**Client**, *A card
+doesn't highlight when you scroll past it*), and it matters more here than
+usual: on touch there is no pointer to move away, so a hover-only chart would
+be a chart that stays stuck on whatever the finger last crossed.
+
+**The pitch colours do not theme.** They are `lib.ts::pitchStyle`'s — Savant's
+own palette, already shared with the arsenal rows, the per-game rows and the
+pitch dots in a plate appearance — so a four-seamer is that red in Midnight and
+in Lavender alike, the way a club's cap logo is its own colours. Everything
+around them is tokens.
+
+#### Pitch Usage: a butterfly, not a bar chart
+
+The pitch runs down the middle and how often he goes to it against each side of
+the plate grows **outward from it**, so the two hands read against each other
+across the pitch they belong to rather than down two separate columns.
+
+**The bars are scaled to the widest pitch on the chart, not to 100%** — checked
+against Savant's own rendering, whose proportions are relative (15/64, 6/64 and
+13/64 of the track for a 64% four-seamer's 15%, 6% and 13% neighbours). At
+absolute scale every arsenal but a one-pitch reliever's would sit in the left
+fifth of its track, and the comparison a reader makes here is between *these*
+pitches. The exact figure is printed beside every bar, so the relative scale
+hides nothing. **One scale across all three columns**, so a bar reaching further
+really is a pitch thrown more often.
+
+**Selected, the badge grows into the pitch's full name and takes the figure's
+place**, which is Savant's own move. The middle column is a fixed width, so
+nothing either side of it shifts while that happens.
+
+**The badge's ink is computed, not chosen** (`inkOn`). The palette spans a
+crimson four-seamer and a near-yellow slider, so no single ink serves it — white
+on `#c9b200` measures **2.0:1**, well under what an 11px bold badge owes
+anybody. WCAG relative luminance, then whichever of black or white contrasts
+more; the same test the League table's rank badge settled its own ink with.
+
+**A pitcher who has faced only one hand gets no butterfly** (`.pu-chart.solo`),
+the middle column being the whole chart.
+
+#### Movement Profile: the pitches themselves, not one bubble each
+
+Every dot is a real pitch. **That is the whole point of the server shipping
+samples** — the spread *within* a pitch type is what a reader is looking at, and
+a slider that sometimes cuts and sometimes sweeps is two clusters under one
+average that a single bubble would hide.
+
+**The axes need no handedness case, and this was the one thing worth checking
+before anything was drawn.** The app's `hBreak` is positive toward third base
+and `vBreak` is positive upward for a pitcher of either hand, which turns out to
+be exactly Savant's own plotting convention with the sign already the right way
+round. Verified against Savant's rendering of the same pitcher, and then in the
+browser against a left-hander: a RHP's four-seam at `hBreak +11` sits up and to
+the right on both, and **Chris Sale's at −14.6 sits up and to the left**, which
+is where a left-hander's arm-side run belongs. No flip, no per-hand branch.
+
+**The domain is fixed at 24", not fitted to the pitcher**, so two pitchers'
+charts can be read against each other. It is wide enough that only a genuine
+outlier lands outside the last ring (measured on a real arsenal: the widest
+pitch was 21"), and the soft disc extends a little past it so such a pitch still
+lands on something.
+
+**Only the solid rings carry a figure.** Savant labels its inner rings on one
+side only, which keeps a right-hander's fastball quadrant clear and would crowd
+a left-hander's; labelling the two solid rings on all four arms is symmetric,
+handedness-neutral and leaves the middle — where the pitches are — clear, with
+the dashed rings reading as the halves they are.
+
+**The league average is a hatched blob rather than a point**, as wide as the
+league's own spread (`leagueHRange`/`leagueVRange`). "Average" is a cloud too,
+and a bare dot would invite a reader to treat half an inch of daylight as a
+difference.
+
+**The selected pitch's own figures are in the callout row above the plot, not on
+the leader lines.** Savant rotates a label along each leader, which works
+because those labels are the only thing in that space; here both legs collapse
+toward nothing as a pitch approaches the origin, and a slider at 3.5" break and
+2.2" rise left two 80px boxes stacked on each other **and on the AVG marker** —
+a picture of the collision rather than of the pitch. Off the plot they cannot
+collide at any geometry, and they gain the room to carry the league comparison
+in the same breath (`Break 3.5" · 3.0" less than league`). **A leg is drawn only
+when it is longer than the marker's own radius**, for the same reason: two stubs
+behind a 15px bubble read as specks rather than as a measurement.
+
+**"More" and "less" are said of the quantity just named, and the sign flips with
+the pitch.** A curveball whose induced break is *above* the league's has **less
+drop**, not more rise — so the comparison reads off `vBreak`'s own sign as well
+as the difference's. Checked in the browser: the curve reads `Drop 8.2" · 0.3"
+less than league` and the four-seam `Rise 15.4" · 0.1" less than league`, both
+agreeing exactly with the ▲▼ deltas on the rows below, which are computed
+independently from the same league fields.
+
+**The callout row reserves its own height with a hidden copy of a real pitch's
+chips** rather than a declared `min-height` — the chips wrap to two rows on a
+phone and one on a desktop, so any fixed number would be wrong at one of those
+widths and would shift the plot under the reader's finger the moment they picked
+a pitch. The same trick `.spl-head-mark--ghost` uses on the Splits card, and it
+has to be **one box with two possible contents**: a ghost sitting beside an empty
+real row is two margins where the selected state has one, which is exactly the
+6px of shift it exists to prevent (measured, twice, before it was right).
+
+**The legend is transposed the way Savant's is** — a column per pitch, a row per
+measure — with the label column and every pitch column sharing one row template,
+so `Usage` lines up with the usage figures without either side hard-coding the
+other's height. The labels **stay on a phone**, at a smaller size: three
+unlabelled numbers under a swatch are not a legend.
+
+**An `InfoKey` carries what the chart cannot say for itself** — that the rings
+are inches, that the vertical axis is *induced* break rather than total drop,
+and what the hatching means. The app's own disclosure, for that component's
+stated reasons, anchored to the title row rather than to its own 30px button
+(the `.roll-key` trick: a shrink-to-fit against the button resolves to 180px,
+and a 320px panel fits from neither of the button's edges on a phone).
+
+#### What is deliberately not recreated
+
+**The arm-angle figure and its silhouette.** It is a separate Savant dataset
+(`pitcherArmAngles`) this app does not read, and inventing one from the break
+would be a guess drawn as a measurement.
+
+**The "100 pitch sample" toggle.** The sample is already bounded at ~240 by the
+server, so the control would toggle between one bounded cloud and another.
+
+**Savant's own `RHP AVG` velocity row** reads `Lg avg` here, because
+`pitchLeague.ts` is not split by hand — the label says what the number is.
+
+#### A missing field must not unmount the app
+
+**The first thing this shipped with was a client that trusted the server to be
+the same build**, and a stale dev server found it in minutes: `arsenal.samples`
+absent → `undefined.filter` → **`#root` with 0 children**, the whole application
+gone rather than one chart. Measured, before the guard.
+
+**`SeasonArsenal.samples` is declared non-optional and the two `types.ts` are
+mirrored by hand**, so TypeScript cannot see this coming — it is precisely the
+hazard that mirroring carries, and the window is real rather than theoretical: a
+deploy puts the new client at the edge while a warm Lambda is still on the older
+build. So the tab reads `arsenal.samples ?? []`, `MovementChart` guards its own
+prop as well (it is exported, and a chart that can blank the app is too sharp an
+edge to leave on one caller's discipline), `season` is checked with `!= null` so
+an unnamed season prints nothing rather than `undefined`, and a league blob whose
+spread is missing is **not drawn at all** — `rx="NaN"` is an invalid attribute
+that paints nothing anyway, and "we cannot say how wide the league is here" is
+the honest reading.
+
+**Measured against a genuinely stale server**, before → after: `#root` children
+**0 → 1**, arsenal rows 0 → 5, charts 0 → 2, exceptions 1 → **0**, NaN
+attributes 5 → 0. The Pitch Usage chart is *fully* working in that state, being
+drawn from fields the older build does send; what is lost is the dot cloud and
+the league blobs, which is the right thing to lose. Against a current server the
+guards cost nothing: 246 dots, 5 blobs, 0 NaN attributes, the year back in the
+title.
+
+#### Measured
+
+**Driven in a browser against the live 2026 season** at 320 / 390 / 480 / 640 /
+900 / 1400: **0 horizontal overflow of the page body and of the player-page view
+at every width**, 0 clipped cells in either chart, the legend's row labels drawn
+at every one, and **the plot's top identical before and after selecting a
+pitch** at all six (698 / 642 / 615 / 615 / 561 / 561). The SVG is 288px at 320
+and caps at 470. 246 dots, 5 usage rows, 5 legend columns on a five-pitch
+arsenal; the split tabs cut the cloud to **146 dots vs LHB and 100 vs RHB**,
+matching the `stand` counts on the wire, with the legend re-sorting to that
+split's own usage. Both colour schemes checked. `Escape` with the info key open
+closes the key and leaves the player page standing, then closes the page —
+**with a real key event**; a synthetic `window.dispatchEvent` targets `window`
+rather than the focused element and collapses the ladder, which is a property of
+that test rather than of the app.
+
+**Bundle: 529.65 → 539.37 KB of JS** (156.66 → 159.40 gzipped) and **134.44 →
+140.26 KB of CSS** (23.64 → 24.78) — 9.7KB and 5.8KB raw, 2.7KB and 1.1KB over
+the wire, for two charts, a shared selection, an explainer and the paragraphs
+above restated where the rules are.
+
+**One number worth knowing about, and it is not this change's.** The curated
+`Slider` league horizontal break in `pitchLeague.ts` is **6.5"** where Savant's
+own 2026 right-hander table says **3.88"** — most other entries match closely
+(four-seam 8.0 against 7.76, sinker 15.0 against 14.73, curve 8.5 against 8.17).
+It puts a slider's hatched league blob further from the plate's centre than
+Savant's does, and it moves the ▲▼ arrow on every slider row in the app, which
+is why it was left alone here rather than corrected as a side effect of drawing
+a chart.
+
+
 - **Client**: **`PitcherCard` no longer renders anywhere, and neither does `PlayerCard`.** They were the Games view's cards, and that view is gone — folded into the feed as a grouping, and from there onto the player page as its Overview tab (see **Client**). Their *parts* very much live on, which is why both files stay: `PitchingTag`, `lineSummary` and `OpponentSection` here, `GameStatusBadge` next door (and `PlatoonSplit`, which the feed's Upcoming row read until it took `PlatoonSplits`' own card instead), all read by `LiveFeed` and, through it, by `PlayerDay.tsx`, plus everything `PitcherCard.tsx` imports from `PlayerCard.tsx`. What is unrendered is the two top-level components and the pieces only they used (`CardSection`, `GameLine`), which rollup drops from the bundle — 442KB to 425.
   **All four sections are back, as a page.** The Games view took a pitcher's per-game **Line** (the `.ars-row` with its Results / Rates / Contact strips), the **Opponent** lineup and his per-game **Arsenal** off screen with it, and the way back to them was `OutingBreakdown`: a **Full breakdown** button inside the opened outing dialog, raising a *second* `Modal` over the three sections the item hasn't got. That is now **`OutingPage`** (`components/OutingPage.tsx`) — one full-screen page, the shape `PlayerDetails` (`.details-view`) and `LeagueMatchupView` (`.mup-view`) already have, opening straight onto the full read under a tab strip: **`Line · Innings · Opponent · Arsenal`**.
 
