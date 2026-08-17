@@ -51,7 +51,7 @@ import type {
 } from '../types';
 import { LoadingBlock } from './Loading';
 import LeagueRankings from './LeagueRankings';
-import LeagueTransactions from './LeagueTransactions';
+import LeagueTransactions, { type TrendDeltas } from './LeagueTransactions';
 
 /* ---- Formatting ---------------------------------------------------------
  *
@@ -678,6 +678,7 @@ export default function LeagueView({
   transactionsError,
   players,
   rosterPct,
+  rosterTrend,
   eligibility,
   onOpenPlayer,
   connected,
@@ -712,6 +713,7 @@ export default function LeagueView({
    *  club, his positions and his roster % from. */
   players: SeasonPlayer[];
   rosterPct: Map<number, number> | null;
+  rosterTrend: TrendDeltas | null;
   eligibility: Map<number, string[]> | null;
   onOpenPlayer: (mlbId: number) => void;
   connected: boolean;
@@ -756,6 +758,7 @@ export default function LeagueView({
           error={transactionsError}
           players={players}
           rosterPct={rosterPct}
+          rosterTrend={rosterTrend}
           eligibility={eligibility}
           onOpenPlayer={onOpenPlayer}
         />

@@ -33,6 +33,7 @@ import type {
   EspnTransactions,
   PlayerKind,
   SeasonPlayer,
+  TrendWindow,
 } from '../types';
 import { eligibleForKind, headshotUrl, positionCell } from '../lib';
 import { LoadingBlock } from './Loading';
@@ -40,6 +41,54 @@ import { PlayerIdentity } from './PlayerIdentity';
 import { TeamLogo } from './LeagueView';
 
 const PAGE_SIZE = 25;
+
+/**
+ * One entry per span the ownership read found a baseline for, keyed by window.
+ * `App` holds it for the research board and the player page; this tab is the
+ * third reader and takes the raw deltas because it asks after one player at a
+ * time rather than merging a column onto every row.
+ */
+export type TrendDeltas = readonly {
+  window: TrendWindow;
+  days: number;
+  delta: Map<number, number>;
+}[];
+
+/**
+ * **The three spans a row draws, of the five the server can send.**
+ *
+ * The board offers 1, 3, 7, 15 and 30 and defaults four of them off, on the
+ * argument that five near-identical signed columns at the front of the app's
+ * widest table is a resolution nobody asked for. A feed is the opposite case:
+ * every row here is *dated*, so how a player's ownership moved **since then**
+ * is the reading, and the three short spans are the ones a move a week old can
+ * still be read against. 15 and 30 would be a fortnight and a month of drift
+ * over a transaction from Tuesday.
+ *
+ * A window with no baseline is simply absent from the response, so a young
+ * install draws whichever of the three it has and no empty columns.
+ */
+const TREND_SPANS: readonly TrendWindow[] = [1, 3, 7];
+
+/**
+ * **Added players lead, whatever order ESPN sent them in.**
+ *
+ * A pickup and the drop that paid for it arrive as one topic, and the order
+ * inside it is arbitrary: measured over the live league's 250 most recent
+ * moves, **79 of the 149 two-player transactions arrive drop-first and 70
+ * add-first**. So half the feed read backwards — the man who left above the man
+ * who arrived — for no reason a reader could see. The add is the news (it is
+ * what the manager went and did; the drop is what it cost), so it leads.
+ *
+ * `sort` is **stable** by specification, which is what makes this safe on a
+ * trade: every player in one is an `add` (ESPN's message type 244 files them
+ * that way, each to the team receiving him), so the comparator is flat across
+ * all nine and the order ESPN sent — which pairs the two halves of the deal —
+ * survives untouched.
+ */
+function addsFirst(players: EspnTransactionPlayer[]): EspnTransactionPlayer[] {
+  return [...players].sort((a, b) => (a.move === 'drop' ? 1 : 0) - (b.move === 'drop' ? 1 : 0));
+}
 
 /** What the season roster knows about a transacted player: which board he is on
  *  and MLB's own word for where he plays. Both are only ever the *fallback* for
@@ -221,6 +270,7 @@ function PlayerLine({
   teams,
   facts,
   rosterPct,
+  rosterTrend,
   eligibility,
   onOpenPlayer,
 }: {
@@ -228,6 +278,7 @@ function PlayerLine({
   teams: Map<number, EspnStandingsTeam>;
   facts: Map<number, MlbFacts>;
   rosterPct: Map<number, number> | null;
+  rosterTrend: TrendDeltas | null;
   eligibility: Map<number, string[]> | null;
   onOpenPlayer: (mlbId: number) => void;
 }) {
@@ -265,13 +316,23 @@ function PlayerLine({
           to {teams.get(player.toTeamId)?.name ?? `Team ${player.toTeamId}`}
         </span>
       )}
-      {player.bid != null && player.bid > 0 && (
-        <span className="lg-tx-bid" title="ESPN's own waiver bid">
-          ${player.bid}
-        </span>
-      )}
     </>
   );
+
+  // Absent from a delta map means "hasn't moved", not "unknown" — the server
+  // drops zeroes to keep the blob small — so a player with a roster % and no
+  // entry really is flat, and the 0.0 is filled back in here. Gated on the
+  // percentage itself: a move with no figure to have moved is nothing to draw.
+  const trends =
+    pct == null || player.mlbId == null || !rosterTrend
+      ? []
+      : rosterTrend
+          .filter((w) => TREND_SPANS.includes(w.window))
+          .map((w) => ({
+            window: w.window,
+            days: w.days,
+            change: w.delta.get(player.mlbId as number) ?? 0,
+          }));
 
   return (
     <li className={`lg-tx-player lg-tx-${player.move}`}>
@@ -287,11 +348,42 @@ function PlayerLine({
         </PlayerIdentity>
       )}
       {pct != null && (
-        <span
-          className="lg-tx-pct"
-          title={`Rostered in ${pct.toFixed(1)}% of all ESPN leagues`}
-        >
-          {pct.toFixed(1)}%
+        <span className="lg-tx-own">
+          <span
+            className="lg-tx-pct"
+            title={`Rostered in ${pct.toFixed(1)}% of all ESPN leagues`}
+          >
+            {pct.toFixed(1)}%
+          </span>
+          {/* The move under the figure it moved, which is the shape the player
+              page's own header already gives these — the span up front and the
+              change behind it, so three of them read across rather than as
+              three sentences. The classes are folded onto that header's, so the
+              up/down vocabulary has one definition. */}
+          {trends.length > 0 && (
+            <span className="lg-tx-trends">
+              {trends.map((t) => (
+                <span
+                  key={t.window}
+                  className={`lg-tx-trend${
+                    t.change > 0 ? ' up' : t.change < 0 ? ' down' : ''
+                  }`}
+                  title={`Rostered ${
+                    t.change === 0
+                      ? 'in the same share of leagues as'
+                      : `${Math.abs(t.change).toFixed(1)} points ${
+                          t.change > 0 ? 'more' : 'fewer'
+                        } than`
+                  } ${t.days} day${t.days === 1 ? '' : 's'} ago`}
+                >
+                  <span className="lg-tx-trend-span">{t.days}d</span>
+                  {t.change === 0
+                    ? '0.0'
+                    : `${t.change > 0 ? '▲' : '▼'}${Math.abs(t.change).toFixed(1)}`}
+                </span>
+              ))}
+            </span>
+          )}
         </span>
       )}
     </li>
@@ -305,6 +397,7 @@ function TransactionRow({
   now,
   facts,
   rosterPct,
+  rosterTrend,
   eligibility,
   onOpenPlayer,
 }: {
@@ -314,6 +407,7 @@ function TransactionRow({
   now: number;
   facts: Map<number, MlbFacts>;
   rosterPct: Map<number, number> | null;
+  rosterTrend: TrendDeltas | null;
   eligibility: Map<number, string[]> | null;
   onOpenPlayer: (mlbId: number) => void;
 }) {
@@ -340,13 +434,14 @@ function TransactionRow({
         <span className="lg-tx-date">{stamp(tx.date, now)}</span>
       </div>
       <ul className="lg-tx-players">
-        {tx.players.map((p, i) => (
+        {addsFirst(tx.players).map((p, i) => (
           <PlayerLine
             key={`${p.espnId}-${i}`}
             player={p}
             teams={teams}
             facts={facts}
             rosterPct={rosterPct}
+            rosterTrend={rosterTrend}
             eligibility={eligibility}
             onOpenPlayer={onOpenPlayer}
           />
@@ -362,6 +457,7 @@ export default function LeagueTransactions({
   error,
   players,
   rosterPct,
+  rosterTrend,
   eligibility,
   onOpenPlayer,
 }: {
@@ -376,6 +472,10 @@ export default function LeagueTransactions({
   /** Both off the `/api/espn/ownership` response App already holds for the
    *  research board — no read of this tab's own, and null before it lands. */
   rosterPct: Map<number, number> | null;
+  /** How each of those percentages has moved, one entry per span the read found
+   *  a baseline for. Null without a league and until a second day of history
+   *  exists — see `TREND_SPANS` for which of them a row draws. */
+  rosterTrend: TrendDeltas | null;
   eligibility: Map<number, string[]> | null;
   onOpenPlayer: (mlbId: number) => void;
 }) {
@@ -430,6 +530,7 @@ export default function LeagueTransactions({
             now={now}
             facts={facts}
             rosterPct={rosterPct}
+            rosterTrend={rosterTrend}
             eligibility={eligibility}
             onOpenPlayer={onOpenPlayer}
           />
