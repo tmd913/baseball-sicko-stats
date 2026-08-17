@@ -907,7 +907,11 @@ export function UpcomingRow({
         >
           <div className="upcoming-detail">
             {isPitcher ? (
-              <OpponentSection game={game} throws={report.throws} />
+              <OpponentSection
+                hitting={game.opponentHitting}
+                opponent={game.opponent}
+                hand={game.stand ?? report.throws ?? null}
+              />
             ) : (
               <>
                 {/* Who he is facing, in full and with a way through to him. The

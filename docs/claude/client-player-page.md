@@ -582,6 +582,184 @@ back, and the client draws exactly that many. The bundle figures for this
 round are the Game Log's, below, which is where the one client change worth
 measuring actually is.
 
+### A row opens the lineup he faces
+
+**Every row named an opponent and said nothing about him**, which is half a
+sentence: a manager reading `Aug 23 · vs STL` is deciding whether to start a
+pitcher against that club, and the app already knows exactly how that club has
+hit — nine cuts of it, over five spans, home and away, by the hand on the mound.
+So a row is a press and it raises the **same dialog a pitcher's Upcoming row
+raises in the feed**: `OpponentSection`, drawn by the same component with the
+same span and venue controls and the same accented hand row.
+
+**The same component rather than a thinner one, which is the whole of the
+change.** A second drawing of an opposing lineup on the player page would be
+three rows, ten columns, two segmented controls, a per-cut league rank and the
+`lowerBetter`-free rule that 1st is always the best offence — every one of them
+free to drift from the feed's copy the next time either was touched. This is the
+rule `PlayerIdentity` and `PhotoStatus` already set for the blocks two tables
+share, applied to the one table two *pages* share.
+
+#### `OpponentSection` takes what it reads, and a start is not a game
+
+**It took a whole `PlayerGame` and reads three fields off one** —
+`opponentHitting`, `opponent` and `stand` — which was fine while every caller had
+a game: the pitcher card, its Full breakdown and the feed's Upcoming row all draw
+one that has been played or is about to be. **A `ProjectedStart` is not a game**
+(`types.ts`): it is a `gamePk`, a date, an opponent id and an abbreviation,
+placed on his club's remaining schedule, and four of its five rows are for games
+nobody has been named for. Faking a `PlayerGame` around three fields to satisfy a
+parameter is the kind of thing that reads as harmless and then has somebody
+wondering, a year later, why a projection carries a `plateAppearances: []`.
+
+So the component names the three (`hitting`, `opponent`, `hand`) and each caller
+resolves its own. **The hand rule moved out with it**, deliberately: it was
+`game.stand ?? throws ?? null` *inside* the table, and only a caller knows
+whether it has a game to read a `stand` off — this one never does, so the row is
+accented off `PlayerReport.throws` alone, which is precisely the pre-game case
+that fallback was written for. The four call sites each pass one line
+(`hand={game.stand ?? report.throws ?? null}`), so nothing about the three older
+ones changed behaviour; measured after, the feed's Upcoming dialog reads
+`SD · vs RHP` for a right-hander and the Full breakdown reads `MIL · vs LHP` for
+Skubal, both off `stand` as before.
+
+#### The season line is read on the press, and held
+
+**Three ways of getting the opposing club's line were weighed and the client-side
+read wins on all three counts.**
+
+- **Widen the server** so a `ProjectedStart` carries its opponent's hitting. It
+  is the tidiest to *call* and the worst to pay for: `projectedStarts.ts` is
+  memory-only with no blob (that being this codebase's rule for a window onto
+  games not yet played), so five `TeamHitting` boards — nine cuts each, ranked —
+  would ride on every read of a route the block makes on **every pitcher's page**,
+  for a reader who may open none of the five.
+- **Fetch every row's club up front.** Same payload, moved; five requests on a
+  page that mostly gets scrolled past.
+- **Read it on the press** (`api.teamHitting(teamId, 'season')`), which is what
+  it does. The route already exists and is what `OpponentTable` itself calls when
+  the reader changes span; the module is cached six hours in memory and in the
+  storage tier and pulled warm nightly by `warmer.ts`, so a press costs a `Map`
+  lookup rather than an upstream. And the season cut is **the same object the
+  report attaches** to a pitcher's games (`getReport` → `getTeamHitting`), so this
+  is one number by another route rather than a second answer to one question.
+
+**Held at block level rather than inside the row**, which is what makes a
+three-game series free: two starts against one club cost one read, and closing a
+dialog and reopening it costs none. The block therefore keeps a
+`Record<teamId, OppRead>` and hands each row its own club's entry.
+
+**The mark that dedupes it comes off on failure**, which is the one place this
+departs from the rule stated at length in **Client — the League view**, *never
+mark a request answered before it is answered*. What that rule guards against is
+an effect whose cleanup discards the answer while the mark stands — `StrictMode`
+mounting, tearing down and re-running. This is a **press handler**: there is no
+cleanup and the answer always lands. Unmarking in the `catch` is what makes the
+dialog's `Try again` a retry rather than a no-op, and it was driven: with
+`/api/teams/` forced to reject, the dialog reads `Couldn't read the opponent's
+line. Try again`, and pressing it with the stub lifted fills the table in
+(`oppRows 0 → 3`).
+
+#### A row with nothing behind it is not a press — one read later
+
+**The feed's rule is `expandable = !!game.opponentHitting`, decided before
+anything is drawn**, because the report already carries the line. Here it cannot
+be: a projected start's club has not been read until somebody presses. So the row
+is a press by default and goes **static** on exactly one answer — the server
+returning **no board for that club**, which is what `getTeamHitting` gives for a
+team its own board has no row for. A read that **threw** keeps its press, since a
+retry is a different fact from an absence and the dialog offers one.
+
+**Which forced one thing that reads as a subtlety and is not**: the dialog is
+rendered on `open` alone rather than on `expandable && open`. The answer that
+makes a row static arrives *while its own dialog is up*, so gating on both
+unmounted the box in front of the reader the moment the read landed — measured
+with a stubbed `null`: `dialogs 1 → 0` with nothing said, a press that flashed
+and shut. Only a press can set `open` and a static row has none, so the two
+states cannot contradict each other. With the fix the reader sees `No line for
+STL.`, and the row behind is static when the box closes (`presses 5 → 4`,
+`statics 0 → 1`, its title dropping the `open to see how that lineup has hit`
+clause).
+
+#### What the dialog says about a guess
+
+**A projected row is a guess and its dialog must not read as a claim about a game
+he has been named for.** On the row that is said twice already — the text is
+muted and the tag reads `Projected` — and inside the box both of those are gone,
+so the sentence is repeated where the reader is: *Projected from his rotation
+slot — nobody has named this start yet, so this is the lineup he* **would**
+*face.* An announced row carries none of it, his club having named him; measured,
+that line is the whole of the difference between the two boxes (365.48 → 388.48px
+at 1200, 409.48 → 447.48 at 390).
+
+**The opposing starter is deliberately not named inside**, which is the feed's own
+decision arriving here rather than a new one. A batter's Upcoming dialog names him
+in full with a headshot through to his page, because the *card* in that box is
+about the half of a platoon split he creates. A **pitcher's** dialog holds the
+lineup instead, on the stated grounds that the man on the other side is his
+counterpart rather than somebody he faces — and on a *projected* row there is
+nobody to name at all, MLB reaching about three days out (measured on the live
+season: the opposing probable is on **39 of 151 first rows and 0 of the 568
+behind them**). A block that named him on row one and not on rows two to five
+would be a fifth of a feature. The surname is on the closed row where it already
+was, and his full name and hand are on the row's own `title`.
+
+#### Measured
+
+**Driven against the built client and the live 2026 season at 1200×900 and
+390×844**, on Cristopher Sánchez (1 announced + 4 projected, cadence 5).
+
+**The block does not move.** Before → after: `.ovw-starts` **191px at both
+widths**, five rows at **32 / 32 / 32 / 32 / 31px**, byte-identical — the row's
+`padding: 7px 0` having moved from the `<li>` to the line inside it, which is
+where a press wants its own breathing room. Page-body and overlay overflow **0**
+at both widths in every state.
+
+**One fault was found by measuring rather than by reading, and it is the trap
+this stylesheet already records from the other side.** `.start-line`'s button
+reset was written `font: inherit`, which is a *shorthand* — so it reset the
+`font-size: 13px` the shared `.ovw-next-line, .start-line` rule sets, and a
+`<button>` then inherited the body's **16px** from the `<li>`. Measured: rows
+**34px** against 32, block **201 / 220**, and the announced row **wrapping at
+390** where it never had. `font-family: inherit` is the whole of the reset a
+button actually needs here, everything else being declared; re-measured, 191 and
+32 at both widths.
+
+**The dialog.** `800 × 365.48` at 1200 and `358 × 409.48` at 390 on an announced
+row (`388.48 / 447.48` projected), body overflow **0**, `z-index` **51** — the
+overlay's 50 plus one, from `DialogLayerContext` with nothing written inline —
+titled `Cristopher Sánchez — Aug 17 vs MIA`, holding the `Opponent` label, the
+five span pills, the three venue pills and three rows (`Overall · vs RHP ·
+vs LHP`) under a `MIA` corner header, with **`vs LHP` accented**, Sánchez being a
+left-hander and the start having no `stand` to read.
+
+**The press, four ways.** A mouse click opens it; **Enter** opens it and **Space**
+opens it, with the focus ring measured at `2px solid rgb(56, 189, 248)`; the ✕
+closes it; and **Escape unwinds one rung per press** — the dialog first with the
+player page standing and focus back on the row's own button, the page second,
+`[inert]` back to **0**.
+
+**The hover is scoped.** With a mouse the line goes `rgba(0, 0, 0, 0)` →
+`rgb(27, 41, 73)` (`--panel-2`, the app's borderless-row hover) with
+`cursor: pointer`; under touch emulation (`(hover: hover)` **false**,
+`(pointer: coarse)` **true**) the same pointer move leaves it at
+`rgba(0, 0, 0, 0)` — and `matches(':hover')` reads **false** there, the emulator
+not holding the state at all. **No caret** either way.
+
+**Every other state was driven and is unchanged**: a refusal draws its own
+sentence and **0 rows and 0 presses** (Abel `out-of-rotation` 39 / 69px,
+Arrighetti `new-club` the same), and a reliever (Hader) and a batter (Perez) draw
+**no block at all**. The three older `OpponentSection` call sites still work —
+the feed's Upcoming dialog (`Nolan McLean — NYM vs SD`, `SD`, 3 rows, `vs RHP`,
+five span pills) and a pitcher's Full breakdown (`Tarik Skubal — LAD vs MIL`,
+`Line · Opponent · Arsenal`, `MIL`, 3 rows, `vs LHP`) — and the Roster, Feed and
+Research views all render with no error banner and 0 overflow.
+
+**Bundle: 522.29 → 524.14 KB of JS** (154.38 → 154.88 gzipped) and **126.34 →
+126.64 KB of CSS** (22.44 → 22.48) — 1.9KB and 0.3KB raw, 0.5KB and 0.04KB over
+the wire, for a press, a dialog, a lazy read with its cache and the paragraphs
+above restated where the rules are.
+
 #### The scheduled game's pitcher link opened nothing
 
 **The report: press the pitcher in the Overview tab's scheduled-game popup and nothing happens.** Not a wrong page and not a dead-looking one — no change at all.

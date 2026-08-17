@@ -375,7 +375,12 @@ function PitcherGameBlock({
           {/* The lineup on the other side. Once he's thrown a pitch this is
               background rather than the headline, so it sits under the outing
               itself and collapses like every section around it. */}
-          <OpponentSection game={game} throws={throws} collapsible />
+          <OpponentSection
+            hitting={game.opponentHitting}
+            opponent={game.opponent}
+            hand={game.stand ?? throws ?? null}
+            collapsible
+          />
 
           {/* Arsenal: velo/spin/break per pitch type, vs season & league */}
           <ArsenalSection pg={pg} />
@@ -444,7 +449,13 @@ export function OutingBreakdown({
       {/* Open by default, all three: this dialog was opened *for* them, and a
           box of three collapsed bars would be asking the same question twice. */}
       <GameLine pg={pg} defaultOpen />
-      <OpponentSection game={game} throws={report.throws} collapsible defaultOpen />
+      <OpponentSection
+        hitting={game.opponentHitting}
+        opponent={game.opponent}
+        hand={game.stand ?? report.throws ?? null}
+        collapsible
+        defaultOpen
+      />
       <ArsenalSection pg={pg} defaultOpen />
     </Modal>
   );
@@ -592,7 +603,11 @@ export function PitcherCard({
                   </div>
                 </div>
               )}
-              <OpponentSection game={g} throws={report.throws} />
+              <OpponentSection
+                hitting={g.opponentHitting}
+                opponent={g.opponent}
+                hand={g.stand ?? report.throws ?? null}
+              />
             </div>
           ))}
       </div>

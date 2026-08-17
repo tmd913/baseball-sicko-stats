@@ -3886,7 +3886,7 @@ body {
   gap: 6px;
 }
 .ovw-next-line,
-.start-row {
+.start-line {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -3943,20 +3943,66 @@ body {
   flex-direction: column;
   gap: 2px;
 }
-/* One start. **Folded onto `.ovw-next-line`'s rule** rather than restyled to
-   resemble it — the block above draws exactly this sentence for exactly this
-   kind of fact, so the two are one object and a second copy of the wrap, the
-   gap and the type is the drift this stylesheet spends its comments avoiding.
-   What this adds is a row's own padding and a hairline between rows, the
-   `.news-item` device: this is one list of one player's month, and five
-   bordered cards would read as five unrelated things. */
+/* One start. The `<li>` is the list item — a hairline between rows, the
+   `.news-item` device: this is one list of one player's month, and five bordered
+   cards would read as five unrelated things — and `.start-line` inside it is the
+   sentence, **folded onto `.ovw-next-line`'s rule** rather than restyled to
+   resemble it, the block above drawing exactly this sentence for exactly this
+   kind of fact.
+
+   The two were one element until a row became a press. A `<button>` cannot be an
+   `<li>`, and the row's padding belongs to whichever of them is the target — a
+   press whose 7px of breathing room is outside it is a press that misses when
+   you aim at the gap — so the padding moved inward with the line and the item
+   keeps only its rule. */
 .start-row {
-  padding: 7px 0;
   border-bottom: 1px solid var(--border);
 }
 .start-row:last-child {
   border-bottom: none;
 }
+/* Both shapes the line takes — the button and the static `<div>` a row with
+   nothing behind it draws — so the two lay out identically and only the pointer
+   and the hover tell them apart. `color: inherit` is what lets
+   `.start-row--projected`'s muting reach through the button.
+
+   **`font-family` rather than the usual `font: inherit`**, which is the trap
+   `--research-head-line` already records from the other side: `font` is a
+   shorthand, so it resets *every* font longhand — including the `font-size: 13px`
+   the shared rule above sets, which a `<button>` then inherits from the `<li>`
+   at the body's 16px. Measured before the fix: 16px, a 34px row against the
+   32 the block has always drawn, and the announced row wrapping at 390 where it
+   had not. A button inherits nothing of the family and everything else it needs
+   is declared, so the family is the whole of the reset. */
+.start-line {
+  width: 100%;
+  padding: 7px 0;
+  font-family: inherit;
+  color: inherit;
+  text-align: left;
+  background: none;
+  border: none;
+}
+button.start-line {
+  cursor: pointer;
+}
+/* Scoped: a full-width row in a list that scrolls, which is the surface that
+   rule is written for — see *A card doesn't highlight when you scroll past it*
+   at the top of the file. The tint is `--panel-2`, the app's own borderless-row
+   hover (`.glog-table tbody tr`), rather than a border: this line has no box to
+   light. */
+@media (hover: hover) {
+  button.start-line:hover {
+    background: var(--panel-2);
+  }
+}
+button.start-line:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+/* The dialog a start opens is the feed's own Upcoming detail — same box, same
+   `OpponentSection`, same reason — so `.start-detail` is folded onto that rule
+   where it is declared rather than restated here. */
 /* **A projection is drawn as a guess**, which is the app's standing rule —
    the percentile card's dotted bubble and the Splits card's hatched fill are
    the same rule on two other surfaces. It is said **two** ways: the row's text
@@ -8862,7 +8908,11 @@ body {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-.upcoming-detail {
+/* `.start-detail` is the player page's Projected Starts dialog, folded on rather
+   than restyled: it is this box holding this same `OpponentSection`, opened from
+   a row that names a start instead of a scheduled game. */
+.upcoming-detail,
+.start-detail {
   display: flex;
   flex-direction: column;
   gap: 8px;

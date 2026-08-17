@@ -206,6 +206,19 @@ Rutschman vs RHP Chandler, Lowe vs RHP King, Walton vs RHP Rocker):
   `OpponentSection` and **no** splits card and **no** `.upcoming-sp` block, page
   overflow 0.
 
+**And its dialog has a second caller now**, which cost this row one line and
+nothing else. The player page's **Projected Starts** block opens the same
+`OpponentSection` off a `ProjectedStart` — no `PlayerGame` in sight — so that
+component takes the three fields it reads rather than a game, and this call site
+resolves its own hand (`hand={game.stand ?? report.throws ?? null}`) where the
+table used to do it inside. `.start-detail` is folded onto `.upcoming-detail`'s
+rule for the same reason: it is this box holding this same table, opened from a
+row that names a start instead of a scheduled game. Re-measured on the live
+season after the change: this dialog reads `Nolan McLean — NYM vs SD` over an
+`SD` corner header, three rows, **`vs RHP`** accented and the five span pills,
+with the page overflowing by 0. See **Client — the player page**, *A row opens
+the lineup he faces*.
+
 **Bundle: 464.53 → 464.54 KB of JS** (137.79 → 137.96 gzipped) and **106.76 →
 107.01 KB of CSS** (19.06 → 19.11 gzipped) — 0.01KB and 0.25KB raw, and under
 0.2KB over the wire between them, for a card that replaced a card, a marker, an

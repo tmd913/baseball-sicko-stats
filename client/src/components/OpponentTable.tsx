@@ -6,7 +6,6 @@ import { CardSection } from './PitcherCard';
 import { LoadingBlock } from './Loading';
 import { TEAM_HITTING_WINDOWS } from '../types';
 import type {
-  PlayerGame,
   TeamHitting,
   TeamHittingLine,
   TeamHittingVenue,
@@ -90,14 +89,42 @@ function pct(rate: string): string {
   return Number.isFinite(n) ? `${(n * 100).toFixed(1)}%` : '—';
 }
 
+/**
+ * **It takes the three things it reads, not a whole `PlayerGame`.**
+ *
+ * It used to take the game and pull `opponentHitting`, `opponent` and `stand`
+ * off it, which was fine while every caller had one — the pitcher card, its
+ * breakdown and the feed's Upcoming row all draw a game that has been played or
+ * is about to be. The player page's **Projected Starts** block has no game at
+ * all: a `ProjectedStart` is a `gamePk`, a date, an opponent id and an
+ * abbreviation, placed on his club's remaining schedule (see `types.ts`). So the
+ * parameter was a shape this table never wanted, and naming what it actually
+ * reads is what lets one component serve both without a `PlayerGame` being faked
+ * up around three fields.
+ *
+ * The alternative was a second, thinner drawing of the opposing lineup on the
+ * player page, which is exactly the drift this codebase spends its comments
+ * avoiding: nine cuts, three rows, ten columns, a span control, a venue control
+ * and the accented hand row are a lot of decisions to keep two copies of.
+ */
 function OpponentBody({
-  game,
-  throws: reportThrows,
+  hitting: season,
+  opponent,
+  hand,
 }: {
-  game: PlayerGame;
-  throws?: string | null;
+  /** The **season, all games** cut — this table's opening state. The other four
+   *  spans are read here, on demand; see the effect below. */
+  hitting: TeamHitting | null;
+  /** The club, for the table's corner header. */
+  opponent: string;
+  /** The hand on the mound, which decides which row is accented. A team's split
+   *  is by the hand they faced, so this is the pitcher's own throwing hand —
+   *  `game.stand` where he has already thrown a pitch in the game, his report's
+   *  `throws` before that, and on a start nobody has played yet only the latter
+   *  exists. Resolving that is the caller's job, since only the caller knows
+   *  whether it has a game to read a `stand` off. */
+  hand: string | null;
 }) {
-  const season = game.opponentHitting;
   const teamId = season?.teamId ?? null;
   const [window, setWindow] = useState<TeamHittingWindow>('season');
   const [venue, setVenue] = useState<TeamHittingVenue>('all');
@@ -166,12 +193,6 @@ function OpponentBody({
 
   if (!season) return null;
 
-  // `stand` on a pitcher's game is his throwing hand, and a team's split is by
-  // the hand they faced — so the row matching it is the one that is his
-  // problem. Before he has thrown a pitch the game has no `stand`, which is
-  // exactly when this table is most worth reading, so his report's hand stands
-  // in.
-  const hand = game.stand ?? reportThrows ?? null;
   const mine = hand === 'L' || hand === 'R' ? hand : null;
 
   const board = window === 'season' ? season : boards[String(window)];
@@ -236,7 +257,7 @@ function OpponentBody({
           <table className="opp-table">
             <thead>
               <tr>
-                <th className="glog-date opp-rowhead">{game.opponent}</th>
+                <th className="glog-date opp-rowhead">{opponent}</th>
                 {COLUMNS.map((c) => (
                   <th key={c.key} className="glog-num" title={c.title}>
                     {c.label}
@@ -257,7 +278,7 @@ function OpponentBody({
                       className="glog-date opp-rowhead"
                       title={
                         on
-                          ? `${game.opponent} against ${row.hand === 'L' ? 'left' : 'right'}-handers — the half that applies to this game`
+                          ? `${opponent} against ${row.hand === 'L' ? 'left' : 'right'}-handers — the half that applies to this game`
                           : undefined
                       }
                     >
@@ -296,18 +317,20 @@ function OpponentBody({
  * toggle there would only offer to hide the one thing worth reading.
  */
 export function OpponentSection({
-  game,
-  throws,
+  hitting,
+  opponent,
+  hand,
   collapsible = false,
   defaultOpen = false,
 }: {
-  game: PlayerGame;
-  throws?: string | null;
+  hitting: TeamHitting | null;
+  opponent: string;
+  hand: string | null;
   collapsible?: boolean;
   defaultOpen?: boolean;
 }) {
-  if (!game.opponentHitting) return null;
-  const body = <OpponentBody game={game} throws={throws} />;
+  if (!hitting) return null;
+  const body = <OpponentBody hitting={hitting} opponent={opponent} hand={hand} />;
   return collapsible ? (
     <CardSection title="Opponent" defaultOpen={defaultOpen}>
       {body}
