@@ -39,6 +39,7 @@ import {
 } from '../hooks';
 import { OverviewTab } from './PlayerOverview';
 import { DialogLayerContext, OVERLAY_LAYER } from './Modal';
+import { BackButton } from './BackButton';
 
 /**
  * Savant's diverging percentile scale: deep blue (poor, 0) → neutral grey
@@ -954,12 +955,7 @@ export function PlayerDetails({
           bar. */}
       <div className="details-chrome" ref={chromeRef}>
         <div className="details-head">
-          <button type="button" className="details-back" onClick={onClose}>
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M15 18l-6-6 6-6" />
-            </svg>
-            Back
-          </button>
+          <BackButton onClose={onClose} />
           <div className="details-id">
             <DetailsPhoto playerId={playerId} name={name} kind={kind} />
             <div>

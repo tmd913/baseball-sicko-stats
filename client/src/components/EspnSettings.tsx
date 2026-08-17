@@ -3,6 +3,7 @@ import { answersEscape, useLockBodyScroll, useOverlayFocus } from '../hooks';
 import { api } from '../api';
 import type { EspnStatus, EspnTeam } from '../types';
 import { LoadingLine } from './Loading';
+import { BackButton } from './BackButton';
 
 /**
  * What a pasted ESPN league URL yields. Both ids are in the address bar of any
@@ -349,22 +350,7 @@ export function EspnSettings({
   return (
     <div className="details-view espn-view" ref={viewRef} tabIndex={-1}>
       <div className="tut-head">
-        <button type="button" className="details-back" onClick={onClose}>
-          <svg
-            viewBox="0 0 24 24"
-            width="18"
-            height="18"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-          Back
-        </button>
+        <BackButton onClose={onClose} />
         <div className="tut-title-block">
           <h1 className="tut-title">Fantasy league</h1>
           <p className="tut-lede">

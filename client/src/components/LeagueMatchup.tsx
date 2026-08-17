@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { answersEscape, useLockBodyScroll, useOverlayFocus } from '../hooks';
 import { DialogLayerContext } from './Modal';
+import { BackButton } from './BackButton';
 import { InfoKey } from './InfoKey';
 import { DateRow, DateToggle } from './DateControls';
 import type { DatePreset } from './DateControls';
@@ -482,11 +483,12 @@ export default function LeagueMatchupView({
     <div className="mup-chrome">
       <div className="mup-bar">
         {/* The way back, and the only one this page needs: it was opened from a
-            card on the Scoreboard and returns to it. `.details-back`'s own
-            shape, so the two overlays leave by the same door. */}
-        <button type="button" className="details-back" onClick={onClose}>
-          ‹ Back
-        </button>
+            card on the Scoreboard and returns to it. It is `BackButton` — the
+            app's one back control — where it used to be `.details-back`'s class
+            around the text `‹ Back`, which is the same *class* as the player
+            page's and was not the same button: 65.03 × 31 against 80.08 × 34,
+            the chevron being an 18px icon there and a text glyph here. */}
+        <BackButton onClose={onClose} />
         {/* Printed rather than navigable. The arrows are the Scoreboard's,
             which is the page about *which* week; here the week is context the
             numbers cannot be read without — a live period's totals cover the
