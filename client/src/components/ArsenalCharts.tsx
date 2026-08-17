@@ -244,7 +244,7 @@ const R_PX = 156;
  * pixels to see it, which is the only kind that can.
  */
 const VIEW_TOP = 22;
-const VIEW_H = 348;
+const VIEW_H = 362;
 const SCALE = R_PX / DOMAIN_IN; // px per inch
 
 const px = (inches: number) => inches * SCALE;
@@ -252,11 +252,27 @@ const px = (inches: number) => inches * SCALE;
 /** Round-trip a break in inches to a printable figure. */
 const inches1 = (n: number) => `${n >= 0 ? '' : '−'}${Math.abs(n).toFixed(1)}"`;
 
-/** Where the two corner marks sit, in viewBox units. Below the disc's widest
- *  point each bottom corner opens up; at this height it is clear by ~100 units
- *  either side, which is what these are drawn to fit. */
-const CORNER_Y = 300;
-const CORNER_INSET = 12;
+/**
+ * Where the two corner marks sit, in viewBox units — and they are **solved
+ * rather than nudged**, because "in the corner" is not the same as "clear of the
+ * circle" and the first pass was neither.
+ *
+ * A mark is clear when the corner of its box **nearest the centre** is more than
+ * the disc's radius away: the top-*inner* corner, since both marks sit low and
+ * outboard. With the disc at (200, 196) r 171.6 that gives, for the arm at
+ * `ARM_SY`, a shoulder no further in than x ≈ 319 — it was at 314, six units
+ * inside — and for the key a box whose inner edge stops around x ≈ 98, where its
+ * *text* had been running to 100 and 18 units in. (The first check measured the
+ * key's anchor rather than the end of its text, which is why it passed.)
+ *
+ * Every one of these clears by at least 10 units, the tightest being the ball at
+ * a 70° slot, the highest the leaderboard carries.
+ */
+const ARM_SY = 352;
+const ARM_SX = 322; // mirrored to 400 − this for a left-hander
+const ARM_LEN = 34;
+const CORNER_LABEL_Y = 366;
+const KEY_Y = 362;
 
 /**
  * His arm slot, drawn as the arm.
@@ -283,44 +299,36 @@ function ArmAngleMark({
 }) {
   const right = hand !== 'L';
   const dir = right ? 1 : -1;
-  // The shoulder end sits nearest the middle of the chart; the arm reaches out
-  // into the corner, which is the empty part.
-  const sx = right ? VIEW - CORNER_INSET - 74 : CORNER_INSET + 74;
-  const sy = CORNER_Y + 16;
-  const L = 46;
+  const sx = right ? ARM_SX : VIEW - ARM_SX;
+  const sy = ARM_SY;
   const rad = (angle * Math.PI) / 180;
-  const ex = sx + dir * L * Math.cos(rad);
-  const ey = sy - L * Math.sin(rad);
+  const ex = sx + dir * ARM_LEN * Math.cos(rad);
+  const ey = sy - ARM_LEN * Math.sin(rad);
   return (
-    <g
-      className="mv-arm"
-      // A `<title>` rather than a printed sentence: the corner has room for the
-      // figure and not for the gloss.
-    >
+    <g className="mv-arm">
       <title>
         {`Arm angle ${angle.toFixed(0)}° above horizontal at release` +
           (league === null ? '' : ` — the MLB average is ${league.toFixed(0)}°`)}
       </title>
-      <line className="mv-arm-ref" x1={sx} y1={sy} x2={sx + dir * L} y2={sy} />
+      <line className="mv-arm-ref" x1={sx} y1={sy} x2={sx + dir * ARM_LEN} y2={sy} />
       <line className="mv-arm-line" x1={sx} y1={sy} x2={ex} y2={ey} />
-      <circle className="mv-arm-ball" cx={ex} cy={ey} r="4.5" />
-      {/* Both labels go *below* the horizontal reference. Above it is the
+      <circle className="mv-arm-ball" cx={ex} cy={ey} r="4" />
+      {/* Both labels sit *below* the horizontal reference. Above it is the
           opening the arm sweeps through, and at a low slot the arm passes
-          straight through where a number would sit — measured at 30°, the
-          degrees and the arm line were touching. Below the reference is free at
-          every angle the leaderboard can produce. */}
+          straight through where a number would go — measured at 30°, the
+          degrees and the arm line were touching. */}
       <text
         className="mv-arm-deg"
-        x={sx + dir * 4}
-        y={sy + 16}
+        x={sx + dir * 3}
+        y={CORNER_LABEL_Y}
         textAnchor={right ? 'start' : 'end'}
       >
         {`${angle.toFixed(0)}°`}
       </text>
       <text
         className="mv-arm-label"
-        x={sx + dir * 4}
-        y={sy + 29}
+        x={sx + dir * 3}
+        y={CORNER_LABEL_Y + 12}
         textAnchor={right ? 'start' : 'end'}
       >
         ARM ANGLE
@@ -332,12 +340,17 @@ function ArmAngleMark({
 /** The hatched swatch that says what the blobs behind the clouds are, in the
  *  bottom corner the arm does not want. */
 function HatchKey({ side }: { side: 'left' | 'right' }) {
-  const x = side === 'right' ? VIEW - CORNER_INSET - 74 : CORNER_INSET + 20;
-  const y = CORNER_Y + 12;
+  const left = side === 'left';
+  const cx = left ? 18 : VIEW - 18;
   return (
     <g className="mv-hatchkey" aria-hidden="true">
-      <circle className="mv-hatchkey-dot" cx={x} cy={y} r="8" />
-      <text className="mv-hatchkey-text" x={x + 13} y={y + 4} textAnchor="start">
+      <circle className="mv-hatchkey-dot" cx={cx} cy={KEY_Y} r="7" />
+      <text
+        className="mv-hatchkey-text"
+        x={left ? cx + 12 : cx - 12}
+        y={KEY_Y + 3.5}
+        textAnchor={left ? 'start' : 'end'}
+      >
         MLB AVG
       </text>
     </g>

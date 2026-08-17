@@ -13288,24 +13288,34 @@ html[data-theme='lavender'] .league-table thead th {
   font-size: 11px;
   font-weight: 700;
   color: var(--text);
-  padding-bottom: 3px;
+  /* **One rule, on the container.** It was a `border-bottom` on each of the
+     three head cells with a margin either side of the middle one, which drew
+     the line in three segments with two gaps in it — a separator that looks
+     like it is made of pieces. The vertical dividers below have the same fix
+     applied the other way round (see `.pu-mid`). */
+  border-bottom: 1px solid var(--border);
+  /* The breathing room goes on the cells, not here: on the container it sits
+     *below* `.pu-head-mid`'s box, so the vertical dividers stopped 5px short of
+     the rule and the two separators did not meet. */
+  padding-bottom: 0;
 }
 .pu-head-side,
 .pu-head-mid {
   text-align: center;
-  border-bottom: 1px solid var(--border);
   padding-bottom: 4px;
 }
 .pu-head-side:first-child {
   grid-column: 1 / 3;
-  margin-right: 8px;
 }
 .pu-head-mid {
   grid-column: 3;
+  /* The verticals start at the header rather than a row below it, so the two
+     separators meet. */
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
 }
 .pu-head-side:last-child {
   grid-column: 4 / 6;
-  margin-left: 8px;
 }
 
 .pu-rows {
@@ -13319,7 +13329,11 @@ html[data-theme='lavender'] .league-table thead th {
   appearance: none;
   background: none;
   border: 0;
-  padding: 2px 0;
+  /* No vertical padding on the button: the middle cell carries the dividers,
+     and 2px of button padding put a 2px gap between one row's cell and the
+     next, which drew the verticals as a dashed line. The rhythm moves inside
+     `.pu-mid`, which stretches to the row so the boxes are contiguous. */
+  padding: 0;
   margin: 0;
   font: inherit;
   color: inherit;
@@ -13385,8 +13399,11 @@ html[data-theme='lavender'] .league-table thead th {
   gap: 8px;
   border-left: 1px solid var(--border);
   border-right: 1px solid var(--border);
-  padding: 0;
-  min-height: 22px;
+  /* Stretched to the row and carrying the row's own vertical rhythm, so
+     consecutive cells touch and the dividers read as two unbroken lines. */
+  align-self: stretch;
+  padding: 3px 0;
+  min-height: 26px;
 }
 .pu-badge {
   display: inline-flex;
@@ -13507,7 +13524,9 @@ html[data-theme='lavender'] .league-table thead th {
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--faint);
-  margin-top: 2px;
+  /* It belongs to the plot above it and not to the legend below, so it sits
+     close to the one and clear of the other. */
+  margin: 2px 0 16px;
 }
 .mv-axis-foot span {
   color: var(--muted);
