@@ -118,7 +118,7 @@ Page-body overflow is **0** at every one of those widths, and the page draws cor
 
 **Joining a league by an invite link left the app reading a roster the joiner has nothing in.** The link attaches them to the league and opens the onboarding page (above; it was the Fantasy league page when this was written), they pick which team is theirs, and then — nothing. `UserPrefs.rosterSource` was still `saved`, so the Roster and Feed views went on reporting on the list they built here, which for somebody who has just arrived is empty; the way out was the roster-source toggle in the fantasy popover, which is a control they have no reason to know exists. The last step of joining a league is to say which team is yours, and after it the app should be reading that team.
 
-**So it does, and the rule is one sentence with two guards** (`App.tsx::onEspnStatusChange`): naming a team **where the connection had none** turns the fantasy roster on, **unless the user has stated which list they want**. Neither guard is optional and each excludes a different way of getting this wrong.
+**So it does, and the rule is one sentence with two guards** (`App.tsx::onEspnStatusChange` for the settings page's own picker, and `confirmEspnOnboarding` for the invite flow, which applies the identical test and then reloads — see **The pick ends in a boot** below): naming a team **where the connection had none** turns the fantasy roster on, **unless the user has stated which list they want**. Neither guard is optional and each excludes a different way of getting this wrong.
 
 **`firstTeamNamed(prev, next)`** is the first, and it is a test on the *transition* rather than on the new status. It requires `prev.connected`, the **same league**, `prev.teamId === null` and `next.teamId !== null`. What each clause keeps out:
 
@@ -130,7 +130,7 @@ Page-body overflow is **0** at every one of those widths, and the page draws cor
 
 **The two guards give a property worth stating: it can fire at most once for a user, ever.** The write it makes is itself a stated source, so the record then holds `fantasy`; a reader who turns it off writes `saved`; either way the ref and the record agree and nothing fires again. That is also why `rosterSource === 'saved'` is tested rather than assumed — with the fantasy roster already on there is nothing to turn on, and writing it down would have a `roster=fantasy` **link** quietly overwrite the record it was only ever meant to override for one visit, which is the rule `cols=` follows.
 
-**Nothing downstream had to be told.** The switch is one call to `setRosterSource`, which is the same thing the popover's toggle presses: it flips `usingFantasy`, which is what `loadReport` asks its `source=` with, what the fantasy roster read and the report effect both depend on, what the URL sync writes `roster=fantasy` from, and what lights the fantasy button and takes the editing controls away (**Editing is off in that mode**, below). One state change, one render, one pass — so the URL and the record cannot end up saying different things, and the report is re-read rather than left describing the saved roster.
+**Nothing downstream had to be told**, which is true of the *settings page's* picker and is the half of this that the invite flow later gave up. The switch is one call to `setRosterSource`, which is the same thing the popover's toggle presses: it flips `usingFantasy`, which is what `loadReport` asks its `source=` with, what the fantasy roster read and the report effect both depend on, what the URL sync writes `roster=fantasy` from, and what lights the fantasy button and takes the editing controls away (**Editing is off in that mode**, below). One state change, one render, one pass — so the URL and the record cannot end up saying different things, and the report is re-read rather than left describing the saved roster. On an **invite** the same state change is made and then thrown away with the tab, for the reason the next section sets out.
 
 **One write at a time, which the shape gives for free.** `PUT /api/espn/team` has resolved by the time `onEspnStatusChange` is called, so the preference PUT that follows cannot race it against the same user item — the lost-update hazard `App.tsx::queueUserWrite` exists for and the reason this is not done optimistically inside the picker. Checked on the file backend, which has no version to conflict on: after a pick the record carries **both** `espn.teamId: 6` and `prefs.rosterSource: "fantasy"`.
 
@@ -139,6 +139,87 @@ Page-body overflow is **0** at every one of those widths, and the page draws cor
 **Driven end to end against the live 12-team league**, with the invite code, a real `PUT /api/espn/team` and the file backend, at 1200×900. *Fires* — a joiner with no record opens `?league=<code>`, the page opens with `teamId: null` and thirteen teams in the picker, and choosing one takes the URL to **`?preset=Today&roster=fantasy`**, the fantasy button to **`fantasy-btn on`**, the record to **`{"rosterSource":"fantasy"}`**, and the next report request to **`/api/report?…&source=fantasy`** — where before the pick it carried no `source`. Behind the page the summary table then draws **14 rows with 14 slot chips** and **0 add buttons**, and a reload comes back on `roster=fantasy` with the same 14 rows off the saved preference alone. *Does not fire, three ways.* A record holding `rosterSource: "saved"` with no team yet: the pick sets the team (`League 60120 · Brian&Tom's Excellent Adventure`) and leaves the record at `{"rosterSource":"saved"}`, the URL without `roster=`, the button unlit and the report without `source=`. A record with **no** stated source but a team already chosen, changed from team 6 to team 1: record stays `{}`, URL and button unchanged — the team-change case. And a `?league=<code>&roster=fantasy` **link** on a record with nothing saved: the views read the fantasy roster because the link says so, and the pick writes **nothing** to the record (`{}` before and after).
 
 **Bundle: 464.53 → 464.87 KB of JS** (137.79 → 137.93 gzipped) and **CSS unchanged at 106.76** (19.06) — 0.34KB raw and 0.14KB over the wire, most of it the paragraphs arguing the two guards.
+
+### The pick ends in a boot, and two races were behind why it had to
+
+**Reported: accepting an invite, picking a team, and landing on "two tabs and no
+page content" — right again on a reload.** Both halves of that are literal.
+`Research · League` is the tab row with `showRosterViews` false (the roster pills
+need rows) and a league connected; and with the report empty, the saved-roster
+empty state suppressed by `!usingFantasy` and the fantasy one waiting on a roster
+read, there is genuinely nothing under it.
+
+**Two independent races produce it, and each was reproduced against a stub before
+it was fixed.**
+
+- **A stale report landing on a fresh one.** The saved-roster reads fired while
+  the join was still in flight are answered from a roster of nobody, and the
+  fantasy read that follows the pick is a cold ESPN league plus a cold report —
+  so the loser of that race writes an empty player list over the winner's.
+  Measured with the saved read held for six seconds: right at t+1.5s, **blank at
+  t+4s and still blank at t+9s**. It is not the invite's own bug — the fantasy
+  popover's toggle, pressed off and straight back on, does the same thing — so
+  the guard is on `loadReport` rather than on this flow; see **Client**, *Rule 1
+  has a fourth clause*.
+- **A stale `GET /api/espn` landing on the join's answer.** The boot status read
+  and the invite's `POST /api/espn/join` are fired **concurrently**, and for the
+  one visitor an invite is aimed at the read is the stale half by construction:
+  it describes the account a second before it joined. Landing last it undid the
+  join outright — measured on `main` with the read held 1.5s, the onboarding page
+  **never appears at all**, the reader is left on a one-tab app, and no team is
+  ever named. `espnStatusWritten` is the whole of the fix: a `POST`/`PUT` answer
+  is authoritative and the boot `GET` may not overwrite one.
+
+**And then the flow reloads anyway**, which is the third thing and the one that
+looks heavy-handed. `confirmEspnOnboarding` names the team, decides the roster
+source by the rule above, **awaits** the preference write, and navigates to the
+app's own URL with `roster=fantasy` on it.
+
+**A boot rather than a reconciliation, because this is the one moment in the
+app's life when nearly everything it has read is about to be wrong at once.** A
+join arrives mid-boot, so the saved roster, the report drawn from it, the
+ownership map, the league's teams and the connection itself are all read, in
+flight or absent in some combination nobody can enumerate — and the pick then
+changes *which roster every view is about*. Reconciling that in place is a pile
+of ordering rules each of which is one race away from a page that draws nothing,
+which is what this flow was reported doing twice over. A boot has all of those
+rules already and is known to work. It costs the splash, once, on a screen the
+reader sees once.
+
+**The write is awaited, where every other caller of it fires and forgets**, and
+that is the one thing a reload could genuinely have cost: a `PUT
+/api/prefs/roster-source` still in flight when the tab is torn down is a record
+that never learns which list its owner chose. A **failure** is logged rather than
+raised — the URL still puts this session on the fantasy roster, the toggle is one
+press from telling the record, and failing the pick over it would leave the
+reader on a page whose one button appears not to work.
+
+**`LeagueOnboarding` gave up `onStatusChange` for `onConfirm`**, one call that
+does the whole last step: it rejects if the team could not be set — the one
+failure that leaves the page on screen, with its message and the answer still in
+the box — and resolving means the page is going away, so nothing after it has to
+be cleared. `Not now` and Escape are untouched and reload nothing.
+
+**Measured against a stub API driven in a browser at 1200×900**, `main` → this,
+each case run twice:
+
+| | main | now |
+| --- | --- | --- |
+| the ordinary invite, pick a team | 4 tabs and 2 rows, then **`Research · League`, blank** at t+4s | 4 tabs, 2 rows, stable at t+9s |
+| … the URL and the button | `?preset=Today&roster=fantasy`, `fantasy-btn on` | unchanged |
+| … the record | `{"rosterSource":"fantasy"}` | unchanged |
+| … the requests | `PUT team` → `PUT roster-source` | `PUT team` → `PUT roster-source` → **reload** → `GET /api/report?…&source=fantasy` |
+| the boot `GET` held 1.5s | onboarding page **never drawn**, 1 tab, `teamId` never set | page drawn, pick completes, `teamId: 6` |
+| fantasy toggle off then straight on, saved read held 6s | blank at t+8s | 4 tabs and 2 rows at t+8s |
+| a record stating `saved` | — | team set, **no** `roster=`, no preference write, button unlit |
+| `PUT /api/espn/team` fails (409) | — | page stays, `No team 6 in this league.`, button back to its label, no reload, no preference write |
+| `Not now` / Escape | — | no reload, no writes, `teamId` null |
+| an invalid code | — | unchanged: the settings page with `That invite link is no longer valid.` |
+| `/api/espn/roster` 502 with an empty fantasy team | `Research · League`, blank | `Your fantasy team is empty` |
+
+**Bundle: 549.04 → 549.73 KB of JS** (162.66 → 162.88 gzipped), **CSS unchanged
+at 147.02** (26.21) — 0.7KB raw and 0.2KB over the wire, for two sequence
+guards, a counted wait, a reload and the paragraphs arguing them.
 
 **Editing is off in that mode — all of it.** The reorder screen is hidden (`!usingFantasy`), because ESPN owns that list and a screen offering to rearrange it would be offering something it can't do. That was for a long time the only half that went, and the other half was argued for on the grounds that the search and the player page's add button still worked: they added to the *saved* list, the one the app goes back to the moment the toggle is turned off, so `PlayerAdder` kept deduping against the saved roster while `rosterKeys` (the research board's `My Roster` button and its baseball) followed whichever list was actually on screen — the adder showing the state of the thing its own button changes.
 
@@ -150,7 +231,9 @@ Page-body overflow is **0** at every one of those widths, and the page draws cor
 
 Two things were rejected. **Relabelling rather than removing** — an `Add to saved roster` that says which list it touches — is honest about the destination and still spends a control on a change the page cannot show; the app does not otherwise offer edits to lists it isn't displaying. And **keeping Remove beside the badge**, on the reasoning that it could fall back to the saved list, which is the same trick one level worse: a ✕ under a badge that says "on roster" would remove him from a list that isn't the one the badge is about.
 
-One consequence had to be paid for. The `Your roster is empty` block is about the *saved* list, so it is now gated on `!usingFantasy` — a user with an ESPN team and nothing saved was getting it on top of a full page of his fantasy team's cards, over a button opening a search that no longer adds to anything. The mode's own empty case (`Your fantasy team is empty`) names its cause the way every other emptied view in the app does, held until the roster read has landed so it can't flash over a page that is merely waiting for ESPN.
+One consequence had to be paid for. The `Your roster is empty` block is about the *saved* list, so it is now gated on `!usingFantasy` — a user with an ESPN team and nothing saved was getting it on top of a full page of his fantasy team's cards, over a button opening a search that no longer adds to anything. The mode's own empty case (`Your fantasy team is empty`) names its cause the way every other emptied view in the app does, held until the roster read has **settled** so it can't flash over a page that is merely waiting for ESPN.
+
+**Settled rather than landed, which is a correction.** It was held on `fantasyRoster !== null` — the read having *succeeded* — and a read that fails never satisfies that, so it was held for ever. Which is exactly when it was most needed: with the roster read failed, the block above is suppressed by `!usingFantasy`, this one by its own gate, and the report has nothing to draw. Reproduced against a stub — a 502 on `/api/espn/roster` with the fantasy report answering an empty team gives **`Research · League` and an otherwise blank page**, and with the fix the same state names its cause. A `reports.length === 0` joined the gate at the same time and covers the mirror of it: with the roster read failed but the report answered, `rosterKeys` falls back to the *saved* list, which for this reader is empty, and the message would have sat over a full table.
 
 The board's **watchlist** is a third thing again and is unaffected by any of this — it is a set of keys of the user's own, not a roster at all, which is why its star survives on the player page in every mode.
 
