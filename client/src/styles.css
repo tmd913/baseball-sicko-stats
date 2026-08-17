@@ -8503,6 +8503,29 @@ button.start-line:focus-visible {
   color: var(--muted);
 }
 
+/* The foot of the board while there are rows still to come — the strip that
+   holds the spinning ball for `PAGE_BEAT` each time a page is asked for. Its
+   height is reserved from the moment there is a next page rather than arriving
+   with the mark, since it lives *inside* the scroller and a box that came and
+   went would take its own height out of `scrollHeight` under a reader sitting
+   at the bottom of it.
+
+   `position: sticky; left: 0` for the reason the name column and the sorted
+   column are sticky: a block child of this scroller is only as wide as the
+   pane, so on a table that is twice that it would sit off the left of the
+   screen exactly when the reader is out at the far columns. */
+.research-more {
+  position: sticky;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
 /* ---- Table ---- */
 /* This board keeps the *tighter* gutters the summary table has just grown out
    of, and the reason is the one that widened them over there: slack. The summary
