@@ -517,7 +517,7 @@ export function MovementChart({
         </div>
         <div className="mv-legend-cols">
           {shown.map((p) => {
-            const { color } = pitchStyle(p.pitchType);
+            const { abbr, color } = pitchStyle(p.pitchType); // color: the swatch
             const on = hot === p.pitchType;
             const dim = hot !== null && !on;
             return (
@@ -526,11 +526,30 @@ export function MovementChart({
                 type="button"
                 className={`mv-legend-col${on ? ' on' : ''}${dim ? ' dim' : ''}`}
                 aria-pressed={on}
+                aria-label={p.pitchType}
                 onMouseEnter={() => onHover(p.pitchType)}
                 onFocus={() => onHover(p.pitchType)}
                 onClick={() => onHover(on ? null : p.pitchType)}
               >
-                <span className="mv-legend-name">{p.pitchType}</span>
+                {/* The abbreviation at rest and the whole name when it is the
+                    one being read — five full pitch names across a 470px chart
+                    is a legend that wraps `4-Seam Fastball` onto two lines and
+                    pushes the numbers under it apart, and only one column is
+                    ever the answer to a question. The full name is absolutely
+                    placed so the grid holds still while it appears, and it may
+                    overhang its neighbours, which are dimmed at that moment
+                    anyway. Same move the usage badge makes. */}
+                <span className="mv-legend-name">
+                  {/* Not in the pitch's own colour: this palette is built to
+                      be a *fill* with computed ink over it (see `inkOn`), and as
+                      text it fails on one scheme or the other for nearly every
+                      pitch — measured against the two page grounds, 6 of 9 land
+                      under 3:1 on Lavender and FC/KC under 3:1 on Midnight, with
+                      no value working in both. The swatch directly below is
+                      where the colour belongs. */}
+                  <span className="mv-legend-abbr">{abbr}</span>
+                  <span className="mv-legend-full">{p.pitchType}</span>
+                </span>
                 <span className="mv-legend-swatch" style={{ background: color }} />
                 <span className="mv-legend-val">{pctText(p.share)}</span>
                 <span className="mv-legend-val">{p.velo === null ? '—' : p.velo.toFixed(1)}</span>
