@@ -1091,15 +1091,86 @@ below it, the range bubble on the toggle's corner) applies to both callers by
 construction. What each caller keeps is the *state*, that being the only half
 the two answer differently.
 
-**The days start at today**, not at the matchup's week — that is the reading a
-manager arrives with (*what is his team doing right now*) and it is what the
-app's own roster views open on, which is the point of these pages being those
-views. The week is one press away as a preset of its own: **`Matchup` leads the
-list**, and it is the one named range that means something only here — the days
-the categories on the Summary page were summed over, so picking it makes every
-row the arithmetic behind a category. It is absent where the period has no dates
-to name, the rule the Rankings span strip already follows for a half with no
-matchup period in it.
+**The days start at today on the week being played**, not at the matchup's week
+— that is the reading a manager arrives with (*what is his team doing right
+now*) and it is what the app's own roster views open on, which is the point of
+these pages being those views. The week is one press away as a preset of its
+own: **`Matchup` leads the list**, and it is the one named range that means
+something only here — the days the categories on the Summary page were summed
+over, so picking it makes every row the arithmetic behind a category. It is
+absent where the period has no dates to name, the rule the Rankings span strip
+already follows for a half with no matchup period in it.
+
+### A settled matchup opens on its own days
+
+**That paragraph said "the days start at today" flatly, and the four words added
+to it are the whole of this change: the argument is right about the week being
+played and plainly wrong about one that is over.** On last week's matchup
+`Today` names days that are not in the matchup **at all**, so the roster table
+had nothing to do with the categories the Summary page an inch away is drawn
+from — and a page opened on a finished week is opened to read that week. So the
+live matchup keeps `Today` and a settled one opens on **`Matchup`**, which is
+the two halves of the argument each applied where it holds rather than one of
+them applied everywhere.
+
+**The test is `board.live`** — the flag the header's own `Live` / `Final` tag
+reads, so the page cannot say `Final` beside the week and open on today.
+Deliberately not a second definition of "current" worked out from the dates:
+`start`/`end` are the **observed** span and truncate at today for the week being
+played (*The matchup window*, above), so a date test would be reading the
+symptom of the thing the flag states outright. It also gets the ~90-minute
+window right for nothing — between our 3am rollover and ESPN's nightly batch the
+board is the week that has just ended and says `Final`, and the page then opens
+on that week's days, which is exactly what it is showing.
+
+**The fallback is `Today`**, because `Matchup` is only in the preset row when
+there are dates to name it with, and a date button marking a preset the row does
+not contain is worse than the old default. Both halves read one `matchupSpan`,
+hoisted above the state it seeds and the preset list it builds, so the two
+cannot come to disagree about whether there is a matchup span at all.
+
+**It is seeded, not corrected.** A lazy `useState` initialiser rather than an
+effect — the rule the page's own `sideTab` already follows: the board is a prop
+at mount (App draws this page only once the scoreboard has landed), so the first
+paint is already the right span, where an effect would draw today's rows, fetch
+them, and swap a frame later. And it applies **once**: a week that settles under
+a reader who has the page open must not move the days out from under them, nor
+must the League page's own minute poll re-running with a newer board, and the
+reader's own pick — a preset or a custom range — is the last word from the
+moment they make it. That costs nothing in reach, because closing the page
+unmounts it and stepping the period on the Scoreboard clears `mup=`, so every
+other matchup is a fresh mount and a fresh default.
+
+**This is the team pages' control and reaches nothing else.** The whole `tools`
+row is drawn only where a side is selected, so the Summary page has no date
+control to default — checked at both widths on both kinds of matchup: **0**
+`.date-toggle` on it.
+
+**Measured on the live 12-team league at 1200×900 and 390×844, before → after.**
+The **live** matchup (week 19, `Live`, Aug 10 – Aug 16) is unchanged: the date
+button reads **`Today`** with an `8/16` bubble, 13 rows, `Total 10/38 · 5 R` —
+one day. The **settled** one (week 18, `Final`, Aug 3 – Aug 9) goes from that to
+**`Matchup`** with an `8/3–8/9` bubble, **13 → 16 rows** (the week's union of
+rosters against today's team) and `Total 13/46 · 10 R` → **`76/278 · 50 R`**,
+with every opponent cell a game of that week. The preset row offers `Matchup ·
+Today · Tomorrow · Yesterday · This week · Last 15 days` and marks the one the
+page opened on. Page and overlay overflow **0** at both widths in every state.
+
+**The reader's own pick wins, driven rather than reasoned about.** On the
+settled matchup, picking `Today` against the default takes the button to
+`Today · 8/16` and 15 rows, and it **survives** crossing to Summary, on to the
+other manager's page (`5/32 · 3 R`, his own team over the same day), back again
+(`13/46 · 10 R`, unchanged) and a switch to Pitchers — identical at both widths.
+
+**And the no-dates fallback was driven with `board.start`/`end` stubbed away**:
+the header loses its week dates, the preset row is `Today · Tomorrow ·
+Yesterday · This week · Last 15 days` with **no `Matchup` in it**, and the page
+opens on **`Today`** with `Today` marked — the pre-change behaviour exactly, at
+both widths, with 0 overflow.
+
+**Bundle: 526.70 → 526.77 KB of JS** (155.69 → 155.72 gzipped), **CSS unchanged
+at 127.38** (22.59) — 70 bytes raw and 30 over the wire for a lazy initialiser
+and a hoisted memo; the paragraphs arguing them cost the bundle nothing.
 
 **The roster reading is a fixed-height column, so the table's own header and
 total row stick.** A sticky row sticks to the box that *scrolls*, and without
