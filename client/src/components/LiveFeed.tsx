@@ -4,7 +4,6 @@ import { playerKey } from '../types';
 import {
   baseEventLabel,
   baseEventTone,
-  creditLabel,
   decisionColor,
   formatStartTime,
   handThrows,
@@ -27,9 +26,9 @@ import type {
 import { Modal } from './Modal';
 import { BaseDiamond, PlaySituation } from './BaseDiamond';
 import { InlineVideoClip, PlateAppearanceCard } from './PlateAppearanceCard';
-import { GameStatusBadge } from './PlayerCard';
 import { BatterSplitsTab } from './PlatoonSplits';
-import { OpponentSection, OutingBreakdown, PitchingTag, lineSummary } from './PitcherCard';
+import { OpponentSection, PitchingTag, outingBar } from './PitcherCard';
+import { OutingPage } from './OutingPage';
 import { InningsList } from './Innings';
 
 /** How many stream items the Recent section shows at a time — a day of at-bats
@@ -559,10 +558,13 @@ function FeedBaseEvent({
 /**
  * A watched pitcher's outing in the feed — one item per game, not a row per
  * batter faced. In the stream it is the usual feed header plus his line, and a
- * press **opens a dialog** holding his innings (`InningsList`, first inning
- * first, each a bar that opens that inning as a feed of the batters he faced)
- * and the way to the full breakdown. `role` is set only while he's on the
- * mound, and tints the header.
+ * press **opens the outing as a full-screen page** (`OutingPage`) — his line,
+ * his innings, the lineup he faced and his arsenal, one per tab. `role` is set
+ * only while he's on the mound, and tints the header.
+ *
+ * **The press used to raise a dialog of innings with a `Full breakdown` button
+ * raising a second one**, which is what that page replaced; see `OutingPage`,
+ * where the argument for four readings behind a tab strip lives.
  *
  * **It was the largest accordion in the app**, which is why the swap matters
  * most here: a seven-inning start unrolled several screens of innings into the
@@ -599,25 +601,33 @@ function FeedPitcherGame({
    * it does, the matchup is the only thing saying which game a play belongs to
    * (the game blocks that used to say it went with the Games view). */
   multiGame?: boolean;
-  /** Draw the innings under the bar instead of behind a dialog.
+  /** Draw the innings under the bar instead of behind a press.
    *
-   * The dialog is right in the *stream*, where an outing is one item among
-   * dozens and its innings are several screens of them. It is wrong inside a
-   * box that is already about this one game — the player page's Overview tab
-   * and the Game Log's per-game popup — where a press would open a second
-   * dialog holding the only thing the first one had to show. Same reasoning as
-   * `grouped` one line up: a container that has already said something does
-   * not make its contents say it again. */
+   * A press is right in the *stream*, where an outing is one item among dozens
+   * and its innings are several screens of them. It was wrong inside a box that
+   * is already about this one game — the Game Log's per-game popup — where a
+   * press opened a second dialog holding the only thing the first one had to
+   * show. Same reasoning as `grouped` one line up: a container that has already
+   * said something does not make its contents say it again.
+   *
+   * **The press opens more than the box holds now, so the original argument no
+   * longer reaches the whole of it**, and the honest reading is the one the
+   * Overview tab's own five-game preview already makes: the popup's innings are
+   * a *preview* — one of the outing page's four readings, drawn where the reader
+   * already is — and the page under `Full breakdown` is the whole. That is
+   * exactly the relationship `GameLogTable` has with itself (`shown={5}` on the
+   * Overview against the tab's paging 25), and the same answer: the narrow
+   * reading stays where it is and the door beside it goes to the wide one. The
+   * alternative — dropping the inline innings so the popup is a bar and a press
+   * — makes the popup a shim, which is a worse thing for a reader to meet than
+   * a list they will see again. */
   detailInline?: boolean;
 }) {
   const pg = game.pitching!;
+  // Whether the outing page is open over everything. One flag for both routes
+  // in — the bar in the stream, and the `Full breakdown` door under the inline
+  // innings — since it is one page either way.
   const [open, setOpen] = useState(false);
-  // The three sections the Games view's card carried and the feed's item never
-  // has — the game line with its Results/Rates/Contact strips, the lineup he
-  // faced, and his arsenal for the outing. They are a dialog rather than more
-  // of this item because an item is a stream entry: the innings are the outing,
-  // and this is the read *around* it.
-  const [breakdown, setBreakdown] = useState(false);
   // The rail. Every other item shape in this feed groups itself with one — the
   // outcome's colour on an at-bat, the role's on a live entry, the event's on a
   // base event — and the outing was the one that didn't, so the pitcher feed
@@ -634,35 +644,23 @@ function FeedPitcherGame({
   // is what says a group is happening now, and a decision he hasn't got yet is
   // the lesser fact.
   const rail = role ? undefined : { borderLeftColor: decisionColor(pg.decision) };
-  // The innings and the way to the full read — drawn under the bar in a box
-  // that is already about this game, and inside a dialog everywhere else.
+  // The innings and the way to the whole outing — drawn under the bar in a box
+  // that is already about this game, where the bar itself is the door
+  // everywhere else.
   const body = (
     <>
       <InningsList game={game} pitcherId={report.id} pitcherName={report.name} />
-      {/* Below the innings rather than on the bar above them: the bar is the
-          toggle, every pixel of it, and a button inside a button is not a
-          thing. A reader who wants the full read has already opened the
-          outing, so this is where they are. */}
+      {/* Below the innings rather than on the bar above them: the bar is
+          static in this mode precisely because the box has already named the
+          game, so the door is where a reader wanting more detail already is. */}
       <button
         type="button"
         className="outing-breakdown-btn"
-        onClick={() => setBreakdown(true)}
+        onClick={() => setOpen(true)}
         title={`${report.name} — the full line, the lineup he faced and his arsenal for this outing`}
       >
         Full breakdown
       </button>
-      {/* Rendered *here*, inside whatever box the innings are in, and that
-          placement is load-bearing rather than tidy: `DialogLayerContext` is a
-          React context, so a breakdown written as a sibling of the outing's own
-          `Modal` reads the *page's* layer and lands on 46 — the same rung as the
-          dialog it was opened from, which makes each invisible to the other's
-          `overlayAbove` test and closes both on one press of Escape (measured:
-          2 dialogs → 0). Inside the children it inherits 46 and takes 47, and
-          inside a game dialog at 51 it takes 52, so the ladder is right in
-          every place an outing is drawn. */}
-      {breakdown && (
-        <OutingBreakdown report={report} game={game} onClose={() => setBreakdown(false)} />
-      )}
     </>
   );
   return (
@@ -707,8 +705,10 @@ function FeedPitcherGame({
         <button
           type="button"
           className="feed-item-toggle"
-          aria-haspopup="dialog"
-          aria-expanded={open}
+          /* No `aria-haspopup` and no `aria-expanded`: what this opens is a
+             page rather than a popup, and it is not an expansion of this
+             element — the same reason the research board's row and the
+             scoreboard's card, which each open a page, carry neither. */
           title="Open outing"
           onClick={() => setOpen(true)}
         >
@@ -716,35 +716,8 @@ function FeedPitcherGame({
         </button>
       )}
       {detailInline ? body : null}
-      {open && !detailInline && (
-        <Modal
-          title={`${report.name} — ${matchup(game)}`}
-          titleId="feed-outing-title"
-          className="outing-box"
-          onClose={() => setOpen(false)}
-        >
-          {body}
-        </Modal>
-      )}
+      {open && <OutingPage report={report} game={game} onClose={() => setOpen(false)} />}
     </div>
-  );
-}
-
-/** What the outing's bar says, whether or not it is a control: the role chip,
- *  the credit, the line, and how the game stands. No caret — see the note on
- *  `.feed-item-toggle` in styles.css. */
-function outingBar(game: PlayerGame, pg: NonNullable<PlayerGame['pitching']>) {
-  return (
-    <>
-      <PitchingTag game={game} />
-      {pg.decision && (
-        <span className={`dec-tag dec-${pg.decision}`}>{creditLabel(pg.decision)}</span>
-      )}
-      <span className="feed-pitch-line">{lineSummary(pg.line)}</span>
-      {/* Score and state, the same badge closing the pitcher card's header —
-          and, while he's on the mound, the inning and the bases behind him. */}
-      <GameStatusBadge game={game} />
-    </>
   );
 }
 

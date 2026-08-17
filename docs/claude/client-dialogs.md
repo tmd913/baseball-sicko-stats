@@ -25,9 +25,9 @@ are in `client-player-page.md`; the feed items that open into these dialogs are 
 
 **The pitcher's inning block was the third and is not any more**, which is the one entry on this list that has since been overturned. It stayed on the argument above — an inning is a *grouping*, a list of rows each of which opens on its own account, so popping it would put the pitch sequence a **third** dialog deep from the feed and a fourth from the Game Log's popup, and "an open inning grows *that box's* scroller rather than the page behind it, which is what a modal's scroller is for". The clauses are true and the last one is the mistake: that scroller is the one the reader is reading, and an open inning pushed every inning under it down it — measured on an eight-inning start, **501 → 751 → 1001px** as two innings were opened. So the inning is a dialog and the rung under it was given back: a base event stops being a press at all, and a batter faced carries his clip on the row where the box behind it used to hold it. The whole of that argument, and what it costs the Escape ladder (three dialogs where a batter's game reaches two), is in **Pitchers on the roster**, *An inning is a popup*.
 
-**One section stopped being a toggle without becoming a dialog.** `PitcherCard`'s `CardSection` renders in exactly one live place — `OutingBreakdown`, a dialog opened *for* its three sections — where all three already passed `defaultOpen`. A bar that is open from the start, in a box whose whole purpose is what is under it, is a control asking a question that has been answered, so `defaultOpen` now means "a plain label" (`.game-sub-bar.static`, which already existed for the batter card's no-PA game bar). The collapsible half is kept unrendered, because `PitcherCard` still names it and that card is kept for its parts.
+**One section stopped being a toggle without becoming a dialog.** `PitcherCard`'s `CardSection` rendered in exactly one live place — `OutingBreakdown`, a dialog opened *for* its three sections — where all three already passed `defaultOpen`. A bar that is open from the start, in a box whose whole purpose is what is under it, is a control asking a question that has been answered, so `defaultOpen` came to mean "a plain label" (`.game-sub-bar.static`, which already existed for the batter card's no-PA game bar). **That has since gone one step further**: the breakdown is a *page* now (see **Pitchers on the roster**, *All four sections are back, as a page*), and under a tab strip that has just said `Line` even a plain label is the word twice — so `CardSection` grew a third mode, `bare`, which renders no heading at all, and the static one is what nothing renders today. The collapsible half is still kept unrendered, because `PitcherCard` names it and that card is kept for its parts.
 
-**Every dialog takes the feed's own width** — `--card-column`, shared by `.player-day-box`, `.outing-box` and `.play-detail-box` — so a play read in a box and the same play read on the stream are the same width by construction. That is the point of the whole change being a change of *place* rather than of drawing: the contents are the same components, and `.pa-detail` and `.faced-detail` gave up only the `border-top` and inset padding that positioned them under a summary row they no longer sit under.
+**Every dialog takes the feed's own width** — `--card-column`, shared by `.player-day-box`, `.inning-box` and `.play-detail-box` (`.outing-box` was a fourth until the outing became a page rather than a dialog) — so a play read in a box and the same play read on the stream are the same width by construction. That is the point of the whole change being a change of *place* rather than of drawing: the contents are the same components, and `.pa-detail` and `.faced-detail` gave up only the `border-top` and inset padding that positioned them under a summary row they no longer sit under.
 
 **And `.app-dialog-body` had to become a `container`, which is the one thing moving a detail out of its card genuinely broke.** A plate appearance's detail sizes itself with `@container` queries — the strike zone stacks under the pitch table below 600, the swing-speed pill drops its column below 380 — and those were anchored on `.pa-card` and `.inning-block`, the boxes it used to unroll inside. A query with no container **silently fails**, so in a dialog it kept the side-by-side layout at every width: measured at 390, a batter-faced dialog held the 210px strike-zone column and crushed the result text to one letter a line. The dialog's body is the box the detail actually has and its inline size is exactly the width the detail gets, so it declares `container-type: inline-size` — the same fix `.inning-block` already records for the same failure one level down.
 
@@ -96,6 +96,50 @@ Checked in a browser, three and four levels deep and in both directions: with th
 Marking the press (`answersEscape`) is half the fix. The other half is that the popover has to answer **first**, and the stacking test cannot see it: `overlayAbove` reads declared `z-index`es off `OVERLAYS`, and a popover is on none of them — it is not a page or a dialog, it is a panel hanging off a button that happens to be inside one. Left to registration order the overlay always wins, being mounted first. So the hook binds its keydown in the **capture phase**, which precedes every bubble listener whatever the order, and "the innermost thing goes first" holds by construction rather than by luck. A popover with an overlay genuinely above it still declines, `overlayAbove` being consulted as ever — the header's menu sits at `z-index: 40` under a player page at 50, so the page answers and the menu behind it does not, where before they both did.
 
 **Driven in a browser on all three callers.** With the key open over a player page, Escape closes the key and leaves the page (twice over, once from Enter and once from Space), a second press closes the page, and focus stays on the button throughout. The settings gear and the fantasy popover close on Escape, on an outside press and on a second press of their own button exactly as before.
+
+### A page can sit on the dialog ladder, and one now does
+
+**Every box in this file has had a layer that is either fixed by the stylesheet
+(the four overlays, the full-page table box) or one step above whatever `Modal`
+host it was written inside.** `OutingPage` is the first that is neither: it is a
+*page* — `.details-view`'s own fixed box, own scroller, `useLockBodyScroll`,
+`useOverlayFocus`, `answersEscape`, a `BackButton` and a pinned head — and its
+z-index is read from `DialogLayerContext` like a dialog's.
+
+**It has to be, because the control that opens it is drawn at four depths.** A
+pitcher's outing bar appears in the feed stream (nothing above it), on a matchup
+team page (`.mup-view`, 48), inside the player page's Overview tab behind a game
+dialog (51), and inside the Game Log's per-game popup (also 51, inside the
+player page at 50). A fixed z-index serves none of those four: `.details-view`'s
+own 50 would sit *under* the popup that opened it. So the page takes `host + 1`
+— **46 / 49 / 52 / 52** — and provides its own layer downward, so the inning
+dialog inside it climbs one more and a faced batter one more again.
+
+**`.outing-view` is therefore in `OVERLAYS`, and it is the one member of that
+list whose number is not in the stylesheet.** `layerOf` walks up reading the
+computed `z-index`, so it reads the inline one and needs no special case; what
+would have gone wrong without the selector is not stacking but **Escape** — the
+box underneath (the popup, the matchup page) is a registered overlay too, and
+with the page invisible to `overlayAbove` both would have answered one press.
+The same selector is what `backgroundOf` reads to decide which marks must give
+up a hold when a box opens *inside* what they are holding, which is exactly what
+a page opened from inside a dialog does.
+
+**And it must be portalled to `document.body`**, which is a fact about CSS
+rather than about this ladder: `.app-dialog-body` declares `container-type:
+inline-size` for the plate-appearance detail's own container queries, and layout
+containment makes a box a containing block for `position: fixed` descendants —
+so a page rendered where the Game Log's popup draws its outing would be laid out
+inside that popup.
+
+**Driven from all four entry points at 1200×900 and 390×844**, one press of
+Escape undoing one thing at every rung, the top box never itself inert, and no
+`inert` attribute surviving any of them: feed **46 → 47 → 48**; matchup team
+page **48 → 49 → 50**; Overview tab **50 → 51 → 52**; Game Log popup **50 → 51
+→ 52 → 53 → 54** (five presses). Focus is handed back at each step — checked
+with a real dispatched mouse press, since `HTMLElement.click()` does not focus
+its target and so restores to the body, which is a property of the test rather
+than of the hook.
 
 ### A tap can still reach behind a popup, in the one instant the popup is being closed
 

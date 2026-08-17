@@ -749,11 +749,14 @@ not holding the state at all. **No caret** either way.
 **Every other state was driven and is unchanged**: a refusal draws its own
 sentence and **0 rows and 0 presses** (Abel `out-of-rotation` 39 / 69px,
 Arrighetti `new-club` the same), and a reliever (Hader) and a batter (Perez) draw
-**no block at all**. The three older `OpponentSection` call sites still work —
+**no block at all**. The other `OpponentSection` call sites still work —
 the feed's Upcoming dialog (`Nolan McLean — NYM vs SD`, `SD`, 3 rows, `vs RHP`,
-five span pills) and a pitcher's Full breakdown (`Tarik Skubal — LAD vs MIL`,
-`Line · Opponent · Arsenal`, `MIL`, 3 rows, `vs LHP`) — and the Roster, Feed and
-Research views all render with no error banner and 0 overflow.
+five span pills) and the pitcher's own outing (`Tarik Skubal — LAD vs MIL`, `MIL`,
+3 rows, `vs LHP`) — and the Roster, Feed and Research views all render with no
+error banner and 0 overflow. That second one was a `Full breakdown` **dialog**
+when it was measured, and is the outing page's **Opponent tab** since; the two
+changes landed in the same merge, and what the tab draws is this same section
+with `bare` where the dialog passed `defaultOpen`.
 
 **Bundle: 522.29 → 524.14 KB of JS** (154.38 → 154.88 gzipped) and **126.34 →
 126.64 KB of CSS** (22.44 → 22.48) — 1.9KB and 0.3KB raw, 0.5KB and 0.04KB over

@@ -34,7 +34,6 @@ import {
 } from './Arsenal';
 import type { SplitKey } from './Arsenal';
 import { InningsList } from './Innings';
-import { Modal } from './Modal';
 import { OpponentSection } from './OpponentTable';
 import {
   GameStatusBadge,
@@ -79,12 +78,20 @@ export function lineSummary(l: PitchingLine): string {
  * no caret.
  *
  * **`defaultOpen` now means "not a toggle at all".** Every surviving render of
- * this component is inside `OutingBreakdown`, a dialog opened *for* its three
- * sections — and a bar that is open from the start, in a box whose whole
- * purpose is what is under it, is a control asking a question that has already
- * been answered. So the head is a plain label there and the scroll-on-expand
- * goes with the expansion: a dialog has its own scroller and nothing to scroll
- * *to*.
+ * this component is inside a box opened *for* its sections — and a bar that is
+ * open from the start, in a box whose whole purpose is what is under it, is a
+ * control asking a question that has already been answered. So the head is a
+ * plain label there and the scroll-on-expand goes with the expansion: a dialog
+ * has its own scroller and nothing to scroll *to*.
+ *
+ * **And `bare` is one step further on: not a section header at all.** The
+ * outing page (`OutingPage.tsx`) puts each of these behind a *tab*, and a tab
+ * strip pinned at the top of that page has already said `Line` — a heading
+ * twenty pixels under it saying `Line` again is the same word twice, which is
+ * exactly the argument `defaultOpen` makes about the bar it replaced. Three
+ * modes rather than two because the three are genuinely three: a section on a
+ * long page folds away, a section in a box opened for it is labelled, and a
+ * section that *is* the page needs no label at all.
  *
  * The collapsible half is kept, unrendered, because `PitcherCard` still names
  * it and that card is kept for its parts (see **Pitchers on the roster**);
@@ -94,13 +101,17 @@ export function lineSummary(l: PitchingLine): string {
 export function CardSection({
   title,
   defaultOpen = false,
+  bare = false,
   children,
 }: {
   title: string;
   defaultOpen?: boolean;
+  /** Draw the children with no bar and no label — see above. */
+  bare?: boolean;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  if (bare) return <div className="card-section">{children}</div>;
   if (defaultOpen) {
     return (
       <div className="card-section">
@@ -136,12 +147,20 @@ function splitOf(pg: PitcherGame, key: SplitKey): PitcherSplit | null {
 
 /** The Savant-style arsenal table (one row per pitch type), for the whole
  * outing or one batter handedness. */
-export function ArsenalSection({ pg, defaultOpen = false }: { pg: PitcherGame; defaultOpen?: boolean }) {
+export function ArsenalSection({
+  pg,
+  defaultOpen = false,
+  bare = false,
+}: {
+  pg: PitcherGame;
+  defaultOpen?: boolean;
+  bare?: boolean;
+}) {
   const [split, setSplit] = useState<SplitKey>('all');
   if (pg.pitchMix.length === 0) return null;
   const mix = splitOf(pg, split)?.pitchMix ?? pg.pitchMix;
   return (
-    <CardSection title="Arsenal" defaultOpen={defaultOpen}>
+    <CardSection title="Arsenal" defaultOpen={defaultOpen} bare={bare}>
       <SplitTabs hasRight={!!pg.vsRight} hasLeft={!!pg.vsLeft} value={split} onChange={setSplit} />
       <div className="arsenal">
         {mix.map((m) => (
@@ -205,7 +224,15 @@ function battedBallStats(faced: FacedBatter[]) {
  * counting stats fill the metric grid, and the rates ride in the same dashed
  * strip the arsenal uses for its season results.
  */
-export function GameLine({ pg, defaultOpen = true }: { pg: PitcherGame; defaultOpen?: boolean }) {
+export function GameLine({
+  pg,
+  defaultOpen = true,
+  bare = false,
+}: {
+  pg: PitcherGame;
+  defaultOpen?: boolean;
+  bare?: boolean;
+}) {
   const [split, setSplit] = useState<SplitKey>('all');
   const sp = splitOf(pg, split);
   // A split's line is derived from the plays, so it has no innings, and the
@@ -221,7 +248,7 @@ export function GameLine({ pg, defaultOpen = true }: { pg: PitcherGame; defaultO
   const perBf = (n: number) => (L.battersFaced ? n / L.battersFaced : null);
   const singles = Math.max(0, L.hits - L.doubles - L.triples - L.hr);
   return (
-    <CardSection title="Line" defaultOpen={defaultOpen}>
+    <CardSection title="Line" defaultOpen={defaultOpen} bare={bare}>
       <SplitTabs hasRight={!!pg.vsRight} hasLeft={!!pg.vsLeft} value={split} onChange={setSplit} />
       <div className="pline">
         <div className="ars-row" style={{ borderLeftColor: color }}>
@@ -411,53 +438,30 @@ function creditTally(games: PlayerGame[]): { credit: PitchingCredit; n: number }
 
 
 /**
- * A pitcher's outing in full, in a dialog: the game line with its Results,
- * Rates and Contact strips, the lineup he faced, and his arsenal for that
- * outing.
+ * What an outing's bar says, whether or not it is a control: the role chip, the
+ * credit, the line, and how the game stands. No caret — see the note on
+ * `.feed-item-toggle` in styles.css.
  *
- * These are three of the four sections `PitcherCard` was made of, and they went
- * off screen with it when the Games view folded into the feed. The fourth —
- * Innings — did not, being what the feed's outing item already opens onto, so
- * this holds exactly the parts that had no other home. The sections are the
- * card's own components rather than a second rendering of the same numbers,
- * which is the point: a breakdown that drifted from the card it replaced would
- * be worse than the gap it fills.
- *
- * Reached from a button inside the opened outing rather than from its bar. The
- * bar is the toggle, every pixel of it — a documented rule, and a `<button>`
- * inside a `<button>` is not a thing — so the control sits with the innings,
- * which is where a reader wanting more detail already is.
+ * **It lives here rather than in `LiveFeed.tsx`, where it was written**, because
+ * a second reader turned up: the outing page's own head draws the same strip
+ * under the pitcher's name, and the two must not become two. Here rather than
+ * there because the dependency runs one way — `LiveFeed` and `OutingPage` both
+ * import from this file, and this file imports neither, so moving it up is what
+ * keeps the pair out of a cycle. It is `PitchingTag`'s and `lineSummary`'s own
+ * neighbourhood anyway, both of which it reads.
  */
-export function OutingBreakdown({
-  report,
-  game,
-  onClose,
-}: {
-  report: PlayerReport;
-  game: PlayerGame;
-  onClose: () => void;
-}) {
-  const pg = game.pitching;
-  if (!pg) return null;
+export function outingBar(game: PlayerGame, pg: NonNullable<PlayerGame['pitching']>) {
   return (
-    <Modal
-      title={`${report.name} — ${matchupLine(game)}`}
-      titleId="outing-breakdown-title"
-      className="outing-breakdown-box"
-      onClose={onClose}
-    >
-      {/* Open by default, all three: this dialog was opened *for* them, and a
-          box of three collapsed bars would be asking the same question twice. */}
-      <GameLine pg={pg} defaultOpen />
-      <OpponentSection
-        hitting={game.opponentHitting}
-        opponent={game.opponent}
-        hand={game.stand ?? report.throws ?? null}
-        collapsible
-        defaultOpen
-      />
-      <ArsenalSection pg={pg} defaultOpen />
-    </Modal>
+    <>
+      <PitchingTag game={game} />
+      {pg.decision && (
+        <span className={`dec-tag dec-${pg.decision}`}>{creditLabel(pg.decision)}</span>
+      )}
+      <span className="feed-pitch-line">{lineSummary(pg.line)}</span>
+      {/* Score and state, the same badge closing the pitcher card's header —
+          and, while he's on the mound, the inning and the bases behind him. */}
+      <GameStatusBadge game={game} />
+    </>
   );
 }
 
