@@ -907,8 +907,31 @@ back to 0.
 Summary page is where the two counts are compared and **a bye has no Summary
 page**, so without this the one manager most likely to be reading his own bye
 week — the reader, on the week his own team has one — could not see his own
-figure at all. It sits at the right end of the head, where the scoreboard card
-puts its headline, reading `Acq 5/10`.
+figure at all.
+
+**Under the record, as a third line of the identity block** — `Acquisitions:
+5/10` beneath the team's name and its season record — where it used to sit at
+the right end of the row reading `Acq 5/10`. That placement was the scoreboard
+card's, where `margin-left: auto` puts a figure opposite the headline triple and
+a reader's eye is already at that end; this head has no second column for it to
+sit against, so measured at 1200 it was a number at **x=942 of a 1200px window**
+with the team it belongs to at 242. Under the record it is what it is: another
+fact about this manager's week, beside the one about his season — and a line of
+its own is what buys the word rather than `ACQ`.
+
+**`Bye` came in off the right edge with it**, which was the other half of a
+correction this file had already made once: dropping that tag's own
+`margin-left: auto` was not enough, because `.mup-side-id` grows (`flex: 1 1 0`,
+which is what lets a name shrink and ellipsize beside a headline triple) and so
+took every pixel of free space and pushed the tag out regardless — 910 before,
+976 once the acquisitions were no longer holding the end of the row. It has
+nothing to grow against on this head, so it takes its content's width and keeps
+the shrink: the tag lands next to the name (**478 at 1200, 294 at 390**) and a
+long name still ellipsizes at 320.
+
+**Measured before → after** at 390 and 1200: the head is **30 → 45px** and the
+chrome **108 → 123**, which is the one line, and the page overflows by **0** at
+320, 390 and 1200.
 
 ### A matchup is a page, not a tab
 
