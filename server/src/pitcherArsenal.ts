@@ -1,5 +1,6 @@
 import { parse } from 'csv-parse/sync';
 import { readJsonBlob, writeJsonBlob } from './storage.js';
+import type { MovementSample } from './types.js';
 
 // Keep in sync with hfSea in savant.ts, SEASON in xwoba.ts / teamHitting.ts /
 // expectedStats.ts, and CURRENT_SEASON in percentiles.ts.
@@ -71,28 +72,10 @@ export interface Appearance {
 /** A pitcher's appearances, by gamePk. */
 export type Appearances = Map<number, Appearance>;
 
-/**
- * One pitch as a point on the movement plot: where it broke, how hard it was
- * thrown, and which side the batter stood on. The Arsenal tab's Movement
- * Profile draws a dot per sample, which is what makes it a *cloud* rather than
- * one bubble per pitch type — the spread within a type is the thing a reader is
- * looking at (a slider that sometimes cuts and sometimes sweeps is two clusters
- * under one average).
- *
- * `hBreak`/`vBreak` are the file's own convention throughout: −pfx_x × 12 and
- * pfx_z × 12, inches. That happens to be exactly Savant's own plotting
- * convention with the sign already the right way round — positive `hBreak`
- * renders toward third base for a pitcher of either hand, so the chart needs no
- * handedness case (checked against Savant's own rendering: a RHP four-seam at
- * hBreak +11 sits on the 3B side there too).
- */
-export interface MovementSample {
-  pitchType: string;
-  hBreak: number;
-  vBreak: number;
-  velo: number | null;
-  stand: 'R' | 'L' | null; // the BATTER's side, so the client can cut by split
-}
+// The movement point is declared in `types.ts` with the rest of the wire shapes,
+// which is the file mirrored by hand into the client — one declaration per
+// workspace. Re-exported here because this module is where callers look for it.
+export type { MovementSample } from './types.js';
 
 /** The season arsenal, whole and split by the batter's side. A split is empty
  * (not absent) when he's faced nobody of that hand. */
@@ -195,8 +178,12 @@ interface StoredArsenals {
 // the movement samples — a v3 blob deserializes with none, and the Arsenal tab's
 // movement plot would then draw an empty cloud for six hours with the legend and
 // the league blobs around it intact, which reads as a pitcher who threw nothing
-// rather than as a stale blob.
-const storeKey = (pitcherId: number) => `arsenal-${pitcherId}-${SEASON}-v4.json`;
+// rather than as a stale blob. **v5 is the samples themselves changing**, which
+// is the subtler version of the same hazard: a v4 blob deserializes perfectly
+// and holds the *old* allocation — 240 points with a floor of ten under every
+// pitch type — so the plot would go on overstating a rare pitch tenfold for six
+// hours, correctly, off a blob nothing could tell was stale.
+const storeKey = (pitcherId: number) => `arsenal-${pitcherId}-${SEASON}-v5.json`;
 
 const NO_BATTED_BALLS: BattedBallMix = { total: 0, fly: 0, ground: 0, line: 0 };
 
@@ -250,14 +237,12 @@ function battedBallMix(records: Record<string, string>[]): BattedBallMix {
 }
 
 /**
- * How many pitches the movement plot gets to draw. Savant ships ~200; the
- * cloud reads the same at that order of magnitude and the payload stays small
- * (~240 points is ~3KB gzipped on the wire).
+ * **One dot per percent of his pitches.** A pitch he throws a tenth of the time
+ * gets ten dots, so the cloud's densities *are* his usage and a reader can count
+ * them — which is the whole reason to draw individual pitches rather than one
+ * bubble each.
  */
-const SAMPLE_TARGET = 240;
-/** Floor per pitch type, so a 1%-usage changeup is still a visible cluster
- *  rather than one lonely dot the eye reads as an outlier. */
-const SAMPLE_FLOOR = 10;
+const DOTS_PER_ARSENAL = 100;
 
 /**
  * Reduce the season's pitches to a bounded set of movement points.
@@ -266,10 +251,19 @@ const SAMPLE_FLOOR = 10;
  * is 400px wide — past a few hundred dots the cloud is a solid blob that says
  * less, not more, and the payload grows for nothing.
  *
- * **Proportional, with a floor.** Each pitch type gets a share of the budget in
- * proportion to how often he throws it, so the cloud's densities read as his
- * usage — but never fewer than `SAMPLE_FLOOR`, because the interesting pitch is
- * often the rare one and a 1% changeup allocated 2 dots would look like noise.
+ * **Strictly proportional, and that is the rule rather than a budget.** A pitch
+ * type gets as many dots as it has percent of his season, so ten dots means he
+ * throws it a tenth of the time and the cloud can be *counted* as well as
+ * looked at.
+ *
+ * **No floor.** There was one — ten dots minimum, so a rare pitch was still a
+ * visible cluster — and it is exactly what broke the correspondence: a 1%
+ * changeup drew the same ten dots as a 10% one, overstating it tenfold on the
+ * one chart whose densities are supposed to *be* the usage. A pitch that
+ * survives `aggregate` still gets at least one dot, so nothing in the legend is
+ * missing from the plot; past that the count is the percentage, and a rare
+ * pitch reads as rare. What it costs is the spread of a pitch thrown a handful
+ * of times, which is a spread there was never much evidence for.
  *
  * **Deterministic, by stride rather than at random.** `Math.random` would give
  * a different cloud every time the blob was rebuilt — the same pitcher's chart
@@ -288,14 +282,11 @@ function sampleMovement(records: Record<string, string>[]): MovementSample[] {
     const px = num(r.pfx_x);
     const pz = num(r.pfx_z);
     if (px === null || pz === null) continue;
-    const stand = r.stand === 'R' || r.stand === 'L' ? r.stand : null;
     const list = byType.get(name);
     const point: MovementSample = {
       pitchType: name,
       hBreak: Math.round(-px * 12 * 10) / 10,
       vBreak: Math.round(pz * 12 * 10) / 10,
-      velo: num(r.release_speed),
-      stand,
     };
     if (list) list.push(point);
     else byType.set(name, [point]);
@@ -310,10 +301,8 @@ function sampleMovement(records: Record<string, string>[]): MovementSample[] {
     // (pitchouts and the like); match that here or the plot draws a dot for a
     // pitch the legend beside it has never heard of.
     if (all.length < 2) continue;
-    const want = Math.min(
-      all.length,
-      Math.max(SAMPLE_FLOOR, Math.round((all.length / total) * SAMPLE_TARGET)),
-    );
+    // At least one, so a pitch the legend names is never absent from the plot.
+    const want = Math.min(all.length, Math.max(1, Math.round((all.length / total) * DOTS_PER_ARSENAL)));
     for (let i = 0; i < want; i++) out.push(all[Math.floor((i * all.length) / want)]);
   }
   return out;

@@ -469,8 +469,8 @@ export interface PitcherGame {
 
 /**
  * One pitch as a point on the Arsenal tab's Movement Profile — where it broke,
- * how hard, and which side the batter stood on (so the plot can follow the
- * Overall / vs RHB / vs LHB tabs off one array rather than three).
+ * and nothing else: the plot draws a coloured dot at (`hBreak`, `vBreak`) and
+ * reads no other field.
  *
  * `hBreak`/`vBreak` are the app's usual convention, inches: positive `hBreak`
  * breaks toward **third base** and positive `vBreak` is rise. That holds for a
@@ -482,8 +482,6 @@ export interface MovementSample {
   pitchType: string;
   hBreak: number;
   vBreak: number;
-  velo: number | null;
-  stand: 'R' | 'L' | null;
 }
 
 /** A pitcher's season arsenal: the whole season, plus the batter-handedness
