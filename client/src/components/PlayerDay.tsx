@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { combineLines, combinePitchingLines, prettyGameDate } from '../lib';
 import { lineSummary as battingLineSummary } from '../lib';
-import type { PlayerGame, PlayerKind, PlayerReport } from '../types';
+import type { PlayerGame, PlayerReport } from '../types';
 import { GameStatusBadge } from './PlayerCard';
 import { lineSummary as pitchingLineSummary } from './PitcherCard';
 import {
@@ -18,6 +18,7 @@ import type { FeedEntry } from './LiveFeed';
 import { useDelayedFlag } from '../hooks';
 import { LoadingBlock } from './Loading';
 import { Modal } from './Modal';
+import { OutingPage } from './OutingPage';
 
 /**
  * One player's day, drawn from the feed's own items.
@@ -151,15 +152,7 @@ export function PlayerDay({
           that game has no card at all — see `livePitching` above. */}
       {live &&
         (isPitcher && live.game.pitching ? (
-          <FeedItem
-            entry={{ type: 'pitching', report, game: live.game }}
-            onOpenDetails={open}
-            grouped
-            /* Narrowed to one game, the box is already about this outing, so
-               the innings read here rather than behind a second press — the
-               same rule `PlayerDayGameFeed` states for a finished one. */
-            detailInline={oneGame}
-          />
+          <FeedItem entry={{ type: 'pitching', report, game: live.game }} onOpenDetails={open} grouped />
         ) : (
           <LiveEntry
             report={report}
@@ -222,6 +215,23 @@ function nothingDoing(game: PlayerGame): string {
  *
  * A game he did nothing in is **not** a press: there is nothing behind it, so
  * it draws the line the plays would have been under and stays static.
+ *
+ * **A pitcher's card opens the outing page rather than a dialog**, which is the
+ * same split `useGameOpen` makes for the Game Log's rows and for the same
+ * reason: a batter's game is a *feed* of plate appearances and this box is
+ * exactly that, where a pitcher's game is **one outing** and the app has a page
+ * for it. The dialog in between drew a static outing bar with its innings and a
+ * `Full breakdown` button through to that page — two presses and a box in front
+ * of a page, on a card whose whole content is the outing.
+ *
+ * It needs no fetch: this card is already holding the `report` and the
+ * `PlayerGame` the page reads, which is what makes the swap free here and a
+ * read on a Game Log row (see `OutingPageForGame`).
+ *
+ * And the pitcher branch is `game.pitching` rather than `items.length`, which
+ * for a section on this tab is the same set — a pitcher's entry exists iff his
+ * game carries an outing, and the pinned live one is filtered out of `sections`
+ * upstream — but says what it means rather than relying on the two agreeing.
  */
 function PlayerDayGameCard({
   report,
@@ -251,28 +261,34 @@ function PlayerDayGameCard({
   if (items.length === 0) {
     return <div className="pday-game static">{body}</div>;
   }
+  const outing = report.kind === 'pitcher' ? game.pitching : null;
   return (
     <>
       <button
         type="button"
         className="pday-game"
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        title={`${report.name} — ${matchup(game)}`}
+        /* A page rather than a popup for a pitcher, so it carries neither —
+           the same reason the feed's own outing bar carries neither, and the
+           reason the research board's rows and the scoreboard's cards don't. */
+        {...(outing ? {} : { 'aria-haspopup': 'dialog' as const, 'aria-expanded': open })}
+        title={outing ? 'Open outing' : `${report.name} — ${matchup(game)}`}
         onClick={() => setOpen(true)}
       >
         {body}
       </button>
-      {open && (
-        <Modal
-          title={`${report.name} — ${matchup(game)}`}
-          titleId="player-day-game-title"
-          className="player-day-box"
-          onClose={() => setOpen(false)}
-        >
-          <PlayerDayGameFeed game={game} items={items} onOpenDetails={onOpenDetails} />
-        </Modal>
-      )}
+      {open &&
+        (outing ? (
+          <OutingPage report={report} game={game} onClose={() => setOpen(false)} />
+        ) : (
+          <Modal
+            title={`${report.name} — ${matchup(game)}`}
+            titleId="player-day-game-title"
+            className="player-day-box"
+            onClose={() => setOpen(false)}
+          >
+            <PlayerDayGameFeed game={game} items={items} onOpenDetails={onOpenDetails} />
+          </Modal>
+        ))}
     </>
   );
 }
@@ -309,9 +325,6 @@ function PlayerDayGameFeed({
             /* The box around this names the game, so an item repeating the
                matchup would be saying it twice. */
             multiGame={false}
-            /* And a pitcher's outing is the whole of what this box is about, so
-               its innings read here rather than behind a second press. */
-            detailInline
           />
         ))
       )}
@@ -335,13 +348,20 @@ export function playerDayLine(report: PlayerReport): string | null {
 }
 
 /**
- * One player's day for one game, in a dialog — what a **Game Log row** opens.
+ * One **batter's** day for one game, in a dialog — what a Game Log row opens.
  *
- * The log is the season as the games it is made of, and until now a row was the
- * end of the road: fourteen columns of what he did and no way to see any of it.
- * A press now opens the same reading the player page's Overview tab gives, for
- * that afternoon — his plate appearances with their clips, or his outing with
- * its innings.
+ * The log is the season as the games it is made of, and a row was once the end
+ * of the road: fourteen columns of what he did and no way to see any of it. A
+ * press opens the same reading the player page's Overview tab gives, for that
+ * afternoon — his plate appearances with their clips.
+ *
+ * **`kind` is narrowed to `'batter'`, and that narrowing is the routing rule
+ * made checkable.** A pitcher's game is one outing rather than a feed of plays,
+ * and `useGameOpen` sends him to `OutingPageForGame` instead; a row that
+ * reached here for him drew a static outing bar over its innings with a
+ * `Full breakdown` button through to the very page he should have landed on.
+ * The type is what stops that being reintroduced by a caller rather than by a
+ * comment nobody reads.
  *
  * It fetches its own day rather than being handed one, because a row names a
  * date the page above it knows nothing about; the request is per open, which is
@@ -355,14 +375,12 @@ export function playerDayLine(report: PlayerReport): string | null {
  */
 export function PlayerDayModal({
   playerId,
-  kind,
   name,
   date,
   gamePk,
   onClose,
 }: {
   playerId: number;
-  kind: PlayerKind;
   name: string;
   date: string;
   gamePk: number;
@@ -378,7 +396,7 @@ export function PlayerDayModal({
     setLoading(true);
     setError(null);
     api
-      .playerDay(playerId, kind, date)
+      .playerDay(playerId, 'batter', date)
       .then((d) => {
         if (live) setReport(d.player);
       })
@@ -391,7 +409,7 @@ export function PlayerDayModal({
     return () => {
       live = false;
     };
-  }, [playerId, kind, date]);
+  }, [playerId, date]);
   return (
     <Modal
       title={`${name} — ${prettyGameDate(date)}`}

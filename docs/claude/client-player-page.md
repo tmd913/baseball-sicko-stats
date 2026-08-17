@@ -5,7 +5,7 @@ Split out of `client.md`. `PlayerDetails` is the overlay that opens on **anybody
 which is the fact most of its design follows from. The dialog rules its tabs lean
 on are in `client-dialogs.md`.
 
-- **the player page and the editor** — what is left of the old **players / Games** view, which was one card per rostered player (`PlayerCard`, `PitcherCard`); the card became the feed's grouped reading and the grouping became this page's own **Overview** tab, so the card's job has ended up here. **Both card components survive in the tree and render nowhere**; their parts do the work instead — `PlateAppearanceCard`, `InningsList`, `OpponentSection` and `GameStatusBadge` are all read by `LiveFeed` (`PlatoonSplit` was the fifth until the feed's Upcoming row swapped it for `PlatoonSplits`' own card — see **The Upcoming dialog is the Splits card** in **Client — the Feed view** — so it is now named only by `PlayerCard`'s own unrendered `GameBlock`) and, through it, by `PlayerDay.tsx`, which is why the files stay and why rollup drops only the two shells (442KB → 425). See **Pitchers on the roster** for the two things that went off screen with them and have not been rehomed. `PlayerDetails` overlays a tabbed view: **Overview** (his season line, his day and his last five games — see its own section below; first in the strip and the tab the page opens on), the percentile card, a **Charts** tab holding the rolling-xwOBA chart (`RollingXwoba.tsx` — a client-computed rolling average over a 50/100/250-PA window, lazily fetched only when its tab opens; see **The Charts tab** below for why the strip names the kind of reading rather than the one card in it, for why the labels on that chart are sized in rendered pixels, and for why the league average is named in a legend under the chart rather than written across the plot), a pitchers-only **Arsenal** tab (also lazy, `SeasonArsenalRow`, with its own Overall / vs RHB / vs LHB `SplitTabs`), a **Game Log** tab (`GameLog.tsx`, lazy too — and lazy for the **Overview** as well, which draws five of its rows off the same one read; the whole season's games, newest first, in the app's one plain stat table outside the summary view. The table itself is **`GameLogTable`**, factored out so the tab and the Overview's preview are one component with `shown` and `totals` set differently rather than two tables free to drift — see **the player page's Overview tab** below: the counting stats per game plus the running **Szn** line (below), a `<tfoot>` season row summing **every** game rather than the page on screen (pinned to the bottom of the box, but **only on that axis**: its label spans four columns and carries `.glog-date`, the class that pins the date column to the left edge, so scrolling right slid the label along over its own totals and swallowed the first two stat columns — `left: auto` leaves it constrained on the block axis alone), and the feed's Load-more paging at `PAGE_SIZE` 25 because a batter's season is 150 rows inside an overlay that already scrolls. Its header row sticks to the top and the date column to the left, both at once — which is why this tab alone gives the overlay `.gamelog-mode`: a sticky header can only stick to the box that scrolls, and the box that scrolls has to be the table's own (its columns overflow a phone, and an `overflow-x` container scrolls in both axes whether you want it to or not), so the overlay becomes a fixed-height flex column — the shape `.app.summary-mode` gives the summary view — with the head and tabs holding their place. Zeroes are dimmed so the eye lands on the games with something in them. **Every row is a press that opens that game as a feed**, and carries the hover tint and the pointer that say so — see **The Game Log's rows open the game** below, which also sets out why the rows deliberately carried no tint for as long as they did nothing. The zebra stripe is untouched: it is what keeps a fourteen-column row readable across, and it is the same device the other two wide tables use. The pitcher's SP/RP marker renders **only when the log holds both** — twenty rows of SP say nothing the IP column doesn't. **The batter's line leads with where he hit and where he stood** — `Batting` and `Pos`, adjacent and ahead of the counting stats, because both are game context of the kind the opponent cell beside them is rather than anything he did. They are **one fact read twice**: `Batting` is his index in the posted order and `Pos` is where that same start was made, so neither can claim he started when the other says he didn't, and a man who came on off the bench draws a dimmed `—` in both under one tooltip (`Not in the posted lineup`) rather than a position for a start he never made. A starter's reads `Started at C`. See **Date handling and server routing** for where the position comes from, why the split's `positionsPlayed` is gated on the lineup entry rather than trusted alone, and why the schedule's own per-game position — correct, and already fetched — was refused on payload. It costs the table **70px at 1200 and 39 at 390** on a log that scrolls sideways at both, and nothing at all in height.
+- **the player page and the editor** — what is left of the old **players / Games** view, which was one card per rostered player (`PlayerCard`, `PitcherCard`); the card became the feed's grouped reading and the grouping became this page's own **Overview** tab, so the card's job has ended up here. **Both card components survive in the tree and render nowhere**; their parts do the work instead — `PlateAppearanceCard`, `InningsList`, `OpponentSection` and `GameStatusBadge` are all read by `LiveFeed` (`PlatoonSplit` was the fifth until the feed's Upcoming row swapped it for `PlatoonSplits`' own card — see **The Upcoming dialog is the Splits card** in **Client — the Feed view** — so it is now named only by `PlayerCard`'s own unrendered `GameBlock`) and, through it, by `PlayerDay.tsx`, which is why the files stay and why rollup drops only the two shells (442KB → 425). See **Pitchers on the roster** for the two things that went off screen with them and have not been rehomed. `PlayerDetails` overlays a tabbed view: **Overview** (his season line, his day and his last five games — see its own section below; first in the strip and the tab the page opens on), the percentile card, a **Charts** tab holding the rolling-xwOBA chart (`RollingXwoba.tsx` — a client-computed rolling average over a 50/100/250-PA window, lazily fetched only when its tab opens; see **The Charts tab** below for why the strip names the kind of reading rather than the one card in it, for why the labels on that chart are sized in rendered pixels, and for why the league average is named in a legend under the chart rather than written across the plot), a pitchers-only **Arsenal** tab (also lazy, `SeasonArsenalRow`, with its own Overall / vs RHB / vs LHB `SplitTabs`), a **Game Log** tab (`GameLog.tsx`, lazy too — and lazy for the **Overview** as well, which draws five of its rows off the same one read; the whole season's games, newest first, in the app's one plain stat table outside the summary view. The table itself is **`GameLogTable`**, factored out so the tab and the Overview's preview are one component with `shown` and `totals` set differently rather than two tables free to drift — see **the player page's Overview tab** below: the counting stats per game plus the running **Szn** line (below), a `<tfoot>` season row summing **every** game rather than the page on screen (pinned to the bottom of the box, but **only on that axis**: its label spans four columns and carries `.glog-date`, the class that pins the date column to the left edge, so scrolling right slid the label along over its own totals and swallowed the first two stat columns — `left: auto` leaves it constrained on the block axis alone), and the feed's Load-more paging at `PAGE_SIZE` 25 because a batter's season is 150 rows inside an overlay that already scrolls. Its header row sticks to the top and the date column to the left, both at once — which is why this tab alone gives the overlay `.gamelog-mode`: a sticky header can only stick to the box that scrolls, and the box that scrolls has to be the table's own (its columns overflow a phone, and an `overflow-x` container scrolls in both axes whether you want it to or not), so the overlay becomes a fixed-height flex column — the shape `.app.summary-mode` gives the summary view — with the head and tabs holding their place. Zeroes are dimmed so the eye lands on the games with something in them. **Every row is a press that opens that game** — as a feed for a batter, as the outing page for a pitcher — and carries the hover tint and the pointer that say so — see **The Game Log's rows open the game** below, which also sets out why the rows deliberately carried no tint for as long as they did nothing. The zebra stripe is untouched: it is what keeps a fourteen-column row readable across, and it is the same device the other two wide tables use. The pitcher's SP/RP marker renders **only when the log holds both** — twenty rows of SP say nothing the IP column doesn't. **The batter's line leads with where he hit and where he stood** — `Batting` and `Pos`, adjacent and ahead of the counting stats, because both are game context of the kind the opponent cell beside them is rather than anything he did. They are **one fact read twice**: `Batting` is his index in the posted order and `Pos` is where that same start was made, so neither can claim he started when the other says he didn't, and a man who came on off the bench draws a dimmed `—` in both under one tooltip (`Not in the posted lineup`) rather than a position for a start he never made. A starter's reads `Started at C`. See **Date handling and server routing** for where the position comes from, why the split's `positionsPlayed` is gated on the lineup entry rather than trusted alone, and why the schedule's own per-game position — correct, and already fetched — was refused on payload. It costs the table **70px at 1200 and 39 at 390** on a log that scrolls sideways at both, and nothing at all in height.
 
 The batter's line then **leads its stats on `H/AB`** — one cell where AB and H were two columns, the same shape the summary table's own `H/AB` uses. It spent a spell over **plate appearances** instead, on the argument that AB throws away the walk and the sacrifice, so a 2-for-4 night with a walk read `2/5` where the at-bat count alone calls it four trips. What that traded away is the thing this column is actually read for: **every other number on the line is over at-bats** — the `Szn AVG` three cells along, and the AVG and the SLG inside the OPS on the `<tfoot>` row underneath — so `H/PA` was the one cell on the row whose denominator nothing else on it shared, and a reader checking the .259 beside it found 117 over 524 rather than the 117 over 452 that made it. Over at-bats the cell and the average agree by construction, and the walk it was defending is not lost at all: it is the BB column four cells along, which is where a walk belongs. `2/4` with a `1` under BB is a five-trip night stated in the two places that own the two facts. **PA leaves the columns and not the row** — it rides the cell's tooltip (`0 hits in 4 at-bats · 5 PA`) and it is still what tells the two kinds of `0/0` apart, below. The `<tfoot>` follows the cell above it, being that column's sum: season hits over season **at-bats**, which is the very pair the AVG at the end of the same row divides. Checked in a browser against MLB's published season line, three batters end to end — Alonso `117/452` · .259 · .833, Soto `83/293` · .283 · .947, and Justin Dean `3/8` · .375 · 1.125 at the thin end of the scale — each identical to MLB's own; and league-wide, summing 9,023 game-log rows across 120 batters reproduces MLB's season AB and H for **all 120**, 0 mismatches. **What dims is `pa === 0`, not a bare `0/0`.** A man who appeared without coming to the plate — a pinch-runner, a defensive replacement — has nothing to read in this cell and dims whole, the way every other zero in this table does. Over at-bats a night that was one walk is *also* `0/0`, and it deliberately stays plain: he did come up and he did do something, and the cell can no longer tell those two apart where the row still can. That distinction is worth keeping rather than collapsing — in the same sample 309 rows are a genuine 0 PA against 97 that are `0/0` off a walk or a sacrifice, so dimming on at-bats would have quietly filed 97 real plate appearances as “not in the game”. Each says which of the two it is on hover, the plain one naming the trip it doesn't count (`1 PA, no official at-bat`). `decisionColor` moved from `PitcherCard.tsx` to `lib.ts` so the log's W/L/S/HLD chips take the same colours as the card's. **The Szn columns read in the order the two lines are read in.** A batter's are `Szn AVG · Szn OBP · Szn SLG · Szn OPS` — slash-line order, so the eye takes them the way a slash line is taken, and OBP and SLG sit between AVG and OPS rather than after it because a slash line with its middle terms at the end is not a slash line. **SLG had gone unspent for a while**, on the argument that `seasonSlg` — parsed and shipped by the route since it was written — is exactly `OPS − OBP` off the two cells beside it, so a column for it would be a fourth cell saying nothing the other three didn't already imply, on a table already sixteen columns wide on the pitcher tab. That argument proves too much: `AVG` is no less implied by `H/AB` two cells to its left, and the whole point of a slash line is that a reader wants the middle terms named rather than derived on the fly down a column of games. So it is a column now, between `Szn OBP` and `Szn OPS`, reading straight off the same `seasonSlg` the route has always sent (`toBatterGameLog`'s `s(st.slg)`, the same season-to-date field `seasonAvg`/`seasonObp`/`seasonOps` already are — checked against MLB's own published season line for Salvador Perez, `.216/.262/.369/.631`, exact on all four). A pitcher's are `Szn ERA · Szn FIP · Szn WHIP` — **the estimator immediately after the number it estimates**, which is the rule the pitcher card's season line and the research board's `ERA · xERA · FIP · xFIP` both follow, and the reason the pair must not be split. **WHIP comes after the pair rather than between them**, because it answers a different question: ERA and FIP are two readings of the runs, one of them scrubbed of the fielding behind him, and a number counting the traffic he allows has no business standing in the middle of that comparison. FIP is **null under three innings** — `fipLike`'s own rule, applied to the season-to-date innings — and dashes there, which on a reliever's log is his first outing or two and nothing else.
 
@@ -53,7 +53,7 @@ So `.details-overview` loses its cap and inherits the overlay's own 16px bleed, 
 
 **The blocks are `.ovw-block`, and each heading is the percentile card's small caps minus the rule under it** — a block here closes on a table with its own border, so a second line above it would be two edges a few pixels apart. The links are text in the accent rather than buttons: they change which tab is on screen, which is what the strip above them does, so a button would be a second control competing with the tab it points at.
 
-**Measured at 1200 and 390, on a batter, a starting pitcher and a reliever**: no horizontal overflow of the page or the overlay at either width (0 and 0 on every one), the season strip fits its column without scrolling at both (800 and 358), and the preview table scrolls inside its box exactly as the tab's does (1209 and 730 inside 800 and 358). The links work: `Stats →` lands on the Stats tab with the view scrolled back to the top, `Game Log →` on a 25-row log with its season foot, and a press on a preview row opens that game's `PlayerDayModal` at `z-index: 51` — the layer `DialogLayerContext` gives a dialog opened inside the overlay, untouched by any of this. **Bundle: 436.13 → 440.52 KB of JS** (129.23 → 130.31 gzipped) and **96.75 → 97.97 KB of CSS** (17.33 → 17.52), which is 4.4KB and 1.2KB raw — 1.1KB and 0.2KB over the wire — for two new blocks, a route and a component that replaced a copy that was never written.
+**Measured at 1200 and 390, on a batter, a starting pitcher and a reliever**: no horizontal overflow of the page or the overlay at either width (0 and 0 on every one), the season strip fits its column without scrolling at both (800 and 358), and the preview table scrolls inside its box exactly as the tab's does (1209 and 730 inside 800 and 358). The links work: `Stats →` lands on the Stats tab with the view scrolled back to the top, `Game Log →` on a 25-row log with its season foot, and a press on a preview row opens that game at `z-index: 51` — the layer `DialogLayerContext` gives a box opened inside the overlay, untouched by any of this; it was `PlayerDayModal` for both kinds and is that for a batter and the outing page for a pitcher. **Bundle: 436.13 → 440.52 KB of JS** (129.23 → 130.31 gzipped) and **96.75 → 97.97 KB of CSS** (17.33 → 17.52), which is 4.4KB and 1.2KB raw — 1.1KB and 0.2KB over the wire — for two new blocks, a route and a component that replaced a copy that was never written.
 
 #### The day, which is the block that did not change
 
@@ -67,7 +67,7 @@ So `.details-overview` loses its cap and inherits the overlay's own 16px bleed, 
 
 **The day is a card per game, and the plays are behind it.** It used to be the plays themselves, under a static header per game, and that was the tab spending its whole height on one thing: a day is one game almost every time, so what it opened on was a date line and then four or five at-bat cards with a clip apiece. Measured on the same batter and the same day, the tab is **384.75px → 44px at 1200 and 432.75px → 44px at 390**; on a pitcher it is **86 → 44** and **137 → 64**. That is the *lead* of a player page, and the first thing a lead should answer is "what did he do today", which is his line and how the game stands — the plays being the follow-up question.
 
-So a game is a **card** (`.pday-game`, **folded into `.feed-item-toggle`'s selector lists** rather than restyled to resemble the bar it is: a full-width row carrying a line and a status badge, pressed to open what is behind it) carrying the date, his line for the game and `GameStatusBadge`, and a press opens the feed for that game in a dialog. Nothing was cut — everything the tab drew is one press away — and a doubleheader now reads as two things rather than as one long scroll with a rule through the middle of it.
+So a game is a **card** (`.pday-game`, **folded into `.feed-item-toggle`'s selector lists** rather than restyled to resemble the bar it is: a full-width row carrying a line and a status badge, pressed to open what is behind it) carrying the date, his line for the game and `GameStatusBadge`, and a press opens that game — the feed for it in a dialog on a batter, the outing page itself on a pitcher (below). Nothing was cut — everything the tab drew is one press away — and a doubleheader now reads as two things rather than as one long scroll with a rule through the middle of it.
 
 **The matchup line went, and the badge is what let it.** The old header printed `CHC @ WSH` beside a badge that already reads `CHC 0–7 WSH` the moment there is a score — the same fact twice on one row — so the card drops the line and passes **`withMatchup`**, which fills exactly the gap the badge leaves (a game with no score yet). The card therefore says who was played in every state and says it once.
 
@@ -89,7 +89,7 @@ So a game is a **card** (`.pday-game`, **folded into `.feed-item-toggle`'s selec
 
 **`playerDayEntries` has had the guard since it was written and the card never saw it.** That function computes a `pinned` — the game a pitcher's live item is drawn from — and keeps its entry out of `entries`, which is what stops `LiveFeed`'s own stream repeating a pinned outing. `PlayerDay` builds its **sections off `report.games`** rather than off the entries, so the filter reached the plays and not the card. `livePitching` is that same guard one level up, phrased on exactly the condition the live branch renders on (`isPitcher && live.game.pitching`), so the two cannot come to disagree about which game is spoken for.
 
-**Under a `gamePk` it was worse than a duplicate, which is the half a screenshot of the Overview tab would not have shown.** In the Game Log's popup the section *is* the plays, and with the pinned entry already filtered out of `entries` there were none — so `PlayerDayGameFeed` fell through to its empty case and printed **`Not in the game yet.`** beneath a bar saying he was on the mound in the second. The popup now draws the live item with `detailInline`, which is the rule that box already applies to a finished outing: it is about one game, so the innings read in it rather than behind a second press.
+**Under a `gamePk` it was worse than a duplicate, which is the half a screenshot of the Overview tab would not have shown.** In the Game Log's popup the section *is* the plays, and with the pinned entry already filtered out of `entries` there were none — so `PlayerDayGameFeed` fell through to its empty case and printed **`Not in the game yet.`** beneath a bar saying he was on the mound in the second. The popup drew the live item with `detailInline` instead, which was the rule that box already applied to a finished outing: it is about one game, so the innings read in it rather than behind a second press. **That case is unreachable now and the flag is gone**, a pitcher's Game Log row opening the outing page directly — so the popup is a batter's alone and `livePitching` is the guard that still keeps his own live at-bat from being drawn twice.
 
 **Measured on the live 2026 season** (Grayson Rodriguez, LAA, 2026-08-14, on the mound), before → after:
 
@@ -2117,7 +2117,7 @@ that is mostly the paragraphs above restated where the rules are.
 
 ### The Game Log's rows open the game
 
-**A press on a row of the Game Log opens that game as a feed** — the same `PlayerDay`, narrowed to the row's `gamePk`, in the app's shared `Modal` (`PlayerDayModal`). The log is the season as the games it is made of, and until now a row was the end of the road: fourteen columns of what he did that night and no way to see any of it. A doubleheader is why the popup is keyed on the game rather than the date — two rows share one afternoon.
+**A press on a row of the Game Log opens that game** — for a **batter** as a feed, the same `PlayerDay` narrowed to the row's `gamePk` in the app's shared `Modal` (`PlayerDayModal`), and for a **pitcher** as the outing page itself, that box having had nothing of its own to say (see *A pitcher's game opens the outing, not a box in front of it* below, which is where the split is argued). The log is the season as the games it is made of, and until now a row was the end of the road: fourteen columns of what he did that night and no way to see any of it. A doubleheader is why either is keyed on the game rather than the date — two rows share one afternoon.
 
 It **fetches its own day** rather than being handed one, because a row names a date the page above it knows nothing about; per open is right for an explicit action against a route every layer of which is already cached (a past date is a frozen day snapshot, one read). `GameLog` therefore gained `playerId` and `name`, which it had never needed while it only drew what it was given. The box takes `--card-column` for the same reason the tab does.
 
@@ -2126,6 +2126,125 @@ It **fetches its own day** rather than being handed one, because a row names a d
 **That scoping was written here first and is now the app's.** The same fault was reported against the feed's cards — *"the cards should not highlight when scrolling"* — and ten more pressable surfaces take the identical rule, with the line between a surface and a control drawn where it belongs: see **A card doesn't highlight when you scroll past it** in **Client**. Nothing about this table moved; it is the precedent the sweep generalised, and its `:focus-visible` background stays outside the query on purpose, a keyboard ring being wanted on every device.
 
 A `<tr>` cannot hold a button without leaving table layout and the whole row is the target, so it takes **`role="button"`, `tabIndex={0}` and Enter/Space** (`GameLog.tsx::pressProps`, which `preventDefault`s Space so the press doesn't also scroll the pane under it); `:focus-visible` draws an inset accent rule top and bottom, inset because a row spans a scrollport that clips at both edges. Everything else about the table is untouched and was checked to be: the sticky header row and sticky date column, the `<tfoot>` season row, Load-more paging and the full-page expand button all behave as before, and a row press works from inside the expanded box as well as out of it.
+
+### A pitcher's game opens the outing, not a box in front of it
+
+**Two of the three routes into a pitcher's outing went through a popup that had
+nothing of its own to say.** A Game Log row and the Overview tab's game card
+both opened `PlayerDayModal`, and for a pitcher what that box held was a
+**static** outing bar over the innings (`detailInline`) with a `Full breakdown`
+button under them — a door to `OutingPage`, which holds those same innings under
+a tab strip with the Line, the Opponent and the Arsenal beside it. So the reader
+pressed twice, and the box in between was one bar and a subset of the page it
+was standing in front of. Both routes now open the page.
+
+**Measured before, at 1200×900**: a Game Log row gave a dialog at **51** holding
+6 inning bars and 1 `Full breakdown`, and pressing that gave the page at **52** —
+**two presses in, three Escapes out**. The Overview card was the same shape.
+After: **one press**, the page at **51**, and Escape hands focus back to the row
+and closes the page in one. Identical at 390×844.
+
+**Batters keep the popup, and that is the whole line.** A batter's game is a
+**feed** — four or five plate appearances, each with its clip and its pitch
+sequence a press away — which is a list and belongs in a box; a pitcher's game is
+**one outing**, which is a page. `useGameOpen` branches on `kind` and nothing
+else, and `PlayerDayModal` was narrowed to `kind: 'batter'` so that rule is
+checkable rather than merely observed: the prop is gone from its signature and
+its own fetch names the kind outright. Driven after the change: the batter's
+Overview card still carries `aria-haspopup="dialog"` and opens a dialog at 51
+(`Lawrence Butler — ATH vs TEX`), and his Game Log row opens one at 51 with 4
+plate-appearance cards in it.
+
+#### The wait is inside the page, not in front of it
+
+**The Overview card needs no fetch and the Game Log row does**, and that
+asymmetry is the only interesting thing about the routing. The card is rendered
+from a `PlayerReport` and a `PlayerGame` the tab already holds, so it hands both
+to `OutingPage` and the page is there on the press. A log row holds a
+`PitcherGameLog` and nothing else, so `OutingPageForGame` reads
+`/api/players/:id/day?date=` and picks the game out of it by **`gamePk`** — which
+is what keeps the doubleheader property the popup had, two rows sharing one
+afternoon.
+
+**One component owning both states, rather than a loading shell that swaps for
+the page.** The shell reads as the tidier design and breaks the thing this page
+is careful about: a swap **remounts the box**, and `useOverlayFocus` reads the
+opener at mount — so the second mount would record `body` as the opener and
+Escape would drop the reader at the top of the document instead of back on the
+row they pressed. `OutingPage` therefore takes an optional `pending` — the name,
+the date, whether to draw a wait, and an error if there is one — and draws the
+head it can already write with a `LoadingBlock` under it.
+
+**Nothing at all opens under `WAIT_DELAY`.** The flag is `useDelayedFlag`, the
+app's own 250ms floor, and it gates the *opening* as well as the wait: with the
+read stubbed to **120ms**, nothing is on screen at 80ms and the full page is
+there at 200ms, with **0** loading blocks drawn at any point. With it stubbed to
+**1500ms**: nothing at 200ms, and at ~400ms the head alone — the name, `Aug 11`,
+**1** Back button, **0** tab strips — over `Reading the outing`, with the whole
+page at 2200ms. The tab strip is gated on the tab list rather than each tab being
+gated inside it, which is the `.view-switch` rule (*gate the div, not what is in
+it*) applied one file along: an empty strip still paints a segmented control's
+ground, border and 36px floor around nothing.
+
+**A failure says what failed rather than opening an empty page.** A 502 draws
+`⚠ Upstream is having a day` in the page's own body, under the same head and the
+same Back button, with no tab strip; the message is the server's, unwrapped by
+`api.ts` as everywhere else.
+
+#### A game with no outing
+
+**It cannot be reached from the Overview card at all**, and that needed no work:
+that card is already static for a game with no items in it, drawing `Did not
+appear.` / `Not in the game yet.` / `Yet to play.` and taking no press. The
+pitcher branch reads `game.pitching`, so a game he was on the roster for and did
+not pitch in is the batter branch's static card exactly as before.
+
+**From a Game Log row it draws a sentence in the page**: `No outing for
+Cristopher Sánchez in that game.` The alternative was to fall back to the popup,
+and it was rejected for the same reason the wait lives inside the page — falling
+back means swapping one box for another after the press, which moves the focus
+record, the `inert` marks and the layer under a reader who has already pressed
+once. A page that says why it is empty is a page; a page that turns into a dialog
+is a flicker.
+
+#### The ladder, and what it cost
+
+**One rung shorter from the player page, unchanged everywhere else.** Driven at
+1200×900 and 390×844, one press of Escape undoing one thing at every rung, focus
+restored at each, and no `inert` mark left at the end of any of them:
+
+| from | before | after |
+| --- | --- | --- |
+| Game Log row → outing | player page 50 → popup 51 → page 52 | **50 → 51** |
+| … → inning → faced batter | 53 → 54 | **52 → 53** |
+| Overview game card | 50 → popup 51 → page 52 | **50 → 51** |
+| the feed's own bar | 46 → 47 → 48 | unchanged |
+| a matchup team page's feed | 48 → 49 → 50 | unchanged |
+
+`[inert]` with the page open from a Game Log row is `#root`, `.app-chrome`,
+`.summary-view` and `.float-btn` — the player page's own background, the page
+itself never inert — and the four-press unwind from the deepest rung restores
+focus to the faced-batter row, the inning bar, the Game Log `<tr>` and then the
+row that opened the player page.
+
+**The page's geometry is the same from either entry point**, which is the check
+that matters for a page with two callers: at 320 / 390 / 640 / 1200 / 1920 the
+head, the tab strip and the tab body share one **860px** column at both wide
+widths (288 / 358 / 608 at the narrow ones, which is the window less the
+gutters), and **page-body overflow and view overflow are 0 at every width from
+both routes**.
+
+**What went with the popup**: `detailInline`, which had no other caller and is
+gone on the repo's own rule (*a field nobody reads is a field nobody misses*);
+`.feed-item-toggle.static`, which nothing sets any more, so the feed's bar is
+unconditionally a button; the `Full breakdown` button, the door having become the
+row; and `.outing-breakdown-btn`'s three rules. Measured app-wide after: **0** of
+each. `PlayerDayModal` stays, being the batter's.
+
+**Bundle: 526.70 → 527.31 KB of JS** (155.69 → 155.90 gzipped) and **127.38 →
+126.97 KB of CSS** (22.59 → 22.54). The CSS *falls* — a rule block went with the
+button — and the 0.6KB of JS is the fetching wrapper and the paragraphs arguing
+where the wait belongs.
 
 ### The Charts tab, and why its labels are a rendered size
 

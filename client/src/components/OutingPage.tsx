@@ -1,9 +1,11 @@
 import { useContext, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { api } from '../api';
 import type { PlayerGame, PlayerReport } from '../types';
 import { prettyGameDate } from '../lib';
-import { answersEscape, useLockBodyScroll, useOverlayFocus } from '../hooks';
+import { answersEscape, useDelayedFlag, useLockBodyScroll, useOverlayFocus } from '../hooks';
 import { BackButton } from './BackButton';
+import { LoadingBlock } from './Loading';
 import { DialogLayerContext, DIALOG_LAYER } from './Modal';
 import { InningsList } from './Innings';
 import { ArsenalSection, GameLine, OpponentSection, outingBar } from './PitcherCard';
@@ -58,13 +60,12 @@ import { matchupLine } from './PlayerCard';
  *
  * ### The layer is the host's plus one, which is the whole of the stacking
  *
- * An outing bar is drawn in **four** places: the feed's stream (on the page),
- * the player page's Overview tab (inside `.details-view`, 50), the Game Log's
- * per-game popup (a `Modal` at 51 inside that page) and a matchup's team feed
- * (inside `.mup-view`, 48). So this box cannot have a fixed z-index the way
- * `.details-view` and `.mup-view` do: opened from the Game Log's popup it has
- * to clear 51, and opened from the feed it must not sit needlessly over the
- * whole app.
+ * This page is opened from **four** places: the feed's stream (on the page),
+ * the player page's Overview tab and its Game Log (both inside `.details-view`,
+ * 50), and a matchup's team feed (inside `.mup-view`, 48). So this box cannot
+ * have a fixed z-index the way `.details-view` and `.mup-view` do: opened from
+ * the player page it has to clear 50, and opened from the feed it must not sit
+ * needlessly over the whole app.
  *
  * `DialogLayerContext` answers exactly that question and already answers it for
  * every `Modal` — a host declares its own layer once and anything opened inside
@@ -73,8 +74,11 @@ import { matchupLine } from './PlayerCard';
  * ordinary case, opened from the page, is left to the stylesheet's own 46 so
  * that nothing is written inline where nothing differs, which is `Modal`'s rule
  * exactly. The rungs that fall out: **feed 46** → inning 47 → faced batter 48;
- * **Overview tab 51** → 52 → 53; **Game Log popup 52** → 53 → 54; **a team
- * page's feed 49** → 50 → 51.
+ * **the player page's own tabs 51** → 52 → 53, whether the press was a Game Log
+ * row or an Overview game card; **a team page's feed 49** → 50 → 51. (The
+ * Overview card and the Game Log row both used to reach this through
+ * `PlayerDayModal` at 51, so it opened at 52 and the ladder ran a rung deeper —
+ * see `OutingPageForGame` and `PlayerDayGameCard`.)
  *
  * **Portalled to the body**, and that is forced rather than tidy. A
  * `position: fixed` box is positioned against its nearest ancestor that
@@ -90,10 +94,19 @@ import { matchupLine } from './PlayerCard';
 export function OutingPage({
   report,
   game,
+  pending,
   onClose,
 }: {
-  report: PlayerReport;
-  game: PlayerGame;
+  report: PlayerReport | null;
+  game: PlayerGame | null;
+  /**
+   * What the head can write, and what the body says, **before the outing has
+   * arrived** — for the one caller that opens this page without it, a Game Log
+   * row (see `OutingPageForGame`). Every other caller is drawn from a report it
+   * already holds and passes none, so the two branches below are the loaded
+   * page and nothing else for them.
+   */
+  pending?: { name: string; date: string; wait: boolean; error: string | null };
   onClose: () => void;
 }) {
   useLockBodyScroll();
@@ -128,8 +141,11 @@ export function OutingPage({
     viewRef.current?.scrollTo({ top: 0 });
   }, [tab]);
 
-  const pg = game.pitching;
-  if (!pg) return null;
+  const pg = game?.pitching ?? null;
+  // Nothing to draw and nothing to say about why: the defensive branch for a
+  // caller that hands over a game with no outing in it. Every real caller
+  // either has the outing or passes a `pending` that says what is missing.
+  if (!pg && !pending) return null;
 
   /**
    * Only the tabs that have something behind them. Line and Innings always do
@@ -139,12 +155,14 @@ export function OutingPage({
    * tab that draws nothing is worse than an absent one: the reader presses it
    * and cannot tell whether the app is broken or the outing is.
    */
-  const tabs: { key: OutingTab; label: string }[] = [
-    { key: 'line', label: 'Line' },
-    { key: 'innings', label: 'Innings' },
-    ...(game.opponentHitting ? [{ key: 'opponent' as const, label: 'Opponent' }] : []),
-    ...(pg.pitchMix.length > 0 ? [{ key: 'arsenal' as const, label: 'Arsenal' }] : []),
-  ];
+  const tabs: { key: OutingTab; label: string }[] = !pg
+    ? []
+    : [
+        { key: 'line', label: 'Line' },
+        { key: 'innings', label: 'Innings' },
+        ...(game!.opponentHitting ? [{ key: 'opponent' as const, label: 'Opponent' }] : []),
+        ...(pg.pitchMix.length > 0 ? [{ key: 'arsenal' as const, label: 'Arsenal' }] : []),
+      ];
 
   return createPortal(
     <DialogLayerContext.Provider value={layer ?? DIALOG_LAYER}>
@@ -168,55 +186,167 @@ export function OutingPage({
                   player page from here would have to clear a box whose own
                   layer is decided by where it was opened from, which is exactly
                   the stack `.details-view`'s fixed 50 cannot answer. */}
-              <h1 className="details-name">{report.name}</h1>
+              <h1 className="details-name">{report?.name ?? pending?.name ?? ''}</h1>
               <p className="outing-sub">
-                {matchupLine(game)} · {prettyGameDate(game.date)}
+                {pg && game
+                  ? `${matchupLine(game)} · ${prettyGameDate(game.date)}`
+                  : prettyGameDate(pending!.date)}
               </p>
             </div>
             {/* The bar's own strip — role chip, credit, line, status badge —
                 drawn by the same `outingBar` the feed's bar draws, so the head
-                and the row that opened it cannot come to say two things. */}
-            <div className="outing-head-line">{outingBar(game, pg)}</div>
+                and the row that opened it cannot come to say two things. Absent
+                until the outing is, there being nothing to draw one from. */}
+            {pg && game && <div className="outing-head-line">{outingBar(game, pg)}</div>}
           </div>
 
-          <div className="details-tabs" role="tablist">
-            {tabs.map((t) => (
-              <button
-                key={t.key}
-                type="button"
-                role="tab"
-                aria-selected={tab === t.key}
-                className={`details-tab${tab === t.key ? ' is-active' : ''}`}
-                onClick={() => setTab(t.key)}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
+          {/* The gate is on the strip rather than inside it, which is the rule
+              `.view-switch` already records: `.details-tabs` carries a rule and
+              its own height, so an empty one draws a band around nothing and
+              puts an empty `role="tablist"` in the accessibility tree. */}
+          {tabs.length > 0 && (
+            <div className="details-tabs" role="tablist">
+              {tabs.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === t.key}
+                  className={`details-tab${tab === t.key ? ' is-active' : ''}`}
+                  onClick={() => setTab(t.key)}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="outing-tab">
-          {tab === 'line' && <GameLine pg={pg} bare />}
-          {tab === 'innings' && (
-            <InningsList game={game} pitcherId={report.id} pitcherName={report.name} />
+          {pg && game && report ? (
+            <>
+              {tab === 'line' && <GameLine pg={pg} bare />}
+              {tab === 'innings' && (
+                <InningsList game={game} pitcherId={report.id} pitcherName={report.name} />
+              )}
+              {tab === 'opponent' && (
+                <OpponentSection
+                  hitting={game.opponentHitting}
+                  opponent={game.opponent}
+                  // A team's split is by the hand they faced, and before he has thrown a
+                  // pitch the game has no `stand` — so his report's hand stands in. The
+                  // fallback is the caller's because only a caller knows whether it has a
+                  // game to read a `stand` off; see `OpponentBody`.
+                  hand={game.stand ?? report.throws ?? null}
+                  bare
+                />
+              )}
+              {tab === 'arsenal' && <ArsenalSection pg={pg} bare />}
+            </>
+          ) : pending?.error ? (
+            <div className="details-status details-error">⚠ {pending.error}</div>
+          ) : (
+            <LoadingBlock>Reading the outing</LoadingBlock>
           )}
-          {tab === 'opponent' && (
-            <OpponentSection
-              hitting={game.opponentHitting}
-              opponent={game.opponent}
-              // A team's split is by the hand they faced, and before he has thrown a
-              // pitch the game has no `stand` — so his report's hand stands in. The
-              // fallback is the caller's because only a caller knows whether it has a
-              // game to read a `stand` off; see `OpponentBody`.
-              hand={game.stand ?? report.throws ?? null}
-              bare
-            />
-          )}
-          {tab === 'arsenal' && <ArsenalSection pg={pg} bare />}
         </div>
       </div>
     </DialogLayerContext.Provider>,
     document.body,
+  );
+}
+
+/**
+ * The same page, opened before the outing exists — what a **Game Log row**
+ * presses, and the one caller that has to fetch.
+ *
+ * A row holds a `PitcherGameLog`: a `gamePk`, a date and a line. The page needs
+ * the `PlayerGame` behind it, which is what `/api/players/:id/day` answers with
+ * — the same read the popup this replaced already made, and the same one the
+ * player page's Overview tab makes, so no layer under it is newly paid for (a
+ * past date is a frozen day snapshot, one read).
+ *
+ * ### Where the wait belongs, and it is in two places split at `WAIT_DELAY`
+ *
+ * **Under 250ms nothing opens at all.** The press is one round trip against a
+ * route every layer of which is cached, and a page that flashed into existence
+ * and filled in would read as the app stuttering rather than as an answer —
+ * which is the whole of what `useDelayedFlag` is for.
+ *
+ * **Past it the page opens on the head it can already write** — his name and
+ * the day, both of which the row that was pressed already knows — with a block
+ * wait in the body. That is `PlayerDayModal`'s own shape (a `Modal` whose title
+ * is `name — date` over a `LoadingBlock`) rather than a new one, and it is why
+ * this is not "a page with nothing in it": it says whose outing and which day,
+ * and it carries the way back out.
+ *
+ * The alternative — hold the press silently until the data lands — leaves a
+ * press with no trace for however long a cold read takes, which is the failure
+ * `MIN_SPIN` exists to prevent at the other end of the same argument. Drawing
+ * the wait *in the Game Log* was the third option and is worse than either: a
+ * table that has data would grow a spinner in one row, which is a second
+ * loading idiom for a surface that already has none.
+ *
+ * ### And a game with no outing in it says so rather than opening empty
+ *
+ * A pitcher's game log has a row only for a game he appeared in, so the day
+ * read should always carry a `pitching`. Where it does not — the game missing
+ * from the day, or carrying no outing — the page draws the sentence rather than
+ * a head over an empty body. **A read that *threw* keeps its page too**, that
+ * being a different fact from an absence and one the reader can retry by
+ * pressing the row again.
+ */
+export function OutingPageForGame({
+  playerId,
+  name,
+  date,
+  gamePk,
+  onClose,
+}: {
+  playerId: number;
+  name: string;
+  date: string;
+  gamePk: number;
+  onClose: () => void;
+}) {
+  const [report, setReport] = useState<PlayerReport | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  // Behind WAIT_DELAY like every other block wait — see `Loading.tsx`.
+  const wait = useDelayedFlag(loading);
+  useEffect(() => {
+    let live = true;
+    setLoading(true);
+    setError(null);
+    api
+      .playerDay(playerId, 'pitcher', date)
+      .then((d) => {
+        if (live) setReport(d.player);
+      })
+      .catch((e: unknown) => {
+        if (live) setError(e instanceof Error ? e.message : 'Failed to load');
+      })
+      .finally(() => {
+        if (live) setLoading(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [playerId, date]);
+
+  // Keyed on the **game** rather than the date, because a doubleheader is two
+  // outings on one afternoon and the row that was pressed named one of them.
+  const game = report?.games.find((g) => g.gamePk === gamePk) ?? null;
+  const missing = !loading && !error && report !== null && !game?.pitching;
+  const message = error ?? (missing ? `No outing for ${name} in that game.` : null);
+  // Nothing on screen until there is something to say — see above.
+  if (!game?.pitching && !message && !wait) return null;
+  return (
+    <OutingPage
+      report={report}
+      game={game}
+      pending={{ name, date, wait, error: message }}
+      onClose={onClose}
+    />
   );
 }
 

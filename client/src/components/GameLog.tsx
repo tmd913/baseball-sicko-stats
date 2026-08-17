@@ -4,6 +4,7 @@ import type { BatterGameLog, PitcherGameLog, PlayerKind } from '../types';
 import { ExpandButton } from './ExpandButton';
 import { useFullPage } from '../hooks';
 import { creditLabel, decisionColor, formatIp, formatRate, ordinal, prettyGameDate } from '../lib';
+import { OutingPageForGame } from './OutingPage';
 import { PlayerDayModal } from './PlayerDay';
 
 /**
@@ -502,28 +503,55 @@ function GameLogTable({
 }
 
 /**
- * Which row's game is open, and the dialog it opens. Both drawings of the table
- * want the same thing — a press opens that afternoon as a feed — so the state
- * and the modal travel together rather than being written out twice.
+ * Which row's game is open, and what it opens. Both drawings of the table want
+ * the same thing — a press opens that game — so the state and the box travel
+ * together rather than being written out twice.
  *
  * Keyed on the **game** rather than the date, because a doubleheader puts two
  * rows on one afternoon and they are two different readings.
+ *
+ * ### A pitcher's row opens the outing page and a batter's keeps the popup
+ *
+ * The two kinds are two different things to open, which is why this is the one
+ * place the table branches on kind at all. A **batter's** game is a *feed* —
+ * his plate appearances with their clips, the shape the whole app reads plays
+ * in — and `PlayerDayModal` is exactly that, narrowed to one `gamePk`. A
+ * **pitcher's** game is *one outing*, and the app has a page for that
+ * (`OutingPage`: `Line · Innings · Opponent · Arsenal`).
+ *
+ * **What the popup did for him was stand between the row and that page.** It
+ * drew a static outing bar with the innings inline and a `Full breakdown`
+ * button through to the page — so reaching a pitcher's line cost two presses
+ * and put a box in front of a page, on a row whose whole content is one outing.
+ * Pressing a game log row *is* asking for the read, so it lands on it, which is
+ * the same sentence the feed's outing bar already answers to.
+ *
+ * `PlayerDayModal`'s `kind` is narrowed to `'batter'` for exactly that reason:
+ * the routing decision is made here, and making it checkable is cheaper than a
+ * comment saying a pitcher no longer arrives there.
  */
 function useGameOpen(playerId: number, kind: PlayerKind, name: string) {
   const [open, setOpen] = useState<{ date: string; gamePk: number } | null>(null);
   const openGame = (g: BatterGameLog | PitcherGameLog) =>
     setOpen({ date: g.date, gamePk: g.gamePk });
-  const modal = open ? (
-    <PlayerDayModal
+  const opened = !open ? null : kind === 'pitcher' ? (
+    <OutingPageForGame
       playerId={playerId}
-      kind={kind}
       name={name}
       date={open.date}
       gamePk={open.gamePk}
       onClose={() => setOpen(null)}
     />
-  ) : null;
-  return { openGame, modal };
+  ) : (
+    <PlayerDayModal
+      playerId={playerId}
+      name={name}
+      date={open.date}
+      gamePk={open.gamePk}
+      onClose={() => setOpen(null)}
+    />
+  );
+  return { openGame, opened };
 }
 
 /**
@@ -553,7 +581,7 @@ export function GameLogPreview({
    *  reading, so it says where the rest of the season is. */
   onSeeAll: () => void;
 }) {
-  const { openGame, modal } = useGameOpen(playerId, log.kind, name);
+  const { openGame, opened } = useGameOpen(playerId, log.kind, name);
   if (log.games.length === 0) {
     return (
       <section className="ovw-block">
@@ -574,7 +602,7 @@ export function GameLogPreview({
         </button>
       </div>
       <GameLogTable log={log} shown={shown} totals={false} onOpen={openGame} />
-      {modal}
+      {opened}
     </section>
   );
 }
@@ -600,7 +628,7 @@ export function GameLog(
   const [shown, setShown] = useState(PAGE_SIZE);
   // Both above the early return: hooks are unconditional, and a player with no
   // games takes that branch.
-  const { openGame, modal } = useGameOpen(log.playerId, log.kind, log.name);
+  const { openGame, opened } = useGameOpen(log.playerId, log.kind, log.name);
   const { isFull, toggle, ref: fullRef } = useFullPage<HTMLDivElement>();
   if (log.games.length === 0) {
     return <div className="details-status">No games played this season.</div>;
@@ -621,7 +649,7 @@ export function GameLog(
           Load more · {more} earlier {more === 1 ? 'game' : 'games'}
         </button>
       )}
-      {modal}
+      {opened}
     </div>
   );
 }

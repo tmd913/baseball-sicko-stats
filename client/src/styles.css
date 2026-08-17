@@ -7440,31 +7440,12 @@ button.start-line:focus-visible {
 .play-detail-box {
   width: min(var(--card-column), 100%);
 }
-/* The way into the outing page, under the innings the Game Log's popup draws
-   inline. A quiet full-width bar rather than a button floating at one end: it
-   closes that list the way `Load more` closes the feed's own, and at that width
-   it is a thumb target on a phone without being a second accent competing with
-   the credit chip above it. */
-.outing-breakdown-btn {
-  align-self: stretch;
-  padding: 9px 12px;
-  color: var(--muted);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--control-radius);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-}
-.outing-breakdown-btn:hover {
-  color: var(--text);
-  border-color: var(--accent);
-}
-.outing-breakdown-btn:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
+/* `.outing-breakdown-btn` was here — the full-width `Full breakdown` bar under
+   the innings the Game Log's popup drew inline, and the last way into the outing
+   page that was not the outing bar itself. A pitcher's Game Log row opens that
+   page directly now, so the popup, the inline innings and this door all went
+   together; `.feed-item-toggle` is the one route in, and its own `.static`
+   variant went with them (see `FeedPitcherGame`). */
 
 /* ---- The outing page ----------------------------------------------------
    One pitcher's outing as a full-screen page over whatever opened it: his line,
@@ -9185,11 +9166,15 @@ button.start-line:focus-visible {
   border: 1px solid var(--border);
   border-radius: var(--control-radius);
 }
-/* Pressable unless it is standing in for itself: inside a box that is already
-   about this one game the bar states the outing and opens nothing, so it drops
-   the cursor and the hover that would promise otherwise. `.upcoming-head` makes
-   the same split for the same reason. */
-.feed-item-toggle:not(.static),
+/* The game card is pressable unless there is nothing behind it — a game he did
+   not appear in draws its line and stays static, so it drops the cursor and the
+   hover that would promise otherwise; `.upcoming-head` makes the same split for
+   the same reason. **The outing bar takes no `:not(.static)`** and used to: its
+   static form was the Game Log popup's, which drew the bar over inline innings
+   and opened nothing, and that popup is gone for a pitcher — a row opens the
+   outing page itself. Nothing sets the class on this element now, so testing
+   for it would be a selector guarding a state the app cannot reach. */
+.feed-item-toggle,
 .pday-game:not(.static) {
   cursor: pointer;
   transition: border-color 0.14s ease;
@@ -9197,7 +9182,7 @@ button.start-line:focus-visible {
 /* Scoped: both are full-width cards in a list — the outing bar in the stream,
    the game card on the player page's Overview. See the top of the file. */
 @media (hover: hover) {
-  .feed-item-toggle:not(.static):hover,
+  .feed-item-toggle:hover,
   .pday-game:not(.static):hover {
     border-color: var(--accent);
   }
