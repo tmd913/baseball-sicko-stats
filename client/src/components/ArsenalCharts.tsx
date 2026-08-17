@@ -1,6 +1,7 @@
-import { useId, useMemo } from 'react';
+import { useCallback, useId, useMemo, useRef, useState } from 'react';
 import type { ArmAngleInfo, MovementSample, SeasonArsenalPitch } from '../types';
 import { pitchStyle } from '../lib';
+import { useDismissable } from '../hooks';
 import { InfoKey } from './InfoKey';
 import { pitchDirections } from './Arsenal';
 
@@ -275,7 +276,56 @@ const CORNER_LABEL_Y = 366;
 const KEY_Y = 362;
 
 /**
- * His arm slot, drawn as the arm.
+ * The two figures the mark's own hit area covers, in viewBox units.
+ *
+ * A **thick transparent line along the arm** and a **box over the two labels**,
+ * rather than one rect over the lot — and that is forced rather than fussy. A
+ * single box containing both the shoulder (low and inboard) and the ball at the
+ * steepest slot the leaderboard carries (70°, high and outboard) has a
+ * top-*inner* corner at (316, 314), which is **165.5 units from the disc's
+ * centre against its 171.6 radius** — inside it. Two elements each clear it: the
+ * line's closest approach is its own shoulder at 198 less 8 of half-width, and
+ * the label box's inner corner (320, 354) is at 198.4.
+ *
+ * `pointer-events: all` in the stylesheet is what makes them hit-test at all,
+ * being transparent — and it is why the strokes are 16 units wide: the drawn arm
+ * is 2.5, which is a target nothing but a mouse can aim at.
+ */
+const ARM_HIT_W = 16;
+const ARM_LABEL_W = 66;
+const ARM_LABEL_Y = 354;
+const ARM_LABEL_H = 28;
+
+/**
+ * The four printable figures, read once for both the mark and the panel it opens.
+ *
+ * Shared rather than derived twice, which is the only way the corner label and the
+ * panel cannot come to state different numbers — the drift this file's comments
+ * spend their time avoiding. Two rules are in here:
+ *
+ * **Whole degrees**, which is what Savant's own page prints and all the corner has
+ * room for; a panel carrying a decimal would be the same fact reading two ways an
+ * inch apart.
+ *
+ * **A missing release figure is 0 or absent, and either way there is none.** The
+ * server writes 0 where the leaderboard's column would not parse, and a build
+ * older than the field sends nothing at all — and nobody releases a ball at ground
+ * level, so the line is dropped rather than printed as `0.0`.
+ */
+function armFigures(info: ArmAngleInfo) {
+  const height = Number.isFinite(info.releaseHeight) ? info.releaseHeight : 0;
+  const side = Number.isFinite(info.releaseSide) ? info.releaseSide : 0;
+  return {
+    deg: Math.round(info.angle),
+    league: info.league === null ? null : Math.round(info.league),
+    height: height > 0 ? height : null,
+    side: side > 0 ? side : null,
+  };
+}
+
+/**
+ * His arm slot, drawn as the arm — and pressable, because the drawing is half of
+ * what the leaderboard publishes about it.
  *
  * A horizontal reference from the shoulder, the arm itself at the measured
  * angle, and the ball at the end of it — so the picture *is* the number rather
@@ -287,29 +337,106 @@ const KEY_Y = 362;
  * **It goes on his own side.** A right-hander's arm is toward third base, which
  * is the right of this chart, and the arm points outward from the plate — which
  * is also the direction that keeps it clear of the disc.
+ *
+ * ### Why it opens a panel where it used to carry a `title`
+ *
+ * The mark's whole affordance was an SVG `<title>` on the group, which is the
+ * two failures this app has already written down once: a native tooltip is
+ * **invisible on a phone**, where roughly half the traffic is, and it wants the
+ * pointer to be **on the painted stroke** — 2.5 units of it, over an arm 34 long.
+ * So there was nothing to see on touch and next to nothing to hit with a mouse.
+ *
+ * And what it said was the smaller half of what is in hand: the leaderboard
+ * publishes the **release point** beside the angle and `ArmAngleInfo` has
+ * carried both since it was written, read by nothing. The angle is where his arm
+ * is; the release point is where the ball actually leaves it, which is the fact
+ * a reader is chasing when they reach for this corner at all.
+ *
+ * So the group is a real target — `role="button"` with a `tabIndex`, the rule
+ * the Game Log's rows and a scoreboard card already follow for an element that
+ * cannot hold a `<button>` — and the reveal is the app's own **popover**
+ * (`.settings-popover`, literally the box `InfoKey` and the settings gear open)
+ * rather than a second thing that resembles one. A pointer opens it by hovering
+ * and closes it by leaving; a finger presses it; the keyboard opens it on focus;
+ * and an outside press or Escape closes it through `useDismissable`, which is
+ * also what stops the dismissing press pressing whatever was under it.
+ *
+ * ### Two things about the handlers, both measured rather than reasoned
+ *
+ * **Hover is filtered on `pointerType`** rather than bound as `onMouseEnter`,
+ * because Chrome dispatches the compatibility mouse events *after* a tap — so an
+ * `onMouseEnter` would open on a tap's own `mouseenter` and give the press
+ * something to undo a hundredth of a second later.
+ *
+ * **And the press only ever opens.** Filtering the hover is not enough on its
+ * own: a tap's real event order is `pointerenter:touch → … → mouseenter →
+ * mousedown → **focus** → mouseup → click`, so opening on focus and *toggling* on
+ * the click cancel out — measured, the first tap on the mark did nothing at all
+ * and the second opened it, because by then the element was already focused and
+ * only the click fired. Both handlers now agree (`onOpen(true)`), which cannot
+ * depend on their order. What that gives up is closing by pressing the mark a
+ * second time; closing is the popover contract instead — an outside press or
+ * Escape through `useDismissable`, a mouse leaving, or a blur — which is how
+ * every other popover in this app closes and is one gesture either way.
  */
 function ArmAngleMark({
-  angle,
+  info,
   hand,
-  league,
+  open,
+  onOpen,
+  panelId,
 }: {
-  angle: number;
+  info: ArmAngleInfo;
   hand: 'R' | 'L' | null;
-  league: number | null;
+  open: boolean;
+  onOpen: (open: boolean) => void;
+  panelId: string;
 }) {
   const right = hand !== 'L';
   const dir = right ? 1 : -1;
   const sx = right ? ARM_SX : VIEW - ARM_SX;
   const sy = ARM_SY;
-  const rad = (angle * Math.PI) / 180;
+  const rad = (info.angle * Math.PI) / 180;
   const ex = sx + dir * ARM_LEN * Math.cos(rad);
   const ey = sy - ARM_LEN * Math.sin(rad);
+  const { deg, league, height, side } = armFigures(info);
+  // The whole fact in words, so a screen reader gets it from the label alone and
+  // nothing rides on the panel being reachable.
+  const label =
+    `Arm angle ${deg}° above horizontal` +
+    (league === null ? '' : `, against an MLB average of ${league}°`) +
+    (height === null
+      ? ''
+      : `. Released ${height.toFixed(1)} feet off the ground` +
+        (side === null ? '' : `, ${side.toFixed(1)} feet to his arm side of the shoulder`));
   return (
-    <g className="mv-arm">
-      <title>
-        {`Arm angle ${angle.toFixed(0)}° above horizontal at release` +
-          (league === null ? '' : ` — the MLB average is ${league.toFixed(0)}°`)}
-      </title>
+    <g
+      className={`mv-arm${open ? ' on' : ''}`}
+      role="button"
+      tabIndex={0}
+      aria-expanded={open}
+      aria-controls={panelId}
+      aria-label={label}
+      onPointerEnter={(e) => {
+        if (e.pointerType === 'mouse') onOpen(true);
+      }}
+      onPointerLeave={(e) => {
+        if (e.pointerType === 'mouse') onOpen(false);
+      }}
+      onFocus={() => onOpen(true)}
+      onBlur={() => onOpen(false)}
+      onClick={() => onOpen(true)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          // Space would scroll the tab under the reader otherwise, which is the
+          // same reason the Game Log's rows swallow it. A toggle here rather than
+          // an open, since focus has already opened it by the time a key can be
+          // pressed — this is the keyboard's way back out, beside Escape.
+          e.preventDefault();
+          onOpen(!open);
+        }
+      }}
+    >
       <line className="mv-arm-ref" x1={sx} y1={sy} x2={sx + dir * ARM_LEN} y2={sy} />
       <line className="mv-arm-line" x1={sx} y1={sy} x2={ex} y2={ey} />
       <circle className="mv-arm-ball" cx={ex} cy={ey} r="4" />
@@ -323,7 +450,7 @@ function ArmAngleMark({
         y={CORNER_LABEL_Y}
         textAnchor={right ? 'start' : 'end'}
       >
-        {`${angle.toFixed(0)}°`}
+        {`${deg}°`}
       </text>
       <text
         className="mv-arm-label"
@@ -333,7 +460,68 @@ function ArmAngleMark({
       >
         ARM ANGLE
       </text>
+      {/* Last, so the target is over the mark rather than under it. */}
+      <line
+        className="mv-arm-hit"
+        x1={sx}
+        y1={sy}
+        x2={ex}
+        y2={ey}
+        strokeWidth={ARM_HIT_W}
+      />
+      <rect
+        className="mv-arm-hit"
+        x={right ? sx - 2 : sx + 2 - ARM_LABEL_W}
+        y={ARM_LABEL_Y}
+        width={ARM_LABEL_W}
+        height={ARM_LABEL_H}
+      />
     </g>
+  );
+}
+
+/**
+ * What the mark says once it is opened: the slot in words, and the release point,
+ * which is the half of the leaderboard's answer nothing drew before.
+ *
+ * It is `.settings-popover` — the app's own popover, the box `InfoKey` opens —
+ * anchored to the arm's own bottom corner of the plot and sitting **above the
+ * highest the ball can reach**, so it never covers the mark it belongs to. Its
+ * side is the arm's side for the same reason the mark's is.
+ */
+function ArmAnglePanel({
+  info,
+  hand,
+  panelId,
+}: {
+  info: ArmAngleInfo;
+  hand: 'R' | 'L' | null;
+  panelId: string;
+}) {
+  const right = hand !== 'L';
+  const { deg, league, height, side } = armFigures(info);
+  return (
+    <div
+      className={`settings-popover mv-arm-panel mv-arm-panel-${right ? 'right' : 'left'}`}
+      id={panelId}
+    >
+      {/* **The figures and nothing else.** What 0° and 90° *mean* is a key —
+          needed once and in the way ever after — so it lives in the chart's own
+          ⓘ, which is where this app puts every other sentence of that kind. Two
+          short lines here rather than four: the panel sits over a corner of the
+          cloud while it is open, and every line of it is a dot the reader cannot
+          see. */}
+      <p>
+        <strong>{`${deg}° above horizontal`}</strong>
+        {league === null ? '.' : `, against an MLB average of ${league}°.`}
+      </p>
+      {height !== null && (
+        <p>
+          <strong>{`Released ${height.toFixed(1)} ft`}</strong> off the ground
+          {side !== null && `, ${side.toFixed(1)} ft to his arm side of the shoulder`}.
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -394,6 +582,19 @@ export function MovementChart({
   // (a player page over a matchup team page), so the ids carry a per-instance
   // prefix rather than the pitch name alone.
   const uid = useId().replace(/:/g, '');
+
+  // The arm mark's own reveal. Independent of `hovered`, which is a *pitch* type
+  // — one selection for two different kinds of thing would be one of them
+  // clearing the other for no reason a reader could see.
+  const [armOpen, setArmOpen] = useState(false);
+  const plotRef = useRef<HTMLDivElement | null>(null);
+  const closeArm = useCallback(() => setArmOpen(false), []);
+  // The plot wrap is what counts as "inside", rather than the mark: the panel is
+  // an HTML sibling of the SVG and the trigger is a `<g>` within it, so they are
+  // two disjoint nodes and only their common parent can answer for both. It is
+  // loose by exactly the width of a plot with nothing else pressable in it.
+  useDismissable(armOpen, plotRef, closeArm);
+  const armPanelId = `arm-${uid}`;
 
   const shown = useMemo(
     () => pitches.filter((p) => p.hBreak !== null && p.vBreak !== null),
@@ -492,6 +693,12 @@ export function MovementChart({
             difference. (A right-hander throws about two miles an hour harder than a
             left-hander at every pitch type, which is why the comparison is split.)
           </p>
+          <p>
+            The arm in the bottom corner is <b>his own slot</b> — how far above
+            horizontal his arm is at release, where 0° is a true sidearm and 90° would
+            be straight over the top. It is drawn on the side he throws from, and it
+            opens onto where the ball actually leaves his hand.
+          </p>
           <p>Pick a pitch below to single it out and see how it compares.</p>
         </InfoKey>
       </figcaption>
@@ -571,7 +778,7 @@ export function MovementChart({
         </span>
       </div>
 
-      <div className="mv-plot-wrap">
+      <div className="mv-plot-wrap" ref={plotRef}>
         <span className="mv-axis-side mv-axis-rise" aria-hidden="true">
           More rise ▲
         </span>
@@ -716,10 +923,20 @@ export function MovementChart({
               goes on his own side (a right-hander's arm is toward third base,
               which is the right of this chart) and the hatch key opposite it. */}
           {armAngle && (
-            <ArmAngleMark angle={armAngle.angle} hand={hand} league={armAngle.league} />
+            <ArmAngleMark
+              info={armAngle}
+              hand={hand}
+              open={armOpen}
+              onOpen={setArmOpen}
+              panelId={armPanelId}
+            />
           )}
           <HatchKey side={hand === 'L' ? 'right' : 'left'} />
         </svg>
+
+        {armAngle && armOpen && (
+          <ArmAnglePanel info={armAngle} hand={hand} panelId={armPanelId} />
+        )}
       </div>
 
       {/* Under the plot rather than over it: it names the horizontal axis, and
