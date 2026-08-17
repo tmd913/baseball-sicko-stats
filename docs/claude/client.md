@@ -230,6 +230,47 @@ It is **nine keyframes of `transform` and `opacity` on four paths, and no JavaSc
 2. **A block wait only when there is nothing to show yet**, and only after **`WAIT_DELAY` (250ms)**. That floor has guarded the report since it was written and is now `hooks.ts::useDelayedFlag`, which every block wait in the app takes — the five player-page tabs above all, where a warm percentile card comes back in tens of milliseconds and a wait that appears and vanishes inside a tenth of a second reads as the page breaking rather than as an answer. The *content* stays gated on the real flag, not the delayed one, or a fast tab would show a blank pane instead of a wait.
 3. **A press-triggered mark holds `MIN_SPIN` (450ms)**, unchanged and now stated as the other end of the same argument: `MIN_SPIN` is a floor on how long a mark stays up once a press put it there, `WAIT_DELAY` is a delay before a mark goes up at all for the waits nobody pressed. The two are deliberately different numbers because they answer different questions. Its one caller is the fantasy popover's Refresh from ESPN, which the ESPN page's own Refresh inherits through `onRefresh`, that being `refreshFantasy`; the sign-in submit and the Connect league button take neither, a Cognito or ESPN round trip having no fast answer to leave a press without a trace.
 
+### Rule 1 has a fourth clause: a stale answer must not land on a fresh one
+
+**Never over data** is written above as a rule about *waits*, and it turns out
+to have been half a rule: the app was careful never to blank a pane while a read
+was in flight, and had nothing at all to say about a read that came back
+**after** the one that replaced it. `loadReport` wrote whatever it was handed,
+so the slowest response won whatever it was about — and what it was about could
+be a different roster entirely.
+
+**Several report reads are in flight on an ordinary load, which is what makes
+that reachable.** The effect behind it fires on the date range, on the saved
+roster arriving, and on the ESPN status settling; it fires again the moment
+`usingFantasy` flips. So a `saved` read begun against a roster of nobody can
+land *after* the `fantasy` read that superseded it and set the report back to an
+empty list — leaving the tab row at `Research · League` (the roster pills need
+rows) over a page with **nothing on it at all**, since the saved-roster empty
+state is suppressed in fantasy mode and the fantasy one is waiting on a roster
+read of its own.
+
+**Reproduced rather than reasoned about**, against a stub holding the saved read
+open for six seconds. Accepting an invite: the report is right at t+1.5s (four
+tabs, two rows) and is **`Research · League` and nothing else at t+4s**, and
+stays that way. And the same thing with no invite anywhere near it — the fantasy
+popover's own toggle, pressed off and straight back on: right at t+1.2s, blank
+at t+8s. That second one is why the guard is on the **read** rather than on the
+invite flow.
+
+**So `loadReport` carries a sequence number**, which `loadFantasyRoster` has had
+since it was written and for the same reason in a milder shape: only the newest
+read may write `reports`, and only the newest may raise the error banner — a
+stale failure is no more worth showing than a stale answer is worth drawing.
+
+**The wait is cleared by a count rather than by that sequence**, and the two are
+different questions. Clearing it on the newest read alone would leave it up for
+ever the first time a background poll bumped the sequence past a foreground read
+that was still going; clearing it on *any* read taking the block wait off a page
+that still has nothing on it is the same blank arrived at from the other side.
+So foreground reads are counted in and out, and the wait goes when the last of
+them lands. `reportSettled` is deliberately neither — it is "has an answer come
+back at all", which a superseded read answers as well as any other.
+
 **Where it sits and what colour it is.** The ball is `currentColor` and `.ball-spin` sets `color: var(--accent)`, so there is one loading colour in the app and it is the accent — including inside a control that is `:disabled` while it works and otherwise muted, since it is disabled *because* it is working. The rim carries `stroke-opacity: 0.5`: at full accent the silhouette is the loudest thing in the mark and the seams — the only part that moves — read as detail inside it, which is backwards for something whose whole job is to look like it is turning. **Inside an overlay** it is the same `md` block the page uses, centred in the player page's own reading column, and the details view's five tabs get it in the box `.details-status` already owned — that class is folded into `.loading-block`'s selector list rather than restyled to match it, the rule this stylesheet applies everywhere, and what is left under its own name is only what a *failed* tab adds (`.details-error`'s colour).
 
 **`.refreshing` keeps its name and its pill and is now `.loading-line` plus that pill**, so the badge and the board's bare caption are one object cut two ways. `LoadingLine` takes an `announce` flag that is off inside a control: the button already says `aria-busy`, and a live region nested in a button is the same news announced twice.

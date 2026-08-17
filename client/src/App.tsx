@@ -1224,12 +1224,27 @@ export default function App() {
   // session waiting forever for an answer that isn't coming.
   const [espnStatusSettled, setEspnStatusSettled] = useState(false);
 
+  /**
+   * A `PUT`/`POST` answer has already told us what the connection is, so the
+   * boot `GET` below must not put its own answer over the top of it.
+   *
+   * The two are fired **concurrently** on a load that carries an invite code —
+   * this read and the join that redeems it — and for the one visitor an invite
+   * is aimed at the read is the stale half by construction: it describes the
+   * account a second before it joined a league. Landing last it undoes the
+   * join, which takes the onboarding page off screen (it renders only while
+   * the status says connected) and leaves the team pick with no
+   * disconnected → connected transition to read, i.e. with the fantasy roster
+   * never turned on. Ordering is not ours to arrange, so the write simply
+   * wins.
+   */
+  const espnStatusWritten = useRef(false);
   useEffect(() => {
     let cancelled = false;
     api
       .espn()
       .then((s) => {
-        if (!cancelled) setEspnStatus(s);
+        if (!cancelled && !espnStatusWritten.current) setEspnStatus(s);
       })
       // Not banner-worthy: with no status the board simply doesn't offer the
       // pill, which is what an unconnected user sees anyway.
@@ -1269,6 +1284,7 @@ export default function App() {
       .joinEspn(inviteCode)
       .then((s) => {
         if (cancelled) return;
+        espnStatusWritten.current = true;
         setEspnStatus(s);
         // The onboarding page, not the settings page: what this reader has to
         // do is name their team, and everything else on that page is written
@@ -1660,6 +1676,8 @@ export default function App() {
   // The fantasy roster itself — the slot chips, and the list the reorder screen
   // and the adder must not pretend to edit. Only read while it is in use.
   const [fantasyRoster, setFantasyRoster] = useState<EspnRoster | null>(null);
+  /** Has the read above come back at all — see its own `finally`. */
+  const [fantasyRosterSettled, setFantasyRosterSettled] = useState(false);
   const usingFantasy = rosterSource === 'fantasy' && espnConnected;
 
   /**
@@ -1701,7 +1719,16 @@ export default function App() {
       })
       // The report request carries the same failure and banners it; a second
       // copy of the same message would only say it twice.
-      .catch((e: Error) => console.error('fantasy roster unavailable:', e.message));
+      .catch((e: Error) => console.error('fantasy roster unavailable:', e.message))
+      // **Settled, not loaded**, and the difference is a page with nothing on
+      // it at all. The mode's empty state is held until this read lands so it
+      // can't flash over every fantasy page while ESPN answers — but held on
+      // `fantasyRoster !== null` it was held *for ever* when the read failed,
+      // and a failed read is exactly when the saved-roster empty state beside
+      // it is also suppressed (`!usingFantasy`) and the report has no players
+      // to draw. Blank, with nothing on screen saying why. A read that came
+      // back is an answer whichever way it came back.
+      .finally(() => setFantasyRosterSettled(true));
     // The whole range rather than nothing: `end` decides which day's roster and
     // slot chips come back, and `start` opts the response into a lineup **per
     // day** of it, which is what the roster views credit a player's days
@@ -2109,6 +2136,7 @@ export default function App() {
   const onEspnStatusChange = useCallback(
     (s: EspnStatus) => {
       const prev = espnStatus;
+      espnStatusWritten.current = true;
       setEspnStatus(s);
       // A fresh connection (or a disconnect) makes whatever was read before
       // wrong; the board re-reads when it next needs it.
@@ -2124,6 +2152,62 @@ export default function App() {
       }
     },
     [espnStatus, rosterSource, setRosterSource],
+  );
+
+  /**
+   * The invite flow's own way out, and it is deliberately not the settings
+   * page's: name the team, write down which list to read, and then **start the
+   * app over on it**.
+   *
+   * A reload for one press looks heavy-handed and is the honest answer here,
+   * because this is the one moment in the app's life when nearly everything it
+   * has read is about to be wrong at once. A join arrives mid-boot, so the
+   * saved roster, the report drawn from it, the ownership map, the league's
+   * teams and the connection itself are all read, in flight or absent in some
+   * combination nobody can enumerate — and the team pick then changes *which
+   * roster every view is about*. Reconciling that in place is a pile of
+   * ordering rules each of which is one race away from a page that draws
+   * nothing, which is what this flow was reported doing. A boot has all of
+   * those rules already and is known to work.
+   *
+   * It costs the splash, once, on a screen the reader sees once. What it
+   * cannot cost is the preference: the write is **awaited** before the tab is
+   * torn down, where every other caller of it fires and forgets.
+   *
+   * The switch itself is `onEspnStatusChange`'s rule and its two guards
+   * unchanged — see `firstTeamNamed`, which is what keeps this off a team
+   * *change* and off anyone who has already said which list they want.
+   */
+  const confirmEspnOnboarding = useCallback(
+    async (teamId: number) => {
+      const prev = espnStatus;
+      const next = await api.setEspnTeam(teamId);
+      const turnOn =
+        rosterSource === 'saved' &&
+        !rosterSourceStated.current &&
+        firstTeamNamed(prev, next);
+      if (turnOn) {
+        rosterSourceStated.current = true;
+        // Logged rather than raised: the URL below still puts *this* session on
+        // the fantasy roster, and the toggle in the fantasy popover is one
+        // press from telling the record. Failing the pick over it would leave
+        // the reader on a page whose one button appears not to work.
+        await api
+          .saveRosterSource('fantasy')
+          .catch((e: Error) => console.error('saving roster source failed:', e.message));
+      }
+      // `league` because a code redeemed twice is a code redeemed once and then
+      // refused — `takeInvite` has already spent it, and App's URL sync would
+      // drop the param anyway; this only makes sure the reload doesn't carry it.
+      const params = new URLSearchParams(window.location.search);
+      params.delete('league');
+      if (turnOn || rosterSource === 'fantasy') params.set('roster', 'fantasy');
+      const qs = params.toString();
+      // `replace`, so the pre-pick URL doesn't become a Back destination that
+      // re-enters a flow which is over.
+      window.location.replace(`${window.location.pathname}${qs ? `?${qs}` : ''}`);
+    },
+    [espnStatus, rosterSource],
   );
   // The settings popover (gear next to the title) — the hide-injured toggle
   // (and the simulate one, when it's shown), then the way into the how-to page.
@@ -2441,17 +2525,53 @@ export default function App() {
       });
   }, []);
 
-  // `quiet` refreshes in the background (live polling) without flashing the
-  // loading UI; the foreground load on date/roster change is not quiet.
+  /**
+   * The sequence number is what `loadFantasyRoster` carries and is here for the
+   * same reason in a sharper shape: **several report reads are in flight at
+   * once on an ordinary load**, and without it the slowest one wins whatever it
+   * is about. The effect below fires on the range, the saved roster and the
+   * ESPN status settling, and then again the moment `usingFantasy` flips — so
+   * a `saved` read begun on a roster of nobody can land *after* the `fantasy`
+   * read that replaced it and set the report back to an empty list.
+   *
+   * That is not a corner: it is exactly what accepting an invite does. The
+   * saved reads are fired against an empty roster while the join is still in
+   * flight, the fantasy read that follows the team pick is a cold ESPN league
+   * plus a cold report, and a page drawn from the loser of that race is a
+   * fantasy team with nobody on it — which is what "two tabs and no page
+   * content" was. The same race is reachable from the fantasy popover's own
+   * toggle, so the guard is on the read rather than on the flow.
+   *
+   * `quiet` refreshes in the background (live polling) without flashing the
+   * loading UI; the foreground load on date/roster change is not quiet.
+   */
+  const reportRead = useRef(0);
+  const reportInFlight = useRef(0);
   const loadReport = useCallback(
     (quiet = false, refresh = false) => {
-      if (!quiet) setReportLoading(true);
+      if (!quiet) {
+        reportInFlight.current += 1;
+        setReportLoading(true);
+      }
+      const seq = ++reportRead.current;
       return api
         .report(start, end, usingFantasy ? 'fantasy' : 'saved', refresh)
-        .then((r) => setReports(r.players))
-        .catch((e: Error) => setError(e.message))
+        .then((r) => {
+          if (seq === reportRead.current) setReports(r.players);
+        })
+        .catch((e: Error) => {
+          // A stale failure is no more worth bannering than a stale answer is
+          // worth drawing — the read that superseded it is the one on screen.
+          if (seq === reportRead.current) setError(e.message);
+        })
         .finally(() => {
-          if (!quiet) setReportLoading(false);
+          // The wait is cleared when the **last** foreground read finishes
+          // rather than when any one of them does: a stale response clearing
+          // it would take the block wait off a page that still has nothing on
+          // it, which is the same blank the guard above exists to prevent,
+          // arrived at from the other side. A count rather than the sequence
+          // number, because a quiet poll bumps that and never touches this.
+          if (!quiet && --reportInFlight.current === 0) setReportLoading(false);
           // Settled either way — a failed read still counts as an answer, so
           // the tab pills below don't wait forever for one that isn't coming.
           // Setting this to `true` on every call (quiet ones included) is a
@@ -4288,9 +4408,14 @@ export default function App() {
           other emptied view in the app does. There is no search to offer here
           — the way to put a player on this roster is to add him on ESPN — so
           the two things it can say are the two ways out: go and make the move,
-          or read your own list instead. Held until the roster read has landed
-          (`fantasyRoster !== null`), or the message would flash over every
-          fantasy page for as long as ESPN takes to answer.
+          or read your own list instead. Held until the roster read has
+          **settled** rather than succeeded, or the message would flash over
+          every fantasy page for as long as ESPN takes to answer — and, held on
+          the answer alone, would never appear at all when that read failed,
+          which is one of the two ways this view could be left blank. The
+          `reports.length === 0` beside it is the other half of the same guard:
+          with the roster read failed but the report answered, `rosterKeys`
+          falls back to the saved list and could read empty over a full table.
 
           No `!editMode` here, and that is deliberate rather than an omission:
           the two cannot be true at once. The edit screen is only entered from
@@ -4301,8 +4426,9 @@ export default function App() {
           `.app.edit-mode`. A guard against a state nothing can reach is a guard
           nobody can check. */}
       {usingFantasy &&
-        fantasyRoster !== null &&
+        (fantasyRoster !== null || fantasyRosterSettled) &&
         rosterKeys.size === 0 &&
+        reports.length === 0 &&
         !error &&
         isRosterView(view) && (
           <div className="empty-state">
@@ -4682,7 +4808,7 @@ export default function App() {
       {espnOnboard && espnStatus?.connected === true && (
         <LeagueOnboarding
           status={espnStatus}
-          onStatusChange={onEspnStatusChange}
+          onConfirm={confirmEspnOnboarding}
           onDone={() => setEspnOnboard(false)}
         />
       )}

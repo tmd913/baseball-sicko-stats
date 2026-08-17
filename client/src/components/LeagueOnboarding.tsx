@@ -23,19 +23,27 @@ import { LoadingBlock, LoadingLine } from './Loading';
  *
  * **Why the pick matters enough to be a page.** Naming a team for the first
  * time is what turns the roster views over to the fantasy team (see
- * `App.tsx::onEspnStatusChange`), so it is the last step of joining rather than
- * a preference: without it a brand-new user is in a league and reading a saved
- * roster they have nothing in. The button's label says so.
+ * `App.tsx::confirmEspnOnboarding`), so it is the last step of joining rather
+ * than a preference: without it a brand-new user is in a league and reading a
+ * saved roster they have nothing in. The button's label says so.
  */
 export function LeagueOnboarding({
   status,
-  onStatusChange,
+  onConfirm,
   onDone,
 }: {
   /** The connection as it stands, straight off the join. */
   status: Extract<EspnStatus, { connected: true }>;
-  onStatusChange: (s: EspnStatus) => void;
-  /** Leave the flow — pressed the button, or skipped it. */
+  /**
+   * Name the team and start the app on it — the whole of the last step, App's
+   * to do because it is the one that knows which list the views should read
+   * and it finishes by reloading the tab (see `App.tsx::confirmEspnOnboarding`
+   * for why a boot rather than a reconciliation). Rejects if the team could not
+   * be set, which is the one failure that leaves this page on screen; resolving
+   * means the page is going away, so nothing after it has to be cleared.
+   */
+  onConfirm: (teamId: number) => Promise<void>;
+  /** Leave the flow — skipped it, or pressed Escape. */
   onDone: () => void;
 }) {
   useLockBodyScroll();
@@ -117,15 +125,16 @@ export function LeagueOnboarding({
     setSaving(true);
     setSaveError(null);
     try {
-      onStatusChange(await api.setEspnTeam(Number(picked)));
-      onDone();
+      await onConfirm(Number(picked));
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Could not set the team');
       setSaving(false);
     }
-    // Deliberately no `finally`: on the way through, this page unmounts, and
-    // clearing a flag on a component that has gone is a state update nobody
-    // reads. Only the failing path stays on screen, and it clears its own.
+    // Deliberately no `finally`: on the way through the tab reloads, and
+    // clearing a flag on a page that is being torn down is a state update
+    // nobody reads — it would also blink the button back from `Setting up` to
+    // its label for the frame before the boot takes the screen. Only the
+    // failing path stays on screen, and it clears its own.
   };
 
   return (
