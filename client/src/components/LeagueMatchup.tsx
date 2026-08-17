@@ -428,20 +428,64 @@ export default function LeagueMatchupView({
   const [dateOpen, setDateOpen] = useState(false);
   const [scheduleSpan, setScheduleSpan] = useState<ScheduleSpan | null>(null);
   /**
-   * **The days a team page reports on, and they start at today** rather than at
-   * the matchup's week.
+   * **The matchup's own days**, or null where the period has no dates to name —
+   * an anchor the schedule could not be read for, where a span with no days in
+   * it would be worse than none.
    *
-   * That is the reading a manager arrives with — *what is his team doing right
-   * now* — and it is what the app's own roster views open on, which is the
-   * whole point of these pages being those views. The week is one press away as
-   * a preset of its own (below), and picking it makes every row the arithmetic
-   * behind a category on the Summary page.
+   * Hoisted above both readers so they cannot come to disagree: the `Matchup`
+   * preset below is built from it, and the default span is seeded from it, so
+   * the default can never select a preset the row does not contain.
    */
-  const [span, setSpan] = useState<{ start: string; end: string; preset: string | null }>({
-    start: today,
-    end: today,
-    preset: 'Today',
-  });
+  const matchupSpan = useMemo(
+    () => (board.start && board.end ? { start: board.start, end: board.end } : null),
+    [board.start, board.end],
+  );
+
+  /**
+   * **The days a team page reports on: today on the week being played, and the
+   * matchup's own days on one that is over.**
+   *
+   * The first half is the reading a manager arrives with — *what is his team
+   * doing right now* — and it is what the app's own roster views open on, which
+   * is the whole point of these pages being those views. That argument is right
+   * about the live week and is plainly wrong about a settled one: on last
+   * week's matchup `Today` names days that are not in the matchup at all, so
+   * the roster table would have nothing to do with the categories the Summary
+   * page next door is drawn from. A page opened on a finished week is opened to
+   * read that week.
+   *
+   * **The test is `board.live`, which is the flag the header's own `Live` /
+   * `Final` tag reads** — deliberately not a second definition of "current"
+   * derived from the dates, which are the *observed* span and truncate at today
+   * for the week being played (see **ESPN fantasy league**, *The matchup
+   * window*). So the page cannot say `Final` beside the week and open on today,
+   * whichever way ESPN's own clock happens to be running: in the ~90 minutes
+   * each morning before ESPN opens the new matchup period, the board is the
+   * week that has just ended, says `Final`, and opens on that week's days,
+   * which is exactly what it is showing.
+   *
+   * **The fallback is `Today`**, because `Matchup` is only in the preset row
+   * when there are dates to name it with — a control marking a preset the row
+   * does not contain is worse than the old default.
+   *
+   * **A lazy initialiser rather than an effect**, the rule `sideTab` above
+   * follows: the board is a prop at mount (App draws this page only once the
+   * scoreboard has landed), so the first paint is already the right span, where
+   * an effect would draw today's rows, fetch them, and swap a frame later.
+   *
+   * And it applies **once**. A week that settles under a reader who has the
+   * page open must not move the days out from under them, and neither must the
+   * live poll re-running with a newer board; the reader's own pick — a preset
+   * or a custom range — is the last word from the moment they make it. That
+   * costs nothing in reach: closing the page unmounts it, and stepping the
+   * period on the Scoreboard clears `mup=`, so every other matchup is a fresh
+   * mount and a fresh default.
+   */
+  const [span, setSpan] = useState<{ start: string; end: string; preset: string | null }>(() =>
+    !board.live && matchupSpan
+      ? { ...matchupSpan, preset: 'Matchup' }
+      : { start: today, end: today, preset: 'Today' },
+  );
 
   /**
    * The app's presets plus **this matchup's own span**, which is the one named
@@ -451,16 +495,11 @@ export default function LeagueMatchupView({
    * score does not.
    *
    * It leads, being the reason a reader is on this page at all, and it is
-   * absent where the period has no dates to name — an anchor the schedule could
-   * not be read for, where offering a span with no days in it would be worse
-   * than not offering it.
+   * absent where the period has no dates to name.
    */
   const spanPresets = useMemo<DatePreset[]>(
-    () =>
-      board.start && board.end
-        ? [{ label: 'Matchup', start: board.start, end: board.end }, ...presets]
-        : presets,
-    [board.start, board.end, presets],
+    () => (matchupSpan ? [{ label: 'Matchup', ...matchupSpan }, ...presets] : presets),
+    [matchupSpan, presets],
   );
 
   const teams = useMemo(() => new Map(board.teams.map((t) => [t.id, t])), [board.teams]);
