@@ -137,6 +137,41 @@ pinned column's own edge shadow, which is meant to be there.
 names. Where one is declared, something is reading it, and painting past it is
 how two halves of one surface come to disagree.
 
+### Two things a theme is allowed to move that are not colours of the page
+
+**The winner's colour** (`--win`). Four rules make one statement — the
+scoreboard card's winning figure, the matchup Summary's, its diverging category
+bar and the run of the whole-matchup meter the leader holds — and all four wrote
+`--hit` out. They read a token now, so a theme can move the statement rather than
+four rules, and Lavender moves it to the **accent**: on a palette whose whole
+subject is violet, the app's green is the one loud thing on the page belonging to
+no other mark on it, and it reads as an import from the other theme. It is still
+unmistakably *the* mark — ΔE **15.8** from the `--muted` a losing figure takes,
+half again the widest gap this palette has anywhere else, and the winner is
+bolder besides. Midnight keeps its green, which is what the token is for.
+
+**The plate behind a team logo** (`--logo-plate`). ESPN lets a manager upload
+anything, so a logo is an arbitrary image on whatever surface it lands on — and
+on a near-white card a **light or white** one has no boundary at all. Measured on
+the live 12-team league, 6 of its 12 logos are transparent or pale enough that a
+fifth to a half of their box sat within 6/255 of the card: the ESPN cap logos'
+white panel, and any photo with a pale surround, simply ended where the card
+began. So a logo gets a well to sit in rather than the page's own colour, at a
+value measured against the thing it has to hold: white on it is **1.53:1** where
+white on `--bg` is 1.00 and on `--border` 1.42, and it reads as a tile against
+both grounds it can land on (1.53 on a card, 1.36 on the zebra). A step further
+(#cfc6e4, 1.63) starts to read as a coloured chip behind every team.
+
+`.lg-logo-none` — the fallback baseball for a team with no logo or a dead URL —
+is excluded, because it is **our** mark rather than an uploaded one: it is drawn
+in `--faint` on the page's own colour, which the plate would only push toward its
+own ink (3.98:1 on `--bg` against 2.3 on the plate). It keeps the hairline that
+already makes it read as a deliberate placeholder.
+
+The dark theme has the mirror of the same problem — a *black* logo on a
+near-black card — and is deliberately left alone: nobody has reported it, and
+`--bg` there is doing the same job this token does here.
+
 ### The preference, and why it is the one thing in localStorage
 
 `UserPrefs.theme` is a **string id** rather than a boolean — there can be a third
@@ -168,6 +203,17 @@ moment the server's answer lands (which also writes it back, so a theme picked o
 one device reaches this one). A browser refusing storage gets the default and one
 frame of the wrong theme on a reload, which is the whole cost of it being a
 cache.
+
+**Saving it is a write to the user's own item, so it goes through the queue.**
+Everything this app saves about a person lands on one record, and the settings
+menu is the one surface where several of them are pressed in sequence: the
+scheme and the three toggles beside it. Driven back to back before the writes
+were queued, a theme press and a mute-audio press **corrupted the dev record** —
+not a lost update but a torn file, and both writes then 502'd, as did every one
+after them. The client half is `App.tsx::queueUserWrite`, which the scheme and
+all three toggles now use; the server half is `store.ts::fileWriteDb`, which
+writes to a temp file and renames. Both are set out under **Roster, watchlist,
+users and auth**.
 
 **The boot script is the only place a palette colour is written outside the
 stylesheet** — two `--bg` values and two `color-scheme` words — and it is inline,

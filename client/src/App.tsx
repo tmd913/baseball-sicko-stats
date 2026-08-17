@@ -401,6 +401,39 @@ export default function App() {
   // reachable by hand as `?sim=1`; only its settings-menu entry is hidden (see
   // SHOW_SIMULATE_TOGGLE).
   const [simulate, setSimulate] = useState<boolean>(() => initialParams.get('sim') === '1');
+  /**
+   * Writes to the user's own record, one at a time.
+   *
+   * **Everything the app saves about a person lands on one item** — the roster,
+   * the watchlist, the search history, the transactions marker and every entry
+   * in `UserPrefs` — so two of them in flight at once is a read-modify-write
+   * race whatever the two are. The deployed backend survives it (`store.ts`'s
+   * `mutate` re-reads and replays a lost update against a version-conditional
+   * put); the dev file backend has no version to check.
+   *
+   * It was one press of ＋ that first needed this — the roster and the search
+   * history, measured losing the pick on the very machine it was made on — and
+   * the **settings menu** is the same shape one press further: the colour
+   * scheme and the two toggles sit in one popover and are pressed in sequence
+   * by the same person. Driven back to back before this covered them, a theme
+   * and a mute-audio press left the dev record **corrupt** and both writes
+   * 502ing (see `store.ts::fileWriteDb`, which is the other half of that fix).
+   *
+   * A promise chain is the whole of it, and it costs nothing worth having: each
+   * write is a few hundred bytes against one small item, and nothing on screen
+   * is waiting for the second — the state has already moved, which is what
+   * makes every one of these safe to queue rather than await.
+   *
+   * `then(run, run)` rather than `then(run)`: a failed write must not stop the
+   * queue, or one dropped request would silently swallow every later one.
+   */
+  const userWrites = useRef<Promise<unknown>>(Promise.resolve());
+  const queueUserWrite = useCallback(<T,>(run: () => Promise<T>): Promise<T> => {
+    const next = userWrites.current.then(run, run);
+    userWrites.current = next.catch(() => undefined);
+    return next;
+  }, []);
+
   // Keep players on the IL off the players view. The summary table hides them
   // whatever this says (see `visibleReports`); this is the one view where the
   // choice is the user's, since a card can still show what he did before he got
@@ -420,10 +453,10 @@ export default function App() {
   const setHideInjured = useCallback((hide: boolean) => {
     hideInjuredTouched.current = true;
     setHideInjuredState(hide);
-    api
-      .saveHideInjured(hide)
-      .catch((e: Error) => console.error('saving hide-injured failed:', e.message));
-  }, []);
+    queueUserWrite(() => api.saveHideInjured(hide)).catch((e: Error) =>
+      console.error('saving hide-injured failed:', e.message),
+    );
+  }, [queueUserWrite]);
   /**
    * Narrow the summary table to the players who are actually starting today —
    * a hitter in the posted lineup, a pitcher named as today's starter.
@@ -567,6 +600,7 @@ export default function App() {
     const today = baseballToday();
     return start <= today && today <= end;
   }, [start, end]);
+
   // Play every clip with the sound off. Saved per user like the toggle above,
   // but deliberately **not** in the URL: hide-injured is there because it
   // changes which players a view is reporting on, and a link that says so is
@@ -580,10 +614,10 @@ export default function App() {
   const setMuteAudio = useCallback((mute: boolean) => {
     muteAudioTouched.current = true;
     setMuteAudioState(mute);
-    api
-      .saveMuteAudio(mute)
-      .catch((e: Error) => console.error('saving mute-audio failed:', e.message));
-  }, []);
+    queueUserWrite(() => api.saveMuteAudio(mute)).catch((e: Error) =>
+      console.error('saving mute-audio failed:', e.message),
+    );
+  }, [queueUserWrite]);
   /**
    * **The colour scheme.** Saved per user like the two toggles above and, like
    * them, deliberately **not in the URL**: it is a fact about this person and
@@ -607,12 +641,14 @@ export default function App() {
     themeTouched.current = true;
     setThemeState(next);
     storeTheme(next);
-    api
-      // `null` is "back to the default", which the server stores as the absence
-      // of the entry — the convention every preference here follows.
-      .saveTheme(next === DEFAULT_THEME ? null : next)
-      .catch((e: Error) => console.error('saving theme failed:', e.message));
-  }, []);
+    // Through `queueUserWrite`, like every other write to this item: the
+    // scheme is picked in the same popover as the two toggles above, so two
+    // presses a moment apart are two writes to one record. `null` is "back to
+    // the default", which the server stores as the absence of the entry.
+    queueUserWrite(() => api.saveTheme(next === DEFAULT_THEME ? null : next)).catch(
+      (e: Error) => console.error('saving theme failed:', e.message),
+    );
+  }, [queueUserWrite]);
   // The one line that puts a palette on the page. A layout effect so the
   // attribute is stamped before the browser paints the commit that changed it,
   // and idempotent, so re-running it costs nothing.
@@ -640,32 +676,10 @@ export default function App() {
   const setShowRanks = useCallback((on: boolean) => {
     showRanksTouched.current = true;
     setShowRanksState(on);
-    api
-      .saveStatRanks(on)
-      .catch((e: Error) => console.error('saving stat-ranks failed:', e.message));
-  }, []);
-  /**
-   * Writes to the user's own record, one at a time.
-   *
-   * One press of ＋ now writes to that record **twice** — the roster and the
-   * search history — and the two must not race. The deployed backend survives
-   * it (`store.ts::mutate` re-reads and replays a lost update against a
-   * version-conditional put), but the dev file backend has no version to check
-   * and the second writer simply overwrites the first: measured locally, an
-   * added player reached the roster and his pick vanished from the history on
-   * the very machine it was made on. A promise chain is the whole of the fix,
-   * and it costs nothing worth having — both writes are a few hundred bytes
-   * against one small item, and nothing on screen is waiting for the second.
-   *
-   * `then(run, run)` rather than `then(run)`: a failed write must not stop the
-   * queue, or one dropped request would silently swallow every later one.
-   */
-  const userWrites = useRef<Promise<unknown>>(Promise.resolve());
-  const queueUserWrite = useCallback(<T,>(run: () => Promise<T>): Promise<T> => {
-    const next = userWrites.current.then(run, run);
-    userWrites.current = next.catch(() => undefined);
-    return next;
-  }, []);
+    queueUserWrite(() => api.saveStatRanks(on)).catch((e: Error) =>
+      console.error('saving stat-ranks failed:', e.message),
+    );
+  }, [queueUserWrite]);
 
   /**
    * The players most recently picked out of the header search, newest first —

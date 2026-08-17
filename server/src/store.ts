@@ -453,9 +453,49 @@ async function fileDb(): Promise<FileDb> {
   return { __legacy: obj };
 }
 
+/**
+ * Write the dev record **atomically**, and one write at a time.
+ *
+ * `fs.writeFile` over an existing path truncates and rewrites **in place**, so
+ * a write that is shorter than what is already there leaves the tail of the old
+ * document behind — and a JSON document with a byte of another one after it
+ * does not parse. That is not a lost update, which this backend has always been
+ * documented as risking; it is a **corrupted file**, and once it happens every
+ * read *and* every write fails until somebody repairs it by hand.
+ *
+ * It was reproduced rather than guessed at: two preference writes fired back to
+ * back from one settings menu (a theme and a toggle) left `watchlist.json` as a
+ * valid 8,056-byte document followed by a single stray `}`, and both writes then
+ * came back **502** — as did every one after them. The roster, the watchlist and
+ * the league's ESPN credential were all in that file.
+ *
+ * Two lines fix it and each answers a different half:
+ *
+ * - **A temp file and a rename.** `rename(2)` is atomic within a filesystem, so
+ *   a reader sees either the whole old document or the whole new one and never a
+ *   splice of the two. The temp name carries the pid so two processes sharing a
+ *   `server/data/` cannot collide on it.
+ * - **A promise chain**, so two writes *in this process* cannot interleave at
+ *   all. `client/src/App.tsx::queueUserWrite` does the same one tier up and is
+ *   the reason a single tab is orderly; this is what makes two tabs, a tab and a
+ *   `curl`, or anything else pointed at the same file safe as well.
+ *
+ * What it deliberately does **not** do is give this backend the versioned,
+ * conditional write DynamoDB gets. A concurrent read-modify-write here can still
+ * *lose* an update, which is the documented shape and is what `mutate`'s replay
+ * handles where it can; what it can no longer do is destroy the file.
+ */
+let fileWrites: Promise<unknown> = Promise.resolve();
 async function fileWriteDb(db: FileDb): Promise<void> {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  await fs.writeFile(FILE, JSON.stringify({ records: db }, null, 2), 'utf8');
+  const run = async () => {
+    await fs.mkdir(DATA_DIR, { recursive: true });
+    const tmp = `${FILE}.${process.pid}.tmp`;
+    await fs.writeFile(tmp, JSON.stringify({ records: db }, null, 2), 'utf8');
+    await fs.rename(tmp, FILE);
+  };
+  const next = fileWrites.then(run, run);
+  fileWrites = next.catch(() => undefined);
+  return next;
 }
 
 async function fileLoad(userId: string): Promise<Versioned> {
