@@ -1840,6 +1840,37 @@ its rank, the group row still drawn and `aria-sort` naming exactly one column.
 per-cell gradient layer, a row-wash rule and a green first-place override costs
 when what replaces them is one pill rule and one ring.
 
+### The table takes the page
+
+**The fourth of the app's wide tables to offer it**, and the one with the most
+chrome above it: a tab strip, a span strip and a caption, over fifteen columns
+on the live league every one of which is wanted at once. The button is
+`ExpandButton` — the same control the summary table, the research board and the
+game log carry — in **the badge column's header cell**, which is this table's
+own version of the cell those three put it in: the one pinned on *both* axes, so
+the way back out is on screen wherever the reader has scrolled to. It costs the
+table nothing: measured at 390, 1100 and 1920, the badge column is **48.8 /
+75.8 / 90px with the button and byte-identical without it**, the button being
+26px inside a column already wider than that, and the table is unchanged at
+996.8 / 1408.2 / 1920.
+
+**It needs no `.expanded-chrome` row, which is the one way it parts from the
+other three.** The caption it already carries *is* the chrome — `Week 19 · Aug
+10 – Aug 16 · so far` and the ⓘ that explains OVR/BAT/PIT — which is exactly
+the context the span strip up in the tab row can no longer give once this box
+covers it, and it is the table's caption besides. So the box keeps that line and
+hides everything else, which is the research board's own rule (it keeps its
+count line for the same reason) applied with one fewer element.
+
+**Driven in a browser at 1200×800.** Closed, the box is 1356 × 757 at (22, 129);
+expanded it is **1400 × 900 at (0, 0)** with the background `inert` (2 held) and
+the two children `.lg-span-detail` and `.league-scroll` and no empty state.
+Scrolled 600 across and 200 down inside it, the badge column pins at **0** and
+the header row at **1px** — the border — with the button still on screen at
+x=27. Sorting still works from inside the box (one press of `HR` puts the
+leaders on top), the ⓘ still opens, and **Escape unwinds one rung per press**:
+the key first, the full-page box second, `[inert]` back to 0.
+
 **Sorting is on the rank rather than the value**, which is the one thing this
 table does that the season table did not, and it buys the reader a rule they no
 longer have to know: **every column opens on first place**, whichever direction

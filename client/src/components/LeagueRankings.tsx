@@ -19,6 +19,7 @@
  * span is made of and what was measured to establish that it could be.
  */
 import { useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import type {
   EspnCategory,
   EspnCategorySide,
@@ -27,6 +28,8 @@ import type {
   EspnRankSpanInfo,
   EspnRankings,
 } from '../types';
+import { useFullPage } from '../hooks';
+import { ExpandButton } from './ExpandButton';
 import { InfoKey } from './InfoKey';
 import { LoadingBlock } from './Loading';
 import { TeamLogo, categoryGroups, fmtValue, prettyDate, record } from './LeagueView';
@@ -178,9 +181,15 @@ function sameKey(a: SortKey, b: SortKey): boolean {
 function RankTable({
   rankings,
   categories,
+  corner,
 }: {
   rankings: EspnRankings;
   categories: EspnCategory[];
+  /** The full-page button, which goes in the badge column's header cell — the
+   *  one cell of this table pinned on both axes, so the way back out is on
+   *  screen wherever the reader has scrolled to. The three wide tables put it
+   *  in exactly that cell for exactly that reason. */
+  corner?: ReactNode;
 }) {
   const [sort, setSort] = useState<SortKey>({ kind: 'team' });
   const [asc, setAsc] = useState(true);
@@ -317,7 +326,9 @@ function RankTable({
                 carries no label and no sort: it is the same cell the two roster
                 tables give a headshot, and the sort that belongs to a team's
                 identity belongs on its name. */}
-            <th scope="col" className="lg-logo-col" aria-label="Team badge" />
+            <th scope="col" className="lg-logo-col" aria-label="Team badge">
+              {corner}
+            </th>
             {head({ kind: 'team' }, 'Team', 'The league standing', 'lg-name-col')}
             {/* **The whole row in one column, leading the two halves it is made
                 of.** It is what a manager wants first — where he stands, full
@@ -548,6 +559,18 @@ export default function LeagueRankings({
   loading: boolean;
   error: string | null;
 }) {
+  /**
+   * **The page, for the widest table on this view.** It is fifteen columns on
+   * the live league and every one of them is wanted at once, which is the
+   * whole of the argument the three tables that already offer this make — and
+   * this one is read inside a tab strip, a span strip and a caption, so it has
+   * more chrome above it than any of them.
+   *
+   * The hook is called before the early returns because hooks must be, and it
+   * costs nothing on a render that draws a message instead: with no table
+   * there is no button, so the mode cannot be entered.
+   */
+  const { isFull, toggle, ref: fullRef } = useFullPage<HTMLDivElement>();
   if (error && !rankings) {
     return (
       <div className="empty-state">
@@ -567,7 +590,7 @@ export default function LeagueRankings({
   const info = rankings.spans.find((s) => s.span === shown);
 
   return (
-    <div className="lg-rankings">
+    <div ref={fullRef} className={`lg-rankings${isFull ? ' is-expanded' : ''}`}>
       {/* What the span covers, **directly above the table** rather than beside
           the strip that picks it. The strip is in the app's tab row now (see
           `App`), and this is not a control: it is the table's caption, which is
@@ -601,7 +624,11 @@ export default function LeagueRankings({
           <p>ESPN has no category totals for these weeks, so there is nothing to rank.</p>
         </div>
       ) : (
-        <RankTable rankings={rankings} categories={rankings.categories} />
+        <RankTable
+          rankings={rankings}
+          categories={rankings.categories}
+          corner={<ExpandButton isFull={isFull} onToggle={toggle} what="table" />}
+        />
       )}
     </div>
   );
