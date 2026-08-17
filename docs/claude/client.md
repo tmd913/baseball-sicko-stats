@@ -401,7 +401,7 @@ untouched.
 resolve** — all of them are imported by `CLAUDE.md` and so are in context together,
 which is what those references have always relied on. What such a reference no
 longer does is name one file, so follow it by the surface it is talking about: the
-23 of them across `data-sources.md`, `auth-and-storage.md`, `espn.md`, `server.md`
+23 of them across `data-sources.md`, `auth-and-storage.md`, the `espn*.md` family, `server.md`
 and `pitchers.md` mostly mean the roster table, the research board or the feed, and
 each of those now has a file named for it.
 

@@ -40,9 +40,21 @@ letting it grow past it.
 
 @docs/claude/auth-and-storage.md
 
-**ESPN fantasy league** — reading a league with the user's cookies, the name+team join, free agents, roster %, trending, invite sharing.
+**ESPN fantasy league** — reading a league with the user's cookies, the name+team join, free agents, which day's lineup, a range of rosters, the scoring-period anchor and the injury designation.
 
 @docs/claude/espn.md
+
+**ESPN — connecting and sharing a league** — the `espn_s2` credential and how it is handled, the connect form, the nine routes, the invite link, and what naming a team for the first time does.
+
+@docs/claude/espn-connection.md
+
+**ESPN — the per-player marks a league buys** — roster %, position eligibility, the padlock, and the five trend columns, all off one cookie-free player list.
+
+@docs/claude/espn-players.md
+
+**ESPN — the league's own numbers** — the scoreboard and the day `cumulativeScore` leaves off, acquisitions, the stat-id table, the matchup window, the Rankings spans and the transactions feed.
+
+@docs/claude/espn-scoreboard.md
 
 **Deployment** — the CDK app: S3 + CloudFront, Lambda, custom domain, warmers.
 
