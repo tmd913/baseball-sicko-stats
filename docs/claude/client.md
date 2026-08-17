@@ -352,27 +352,53 @@ file below is one surface of the app.
 - **`client-research.md`** — the research board: its columns and their picker, the
   sort, the include buttons and the watchlist star, the position row and what a
   position means, the window tabs and the whole control bar.
-- **`client-player-page.md`** — `PlayerDetails` and its tabs (Overview, Percentile
-  Rankings, Splits, News, Stats, Game Log, Arsenal, Charts), plus the reorder
-  screen and the how-to page.
+- **`client-player-page.md`** — `PlayerDetails`, the reorder screen, the how-to
+  page, and the **Overview** tab: his day, his next game, his projected starts,
+  his latest news and his last five games.
+- **`client-player-tabs.md`** — the player page's other reading tabs: **News**,
+  **Stats**, **Game Log** and **Charts**.
+- **`client-player-splits.md`** — the player page's **Splits** tab: the platoon
+  comparison and the five rounds of measured geometry its bar has taken.
 - **`client-dialogs.md`** — the rules every popup in the app obeys: why details are
   popups rather than accordions, the layer ladder, what a popup has to cover, and
   why one press of Escape undoes exactly one thing.
 - **`client-feed.md`** — the Feed view: its three sections, the base-event
   vocabulary, and what the feed lost when its grouped reading became the player
   page's Overview tab.
-- **`client-league.md`** — the League view: the matchup scoreboard, the season
-  table and its sort, why it earns a pill rather than an entry in the fantasy
-  popover, and the four ESPN league formats it has to be honest about. It is
-  the seventh of these and the first added since the split.
+- **`client-league.md`** — the League view: why it earns a pill rather than an
+  entry in the fantasy popover, its three tabs and their strip, the poll, the
+  four ESPN league formats it has to be honest about, and the **Scoreboard** tab.
+  It was the seventh of these and the first added since the split.
+- **`client-league-matchup.md`** — a matchup as a **page over** that view: the
+  Summary page's category comparison, the acquisitions and moves under it, and
+  the two team pages.
+- **`client-league-rankings.md`** — the League view's **Rankings** tab: every
+  team against every category, its summary columns and its rank badge.
+- **`client-league-transactions.md`** — the League view's **Transactions** tab,
+  and the red dot that says there are moves you haven't seen.
 
 A passage that moved kept its wording; nothing was rewritten to fit its new file,
 so a claim that reads oddly against its neighbours is a seam rather than a change
 of mind. Checked rather than asserted: every one of the 1,087 non-blank lines of
 the original is present exactly once across the six, none added.
 
+**Two of them have since been split again, on the same rule and for the same
+reason** — the limit is per file, and both had grown past it: the player page to
+215k across eight tabs, and the League view to 183k, 17k of that in a single
+session. `client-player-page.md` became three (the page and its Overview, the
+other reading tabs, the Splits tab) and `client-league.md` four (the view and its
+Scoreboard, the matchup page, Rankings, Transactions), which is the division by
+surface applied one level down rather than a new principle. The same check was
+run and reads the same way: **every one of the 2,207 and 2,502 non-blank lines is
+present exactly once**, with nothing added but the orientation paragraph at the
+head of each new file. **Three sections moved rather than staying where they
+sat** — the League view's own tab strip was documented twice in the middle of
+matchup material, and the Transactions dot between two matchup measurements — so
+the split filed them under the surface they are about; their wording is
+untouched.
+
 **The other files' references to "see **Client**" were left alone, and they still
-resolve** — all six are imported by `CLAUDE.md` and so are in context together,
+resolve** — all of them are imported by `CLAUDE.md` and so are in context together,
 which is what those references have always relied on. What such a reference no
 longer does is name one file, so follow it by the surface it is talking about: the
 23 of them across `data-sources.md`, `auth-and-storage.md`, `espn.md`, `server.md`
