@@ -94,18 +94,21 @@ actionable thing a feed of adds and drops can say (*somebody just dropped a
 shortstop*). The **roster %** is how big a deal the move is — a 78%-rostered
 player being dropped is news where a 2% one is noise — and it is four characters,
 right-aligned to the same edge the transaction's own date sits on, so it reads as
-a column rather than as something in the way of scanning the names. The
-**headshot** is recognition, and the app's own way of naming a player everywhere
-else. And the **club** is the cap logo with the abbreviation on its tooltip: on a
-*fantasy* feed it is the least decision-relevant of the four, and drawn as `MIL`
-it would have been a third string on a line already carrying two.
+a column rather than as something in the way of scanning the names (it has since
+gained its own three deltas under it — see *And how that percentage has moved*
+below). The **headshot** is recognition, and the app's own way of naming a player
+everywhere else. And the **club** is the cap logo with the abbreviation on its
+tooltip: on a *fantasy* feed it is the least decision-relevant of the four, and
+drawn as `MIL` it would have been a third string on a line already carrying two.
 
 **The block is `PlayerIdentity`**, the same component the summary table and the
 research board draw a name over a club and a position list with, and the position
 itself is `lib.ts::positionCell` — one definition rather than a third copy, which
 is the rule those two already state for each other. What this caller adds is the
 two things a row in a *feed* needs of it: room to shrink, and a name line that
-carries the trade destination and the waiver bid beside the name.
+carries the trade destination beside the name. (The waiver bid was the third
+thing on that line and has gone — see *The waiver bid is a word, not a figure*
+below.)
 
 ### The headshot opens his page, where it used to be a plain image
 
@@ -279,3 +282,131 @@ above restated where the rules are.
 146.62 gzipped) and **115.61 → 116.33 KB of CSS** (20.54 → 20.63) — 1.5KB and
 0.7KB raw, 0.43KB and 0.09KB over the wire, for a shared identity block, a
 headshot with its fallback, a roster-% cell and the Load-more fold.
+
+### Added players lead, and a hairline separates one from the next
+
+**ESPN's order inside a transaction is arbitrary, and half the feed read
+backwards because of it.** A pickup and the drop that paid for it arrive as one
+topic, and which of the two comes first is not a fact about anything: measured
+over the live league's 250 most recent moves, **79 of the 149 two-player
+transactions arrive drop-first and 70 add-first**. So the man who left sat above
+the man who arrived on a coin flip, on a feed read to find out what somebody
+went and did.
+
+**The add is the news**, so it leads — the drop is what it cost — and the sort
+is one comparator over `move`, applied where the row is drawn rather than on the
+wire, the payload being ESPN's own record and no business of ours to reorder.
+
+**`sort` is stable by specification, which is what makes it safe on a trade.**
+Every player in one is an `add` (ESPN's message type 244 files them that way,
+each to the team receiving him), so the comparator is flat across all nine and
+the order ESPN sent — which pairs the two halves of the deal — survives
+untouched. Checked against the route on a five-player trade: the drawn order is
+byte-identical to the payload's.
+
+**And a hairline separates one player from the next**, which a 4px gap did not:
+an ordinary add-and-drop ran together as one block of four lines and a
+nine-player trade as eighteen. It is the app's own list separator — the rule
+`.news-item` and `.start-row` already carry, `var(--border)` with the last row
+exempt — rather than a second device invented here. It costs a two-player card
+**9px**, because the padding is only ever *between* two rows and never at the
+card's own edges.
+
+### The waiver bid is a word, not a figure
+
+**`$12` beside a name is gone.** What it was there for is already said by the
+row's own word — `Claimed` rather than `Added`, which is the distinction that
+changes a reading (one cost him a bid and his place in the order, the other cost
+him nothing) — and the figure itself is a number nobody scans a feed for. It sat
+on the name line, which is the one line on the row that has to shrink.
+
+**`EspnTransactionPlayer.bid` keeps a reader and stays**, which is the test this
+repo applies before removing a field: the matchup page's Moves section carries it
+in the row's **tooltip**, with the day (`Claimed · Aug 17 · $1`), where it is
+available to anybody who wants it and in nobody's way. So this is one chip
+removed from one surface rather than a field pruned.
+
+### And how that percentage has moved
+
+**The roster % says how big a deal a move is and could not say which way it was
+going.** A player at 21.3% is either a man the league is dropping or one it is
+picking up, and on a *dated* feed that is the more useful half: the row says what
+happened on Tuesday, and the deltas say what the league has thought of it since.
+
+**Three spans, 1d / 3d / 7d**, of the five the server can send. The board offers
+all five and defaults four of them off, on the argument that five near-identical
+signed columns at the front of the app's widest table is a resolution nobody
+asked for; a feed is the opposite case, and the three *short* spans are the ones
+a move a week old can still be read against — 15 and 30 would be a fortnight and
+a month of drift over a transaction from Tuesday. A window the read found no
+baseline for is simply absent from the response, so a young install draws
+whichever of the three it has and no empty columns.
+
+**Under the figure, not beside it**, which costs the row no height at all: the
+percentage's line and the deltas' come to 32px between them, and the 32px
+headshot beside them already set that. The two are one fact at two resolutions,
+so a column reads as one thing where a run of four figures across would read as
+four.
+
+**The classes are folded onto the player page's own** (`.details-trend`,
+`.details-trend-span`) rather than restyled to match: that header draws the same
+object — a span label and a signed roster-% move, beside the same figure — so the
+up/down vocabulary has one definition. All this caller differs in is a 10px label
+under an 11px value, which is the same step down the 11-under-12.5 there is.
+
+**It costs no request.** `App` already holds the deltas for the board's trend
+columns and the player page's header; the tab is the third reader and takes them
+whole, because it asks after one player at a time rather than merging a column
+onto every row.
+
+**A flat window prints `0.0` rather than nothing.** The server drops zeroes from
+the wire to keep the blob small, so absence there means *hasn't moved* and the
+figure is filled back in here — which is what keeps the column a fixed width down
+a list of 418 rows, and what stops a genuine nought reading as a missing answer.
+A player with **no** roster % at all draws no ownership block, deltas included:
+a move with no figure to have moved is nothing to draw.
+
+### On a phone the ownership column takes its own line
+
+**The row's fixed costs are a 58px move word, a 32px circle, three 8px gaps and —
+once the deltas joined it — a 151px ownership block**, which at 390 left the name
+**53px** and ellipsized **all 42 of them**. Wrapping the block under the row
+rather than dropping the deltas gives the name the whole first line (0
+ellipsized) and costs the row ~17px, which on a scrolling feed is much the
+cheaper of the two. It stays right-aligned there, so the percentages still line
+up down the list.
+
+**It is the one place the row wraps, and it does not undo the rule above it**:
+what must not wrap is the *identity block*, which still ellipsizes, so a
+nine-player trade is nine rows of two lines rather than nine paragraphs.
+
+### Measured
+
+**Driven against the built client and the live 12-team league**, at 320 / 390 /
+640 / 900 / 1200 / 1920 in Midnight and Powder Blue:
+
+- **Over the whole feed paged out — 250 transactions, 418 player rows —
+  `0` transactions draw a drop above an add**, where the payload has 79 of them.
+  A five-player trade's drawn order is byte-identical to the route's.
+- **`0` bid chips and `0` `$` characters** anywhere in the tab.
+- **415 of the 418 rows carry the ownership block and its three deltas**; the
+  three that don't are the players the name-and-club join could not place, which
+  is the same set that draws initials and a plain name.
+- **The hairline** computes `1px` in each theme's own `--border` (`rgb(38,54,92)`
+  / `rgb(180,207,230)`), and `0px` on the last row of every card.
+- **The deltas** read `1d ▼1.5 3d ▲0.8 7d ▲0.9`, with `up` and `down` resolving
+  each theme's `--hit` and `--strikeout` (`rgb(52,211,153)` / `rgb(248,113,113)`
+  and `rgb(13,84,36)` / `rgb(163,21,31)`).
+- **Row height** 40px from 640 up and 57 below it (the wrapped ownership line),
+  against 32/32 before; **0 names ellipsized at any width in either theme**, and
+  **page-body overflow 0** and card overflow 0 at all six.
+- **With `/api/espn/ownership` blocked** the rows draw with no ownership block at
+  all, the positions fall back to MLB's own word, and there is no error state —
+  42 rows, `0` `.lg-tx-own`, `0` `.lg-tx-trends`, overflow 0.
+- **The matchup page's Moves section is untouched**: 25 moves with the bid still
+  in the tooltip (`Claimed · Aug 17 · $1`).
+
+**Bundle: 544.45 → 545.25 KB of JS** (161.65 → 161.87 gzipped) and **145.50 →
+146.00 KB of CSS** (25.93 → 26.02) — 0.8KB and 0.5KB raw, 0.2KB and 0.09KB over
+the wire, for a sort, a hairline, a stacked column, a phone rule and the
+paragraphs above restated where they apply.

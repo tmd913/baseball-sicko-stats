@@ -4406,6 +4406,11 @@ export default function App() {
              maps the ownership read already puts in hand. No read of its own. */
           players={seasonPlayers}
           rosterPct={rosterPct}
+          /* And the deltas beside it — the same object the board's trend
+             columns and the player page's own header read, handed over whole
+             because that tab asks after one player at a time rather than
+             merging a column onto every row. */
+          rosterTrend={rosterTrend}
           eligibility={eligibility}
           onOpenPlayer={openLeaguePlayer}
           connected={espnConnected}

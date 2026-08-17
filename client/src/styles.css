@@ -10718,7 +10718,12 @@ button.start-line:focus-visible {
   row-gap: 2px;
   margin-left: 8px;
 }
-.details-trend {
+/* `.lg-tx-trend` is folded on rather than restyled: the Transactions tab draws
+   the same object — a span label and a signed roster-% move — beside the same
+   figure, and two rules would be two chances for the up/down vocabulary to
+   drift. All this caller differs in is its label size, one rule below. */
+.details-trend,
+.lg-tx-trend {
   font-weight: 700;
   color: var(--faint);
   white-space: nowrap;
@@ -10727,16 +10732,24 @@ button.start-line:focus-visible {
    the label and the number is the news. Never wraps away from its own value —
    the whole item is `nowrap` — so "7d" can't end a line with its move on the
    next one, which would read as a different span's. */
-.details-trend-span {
+.details-trend-span,
+.lg-tx-trend-span {
   margin-right: 3px;
   font-weight: 600;
   font-size: 11px;
   color: var(--muted);
 }
-.details-trend.up {
+/* Under an 11px value rather than the player page's 12.5px one, so the label
+   keeps the same step down from the number it qualifies. */
+.lg-tx-trends .lg-tx-trend-span {
+  font-size: 10px;
+}
+.details-trend.up,
+.lg-tx-trend.up {
   color: var(--hit);
 }
-.details-trend.down {
+.details-trend.down,
+.lg-tx-trend.down {
   color: var(--strikeout);
 }
 /* Scoped to `td` so they outrank `.research-table td.research-sorted`, which
@@ -12965,18 +12978,34 @@ span.mup-move-name:hover {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
 }
 /* A player row is the move, his face, the identity block every other table in
    the app draws him with, and his roster % at the far end. It does **not**
    wrap: the block ellipsizes instead, which is what keeps a nine-player trade a
-   list of nine rows rather than of nine paragraphs. */
+   list of nine rows rather than of nine paragraphs.
+
+   **A hairline separates one player from the next**, which a 4px gap did not:
+   two rows of an ordinary add-and-drop ran together as one block of four lines,
+   and a nine-player trade as eighteen. It is the app's own list separator — the
+   rule `.news-item` and `.start-row` already carry, `var(--border)` with the
+   last row exempt — rather than a second device, and it costs the card 9px for
+   a two-player move because the padding is only ever *between* two rows and
+   never at the card's own edges. */
 .lg-tx-player {
   display: flex;
   align-items: center;
   gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
   font-size: 13px;
   min-width: 0;
+}
+.lg-tx-player:first-child {
+  padding-top: 0;
+}
+.lg-tx-player:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
 }
 /* The block is `PlayerIdentity`'s, unscoped and shared with the summary table
    and the research board — see `components/PlayerIdentity.tsx`. What this
@@ -13052,17 +13081,41 @@ span.mup-move-name:hover {
   letter-spacing: 0.02em;
   color: var(--faint);
 }
-/* ESPN's global rostered percentage — how big a deal the move is. Muted and
-   right-aligned, so it is there to be read off a row rather than in the way of
-   scanning the names. */
-.lg-tx-pct {
+/* **The far end of the row: how widely he is rostered, and how that has
+   moved.** A column rather than a run, because the two are one fact at two
+   resolutions and the deltas are the smaller of them — and because stacking
+   them costs the row no height at all: the figure's line and the deltas' come
+   to 32px between them, which is exactly what the 32px headshot beside them
+   already sets. Right-aligned so the percentages line up down the list and the
+   scan path along the names is left alone. */
+.lg-tx-own {
   margin-left: auto;
   flex: none;
-  padding-left: 6px;
+  padding-left: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+/* ESPN's global rostered percentage — how big a deal the move is. */
+.lg-tx-pct {
   font-size: 12px;
   font-weight: 700;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+}
+/* One span per window the read found a baseline for, in the order the server
+   sends them (ascending), so the newest movement is nearest the figure it
+   moved. `nowrap` on the run: three of these under a 40px percentage is the
+   widest thing in the column, and breaking it would put `7d` on one line with
+   its move on the next, which reads as a different span's. */
+.lg-tx-trends {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 /* The word for the move, in a fixed-width slot so the names under one another
    start at one x — the same arithmetic the summary table's fantasy slot chip
@@ -13116,15 +13169,37 @@ span.mup-move-name:hover {
   font-size: 12px;
   color: var(--muted);
 }
-.lg-tx-bid {
-  flex: none;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--faint);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 1px 6px;
+/* `.lg-tx-bid` — the `$12` chip a waiver claim carried — is gone. What it said
+   is already in the row's own word (`Claimed` rather than `Added`, which is the
+   distinction that changes a reading), and a dollar figure beside a name in a
+   feed is a number nobody scans for. `EspnTransactionPlayer.bid` keeps a reader
+   on the matchup page's Moves section, where it rides in the row's tooltip. */
+/* **On a phone the ownership column takes its own line.** The row's fixed costs
+   are a 58px move word, a 32px circle, three 8px gaps and — since the deltas
+   joined it — a 151px ownership block, which at 390 left the name **53px** and
+   ellipsized **all 42 of them**. Wrapping the block under the row rather than
+   dropping the deltas gives the name the whole first line (214px, 0 ellipsized)
+   and costs the row ~17px, which on a scrolling feed is the cheaper of the two.
+   It stays right-aligned there, so the percentages still line up down the list.
+
+   This is the one place the row wraps, and it does not undo the rule above it:
+   what must not wrap is the *identity block*, which still ellipsizes, so a
+   nine-player trade is nine rows of two lines rather than nine paragraphs. */
+@media (max-width: 640px) {
+  .lg-tx-player {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+  .lg-tx-own {
+    flex-basis: 100%;
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: flex-end;
+    gap: 8px;
+    padding-left: 0;
+  }
 }
+
 /* What the list is, said at its foot when it is at the server's own limit
    rather than implied — the same honesty the research board's count line
    carries for a filtered table. */
