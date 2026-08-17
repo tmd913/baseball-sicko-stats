@@ -74,6 +74,49 @@ export function fmtValue(value: number | undefined, cat: EspnCategory): string {
   return String(Math.round(value * 1000) / 1000);
 }
 
+/**
+ * **A team's short name**, for the places a full one will not fit — the matchup
+ * page's three-tab strip above all, where `The Stickystackers` and
+ * `Brian&Tom's Excellent Adventure` clipped mid-word at 320 and crowded the
+ * strip at every width above it.
+ *
+ * **ESPN's own where there is one**, which there almost always is: a manager
+ * sets it and ESPN shows it on its own scoreboard, so it is the league's own
+ * vocabulary rather than a rendering of ours — and it is often *not* derivable
+ * from the name (`GREG` for The Homewreckers, `HOFF` for THE BRONX FLOATERS,
+ * `BETS` for Sho me the Parlay), which is the strongest argument for reading it
+ * rather than computing one. On the live league all twelve have one, 2 to 4
+ * characters.
+ *
+ * **Derived only where the field is empty.** Initials of the significant words
+ * (`Pirates Cove` → `PC`, `Let's Go Mets` → `LGM`), or the first four letters
+ * where there is only one word left (`Homewreckers` → `HOME`), with the
+ * articles and conjunctions dropped so `The` cannot be a team's whole
+ * abbreviation. A name with no letters or digits in it at all falls back to the
+ * team's id, which is what every other unnameable team on this view does.
+ *
+ * The **full name is never lost**: every caller keeps it in the control's own
+ * `title`, and the two places with room for it — a scoreboard card and a
+ * rankings row — go on printing it.
+ */
+const ABBREV_NOISE = new Set(['the', 'a', 'an', 'of', 'and']);
+
+export function teamAbbrev(team: EspnStandingsTeam | undefined, teamId: number): string {
+  const own = team?.abbrev?.trim();
+  if (own) return own;
+  const words = (team?.name ?? '')
+    .split(/\s+/)
+    .map((w) => w.replace(/[^\p{L}\p{N}]/gu, ''))
+    .filter((w) => w && !ABBREV_NOISE.has(w.toLowerCase()));
+  if (words.length === 0) return `T${teamId}`;
+  if (words.length === 1) return words[0].slice(0, 4).toUpperCase();
+  return words
+    .slice(0, 4)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase();
+}
+
 /** `7-7-4`, or `7-7` where the league has no ties to report. */
 export function record(t: { wins: number; losses: number; ties: number }): string {
   return t.ties > 0 ? `${t.wins}-${t.losses}-${t.ties}` : `${t.wins}-${t.losses}`;
