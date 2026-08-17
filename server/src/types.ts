@@ -497,21 +497,27 @@ export interface PitcherGame {
 
 /**
  * One pitch as a point on the Arsenal tab's Movement Profile — where it broke,
- * how hard, and which side the batter stood on (so the plot can follow the
- * Overall / vs RHB / vs LHB tabs off one array rather than three).
+ * and nothing else: the plot draws a coloured dot at (`hBreak`, `vBreak`) and
+ * reads no other field. A `velo` and a `stand` rode along until the tab's split
+ * tabs were removed and took their last reader with them (the rule
+ * `teamProbablePitcher`'s removal sets); both are one line to put back if a
+ * per-dot tooltip or a per-hand cloud ever wants them.
  *
  * `hBreak`/`vBreak` are the app's usual convention, inches: positive `hBreak`
  * breaks toward **third base** and positive `vBreak` is rise. That holds for a
  * pitcher of either hand with no special case — a RHP's four-seam runs arm-side
  * to 3B and reads positive, a LHP's runs to 1B and reads negative — which is
  * also exactly where Savant's own chart puts them.
+ *
+ * **This is the declaration `pitcherArsenal.ts` imports**, rather than one of
+ * two: it had its own copy for a while, `tsc` could not see the pair drift
+ * because nothing imported the duplicate, and the copy in this file was still
+ * carrying two fields the wire had stopped sending.
  */
 export interface MovementSample {
   pitchType: string;
   hBreak: number;
   vBreak: number;
-  velo: number | null;
-  stand: 'R' | 'L' | null;
 }
 
 /**
