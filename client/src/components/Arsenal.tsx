@@ -1,4 +1,4 @@
-import type { PitchMix, SeasonArsenalPitch } from '../types';
+import type { PitchMix } from '../types';
 import { deltaVs, fmt, pitchStyle } from '../lib';
 
 /*
@@ -249,64 +249,6 @@ export function ArsenalRow({ m, split = 'all' }: { m: PitchMix; split?: SplitKey
           <ResultStat label="wOBA" value={avg3(m.seasonWoba)} />
           <ResultStat label="xwOBA" value={avg3(m.seasonXwoba)} />
           <ResultStat label="PutAway" value={pct(m.seasonPutAway)} />
-        </div>
-      )}
-    </div>
-  );
-}
-
-/**
- * One pitch type over the whole season — the details view's row. Same shape as
- * the per-game row, but the pitcher's season is the value and the **league** is
- * the baseline the ▲▼ deltas measure against, so the arrows say how his pitch
- * compares to everyone else's rather than to his own norm.
- */
-export function SeasonArsenalRow({ p }: { p: SeasonArsenalPitch }) {
-  const { abbr, color } = pitchStyle(p.pitchType);
-  const better = pitchDirections(p.pitchType);
-  const balls = p.count - p.strikes;
-  return (
-    <div className="ars-row" style={{ borderLeftColor: color }}>
-      <div className="ars-head">
-        <span className="ars-dot" style={{ background: color }} />
-        <span className="ars-abbr">{abbr}</span>
-        <span className="ars-name">{p.pitchType}</span>
-        <RateBar
-          label="Usage"
-          pct={Math.round(p.share * 100)}
-          color={color}
-          counts={`${p.count} P`}
-          title={`${p.count} of his season's pitches`}
-        />
-        <RateBar
-          label="Strike"
-          pct={p.count ? Math.round((p.strikes / p.count) * 100) : null}
-          color="var(--accent)"
-          counts={`${p.strikes} S · ${balls} B`}
-        />
-      </div>
-      <div className="ars-metrics">
-        <ArsenalMetric label="Velo" value={p.velo} unit=" mph" season={p.leagueVelo} league={null} digits={1} better={better.velo} />
-        <ArsenalMetric label="Spin" value={p.spin} unit="" season={p.leagueSpin} league={null} digits={0} better={better.spin} />
-        <ArsenalMetric label="iVB" value={p.vBreak} unit='"' season={p.leagueVBreak} league={null} digits={1} better={better.ivb} />
-        <ArsenalMetric label="HB" value={p.hBreak} unit='"' season={p.leagueHBreak} league={null} digits={1} better={better.hb} />
-        <div className="ars-metric ars-metric-whiff">
-          <span className="ars-mlabel">Whiff</span>
-          <span className="ars-mval">{pct(p.whiff)}</span>
-          <span className="ars-delta tone-flat" aria-hidden="true">
-            {' '}
-          </span>
-        </div>
-      </div>
-      {p.pa !== null && (
-        <div className="ars-results" title={`${p.pa} PA ended on this pitch`}>
-          <span className="ars-rtag">Season Results</span>
-          <ResultStat label="PA" value={String(p.pa)} />
-          <ResultStat label="BA" value={avg3(p.ba)} />
-          <ResultStat label="SLG" value={avg3(p.slg)} />
-          <ResultStat label="wOBA" value={avg3(p.woba)} />
-          <ResultStat label="xwOBA" value={avg3(p.xwoba)} />
-          <ResultStat label="PutAway" value={pct(p.putAway)} />
         </div>
       )}
     </div>

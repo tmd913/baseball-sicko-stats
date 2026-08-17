@@ -296,56 +296,61 @@ export function MovementChart({
         </InfoKey>
       </figcaption>
 
-      {/* One row, two possible contents. It reserves its own height with a
-          hidden copy of a real pitch's chips rather than a declared
-          `min-height`: they wrap to two rows on a phone and one on a desktop,
-          so any fixed number would be wrong at one of those widths and would
-          shift the plot under the reader's finger the moment they picked a
-          pitch. The same trick `.spl-head-mark--ghost` uses on the Splits card
-          — and it has to be *one* box, since a ghost sitting beside an empty
-          real row is two margins where the selected state has one. */}
-      <div className={`mv-callouts${focus ? '' : ' mv-callouts-ghost'}`} aria-hidden={!focus}>
-        {focus === null ? (
-          <>
-            <span className="mv-callout">
-              Break <b>0.0"</b>
-              <em> · 0.0" more than league</em>
-            </span>
-            <span className="mv-callout">
-              Rise <b>0.0"</b>
-              <em> · 0.0" more than league</em>
-            </span>
-          </>
-        ) : (
-          <>
-            {focus.hBreak !== null && (
-              <span className="mv-callout">
-                Break <b>{Math.abs(focus.hBreak).toFixed(1)}"</b>
-                {hDiff !== null && (
-                  <em>
-                    {' '}
-                    · {Math.abs(hDiff).toFixed(1)}" {hDiff >= 0 ? 'more' : 'less'} than league
-                  </em>
-                )}
-              </span>
-            )}
-            {focus.vBreak !== null && (
-              <span className="mv-callout">
-                {focus.vBreak >= 0 ? 'Rise' : 'Drop'} <b>{Math.abs(focus.vBreak).toFixed(1)}"</b>
-                {vDiff !== null && (
-                  <em>
-                    {' '}
-                    {/* "more" and "less" are said of the quantity just named,
-                        which flips with the pitch: a curveball above the
-                        league's induced break has LESS drop, not more rise. */}
-                    · {Math.abs(vDiff).toFixed(1)}"{' '}
-                    {(focus.vBreak >= 0 ? vDiff >= 0 : vDiff < 0) ? 'more' : 'less'} than league
-                  </em>
-                )}
-              </span>
-            )}
-          </>
-        )}
+      {/* The row holds its own height with a hidden copy of a real pitch's chips
+          rather than a declared `min-height`: they wrap to two rows on a phone
+          and one on a desktop, so any fixed number would be wrong at one of
+          those widths and would shift the plot under the reader's finger the
+          moment they picked a pitch.
+
+          The ghost and the live text share **one grid cell** — the trick the
+          Columns dialog's hint line uses for exactly this — so at rest the space
+          the chips will need carries the sentence that says how to get them,
+          rather than sitting empty. */}
+      <div className="mv-callouts">
+        <span className="mv-callouts-ghost" aria-hidden="true">
+          <span className="mv-callout">
+            Break <b>0.0"</b>
+            <em> · 0.0" more than league</em>
+          </span>
+          <span className="mv-callout">
+            Rise <b>0.0"</b>
+            <em> · 0.0" more than league</em>
+          </span>
+        </span>
+        <span className="mv-callouts-live">
+          {focus === null ? (
+            <span className="mv-hint">Pick a pitch to compare it with the league</span>
+          ) : (
+            <>
+              {focus.hBreak !== null && (
+                <span className="mv-callout">
+                  Break <b>{Math.abs(focus.hBreak).toFixed(1)}"</b>
+                  {hDiff !== null && (
+                    <em>
+                      {' '}
+                      · {Math.abs(hDiff).toFixed(1)}" {hDiff >= 0 ? 'more' : 'less'} than league
+                    </em>
+                  )}
+                </span>
+              )}
+              {focus.vBreak !== null && (
+                <span className="mv-callout">
+                  {focus.vBreak >= 0 ? 'Rise' : 'Drop'} <b>{Math.abs(focus.vBreak).toFixed(1)}"</b>
+                  {vDiff !== null && (
+                    <em>
+                      {' '}
+                      {/* "more" and "less" are said of the quantity just named,
+                          which flips with the pitch: a curveball above the
+                          league's induced break has LESS drop, not more rise. */}
+                      · {Math.abs(vDiff).toFixed(1)}"{' '}
+                      {(focus.vBreak >= 0 ? vDiff >= 0 : vDiff < 0) ? 'more' : 'less'} than league
+                    </em>
+                  )}
+                </span>
+              )}
+            </>
+          )}
+        </span>
       </div>
 
       <div className="mv-axis-top" aria-hidden="true">

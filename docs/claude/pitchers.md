@@ -11,9 +11,28 @@ The roster holds both batters and pitchers, discriminated by `WatchPlayer.kind` 
 
 **`components/ArsenalCharts.tsx` recreates the two pictures a Baseball Savant
 pitcher page leads with** — **Pitch Usage** and **Movement Profile (Induced
-Break)** — above the per-pitch rows the tab already had. The rows are the
-detail; these are what a reader opens an arsenal *for*: what he throws, and
-where it moves.
+Break)** — and they are now the whole of the tab. They are what a reader opens
+an arsenal *for*: what he throws, and where it moves.
+
+**The rows and the split control went, and each was saying again what a picture
+says better.** The tab shipped with the charts *above* a `SeasonArsenalRow` per
+pitch and an Overall / vs RHB / vs LHB `SplitTabs` over the lot, which is the
+shape it had before the charts existed with the charts pasted on top.
+
+- **The split tabs are subsumed by the usage chart**, which draws vs LHH and vs
+  RHH side by side *always*. A control that switches the entire tab between two
+  of the three columns already on screen is a second, narrower way to ask a
+  question the chart has answered — and it quietly cut the movement cloud to a
+  third of itself for no reason the reader could see. (`SplitTabs` itself stays:
+  the pitcher card's Line and Arsenal sections are its live callers, and the
+  outing page still draws it.)
+- **The rows are the velo / spin / break / results table**, which is what the
+  movement plot, the legend under it and the callouts now carry between them.
+
+The samples are handed to the chart whole for the same reason: with no split
+control there is nothing to cut them by, and the cloud is the pitcher's season.
+The tab is **two charts and nothing else** — no note, no rows, no control —
+which took it from roughly three screens to one.
 
 **They share one selection, held by the tab.** Picking out the slider in one
 picks it out in the other, because they are two views of one arsenal — a
@@ -119,9 +138,13 @@ chips** rather than a declared `min-height` — the chips wrap to two rows on a
 phone and one on a desktop, so any fixed number would be wrong at one of those
 widths and would shift the plot under the reader's finger the moment they picked
 a pitch. The same trick `.spl-head-mark--ghost` uses on the Splits card, and it
-has to be **one box with two possible contents**: a ghost sitting beside an empty
-real row is two margins where the selected state has one, which is exactly the
-6px of shift it exists to prevent (measured, twice, before it was right).
+took two goes: a ghost sitting *beside* an empty real row is two margins where
+the selected state has one, which is exactly the 6px of shift it exists to
+prevent. **The ghost and the live text now share one grid cell** — the Columns
+dialog's own hint-line trick — so the space the chips will need carries, at
+rest, the sentence that says how to get them (`Pick a pitch to compare it with
+the league`) rather than sitting empty. Reserved space with something in it
+beats reserved space without.
 
 **The legend is transposed the way Savant's is** — a column per pitch, a row per
 measure — with the label column and every pitch column sharing one row template,
@@ -181,7 +204,8 @@ title.
 900 / 1400: **0 horizontal overflow of the page body and of the player-page view
 at every width**, 0 clipped cells in either chart, the legend's row labels drawn
 at every one, and **the plot's top identical before and after selecting a
-pitch** at all six (698 / 642 / 615 / 615 / 561 / 561). The SVG is 288px at 320
+pitch** at all six (659 / 603 / 576 / 576 / 522 / 522 with the tab stripped to
+the charts; 698 / 642 / 615 / 615 / 561 / 561 before it was). The SVG is 288px at 320
 and caps at 470. 246 dots, 5 usage rows, 5 legend columns on a five-pitch
 arsenal; the split tabs cut the cloud to **146 dots vs LHB and 100 vs RHB**,
 matching the `stand` counts on the wire, with the legend re-sorting to that
@@ -191,10 +215,18 @@ closes the key and leaves the player page standing, then closes the page —
 rather than the focused element and collapses the ladder, which is a property of
 that test rather than of the app.
 
-**Bundle: 529.65 → 539.37 KB of JS** (156.66 → 159.40 gzipped) and **134.44 →
-140.26 KB of CSS** (23.64 → 24.78) — 9.7KB and 5.8KB raw, 2.7KB and 1.1KB over
+**At rest** — which is the state that matters most, and the one a stale dev
+server hid for a while — the plot draws the **whole cloud and every league blob**
+with nothing dimmed: 246 dots and 5 hatched blobs on a five-pitch right-hander,
+241 and 4 on a four-pitch left-hander, and 0 dimmed dots in both. Selecting
+lights one type and dims the rest (26/246 dots, 1/5 blobs, the AVG marker in);
+deselecting restores all 246 with the marker gone.
+
+**Bundle: 529.65 → 537.12 KB of JS** (156.66 → 159.06 gzipped) and **134.44 →
+140.40 KB of CSS** (23.64 → 24.81) — 7.5KB and 6.0KB raw, 2.4KB and 1.2KB over
 the wire, for two charts, a shared selection, an explainer and the paragraphs
-above restated where the rules are.
+above restated where the rules are; stripping the rows and the split plumbing
+gave 2.4KB of it back.
 
 **One number worth knowing about, and it is not this change's.** The curated
 `Slider` league horizontal break in `pitchLeague.ts` is **6.5"** where Savant's
@@ -270,4 +302,4 @@ The collapsed header's line is the **range in view** rather than the season (`ra
 
 **What is still an accordion, and why the test survives its own reversal.** The grouping-against-detail test was not wrong; it was applied to a case where the *cost of the grouping staying open* had not been measured. Nothing else on the pitcher side changed: `CardSection` is still a plain label inside the breakdown, and the two unrendered cards' game blocks still collapse. The rule to carry forward is the sharper one — **a grouping may stay an accordion only while opening it does not push the thing the reader is reading**, and inside a bounded dialog scroller it always does.
 
-**Innings read first-to-last everywhere, and `newestFirst` is gone.** `InningsList` took a flag that reversed them, which the feed passed so the half he was throwing sat directly under his name the way the stream around it reads newest-first. What that bought was one inning's convenience on a live outing; what it cost is that an outing was drawn in **two different orders in two places of the same app** — the card and the breakdown one way, the feed the other — with the reader expected to notice which. An outing is a thing with a beginning: a first inning at the top is how a box score, a game log and a scorebook all read it, and it is what makes "he lost it in the sixth" a sentence you can follow down the page. The live half is still marked (`.inning-block.active`), so nothing is lost by leaving it where it belongs in the sequence. Measured on a real outing in the feed, before → after: `5th 4th 3rd 2nd 1st` → `1st 2nd 3rd 4th 5th`, and the same list in the Overview tab's game dialog, the Game Log's popup and the breakdown. Batters faced always read in play order, live or final, and always did. While the watched pitcher is the one on the mound (`status.pitchingId`), the half-inning he's throwing gets `.inning-block.active` — a **`--mound-teal`** border, a 12% head tint and a **Live** tag, the same teal his row, his ring, his tag and his rail take, so "this man is working" reads as one thing across the app. It was `--live-purple`, on the reasoning that it is "the same purple the at-bat/on-base rings use" — which said *this pitcher is working* in the colour a **runner** wears, and is the collision the summary table's legend made visible; see **Client**, where the token and the measured gaps between all four role grounds are set out. The arsenal table itself lives in **`Arsenal.tsx`**, shared by both views: `ArsenalRow` (one game, ▲▼ vs the pitcher's own season), `SeasonArsenalRow` (the whole season, ▲▼ vs the **league**), and the pieces they share — `RateBar`, `ArsenalMetric`, `ResultStat`, `PITCH_DIRECTIONS`, `SplitTabs` (the Overall / vs RHB / vs LHB selector the pitcher card's Line and Arsenal sections use too) and the `pct`/`avg3` formatters. That pitch sequence (pitch table + `StrikeZone` plot, sharing a hover/tap highlight) lives in the shared `PitchSequence.tsx` — extracted from `PlateAppearanceCard`, which now reuses `PitchTable`. The innings themselves live in **`Innings.tsx`** for the same reason — `InningsList` (grouping + the live-inning accent), `InningBlock` and `FacedBatterCard` — so every place an outing is drawn reads it identically — and it takes no flag to say so, `newestFirst` having gone (above). Everything here still mirrors its batter counterpart: the inning bar takes the game bar's shape and raises a dialog rather than unrolling (see above, which is also why `useScrollIntoViewOnExpand` has no caller left in this file — nothing here moves the page any more), the faced-batter card takes `.pa-card`'s radius, left accent, hover tint and focus ring and opens a dialog exactly as `PlateAppearanceCard` does, carrying its clip on the row exactly as `FeedAtBat` does, and **nothing carries a caret** either way. The batter-name font shrinks on narrow cards via `@container` queries on `.faced-batter`. `SummaryTable` renders a pitcher sub-table (IP/H/R/ER/BB/K/HR, then the **W/SV/HLD** credits summed off `PitchingLine`, then ERA/WHIP — a credit column is dashed at zero, since almost every row is empty); `LiveFeed`'s pitcher tab renders one item per outing (`FeedPitcherGame`), whose bar raises a dialog holding that same `InningsList`, and `PlayerDay.tsx` draws that very item for one pitcher's day on the player page — where it is the **live** entry alone, a finished outing being a card that opens the outing page rather than a bar that unrolls; `PlayerDetails` gains an `isPitcher` prop. It used to draw it in the Game Log's popup too, with a **`detailInline`** flag that made the bar static and read the innings underneath, and that popup is a batter's alone now.
+**Innings read first-to-last everywhere, and `newestFirst` is gone.** `InningsList` took a flag that reversed them, which the feed passed so the half he was throwing sat directly under his name the way the stream around it reads newest-first. What that bought was one inning's convenience on a live outing; what it cost is that an outing was drawn in **two different orders in two places of the same app** — the card and the breakdown one way, the feed the other — with the reader expected to notice which. An outing is a thing with a beginning: a first inning at the top is how a box score, a game log and a scorebook all read it, and it is what makes "he lost it in the sixth" a sentence you can follow down the page. The live half is still marked (`.inning-block.active`), so nothing is lost by leaving it where it belongs in the sequence. Measured on a real outing in the feed, before → after: `5th 4th 3rd 2nd 1st` → `1st 2nd 3rd 4th 5th`, and the same list in the Overview tab's game dialog, the Game Log's popup and the breakdown. Batters faced always read in play order, live or final, and always did. While the watched pitcher is the one on the mound (`status.pitchingId`), the half-inning he's throwing gets `.inning-block.active` — a **`--mound-teal`** border, a 12% head tint and a **Live** tag, the same teal his row, his ring, his tag and his rail take, so "this man is working" reads as one thing across the app. It was `--live-purple`, on the reasoning that it is "the same purple the at-bat/on-base rings use" — which said *this pitcher is working* in the colour a **runner** wears, and is the collision the summary table's legend made visible; see **Client**, where the token and the measured gaps between all four role grounds are set out. The arsenal table itself lives in **`Arsenal.tsx`**, shared by both views: `ArsenalRow` (one game, ▲▼ vs the pitcher's own season — the outing page's Arsenal tab is its live caller), and the pieces it shares with what is left of the file. `SeasonArsenalRow` (the whole season, ▲▼ vs the **league**) was beside it until the player page's Arsenal tab became the two charts alone; it had exactly one caller, and every helper it used — `RateBar`, `ArsenalMetric`, `ResultStat`, `PITCH_DIRECTIONS`, `pct`/`avg3` — is read by `ArsenalRow` too, so removing it orphaned nothing. Those pieces, plus — `RateBar`, `ArsenalMetric`, `ResultStat`, `PITCH_DIRECTIONS`, `SplitTabs` (the Overall / vs RHB / vs LHB selector the pitcher card's Line and Arsenal sections use too) and the `pct`/`avg3` formatters. That pitch sequence (pitch table + `StrikeZone` plot, sharing a hover/tap highlight) lives in the shared `PitchSequence.tsx` — extracted from `PlateAppearanceCard`, which now reuses `PitchTable`. The innings themselves live in **`Innings.tsx`** for the same reason — `InningsList` (grouping + the live-inning accent), `InningBlock` and `FacedBatterCard` — so every place an outing is drawn reads it identically — and it takes no flag to say so, `newestFirst` having gone (above). Everything here still mirrors its batter counterpart: the inning bar takes the game bar's shape and raises a dialog rather than unrolling (see above, which is also why `useScrollIntoViewOnExpand` has no caller left in this file — nothing here moves the page any more), the faced-batter card takes `.pa-card`'s radius, left accent, hover tint and focus ring and opens a dialog exactly as `PlateAppearanceCard` does, carrying its clip on the row exactly as `FeedAtBat` does, and **nothing carries a caret** either way. The batter-name font shrinks on narrow cards via `@container` queries on `.faced-batter`. `SummaryTable` renders a pitcher sub-table (IP/H/R/ER/BB/K/HR, then the **W/SV/HLD** credits summed off `PitchingLine`, then ERA/WHIP — a credit column is dashed at zero, since almost every row is empty); `LiveFeed`'s pitcher tab renders one item per outing (`FeedPitcherGame`), whose bar raises a dialog holding that same `InningsList`, and `PlayerDay.tsx` draws that very item for one pitcher's day on the player page — where it is the **live** entry alone, a finished outing being a card that opens the outing page rather than a bar that unrolls; `PlayerDetails` gains an `isPitcher` prop. It used to draw it in the Game Log's popup too, with a **`detailInline`** flag that made the bar static and read the innings underneath, and that popup is a batter's alone now.

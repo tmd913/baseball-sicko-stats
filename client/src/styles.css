@@ -13425,19 +13425,33 @@ html[data-theme='lavender'] .league-table thead th {
   max-width: 470px;
   width: 100%;
 }
+/* One grid cell holding two things: the live text, and an invisible copy of the
+   widest thing the row can contain, which is what reserves the height. Both are
+   stacked in the same cell, so the row is as tall as the chips at whatever width
+   the chart happens to be — no declared `min-height` to be wrong at one of
+   them, and no shift when a pitch is picked. */
 .mv-callouts {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 6px;
+  display: grid;
   margin-bottom: 6px;
 }
-/* Laid out and invisible — it is holding the row open, not saying anything, so
-   it keeps every one of `.mv-callouts`' own metrics and overrides only the ink.
-   (It carried a negative bottom margin for one round, which is exactly the 6px
-   of shift on select that it exists to prevent.) */
+.mv-callouts-ghost,
+.mv-callouts-live {
+  grid-area: 1 / 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: center;
+  justify-content: center;
+  gap: 6px;
+}
+/* Laid out and invisible — it is holding the row open, not saying anything. */
 .mv-callouts-ghost {
   visibility: hidden;
+}
+.mv-hint {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--faint);
+  text-align: center;
 }
 .mv-callout {
   font-size: 11px;
