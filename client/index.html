@@ -32,13 +32,39 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="alternate icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <!-- Paint the dark base color on the very first frame so a reload doesn't
-         flash white before the stylesheet loads. -->
-    <style>
-      html {
-        background: #0b1220;
-      }
-    </style>
+    <!-- Paint the base colour on the very first frame so a reload doesn't flash
+         before the stylesheet loads — and paint the *reader's own* base colour,
+         which is why this is a script rather than the one rule it used to be.
+
+         `client/src/theme.ts` mirrors the chosen theme into localStorage purely
+         so this can run: the saved preference is the server's, and it arrives a
+         round trip after the page has painted, so without a local copy the app
+         would open dark and turn lavender a moment later on every single load.
+         The values below are the two themes' own `--bg`, and they are the one
+         place in the app a palette colour is written outside the stylesheet.
+
+         Deliberately inline, blocking and tiny: it has to have finished before
+         the first paint, and a failed read simply leaves the default. -->
+    <script>
+      (function () {
+        var BG = { midnight: '#0b1220', lavender: '#f3f1f8' };
+        var SCHEME = { midnight: 'dark', lavender: 'light' };
+        var id = 'midnight';
+        try {
+          var saved = localStorage.getItem('sicko:theme');
+          if (saved && BG[saved]) id = saved;
+        } catch (e) {
+          /* a browser refusing storage gets the default */
+        }
+        if (id !== 'midnight') document.documentElement.setAttribute('data-theme', id);
+        document.documentElement.style.colorScheme = SCHEME[id];
+        var meta = document.querySelector('meta[name="color-scheme"]');
+        if (meta) meta.content = SCHEME[id];
+        var style = document.createElement('style');
+        style.textContent = 'html{background:' + BG[id] + '}';
+        document.head.appendChild(style);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

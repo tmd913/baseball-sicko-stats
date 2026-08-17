@@ -25,6 +25,8 @@ import type {
 } from './types';
 import { baseballDay, isInjured, isStartingOn } from './lib';
 import { takeInvite } from './invite';
+import { applyTheme, DEFAULT_THEME, readStoredTheme, storeTheme, THEMES, toThemeId } from './theme';
+import type { ThemeId } from './theme';
 import { BaseballMark } from './components/BaseballMark';
 import { PlayerAdder } from './components/PlayerAdder';
 import { PlayerOrderEditor } from './components/PlayerOrderEditor';
@@ -583,6 +585,41 @@ export default function App() {
       .catch((e: Error) => console.error('saving mute-audio failed:', e.message));
   }, []);
   /**
+   * **The colour scheme.** Saved per user like the two toggles above and, like
+   * them, deliberately **not in the URL**: it is a fact about this person and
+   * this room rather than about the view a link describes — the line `muteAudio`
+   * is on, and one step further from the data than `hideil=1`, which is in the
+   * URL precisely because it changes which players a view reports on.
+   *
+   * It is the one preference in the app that is *also* mirrored into
+   * localStorage, and `theme.ts` argues why: the server's answer arrives a round
+   * trip after the page has painted, so without a local copy every load would
+   * open on one palette and change to the other in front of the reader. The
+   * mirror is a paint-ahead cache and the record is the source of truth — which
+   * is what makes the choice follow them to another device.
+   *
+   * Seeded from the mirror rather than from the default, so the first React
+   * render agrees with what `index.html`'s boot script has already painted.
+   */
+  const [theme, setThemeState] = useState<ThemeId>(() => readStoredTheme() ?? DEFAULT_THEME);
+  const themeTouched = useRef(false);
+  const setTheme = useCallback((next: ThemeId) => {
+    themeTouched.current = true;
+    setThemeState(next);
+    storeTheme(next);
+    api
+      // `null` is "back to the default", which the server stores as the absence
+      // of the entry — the convention every preference here follows.
+      .saveTheme(next === DEFAULT_THEME ? null : next)
+      .catch((e: Error) => console.error('saving theme failed:', e.message));
+  }, []);
+  // The one line that puts a palette on the page. A layout effect so the
+  // attribute is stamped before the browser paints the commit that changed it,
+  // and idempotent, so re-running it costs nothing.
+  useLayoutEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
+  /**
    * **Draw a percentile rank under every value** on the research board and on
    * the player page's Stats tab — one flag for both, because they are one
    * vocabulary and this is a habit of reading rather than a setting on a table.
@@ -821,6 +858,14 @@ export default function App() {
         // source there is, so it applies unless the user has already spoken.
         if (!muteAudioTouched.current && prefs.muteAudio) setMuteAudioState(true);
         if (!showRanksTouched.current && prefs.statRanks) setShowRanksState(true);
+        // The record is the source of truth and the localStorage mirror is
+        // only a paint-ahead cache, so what lands here wins — and is written
+        // back, which is how a theme picked on one device reaches this one.
+        if (!themeTouched.current) {
+          const saved = toThemeId(prefs.theme);
+          setThemeState(saved);
+          storeTheme(saved);
+        }
         // Merged rather than applied, which is why this needs no touched ref:
         // anyone picked in the second before this landed leads, and the saved
         // list fills in under him — which is the same list the server has
@@ -3651,6 +3696,46 @@ export default function App() {
                   <span className="settings-dot" aria-hidden="true" />
                   Mute clip audio
                 </button>
+                {/* **The colour scheme**, as a row of swatches rather than as a
+                    third toggle. Two reasons, and the second is the one that
+                    decides it. A toggle can only ever hold two, and there is
+                    no reason a third palette should mean re-drawing this
+                    control; and a colour scheme is the one preference in this
+                    menu whose *answer* can be shown rather than described —
+                    each button is three stops of the palette it selects, which
+                    is a truer statement of what it does than any name.
+
+                    A radio group rather than menu items: this is one question
+                    with one answer, and `menuitemradio` is what says so to a
+                    screen reader, where a row of `menuitemcheckbox`es would
+                    claim as many independent switches. The menu deliberately **stays
+                    open** across a press, the way `Refresh from ESPN` does and
+                    for the same reason: the result is a change in the page
+                    behind it, so shutting the menu would hide the thing the
+                    press was for. */}
+                <div className="theme-picker" role="group" aria-label="Colour scheme">
+                  <span className="settings-popover-label">Colour scheme</span>
+                  <div className="theme-swatches">
+                    {THEMES.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        className={`theme-swatch${theme === t.id ? ' active' : ''}`}
+                        role="menuitemradio"
+                        aria-checked={theme === t.id}
+                        onClick={() => setTheme(t.id)}
+                        title={t.hint}
+                      >
+                        <span className="theme-chips" aria-hidden="true">
+                          {t.swatch.map((c) => (
+                            <span key={c} style={{ background: c }} />
+                          ))}
+                        </span>
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 {/* The fantasy entries used to sit here — the roster-source
                     toggle and the league page — and have moved out to their own
                     button beside the gear, where the state they control can be

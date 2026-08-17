@@ -268,6 +268,17 @@ export const api = {
       body: JSON.stringify({ mute }),
     });
   },
+  /** The colour scheme. `null` is "back to the default", which the server
+   *  stores as the absence of the entry — the same null-clears rule
+   *  `saveResearchColumns` follows, and the reason this is a route of its own
+   *  rather than a boolean. */
+  async saveTheme(theme: string | null): Promise<UserPrefs> {
+    return request('/api/prefs/theme', {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ theme }),
+    });
+  },
   /** Show a percentile rank under every value on the research board and the
    *  player page's Stats tab. A boolean like the two above, and a route of its
    *  own for the reason each of those is. */

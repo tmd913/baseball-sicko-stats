@@ -104,6 +104,10 @@ letting it grow past it.
 
 @docs/claude/client-league-transactions.md
 
+**Themes** — the palette as a set of tokens, the two colour schemes (Midnight, the dark original, and Lavender, light gray and violet), the picker in the settings menu, and why the choice is the one thing in this app mirrored into localStorage.
+
+@docs/claude/theming.md
+
 **Client — popups** — the app-wide dialog rules: why details are popups rather than accordions, the layer ladder, what a popup has to cover, and why one press of Escape undoes exactly one thing.
 
 @docs/claude/client-dialogs.md

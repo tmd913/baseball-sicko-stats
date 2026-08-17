@@ -1127,6 +1127,11 @@ export interface UserPrefs {
   hideInjured?: boolean;
   /** Play every video clip with the sound off. Absent means off. */
   muteAudio?: boolean;
+  /** The colour scheme, by id — see `theme.ts`, which owns the vocabulary.
+   *  Absent means the default (Midnight), the same convention as the toggles
+   *  around it, and an id this build does not know is read as the default
+   *  rather than as an error. */
+  theme?: string;
   /** Draw a percentile rank under every value on the research board and the
    *  player page's Stats tab. Absent means off, the same convention. */
   statRanks?: boolean;

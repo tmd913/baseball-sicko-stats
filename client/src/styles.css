@@ -1,4 +1,36 @@
+/* ---------------------------------------------------------------------------
+   The palette is a theme, and there are two of them.
+
+   Everything below `:root` is **Midnight**, the app's original dark palette and
+   still its default — every value here is the one it has always had. A second
+   theme, **Lavender**, is a block near the foot of this file that redeclares
+   the same names against `html[data-theme='lavender']`; nothing else in 12,000
+   lines of stylesheet knows there is more than one.
+
+   That is only true because a colour a rule wants is a **token** rather than a
+   literal, and it was not true when the second theme was written: 88 palette
+   `rgba()` literals were spelled out where they were used — `rgba(56, 189, 248,
+   0.12)` for a 12% accent wash, the same four numbers in forty places — so a
+   theme could move `--accent` and leave every tint it backs sitting on the old
+   hue. They are `color-mix(in srgb, var(--accent) 12%, transparent)` now, which
+   is the identical colour by construction (the mix is against `transparent`, so
+   it *is* the alpha) and follows whatever `--accent` is. The same sweep gave a
+   name to the dozen hard-coded hexes that were not palette entries at all —
+   `--on-accent`, `--prose`, `--chip-solid`, the scrims and the glows, each
+   documented where it is declared below.
+
+   **What a theme may redeclare is exactly the block between here and
+   `--live-purple`'s neighbours**, plus the four role grounds. Everything after
+   that — the pin edges, the control heights, the radii, the column widths — is
+   geometry, is the same in both themes, and is declared once.
+   --------------------------------------------------------------------------- */
 :root {
+  /* The surface ramp, dark to light: the page, the page's second step, a card,
+     and a card's stronger surface (the zebra stripe, a hover). The direction of
+     the last two inverts under a light theme — `--panel` there is white and
+     `--panel-2` a step *down* — and nothing has to be told, because what every
+     rule actually asks for is "the more prominent surface", not "the lighter
+     one". */
   --bg: #0b1220;
   --bg-2: #111a2e;
   --panel: #16213a;
@@ -15,6 +47,55 @@
   --walk: #60a5fa;
   --out: #64748b;
   --strikeout: #f87171;
+
+  /* **Ink on a saturated fill** — an accent-filled tab, a lit toggle, the
+     count badge on a disclosure, a lineup pip. Eighteen rules wrote this as
+     `var(--bg)`, which is exactly right on a dark theme (the page's own
+     near-black over a bright cyan) and exactly wrong on a light one, where
+     `--bg` is the near-white the fill has to be told apart from. A name for the
+     role rather than a reuse of the surface is the whole of the fix, and the
+     dark theme's value is the surface it always was, so nothing here changes.
+
+     One rule *did* change and it is worth stating: `.lineup-spot.spot-out` — the
+     red "!" pip on a headshot — spelled its ink `#fff` where its five siblings
+     used `--bg`, and white on `--strikeout` measures **3.60:1** against the
+     near-black's **5.94:1**. Folding it in both unifies the rule and takes that
+     pip from under the 4.5 an 9px bold glyph owes a reader to comfortably over
+     it. */
+  --on-accent: var(--bg);
+
+  /* Body prose inside a card — the play description under a plate appearance.
+     A hand-picked step short of `--text`, so it reads as description rather
+     than as a value; a token because a light theme's step is in the other
+     direction. */
+  --prose: #cdd8f0;
+  /* The ink on an `--out`-toned badge, which is the one badge whose own colour
+     is too quiet to write in. */
+  --out-ink: #cbd5e1;
+  /* The error banner's ink — a tint of `--strikeout` light enough to read at
+     paragraph weight, which the pure colour is not. */
+  --error-ink: #fecaca;
+  /* The number printed inside a pitch dot on the strike-zone plot. The dots are
+     saturated in both themes, so this is a near-black in both. */
+  --pitch-ink: #06121f;
+  /* The solid ground under a status code on a headshot (`IL10`, `DTD`). Solid
+     rather than the tinted `--panel` every other chip takes, because it sits on
+     a **photograph** — a different colour behind every player — so it carries
+     its own contrast with it rather than borrowing the page's. */
+  --chip-solid: #0a1120;
+  /* The chip over a playing clip (the mute control), on the same argument one
+     step further: it sits on moving video, so it is its own dark scrim in both
+     themes and neither follows the page. */
+  --video-chip: rgba(6, 12, 22, 0.62);
+  --video-chip-hover: rgba(6, 12, 22, 0.85);
+  /* The dimmer behind a dialog: a shade under `--bg` at two thirds, so the page
+     behind reads as dimmed rather than as a second page. */
+  --scrim: rgba(6, 11, 20, 0.66);
+  /* The lighter hue at the top right of the page's own radial gradient, and the
+     second stop of the brand mark's. Both were literals; both are what makes a
+     theme's page read as lit rather than flat, so both are the theme's to set. */
+  --page-glow: #16233f;
+  --brand-2: #a855f7;
 
   /* pitch dot colors */
   --inplay: #34d399;
@@ -162,6 +243,13 @@
      it is a page header rather than a row, and is sized to the head it sits in. */
   --row-photo: 42px;
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  /* The two lifts that are not `--shadow`: a pinned bar sitting flat against
+     the page (felt rather than seen), and a popover genuinely floating over it.
+     Tokens because a light theme's shadow is not a darker version of a dark
+     theme's — it is a fraction of the weight, cast in the palette's own hue
+     rather than in black, which on a pale ground reads as dirt. */
+  --shadow-bar: 0 6px 16px rgba(0, 0, 0, 0.22);
+  --shadow-pop: 0 12px 30px rgba(0, 0, 0, 0.45);
   font-synthesis: none;
 }
 
@@ -234,7 +322,7 @@ html {
 
 body {
   margin: 0;
-  background: radial-gradient(1200px 700px at 80% -10%, #16233f 0%, var(--bg) 55%);
+  background: radial-gradient(1200px 700px at 80% -10%, var(--page-glow) 0%, var(--bg) 55%);
   /* Anchor the gradient to the viewport, not the document, so it looks the same
      on every view regardless of page height — a very tall page (the feed) would
      otherwise push the percentage-positioned gradient up out of sight, leaving a
@@ -321,14 +409,14 @@ body {
   margin: -14px calc(-1 * var(--app-gutter)) 14px;
   padding: 14px var(--app-gutter) 0;
   background:
-    radial-gradient(760px 260px at 82% -40%, rgba(56, 189, 248, 0.09), transparent 70%),
+    radial-gradient(760px 260px at 82% -40%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 70%),
     linear-gradient(180deg, var(--panel) 0%, var(--bg-2) 100%);
   /* The edge of the bar, twice over: a hairline for the eye and a shadow for
      the depth, the second being what says the page passes *under* this rather
      than stopping at it. Much softer than `--shadow` (the cards' 30px lift) —
      this sits flat against the page, it does not float over it. */
   border-bottom: 1px solid var(--border);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.22);
+  box-shadow: var(--shadow-bar);
 }
 /* A short window gets the old behaviour back. Pinned chrome is a bargain — a
    fixed cost at the top in exchange for never having to scroll up for it — and
@@ -379,10 +467,10 @@ body {
   height: 34px;
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, var(--accent), #a855f7);
+  background: linear-gradient(135deg, var(--accent), var(--brand-2));
   border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--border));
   border-radius: 11px;
-  box-shadow: 0 4px 14px rgba(56, 189, 248, 0.3);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 30%, transparent);
   transform: rotate(-8deg);
 }
 .app-header h1 {
@@ -417,7 +505,7 @@ body {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 12px;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-pop);
 }
 /* The popover hangs off the gear, which on a phone sits some 200px into a
    390px-wide header — leaving less room to its right than the shortest useful
@@ -607,7 +695,7 @@ body {
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 12px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-pop);
   width: 260px;
 }
 .drp-head {
@@ -678,7 +766,7 @@ body {
 }
 .drp-day.edge {
   background: var(--accent);
-  color: var(--bg);
+  color: var(--on-accent);
   font-weight: 700;
 }
 .drp-day.edge.start {
@@ -723,7 +811,7 @@ body {
 .adder-input:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
 }
 .adder-clear {
   position: absolute;
@@ -850,18 +938,18 @@ body {
 }
 .chip.accent {
   color: var(--hit);
-  border-color: rgba(52, 211, 153, 0.4);
+  border-color: color-mix(in srgb, var(--hit) 40%, transparent);
 }
 .chip.hr {
   color: var(--hr);
-  border-color: rgba(251, 191, 36, 0.4);
+  border-color: color-mix(in srgb, var(--hr) 40%, transparent);
 }
 
 /* ---- States ---- */
 .error-banner {
-  background: rgba(248, 113, 113, 0.12);
-  border: 1px solid rgba(248, 113, 113, 0.4);
-  color: #fecaca;
+  background: color-mix(in srgb, var(--strikeout) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--strikeout) 40%, transparent);
+  color: var(--error-ink);
   padding: 12px 16px;
   border-radius: 12px;
   margin-bottom: 18px;
@@ -1334,15 +1422,15 @@ body {
   border: 1.5px solid var(--panel);
 }
 .lineup-spot.spot-in {
-  color: var(--bg);
+  color: var(--on-accent);
   background: var(--hit);
 }
 .lineup-spot.spot-out {
-  color: #fff;
+  color: var(--on-accent);
   background: var(--strikeout);
 }
 .lineup-spot.spot-postponed {
-  color: var(--bg);
+  color: var(--on-accent);
   background: var(--hr);
 }
 /* Pitching-role pips: "SP" for a starter, the entry inning for a reliever.
@@ -1354,7 +1442,7 @@ body {
   padding-left: 0.28em;
   padding-right: 0.28em;
   border-radius: 999px;
-  color: var(--bg);
+  color: var(--on-accent);
 }
 .lineup-spot.spot-start {
   background: var(--accent);
@@ -1430,8 +1518,8 @@ body {
   font-weight: 700;
   letter-spacing: 0.01em;
   color: var(--accent);
-  background: rgba(56, 189, 248, 0.12);
-  border: 1px solid rgba(56, 189, 248, 0.4);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
   border-radius: 999px;
   padding: 3px 10px;
   white-space: nowrap;
@@ -1451,8 +1539,8 @@ body {
 }
 .lineup-tag-in {
   color: var(--hit);
-  background: rgba(52, 211, 153, 0.13);
-  border-color: rgba(52, 211, 153, 0.4);
+  background: color-mix(in srgb, var(--hit) 13%, transparent);
+  border-color: color-mix(in srgb, var(--hit) 40%, transparent);
 }
 .lineup-tag-out {
   color: var(--muted);
@@ -1463,13 +1551,13 @@ body {
    reliever are told apart at a glance rather than by reading the label. */
 .lineup-tag-start {
   color: var(--accent);
-  background: rgba(56, 189, 248, 0.12);
-  border-color: rgba(56, 189, 248, 0.4);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
 }
 .lineup-tag-relief {
   color: var(--hr);
-  background: rgba(251, 191, 36, 0.12);
-  border-color: rgba(251, 191, 36, 0.4);
+  background: color-mix(in srgb, var(--hr) 12%, transparent);
+  border-color: color-mix(in srgb, var(--hr) 40%, transparent);
 }
 
 .player-head {
@@ -1491,7 +1579,7 @@ body {
    rather than a fix anybody can see. See the top of the file. */
 @media (hover: hover) {
   .player-head-toggle:hover {
-    background: rgba(56, 189, 248, 0.06);
+    background: color-mix(in srgb, var(--accent) 6%, transparent);
   }
 }
 .player-head-toggle:focus-visible {
@@ -1599,8 +1687,8 @@ body {
 }
 .roster-status-il {
   color: var(--strikeout);
-  background: rgba(248, 113, 113, 0.13);
-  border-color: rgba(248, 113, 113, 0.4);
+  background: color-mix(in srgb, var(--strikeout) 13%, transparent);
+  border-color: color-mix(in srgb, var(--strikeout) 40%, transparent);
 }
 /* Day-to-day shares the suspension amber: both are a lesser thing than an IL
    stint's red — he may well play — and folding the selector into that rule
@@ -1609,8 +1697,8 @@ body {
 .roster-status-susp,
 .roster-status-dtd {
   color: var(--hr);
-  background: rgba(251, 191, 36, 0.13);
-  border-color: rgba(251, 191, 36, 0.4);
+  background: color-mix(in srgb, var(--hr) 13%, transparent);
+  border-color: color-mix(in srgb, var(--hr) 40%, transparent);
 }
 .roster-status-minors,
 .roster-status-other {
@@ -1656,15 +1744,15 @@ body {
 }
 .live-role.role-at-bat {
   color: var(--strikeout);
-  background: rgba(248, 113, 113, 0.15);
+  background: color-mix(in srgb, var(--strikeout) 15%, transparent);
 }
 .live-role.role-on-deck {
   color: var(--hr);
-  background: rgba(251, 191, 36, 0.15);
+  background: color-mix(in srgb, var(--hr) 15%, transparent);
 }
 .live-role.role-on-base {
   color: var(--live-purple);
-  background: rgba(192, 132, 252, 0.15);
+  background: color-mix(in srgb, var(--live-purple) 15%, transparent);
 }
 /* Split off the on-base rule above, which it used to share. The ground is a
    `color-mix` against `transparent` rather than a fourth hand-written rgba: the
@@ -1696,8 +1784,8 @@ body {
   font-weight: 700;
 }
 .game-status.live {
-  border-color: rgba(52, 211, 153, 0.5);
-  background: rgba(52, 211, 153, 0.1);
+  border-color: color-mix(in srgb, var(--hit) 50%, transparent);
+  background: color-mix(in srgb, var(--hit) 10%, transparent);
   color: var(--hit);
 }
 .game-status.live .game-status-detail {
@@ -1705,14 +1793,14 @@ body {
 }
 .game-status.scheduled {
   color: var(--accent);
-  border-color: rgba(56, 189, 248, 0.4);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
 }
 .game-status.final {
   color: var(--faint);
 }
 .game-status.postponed {
   color: var(--hr);
-  border-color: rgba(251, 191, 36, 0.4);
+  border-color: color-mix(in srgb, var(--hr) 40%, transparent);
 }
 .game-prob-pitcher {
   font-size: 12px;
@@ -2592,7 +2680,7 @@ body {
 @media (hover: hover) {
   .inning-head:hover,
   .faced-summary:hover {
-    background: rgba(56, 189, 248, 0.06);
+    background: color-mix(in srgb, var(--accent) 6%, transparent);
   }
 }
 .inning-head:focus-visible,
@@ -2718,7 +2806,7 @@ body {
    crosses most while scrolling a day. See the top of the file. */
 @media (hover: hover) {
   .pa-summary-row:hover {
-    background: rgba(56, 189, 248, 0.06);
+    background: color-mix(in srgb, var(--accent) 6%, transparent);
   }
 }
 .pa-summary-row:focus-visible {
@@ -2743,27 +2831,27 @@ body {
   border-radius: 6px;
 }
 .pa-badge.kind-hr {
-  background: rgba(251, 191, 36, 0.18);
+  background: color-mix(in srgb, var(--hr) 18%, transparent);
   color: var(--hr);
 }
 .pa-badge.kind-hit {
-  background: rgba(52, 211, 153, 0.18);
+  background: color-mix(in srgb, var(--hit) 18%, transparent);
   color: var(--hit);
 }
 .pa-badge.kind-walk {
-  background: rgba(96, 165, 250, 0.18);
+  background: color-mix(in srgb, var(--walk) 18%, transparent);
   color: var(--walk);
 }
 .pa-badge.kind-strikeout {
-  background: rgba(248, 113, 113, 0.18);
+  background: color-mix(in srgb, var(--strikeout) 18%, transparent);
   color: var(--strikeout);
 }
 .pa-badge.kind-out {
-  background: rgba(100, 116, 139, 0.22);
-  color: #cbd5e1;
+  background: color-mix(in srgb, var(--out) 22%, transparent);
+  color: var(--out-ink);
 }
 .pa-badge.kind-other {
-  background: rgba(92, 111, 151, 0.2);
+  background: color-mix(in srgb, var(--faint) 20%, transparent);
   color: var(--muted);
 }
 /* The same badge for a base-running event, keyed by tone rather than outcome —
@@ -2773,19 +2861,19 @@ body {
    match `kind-out` and `kind-hit`, an out on the bases and a run being the same
    two things they are at the plate. */
 .pa-badge.tone-take {
-  background: rgba(192, 132, 252, 0.18);
+  background: color-mix(in srgb, var(--live-purple) 18%, transparent);
   color: var(--live-purple);
 }
 .pa-badge.tone-free {
-  background: rgba(96, 165, 250, 0.18);
+  background: color-mix(in srgb, var(--walk) 18%, transparent);
   color: var(--walk);
 }
 .pa-badge.tone-out {
-  background: rgba(100, 116, 139, 0.22);
-  color: #cbd5e1;
+  background: color-mix(in srgb, var(--out) 22%, transparent);
+  color: var(--out-ink);
 }
 .pa-badge.tone-run {
-  background: rgba(52, 211, 153, 0.18);
+  background: color-mix(in srgb, var(--hit) 18%, transparent);
   color: var(--hit);
 }
 .pa-rbi {
@@ -2793,7 +2881,7 @@ body {
   font-weight: 800;
   letter-spacing: 0.03em;
   color: var(--hr);
-  background: rgba(251, 191, 36, 0.16);
+  background: color-mix(in srgb, var(--hr) 16%, transparent);
   padding: 2px 7px;
   border-radius: 6px;
 }
@@ -2836,7 +2924,7 @@ body {
   margin: 9px 0;
   font-size: 13.5px;
   line-height: 1.4;
-  color: #cdd8f0;
+  color: var(--prose);
 }
 .pa-contact {
   display: flex;
@@ -2867,8 +2955,8 @@ body {
   align-items: center;
   gap: 6px;
   margin-top: 10px;
-  background: rgba(56, 189, 248, 0.12);
-  border: 1px solid rgba(56, 189, 248, 0.4);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
   color: var(--accent);
   padding: 5px 12px;
   border-radius: var(--control-radius);
@@ -2878,7 +2966,7 @@ body {
   transition: background 0.15s, border-color 0.15s;
 }
 .pa-watch:hover:not(:disabled) {
-  background: rgba(56, 189, 248, 0.2);
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
   border-color: var(--accent);
 }
 .pa-watch:disabled {
@@ -2933,7 +3021,7 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.22);
   /* Its own dark chip rather than --panel: it sits on video, which can be any
      colour from frame to frame, so it carries its own contrast with it. */
-  background: rgba(6, 12, 22, 0.62);
+  background: var(--video-chip);
   color: #fff;
   cursor: pointer;
   opacity: 0.78;
@@ -2941,7 +3029,7 @@ body {
 }
 .clip-audio:hover {
   opacity: 1;
-  background: rgba(6, 12, 22, 0.85);
+  background: var(--video-chip-hover);
 }
 .clip-audio:focus-visible {
   opacity: 1;
@@ -2975,8 +3063,8 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: rgba(56, 189, 248, 0.12);
-  border: 1px solid rgba(56, 189, 248, 0.4);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
   color: var(--accent);
   padding: 5px 12px;
   border-radius: var(--control-radius);
@@ -2986,7 +3074,7 @@ body {
   transition: background 0.15s, border-color 0.15s;
 }
 .pa-hide:hover {
-  background: rgba(56, 189, 248, 0.2);
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
   border-color: var(--accent);
 }
 
@@ -3000,8 +3088,8 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  background: linear-gradient(90deg, rgba(56, 189, 248, 0.16), rgba(168, 85, 247, 0.16));
-  border: 1px solid rgba(56, 189, 248, 0.45);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 16%, transparent), color-mix(in srgb, var(--brand-2) 16%, transparent));
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
   color: var(--text);
   padding: 6px 12px;
   border-radius: var(--control-radius);
@@ -3020,7 +3108,7 @@ body {
   font-size: 10px;
 }
 .reel-open-count {
-  background: rgba(56, 189, 248, 0.22);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
   color: var(--accent);
   border-radius: 999px;
   padding: 1px 7px;
@@ -3238,13 +3326,13 @@ body {
 }
 .metric-bat {
   color: var(--foul);
-  background: rgba(251, 191, 36, 0.12);
+  background: color-mix(in srgb, var(--hr) 12%, transparent);
 }
 .pitch-row-wrap.desc-hit {
-  background: rgba(52, 211, 153, 0.08);
+  background: color-mix(in srgb, var(--hit) 8%, transparent);
 }
 .pitch-row-wrap.desc-swinging {
-  background: rgba(248, 113, 113, 0.07);
+  background: color-mix(in srgb, var(--strikeout) 7%, transparent);
 }
 .pitch-row-wrap {
   cursor: default;
@@ -3264,12 +3352,12 @@ body {
   border-radius: 8px;
 }
 .sz-box {
-  fill: rgba(56, 189, 248, 0.05);
+  fill: color-mix(in srgb, var(--accent) 5%, transparent);
   stroke: var(--muted);
   stroke-width: 1.5;
 }
 .sz-grid line {
-  stroke: rgba(142, 160, 196, 0.35);
+  stroke: color-mix(in srgb, var(--muted) 35%, transparent);
   stroke-width: 0.75;
 }
 .sz-plate {
@@ -3278,7 +3366,7 @@ body {
   stroke-width: 1;
 }
 .sz-pitch text.sz-num {
-  fill: #06121f;
+  fill: var(--pitch-ink);
   font-size: 11px;
   font-weight: 800;
   text-anchor: middle;
@@ -3508,11 +3596,11 @@ body {
   margin: 0 -16px 16px;
   padding: 20px 16px 0;
   background:
-    radial-gradient(760px 260px at 82% -40%, rgba(56, 189, 248, 0.09), transparent 70%),
+    radial-gradient(760px 260px at 82% -40%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 70%),
     linear-gradient(180deg, var(--panel) 0%, var(--bg-2) 100%);
   box-shadow:
     inset 0 -1px 0 var(--border),
-    0 6px 16px rgba(0, 0, 0, 0.22);
+    var(--shadow-bar);
 }
 /* A short window gets the old behaviour back, on the page's own threshold and
    for its own reason: a phone held sideways is about 390px tall, and 139px of
@@ -3563,7 +3651,7 @@ body {
   gap: 6px;
   background: var(--accent);
   border: 1px solid var(--accent);
-  color: #04121c;
+  color: var(--on-accent);
   font-size: 13px;
   font-weight: 700;
   padding: 8px 16px;
@@ -3608,8 +3696,8 @@ body {
 }
 .details-watch-star.on {
   color: var(--accent);
-  border-color: rgba(56, 189, 248, 0.5);
-  background: rgba(56, 189, 248, 0.12);
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 .details-watch-star:focus-visible {
   outline: 2px solid var(--accent);
@@ -3629,7 +3717,7 @@ body {
   font-weight: 700;
   letter-spacing: 0.02em;
   color: var(--accent);
-  background: rgba(56, 189, 248, 0.12);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
   /* Transparent rather than tinted, the way .roster-status carries its own
      tone: an outline would pair it with the bordered ✕ beside it and read as
      the second of two controls. */
@@ -3713,7 +3801,7 @@ body {
   padding: 0 5px;
   border-radius: 7px;
   border: 1px solid;
-  background: #0a1120;
+  background: var(--chip-solid);
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.02em;
@@ -3723,12 +3811,12 @@ body {
 }
 .details-photo-status.status-il {
   color: var(--strikeout);
-  border-color: rgba(248, 113, 113, 0.55);
+  border-color: color-mix(in srgb, var(--strikeout) 55%, transparent);
 }
 .details-photo-status.status-dtd,
 .details-photo-status.status-susp {
   color: var(--hr);
-  border-color: rgba(251, 191, 36, 0.55);
+  border-color: color-mix(in srgb, var(--hr) 55%, transparent);
 }
 .details-photo-status.status-minors,
 .details-photo-status.status-other {
@@ -4790,7 +4878,7 @@ button.start-line:focus-visible {
   color: var(--text);
 }
 .roll-win.is-active {
-  color: var(--bg);
+  color: var(--on-accent);
   background: var(--accent);
 }
 .roll-chart-wrap {
@@ -4959,7 +5047,7 @@ button.start-line:focus-visible {
 .pct-track {
   position: relative;
   height: 20px;
-  background: rgba(255, 255, 255, 0.07);
+  background: color-mix(in srgb, var(--text) 7%, transparent);
   border-radius: 999px;
 }
 .pct-track::before {
@@ -5216,7 +5304,7 @@ button.start-line:focus-visible {
 .spl-track {
   position: relative;
   height: 16px;
-  background: rgba(255, 255, 255, 0.06);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
   border-radius: 999px;
 }
 .spl-track::before {
@@ -5399,7 +5487,7 @@ button.start-line:focus-visible {
    open state added, which fills the way every other disclosure in the app fills
    when its panel is showing. Shared by every `InfoKey` in the app. */
 .info-key-btn.active {
-  color: var(--bg);
+  color: var(--on-accent);
   background: var(--accent);
   border-color: var(--accent);
 }
@@ -5584,7 +5672,7 @@ button.start-line:focus-visible {
 .date-toggle.active {
   background: var(--accent);
   border-color: var(--accent);
-  color: var(--bg);
+  color: var(--on-accent);
 }
 /* `.on` — the app is reading the fantasy roster — takes the **filled** accent,
    the same treatment `.active` gives every button in the list above and the
@@ -5603,10 +5691,10 @@ button.start-line:focus-visible {
 .fantasy-btn.on {
   background: var(--accent);
   border-color: var(--accent);
-  color: var(--bg);
+  color: var(--on-accent);
 }
 .fantasy-btn.on:hover {
-  color: var(--bg);
+  color: var(--on-accent);
   border-color: var(--accent);
 }
 .edit-order-icon {
@@ -5727,7 +5815,7 @@ button.start-line:focus-visible {
   padding: 1px 5px;
   border-radius: 999px;
   background: var(--accent);
-  color: var(--bg);
+  color: var(--on-accent);
   font-size: 10px;
   font-weight: 800;
   line-height: 1.4;
@@ -6050,7 +6138,7 @@ button.start-line:focus-visible {
 .expand-btn.on {
   background: var(--accent);
   border-color: var(--accent);
-  color: var(--bg);
+  color: var(--on-accent);
 }
 /* The game log's corner cell is the one that carries a word, so the button sits
    beside it — inline, and deliberately *not* by making the cell a flex box:
@@ -6668,7 +6756,7 @@ button.start-line:focus-visible {
   padding: 0 4px;
   border-radius: 6px;
   border: 1px solid;
-  background: #0a1120;
+  background: var(--chip-solid);
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.02em;
@@ -6679,14 +6767,14 @@ button.start-line:focus-visible {
 }
 .sum-photo-status.status-il {
   color: var(--strikeout);
-  border-color: rgba(248, 113, 113, 0.55);
+  border-color: color-mix(in srgb, var(--strikeout) 55%, transparent);
 }
 /* Day-to-day and a suspension share the amber, as they do beside a name: both
    are a lesser thing than an IL stint's red, since he may well play. */
 .sum-photo-status.status-dtd,
 .sum-photo-status.status-susp {
   color: var(--hr);
-  border-color: rgba(251, 191, 36, 0.55);
+  border-color: color-mix(in srgb, var(--hr) 55%, transparent);
 }
 .sum-photo-status.status-minors,
 .sum-photo-status.status-other {
@@ -6874,6 +6962,7 @@ button.start-line:focus-visible {
    out rather than a toggle, so it has no active state at all. */
 .sim-toggle,
 .settings-toggle,
+.theme-swatch,
 .help-btn {
   display: inline-flex;
   align-items: center;
@@ -6930,8 +7019,8 @@ button.start-line:focus-visible {
 }
 .sim-toggle.active {
   color: var(--strikeout);
-  border-color: rgba(248, 113, 113, 0.5);
-  background: rgba(248, 113, 113, 0.1);
+  border-color: color-mix(in srgb, var(--strikeout) 50%, transparent);
+  background: color-mix(in srgb, var(--strikeout) 10%, transparent);
 }
 .sim-toggle.active .sim-dot {
   background: var(--strikeout);
@@ -6939,11 +7028,66 @@ button.start-line:focus-visible {
 }
 .settings-toggle.active {
   color: var(--accent);
-  border-color: rgba(56, 189, 248, 0.5);
-  background: rgba(56, 189, 248, 0.12);
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 .settings-toggle.active .settings-dot {
   background: var(--accent);
+}
+
+/* ---- The colour-scheme picker ---------------------------------------------
+   A row of swatches in the settings menu — see `App.tsx`, where the choice of a
+   radio group over a third toggle is argued. What it needs of its own is a
+   label over a wrapping row (the menu is 180–320px wide and a third theme must
+   land under the first two rather than off the end), and the swatch itself. */
+.theme-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.theme-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+/* Tighter than the menu's other entries because it carries a picture as well as
+   a word, and `flex: 1 1 auto` so two of them share the menu's width evenly
+   rather than each hugging the length of its own name. */
+.theme-swatch {
+  flex: 1 1 auto;
+  justify-content: center;
+  gap: 8px;
+  padding: 7px 10px;
+  font-size: 12.5px;
+}
+/* The selected theme fills, which is what every other disclosure and toggle in
+   the app does when it is on — see `.settings-toggle.active` directly above,
+   whose tint this is. */
+.theme-swatch.active {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+/* Three stops of the palette the button selects — page, surface, accent — as
+   one 26×14 pill divided in three. A picture of the answer rather than a
+   description of it, and the reason this control is worth its extra row.
+
+   The colours are inline styles off `theme.ts`, deliberately: they are *another
+   theme's* values, so they cannot be tokens (a token here would resolve to the
+   palette currently in force and every swatch would draw the same). The
+   hairline is `--border`, which does follow the page, so the pill reads on
+   whichever theme is actually on screen. */
+.theme-chips {
+  display: flex;
+  flex: none;
+  width: 26px;
+  height: 14px;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.theme-chips > span {
+  flex: 1;
 }
 
 /* ---- Research view: the league board ---------------------------------------
@@ -7166,7 +7310,7 @@ button.start-line:focus-visible {
   color: var(--text);
 }
 .research-pos-tab.active {
-  color: var(--bg);
+  color: var(--on-accent);
   background: var(--accent);
 }
 .research-pos-tab:focus-visible {
@@ -7228,8 +7372,8 @@ button.start-line:focus-visible {
 .starters-toggle.on,
 .schedule-toggle.on {
   color: var(--accent);
-  border-color: rgba(56, 189, 248, 0.5);
-  background: rgba(56, 189, 248, 0.12);
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 .research-toggle:focus-visible,
 .starters-toggle:focus-visible,
@@ -7240,7 +7384,7 @@ button.start-line:focus-visible {
 .research-toggle-count {
   min-width: 17px;
   padding: 1px 4px;
-  color: var(--bg);
+  color: var(--on-accent);
   background: var(--accent);
   border-radius: 999px;
   font-size: 11px;
@@ -7292,7 +7436,7 @@ button.start-line:focus-visible {
 .research-add {
   height: var(--control-h);
   padding: 0 14px;
-  color: var(--bg);
+  color: var(--on-accent);
   background: var(--accent);
   border: 1px solid transparent;
   border-radius: var(--control-radius);
@@ -7340,7 +7484,7 @@ button.start-line:focus-visible {
   padding: 16px;
   /* A shade under `--bg` (#0b1220) at two thirds, so the board behind reads as
      dimmed rather than as a second page. */
-  background: rgba(6, 11, 20, 0.66);
+  background: var(--scrim);
 }
 /* **A dialog opened from inside one of the overlays** — the Game Log's per-game
    popup, reached from a table on the player page — writes its own z-index
@@ -7607,8 +7751,8 @@ button.start-line:focus-visible {
 }
 .research-col-chip.on {
   color: var(--accent);
-  background: rgba(56, 189, 248, 0.12);
-  border-color: rgba(56, 189, 248, 0.45);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
 }
 /* Focus lands on the hidden input, so the ring has to be drawn by the label. */
 .research-col-chip:has(input:focus-visible) {
@@ -7676,8 +7820,8 @@ button.start-line:focus-visible {
   min-height: 28px;
   padding: 0 6px 0 10px;
   color: var(--accent);
-  background: rgba(56, 189, 248, 0.12);
-  border: 1px solid rgba(56, 189, 248, 0.45);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
   border-radius: var(--control-radius-inner);
   font: inherit;
   font-size: 12px;
@@ -7695,13 +7839,13 @@ button.start-line:focus-visible {
 /* Picked up and waiting for somewhere to go. Filled rather than tinted, which
    is the app's own way of saying a control is doing something. */
 .research-order-chip.picked {
-  color: var(--bg);
+  color: var(--on-accent);
   background: var(--accent);
   border-color: var(--accent);
   cursor: grabbing;
 }
 .research-order-chip.picked .research-order-grip {
-  color: var(--bg);
+  color: var(--on-accent);
 }
 /* Every other chip while one is picked up: a place to drop it. Dimmed so the
    lifted one reads as lifted, and a pointer because that is now what a press
@@ -8184,8 +8328,8 @@ button.start-line:focus-visible {
   gap: 6px;
   padding: 5px 9px;
   color: var(--accent);
-  background: rgba(56, 189, 248, 0.12);
-  border: 1px solid rgba(56, 189, 248, 0.4);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
   border-radius: var(--control-radius);
   font: inherit;
   font-size: 12px;
@@ -8194,7 +8338,7 @@ button.start-line:focus-visible {
   cursor: pointer;
 }
 .research-chip:hover {
-  background: rgba(56, 189, 248, 0.2);
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
 }
 .research-chip-x {
   font-size: 14px;
@@ -8690,7 +8834,7 @@ button.start-line:focus-visible {
 .lg-tab.active,
 .lg-span-tab.active,
 .date-preset.active {
-  color: var(--bg);
+  color: var(--on-accent);
   background: var(--accent);
 }
 .view-tab:focus-visible,
@@ -8770,18 +8914,18 @@ button.start-line:focus-visible {
   height: 9px;
   border-radius: 50%;
   background: var(--strikeout);
-  box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.6);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--strikeout) 60%, transparent);
   animation: feed-live-pulse 1.8s ease-out infinite;
 }
 @keyframes feed-live-pulse {
   0% {
-    box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.55);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--strikeout) 55%, transparent);
   }
   70% {
-    box-shadow: 0 0 0 7px rgba(248, 113, 113, 0);
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--strikeout) 0%, transparent);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(248, 113, 113, 0);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--strikeout) 0%, transparent);
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -9028,7 +9172,7 @@ button.start-line:focus-visible {
 }
 .feed-more-count,
 .lg-tx-more-count {
-  background: rgba(56, 189, 248, 0.18);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
   color: var(--accent);
   border-radius: 999px;
   padding: 1px 8px;
@@ -9045,7 +9189,7 @@ button.start-line:focus-visible {
   font-variant-numeric: tabular-nums;
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 14%, transparent);
-  border: 1px solid rgba(56, 189, 248, 0.35);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
   padding: 4px 11px;
   border-radius: 999px;
   white-space: nowrap;
@@ -9573,7 +9717,7 @@ button.start-line:focus-visible {
 .auth-btn-primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #04121f;
+  color: var(--on-accent);
 }
 .auth-btn-primary:hover {
   background: var(--accent-2);
@@ -9981,7 +10125,7 @@ button.start-line:focus-visible {
 .tut-done {
   background: var(--accent);
   border: 1px solid var(--accent);
-  color: #04121c;
+  color: var(--on-accent);
   font-size: 14px;
   font-weight: 800;
   padding: 11px 22px;
@@ -10260,7 +10404,7 @@ button.start-line:focus-visible {
 .espn-input:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
 }
 /* "private leagues only" beside a field label. Sits on the label's line rather
    than under the input, so the pair reads as one heading and the form keeps its
@@ -10380,7 +10524,7 @@ button.start-line:focus-visible {
   background: var(--accent);
   border: 1px solid var(--accent);
   border-radius: var(--control-radius);
-  color: var(--bg);
+  color: var(--on-accent);
   font-size: 14px;
   font-weight: 800;
   padding: 9px 18px;
@@ -10532,7 +10676,7 @@ button.start-line:focus-visible {
      free to carry the thing that actually matters, which is whether he is in
      today's lineup. (The two also differ in shape: this is fully round where
      `.player-pos` is a 6px rect, per the app's label-versus-control rule.) */
-  border: 1px solid rgba(56, 189, 248, 0.3);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
   border-radius: 999px;
   background: none;
   color: var(--muted);
@@ -10546,7 +10690,7 @@ button.start-line:focus-visible {
 }
 .fantasy-slot.starting {
   border-color: transparent;
-  background: rgba(56, 189, 248, 0.16);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
   color: var(--accent);
 }
 
@@ -10635,8 +10779,8 @@ button.start-line:focus-visible {
   margin-top: 1px;
   padding: 0 4px;
   color: var(--accent);
-  background: rgba(56, 189, 248, 0.14);
-  border: 1px solid rgba(56, 189, 248, 0.45);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
   border-radius: 999px;
   font-size: 9px;
   font-weight: 800;
@@ -11827,11 +11971,11 @@ span.mup-move-name:hover {
   margin: 0 -16px 16px;
   padding: 20px 16px 12px;
   background:
-    radial-gradient(760px 260px at 82% -40%, rgba(56, 189, 248, 0.09), transparent 70%),
+    radial-gradient(760px 260px at 82% -40%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 70%),
     linear-gradient(180deg, var(--panel) 0%, var(--bg-2) 100%);
   box-shadow:
     inset 0 -1px 0 var(--border),
-    0 6px 16px rgba(0, 0, 0, 0.22);
+    var(--shadow-bar);
 }
 .mup-bar {
   display: flex;
@@ -12117,8 +12261,8 @@ span.mup-move-name:hover {
      rather than on `:root`: this is the one surface in the app that reads a
      diverging scale, and a palette entry would invite a second reader to
      import the argument with the colour. */
-  --rank-hot: #f87171;
-  --rank-cold: #60a5fa;
+  --rank-hot: var(--strikeout);
+  --rank-cold: var(--walk);
   /* The header's own line, declared for the reason the board and the Stats tab
      declare it: a header must not change height by being sorted, whichever face
      the browser finds for U+25B2. */
@@ -12782,6 +12926,198 @@ span.mup-move-name:hover {
   font-size: 12px;
   color: var(--faint);
   text-align: center;
+}
+
+/* ---------------------------------------------------------------------------
+   Lavender — the light theme.
+
+   Light gray surfaces with a violet cast, one deep violet doing the accent's
+   work, and an ombré on every large surface rather than on the pinned bar
+   alone. It is a **redeclaration of the palette and nothing else**: the block
+   below is tokens, then a short run of rules that add gradients the dark theme
+   does not want. No component knows it exists.
+
+   Selected by `html[data-theme='lavender']`, which `client/src/theme.ts` stamps
+   and `index.html` stamps again before the stylesheet has loaded so a reload
+   does not flash the other theme. The attribute is on `html` rather than on the
+   app's own root because two things outside React read it: that boot script,
+   and `body`, whose gradient is the page.
+
+   **Every number below is measured, and two constraints decide a light theme.**
+   A semantic colour here does three jobs the dark theme lets it do at one
+   lightness: it is printed as *text on the pale page*, it is *filled under white
+   ink*, and — the one that is easy to miss and was missed on the first pass —
+   it is printed as text **on a live-role row**, whose ground is that same
+   palette washed over the page. On a dark theme a 20% wash barely dents a
+   colour sitting 9–11:1 from the page; on a light one it eats most of a 4.5,
+   and the first pass put the live inning's green on a tinted row at **2.90:1**.
+
+   Solving all three is what pushes each hue deeper than its dark-theme twin —
+   the amber lands on a dark gold rather than a sunflower, which is what every
+   light theme's "warning" is, and for exactly this reason. As they render:
+
+   - **on `--bg`** — text **14.5:1**, muted 6.7, faint 4.0, accent **7.4**, hit
+     6.7, hr 6.7, walk 6.7, strikeout 6.7, on-base 6.8, mound 6.7, out 5.4. The
+     quietest of those is `--faint`, the tone the percentile badge under every
+     value on the research board is drawn in, and the dark theme's own reads
+     **3.72** there — so the deliberately-quiet mark is quieter in the palette
+     this is a light counterpart to than it is here.
+   - **on the worst live-role ground** — text 9.6, accent **4.91**, muted 4.40,
+     hit 4.40, hr 4.41, walk 4.41, strikeout 4.41, on-base 4.47, mound 4.44,
+     out 3.58, faint 2.61. The dark theme's own figures here are muted **4.60**,
+     strikeout 4.38 and faint 2.41, so this set sits where that one sits.
+   - **white on each fill** — accent **8.3**, hit 7.5, hr 7.5, walk 7.5,
+     strikeout 7.5, on-base 7.6, mound 7.5, out 6.1.
+
+   **The four live-role grounds are the other measurement**, because the legend
+   under the summary table draws all four side by side and its whole job is to
+   say that these shades differ. They are mixed at **24%/22%** here against the
+   dark theme's 22/20 — a 20% wash of a *deep* colour over a near-white page is
+   still a tint you have to look for — and the six pairwise ΔE2000 distances come
+   to at bat/on deck **14.7**, at bat/on base **12.6**, at bat/on mound **24.7**,
+   on deck/on base **23.8**, on deck/on mound **13.1**, on base/on mound
+   **21.5**: a tightest pair of 12.6 against the dark theme's 12.1.
+
+   **Two purples is the one thing this theme buys and pays for.** The accent is
+   the hero lavender and the on-base role is a purple of long standing, so the
+   two share a family: `--accent` #5138ad against `--live-purple` #8605bd is
+   ΔE **10.1**, which is the tightest pair in either palette — the dark theme's
+   own is `--accent`/`--walk` at 11.7 — and it is what is left after the deeper
+   set above pulled the two toward each other. It is taken deliberately: they
+   never appear in one key (the legend draws the roles and the accent is not
+   among them), they are different objects (chrome against a live mark), and
+   the alternative measured worse where it counts — pushing the purple far
+   enough to clear the accent takes at bat/on base under 12.
+   --------------------------------------------------------------------------- */
+html[data-theme='lavender'] {
+  /* The surface ramp. `--panel` is white and `--panel-2` a step *down* from it,
+     which is the inversion the note on `:root` promises: what a rule asks for is
+     the more prominent surface, and on a pale page that is the darker one. */
+  --bg: #f3f1f8;
+  --bg-2: #e9e5f3;
+  --panel: #ffffff;
+  --panel-2: #f1ecfa;
+  --border: #dcd5ee;
+  --text: #231d33;
+  --muted: #585073;
+  --faint: #7b7299;
+
+  /* The hero, and a rose to gradient toward. `--accent-2` is the second stop of
+     the brand wordmark and the hover on a filled button; in the dark theme it is
+     a *brighter* cyan, and here it is a warmer, redder violet, so a hover still
+     moves and the wordmark still runs lavender → rose → gold. */
+  --accent: #5138ad;
+  --accent-2: #a13c8e;
+  --hr: #744d00;
+  --hit: #14622b;
+  --walk: #0752ab;
+  --out: #5b636e;
+  --strikeout: #a61b25;
+
+  /* White, because every fill above is dark enough to carry it — which is the
+     constraint that set their lightness, together with the tinted-row one. */
+  --on-accent: #ffffff;
+
+  --prose: #3a3350;
+  --out-ink: #414b57;
+  --error-ink: #8b1a1a;
+  /* The number inside a pitch dot **inverts with the dots**. The dark theme's
+     dots are pastels on a near-black plot and take a near-black number; these
+     are deep colours on a pale one, so the number is white — 7.1:1 at worst
+     across the five, against the 2.0:1 a near-black would have managed on the
+     green. */
+  --pitch-ink: #ffffff;
+  /* Still a **solid** chip, for the reason it was solid in the first place — it
+     sits on a photograph rather than on the page, so it carries its own
+     contrast with it rather than borrowing whatever is behind it — but a solid
+     *light* one here, which is the half a light theme has to invert.
+
+     Measured before it was: the code inside is drawn in its own semantic colour
+     (`IL10` in `--strikeout`, `DTD` in `--hr`), and this theme's semantics are
+     **darker** than the dark theme's by construction, so a near-black chip put
+     the red on `#221b33` at **3.08:1** — under the bar for a 9px bold glyph and
+     the one contrast failure this theme's first pass had. On white the same
+     code reads **7.5:1**. */
+  --chip-solid: #ffffff;
+
+  --page-glow: #ffffff;
+  --brand-2: #c2429f;
+
+  /* The dimmer behind a dialog. Not a darker version of the dark theme's — that
+     one is near-black at two thirds, which over a pale page reads as a muddy
+     brown rather than as a page held back, and swallows the ombré it is dimming.
+     A violet veil at 42% keeps the page recognisable underneath while the card
+     on top of it is unmistakably in front. */
+  --scrim: rgba(38, 26, 66, 0.42);
+
+  /* Cast in the palette's own violet at a fraction of the weight. Black at 35%
+     over a pale card reads as dirt rather than as depth. */
+  --shadow: 0 10px 30px rgba(63, 44, 110, 0.12);
+  --shadow-bar: 0 6px 16px rgba(63, 44, 110, 0.09);
+  --shadow-pop: 0 12px 30px rgba(63, 44, 110, 0.18);
+  --pin-edge: 6px 0 8px -6px rgba(63, 44, 110, 0.18);
+  --pin-edge-left: -6px 0 8px -6px rgba(63, 44, 110, 0.18);
+
+  /* pitch dot colors — the semantic set, deepened for a pale plot on the rule
+     above them, and separated from each other by ΔE 19.7 at the tightest. */
+  --inplay: #14622b;
+  --whiff: #a61b25;
+  --foul: #744d00;
+  --called: #6d28d9;
+  --ball: #5b636e;
+
+  --live-purple: #8605bd;
+  --mound-teal: #005f5b;
+
+  /* 24/22 rather than 22/20 — see the note above the block. */
+  --role-at-bat-bg: color-mix(in srgb, var(--strikeout) 24%, var(--bg));
+  --role-on-deck-bg: color-mix(in srgb, var(--hr) 22%, var(--bg));
+  --role-on-base-bg: color-mix(in srgb, var(--live-purple) 22%, var(--bg));
+  --role-pitching-bg: color-mix(in srgb, var(--mound-teal) 22%, var(--bg));
+}
+
+/* ---- Ombré ----------------------------------------------------------------
+   The dark theme already gradients the things that are *lit* — the page, the
+   pinned bar, a card header — and leaves the rest flat, because on a near-black
+   ground a second flat step is all a gradient can be. On a pale ground it is
+   the opposite: white on white needs an edge, and a two-step wash gives a
+   surface a top and a bottom without spending a border on it.
+
+   So these rules run only under the lavender theme, and they are deliberately
+   **shallow** — `--panel` to `--panel-2` is about one step of this palette, the
+   same distance the pinned bar has always travelled. Anything deeper and a card
+   reads as a photograph of a card.
+   --------------------------------------------------------------------------- */
+html[data-theme='lavender'] body {
+  /* Warmer at the top right and cooler at the foot, which is the dark theme's
+     own gradient read the other way up. */
+  background:
+    radial-gradient(1200px 700px at 80% -10%, var(--page-glow) 0%, transparent 60%),
+    radial-gradient(900px 600px at 0% 100%, color-mix(in srgb, var(--accent) 7%, transparent) 0%, transparent 70%),
+    linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%);
+  background-attachment: fixed;
+}
+html[data-theme='lavender'] .pct-card,
+html[data-theme='lavender'] .empty-state,
+html[data-theme='lavender'] .auth-card,
+html[data-theme='lavender'] .app-dialog-box,
+html[data-theme='lavender'] .settings-popover,
+html[data-theme='lavender'] .drp-popover,
+html[data-theme='lavender'] .tut-note,
+html[data-theme='lavender'] .espn-status,
+html[data-theme='lavender'] .lg-matchup,
+html[data-theme='lavender'] .order-row {
+  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+}
+/* The three wide tables keep a flat ground on purpose: a gradient down a
+   scrolling table would slide against its own rows, and the zebra stripe is
+   already doing the work a wash would do. What they take instead is a header
+   row that reads as a header. */
+html[data-theme='lavender'] .summary-table thead th,
+html[data-theme='lavender'] .research-table thead th,
+html[data-theme='lavender'] .glog-table thead th,
+html[data-theme='lavender'] .league-table thead th {
+  background: linear-gradient(180deg, var(--panel-2) 0%, var(--bg-2) 100%);
 }
 
 @media (max-width: 640px) {

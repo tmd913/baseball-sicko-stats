@@ -96,6 +96,21 @@ export interface UserPrefs {
    *  this is a habit of reading rather than a setting on a table. */
   statRanks?: boolean;
   /**
+   * The colour scheme, by id — `'midnight'` (the dark original) or
+   * `'lavender'`. Absent means the default, which is the convention every
+   * toggle above follows and is the right one here for the same reason: the
+   * default can change without anyone's record needing revisiting.
+   *
+   * A string rather than a boolean because there can be a third theme, and an
+   * id the client does not recognise is read as the default rather than
+   * rejected — so a record written by a newer build opens an older tab on
+   * Midnight instead of on nothing. Which ids exist is the **client's**
+   * business (`client/src/theme.ts`): this is the same split `researchColumns`
+   * makes, where the route validates the shape of a key and the vocabulary
+   * lives where the thing is drawn.
+   */
+  theme?: string;
+  /**
    * Read the roster views off the user's **ESPN fantasy team** instead of the
    * list they built here.
    *
@@ -862,6 +877,25 @@ export async function setMuteAudio(userId: string, mute: boolean): Promise<UserP
     const prefs = { ...cur.prefs };
     if (mute) prefs.muteAudio = true;
     else delete prefs.muteAudio;
+    return { prefs };
+  });
+  return next.prefs;
+}
+
+/**
+ * Save the reader's colour scheme.
+ *
+ * Absence is the default theme, so switching *back* to it deletes the entry —
+ * the same convention as the three toggles above, and the same benefit: nobody's
+ * record has to be revisited if the default ever moves. The id is length-capped
+ * and otherwise trusted, the vocabulary being the client's; the worst a bad one
+ * can do is give this reader the default palette.
+ */
+export async function setTheme(userId: string, theme: string | null): Promise<UserPrefs> {
+  const next = await mutate(userId, (cur) => {
+    const prefs = { ...cur.prefs };
+    if (theme) prefs.theme = theme;
+    else delete prefs.theme;
     return { prefs };
   });
   return next.prefs;

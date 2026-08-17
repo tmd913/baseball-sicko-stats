@@ -47,6 +47,7 @@ import {
   setEspnTeam,
   setHideInjured,
   setMuteAudio,
+  setTheme,
   setStatRanks,
   setRecentPlayer,
   setSeenTransactions,
@@ -479,6 +480,32 @@ app.put(
       return;
     }
     res.json(await setMuteAudio(userId(req), mute));
+  }),
+);
+
+/**
+ * The reader's colour scheme. A route of its own for the reason each of the
+ * preferences around it has one — its update semantics are its own: it is
+ * neither a boolean that is always set nor a list a null clears, but **one id,
+ * where `null` means "back to the default"** and is stored as the absence of
+ * the entry.
+ *
+ * The id is shape-checked and otherwise trusted, which is the split
+ * `research-columns` already makes: which themes exist is the client's
+ * vocabulary (`client/src/theme.ts`), and a value this server has never heard
+ * of is read back as the default by whoever draws it. The worst a bad one can
+ * do is give this one reader the default palette.
+ */
+app.put(
+  '/api/prefs/theme',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const { theme } = (req.body ?? {}) as { theme?: unknown };
+    if (theme !== null && (typeof theme !== 'string' || !/^[a-z0-9-]{1,32}$/.test(theme))) {
+      res.status(400).json({ error: 'theme must be a theme id, or null for the default' });
+      return;
+    }
+    res.json(await setTheme(userId(req), theme));
   }),
 );
 
