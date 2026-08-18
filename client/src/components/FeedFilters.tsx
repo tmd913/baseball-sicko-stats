@@ -1,0 +1,225 @@
+/**
+ * **The batter feed's play filters** — which kinds of play the stream draws.
+ *
+ * The Feed view is the roster's day read by clock, and on a full slate it is
+ * hundreds of items: every plate appearance of every batter on the roster, plus
+ * every bag any of them took. The one thing it could not do was answer *what
+ * actually happened today* — the home runs, the steals, the plays there is film
+ * of — without the reader scrolling past every strikeout in between.
+ *
+ * **Six kinds, and they union.** That is the research board's include-button
+ * model rather than a segmented control, and for its reason: the sets genuinely
+ * overlap (a home run is a hit and an extra-base hit), so "pick one" would be a
+ * lie about the vocabulary, where three independent switches say all eight of
+ * their states. Nothing selected is the whole stream — a filter set that
+ * defaults to *everything* rather than to nothing, so the feed opens as it
+ * always did.
+ *
+ * **`New` is not one of them and is deliberately kept out of this list.** It
+ * asks *when* rather than *what kind*, so it narrows whatever the six selected
+ * instead of adding to it — which is exactly the split `inc=` and `watch=1`
+ * already make on the research board, where the ownership sets union and the
+ * watchlist is a separate axis. Read `HR + New` as "the new home runs", never as
+ * "the home runs and also everything new".
+ *
+ * **Batter tab only.** A pitcher's stream item is his whole *outing* rather than
+ * a play — the same fact the kind tabs exist for — so there is nothing here to
+ * select on, and the control is not drawn.
+ */
+
+/** The six kinds a play can be asked for, in the order the chips read. */
+export type PlayFilterKey = 'hr' | 'hit' | 'xbh' | 'sb' | 'run' | 'video';
+
+export const PLAY_FILTER_KEYS: PlayFilterKey[] = ['hr', 'hit', 'xbh', 'sb', 'run', 'video'];
+
+export interface PlayFilterDef {
+  key: PlayFilterKey;
+  /** Short enough for six of them to share a phone's width. */
+  label: string;
+  /** What the chip is actually selecting, in words — the label cannot say it. */
+  title: string;
+}
+
+/**
+ * The chips' own vocabulary.
+ *
+ * The labels are abbreviations because six of these share one row on a 390px
+ * phone, and every one of them is a form a box score already uses. What an
+ * abbreviation cannot say is which plays it takes — that a home run is inside
+ * `Hits` and inside `XBH`, that `Runs` is him crossing the plate rather than
+ * driving one in — so each carries the sentence.
+ */
+export const PLAY_FILTERS: PlayFilterDef[] = [
+  { key: 'hr', label: 'HR', title: 'Home runs' },
+  {
+    key: 'hit',
+    label: 'Hits',
+    title: 'Hits — singles, doubles, triples and home runs',
+  },
+  {
+    key: 'xbh',
+    label: 'XBH',
+    title: 'Extra-base hits — doubles, triples and home runs',
+  },
+  { key: 'sb', label: 'SB', title: 'Stolen bases' },
+  {
+    key: 'run',
+    label: 'Runs',
+    title: 'Runs he scored — crossing the plate, not driving one in',
+  },
+  {
+    key: 'video',
+    label: 'Video',
+    title: 'Plays MLB filed a clip for',
+  },
+];
+
+const BY_KEY = new Map(PLAY_FILTERS.map((f) => [f.key, f]));
+
+/** A chip's own label, for the empty state's wording and the button's title. */
+export function playFilterLabel(key: PlayFilterKey): string {
+  return BY_KEY.get(key)?.label ?? key;
+}
+
+/**
+ * Read the URL's `plays=` into a set, dropping anything this build has no chip
+ * for. An older link naming a kind that has since gone is a link that shows a
+ * *wider* stream than it promised rather than an empty one, which is the
+ * direction every parameter in this app fails in.
+ */
+export function toPlayFilters(raw: string | null): Set<PlayFilterKey> {
+  if (!raw) return new Set();
+  const out = new Set<PlayFilterKey>();
+  for (const part of raw.split(',')) {
+    const k = part.trim() as PlayFilterKey;
+    if (BY_KEY.has(k)) out.add(k);
+  }
+  return out;
+}
+
+/** The `plays=` value for a set, or null where it says nothing (the default). */
+export function playFiltersParam(keys: Set<PlayFilterKey>): string | null {
+  if (keys.size === 0) return null;
+  // In the vocabulary's own order rather than insertion order, so two readers
+  // who tick the same three chips share one link.
+  return PLAY_FILTER_KEYS.filter((k) => keys.has(k)).join(',');
+}
+
+/**
+ * **The `Plays` disclosure and its panel** — the app's own toggle-and-panel
+ * shape rather than a second one that resembles it.
+ *
+ * `.research-toggle` and `.research-panel` are the research board's classes,
+ * folded onto by every disclosure in this app, so the button carries `.active`
+ * while its panel is open and `.on` while the filter *holds* something — and
+ * that second class is what makes a collapsed panel safe: the count badge and
+ * the lit border say the stream is narrowed while the reader scrolls, which is
+ * the board's own rule that a collapsed control must never be the only place a
+ * filter lives.
+ *
+ * **`New` reads last and is set apart by a wider gap**, because it is the one
+ * chip that composes differently: the six before it union with each other and
+ * this one narrows what they selected.
+ *
+ * It was a **hairline** between the two, and that could not survive the wrap: the
+ * panel is a wrapping row, so at 390px `New` drops to a second line and the rule
+ * was left at the end of the first with nothing after it — a mark separating a
+ * group from nothing. A gap cannot dangle, which is what makes it the right
+ * device for a row whose break point is the window's business. The chip's own red
+ * count and its word carry the rest of the distinction.
+ */
+export function PlaysButton({
+  keys,
+  newOnly,
+  open,
+  onToggle,
+}: {
+  keys: Set<PlayFilterKey>;
+  newOnly: boolean;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const held = keys.size + (newOnly ? 1 : 0);
+  return (
+    <button
+      type="button"
+      className={`research-toggle plays-toggle${open ? ' active' : ''}${held > 0 ? ' on' : ''}`}
+      aria-expanded={open}
+      onClick={onToggle}
+      title={
+        held === 0
+          ? 'Narrow the stream to certain kinds of play'
+          : `Showing ${[...PLAY_FILTER_KEYS.filter((k) => keys.has(k)).map(playFilterLabel), ...(newOnly ? ['New'] : [])].join(' · ')}`
+      }
+    >
+      {/* A funnel, which is what the panel behind it is. It carries `flex: none`
+          in the stylesheet for the reason every glyph on this row does: an
+          `<svg>` in a flex row is a flex item and its `width` is a basis it will
+          shrink below the moment the line is tight, which on a phone — where the
+          label is visually hidden and the glyph is the whole button — is the
+          whole button. */}
+      <svg
+        viewBox="0 0 24 24"
+        width="18"
+        height="18"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M3 4h18l-7 8.5V20l-4-2v-5.5L3 4z" />
+      </svg>
+      <span className="research-toggle-label">Plays</span>
+      {held > 0 && <span className="research-toggle-count">{held}</span>}
+    </button>
+  );
+}
+
+export function PlaysPanel({
+  keys,
+  newOnly,
+  newCount,
+  onToggleKey,
+  onToggleNew,
+}: {
+  keys: Set<PlayFilterKey>;
+  newOnly: boolean;
+  /** How many plays are unseen — the same figure the red button carries, shown
+   *  on the chip so the two cannot disagree about it. */
+  newCount: number;
+  onToggleKey: (key: PlayFilterKey) => void;
+  onToggleNew: () => void;
+}) {
+  return (
+    <div className="research-panel plays-panel">
+      {PLAY_FILTERS.map((f) => (
+        <button
+          key={f.key}
+          type="button"
+          className={`research-toggle plays-chip${keys.has(f.key) ? ' on' : ''}`}
+          aria-pressed={keys.has(f.key)}
+          onClick={() => onToggleKey(f.key)}
+          title={f.title}
+        >
+          {f.label}
+        </button>
+      ))}
+      <button
+        type="button"
+        className={`research-toggle plays-chip plays-chip-new${newOnly ? ' on' : ''}`}
+        aria-pressed={newOnly}
+        onClick={onToggleNew}
+        title={
+          newOnly
+            ? 'Showing only the plays you have not marked read — turning this off marks them read'
+            : 'Only the plays since you last marked the feed read. It narrows whatever the chips beside it selected rather than adding to them.'
+        }
+      >
+        New
+        {newCount > 0 && !newOnly && <span className="plays-chip-count">{newCount}</span>}
+      </button>
+    </div>
+  );
+}

@@ -29,10 +29,14 @@ import { InlineVideoClip, PlateAppearanceCard } from './PlateAppearanceCard';
 import { BatterSplitsTab } from './PlatoonSplits';
 import { OpponentSection, PitchingTag, outingBar } from './PitcherCard';
 import { OutingPage } from './OutingPage';
+import type { PlayFilterKey } from './FeedFilters';
 
 /** How many stream items the Recent section shows at a time — a day of at-bats
  * across a roster runs to hundreds, and every one of them mounts a card. */
 export const FEED_PAGE_SIZE = 20;
+
+/** Module-level so the default never changes identity between renders. */
+const EMPTY_FILTERS: Set<PlayFilterKey> = new Set();
 
 /** Priority order for the Live section: at bat, then on deck, then on base. */
 const ROLE_ORDER: Record<LiveRole, number> = {
@@ -116,6 +120,70 @@ function entryTime(e: FeedEntry): number {
 function playOrder(e: FeedEntry): number {
   if (e.type !== 'base') return 0;
   return e.evs.some((ev) => ev.kind === 'run') ? 2 : 1;
+}
+
+/** Doubles, triples and home runs. `outcomeKind` cannot answer this — it files
+ *  all three of the non-homer hits under one `hit`, which is the right grain for
+ *  coloring a card's rail and one short of the grain a chip needs. */
+const XBH_EVENTS = new Set(['double', 'triple', 'home_run']);
+
+/**
+ * Which of the filter chips a stream item answers to.
+ *
+ * A **set** rather than one kind, because the six overlap by construction: a
+ * home run is a hit and an extra-base hit and — nearly always — a play with
+ * film. That overlap is the whole reason the chips union rather than partition
+ * (see `FeedFilters.tsx`), and it is why the test is "does this item answer any
+ * of the chips that are on" rather than "is its kind among them".
+ *
+ * `video` is **`playId != null`** — the id MLB filed a clip under — rather than
+ * a clip that has been *resolved*. Resolution is one request per play and the
+ * feed does it lazily per item as each scrolls into view, so a filter that
+ * waited for it would send hundreds of requests to draw one screen. The cost is
+ * that a play whose clip does not come back is still selected, which is the same
+ * thing the item itself already does — it draws the play and no frame.
+ */
+function playKinds(e: FeedEntry): Set<PlayFilterKey> {
+  const out = new Set<PlayFilterKey>();
+  if (e.type === 'pa') {
+    const kind = outcomeKind(e.pa.event);
+    if (kind === 'hr') out.add('hr');
+    if (kind === 'hr' || kind === 'hit') out.add('hit');
+    if (e.pa.event && XBH_EVENTS.has(e.pa.event)) out.add('xbh');
+    if (e.pa.playId) out.add('video');
+    return out;
+  }
+  if (e.type === 'base') {
+    for (const ev of e.evs) {
+      if (ev.kind === 'sb') out.add('sb');
+      if (ev.kind === 'run') out.add('run');
+      if (ev.playId) out.add('video');
+    }
+    return out;
+  }
+  return out;
+}
+
+/**
+ * **Whether an item survives the filters** — the six union, `New` narrows.
+ *
+ * Two axes rather than one, which is `inc=`/`watch=1`'s own split on the
+ * research board: the chips ask *what kind of play* and `New` asks *when*, so
+ * `HR + New` reads as "the new home runs" and never as "the home runs and also
+ * everything new". An empty chip set is the whole stream rather than none of it,
+ * so the feed opens as it always did and `New` on its own still means something.
+ */
+function passesFilters(
+  e: FeedEntry,
+  keys: Set<PlayFilterKey>,
+  newOnly: boolean,
+  seenPlays: number,
+): boolean {
+  if (newOnly && entryTime(e) <= seenPlays) return false;
+  if (keys.size === 0) return true;
+  const kinds = playKinds(e);
+  for (const k of kinds) if (keys.has(k)) return true;
+  return false;
 }
 
 /**
@@ -1005,6 +1073,39 @@ function baseEntries(report: PlayerReport, game: PlayerGame): FeedEntry[] {
   }));
 }
 
+/**
+ * **How many completed plays are newer than a marker, and the timestamp of the
+ * newest one** — the two numbers the red `N new plays` button is made of.
+ *
+ * Exported because the two halves of that button live in two places and both
+ * have to be right. **App** owns the marker (it persists it, and merges the
+ * saved one on arrival) and owns the `New` filter, so it is App that needs the
+ * timestamp to mark the stream read with; the **stream's vocabulary** — what
+ * counts as a play, and which clock orders them — lives here. One function
+ * rather than App reproducing `entryTime`, which is the same rule that keeps
+ * `playerDayEntries` one function for the stream and the player page: two
+ * readings of what happened must not be able to disagree.
+ *
+ * `newest` is the head of the **whole** stream rather than of the new part of
+ * it, because marking read has to cover what the reader can already see as well
+ * as what the button is about.
+ */
+export function newPlays(
+  reports: PlayerReport[],
+  seenPlays: number,
+): { count: number; newest: number } {
+  let count = 0;
+  let newest = 0;
+  for (const report of reports) {
+    for (const e of playerDayEntries(report).entries) {
+      const t = entryTime(e);
+      if (t > newest) newest = t;
+      if (t > seenPlays) count += 1;
+    }
+  }
+  return { count, newest };
+}
+
 /** Newest first, with a play's own events kept in cause-then-effect order. */
 function byRecency(a: FeedEntry, b: FeedEntry): number {
   const t = entryTime(b) - entryTime(a);
@@ -1086,6 +1187,11 @@ export function LiveFeed({
   onOpenDetails,
   shown: shownFromParent,
   onShowMore,
+  playFilters = EMPTY_FILTERS,
+  newOnly = false,
+  seenPlays = 0,
+  newCount = 0,
+  onShowNew,
 }: {
   reports: PlayerReport[];
   // Which kind the tabs above are showing — the stream is one kind at a time,
@@ -1098,6 +1204,32 @@ export function LiveFeed({
    * scroll offset, and keyed the same way — see its `feedShown`. */
   shown: number;
   onShowMore: (shown: number) => void;
+  /**
+   * Which kinds of play the stream is narrowed to — empty is all of them. See
+   * `FeedFilters.tsx` for why they union and why `New` is not among them.
+   *
+   * **All five of these are optional, and the second caller passes none of
+   * them.** A matchup team page draws this same component for a leaguemate's
+   * week (`LeagueTeam.tsx`), and neither half of the feature belongs to it: the
+   * marker is a fact about how far down *the reader's own* stream they have got,
+   * and that page's own control row already carries four groups. Absent, the
+   * component is exactly the stream it was — no filter, no button, no marker.
+   */
+  playFilters?: Set<PlayFilterKey>;
+  /** The `New` filter — a different axis, so it narrows rather than adding. */
+  newOnly?: boolean;
+  /** How far down the stream this reader has marked read (epoch ms) — what
+   *  `New` narrows to. */
+  seenPlays?: number;
+  /** How many plays are newer than that marker. **App's own count, off
+   *  `newPlays`**, because App owns the marker and the filter and would
+   *  otherwise have to be told a number this component derived. It is counted
+   *  over the *unfiltered* stream on purpose: it is news about the day rather
+   *  than about the lens, and a count that shrank when the reader ticked `HR`
+   *  would be saying the other plays had stopped being new. */
+  newCount?: number;
+  /** Press the red button: show the new plays. App turns the `New` filter on. */
+  onShowNew?: () => void;
 }) {
   // How much of the Recent section is on screen, grown a page at a time by the
   // "Load more" button. Deliberately not in the URL — it's a reading position,
@@ -1133,7 +1265,18 @@ export function LiveFeed({
   // a pitcher his whole outing as a single item. The in-progress at-bat (no
   // event yet) lives in the Live section above, and a pitcher pinned there has
   // already been kept out of this list by `playerDayEntries`.
-  const recent = perPlayer.flatMap((p) => p.entries).sort(byRecency);
+  const allRecent = perPlayer.flatMap((p) => p.entries).sort(byRecency);
+  const recent = allRecent.filter((e) => passesFilters(e, playFilters, newOnly, seenPlays));
+
+  /**
+   * **The red button, and why it is not drawn while `New` is on.** It is the
+   * doorway to those plays, so with the reader already looking at them it would
+   * be a control offering what is on screen — and pressing it would mark them
+   * read, which is what empties a `New` view. So while the filter is on the
+   * marker is frozen and the button is absent, and turning the filter off is
+   * what says "done with those": see App's `setFeedNewOnly`.
+   */
+  const showNewButton = !newOnly && newCount > 0;
 
   // Not-yet-started games, earliest first pitch first — so the feed still has
   // something to show before the day's first at-bat (and lists later games while
@@ -1141,7 +1284,16 @@ export function LiveFeed({
   // `isUpcomingFor`.
   const upcoming = perPlayer.flatMap((p) => p.upcoming).sort(byStartTime);
 
-  const isEmpty = liveRows.length === 0 && recent.length === 0 && upcoming.length === 0;
+  /**
+   * **Emptied by a filter is not the same as empty**, which is the distinction
+   * `filtered` carries. `No games for these players.` is a statement about the
+   * day and would be a lie over a stream the reader has narrowed to home runs on
+   * an afternoon of singles — so the Recent section keeps its own heading and
+   * says which control did it, and the day-level message is held back.
+   */
+  const filtered = allRecent.length > 0 && recent.length === 0;
+  const isEmpty =
+    liveRows.length === 0 && allRecent.length === 0 && upcoming.length === 0;
 
   return (
     <div className="live-feed">
@@ -1177,25 +1329,56 @@ export function LiveFeed({
         </section>
       )}
 
-      {recent.length > 0 && (
+      {(recent.length > 0 || filtered) && (
         <section className="feed-section">
           <h2 className="feed-heading">
             {kind === 'pitcher' ? 'Recent outings' : 'Recent plays'}
           </h2>
-          <div className="feed-items">
-            {recent.slice(0, shown).map((entry) => (
-              <FeedItem key={entryKey(entry)} entry={entry} onOpenDetails={onOpenDetails} />
-            ))}
-          </div>
-          {recent.length > shown && (
+          {/* News about the day, at the head of the list the news landed in —
+              which is where it can also *do* something. The League page's
+              Transactions dot is the same statement made on a tab, and it can
+              only be a mark: it says a feed has moved on a page the reader is
+              not looking at. Here they are looking at it, so the mark carries
+              its own count and is the way to the plays it counts. */}
+          {showNewButton && onShowNew && (
             <button
               type="button"
-              className="feed-more"
-              onClick={showMore}
+              className="feed-new"
+              onClick={onShowNew}
+              title={`${newCount} ${newCount === 1 ? 'play' : 'plays'} since you last marked the feed read — show them`}
             >
-              Load more
-              <span className="feed-more-count">{recent.length - shown}</span>
+              <span className="feed-new-dot" aria-hidden="true" />
+              {newCount} new {newCount === 1 ? 'play' : 'plays'}
             </button>
+          )}
+          {recent.length > 0 ? (
+            <>
+              <div className="feed-items">
+                {recent.slice(0, shown).map((entry) => (
+                  <FeedItem key={entryKey(entry)} entry={entry} onOpenDetails={onOpenDetails} />
+                ))}
+              </div>
+              {recent.length > shown && (
+                <button type="button" className="feed-more" onClick={showMore}>
+                  Load more
+                  <span className="feed-more-count">{recent.length - shown}</span>
+                </button>
+              )}
+            </>
+          ) : (
+            /* Emptied by the reader's own controls, so it names them — the
+               app's standing rule for a view a filter has cleared, and the one
+               state this section could not previously be in. */
+            <div className="feed-empty">
+              {newOnly && playFilters.size > 0
+                ? 'No new plays of those kinds.'
+                : newOnly
+                  ? 'Nothing new since you last marked the feed read.'
+                  : 'No plays of those kinds today.'}{' '}
+              <span className="feed-empty-how">
+                Change it with <b>Plays</b> in the row above.
+              </span>
+            </div>
           )}
         </section>
       )}

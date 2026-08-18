@@ -52,6 +52,7 @@ import {
   setStatRanks,
   setRecentPlayer,
   setSeenTransactions,
+  setSeenPlays,
   setLeagueSharing,
   setResearchColumns,
   setStatsColumns,
@@ -613,6 +614,34 @@ app.put(
       return;
     }
     res.json(await setSeenTransactions(userId(req), leagueId, ts));
+  }),
+);
+
+/**
+ * Mark the Feed view's stream of plays read up to a date — what undraws the red
+ * `N new plays` button at the head of it.
+ *
+ * The **seventh** update semantic on this item, and it is the sixth's with one
+ * field rather than two: a watermark that only ever moves forward (see
+ * `store.ts::setSeenPlays`). One field because a play is scoped to nothing the
+ * reader switches between — it belongs to a roster and a date range, and the
+ * feed is already about both — where a transaction date without its league
+ * could mark somebody else's feed read.
+ *
+ * `ts` is epoch milliseconds, which is what the stream is ordered by. Shape-
+ * checked and otherwise trusted: the worst a bad value can do is this user's
+ * own button.
+ */
+app.put(
+  '/api/prefs/seen-plays',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const { ts } = (req.body ?? {}) as { ts?: unknown };
+    if (typeof ts !== 'number' || !Number.isFinite(ts) || ts < 0) {
+      res.status(400).json({ error: 'ts must be epoch milliseconds' });
+      return;
+    }
+    res.json(await setSeenPlays(userId(req), ts));
   }),
 );
 

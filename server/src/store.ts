@@ -183,6 +183,20 @@ export interface UserPrefs {
    */
   seenTransactions?: { leagueId: number; ts: number };
   /**
+   * How far down the **Feed** view's stream of plays this reader has got —
+   * epoch ms of the newest play they marked read. What draws, and undraws, the
+   * red `N new plays` button at the head of the Recent section, and what the
+   * feed's `New` filter narrows to.
+   *
+   * A bare timestamp where `seenTransactions` carries a league id beside its
+   * own, because a play is not scoped to anything a reader can switch between:
+   * it belongs to a roster and a date range, and both of those are already the
+   * thing the feed is about. Absent means the reader has never marked anything
+   * read, which the client seeds to its own boot instant rather than to zero —
+   * a stream that opens on "84 new plays" is a mark nobody reads.
+   */
+  seenPlays?: number;
+  /**
    * @deprecated The same flag under the name it carried when it *narrowed* the
    * board to the watchlist rather than adding the watchlist to it. Kept on the
    * type because `GET /api/prefs` hands the stored object straight to the
@@ -1015,6 +1029,33 @@ export async function setSeenTransactions(
     const prev = cur.prefs.seenTransactions;
     if (prev && prev.leagueId === leagueId && prev.ts >= ts) return null;
     return { prefs: { ...cur.prefs, seenTransactions: { leagueId, ts } } };
+  });
+  return next.prefs;
+}
+
+/**
+ * Mark the Feed view's stream of plays read up to a date — what undraws the red
+ * `N new plays` button at the head of it.
+ *
+ * `setSeenTransactions`' own semantic with one field instead of two, and the
+ * **forward-only** rule is doing more work here than it does there. The feed is
+ * read over a date range the reader picks, so asking for "Last 15 days" makes
+ * the newest play on screen older than a marker set this afternoon — and a
+ * marker that moved *back* to it would report every play of the fortnight as
+ * unseen the next time the range came back to today. Forward-only is what makes
+ * a range excursion cost nothing, and it is the same property that makes this
+ * safe to replay against a newer record: two tabs on the feed, or a slow
+ * response carrying an older head than one that has landed, cannot un-read what
+ * has been read.
+ *
+ * A marker that would not move writes **nothing** — `mutate`'s own no-op path —
+ * so a reader who never presses the button pays for no writes at all, however
+ * long the 20-second poll runs.
+ */
+export async function setSeenPlays(userId: string, ts: number): Promise<UserPrefs> {
+  const next = await mutate(userId, (cur) => {
+    if (cur.prefs.seenPlays !== undefined && cur.prefs.seenPlays >= ts) return null;
+    return { prefs: { ...cur.prefs, seenPlays: ts } };
   });
   return next.prefs;
 }

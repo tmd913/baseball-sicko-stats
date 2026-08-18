@@ -547,8 +547,8 @@ window and means five different spans of a different thing; one parameter meanin
 two things in two views is exactly the trap `cols=` avoids by being scoped to the
 board `pos=` names. Neither name can collide, nor does `mt=`: the app's other
 params are `preset`, `start`, `end`, `player`, `view`, `kind`, `sim`, `hideil`,
-`starters`, `sched`, `roster`, `pos`, `cols`, `inc`, `scope`, `watch`, `win`,
-`help`, `mp`, `mup` and `league`.
+`starters`, `sched`, `plays`, `newplays`, `roster`, `pos`, `cols`, `inc`, `scope`,
+`watch`, `win`, `help`, `mp`, `mup` and `league`.
 
 **Each tab's data is read on its first open and kept**, the way the player page's
 tabs are — the rankings read is gated on `leagueTab === 'rankings'`, and each of
