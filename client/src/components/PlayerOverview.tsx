@@ -134,7 +134,11 @@ export function OverviewTab({
           answer to what a player page is opened with, and it is never empty:
           the third state is the scheduled game, which is what the block's own
           heading then names. */}
-      <section className="ovw-block">
+      {/* `ovw-day` so the section can be reached by the rule that caps and
+          centers the tab's three reading columns. It carried no modifier while
+          the cap sat on `.player-day` *inside* it, which centered the day's
+          items and left this heading at the tab's left edge. */}
+      <section className="ovw-block ovw-day">
         <h2 className="ovw-head">{dayHead}</h2>
         {line && <p className="details-note details-day-line">{line}</p>}
         {hasGames ? (
