@@ -23,7 +23,7 @@ So the app **names the period** rather than inheriting ESPN's clock, and which p
 
 The mapping needs **no season-start constant**: ESPN numbers its periods one per calendar day of the season, the All-Star break included (2026 allocates ids 111–113 to three gameless days), so a day ahead is exactly a period ahead — checked against ESPN's own `proTeamSchedules_wl` across all 184 game days, period number and calendar day advance together with zero exceptions. What a straight line needs is a **point on it**, and that point is now derived from that same schedule rather than learned from ESPN's own clock — see **The anchor is derived from ESPN's calendar, not from our own clock** below, which is where the whole of that argument lives and why the version that read `currentScoringPeriod` was wrong for an hour and a half every morning. A date that is shaped like one but isn't (`2026-99-99` passes every `YYYY-MM-DD` test in the codebase and `Date.UTC` rolls it into 2034) is read as today by the league-wide read rather than as a period three thousand past the season, and names no period at all for a per-day one.
 
-The ownership blob is therefore keyed by **league and period**, with today's keeping the bare league id so the map every member of a league shares — free agents, roster %, the trend — stays one entry rather than one per person's date range. `/api/espn/ownership` never passes a date: "who can I pick up" is a now question and the research board has no dates on it. And **`force` drops every period of the league**, not just the one asked for — "read my league again" is a statement about the league rather than about a day, and `Refresh from ESPN` leans on exactly that, forcing the ownership read and letting the roster and report follow; a per-period force would have left a `Tomorrow` view serving a nine-minute-old lineup, which is the staleness the button exists to clear. Measured: a warm future read is 3ms, and the same read after a forced ownership call is 269ms, i.e. genuinely back to ESPN.
+The ownership blob is therefore keyed by **league and period**, with the *live* day's keeping the bare league id so the map every member of a league shares — free agents, roster %, the trend — stays one entry rather than one per person's date range. `/api/espn/ownership` never passes a date: "who can I pick up" is a now question and the research board has no dates on it. And **`force` drops every period of the league**, not just the one asked for — "read my league again" is a statement about the league rather than about a day, and `Refresh from ESPN` leans on exactly that, forcing the ownership read and letting the roster and report follow; a per-period force would have left a `Tomorrow` view serving a nine-minute-old lineup, which is the staleness the button exists to clear. Measured: a warm future read is 3ms, and the same read after a forced ownership call is 269ms, i.e. genuinely back to ESPN.
 
 **A range is a range of lineups.** The roster views summarize a span of days and applied **one** lineup to all of it — the one set for the end of the range — so the `Starters` filter over "Last 7 days" either counted a player's whole week or dropped him from it. That is the wrong arithmetic for what the summary table is: a man you started on Monday and benched on Wednesday earned you Monday's line and none of Wednesday's. It is not a rare shape either. Measured on the live 12-team league over the seven days ending 2026-08-12 (periods 135–141), **12 of the 29 players** who were on the team at some point in that week changed state inside it — Gausman benched, started, benched again; Gilbert started, benched, started; Snell off the IL on day six; Hoffman dropped and Bowlan added — and 8 of the 28 slots on a given day were held by somebody different a week earlier.
 
@@ -33,6 +33,81 @@ So the lineup is read **per day, at that day's own scoring period** (`getTeamRos
 - **Which of a player's days count?** The days **you actually had him in your lineup**, each read at its own period, past ones included.
 
 **A day you held him but did not start him is a day he was not in your lineup**, which is the honest reading: that Monday's line is his and is not yours. Measured on that same week: **Kyle Stowers started four of the seven and is on the IL today**, so the whole-range rule dropped him outright and the per-day one credits him his four days.
+
+### The ownership read asks for tomorrow, because a move lands on the next period
+
+**"Kevin Gausman was added today but the board still shows him as a free
+agent."** He was, and it did, and the cause is not a cache: **ESPN books an add
+or a drop against the *next* scoring period once the day's games have started**,
+so `mRoster` asked for *today's* period answers with a roster that is out of
+date from about 1pm ET onwards. Every measurement in this file about what a
+period returns was taken on a quiet morning, where today's answer and the
+freshest one agree.
+
+**Measured against the live league's own activity feed**, which stamps every
+topic with an instant, by reading `mRoster` at four consecutive periods and
+asking which one each move first shows up in (period 145 is 08-16, 146 is
+08-17, 147 is 08-18):
+
+| move | when (ET) | 144 | 145 | 146 | 147 |
+| --- | --- | --- | --- | --- | --- |
+| add of 4417208 | 08-16 11:27 | — | **12** | — | — |
+| add of 34973 | 08-16 19:55 | — | — | **1** | 1 |
+| drop of 34984 | 08-16 19:55 | 1 | 1 | **—** | — |
+| drop of 36071 | 08-16 14:32 | 6 | 6 | **—** | — |
+| add of 32667 (Gausman) | 08-17 22:30 | — | — | — | **1** |
+| drop of 4872649 | 08-17 22:22 | 1 | 1 | 1 | **—** |
+
+The 11:27 add lands on its own day and everything after 1pm lands on the day
+after — the same 13:00 ET boundary **The league scoreboard**'s
+`acquisitionLimitFor` already measures for the acquisition *counter*, here
+deciding the roster itself.
+
+**What that cost is about fourteen hours in twenty-four.** Our own day turns at
+3am ET, so a move made at 1:30pm Monday was invisible until 3am Tuesday —
+everywhere ownership is drawn: the research board's free-agent set, the
+`Other Rosters` set, the padlock, the roster baseball, and `players` on
+`/api/espn/roster`.
+
+**So `ownershipDay` clamps forward to `liveRosterDay()` — tomorrow — rather than
+to today.** A future period returns ESPN's *current* roster, which this file has
+relied on since the `Tomorrow` preset was written ("periods 141 through 200
+carry the same 28 players as today"); what the table above sharpens is that
+"current" means *including the moves booked forward*, which today's period does
+not. It is still one shared entry rather than one per user, every member of a
+league resolving the same tomorrow, and it is one request moved rather than one
+added. Measured after: 315 rostered players against 319, with Gausman on team 1
+and the six men dropped last night gone.
+
+**The day map stays a day map, which is the half that had to be protected.** A
+lineup is a fact about a day and 27 of 313 shared players sit in a different
+slot tomorrow than today, so the two reads are genuinely two answers.
+`fantasyWatchlist` therefore seeds `getTeamRosters` with **`ownershipDay(date)`**
+rather than with today: a range ending tomorrow still takes the seed by identity
+(`byDate[end] === roster`, so `endRoster` stays elided), and a range ending
+**today** reads its last day instead — one `forTeamId` request, 198KB, memory-
+cached ten minutes like every other mutable day. Measured through the route:
+`Yesterday`'s chips still read `In your fantasy lineup on Aug 16 at C`, and a
+past range's `endRoster` is still that day's 28 rather than the live 27.
+
+**And whoever is on the team now but on none of the days in view rides on
+`players` with an empty held-days set.** The union of per-day rosters cannot
+reach him by construction, and `players` is what the client's `rosterKeys` reads
+to answer *is he on my team* — a question about now whatever range is on screen
+(see **Client**, *Two lists*). Left out, your own pickup would have sat on the
+board under `Other Rosters` wearing neither the baseball nor a padlock, which is
+worse than the free agent he used to read as. **Empty rather than absent** is
+load-bearing: `getReport` reads an absent key as held every day and an empty set
+as held on none, so he draws a row of dashes rather than a week of somebody
+else's at-bats. Measured on the team that made the moves: 30 rows over
+08-15…08-17, with `Kevin Gausman (0g)` and `Kyle Leahy (0g)` at the tail.
+
+**Driven in a browser at 1400×950 against the live league.** The Free Agents
+board is `612 of 612 pitchers` with **no Gausman**; `Other Rosters` is 131 rows
+with him among them, his padlock reading `Kevin Gausman is on The Homewreckers
+in your ESPN league`. The roster view over `Today` draws its 14 rows and 14 slot
+chips with no error banner, and over `Yesterday` with `Starters` on it draws 11
+rows, chips titled `on Aug 16`, and 0 horizontal overflow.
 
 ### A range is a range of rosters
 
