@@ -53,6 +53,69 @@ A third source: `server/src/percentiles.ts` **scrapes the Savant player page** f
 
 **Traded players.** A hydrated `stats(...)` group comes back as one row **per stint** plus a season-wide one, and the aggregate is the row carrying no `team` — it leads in the `season` group but *trails* its own stints in the vs-L/R group, so position can't be the test. `mlbStats.ts::preferSeasonWide` picks it (falling back to the first stint row if nothing is team-less, so an unfamiliar shape still yields stats). Taking whichever row came last — what both parsers used to do — showed a traded player only his new team's numbers, i.e. a season that appeared to reset on trade day.
 
+### What an average plate appearance is worth, measured nightly
+
+**The rolling-xwOBA chart draws a reference line, and for its whole life that
+line was `const LEAGUE_XWOBA = 0.315`** — a benchmark, with a comment admitting
+as much ("wOBA is calibrated to the league OBP scale, so this sits ~.310–.320
+year to year"). It is a good benchmark and a poor measurement: the 2026 season
+to date is **.3149 over 140,028 wOBA events**, so the constant is right to a
+thousandth for the year and wrong by a fifth of that *within* it — reduced by
+month, the same season runs **.3241 in April and .3071 in August**. A chart read
+in August was comparing a hitter against a league that stopped existing in the
+spring, and nothing on the page said the number was a guess at all.
+
+**`server/src/leagueWoba.ts` measures it from the days the app already holds.**
+Every wOBA event of the season is in the per-date Savant exports `savant.ts`
+downloads and keeps forever, and `statcastWindow.ts` already tallies the two
+numbers this needs while building the research board — `paDen` (the wOBA
+denominator) and `xwobaSum`. So this is a **second reader of that tally** rather
+than a second pass over the same CSV, which is the rule that file already
+follows for the two boards it feeds; `countsFor` was renamed `dayCounts` and
+exported for it.
+
+**The batter side and the pitcher side are the same number**, so one figure
+serves both charts — the pitcher's series being xwOBA *allowed*. Every plate
+appearance has exactly one of each, so the two sums count the same events:
+checked on three days, **identical PA counts and a difference of 1.7e-16 or
+less** in the average (2026-08-07 `1120 / .304905` on both sides, 07-04 `1123 /
+.317818`, 04-15 `1099 / .328411`).
+
+**Nothing on the read path builds it, which is the whole of the split.**
+`getLeagueXwoba()` reads a blob and answers null if there isn't one;
+`buildLeagueXwoba()` is the nightly job, and `warmer.ts`'s backfill is its only
+caller. A chart opening must never be the thing that reduces 142 days of
+Statcast — measured, that build is **53.8s the first time** (the days with no
+counts blob yet) and **under 0.1s** thereafter, off 142 tiny per-day blobs.
+
+**Stored a day at a time, so a run that dies leaves its work behind.**
+`league-woba-{date}-v1.json` is two numbers — **111 bytes** against the 25KB
+counts blob they are reduced from — written for every settled day and read back
+with no freshness test, the rule `statcast-counts-{date}` itself follows. The
+season blob `league-xwoba-{season}-v1.json` is one object (`xwoba`, `pa`,
+`through`, `days`) and is what the route reads, memoised 30 minutes. Today's day
+is never stored, its games being unfinished — the same exception
+`statcastWindow.ts` makes.
+
+**Yesterday is the last day counted**, `windowDates`' own boundary and for its
+reason: Savant lags the live feed by a day. **March rather than opening day** is
+the start, `teamHitting.ts`'s rule — a spring date reduces to an empty day, so
+this file needs no fixture list and **no season constant**, the year coming off
+`baseballToday()`. The count `CLAUDE.md` keeps is still nine.
+
+**Validated against an independent sum of every day CSV on disk**: summing
+`woba_denom` and `estimated_woba_using_speedangle` straight out of all 142
+exports gives **.3149 over 140,028 events**, which is what the module returns —
+exact, as it must be, both being the same rows added up two ways.
+
+**The fallback is the old constant and says so on the wire.** An installation
+whose nightly job has not run gets `.315` with `leagueXwobaPa: 0`, which is what
+the chart's legend reads to tell a measurement from a benchmark (see **Client —
+the player page's reading tabs**, *The league average is a legend*). Note the
+two round to the same three decimals today — `.3149` prints as `.315` — so what
+this changes on screen this week is the tooltip and not the line; what it
+changes next April is the line.
+
 ### Report join keys
 
 - Stats API at-bats ↔ Savant CSV rows: `at_bat_number == atBatIndex + 1`.
@@ -72,6 +135,7 @@ A third source: `server/src/percentiles.ts` **scrapes the Savant player page** f
 - `rotowire-index-{SEASON}-v1.json` — **RotoWire's whole player list reduced to what the news scrape needs**: MLB id → the path of that player's RotoWire page, 1,375 pairs in **65,502 bytes**, on a 6-hour window in memory and in the storage tier with an `inFlight` guard. What it is reduced *from* is two cookie-free JSON tables (`player-basic-stats.php` at `pos=B` and `pos=P`, 611KB raw / 75KB gzipped between them), so this is the rule `espn-period-anchor` follows — store the answer, not the payload. It earns a blob where the news itself deliberately does not, and the split is the two rules this file already states: a **per-player** window onto something still moving is `nextGame.ts`'s case and stays in memory on 30 minutes, where a **cookie-free list shared by every player and every user** is `getPlayerPool`'s and `expectedStats.ts`'s. **The slug is what has to be stored, not the id** — a RotoWire player URL with the right number and a wrong slug 301s to `/baseball/`, and the bare number is a 404, so the address genuinely has to be looked up. It replaced `news-espn-{espnTeamId}-v1.json`, the club article feed the ESPN half of that section read, which went with the feed. See **Date handling and server routing** for the whole of the route, and **Client — the player page** for the probe record and the join.
 - `news-recent-v1.json` — **who in the league has news today or yesterday**: MLB id → the day the newest item is stamped and its headline, ~25KB for the 285 players inside the window on a checked day. What it is reduced *from* is thirty RotoWire club news pages (~10MB of HTML, 2MB gzipped) plus one league-wide MLB transactions call, so this is the rule `espn-period-anchor` and the RotoWire index beside it both follow — store the answer, not the payload. On a **30-minute** window in memory and in the storage tier with an `inFlight` guard, which is `news.ts`'s own TTL and is that deliberately: the mark beside a player's name and the News tab behind it must not be able to disagree about whether a man has news. **The dates are stored and the levels are not.** A level (`today` / `yesterday`) is a fact about the day it was computed on, so a blob holding levels would go wrong at 3am whether or not anything in it was stale; holding the date and classifying at read time makes the blob mean the same thing whenever it is read, and makes the rollover self-correct with no refetch. See **Date handling and server routing** for the whole of the route, and **Client — the research board** for the mark it draws.
 - `xwoba-*`/`arsenal-*` — `xwoba.ts` and `pitcherArsenal.ts` were memory-only; both now have a storage tier because each is backed by a *full-season* Savant CSV, and `getReport` pulls one arsenal per watched pitcher.
+- `league-woba-{date}-v1.json` / `league-xwoba-{season}-v1.json` — **the rolling chart’s reference line, measured rather than declared**: two numbers a day (111 bytes) and one season total, both read back with no freshness test and built by the nightly warmer alone. See *What an average plate appearance is worth* above.
 - **Live-game freshness:** a game for the current day is re-fetched via `diffPatch` deltas at most once per `LIVE_GAME_TTL` (10s); the parsed day is memoized with a `TODAY_TTL` (10min). Past dates are treated as immutable.
 - `getSeasonPlayers` (roster for the add-player search) cached with a 1h TTL.
 

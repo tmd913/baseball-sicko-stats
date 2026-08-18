@@ -1148,6 +1148,40 @@ at a quarter and at three quarters of the chart's width reads `PA 128` and
 `PA 218` with the crosshair at 181.9 and 541.9 user units, and the tip clears
 when the pointer leaves.
 
+### The league line is measured, and the legend says how deeply
+
+**It was `.315` written into `xwoba.ts` as a constant**, and the legend printed
+it as though it were a fact about this season. It is a benchmark: the 2026
+season to date measures **.3149 over 140,028 wOBA events**, so the constant is
+right to a thousandth for the *year* and wrong by a fifth of that within it —
+**.3241 in April against .3071 in August**. The nightly job measures it now (see
+**Data sources**, *What an average plate appearance is worth*), and this end of
+it is one attribute and one helper.
+
+**The figure keeps its place on the legend and its depth goes in the title** —
+`MLB average xwOBA over 140,028 plate appearances this season, measured
+nightly`. That is the rank badge's own split: the legend is one line under a
+chart and how many plate appearances the league is drawn from is context for the
+figure rather than part of it.
+
+**The wire says which of the two it is, and `0` is the word for benchmark.**
+`XwobaSeries.leagueXwobaPa` is how many events the average was drawn from, and
+the server sends 0 where it fell back to the constant — an installation whose
+nightly job has not run. The legend's title then reads `A fixed benchmark — the
+league average has not been measured yet…`, which is the same honesty the
+percentile card's dotted bubble and the Splits card's hatched fill already
+carry, in the one place a line has to carry it. A response from a server older
+than the field has no `leagueXwobaPa` at all, which reads the same way and
+should: neither can say how many plate appearances it is drawn from, because
+neither was drawn from any.
+
+**Nothing on the chart moved.** `.3149` and `.315` print the same three
+decimals, so this week the line is where it was and only the tooltip is new;
+what it changes is next April, when the line follows the league instead of
+staying put. Measured after, on two players at 1200×900: the legend is the same
+one **25px** row reading `League average (.315)`, the chart is drawn 108ms after
+the tab is pressed, and the page and the overlay each overflow by 0.
+
 **The summary table's own legend is untouched**, which is the thing a shared
 selector list most easily breaks: measured at 1200 and 390 after the fold, a
 **37px** row with `padding: 10px 0px 12px`, 12px `rgb(142, 160, 196)`, a

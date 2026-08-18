@@ -423,8 +423,20 @@ export function RollingXwoba({ series, name }: { series: XwobaSeries; name: stri
               swatch: six cycles of sub-2px marks, which reads as a grey smudge
               rather than as a dashed line. A legend owes the reader the *pattern*,
               at the size the label beside it is read at. */}
+          {/* **The figure is measured, and the legend says how deeply.** It was a
+              constant — .315, a benchmark rather than a measurement — and is now
+              the season's own plate appearances summed nightly (see
+              `leagueWoba.ts`). `leagueXwobaPa` is how many, and **0 is the
+              server saying it is still the benchmark**: a line a reader is
+              judging a whole season against should not have to be taken on
+              trust, and this is the cheapest place to say which it is.
+
+              In the title rather than on the label, for the reason the rank
+              badge's own population is: the legend is one line under a chart
+              and the number of plate appearances behind the league is context
+              for the figure rather than part of it. */}
           <div className="roll-legend">
-            <span className="roll-legend-item">
+            <span className="roll-legend-item" title={leagueNote(series)}>
               <svg className="roll-legend-swatch" viewBox="0 0 24 2" width="24" height="2" aria-hidden="true">
                 <line className="roll-ref" x1="0" y1="1" x2="24" y2="1" />
               </svg>
@@ -435,6 +447,21 @@ export function RollingXwoba({ series, name }: { series: XwobaSeries; name: stri
       )}
     </div>
   );
+}
+
+/**
+ * What the league line is, in words: the measurement and its depth, or the
+ * benchmark and the fact that it is one.
+ *
+ * `leagueXwobaPa` is absent from a response an older server wrote, which reads
+ * the same way as the benchmark — neither can say how many plate appearances it
+ * is drawn from, because neither was drawn from any.
+ */
+function leagueNote(series: XwobaSeries): string {
+  const pa = series.leagueXwobaPa ?? 0;
+  return pa > 0
+    ? `MLB average xwOBA over ${pa.toLocaleString()} plate appearances this season, measured nightly`
+    : 'A fixed benchmark — the league average has not been measured yet, so this is the ~.310–.320 that wOBA is calibrated to';
 }
 
 /** A round PA-number step for the x-axis, ~5 ticks across `span`. */

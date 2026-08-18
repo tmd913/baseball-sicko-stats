@@ -240,7 +240,7 @@ function tally(into: StatcastCounts, r: Record<string, string>): void {
 
 // ---- One day ---------------------------------------------------------------
 
-type DayCounts = Record<PlayerKind, Record<string, StatcastCounts>>;
+export type DayCounts = Record<PlayerKind, Record<string, StatcastCounts>>;
 
 /** `-v4`: bumped when bunts came out of the EV/LA averages (v2), again when
  *  `pullAir`/`pullBip` were added (v3), and again for bat speed's two sums and
@@ -319,8 +319,12 @@ function addPull(day: DayCounts, csv: string): void {
  * keeps that from being permanent: the next reader re-attempts the small pull
  * request (the day CSV itself being on disk), where a stored `pullBip: 0` would
  * have quietly excluded that day from the rate for ever.
+ *
+ * **Exported for a second reader**, `leagueWoba.ts`, which wants two numbers a
+ * day out of the same tally rather than a second pass over the same CSV — the
+ * rule this file already applies to the two boards it feeds.
  */
-async function countsFor(date: string): Promise<DayCounts> {
+export async function dayCounts(date: string): Promise<DayCounts> {
   const hit = dayMem.get(date);
   if (hit) return hit;
   const running = dayInFlight.get(date);
@@ -479,7 +483,7 @@ export async function windowStatcast(
 
   const perDay = await mapLimit(dates, 4, async (date) => {
     try {
-      return await countsFor(date);
+      return await dayCounts(date);
     } catch (err) {
       missed++;
       console.error(`Statcast window: ${date} unavailable:`, err);
