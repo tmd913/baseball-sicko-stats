@@ -618,6 +618,38 @@ answer where a checkbox each would claim independent switches, and the
 menu **stays open** across a press — the rule `Refresh from ESPN` follows, and
 for the same reason: the result is a change in the page behind it.
 
+**The picker leads the menu**, where it trailed the two toggles. It is the one
+entry here that changes the whole app's appearance rather than one view's
+contents, and it is the one a reader opens this menu *for* — hide-injured and
+mute-audio are set once and then left. Leading also puts the *picture* at the
+top of the popover, so the menu opens on something that says what it is; and it
+leaves `Settings` heading the run it actually describes rather than the whole
+box. Measured, the popover's children now read `Color scheme · Settings · Hide
+injured players · Mute clip audio · How to use`, and its height is unchanged at
+**329px** — a reorder costs nothing.
+
+**The chips lead each row and the name is centered in what is left.** The button
+used to centre the pair as a group (`justify-content: center`), so the pill sat
+at a different x on every row — it moved with the length of the name beside it —
+and four rows of a picture-and-a-word read as four unrelated buttons rather than
+as one column of themes. Pinned left (`.theme-swatch-label { flex: 1;
+text-align: center }`), the four pills line up down one edge and so do the four
+names: measured, `chipsX` is **223.2 on every row at 1200** and **46 at 390**,
+and the four labels' ink shares one centre — **312.8 at 1200, 164.6 at 390** —
+with nothing clipped.
+
+**That centre is 17px right of the button's own midline**, which is half the
+pill plus the gap, and the alternative was measured rather than waved away. A
+mirrored 34px spacer on the right is what centres the name truly, and it spends
+the same 34px out of the name column. The binding width is not the phone but the
+**desktop**, where the popover hangs off the gear and is *narrower* than it is at
+390 — **193.3px against 251.2**. Measured there the name column is **111.3px**
+and `Powder Blue`, the longest label the picker has, is **75.7px** of ink: a
+mirror would leave it **1.6px** of slack, and the next theme name to arrive would
+clip. So the cheaper centring is the one that keeps the control working at the
+width it is tightest at, and it buys the thing that actually reads as centered —
+four names sharing one centre.
+
 ### Measured — the first Lavender, and the sweep that made a theme possible
 
 **The dark theme is unchanged, and that is a pixel diff against a control rather
