@@ -9977,6 +9977,138 @@ button.start-line:focus-visible {
   font-size: 14px;
 }
 
+/* **The red `N new plays` button** — news at the head of the list the news
+   landed in, which is where it can also *do* something: pressing it turns the
+   `New` filter on and puts the top of the stream back under the reader.
+
+   Red rather than the accent, and it is the one control in this app that is:
+   `--strikeout` is otherwise spent on a *delta going the wrong way* and on the
+   news mark's "filed today", and this is that second sense — something has
+   happened since you looked. The accent means "this control is doing
+   something", which is what the `Plays` button beside it says and what this one
+   must not, since it is doing nothing until it is pressed.
+
+   `align-self: center` and the ground of `.feed-more` under it: the two are the
+   same object at the two ends of the same list — a full-width band would read
+   as a section of the stream rather than as a note above it. */
+.feed-new {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  color: var(--strikeout);
+  background: color-mix(in srgb, var(--strikeout) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--strikeout) 50%, transparent);
+  border-radius: 999px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+/* Scoped for the app-wide reason (**Client**, *A card doesn't highlight when you
+   scroll past it*): this sits at the top of a list that scrolls, and on touch
+   there is no pointer to move away. */
+@media (hover: hover) {
+  .feed-new:hover {
+    border-color: var(--strikeout);
+    background: color-mix(in srgb, var(--strikeout) 20%, transparent);
+  }
+}
+.feed-new:focus-visible {
+  outline: 2px solid var(--strikeout);
+  outline-offset: 2px;
+}
+/* The same dot the Live heading wears, in the same red and at the same size —
+   one mark for "this is moving" rather than two that resemble each other. It
+   does not pulse: the Live heading's animation says a game is in progress,
+   where this says a count is waiting, and two things pulsing in one column read
+   as one thing. */
+.feed-new-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--strikeout);
+}
+
+/* The second line of the filtered empty state — which control emptied it. A
+   step quieter than the sentence above it, that one being the finding and this
+   the way out of it. */
+.feed-empty-how {
+  display: block;
+  margin-top: 4px;
+  color: var(--faint);
+  font-size: 13px;
+}
+.feed-empty-how b {
+  color: var(--muted);
+}
+
+/* **The `Plays` disclosure and its panel.** The button is `.research-toggle`
+   outright — folded onto in the JSX rather than restyled here — and takes that
+   family's `flex: none` and `white-space: nowrap` for its place in the wrapping
+   tab row, the two declarations `.starters-toggle` and `.date-toggle` carry for
+   the same reason: every group in that row is atomic and breaks to the next line
+   whole rather than folding in half. */
+.plays-toggle {
+  flex: none;
+  white-space: nowrap;
+}
+.plays-toggle svg {
+  flex: none;
+}
+/* Its own line under the tabs, which is the research board's rule for a panel:
+   a row of chips has no business sharing a line with the button that opened it.
+
+   **Named through `.view-bar`, which is the parent it really has** —
+   `.app.date-open .date-control`'s own rule, that being the other disclosure row
+   on this line. It was written `.view-bar-tabs > .plays-panel` first, and that is
+   the trap the board's panels already record from the other side: the selector
+   matched nothing, so the panel took its content width as an ordinary item of a
+   `space-between` row. Measured at 1920: a 426px block of chips at **x=1472**,
+   on the same line as the tabs and jammed against the right edge of the page. */
+.view-bar > .plays-panel {
+  flex: 1 1 100%;
+}
+/* Tighter than a control on the tab row: six of these plus `New` share one line,
+   and each is two to five characters where a labeled toggle is a word. */
+.plays-chip {
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+/* `New` composes differently from the six before it — they union with each other
+   and it narrows what they selected — so a wider gap says so.
+
+   It was a 1px hairline and the wrap is what retired it: this panel breaks where
+   the window says, so at 390px `New` drops to a second line and the rule was
+   left at the end of the first with nothing after it. A gap cannot dangle. Its
+   own red count and its word carry the rest of the distinction. */
+.plays-chip-new {
+  margin-left: 10px;
+}
+/* The unseen count, on the chip as well as on the red button — one figure read
+   in two places, so the panel says how much `New` would show before it is
+   pressed. Red for the reason the button is, and dropped once the filter is on:
+   with the stream already narrowed to them the count is the length of what is on
+   screen. */
+.plays-chip-count {
+  margin-left: 6px;
+  padding: 1px 5px;
+  color: var(--strikeout);
+  background: color-mix(in srgb, var(--strikeout) 18%, transparent);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.plays-chip-new.on .plays-chip-count {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
 /* Feed headshot — a compact variant of the player card's headshot button. */
 .feed-photo-link {
   position: relative;

@@ -37,7 +37,7 @@ import type { ThemeId } from './theme';
 import { BaseballMark } from './components/BaseballMark';
 import { PlayerAdder } from './components/PlayerAdder';
 import { PlayerOrderEditor } from './components/PlayerOrderEditor';
-import { LiveFeed, FEED_PAGE_SIZE } from './components/LiveFeed';
+import { LiveFeed, FEED_PAGE_SIZE, newPlays } from './components/LiveFeed';
 import { SummaryTable } from './components/SummaryTable';
 import {
   ResearchTable,
@@ -76,6 +76,13 @@ import {
 import type { FantasySlot } from './hooks';
 import { LoadingBlock, LoadingLine, SpinningBaseball } from './components/Loading';
 import { StartersToggle } from './components/StartersToggle';
+import {
+  PlaysButton,
+  PlaysPanel,
+  playFiltersParam,
+  toPlayFilters,
+  type PlayFilterKey,
+} from './components/FeedFilters';
 import { Tutorial } from './components/Tutorial';
 import { EspnSettings } from './components/EspnSettings';
 import { LeagueOnboarding } from './components/LeagueOnboarding';
@@ -474,6 +481,58 @@ export default function App() {
   const [startersOnly, setStartersOnly] = useState<boolean>(
     () => initialParams.get('starters') === '1',
   );
+  /**
+   * **The batter feed's play filters** — which kinds of play the stream draws,
+   * and whether it is narrowed to the ones the reader has not marked read.
+   *
+   * Two pieces of state because they are two axes, which is `inc=`/`watch=1`'s
+   * own split on the research board: the six chips ask *what kind of play* and
+   * union with each other, and `New` asks *when* and narrows whatever they
+   * selected. `HR + New` is "the new home runs", never "the home runs and also
+   * everything new". See `FeedFilters.tsx` for the whole of that argument.
+   *
+   * **In the URL** (`plays=hr,sb` and `newplays=1`), by the rule `hideil=1`,
+   * `starters=1` and `sched=` follow: each changes *which* items the view draws,
+   * so a link that carries one describes a different stream. Two params rather
+   * than seven keys in one, for the reason the board keeps `watch=1` out of
+   * `inc=`: they compose differently, and a single list would invite a reader to
+   * expect `New` to union like the rest of it.
+   *
+   * **Not saved as preferences**, and the line is `starters=1`'s: which plays
+   * you want in front of you is a lens for an afternoon, and a saved copy would
+   * mean a feed silently narrowed to home runs a week later. So no `UserPrefs`
+   * key for either, and none of the already-touched ref dance the saved toggles
+   * need. The *marker* below is saved; the lens is not.
+   */
+  const [playFilters, setPlayFilters] = useState<Set<PlayFilterKey>>(() =>
+    toPlayFilters(initialParams.get('plays')),
+  );
+  const [feedNewOnly, setFeedNewOnlyState] = useState<boolean>(
+    () => initialParams.get('newplays') === '1',
+  );
+  /** Whether the Plays panel is open. Transient, like `searchOpen` and
+   *  `editMode` — a panel left open is not a view worth restoring from a link,
+   *  and the button's own count badge is what says the filter holds something
+   *  while it is shut (the research board's rule for its four disclosures). */
+  const [playsPanelOpen, setPlaysPanelOpen] = useState(false);
+  /**
+   * **How far down the feed's stream of plays this reader has got** — epoch ms
+   * of the newest play they marked read, which is what draws the red
+   * `N new plays` button and what the `New` filter narrows to.
+   *
+   * Saved per user (`UserPrefs.seenPlays`) rather than held for the session, for
+   * the reason the transactions marker is: "unread" is a claim about a *person*,
+   * and a count that reset on every reload could never answer *what happened
+   * since I last looked*.
+   *
+   * **Seeded to this boot rather than to zero**, which is the one thing the
+   * transactions marker does not have to decide: a reader with no stored marker
+   * has not *missed* anything, and a stream that opens on `84 new plays` is a
+   * mark nobody reads. So absent means "everything already on screen is seen",
+   * and the marker only reaches the record once they mark something read.
+   */
+  const [seenPlays, setSeenPlaysState] = useState<number>(() => Date.now());
+  const seenPlaysTouched = useRef(false);
   /**
    * **The Schedule view** — the days ahead in place of the stat columns, on the
    * summary table and the research board alike. Null is off; 7 or 14 is the span.
@@ -910,6 +969,19 @@ export default function App() {
           setSeenTx((cur) =>
             cur && cur.leagueId === saved.leagueId && cur.ts >= saved.ts ? cur : saved,
           );
+        }
+        // The feed's own read-marker, and it is applied on the **touched** rule
+        // rather than on "whichever is newer" — which is where it parts from the
+        // marker above and why. This one is seeded to *this boot* rather than to
+        // zero (a reader with no stored marker has missed nothing, and a stream
+        // that opens on `84 new plays` is a mark nobody reads), so a saved value
+        // is nearly always the *older* of the two and taking the newer would
+        // discard it on every load. Absent, therefore, it is the saved value that
+        // wins — and a reader who has already marked something read in the second
+        // before this landed keeps their own, which is the `hideInjuredTouched`
+        // dance and is what stops a saved marker un-reading what they just read.
+        if (prefs.seenPlays !== undefined && !seenPlaysTouched.current) {
+          setSeenPlaysState(prefs.seenPlays);
         }
         // Same rule as hide-injured: the URL can only ever say `fantasy`, so
         // silence there is unspecified rather than "watchlist", which is what
@@ -2365,6 +2437,24 @@ export default function App() {
     if (hideInjured) p.set('hideil', '1');
     // Only while it is actually narrowing something — see `startersActive`.
     if (startersActive) p.set('starters', '1');
+    // The feed's own lens, in the chips' vocabulary order rather than the
+    // reader's tick order, so two readers who pick the same three chips share
+    // one link.
+    //
+    // Gated on the **view** rather than on the view and the batter tab, which is
+    // where this parts from `starters=1` beside it. That one drops out of the URL
+    // over a range with no today in it because there it would be a claim about
+    // data it cannot narrow — a recipient would open a link that says `starters`
+    // over an unfiltered table. This is a lens the reader set on the batter tab
+    // and it is still set: the pitcher tab does not offer it (a pitcher's item is
+    // an outing, not a play), and switching back puts it straight back in force.
+    // Dropping it on the way over and re-adding it on the way back would churn
+    // the query string on every kind switch to say the same thing.
+    if (view === 'feed') {
+      const plays = playFiltersParam(playFilters);
+      if (plays) p.set('plays', plays);
+      if (feedNewOnly) p.set('newplays', '1');
+    }
     // The mode and its span as one param, so it can never say a span with no
     // mode — see `scheduleSpan`. Absent is off, which is the only thing the
     // absence can mean.
@@ -2396,6 +2486,8 @@ export default function App() {
     scheduleSpan,
     rosterSource,
     helpOpen,
+    playFilters,
+    feedNewOnly,
   ]);
 
   // Fetch the research board for the kind on screen, once per kind. Lazy —
@@ -3113,6 +3205,92 @@ export default function App() {
    * the map being there is what these read too.
    */
   const startersReadFantasy = fantasySlots !== null;
+
+  /**
+   * **The two numbers the red `N new plays` button is made of** — how many plays
+   * are newer than the marker, and the timestamp of the newest one.
+   *
+   * Computed here rather than in `LiveFeed` because App owns both halves of the
+   * feature: it holds the marker, it persists it, it merges the saved one on
+   * arrival, and it is what turns the `New` filter off — which is the act that
+   * marks the stream read, and so needs the timestamp. `newPlays` is exported
+   * from `LiveFeed` so the clock that orders the stream has one definition, the
+   * rule `playerDayEntries` already sets for the stream and the player page.
+   *
+   * **Off `kindCards` rather than `filteredCards`**, so the count is news about
+   * the day rather than about the reader's own lens: a `Starters` filter or a
+   * ticked chip must not make the plays it hides stop being new.
+   *
+   * **The batter feed only**, since a pitcher's stream item is his whole outing
+   * rather than a play — the same fact the kind tabs exist for.
+   */
+  const feedIsBatters = view === 'feed' && shownKind === 'batter';
+  const { count: newPlayCount, newest: newestPlayTs } = useMemo(
+    () =>
+      feedIsBatters ? newPlays(kindCards, seenPlays) : { count: 0, newest: 0 },
+    [feedIsBatters, kindCards, seenPlays],
+  );
+
+  /**
+   * Mark the stream read up to the newest play in view.
+   *
+   * The write is a **watermark that only moves forward** server-side, so a
+   * marker that would not move costs no write at all — which is what makes it
+   * safe to call from a range excursion into last week, where the newest play on
+   * screen is older than what the reader has already seen.
+   */
+  const markPlaysSeen = useCallback(
+    (ts: number) => {
+      if (ts <= 0) return;
+      seenPlaysTouched.current = true;
+      setSeenPlaysState((cur) => (ts > cur ? ts : cur));
+      queueUserWrite(() => api.saveSeenPlays(ts)).catch((e: Error) =>
+        console.error('saving seen-plays failed:', e.message),
+      );
+    },
+    [queueUserWrite],
+  );
+
+  /**
+   * **Turning `New` off is what says "done with those"**, so it is what marks the
+   * stream read; turning it on marks nothing.
+   *
+   * The marker has to be **frozen while the filter is on** or the view empties
+   * itself the moment it is drawn — the filter narrows to plays newer than the
+   * marker, so advancing the marker while it is in force is asking for none of
+   * them. That is also why the red button is not drawn while `New` is on
+   * (`LiveFeed`'s `showNewButton`): with the reader already looking at the new
+   * plays it would be a control offering what is on screen, and pressing it
+   * would clear the very list it opened.
+   */
+  const setFeedNewOnly = useCallback(
+    (on: boolean) => {
+      setFeedNewOnlyState(on);
+      if (!on) markPlaysSeen(newestPlayTs);
+    },
+    [markPlaysSeen, newestPlayTs],
+  );
+
+  /**
+   * The red button's press: show the new plays, and put the top of the stream
+   * back under the reader — they are at the head of the list, which is not where
+   * somebody who has been reading is.
+   */
+  const showNewPlays = useCallback(() => {
+    setFeedNewOnlyState(true);
+    window.scrollTo({ top: 0 });
+  }, []);
+
+  /** Tick one of the six play chips. They union, so this is a set membership
+   *  toggle rather than a choice — see `FeedFilters.tsx`. */
+  const togglePlayFilter = useCallback((key: PlayFilterKey) => {
+    setPlayFilters((cur) => {
+      const next = new Set(cur);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
   // Each page keeps its own place, and going back to it lands where you left.
   //
   // Games and Feed are two readings of the same days over one window scroller,
@@ -3570,6 +3748,39 @@ export default function App() {
               ? 'Only the players in your fantasy starting lineup — your bench and IL are hidden whatever their clubs do with them'
               : "Only the players starting today — hitters in a posted lineup, pitchers named as today's starter"
         }
+      />
+    ) : null;
+
+  /* The batter feed's play filters — a disclosure on the roster row and a panel
+     of chips under it.
+
+     **In the pinned row rather than at the head of the list it narrows**, which
+     is this app's standing rule: a control that decides *which rows a view
+     shows* lives with the tabs that select the view (`Starters`, the research
+     board's whole control set, the include buttons). The one thing in the page
+     is the red `N new plays` button, and that is not a filter — it is news, and
+     it belongs where the news landed and where pressing it can also take the
+     reader to it.
+
+     **Batter tab only** (`feedIsBatters`): a pitcher's stream item is his whole
+     outing rather than a play, which is the same fact the kind tabs exist for,
+     so there is nothing here for the chips to select on. */
+  const playsControl = feedIsBatters ? (
+    <PlaysButton
+      keys={playFilters}
+      newOnly={feedNewOnly}
+      open={playsPanelOpen}
+      onToggle={() => setPlaysPanelOpen((v) => !v)}
+    />
+  ) : null;
+  const playsPanel =
+    feedIsBatters && playsPanelOpen ? (
+      <PlaysPanel
+        keys={playFilters}
+        newOnly={feedNewOnly}
+        newCount={newPlayCount}
+        onToggleKey={togglePlayFilter}
+        onToggleNew={() => setFeedNewOnly(!feedNewOnly)}
       />
     ) : null;
 
@@ -4328,6 +4539,11 @@ export default function App() {
               {view === 'summary' && scheduleControl}
               {/* Only over a range that contains today — see `startersToggle`. */}
               {startersToggle}
+              {/* Which kinds of play the feed draws — the batter tab's own, and
+                  it reads before the calendar for the reason this whole row is
+                  ordered: which page, which kind, which reading of it, which
+                  *plays*, which days. */}
+              {playsControl}
               {dateToggle}
               </>
             )}
@@ -4357,7 +4573,11 @@ export default function App() {
                 other page carries an empty row of chrome. */}
             {view === 'research' && <div className="research-chrome" ref={setResearchChrome} />}
           </div>
-          {/* The disclosure's own row, under the tabs — see `dateControl`. */}
+          {/* The two disclosures' own rows, under the tabs — see `dateControl`.
+              Each takes a full line of its own, which is the research board's
+              rule for its panels: a set of chips has no business sharing a line
+              with the button that opened it. */}
+          {isRosterView(view) && playsPanel}
           {isRosterView(view) && dateControl}
         </div>
       )}
@@ -4706,6 +4926,20 @@ export default function App() {
             onOpenDetails={setDetailsKey}
             shown={feedShown.current.get(feedKey) ?? FEED_PAGE_SIZE}
             onShowMore={(n) => feedShown.current.set(feedKey, n)}
+            /* All five gated on the **same flag that draws the control**, so the
+               two cannot disagree: a pitcher's stream item is his whole outing
+               rather than a play, so none of the six chips can match one and
+               passing them through would empty the pitcher feed on behalf of a
+               control that tab does not offer. Measured before the gate: a
+               `plays=hr` link opened on `kind=pitcher` drew 0 outings. The
+               *state* survives the excursion — switching back to batters puts
+               the lens straight back in force — which is `startersOnly`'s own
+               rule for a range with no today in it. */
+            playFilters={feedIsBatters ? playFilters : undefined}
+            newOnly={feedIsBatters ? feedNewOnly : undefined}
+            seenPlays={feedIsBatters ? seenPlays : undefined}
+            newCount={feedIsBatters ? newPlayCount : undefined}
+            onShowNew={feedIsBatters ? showNewPlays : undefined}
           />
         )
       )}

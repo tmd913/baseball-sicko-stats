@@ -1266,6 +1266,12 @@ export interface UserPrefs {
    *  hidden. Absent means nothing has been read, which is right for a reader
    *  who has never opened the tab. */
   seenTransactions?: { leagueId: number; ts: number };
+  /** How far down the Feed view's stream of plays this reader has got — epoch ms
+   *  of the newest play they marked read. What draws and undraws the red
+   *  `N new plays` button, and what the feed's `New` filter narrows to. A bare
+   *  timestamp where `seenTransactions` carries a league id: a play is scoped to
+   *  nothing the reader switches between. Mirrors `server/src/store.ts`. */
+  seenPlays?: number;
   /** @deprecated The same flag under its old name, from when it narrowed the
    *  board rather than widening it. Read on the way in so a preference saved
    *  before the change survives; never written — a record migrates the first

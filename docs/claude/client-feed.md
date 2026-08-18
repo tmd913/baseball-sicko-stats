@@ -5,6 +5,203 @@ summary table reads it as a roster; it sits between the roster it reports on and
 the league it doesn't. Its items open into dialogs whose rules are in
 `client-dialogs.md`.
 
+### The batter feed narrows to kinds of play, and says when something is new
+
+**On a full slate the stream is hundreds of items** — every plate appearance of
+every batter on the roster, plus every bag any of them took — and the one thing
+it could not do was answer *what actually happened today* without the reader
+scrolling past every strikeout in between. It has a filter set now, and a red
+button that says how many plays have arrived since they last looked.
+
+**Six kinds, and they union**: `HR · Hits · XBH · SB · Runs · Video`. That is the
+research board's include-button model rather than a segmented control, and for
+its reason: the sets genuinely **overlap** — a home run is a hit *and* an
+extra-base hit *and* nearly always a play with film — so "pick one" would be a
+lie about the vocabulary where independent switches say all of their states.
+Nothing selected is the **whole stream**, so the feed opens exactly as it always
+did and the default is a lens rather than a wall.
+
+**The labels are abbreviations because six of them share a 390px phone**, and
+each is a form a box score already uses. What an abbreviation cannot say is which
+plays it takes — that a home run is inside `Hits` and inside `XBH`, that `Runs`
+is him crossing the plate rather than driving one in — so every chip carries the
+sentence as its `title`.
+
+**`Hits` reads `outcomeKind` rather than a list of its own**, which is the same
+function the at-bat card's rail is colored by, so a chip and the card it selects
+cannot come to disagree about what a hit is. `XBH` needs a set of its own
+(`XBH_EVENTS`) because that function files the three non-homer hits under one
+`hit` — the right grain for a rail and one short of the grain a chip needs.
+
+**`Video` is `playId != null`** — the id MLB filed a clip under — rather than a
+clip that has been *resolved*. Resolution is one request per play and the feed
+does it lazily as each item scrolls into view, so a filter that waited for it
+would send hundreds of requests to draw one screen. The cost is that a play whose
+clip does not come back is still selected, which is exactly what the item itself
+already does: it draws the play and no frame.
+
+**`New` is not one of the six and is deliberately kept out of that list.** It asks
+*when* rather than *what kind*, so it **narrows** whatever the chips selected
+instead of adding to it — which is the split `inc=` and `watch=1` already make on
+the research board, where the ownership sets union and the watchlist is a separate
+axis. `HR + New` reads as "the new home runs" and never as "the home runs and
+also everything new". Measured on a real day: `HR` 6 items, `New` 48, and
+`HR + New` **6** rather than 54.
+
+**It was a hairline between the six and `New`, and the wrap retired it.** The panel
+breaks where the window says, so at 390px `New` drops to a second line and the
+rule was left at the end of the first with nothing after it — a mark separating a
+group from nothing. It is a wider gap now, which cannot dangle; the chip's own red
+count and its word carry the rest of the distinction.
+
+**Batter tab only.** A pitcher's stream item is his whole *outing* rather than a
+play — the same fact the kind tabs exist for — so none of the six can match one.
+**That is gated on the same flag that draws the control**, and it had to be: a
+`plays=hr` link opened on `kind=pitcher` drew **0 outings** before the gate, the
+filters having been passed through unconditionally. The *state* survives the
+excursion, which is `startersOnly`'s own rule — switching back to batters puts the
+lens straight back in force.
+
+**The five props are optional and the second caller passes none of them.** A
+matchup team page draws this same component for a leaguemate's week
+(`LeagueTeam.tsx`), and neither half of the feature belongs to it: the marker is a
+fact about how far down *the reader's own* stream they have got, and that page's
+control row already carries four groups. Checked: `?mup=…&mt=…&plays=hr&newplays=1`
+draws that page's feed with **0** filter buttons and no red button.
+
+### Where the controls sit, and where the news does
+
+**The `Plays` disclosure is in the pinned tab row and the red button is in the
+page**, and the split is not arbitrary.
+
+A control that decides *which rows a view shows* lives with the tabs that select
+the view — `Starters`, the research board's whole control set, the include
+buttons. So the filters do, behind one disclosure with a **count badge**, which is
+that board's own rule that a collapsed panel must never be the only place a filter
+lives: the badge and the lit border say the stream is narrowed while the reader
+scrolls. It reads **after `Starters` and before the calendar**, which is this
+row's documented order — which page, which kind, which reading of it, which
+*plays*, which days.
+
+The red button is **not a filter**; it is news, and it belongs where the news
+landed and where pressing it can also take the reader to it. The League page's
+Transactions dot is the same statement made on a tab and can only ever be a
+*mark*, because it says a feed has moved on a page the reader is **not** looking
+at. Here they are looking at it, so the mark carries its own count and is the door
+to the plays it counts.
+
+**The panel is named through `.view-bar`, and the first version's selector matched
+nothing.** It was written `.view-bar-tabs > .plays-panel`, which is the trap the
+board's own panels record from the other side — measured at 1920, a **426px block
+of chips at x=1472**, on the same line as the tabs and jammed against the right
+edge of the page, because an unmatched `flex: 1 1 100%` left it an ordinary item
+of a `space-between` row. `.app.date-open .date-control` is the right precedent,
+that being the other disclosure row on this line.
+
+### The marker, and the cycle the two controls make together
+
+**`UserPrefs.seenPlays` is one epoch-ms watermark** — how far down the stream this
+reader has got. See **Roster, watchlist, users and auth** for the field and
+**Date handling and server routing** for the route; what belongs here is the
+cycle.
+
+- **New** is `entryTime(entry) > seenPlays`, over the **unfiltered** stream: the
+  count is news about the day rather than about the lens, and a count that shrank
+  when the reader ticked `HR` would be saying the other plays had stopped being
+  new.
+- **The red button** appears when that count is over nought *and* `New` is off.
+  Pressing it turns `New` on and puts the top of the stream back under the reader
+  — they are at the head of the list, which is not where somebody who has been
+  reading is.
+- **The marker is frozen while `New` is on**, and it has to be: the filter narrows
+  to plays newer than the marker, so advancing it while it is in force is asking
+  for none of them. That is also why the button is not drawn then — with the
+  reader already looking at the new plays it would be a control offering what is
+  on screen, and pressing it would clear the very list it opened.
+- **Turning `New` off is what says "done with those"**, so that is what marks the
+  stream read. A reader who never engages accumulates a count, which is what the
+  transactions dot does too.
+
+**The count is computed in App rather than here**, off `newPlays` — exported from
+this file so the clock that orders the stream has one definition, the rule
+`playerDayEntries` already sets for the stream and the player page. App owns both
+halves of the feature: it holds the marker, persists it, merges the saved one on
+arrival, and is what turns `New` off, which is the act that needs the timestamp.
+
+**The button appearing does not move the reader**, and that is the browser's own
+scroll anchoring rather than a reservation — the same mechanism this file already
+relies on for a new at-bat arriving above somebody mid-read. Measured: scrolled to
+1400 with the item under the reader's eye at y=1773, inserting the button takes
+`scrollY` to 1444 (its own 44px) and the **item moves 0px**.
+
+### Measured
+
+**Every count checked against the raw API figures** for 2026-08-17 (43 plate
+appearances and 8 base events across 14 batters — 6 home runs, 5 doubles, 7
+singles, 1 steal, 5 runs, every play with a `playId`), 51 items in the stream:
+
+| chip | drawn | raw |
+| --- | --- | --- |
+| `HR` | **6** | 6 home runs |
+| `Hits` | **18** | 6 HR + 5 2B + 7 1B |
+| `XBH` | **11** | 5 2B + 6 HR |
+| `SB` | **1** | 1 steal |
+| `Runs` | **5** | 5 runs scored |
+| `Video` | **51** | every item |
+| `HR + SB` | **7** | the union, 6 + 1 |
+
+**The whole cycle, driven end to end** with a marker planted at 2026-08-17 20:00Z:
+the button reads `48 new plays` and the chip `New 48`; scrolled to 600, pressing
+it gives `scrollY 0`, `newplays=1` in the URL, the chip lit, the badge at 1 and
+the button gone; `New + HR` gives **6**; turning `New` off restores all 51 and
+clears the badge; turning it back on gives **0** and the honest empty state,
+`Nothing new since you last marked the feed read.` The advanced marker is on disk
+at 2026-08-18T03:26:41.744Z — the newest play in that stream.
+
+**Both filtered empty states name the control that emptied the view**, which is
+the app's standing rule and a state this section could not previously be in:
+`No plays of those kinds today.` and `No new plays of those kinds.`, each over
+`Change it with **Plays** in the row above.` The **day-level** message is held
+back while a filter is what emptied it (`filtered`), `No games for these players.`
+being a claim about the day and a lie over a stream narrowed to home runs on an
+afternoon of singles.
+
+**Widths, at 320 / 375 / 390 / 480 / 640 / 900 / 1200 / 1920**: page-body overflow
+**0** at every one, and the panel never scrolls sideways. The label goes visually
+hidden at ≤640 and the button is the glyph and its badge (**67px** against 108
+labeled), with the accessible name intact at every width — a button whose only
+content is an `aria-hidden` glyph has none at all. The chips take one row from 640
+up and two below it.
+
+**What the button costs the tab row is a wrapped line at exactly two widths**,
+A/B'd by hiding it on the same page: **320** (207 → 255px of chrome) and **640**
+(111 → 159). 375, 390, 480, 900, 1200 and 1920 are byte-identical. The panel adds
+one row of its own (**40px**) while it is open.
+
+**Contrast, composited over the real ground in all six schemes.** The `New` count
+badge — `--strikeout` on an 18% wash of itself — reads **4.45 (Midnight) to 5.64
+(Powder Blue)**, which is the band the app's own `.feed-more-count` already
+occupies (**4.54 to 6.12**), so it ships at the standard already set rather than
+under it. The red **button** is the same ink on a *12%* wash, so it is higher than
+the badge in every scheme by construction, and was measured at **5.97 / 7.80 /
+6.31** on Light, Lavender and Powder Blue. The `Plays` button is ordinary chrome
+at 12.09–17.75.
+
+**Red rather than the accent, and it is the one control in this app that is.**
+`--strikeout` is otherwise spent on a delta going the wrong way and on the news
+mark's *filed today* — and this is that second sense, something has happened since
+you looked. The accent means "this control is doing something", which is what the
+`Plays` button beside it says and what this one must not, since it does nothing
+until it is pressed. Its dot is the Live heading's own mark in the same red at the
+same size, and deliberately **does not pulse**: that animation says a game is in
+progress where this says a count is waiting, and two things pulsing in one column
+read as one thing.
+
+**Bundle: 560.15 → 565.05 KB of JS** (166.36 → 168.01 gzipped) and **151.76 →
+153.08 KB of CSS** (27.21 → 27.39) — 4.9KB and 1.3KB raw, 1.7KB and 0.18KB over
+the wire, for a filter set, a marker, a route, a red button and the paragraphs
+above restated where the rules are.
+
 - **feed** (`LiveFeed.tsx`) — the roster's day as **one chronological stream**. It had a second reading for a while, the same days grouped one card per player, and that reading is the player page's **Overview** tab now (below), which is where a card per player belonged: this page is the roster read by clock, and one player is not a roster. What is left is a chronological stream across the watched players of the active kind, in three sections (Live / **Recent plays** — "Recent outings" on the pitcher tab, since a pitcher's items are outings, not plays / Upcoming). What one stream item *is* depends on the kind: for a **batter** a single completed plate appearance; for a **pitcher** his whole outing (`FeedPitcherGame`), which is why the pitcher stream is sorted on his *last* batter faced (`lastFacedTime`). A **batter's** stream is interleaved with the base events off `PlayerGame.baseEvents` — his own baserunning, one item per play (see **the base-event vocabulary** below).
 
 **A pitcher's are not items of their own**, and the difference follows from what each stream's item *is*. A batter's item is one play, so the bag he took is a play like the at-bat above it; a pitcher's item is the whole outing, and his balk belongs *inside* it — in the inning he threw it, between the two batters it happened between, which is where `InningsList` puts it and where his card has always read it (see **Pitchers on the roster**). Drawn as a stream item as well it was the same event twice on one page: once in the fourth inning of the outing and again a few hundred pixels below it, timed by its own clock and so detached from the outing by whatever else happened in between. The rule this replaces — that his events were never *pinned* to the Live section but stayed in the stream where they happened, since pinning them would put a balk from the second inning back at the top of the page every time he came out to throw the seventh — is honored more literally now than it was then: a balk from the second sits in the second. Nothing is lost with the item, because the inning row gained what it carried: it **opens onto MLB's line for the play and the clip of it**, and it prints the count a steal went on where a batter's row prints his pitch count. An outing **opens into a full-screen page** — `OutingPage`, `Line · Innings · Opponent · Arsenal`, which is where the whole read lives now (see **Pitchers on the roster**, *All four sections are back, as a page*); every other openable shape in this feed is a dialog, since the feed swapped its accordions for popups (see **Details are popups, not accordions**), and the outing is the one that outgrew a box. It takes the same *shape* as the rest of them: a **static identity header** (headshot + name + matchup, both of them links) over a full-width **line bar** (`.feed-item-toggle`) that is the only control — the batter item's `PlateAppearanceCard` in the same slot. The two were one row until the links inside the tap target made a mistimed thumb navigate away instead of expanding; **don't put the headshot or name back inside the toggle** (the same rule the Upcoming row now follows). The bar carries the tags, the line summary and the game's `GameStatusBadge` (score + Final/inning + bases) so a closed item still says how it went and how the game stands — which is why the context line under his name is just the matchup, the badge already spelling out the live inning it used to. The live-role tag moved to the header, where a batter's already sits (`.feed-item-head .live-role`). Pressed, it opens the page, which leads on his **Line** where the outing is over and on his **Innings** while it is still being thrown — a result against a narrative, and the page opens on whichever the outing is (see **Pitchers on the roster**, *All four sections are back, as a page*). That tab holds `InningsList` **first inning first** — a bar per inning, each of which opens *that* inning as a feed of the batters he faced and the base events he was a party to, in play order (see **Pitchers on the roster**, *An inning is a popup*). Checked from this bar on the live 2026 season: a pitcher in the bottom of the 4th opens on `Innings` with four inning bars, and a finished outing on `Line`. **The sentence this replaces was `and nothing else`** — the dialog held the innings alone, on the reasoning that *the arsenal table belongs to the breakdown and the details view, not to the item, which is a stream entry rather than a full read on the outing*. That was an argument about the **item** applied to the **box it opens**, and the box then had to grow a `Full breakdown` button to reach the read anyway; pressing an outing is asking for the full read, so it lands on one. The innings used to be drawn `newestFirst` so the half he was throwing sat directly under his name the way the stream around it reads; that is gone, and the whole of the argument is in **Pitchers on the roster**. The bar has a 44px floor so it's a thumb-sized target, and `.feed-pitcher` is its own `container-type: inline-size` so that at ≤480px its contents spread across it (`space-between`) with the **player card's** 9em floor on the line, instead of bunching at the right end. Open state is a flag of the item's own, like an at-bat's, and there is no scroll-on-open at all: the stream does not move. **Each live row carries the situation** — a `BaseDiamond` between the name and the role tag, runners and outs off `game.status` (the state *now*, where an at-bat card's diamond is the state that at-bat began in), the same glyph the card and the summary table's live badge use. Without it the section named a player's role and said nothing about the game he was in: "on base" with no word on who else was, "at bat" with no outs. **And the live at-bat carries what has happened during it** (`PlateAppearance.actions`, MLB's own line for each) — a pitching change above all, since who is on the mound is the whole question when your man is up and the card's matchup line has already been overtaken by it; mound visits, pickoffs and substitutions ride along. The server picks them by a **denylist** (`QUIET_ACTIONS`) rather than an allowlist, so a kind MLB adds later shows up rather than vanishing — the safe direction when the job is to say what is going on — excluding only the four that mean nothing happened (batter timeout, step-off, pitching timeout, and `game_advisory`, which is MLB talking to itself). They are filled **only while the at-bat is in progress**, which is the one place they are read: a day snapshot is written once every game is final, so no at-bat in one can be in progress, and no stored day can be stale for want of a field it could never have held, which is the reason this needs no `DAY_SNAPSHOT_VERSION` bump. No `FEED_CACHE_VERSION` bump either: `eventType` and `description` were already in `FEED_FIELDS`, which is leaf-matched, so every cached feed already carries them. The Live section pins whoever is at bat / on deck / on base / on the mound; a pitcher pinned there renders the same outing item, so `livePinned` keeps the stream below from repeating it. **A pitcher stays there until he is taken out of the game**, not just while his half is being played. `liveRoleGame` reads `GameStatus.inGamePitcherIds` — the pitcher each side still has in the game, one per team — where it used to read `pitchingId`, which is `linescore.defense.pitcher` and so names only the side currently *fielding*. Half of every game, therefore, a starter in the middle of a start was nobody's `defense.pitcher`: he dropped out of the Live section the moment his own team came up to bat, reappeared an inning later, and did that all night. Checked against a live board: with the Mets batting in the top of the 6th, McLean — their starter, due back on the mound in ten minutes — was not in the section at all. The server takes the **last entry of each side's boxscore `pitchers[]`**, that array being who has taken the mound in order and so ending on the man who has not yet been replaced (`inGamePitchers` in `mlbStats.ts`); it is filled from warmup on, the same property `startingPitchers` leans on. Checked against nine live games at once: for whichever side was fielding it named exactly the pitcher `defense.pitcher` did, and for the other it named the one in the dugout. A pitcher who really *has* been replaced falls out for good, which is the half of the old behavior that was right. **`pitchingId` stays and keeps its meaning** — the card's `.inning-block.active` accent is a claim about the half being thrown *now*, which is a different question and would be a lie about a pitcher sitting in the dugout. Live-only by nature, so no `DAY_SNAPSHOT_VERSION` bump — a snapshot holds only finished games — and no `FEED_CACHE_VERSION` one either: `pitchers[]` is absent from the compact feed a *final* is cached as, and this is only ever computed for a live game, which is always read from the unfiltered feed. **Only the batter actually up gets an at-bat under him there** (`roleAtBat`): a runner on base has nothing in progress, only the *completed* at-bat that put him there — which the Recent section already carries in full, clip and all — so surfacing it again up top stated the same thing twice and pushed the players who are batting down the page. On base and on deck are therefore the header row alone, which is also what a pitcher with no outing yet looks like. Its rows follow the same rule as the rest of the feed: **the identity row carries no box.** `.live-entry`'s header used to take the panel gradient, a border, a role-colored left accent and a 12px radius — the exact chrome of the `.feed-item-toggle` bar and the at-bat card below it — so a static row of two links read as a collapsed card and invited a tap that did nothing (on deck worst of all, where there is nothing under it to open). The role now reads off the headshot ring (`.feed-photo-link.role-*`, which gained the missing `role-pitching` rule in the process — folded onto on-base's purple then, and split off onto `--mound-teal` since) and the tag, and a role-colored **rail** on `.live-entry` itself runs the whole entry — flagging the group as live without any one row of it posing as a control. A box in this feed means something you can open. **Upcoming** splits the same way, and is built the same way — a static `.upcoming-id` (headshot + name) over an `.upcoming-head` bar carrying the matchup, the SP chip, **the announced starter on the other side** (`vs LHP Boyd` — surname only, as in the summary table's opponent cell, so the bar still holds the matchup and first pitch on one phone line) and first pitch, which is the whole of the row's interactive surface: a batter's opens a dialog on the **platoon card** with that starter's half marked (see below), a pitcher's on the lineup waiting for him — the same `OpponentSection` his card carries, since the probable on the other side is his counterpart rather than someone he faces (and no caret on that row, per the rule above; a control that raises a box gets one no more than a control that unrolls one). **And the row is grouped by a rail, the last of the five shapes to take one** (`.upcoming-item`, which now takes `.feed-item`'s layout so that class is the rail and nothing else) — the same rail `.live-entry`, `.feed-at-bat`, `.feed-base-item` and `.feed-outing` carry. Without it the section read as a run of loose blocks: a name and a bar under it, two things on the page with nothing saying they were one, beside neighbors that group themselves. (It was three while the split unrolled underneath; that half is a dialog now and the rail still earns its keep on the two that are left.) The tone is **`--muted`**, which is what `.feed-outing` takes for an outing with no decision yet and for the same reason — every other rail in this feed is a color for something that happened, and nothing has happened here, so this one groups the item and claims no more than that. A plain border rather than the base event's gradient: that mechanism exists for a play that was two things at once, which nothing scheduled is. The bar gave up its own 4px accent left edge on the way, since under a rail it is a second vertical line 11px inside the first — the fold `.feed-at-bat .pa-card` already makes, and for the same reason. It keeps its box, because it opens and that is what a box means here, and its hover still lights the whole border. The starter is on the **closed** bar because he's what decides whether a scheduled game is worth opening, and the row is expandable on a probable of *known hand* rather than on any probable at all: without one there is no half to mark, and the man named for the game is the row's whole reason to open. (That clause used to close on a second one — *naming him inside too was the same fact twice, the split's own head already saying which hand it's against* — which was true of the old one-hand card and is not true of the comparison that replaced it; see **The Upcoming dialog is the Splits card** below, where he is named in full at the head of it.) **Upcoming lists the games the player is actually in, not his team's** (`isUpcomingFor`): a watched player's club plays every day, but he doesn't. Someone off the active roster — hurt, suspended, optioned — is in none of them, so anything `rosterStatusBadge` puts a badge on (`isOnActiveRoster`) is dropped from the section; his completed at-bats still stand in Recent, since a range that reaches back before the IL stint holds real games he played. And a **starting pitcher is in one game in five** — `isRotationStarter` (a majority of his appearances are starts, so a reliever is never filtered) gates him on being the announced probable, which `pitchingRole === 'starting'` already reports. **An announcement is the only thing that puts him there**, and the rule that stood before it was the opposite: a side that had announced nobody yet (a TBD probable) hid no one, on the reasoning that an unannounced game might still be his. Four starters in five are not pitching, so what that actually did was put the whole rotation on the page and be right about one of them — Logan Webb sat in Upcoming every morning San Francisco had yet to name anybody, which is checked and was the complaint. The cost of the strict rule is that a genuinely undeclared starter appears when his club names him rather than before, which is also the first moment anyone could have known. That retired `PlayerGame.teamProbablePitcher` — his own side's probable, the mirror of `probablePitcher` — which existed for the TBD test and had no other reader in either workspace, so it is gone from both `types.ts` and from `rosterGame`. Nothing cached had to be re-versioned for its removal: a field nobody reads is a field nobody misses, and it was null in every day snapshot anyway (a snapshot is written only once every game is final). The Recent section pages: `PAGE_SIZE` (20) items, then a **Load more** button carrying the count still below it — a day of at-bats across a watchlist runs to hundreds, each mounting its own card. The count is a reading position rather than a view, so it is deliberately not in the URL — but it **is held by App** (`feedShown`, keyed exactly as the component is, kind + date range), which is what keeps switching kind or range resetting it to the first page while a 20s live poll, which only changes the data, leaves it where it was. What it no longer resets on is a **view** switch, and the reason is the scroll memory: the count decides how tall the page is, so a reader who had pressed Load more twice and gone to the board came back to twenty items and to an offset that page had no room for — measured, 57 items and 11,113px left at 6,668 came back to 20 items, 4,529px and **3,629**, which is 3,039px short and the one way the memory could be exactly right and still land wrong. Seeded from App and reported back to it on each press, so the rule that a remount re-reads it is untouched. Each at-bat shows its clip directly (`InlineVideoClip`, `preload="none"`, no Watch button). **The item is grouped by a rail in the outcome's color** (`.feed-at-bat`, `outcomeKind`) — header, card and clip inside one `.pa-card`-colored edge, the same rail device `.live-entry`, the base-event item, the pitcher's outing and the Upcoming row use, so all five of the feed's item shapes group themselves the one way.

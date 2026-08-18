@@ -308,6 +308,18 @@ export const api = {
       body: JSON.stringify({ leagueId, ts }),
     });
   },
+  /** Mark the Feed view's stream of plays read up to `ts` — the timestamp of the
+   *  newest play on screen. What undraws the red `N new plays` button. No league
+   *  travels with it, a play being scoped to nothing the reader switches
+   *  between; the server keeps whichever is newer, so this is safe to fire from
+   *  two tabs and safe against a range excursion into last week. */
+  async saveSeenPlays(ts: number): Promise<UserPrefs> {
+    return request('/api/prefs/seen-plays', {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ ts }),
+    });
+  },
   // ---- ESPN fantasy league ----
   // The credential (`espnS2`, an ESPN session cookie) travels one way: in
   // through `saveEspn` and never back out, so nothing in this app's memory or
