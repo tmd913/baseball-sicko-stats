@@ -11640,11 +11640,55 @@ button.start-line:focus-visible {
   text-align: inherit;
   cursor: pointer;
   border-radius: 4px;
+  /* **The standing mark that says a figure is pressable.** It had none: the
+     cell drew as a plain number on a transparent ground, and its only signals
+     were `cursor: pointer` and the hover tint below — both of which need a
+     pointer, so on touch there was no affordance at all, and with a pointer
+     you had to already be over the thing you were looking for. The card around
+     it is *itself* a press, which makes the plain reading "the card is the
+     button" and the figures text.
+
+     A dotted underline rather than a border, a chip or a colour: it marks the
+     value without taking a pixel of layout (`text-decoration` is not in flow,
+     so the 58px row and the column widths are untouched — measured), and it is
+     the one mark that reads as "this word does something" in prose anywhere.
+
+     It is drawn in **`currentColor`**, never a token, which is what keeps it
+     out of the way of the thing this table actually colors: the winning figure
+     is `--win` and the losing one muted, so the underline is each cell's own
+     state at a lower strength and can never contradict it.
+
+     **50% is measured, not chosen.** A dotted underline is a meaningful
+     non-text indicator, so it owes 3:1 against the ground it sits on, and the
+     binding theme is the light one — on Powder Blue a mix toward a white page
+     loses far more than the same mix toward a dark one. Swept against all four
+     themes on a real card, the ratio at 45% was 3.94 / 3.85 / 4.00 on Midnight,
+     Lavender and Maroon and **2.93 on Powder Blue**, i.e. under the bar on the
+     theme where a faint mark is already hardest to see. 50% is the lowest step
+     that clears it everywhere (3.40 on Powder, 4.57–4.75 on the darks); 55%
+     and above clears it further and starts reading as a second underline of
+     the text rather than a hint under it. */
+  text-decoration: underline dotted;
+  text-decoration-color: color-mix(in srgb, currentColor 50%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
 }
 @media (hover: hover) {
   .lg-cat-btn:hover {
     background: color-mix(in srgb, var(--accent) 14%, transparent);
+    /* Under the pointer the mark goes to full strength — the hover tint says
+       *which* cell and this says it is the pressable thing in it. */
+    text-decoration-color: currentColor;
   }
+}
+/* One line under the period head naming the gesture, on the categories format
+   alone — see `LeagueView.tsx`, where the once-per-page placement is argued.
+   It is the app's own caption: 12px `--muted`, at the gutters the cards sit
+   in, close to the head above it and clear of the first card below. */
+.lg-cat-hint {
+  margin: 2px 0 10px;
+  font-size: 12px;
+  color: var(--muted);
 }
 .lg-cat-btn:focus-visible {
   outline: 2px solid var(--accent);

@@ -682,6 +682,26 @@ function Scoreboard({
         </span>
       </div>
 
+      {/* **The category figures are pressable, and nothing at rest said so.**
+          Each one opens a day-by-day chart of that category, and the cell is a
+          plain number in a card that is *itself* a press (it opens the matchup
+          page) — so the natural reading is "the card is the button" and the
+          figures look like text. The dotted underline on `.lg-cat-btn` is the
+          standing mark; this line is what names the gesture the first time.
+
+          **Once for the page rather than once per card.** It is the same
+          sentence about all ten of them, and a copy on each would be ten lines
+          of chrome on the app's densest page to say one thing. Under the period
+          head, which is where a caption for what follows belongs.
+
+          Categories only: a points league has one number a side and no
+          pressable cell, so the hint would name a gesture that isn't there. */}
+      {board.format === 'h2h-categories' && (
+        <p className="lg-cat-hint">
+          Press any figure for a day-by-day chart of that category.
+        </p>
+      )}
+
       {board.format === 'unknown' ? (
         <div className="empty-state">
           <h3>This league's scoring isn't supported yet</h3>
