@@ -2609,6 +2609,72 @@ async function scoringPeriodTotals(
   return out;
 }
 
+/** One scoring period's production per team, keyed by stat id. */
+type DayTotals = Record<number, Record<number, number>>;
+
+/** A day's own counts, on the rule `espn-lineup-…` already follows one level
+ *  up: a scoring period strictly before ESPN's own latest is a day whose games
+ *  have been played and whose lineups can no longer be edited, so what came out
+ *  of it is a fact. ~1.6KB on the live 12-team league against the ~125KB read
+ *  it is reduced from — store the answer, not the payload. */
+const dayTotalsBlobKey = (leagueId: number, scoringPeriod: number) =>
+  `espn-day-totals-${leagueId}-${scoringPeriod}-v1.json`;
+
+const dayTotalsCache = new Map<string, { totals: DayTotals; fetchedAt: number }>();
+const dayTotalsInFlight = new Map<string, Promise<DayTotals>>();
+
+/**
+ * `scoringPeriodTotals` with the cache the series needs and the live scoreboard
+ * turns out to want too.
+ *
+ * **A finished day is a fact and a day being played is not**, which is the one
+ * split here and it is `getTeamRoster`'s exactly: a scoring period strictly
+ * before ESPN's `latestScoringPeriod` takes a storage blob read with **no
+ * freshness test**, and the day being played is memory-only on `LIVE_TTL_MS`.
+ * That is what makes the chart affordable on the week anybody is looking at —
+ * the first press pays for the whole week, and every minute after it re-reads
+ * the one day that can still move.
+ *
+ * The live scoreboard reads through it as well, which it did not before. It
+ * only ever asks for the latest day, so it always takes the live path and its
+ * behavior is unchanged; what it gains is the `inFlight` guard, so a cold
+ * container serving three tabs sends one upstream rather than three.
+ */
+async function dayTotals(
+  creds: EspnCreds,
+  period: number,
+  scoringPeriodId: number,
+  frozen: boolean,
+): Promise<DayTotals> {
+  const key = `${creds.leagueId}:${scoringPeriodId}`;
+  const hit = dayTotalsCache.get(key);
+  if (hit && (frozen || Date.now() - hit.fetchedAt < LIVE_TTL_MS)) return hit.totals;
+  const running = dayTotalsInFlight.get(key);
+  if (running) return running;
+
+  const job = (async () => {
+    if (frozen) {
+      const stored = await readJsonBlob<DayTotals>(
+        dayTotalsBlobKey(creds.leagueId, scoringPeriodId),
+        () => true,
+      );
+      if (stored && typeof stored === 'object') {
+        dayTotalsCache.set(key, { totals: stored, fetchedAt: Date.now() });
+        return stored;
+      }
+    }
+    const totals = await scoringPeriodTotals(creds, period, scoringPeriodId);
+    dayTotalsCache.set(key, { totals, fetchedAt: Date.now() });
+    if (frozen) await writeJsonBlob(dayTotalsBlobKey(creds.leagueId, scoringPeriodId), totals);
+    return totals;
+  })().finally(() => {
+    dayTotalsInFlight.delete(key);
+  });
+
+  dayTotalsInFlight.set(key, job);
+  return job;
+}
+
 /**
  * ESPN's through-yesterday score with today's day added on.
  *
@@ -2702,7 +2768,7 @@ async function fetchMatchups(
   const wantsToday =
     live && typeof latest === 'number' && span != null && latest >= span.first && latest <= span.last;
   const today = wantsToday
-    ? await scoringPeriodTotals(creds, period, latest).catch((err: Error) => {
+    ? await dayTotals(creds, period, latest, false).catch((err: Error) => {
         console.error(`ESPN live day ${latest} unavailable for league ${creds.leagueId}:`, err.message);
         return null;
       })
@@ -2901,6 +2967,225 @@ export async function getScoreboard(
     leagueName: meta.leagueName,
     fetchedAt: Date.now(),
   };
+}
+
+// ---- A category over the days of a matchup period -------------------------
+//
+// **A scoreboard cell is one number and the week that produced it is not.** `R
+// 31–23` says who is ahead and nothing about how: a lead built on the Monday
+// and defended since reads identically to one taken on the Saturday, and the
+// second is the one a manager can still do something about. So each category
+// cell opens a chart of that category **day by day, both sides** — and the
+// whole of the work was establishing whether ESPN can answer for a day at all.
+//
+// **It cannot, four ways, and each was measured rather than assumed** (all
+// figures the live 12-team league, matchup period 18, scoring periods
+// 132–138):
+//
+//  - **`cumulativeScore` is not parameterised by `scoringPeriodId`.** This is
+//    the one that would have made the series free and authoritative — one read
+//    per day of ESPN's own running total, no summation of ours anywhere. It is
+//    a fact about the **matchup** period and nothing else: asked at
+//    `scoringPeriodId` 0, 132, 134, 136, 138 and 146 the same matchup comes
+//    back with **byte-identical scores every time** (`R 32 · HR 13 · RBI 28 ·
+//    K 45 · ERA 4.43283582`). What the day *does* change is the payload —
+//    23,511 bytes at a day outside the period against 521–579KB at one inside
+//    it, which is the two rosters `scoringPeriodId=0` empties.
+//  - **A response carries exactly one day's stat lines.** The obvious escape —
+//    read one day and take the whole week out of it — does not exist: over the
+//    28 roster entries of one side, every stat line present is
+//    `scoringPeriodId/statSourceId/statSplitTypeId` = **`136/0/5` and nothing
+//    else**, 28 of 28.
+//  - **`filterStatsForTopScoringPeriodIds` is a 400**, as it already is on the
+//    Rankings tab's own probe table.
+//  - **`schedule.filterScoringPeriodIds` is ignored** — 125,723 bytes and the
+//    same single day back, whatever it names. So is
+//    `filterStatsForSplitTypeIds` on `mScoreboard`, which still empties the
+//    roster.
+//  - **`mBoxscore` is `mScoreboard` under another name** — 577,813 bytes, one
+//    day, both roster forms.
+//
+// **So a day is one read, and the series is the days summed** — which is
+// `scoringPeriodTotals`' own arithmetic, already validated at 120 of 120 cells
+// against ESPN's final `cumulativeScore`, and re-validated here: summing the
+// seven days of period 18 reproduces every one of its **120 category cells**,
+// worst delta **4.86e-9** (which is ESPN's own eight-decimal rounding of an
+// OPS, not a disagreement). So the chart's last point *is* the number on the
+// card above it, by construction on a settled week and by the same summation on
+// a live one.
+//
+// **Counting stats add and rates are rebuilt**, the rule `getSpanTotals` and
+// `withScoringPeriod` both obey: the running figure for ERA on day four is
+// four days of earned runs over four days of outs, never four ERAs averaged.
+// Every `DERIVED` id is recomputed from the running components at each day.
+//
+// **What it costs**, measured through the route on the live league: a settled
+// seven-day week is **797,498 bytes and 1,588ms** the first time and nothing
+// upstream ever again, the seven days being frozen blobs from then on. The
+// week being played is that plus one live day per minute. It is why this is a
+// route of its own rather than a field on `/api/espn/scoreboard`: a payload
+// every reader of the League page fetches has no business carrying a week of
+// rosters for a chart nobody may open.
+
+/** One day of a matchup period, and whether it could be read at all. */
+export interface EspnSeriesDay {
+  scoringPeriod: number;
+  /** Its ET calendar date, or null where the period anchor could not be read —
+   *  which costs the axis its dates and nothing else. */
+  date: string | null;
+  /** False for a day ESPN would not answer for. Every point from there on is
+   *  null, the cumulative past a hole being genuinely unknowable — see
+   *  `getMatchupSeries`. */
+  ok: boolean;
+}
+
+export interface EspnMatchupSeries {
+  matchupPeriod: number;
+  /** Whether this is the week being played, so the last point can be labeled
+   *  as the day so far rather than as a finished day. */
+  live: boolean;
+  days: EspnSeriesDay[];
+  /** Team id → stat id → the running figure **after** each day, index-aligned
+   *  with `days`. Null is "not known", never zero: a category with no
+   *  denominator yet (an ERA before anybody has thrown an out) and a day that
+   *  could not be read both read as a gap rather than as a figure. */
+  teams: Record<number, Record<number, (number | null)[]>>;
+  fetchedAt: number;
+}
+
+const seriesCache = new Map<string, { value: EspnMatchupSeries; fetchedAt: number }>();
+const seriesInFlight = new Map<string, Promise<EspnMatchupSeries>>();
+
+/** One matchup period's days read at a time, capped the way every fan-out in
+ *  this file is: a fortnight's playoff round is 14 reads against an upstream
+ *  that has no idea we are doing it. */
+const SERIES_CONCURRENCY = 6;
+
+/**
+ * A matchup period's categories, day by day, for every team in it.
+ *
+ * Keyed by team and stat rather than by matchup, so one read serves every card
+ * on the board — which is what makes it worth a request at all: the ten cards
+ * of a 12-team league are six matchups over the same twelve teams and the same
+ * ten categories.
+ *
+ * **The span is clamped to the day ESPN is on**, so a period that declares more
+ * days than have been played is never asked for a day that has not happened.
+ * On a settled period that is the period's own last day; on the live one it is
+ * `latestScoringPeriod`, which is the same day the scoreboard adds to
+ * `cumulativeScore` — so the two agree about where the week has got to.
+ *
+ * **A day that cannot be read stops the series rather than being skipped.**
+ * Every figure here is a running total, so a hole in the middle of it is not a
+ * missing point but a wrong one for every day after it: the sum would be short
+ * by that day's production with nothing on screen to say so. So the first
+ * failure marks its own day `ok: false` and every point from there is null, and
+ * the chart draws the days it actually knows.
+ */
+export async function getMatchupSeries(
+  creds: EspnCreds,
+  period?: number | null,
+  force = false,
+): Promise<EspnMatchupSeries> {
+  const meta = await leagueMeta(creds, force);
+  const current =
+    meta.currentPeriod ??
+    (meta.periods.length > 0 ? meta.periods[meta.periods.length - 1].period : null);
+  const asked = period != null && meta.periods.some((p) => p.period === period) ? period : current;
+  const at = meta.periods.findIndex((p) => p.period === asked);
+  const span = at >= 0 ? meta.periods[at] : null;
+  const live = asked !== null && asked === current;
+
+  if (asked === null || span === null || meta.format !== 'h2h-categories') {
+    return { matchupPeriod: asked ?? 0, live, days: [], teams: {}, fetchedAt: Date.now() };
+  }
+
+  const key = `${creds.leagueId}:${asked}`;
+  const frozen = !live;
+  const stale = force && !frozen;
+  const hit = seriesCache.get(key);
+  if (!stale && hit && (frozen || Date.now() - hit.fetchedAt < LIVE_TTL_MS)) return hit.value;
+  const running = seriesInFlight.get(key);
+  if (running && !stale) return running;
+
+  const job = (async () => {
+    const latest = meta.latestScoringPeriod;
+    const last = typeof latest === 'number' ? Math.min(span.last, latest) : span.last;
+    const periods: number[] = [];
+    for (let sp = span.first; sp <= last; sp++) periods.push(sp);
+
+    const read = await mapLimit(periods, SERIES_CONCURRENCY, async (sp) => {
+      // Every day but ESPN's own latest is finished, and a finished day takes
+      // the blob rather than the clock.
+      const dayFrozen = typeof latest === 'number' ? sp < latest : true;
+      try {
+        return { totals: await dayTotals(creds, asked, sp, dayFrozen), ok: true };
+      } catch (err) {
+        console.error(
+          `ESPN day ${sp} unavailable for league ${creds.leagueId}:`,
+          (err as Error).message,
+        );
+        return { totals: {} as DayTotals, ok: false };
+      }
+    });
+
+    const dates = await Promise.all(periods.map((sp) => dateForPeriod(sp)));
+    // A hole poisons everything after it: see the note above.
+    const firstBad = read.findIndex((r) => !r.ok);
+    const good = firstBad === -1 ? read.length : firstBad;
+
+    const days: EspnSeriesDay[] = periods.map((sp, i) => ({
+      scoringPeriod: sp,
+      date: dates[i],
+      ok: i < good,
+    }));
+
+    const teamIds = meta.teams.map((t) => t.id);
+    const teams: Record<number, Record<number, (number | null)[]>> = {};
+    for (const teamId of teamIds) {
+      // The running components, which the rates are rebuilt out of at every
+      // day rather than added.
+      const run: Record<number, number> = {};
+      const out: Record<number, (number | null)[]> = {};
+      for (const cat of meta.categories) out[cat.statId] = [];
+      for (let i = 0; i < periods.length; i++) {
+        if (i < good) {
+          for (const [id, v] of Object.entries(read[i].totals[teamId] ?? {})) {
+            run[Number(id)] = (run[Number(id)] ?? 0) + v;
+          }
+        }
+        for (const cat of meta.categories) {
+          if (i >= good) {
+            out[cat.statId].push(null);
+            continue;
+          }
+          const rule = DERIVED[cat.statId];
+          if (!rule) {
+            out[cat.statId].push(run[cat.statId] ?? 0);
+            continue;
+          }
+          const v = rule.needs.every((n) => typeof run[n] === 'number') ? rule.of(run) : null;
+          out[cat.statId].push(typeof v === 'number' && Number.isFinite(v) ? v : null);
+        }
+      }
+      teams[teamId] = out;
+    }
+
+    const value: EspnMatchupSeries = {
+      matchupPeriod: asked,
+      live,
+      days,
+      teams,
+      fetchedAt: Date.now(),
+    };
+    seriesCache.set(key, { value, fetchedAt: Date.now() });
+    return value;
+  })().finally(() => {
+    seriesInFlight.delete(key);
+  });
+
+  seriesInFlight.set(key, job);
+  return job;
 }
 
 /**

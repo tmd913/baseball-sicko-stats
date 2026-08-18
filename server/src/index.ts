@@ -69,6 +69,7 @@ import {
   getOwnership,
   getRankings,
   getRosterOn,
+  getMatchupSeries,
   getScoreboard,
   getTransactions,
   lineupsFrom,
@@ -348,6 +349,26 @@ app.get(
     let watched: WatchPlayer[];
     let held: HeldDays | undefined;
     let teamName: string | null = null;
+    /**
+     * **Which of this team's players were in its lineup on each day of the
+     * range** — what the `Starters` filter reads, and the one thing the report
+     * used to compute and throw away.
+     *
+     * `fantasyWatchlist` has read one roster per day since a range became a
+     * range of rosters: it is where `held` comes from, so the lineups fall out
+     * of work this request already does and cost **no upstream read at all**.
+     * The reader's own views take the same map off `/api/espn/roster?start=`
+     * and are untouched; what this answers for is the team pages of a matchup,
+     * where no route returned it for anybody but the reader.
+     *
+     * It rides here rather than on that roster route for a reason worth
+     * stating: the team page fetches this report anyway, so the filter costs it
+     * no second request — and the lineups then describe **exactly** the rows
+     * this response describes, which is a stronger guarantee than two reads a
+     * moment apart can make. Null where the per-day read failed, which is the
+     * old behavior: one lineup applied to the whole range.
+     */
+    let lineups: Record<string, number[]> | null = null;
     if (fantasy) {
       try {
         // The **range**, not just its end: a fantasy team is a range of rosters
@@ -365,6 +386,7 @@ app.get(
         watched = fan.players;
         teamName = fan.teamName;
         held = fan.held ?? undefined;
+        lineups = fan.lineups;
       } catch (err) {
         // A league that can't be read is the user's to fix, and the client
         // offers the way to — so 409 rather than the 502 `asyncRoute` would
@@ -378,7 +400,16 @@ app.get(
     const players = await getReport(start, end, watched, held);
     // `'watchlist'` is what the source has always been called on the wire and
     // stays so for an old tab's sake; it means the saved roster.
-    res.json({ start, end, players, source: fantasy ? 'fantasy' : 'watchlist', teamName });
+    res.json({
+      start,
+      end,
+      players,
+      source: fantasy ? 'fantasy' : 'watchlist',
+      teamName,
+      // Only where there is one: a saved-roster report has no fantasy lineup to
+      // describe, and an absent field is what every older tab already reads.
+      ...(lineups ? { lineups } : {}),
+    });
   }),
 );
 
@@ -1169,6 +1200,42 @@ app.get(
         return;
       }
       res.json(await getScoreboard(creds, period, req.query.refresh === '1'));
+    } catch (err) {
+      if (!espnError(err, res)) throw err;
+    }
+  }),
+);
+
+// **One matchup period's categories day by day** — what a scoreboard cell
+// cannot say and what the chart behind it draws: how each side's figure in a
+// category moved through the week.
+//
+// A route of its own rather than a field on `/api/espn/scoreboard`, and that is
+// the decision worth recording: the board is read by everybody who opens the
+// League page and this is a week of ESPN rosters summed a day at a time, so
+// folding it in would make every reader pay for a chart nobody may open. It is
+// the split `/api/espn/matchup-window` already makes for the same page, from
+// the other direction — that one is 103 bytes and is fetched once, this one is
+// paid on the first press.
+//
+// `?period=` and `?refresh=1` mean exactly what they mean on the scoreboard
+// beside it, and the refresh reaches only the live period: a day gone by is a
+// finished day and reads back off its blob. A league that scores no categories
+// answers with an empty series rather than an error, there being no chart to
+// draw and nothing wrong.
+app.get(
+  '/api/espn/matchup-series',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const raw = req.query.period;
+    const period = typeof raw === 'string' && /^\d{1,3}$/.test(raw) ? Number(raw) : null;
+    try {
+      const creds = await getEspnCreds(userId(req));
+      if (!creds) {
+        res.status(409).json({ error: 'No ESPN league connected', code: 'espn-missing' });
+        return;
+      }
+      res.json(await getMatchupSeries(creds, period, req.query.refresh === '1'));
     } catch (err) {
       if (!espnError(err, res)) throw err;
     }

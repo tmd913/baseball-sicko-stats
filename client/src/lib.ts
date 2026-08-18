@@ -1515,3 +1515,85 @@ export function easternDate(d: Date): string {
 export function baseballDay(ms: number): string {
   return easternDate(new Date(ms - DAY_ROLLOVER_HOUR * 3_600_000));
 }
+
+/** The dates of an inclusive range, ascending. Cheap — `MAX_RANGE_DAYS` is 62
+ *  — and it is what the `Starters` projection and the count on a slot chip both
+ *  walk, so it is written once rather than in each of them. */
+export function rangeDatesOf(start: string, end: string): string[] {
+  const out: string[] = [];
+  for (let d = start; d <= end; d = addDay(d, 1)) out.push(d);
+  return out;
+}
+
+function addDay(date: string, delta: number): string {
+  const [y, m, day] = date.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, day));
+  dt.setUTCDate(dt.getUTCDate() + delta);
+  return dt.toISOString().slice(0, 10);
+}
+
+/**
+ * Was this player in a fantasy lineup on `date`?
+ *
+ * The one place that question is answered, so the filter that credits a
+ * player's day and the count on his slot chip cannot come to disagree. A date
+ * the map has no entry for is a day the server couldn't read, not a day nobody
+ * started: it falls back to `fallback`, the single end-of-range lineup the
+ * chips are drawn from, which is the answer the app gave before per-day lineups
+ * existed and the right direction to fail in.
+ */
+export function startedOn(
+  lineups: Map<string, Set<number>>,
+  date: string,
+  mlbId: number,
+  fallback: boolean,
+): boolean {
+  const day = lineups.get(date);
+  return day ? day.has(mlbId) : fallback;
+}
+
+/**
+ * **The `Starters` filter, and it cuts days rather than only rows.**
+ *
+ * A range is a range of lineups, so a man started on Monday and benched on
+ * Wednesday earned Monday's line and none of Wednesday's: each report is
+ * *projected* onto the days he was actually in the lineup, and a player with no
+ * such day is dropped outright. Nothing downstream has to be told — the summary
+ * table's rows, its `Total` and every feed item all sum `report.games`, so
+ * cutting the games is the whole of the change.
+ *
+ * **A player kept with no games left is not the same as one dropped.** He was
+ * in the lineup on some day of the range and simply had no game to play, which
+ * is a row of dashes and the honest answer; dropped means he was in it on none
+ * of them.
+ *
+ * Two tiers, and which applies is whether there is a per-day map at all.
+ * Without one — an older server, or a per-day read that failed — the single
+ * end-of-range answer stands and the filter keeps or drops a whole row, which
+ * is what the app did before per-day lineups existed.
+ *
+ * `starting` is that end-of-range answer, and it is a callback because the two
+ * callers reach it differently: the app's own roster reads it off the slot map
+ * it is already holding, and a matchup's team page off the roster it read for
+ * its chips. It is also the per-day map's own fallback for a day the server
+ * could not answer for — see `startedOn`.
+ */
+export function projectStarters(
+  cards: PlayerReport[],
+  dates: string[],
+  lineups: Map<string, Set<number>> | null,
+  starting: (r: PlayerReport) => boolean,
+): PlayerReport[] {
+  if (!lineups) return cards.filter(starting);
+  const out: PlayerReport[] = [];
+  for (const r of cards) {
+    const fallback = starting(r);
+    const days = new Set(dates.filter((d) => startedOn(lineups, d, r.id, fallback)));
+    if (days.size === 0) continue;
+    const games = r.games.filter((g) => days.has(g.date));
+    // Identity is preserved where nothing was cut, so a consumer that memoizes
+    // on a report object is not handed a new one for no reason.
+    out.push(games.length === r.games.length ? r : { ...r, games });
+  }
+  return out;
+}

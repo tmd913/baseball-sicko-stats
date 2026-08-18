@@ -1683,6 +1683,48 @@ export interface EspnRankRow {
   overall?: EspnRankSideTotal;
 }
 
+/**
+ * One day of a matchup period, on the series a category cell opens.
+ *
+ * Mirrored by hand from `server/src/espn.ts`, like every type in this file.
+ */
+export interface EspnSeriesDay {
+  scoringPeriod: number;
+  /** Its ET calendar date, or null where the period anchor could not be read —
+   *  which costs the axis its dates and nothing else. */
+  date: string | null;
+  /** False for a day ESPN would not answer for. Every point from there on is
+   *  null: a running total past a hole is not a missing point but a wrong one,
+   *  so the chart stops where the series stops knowing. */
+  ok: boolean;
+}
+
+/**
+ * **How each category moved through a matchup period** — what the chart behind
+ * a scoreboard cell draws.
+ *
+ * Keyed by team and stat rather than by matchup, so one read serves every card
+ * on the board: the ten cards of a 12-team league are six matchups over the
+ * same twelve teams and the same ten categories.
+ *
+ * The last point of a series **is** the figure on the card above it — checked
+ * through both routes on the live league, 120 of 120 cells on a settled week
+ * (worst 4.86e-9, which is ESPN's own rounding of an OPS) and 120 of 120
+ * exactly on the live one.
+ */
+export interface EspnMatchupSeries {
+  matchupPeriod: number;
+  /** Whether this is the week being played, so the last point can be labeled
+   *  as the day so far rather than as a finished day. */
+  live: boolean;
+  days: EspnSeriesDay[];
+  /** Team id -> stat id -> the running figure **after** each day, index-aligned
+   *  with `days`. Null is "not known", never zero — an ERA before anybody has
+   *  thrown an out and a day that could not be read are both gaps. */
+  teams: Record<number, Record<number, (number | null)[]>>;
+  fetchedAt: number;
+}
+
 export interface EspnRankings {
   span: EspnRankSpan;
   /** Only the spans this league can actually be asked for — a half with no

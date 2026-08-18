@@ -7,6 +7,7 @@ import { InfoKey } from './InfoKey';
 import { DateRow, DateToggle } from './DateControls';
 import type { DatePreset } from './DateControls';
 import LeagueTeam from './LeagueTeam';
+import { StartersToggle } from './StartersToggle';
 import { ScheduleSpanTabs, ScheduleToggle } from './ScheduleControl';
 import { buildScheduleIndex, defaultScheduleSpan } from './schedule';
 import type { ScheduleSpan } from './schedule';
@@ -425,6 +426,23 @@ export default function LeagueMatchupView({
   });
   const [reading, setReading] = useState<'roster' | 'feed'>('roster');
   const [kind, setKind] = useState<PlayerKind>('batter');
+  /**
+   * **Only the men this manager actually started**, over the days he started
+   * them — the app's own `Starters` filter, on somebody else's lineup.
+   *
+   * The overlay owns it for the reason it owns the reading, the kind and the
+   * dates: those are chrome above *both* team pages and must not reset when the
+   * reader crosses from one manager to the other. And it is state rather than
+   * anything in the URL, which is where every other control on this page sits —
+   * `mup` and `mt` are the whole of what a matchup link carries.
+   *
+   * **Always offered**, unlike the roster row's own, which is hidden over a
+   * range with no today in it: that gate exists because the *MLB* reading of
+   * the word is a fact about tonight, and there is no MLB reading here. A
+   * leaguemate's lineup is a real fact about every day of every range, and
+   * where the per-day map is missing the end-of-range roster answers for it.
+   */
+  const [starters, setStarters] = useState(false);
   const [dateOpen, setDateOpen] = useState(false);
   const [scheduleSpan, setScheduleSpan] = useState<ScheduleSpan | null>(null);
   /**
@@ -862,6 +880,13 @@ export default function LeagueMatchupView({
    * back and the week alone: this row belongs to two of the three pages and
    * would be an empty band on the third.
    */
+  const sideName =
+    sideTeamId === null ? 'this team' : teams.get(sideTeamId)?.name ?? `Team ${sideTeamId}`;
+  /** The same rule the slot chip's owner follows: a name already ending in `s`
+   *  takes the bare apostrophe, or the live league produces
+   *  `The Homewreckers’s`. */
+  const sidePossessive = /s$/i.test(sideName) ? `${sideName}’` : `${sideName}’s`;
+
   const tools = (
     <div className={`mup-tools${dateOpen ? ' date-open' : ''}`}>
       <div className="view-switch mup-reading" role="tablist" aria-label="Roster or feed">
@@ -912,6 +937,18 @@ export default function LeagueMatchupView({
             }
           />
         )}
+        {/* Between the reading and the days, which is the roster row's own
+            order: the questions come as *which page, which kind, which reading
+            of it, which players, which days*. */}
+        <StartersToggle
+          on={starters}
+          onToggle={() => setStarters((v) => !v)}
+          title={
+            span.start === span.end
+              ? `Only the players in ${sidePossessive} lineup that day — his bench and his IL are hidden whatever their clubs do with them`
+              : `Only the days ${sideName} had each player in his lineup — a day he sat on the bench or the IL is not counted, however he hit`
+          }
+        />
         <DateToggle
           open={dateOpen}
           onToggle={() => setDateOpen((v) => !v)}
@@ -985,6 +1022,7 @@ export default function LeagueMatchupView({
               end={span.end}
               kind={kind}
               reading={reading}
+              starters={starters}
               schedule={reading === 'roster' ? scheduleIndex : null}
               onOpenDetails={onOpenDetails}
             />
