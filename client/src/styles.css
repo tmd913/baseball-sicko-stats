@@ -12136,12 +12136,32 @@ button.start-line:focus-visible {
    edge whatever this row asked for. */
 .mup-proj-row {
   position: relative;
-  display: flex;
-  justify-content: center;
+  /* **The button is centered and the key hangs off it**, which is a different
+     thing from centering the pair: as one flex group the button sat 19px left of
+     the card's middle, which on a symmetric comparison is a control that looks
+     misaligned with everything above it. The grid is `.mup-nav-row`'s and for
+     the same reason — the middle column is centered between two equal ones and
+     the third holds the key, with the right column's `auto` minimum keeping it
+     on screen if the row ever runs out of width. */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(auto, 1fr);
+  align-items: center;
+  column-gap: 8px;
   padding: 18px 0 0;
 }
+/* `display: contents` so the button and its key are grid items of the row
+   rather than of a wrapper — the trick `.research-bar` uses to put its own
+   groups in the app's tab row. The wrapper's `margin-left: auto`, written for
+   the far end of the scoreboard's head, goes with its box. */
 .mup-proj-row .lg-proj-tools {
-  margin-left: 0;
+  display: contents;
+}
+.mup-proj-row .lg-proj-btn {
+  grid-column: 2;
+}
+.mup-proj-row .lg-proj-key {
+  grid-column: 3;
+  justify-self: start;
 }
 /* **The key opens upward from this row**, which is where the room is: the row
    sits above `Moves` at the foot of a card that runs past the bottom of the
@@ -12643,31 +12663,48 @@ span.mup-move-name:hover {
 .mup-meter-tied {
   background: color-mix(in srgb, var(--faint) 40%, transparent);
 }
-/* **The bars key is the head's corner now**, not the meter row's — see the
-   component, where the move is argued. What is left here is the geometry.
+/* **The bars key sits beside the strip of three pages** — see the component,
+   where the move off the meter row and then out of the band's far corner are
+   both argued. What is left here is the geometry, and it is two rules.
 
-   `.mup-chrome` is `position: sticky` and so is already a containing block for
-   an absolutely positioned child, which is what puts this at the corner of the
-   *screen*: the band spans the view where `.mup-bar` inside it is a centered
-   896px column, so an item at the end of that row would sit a long way inside
-   the right edge on a desktop. The two offsets are the band's own padding, so
-   the button lines up with the top of the Back button beside it (both 30–34px
-   boxes on a 20px top padding) and with the page's own 16px gutter.
+   The **row** keeps the tabs centered while holding the key to their right,
+   which a centered flex row cannot do: [strip][gap][key] centered as a group
+   puts the strip 19px left of the middle. A three-column grid centers the
+   middle column between two equal ones and lands the key in the third, and the
+   asymmetric minimums are what make it degrade the way the eye wants — the left
+   column may collapse to nothing, the right may not go under the key it holds,
+   so when the row runs out of width the strip slides left rather than the key
+   being pushed off the end.
 
-   The panel hangs off the **button** here rather than off a row, which is safe
-   for the one reason `.roll-key`'s note gives it as unsafe elsewhere: the
-   anchor is already at the screen's right edge, so `right: 0` on a panel of a
-   declared width opens leftward into the page rather than off it — measured
-   340 × … landing at x=34 of a 390px screen. */
-.mup-key {
-  position: absolute;
-  top: 20px;
-  right: 16px;
-  display: inline-flex;
-  z-index: 1;
+   The **panel** is anchored to the band rather than to the 30px button, which
+   is `.roll-key`'s measured trick: a shrink-to-fit against a 30px box resolves
+   to the shared `min-width`, and a panel opening from a button in the middle of
+   the screen has no edge to be inside of. `.mup-chrome` is `position: sticky`
+   and so already a containing block, so `right: 16px` is the page's own gutter
+   and the panel drops clear of the whole band. */
+.mup-nav-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(auto, 1fr);
+  align-items: center;
+  column-gap: 8px;
 }
-.mup-key .info-key-panel {
-  right: 0;
+/* Placed rather than auto-flowed: with no column named, the strip lands in the
+   first (a `1fr` gutter) and centers itself *within it*, which at 1920 put it
+   483px left of the row's middle — the whole point of the grid lost to the one
+   line that says which column each item is in. */
+.mup-nav-row > * {
+  grid-column: 2;
+}
+.mup-nav-row > .info-key {
+  grid-column: 3;
+  justify-self: start;
+}
+.mup-key {
+  display: inline-flex;
+  position: static;
+}
+.mup-chrome .info-key-panel {
+  right: 16px;
   left: auto;
   top: calc(100% + 8px);
   bottom: auto;
@@ -12910,19 +12947,6 @@ span.mup-move-name:hover {
   gap: 10px;
   max-width: var(--card-column);
   margin: 0 auto;
-  /* **The right padding is the corner the bars key sits in.** That key is
-     absolutely positioned against the band, so this row knows nothing about it
-     — and at 390 the week block reached x=371 against a button starting at 344,
-     which put `PROJECTED` underneath it. 34px is the button's 30 and a gap.
-
-     Unconditional rather than under a media query, because it costs nothing
-     where the bar is not the width of the screen: measured at 430 / 480 / 640 /
-     900 / 1200 the band is 114px with it or without, the row's content ending
-     hundreds of pixels short of its own edge. What it does cost is a wrapped
-     line at the two widths where the row really is that wide — 114 → 145 at 390
-     and 145 → 167 at 320 — which is the price of the corner and still less than
-     the 160 the head measured while the `Projected` toggle was in this row. */
-  padding-right: 34px;
   padding-bottom: 12px;
   /* The anchor the `Projected` key opens from — `.lg-head`'s own job on the
      Scoreboard, and here for the identical measured reason: `.lg-proj-key` is
@@ -13133,6 +13157,21 @@ span.mup-move-name:hover {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* **The narrowest screen gives the key its 30px out of the two team tabs**, and
+   it has to come from somewhere: at 320 the strip's own minimum is 262.3 and the
+   row has 288, so strip + gap + key came to 300.3 and the button hung 4.3px off
+   the side of the page. A third of an em off each team label frees 26 — more
+   than enough — and it is taken only here, where the alternative is a control
+   half off the screen. `Summary` is untouched, being the tab a reader lands on
+   and the one this file already refuses to shrink.
+
+   It sits after the rule it overrides rather than in either narrow block above,
+   which are earlier in the file than `.mup-sides` and would lose the tie. */
+@media (max-width: 360px) {
+  .mup-side-team .mup-side-label {
+    min-width: 3.5em;
+  }
 }
 
 /* The team page's own head: whose week this is, and the kind switch that

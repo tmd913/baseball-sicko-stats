@@ -574,12 +574,16 @@ function MatchupCard({
  * the one a projection most owes its reader, so it is a paragraph rather than a
  * footnote.
  *
- * **Each of them is one sentence and a clause**, which is a tightening rather
- * than a trim: the four facts are all still here and none of the figures went,
- * but the scaffolding around them did — "every player in a lineup slot keeps his
- * season rate, weighted with the last month" says in fourteen words what "each
- * man in a lineup slot blends his season rate with his last month" says in
- * eleven, and a key that is read once is read faster than it is written.
+ * **Tightened once and then said plainly**, which are two different edits and
+ * the second undid a little of the first. The tightening was right about the
+ * scaffolding and went one step too far into the *subjects*: "each man in a
+ * lineup slot blends his season rate with his last month (up to 40%)" is short
+ * and leaves a reader asking 40% of what, and "nothing moves a figure by more
+ * than a fifth" is shorter than "no one adjustment changes a figure by more than
+ * 20%" and says less. So each paragraph now opens on a full sentence naming what
+ * it is about, and every figure in it is written the way a reader would say it —
+ * `5½%` in particular, which is a fraction glyph in the middle of a run of
+ * percentages and had to be looked at twice to be read as five and a half.
  *
  * **It says how much is left**, off the projection itself rather than from a
  * count of its own, so the sentence cannot come to disagree with the cards.
@@ -597,24 +601,31 @@ function ProjectionKey({
   return (
     <InfoKey label="How the projection works" className="lg-proj-key" drop={drop}>
       <p>
-        <b>What has been scored</b>, plus what the{' '}
-        {days > 0 ? `${days} ${days === 1 ? 'day' : 'days'} left are` : 'rest of the week is'}{' '}
-        worth — each of the {categories} categories on its own, and the win–loss–tie is those{' '}
-        {categories} compared.
+        <b>Every figure is what the team has already scored</b> plus what its players should add{' '}
+        {days > 0
+          ? `over the ${days} ${days === 1 ? 'day' : 'days'} left in the week`
+          : 'over the rest of the week'}
+        . All {categories} categories are worked out separately, and the record beside the team
+        names is those {categories} compared.
       </p>
       <p>
-        <b>Each man in a lineup slot</b> blends his season rate with his last month (up to 40%,
-        less if he has hardly played), times the chances he has left: a hitter's games, a
-        starter's turns, a reliever's usual workload.
+        <b>A player's rate is his season, pulled toward his last 30 days</b> — recent form counts
+        for at most 40% of it, and less if he has hardly played lately. That rate is then applied
+        to the chances he has left: for a hitter, his club's remaining games and how often he is
+        in the lineup; for a starter, the turns he is due; for a reliever, his usual workload.
+        Only players in a lineup slot are counted, so a bench or IL player adds nothing.
       </p>
       <p>
-        <b>Then the matchup</b> — the opposing starter and the platoon edge (about 5½%
-        league-wide) for a hitter, how that club has hit his hand for a pitcher. Nothing moves a
-        figure by more than a fifth.
+        <b>Each figure is then adjusted for the opposition.</b> A hitter moves with the pitcher
+        he is likely to face and with the handedness matchup, which is worth about 5% across the
+        league; a pitcher moves with how that club has been hitting against his throwing arm. No
+        one adjustment changes a figure by more than 20%.
       </p>
       <p>
-        <b>It can't know</b> tomorrow's lineup changes, and a game in progress counts as it
-        stands. One likely outcome, not a probability.
+        <b>What it cannot know is what the managers do next.</b> Whoever is in a lineup slot now
+        is counted for the rest of the week, and a game already under way counts as it stands.
+        This is one likely outcome rather than a probability, so a category it projects to be
+        won by one or two is not a category to count on.
       </p>
     </InfoKey>
   );

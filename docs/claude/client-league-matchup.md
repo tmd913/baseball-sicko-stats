@@ -167,8 +167,8 @@ clipped number.
 hold the grid's shape: nobody is winning acquisitions, and a rail says a
 comparison is being drawn.
 
-**One ⓘ covers both bars — and the gesture — and it is in the top right corner
-of the screen.** The app's own `InfoKey`, for that component's stated reason (a
+**One ⓘ covers both bars — and the gesture — and it sits beside the strip of
+three pages.** The app's own `InfoKey`, for that component's stated reason (a
 `title` is invisible on a phone, a `Modal` is ceremony two sentences cannot pay
 for, an inline reveal fails on distance). Three paragraphs: the meter, a
 category's own bar, and the press that opens that category's chart — see *The
@@ -182,32 +182,47 @@ not that bar alone but the ten under it, which the reader is still going down
 when the button has gone. In the pinned head it is on screen for the whole of
 that reading.
 
-**The corner of the screen rather than of the row**, which is a real distinction
-here: `.mup-bar` is a centered 896px column, so an item at the end of *it* sits
-340px inside the right edge of a 1920px window. The key is therefore an
-absolutely positioned child of `.mup-chrome` — which is `position: sticky` and so
-already a containing block — at the band's own `20px / 16px` padding, which lines
-it up with the top of the Back button beside it and with the page's own gutter.
-Measured, its right edge is **16px from the screen's** at 320, 390, 1200 and 1920
-alike.
+**It spent a round in the band's far corner and that was too far.** Absolutely
+positioned against `.mup-chrome` it really was at the top right of the *screen* —
+measured 16px from the edge at every width — and at 1920 that is a thousand
+pixels from anything it explains, with the Back row made to reserve 34px for a
+box it knew nothing about (measured, the week block reached x=371 against a
+button starting at 344 at 390, and `PROJECTED` was drawn underneath it). Beside
+the tabs it is where the reader's eye already is, and the reservation goes with
+it: the band is back to **114px at 375 through 1920 and 145 at 320**.
 
-**The panel hangs off the button here**, where every other key in the app hangs
-off a row — and it is safe for the one reason `.roll-key`'s note gives it as
-unsafe elsewhere: the anchor is already at the screen's right edge, so `right: 0`
-on a panel of a declared width opens leftward into the page rather than off it.
-Measured 320px wide landing at x=54 of a 390px screen and x=28 of a 320px one,
-inside the viewport at every width.
+**The row keeps the tabs centered *and* holds the key**, which a centered flex
+row cannot do — `[strip][gap][key]` centered as a group puts the strip 19px left
+of the middle, and the tabs are what a reader aims at. `.mup-nav-row` is a
+three-column grid (`minmax(0, 1fr) auto minmax(auto, 1fr)`) with the strip named
+into the middle column and the key into the third: the middle is centered between
+two equal ones, and the **asymmetric minimums** are what make it give way the
+right way round — the left column may collapse to nothing where the right may not
+go under the key it holds, so a row that runs out of width slides the strip left
+rather than pushing the button off the end. Measured, the strip's center is
+**exactly the row's at 360 through 1920** and 12.1px left of it at 320, with the
+key 8px past the strip at every width.
 
-**The Back row reserves the corner** (`padding-right: 34px`, the button's 30 and
-a gap), because the row knows nothing about a box positioned against the band:
-measured at 390 with the longer `PROJECTED` tag, the week block reached x=371
-against a button starting at 344 and the tag was drawn underneath it. It is
-unconditional rather than under a media query because it costs nothing where the
-row is not the width of the screen — 114px of band at 430 / 480 / 640 / 900 /
-1200 with it or without — and where the row *is* that wide it costs a wrapped
-line, 114 → 145 at 390 and 145 → 167 at 320, which is the price of the corner and
-still less than the 160 the band measured while the `Projected` toggle was in
-this row.
+**Naming the columns is the whole of it**, and leaving them to auto-flow was the
+one fault this arrangement had: the strip landed in the first column — a `1fr`
+gutter — and centered itself *within that*, which at 1920 put it **483px left of
+the row's middle** with the key 337px past it. One line says which column each
+item is in.
+
+**The narrowest screen pays 26px of tab label for the key's 30**, which has to
+come from somewhere: at 320 the strip's own minimum is 262.3 in a row of 288, so
+strip + gap + key came to 300.3 and the button hung 4.3px off the side of the
+page. A third of an em off each *team* label under 360px frees more than enough,
+and `Summary` is untouched — it is the tab a reader lands on and the one this
+file already refuses to shrink.
+
+**The panel is anchored to the band rather than to the button**, which is
+`.roll-key`'s measured trick: a shrink-to-fit against a 30px box resolves to the
+shared `min-width`, and a button in the middle of the screen has no edge for a
+panel to open inside of. `.mup-chrome` is `position: sticky` and so already a
+containing block, so `right: 16px` is the page's own gutter and the panel drops
+clear of the whole band — measured 320 × 216 landing at x=54 of a 390px screen
+and 276 × 233 at x=28 of a 320px one, inside the viewport at every width.
 
 **And the headline went 15px → 19px**, and has since gone to **26px** with
 everything else on the card — see *The card reads a size up* below, which is
@@ -444,11 +459,15 @@ one more thing about the week alongside the dates.
 **Directly above `Moves`** because that is where the categories end: everything
 under it — the acquisitions, the two lists of pickups — is a fact about the period
 so far and is not projected either way, so the toggle is the last line of the
-thing it governs rather than the first line of the thing it does not. It is
-**centered**, this card being a symmetric comparison where a control at one end
-would read as belonging to that manager (`.lg-proj-tools`' own `margin-left: auto`
-is reset for it, an auto margin eating the free space `justify-content` would
-otherwise divide).
+thing it governs rather than the first line of the thing it does not. **The button itself is centered and the key hangs off its right**, which is a
+different thing from centering the pair: as one flex group the button sat 19px
+left of the card's middle, which on a symmetric comparison reads as a control
+misaligned with everything above it. `.mup-proj-row` is `.mup-nav-row`'s grid —
+the button named into the middle column, the key into the third — and
+`.lg-proj-tools` goes `display: contents` so the two are items of that row rather
+than of a wrapper, which is the trick `.research-bar` uses to put its own groups
+in the app's tab row. Measured, the button's center is **the row's to the pixel
+at 320 through 1920**, with the key 8px past it.
 
 **On the Summary page alone**, which now needs no gate of its own: the toggle is
 inside the card and the card *is* that page, which is the tidier version of the
@@ -484,16 +503,32 @@ ending at 35 is told before they press rather than after. The two keys stay two
 panels — `How to read these bars` in the screen's top right corner and `How the
 projection works` beside this button — because they are two questions.
 
-**The key's own wording was tightened rather than trimmed**, and the distinction
-is the point: all four facts are still there and no figure went, but the
-scaffolding around them did — "every player in a lineup slot keeps his season
-rate, weighted with the last month" says in fourteen words what "each man in a
-lineup slot blends his season rate with his last month" says in eleven. Measured,
-the panel is **311px against 380** at 390 and its label went `How the projection
-is worked out` → **`How the projection works`**; the button's own tooltip went
-`Show where each matchup is heading by the end of the week` → **`Project every
-total to the end of the week`**, which is also the truer sentence on a page about
-one matchup. Both are shared with the Scoreboard, one control drawn twice.
+**The key was tightened and is now written plainly, which are two edits and the
+second undid a little of the first.** The tightening was right about the
+scaffolding and went one step too far into the *subjects*: `each man in a lineup
+slot blends his season rate with his last month (up to 40%)` is short and leaves
+a reader asking *40% of what*, and `nothing moves a figure by more than a fifth`
+is shorter than `no one adjustment changes a figure by more than 20%` and says
+less. Each paragraph now opens on a full sentence naming what it is about — what
+a figure **is**, how a player's rate and his remaining chances are worked out,
+what the opposition does to it, and what it cannot know — and it says two things
+it never did: that only players in a **lineup slot** count, so a bench or IL
+player adds nothing, and that whoever is in one **now** is counted for the rest
+of the week.
+
+**And `5½%` went**, which is the formatting half of it: a fraction glyph in the
+middle of a run of percentages has to be looked at twice to be read as five and a
+half, and the figure it stands for is a league-wide platoon edge measured at 5.5%
+— `about 5% across the league` is what a reader would say and is no less true.
+The label went `How the projection is worked out` → **`How the projection
+works`** and the button's tooltip `Show where each matchup is heading by the end
+of the week` → **`Project every total to the end of the week`**, which is also
+the truer sentence on a page about one matchup. All of it is shared with the
+Scoreboard, one control drawn twice.
+
+Measured, the panel is **520px against 380** at 390 — clarity bought with height
+rather than sold for it — which is why it opens upward and why it is capped and
+scrolls on a short window: 480px at 390×620 and 280 at 900×420, in view at both.
 
 **Measured on the live 12-team league, matchup 110, at 1200×900**, pressing the
 toggle and pressing it back:
@@ -527,25 +562,25 @@ open, the first press closes the key and leaves the page (`[inert]` still
 `.app-chrome`, `.league-view`, `.float-btn`), and the second closes the page,
 clearing `mup=`, keeping `proj=1` on the board behind it and leaving **0** inert.
 
-**It costs the head nothing now**, which is what moving it into the card bought:
+**It costs the head nothing**, which is what moving it into the card bought:
 `.mup-chrome` measures **114px at 375 through 1920 and 145 at 320**, where with
-the toggle in the Back row it was 160 and 191. What the *bars key* costs that band
-instead is recorded above — a wrapped line at 320 and 390 and nothing from 430 up
-— so the two moves together leave the head shorter than it was at every width. The
-row inside the card is **54px** and there is **0 horizontal overflow of the page
-body or the view** at 320 / 375 / 390 / 480 / 640 / 900 / 1200 / 1920.
+the toggle in the Back row it was 160 and 191 — and the bars key beside the tabs
+costs that band nothing either, where in the corner it had cost a wrapped line at
+320 and 390. The row inside the card is **54px** and there is **0 horizontal
+overflow of the page body or the view** at 320 / 360 / 375 / 390 / 430 / 480 /
+640 / 900 / 1200 / 1920.
 
 **The key's panel is anchored to `.mup-proj-row`** (`position: relative`):
 `.lg-proj-key` is `position: static` so a 320px panel hangs off the **row** rather
 than off a 30px button, and without a positioned row here the nearest one is the
 overlay itself, which would drop the panel the height of the page. Measured at
-390: **320 × 311 at x=41, fully inside the viewport**, and at 320 **276 × 346**.
+390: **320 × 520 at x=41, fully inside the viewport**, and at 320 **276 × 624**.
 
-**Bundle, over the two rounds**: **568.44 → 568.93 KB of JS** (169.15 → 169.24
-gzipped) and **153.52 → 153.81 KB of CSS** (27.39 → 27.53) — half a kilobyte and a
-third of one raw, under a tenth of a kilobyte each over the wire, for a control
-drawn twice, two moved anchors, a popover that knows which way it opens and the
-paragraphs arguing them. The tightened key gave 0.28KB of JS back.
+**Bundle, over the three rounds**: **568.44 → 569.58 KB of JS** (169.15 → 169.46
+gzipped) and **153.52 → 154.21 KB of CSS** (27.39 → 27.62) — 1.1KB and 0.7KB raw,
+0.3KB and 0.2KB over the wire, for a control drawn twice, three moved anchors, two
+grids, a popover that knows which way it opens and a key written to be read once
+and understood.
 
 ### A category row opens its chart
 

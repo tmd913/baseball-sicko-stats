@@ -483,7 +483,8 @@ question later — the two places that need the board are the two that can proje
 it — and Rankings and Transactions drop the param exactly as they did, a lens
 naming figures that are not on screen being the thing that rule forbids.
 
-**On the Summary page alone, and inside the card rather than in the head.** The
+**On the Summary page alone, and centered inside the card rather than in the
+head.** The
 Scoreboard keeps its toggle beside the period it governs, which is that page's
 whole subject; the matchup page's head is shared by three pages and only one of
 them has a category total on it, so the control sits at the **foot of the
@@ -495,12 +496,22 @@ sit in that shared head calling a roster table a projection. Crossing to a team
 page and back leaves the lens where the reader put it. See **Client — a league
 matchup**, *The Projected toggle*, for what it draws and what it measured.
 
-**And the key's wording is tightened**, which reaches both surfaces: the four
-paragraphs keep all four facts and every measured figure and lose the scaffolding
-around them, the label goes `How the projection is worked out` → **`How the
-projection works`**, and the button's tooltip goes `Show where each matchup is
-heading by the end of the week` → **`Project every total to the end of the
-week`**. Measured, the panel is **311px against 380** at 390.
+**And the key is rewritten, which reaches both surfaces.** It was tightened
+first and then written plainly, and the second edit undid a little of the first:
+the tightening was right about the scaffolding and went one step too far into the
+subjects, leaving `up to 40%` with nothing saying 40% *of what* and `a fifth`
+where `20%` reads at a glance. Each paragraph now opens on a sentence naming what
+it is about, two facts it never carried are in it (only players in a **lineup
+slot** count, and whoever is in one **now** is counted all week), and `5½%` —
+a fraction glyph in a run of percentages — is `about 5% across the league`. The
+label goes `How the projection is worked out` → **`How the projection works`**
+and the button's tooltip `Show where each matchup is heading by the end of the
+week` → **`Project every total to the end of the week`**.
+
+**On the Scoreboard the panel still opens downward from the head**, where there
+is a page below it; on the matchup page it opens upward from a control at the
+foot of the card. That is the one thing the two surfaces do differently, and it
+is `InfoKey`'s `drop` flag rather than a second key.
 
 ### Measured
 
