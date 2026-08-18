@@ -46,15 +46,84 @@ which took it from roughly three screens to one.
 **They share one selection, held by the tab.** Picking out the slider in one
 picks it out in the other, because they are two views of one arsenal — a
 selection each would be two answers to "which pitch am I looking at" on one
-screen. `ArsenalTab` owns `hovered` for the same reason it owns the split.
+screen. `ArsenalTab` owns it for the same reason it owns the split.
+
+#### What is lit: a glance and a press are two different statements
+
+**One sentence: the chart shows the pitch the reader is pointing at, or the one
+they last pressed.** A pointer over a button previews it and leaving that button
+drops the preview; a press pins, pressing the same one again unpins, and a press
+anywhere else unpins. On touch there is no pointer, so it reduces to *the one you
+last tapped*, cleared by tapping it again or tapping off it.
+
+**That is two pieces of state where it used to be one, and the paragraph this
+replaces was wrong about both halves of it.** What stood here was: *a touch
+reader taps to select and taps again to clear* — which was the intention and was
+not what the charts did. `ArsenalTab` owned a single `hovered`, written by
+**three** handlers on every button (`onMouseEnter`, `onFocus`, `onClick`) and
+cleared by exactly one, a `mouseleave` on the whole `<figure>`. Both of those
+produced a reported fault, and both were measured on the live tab before they
+were touched:
+
+- **A press could not select at all.** Chrome dispatches a tap as
+  `pointerenter:touch → mouseenter → mousedown → focus → mouseup → click`, so the
+  compatibility `mouseenter` set the pitch, React rendered it as picked, and the
+  click read that fresh `on` and toggled it straight back off. Measured under
+  touch emulation on Paul Skenes' seven-pitch arsenal: **tapping a legend column
+  lit nothing** (`legOn=[]`, 0 of 101 dots dimmed, no AVG marker), and it took
+  **two taps of the same column** to light one — so tapping a *different* pitch
+  type left the reader looking at neither, which is the "part of the 4-Seam
+  Fastball stays highlighted when you click a different pitch type" report from
+  the inside. It is the trap `ArmAngleMark` records below, unfixed on these two
+  buttons; the fix is the same one, `pointerType === 'mouse'` on the preview,
+  plus a press that pins rather than toggling against a state a hover has just
+  written.
+- **And the clear was a different element from the setter.** The plot is *inside*
+  `.mv-chart`, so moving the pointer off a legend column and onto the circle left
+  that column lit with nothing under the pointer at all: measured, `legOn` stayed
+  `["4-Seam Fastball"]` with **60 of 101 dots dimmed and the AVG marker still
+  drawn**, where the same move off a usage row cleared correctly — that figure
+  being in the other `<figure>`. Tabbing past the last legend column left the last
+  one lit for the same reason: nothing answered the blur. Both clear now
+  (`legOn=[]`, `0/101 dim`, no marker), because a leave belongs to the button the
+  pointer actually left.
 
 **Hover is for pointers and the press is for everyone.** Every highlightable
-thing is a real `<button>` — the usage rows, the legend columns — so a touch
-reader taps to select and taps again to clear, and the `:hover` tints sit
-inside `@media (hover: hover)`. That is the app-wide rule (**Client**, *A card
-doesn't highlight when you scroll past it*), and it matters more here than
-usual: on touch there is no pointer to move away, so a hover-only chart would
-be a chart that stays stuck on whatever the finger last crossed.
+thing is a real `<button>` — the usage rows, the legend columns — and every one
+of them carries the same handlers (`pitchButtonProps`), written once so the two
+charts cannot come to answer a gesture differently. The preview is filtered on
+`pointerType === 'mouse'`; on the keyboard it is **`:focus-visible`** that
+previews, which is that discrimination read off the platform rather than guessed
+at — Chrome matches it on a Tab and not on a click or a tap, measured `false` on
+both — so a click focusing its own button no longer previews and no longer
+cancels its own press. The `:hover` tints sit inside `@media (hover: hover)`,
+the app-wide rule (**Client**, *A card doesn't highlight when you scroll past
+it*), and it matters more here than usual: on touch there is no pointer to move
+away, so a hover-only chart would be a chart that stays stuck on whatever the
+finger last crossed.
+
+**A leave only ever clears its own preview**, which is why `onPreview` takes the
+pitch type on the way *out* as well as in: focus can leave one button while the
+pointer sits on another, and an unconditional clear takes the wrong one down.
+
+**`aria-pressed` reports the pin, not what is lit.** A toggle button owes
+assistive technology its *toggle* state, and reporting the preview there would
+have it flicker as the pointer crossed a row. Measured after a keyboard Enter on
+`Sweeper` and a Tab onto `Changeup`: `Sweeper:true` with every other column
+`false`, while what is drawn is Changeup — the pin and the glance saying two
+different true things.
+
+**A press anywhere else unpins**, which is the other half of a press meaning
+something: on touch there is nothing to move away, so without it a tapped pitch
+would stay lit until the reader remembered which one it was. It is a
+`pointerdown` listener in `ArsenalTab` testing `[data-pitch]` — the attribute
+both buttons carry, so the test names *a pitch button* rather than either chart's
+markup — and it is deliberately **not `useDismissable`**, though it is the same
+shape. That hook also spends the press (`swallowNextClick`), because a popover is
+in the reader's way and a press past it is aimed at getting rid of it; a lit pitch
+covers nothing, so the press that clears it should also do what it was aimed at.
+Measured: with a pitch pinned, one press of the `Splits` tab switches the tab
+**and** clears the pin.
 
 **The pitch colours do not theme.** They are `lib.ts::pitchStyle`'s — Savant's
 own palette, already shared with the arsenal rows, the per-game rows and the
@@ -341,6 +410,46 @@ the thing the title names. It sits close to the plot and **16px clear of the
 legend**: it belongs to the picture above it, and hard against the pitch names
 below it read as their heading.
 
+**And the vertical axis is named down the left edge, with each arrow outboard of
+its label** — `▲` above `MORE RISE`, `▼` below `MORE DROP`. They pointed the
+other way for a while and it was not a source-order mistake: the arrows were
+inline with the words in a 4.4em box, so `More rise ▲` wrapped and put the ▲ on a
+second line *underneath* the label, while `▼ More drop` put its ▼ on a first line
+*above* it. Measured, the rise block was two lines and the drop block three, and
+each arrow pointed away from the half of the plot it names. An arrow that shares
+a line lands wherever the break puts it, so it has a block of its own now.
+
+**The rise block grows upward, so its bottom edge does not move.** The arrow
+adds a line and the edge nearest the disc is the bottom one, so the top is pulled
+up by exactly that line (`top: calc(26% - 12.5px)`) rather than the block
+reaching further into the circle: measured, its nearest approach to the painted
+field is **+1.4px at 470px of chart, the same figure it was**. The drop block was
+already three lines, so the arrow moving to its foot changes no height at all;
+what moved is its anchor, 62% → **64%**, which squares the two blocks up against
+each other — their centres now sit ~87px either side of the disc's own centre —
+and takes its corner clear of the field for the first time (**−1.7px → +1.1px**).
+
+**At phone widths they move outboard, because they do not shrink and the disc
+does.** A label is a type size and the circle is a share of the chart, so the
+same anchors that clear it at 470px had the block sitting **7.2px inside the 24"
+ring at 320** — measured on `main`, and true before this change as well as after
+the arrow moved. Under the container query that already tunes this chart for a
+phone they take **17% and 70%**, and every part of both labels then clears that
+ring at every width the app is checked at: **+19.7 / +19.4 at 470px, +15.1 /
++12.9 at 390, +2.3 / +2.9 at 320**, against +19.7 / +16.7, +3.2 / +2.7 and −7.2 /
+−5.9 before. What they still sit over at the two narrowest widths, as they always
+have, is the **soft field wash** — the 7% accent tint drawn 2.4" past the last
+ring precisely so an outlier lands on something — which is a wash rather than a
+mark, and the two corners a label could retreat into are the arm's and the hatch
+key's.
+
+**The arm and the key are untouched and were re-measured to prove it**: every
+drawn part of both clears the painted field by the same figures it did before
+(the arm 10.8–30.5px at 320 and 17.7–49.6 at 470, the key 22.5–60.5), and neither
+label's box intersects any part of either mark, or the callout row above, at
+320 / 360 / 390 / 480 / 640 / 900 / 1400 — with both labels inside the SVG at
+every one.
+
 **And the box is cropped to what is in it.** A disc in a 400×400 viewBox leaves
 ~33 units of nothing above it and ~40 below, which at the width this renders is
 about 70px of empty SVG between the title and the top of the circle — space no
@@ -548,6 +657,29 @@ with nothing dimmed: 246 dots and 5 hatched blobs on a five-pitch right-hander,
 lights one type and dims the rest (26/246 dots, 1/5 blobs, the AVG marker in);
 deselecting restores all 246 with the marker gone.
 
+**And the four gestures were each driven end to end against the built client**,
+on Skenes' seven pitches (101 dots), reading the two charts' classes and the
+cloud back at every step — a lit pitch is `puOn`/`legOn` naming one type, its
+dots undimmed and the AVG marker drawn.
+
+| | before | after |
+| --- | --- | --- |
+| a **tap** on a legend column | nothing lit, `0/101` dimmed | **that pitch**, `60/101` dimmed, marker in |
+| a **tap** on a *different* column | still nothing lit | **only the new one** |
+| a second tap on the same one | lights it (the first tap's work) | **clears it** |
+| a tap **off** a button (the plot) | leaves it lit | **clears it** |
+| pointer off a legend column onto the plot | `["4-Seam Fastball"]`, `60/101` dimmed, marker in | **`[]`, `0/101`, no marker** |
+| pointer off a *usage row* onto the plot | cleared | cleared (unchanged) |
+| a **mouse click** | cleared the pitch the hover had just lit | **pins it**; it survives the pointer leaving |
+| **Tab** past the last legend column | `["Curveball"]` left lit | **cleared** |
+| Enter on a focused column, then Tab on | one pitch `on` and another `:hover`-tinted | pin `Sweeper:true`, preview `Changeup` lit |
+| a press on the `Splits` tab with a pitch pinned | — | **tab switches and the pin clears** |
+
+The arm-angle mark is unaffected by the new outside-press listener: it still
+opens on hover and on a press (its 250 × 102 panel), the press clears a pinned
+pitch as any other press outside a pitch button does, and one Escape closes the
+panel and leaves the player page standing.
+
 **The payload halved on the way**, twice over: 100 points rather than 240, and a
 point that is `{ pitchType, hBreak, vBreak }` rather than five fields — `velo`
 and `stand` went with their last reader when the split tabs did (the rule
@@ -560,6 +692,13 @@ gzipped**, measured through the route.
 the wire, for two charts, a shared selection, an explainer and the paragraphs
 above restated where the rules are; stripping the rows and the split plumbing
 gave 2.4KB of it back.
+
+**And for the preview-and-pin selection, the axis arrows and the outing page's
+own default tab together: 550.02 → 550.77 KB of JS** (163.06 → 163.28 gzipped)
+and **147.02 → 147.14 KB of CSS** (26.21 → 26.23) — 0.75KB and 0.12KB raw, 0.22KB
+and 0.02KB over the wire, for a second piece of state, one shared set of button
+handlers replacing three per button, a window listener, a block-level arrow and a
+lazy initialiser.
 
 **And `MovementSample` is one declaration per workspace again.** It had two on
 the server — `pitcherArsenal.ts`'s own and a copy in `types.ts` — and `tsc`
@@ -583,7 +722,15 @@ a chart.
 
   **The passage this replaces argued for the two dialogs, and its argument was about the button rather than the box.** It read: *the feed's outing item deliberately opens onto `InningsList` alone, an item being a stream entry rather than a full read* — and then bolted a door onto that stream entry to reach the read anyway. Two presses and two stacked dialogs to see a pitcher's line is a ladder built on a decision the second press immediately overturns; the honest reading is that pressing an outing **is** asking for the full read, so it should land on one. It also stops the innings and the line being two different kinds of thing: they are four tabs of one page now, in the order an outing is read — what he did, how it went inning by inning, whom he faced, what he threw.
 
-  **Line is the default tab**, being the thing you open a pitcher's outing for; Innings is second because it is the narrative, and the two behind them are context. **Opponent and Arsenal are drawn only when there is something in them** (`game.opponentHitting`, and a non-empty `pitchMix`), so a relief appearance with no arsenal data gets three tabs rather than a fourth that says nothing — the rule `SplitTabs` already follows for a hand he never faced.
+  **The tabs read in the order an outing is read**, and the one the page *opens* on is whichever of the first two the outing is: **Innings while it is live, Line once it is done.** A finished outing is a result, so it leads on the line; one still being thrown is a narrative, and what a manager wants at 9:40 on a Tuesday is the half-inning he is in — which the line, one number per column and rewritten every batter, cannot say. It is the argument the Rankings tab already makes for opening on the week being played rather than on the season. (This sentence read **Line is the default tab** flat, which was right about a game that is over and stated of every game.) **Opponent and Arsenal are drawn only when there is something in them** (`game.opponentHitting`, and a non-empty `pitchMix`), so a relief appearance with no arsenal data gets three tabs rather than a fourth that says nothing — the rule `SplitTabs` already follows for a hand he never faced.
+
+  **Live is `gameStatusView`'s own `kind`, not a second test** — that is what the `GameStatusBadge` at the head of this very page reads to print `Live`, so the tab and the badge above it cannot come to disagree about whether the outing is still going on.
+
+  **A lazy `useState` initialiser rather than an effect**, the rule `LeagueMatchup`'s `sideTab` sets: the game is a prop at mount for every caller that has one, so the first paint is already the right tab, where an effect would draw Line, swap a frame later, and reset the scroll doing it. And it decides **once** — `tab` is null until something has decided it — so a game that goes final under a reader who has the page open cannot move the tab out from under them, which is a live hazard rather than a hypothetical: the feed re-polls `/api/report` every twenty seconds while a game is on and hands this page a fresh `game` object each time. The reader's own press is the last word from the moment they make it.
+
+  **The one caller that opens this page before it has a game is the Game Log row**, whose read is still out, and the same latch covers it without painting anything wrong: the `pending` branch draws **no tab strip at all**, so there is nothing on screen to swap. Measured with that read held 1.5s, at t+400ms and t+900ms: **0 tab strips, 0 tabs, the block wait**, then at t+1300ms the game lands and the page is on **Innings** with its four inning bars. Setting the state during that render rather than in an effect is what keeps it to one paint — React re-renders on a set during render before it commits.
+
+  **Measured on the live 2026 season, all four routes**: a live outing (Blake Snell, `LAD 5–1 COL · Bottom 4`) opens on **Innings** with 4 inning bars from the Overview tab's game card, from a Game Log row and from the feed's own outing bar alike; a finished one (`STL 2–1 CIN · Final`) opens on **Line** from all three. Pressing `Line` on the live page sticks.
 
   **The sections are the card's own components** (`GameLine`, `OpponentSection`, `ArsenalSection`, `InningsList`), not a second rendering of the same numbers: a page that drifted from the card it replaces would be worse than the gap it fills, which is also why `PitcherCard` stays rather than being deleted for parts. What each gained is a **`bare`** mode. Inside a page opened *for* a section, under a tab strip that has just named it, a `.game-sub-bar` reading `Line` over the line is the same word twice — and a *collapsible* one offers to hide the only thing on screen. So `CardSection` has three modes: a toggle (the card), a static label (`defaultOpen`, which the old breakdown used), and no heading at all (`bare`). Measured on the page: **0 `.section-title`** elements.
 

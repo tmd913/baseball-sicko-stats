@@ -2,7 +2,7 @@ import { useContext, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../api';
 import type { PlayerGame, PlayerReport } from '../types';
-import { prettyGameDate } from '../lib';
+import { gameStatusView, prettyGameDate } from '../lib';
 import { answersEscape, useDelayedFlag, useLockBodyScroll, useOverlayFocus } from '../hooks';
 import { BackButton } from './BackButton';
 import { LoadingBlock } from './Loading';
@@ -112,7 +112,44 @@ export function OutingPage({
   useLockBodyScroll();
   const viewRef = useRef<HTMLDivElement | null>(null);
   useOverlayFocus(viewRef);
-  const [tab, setTab] = useState<OutingTab>('line');
+  /**
+   * **Innings while the outing is live, Line once it is done.**
+   *
+   * The page opens on the reading its reader came for. A finished outing is a
+   * result, so it leads on the line; one still being thrown is a *narrative*,
+   * and what a manager wants at 9:40 on a Tuesday is the half-inning he is in —
+   * which the line, one number per column and rewritten every batter, cannot
+   * say. It is the same argument the Rankings tab makes for opening on the week
+   * being played rather than on the season.
+   *
+   * **`gameStatusView`'s own `kind`**, not a second test: that is what the
+   * `GameStatusBadge` at the head of this very page reads to print `Live`, so
+   * the tab and the badge above it cannot come to disagree about whether the
+   * outing is still going on.
+   *
+   * **A lazy initialiser rather than an effect**, the rule `LeagueMatchup`'s
+   * `sideTab` sets: the game is a prop at mount for every caller that has one,
+   * so the first paint is already the right tab, where an effect would draw
+   * Line, swap a frame later, and reset the scroll doing it.
+   *
+   * And it applies **once**. A game that goes final under a reader who has the
+   * page open must not move the tab out from under them — which is a live
+   * hazard rather than a hypothetical, the feed re-polling `/api/report` every
+   * twenty seconds while a game is on and handing this page a fresh `game`
+   * object each time — and the reader's own press is the last word from the
+   * moment they make it. `tab` is `null` until something has decided, so the
+   * latch below can seed it for the one caller that opens this page *before* it
+   * has a game (a Game Log row, whose read is still out) without ever
+   * re-deciding for the rest.
+   */
+  const [tab, setTab] = useState<OutingTab | null>(() => (game ? defaultOutingTab(game) : null));
+  if (tab === null && game) {
+    // Not an effect: React re-renders on a set during render before it commits,
+    // so nothing is painted on the tab this is correcting. The `pending` branch
+    // draws no tab strip at all, so there is nothing on screen to swap either.
+    setTab(defaultOutingTab(game));
+  }
+  const active: OutingTab = tab ?? 'line';
   // One step above whatever this was opened out of — see the note above. Null
   // where there is nothing above the page, so the stylesheet's own 46 stands and
   // nothing is written inline, which is `Modal`'s own rule.
@@ -139,7 +176,7 @@ export function OutingPage({
   // page's own tabs and the matchup page's three follow.
   useEffect(() => {
     viewRef.current?.scrollTo({ top: 0 });
-  }, [tab]);
+  }, [active]);
 
   const pg = game?.pitching ?? null;
   // Nothing to draw and nothing to say about why: the defensive branch for a
@@ -211,8 +248,8 @@ export function OutingPage({
                   key={t.key}
                   type="button"
                   role="tab"
-                  aria-selected={tab === t.key}
-                  className={`details-tab${tab === t.key ? ' is-active' : ''}`}
+                  aria-selected={active === t.key}
+                  className={`details-tab${active === t.key ? ' is-active' : ''}`}
                   onClick={() => setTab(t.key)}
                 >
                   {t.label}
@@ -225,11 +262,11 @@ export function OutingPage({
         <div className="outing-tab">
           {pg && game && report ? (
             <>
-              {tab === 'line' && <GameLine pg={pg} bare />}
-              {tab === 'innings' && (
+              {active === 'line' && <GameLine pg={pg} bare />}
+              {active === 'innings' && (
                 <InningsList game={game} pitcherId={report.id} pitcherName={report.name} />
               )}
-              {tab === 'opponent' && (
+              {active === 'opponent' && (
                 <OpponentSection
                   hitting={game.opponentHitting}
                   opponent={game.opponent}
@@ -241,7 +278,7 @@ export function OutingPage({
                   bare
                 />
               )}
-              {tab === 'arsenal' && <ArsenalSection pg={pg} bare />}
+              {active === 'arsenal' && <ArsenalSection pg={pg} bare />}
             </>
           ) : pending?.error ? (
             <div className="details-status details-error">⚠ {pending.error}</div>
@@ -352,3 +389,8 @@ export function OutingPageForGame({
 
 /** Which reading of the outing is on screen. */
 type OutingTab = 'line' | 'innings' | 'opponent' | 'arsenal';
+
+/** Which one a page opens on — see the note beside the state it seeds. */
+function defaultOutingTab(game: PlayerGame): OutingTab {
+  return gameStatusView(game).kind === 'live' ? 'innings' : 'line';
+}

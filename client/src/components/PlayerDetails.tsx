@@ -1,4 +1,12 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactElement } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactElement,
+} from 'react';
 import { api } from '../api';
 import type {
   BatterGameLog,
@@ -304,11 +312,64 @@ type DetailsTab =
  * there is nothing to cut them by, and the cloud is the pitcher's season.
  */
 function ArsenalTab({ arsenal }: { arsenal: SeasonArsenal }) {
-  // The two charts share one selection, so picking out the slider in the usage
-  // butterfly picks it out in the movement cloud as well — they are two views of
-  // one arsenal, and a selection each would be two answers to "which pitch am I
-  // looking at" on one screen.
-  const [hovered, setHovered] = useState<string | null>(null);
+  /**
+   * The two charts share one selection, so picking out the slider in the usage
+   * butterfly picks it out in the movement cloud as well — they are two views of
+   * one arsenal, and a selection each would be two answers to "which pitch am I
+   * looking at" on one screen.
+   *
+   * **Two pieces of state, not one**, which is what makes a press mean something
+   * a hover does not: `preview` is where the pointer or the keyboard is, `picked`
+   * is what was pressed, and what is lit is the first of those that exists. See
+   * `PitchSelection` in `ArsenalCharts.tsx` for the whole of the rule and for the
+   * two faults a single `hovered` produced.
+   */
+  const [preview, setPreview] = useState<string | null>(null);
+  const [picked, setPicked] = useState<string | null>(null);
+  // Turning a preview *off* only clears its own: focus can leave one button
+  // while the pointer sits on another, and an unconditional clear takes the
+  // wrong one down.
+  const onPreview = useCallback(
+    (pitchType: string, on: boolean) =>
+      setPreview((cur) => (on ? pitchType : cur === pitchType ? null : cur)),
+    [],
+  );
+  const onPick = useCallback(
+    (pitchType: string) => setPicked((cur) => (cur === pitchType ? null : pitchType)),
+    [],
+  );
+
+  /**
+   * **A press anywhere else unpins**, which is the other half of a press meaning
+   * something: on touch there is no pointer to move away, so without this a
+   * tapped pitch would stay lit until the reader remembered which one it was and
+   * tapped it again.
+   *
+   * Deliberately **not `useDismissable`**, though it is the same shape: that hook
+   * also spends the press (`swallowNextClick`), because a popover is *in the
+   * reader's way* and a press past it is aimed at getting rid of it. A lit pitch
+   * covers nothing, so the press that clears it should also do what it was aimed
+   * at — a first tap on the Splits tab must switch tabs, not be eaten.
+   *
+   * `[data-pitch]` rather than the two class names, so the test names the thing
+   * (a pitch button) rather than either chart's markup.
+   */
+  useEffect(() => {
+    if (picked === null) return;
+    const onDown = (e: globalThis.PointerEvent) => {
+      const t = e.target as Element | null;
+      if (t?.closest?.('[data-pitch]')) return;
+      setPicked(null);
+    };
+    window.addEventListener('pointerdown', onDown);
+    return () => window.removeEventListener('pointerdown', onDown);
+  }, [picked]);
+
+  const selection = useMemo(
+    () => ({ selected: preview ?? picked, picked, onPreview, onPick }),
+    [preview, picked, onPreview, onPick],
+  );
+
   if (arsenal.pitches.length === 0) {
     return <div className="details-status">No Statcast pitches this season.</div>;
   }
@@ -320,8 +381,7 @@ function ArsenalTab({ arsenal }: { arsenal: SeasonArsenal }) {
           pitches={arsenal.pitches}
           vsRight={arsenal.vsRight}
           vsLeft={arsenal.vsLeft}
-          hovered={hovered}
-          onHover={setHovered}
+          selection={selection}
         />
         <MovementChart
           season={arsenal.season ?? null}
@@ -337,8 +397,7 @@ function ArsenalTab({ arsenal }: { arsenal: SeasonArsenal }) {
           // app (measured against a stale dev server: `#root` went to 0
           // children on the press).
           samples={arsenal.samples ?? []}
-          hovered={hovered}
-          onHover={setHovered}
+          selection={selection}
         />
       </div>
     </div>

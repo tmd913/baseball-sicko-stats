@@ -1,4 +1,5 @@
 import { useCallback, useId, useMemo, useRef, useState } from 'react';
+import type { FocusEvent, PointerEvent } from 'react';
 import type { ArmAngleInfo, MovementSample, SeasonArsenalPitch } from '../types';
 import { pitchStyle } from '../lib';
 import { useDismissable } from '../hooks';
@@ -12,17 +13,99 @@ import { pitchDirections } from './Arsenal';
  * per type). Both are recreations of the charts on a Baseball Savant player
  * page, and both read the data the tab already has.
  *
- * **They share one hover.** The tab owns `hovered` and hands it to both, so
+ * **They share one selection.** The tab owns it and hands it to both, so
  * picking out the slider in one picks it out in the other — they are two views
  * of one arsenal, and letting each keep its own selection would be two answers
  * to "which pitch am I looking at" on one screen.
  *
+ * ### What is lit, and who is allowed to say so
+ *
+ * One sentence: **the chart shows the pitch the reader is pointing at, or the
+ * one they last pressed.** A pointer over a button previews it and leaving that
+ * button drops the preview; a press pins, pressing the same one again unpins,
+ * and a press anywhere else unpins. On touch there is no pointer, so it reduces
+ * to *the one you last tapped*.
+ *
+ * That is two pieces of state (`PitchSelection` below) rather than one, and the
+ * split is the whole of what was wrong before. The old shape was a single
+ * `hovered`, written by **three** handlers on every button — `onMouseEnter`,
+ * `onFocus` and `onClick` — and cleared by exactly one, a `mouseleave` on the
+ * whole `<figure>`. Neither half of that survives contact:
+ *
+ * - **A press could not select.** Chrome dispatches a tap as `pointerenter:touch
+ *   → mouseenter → mousedown → focus → mouseup → click`, so the compatibility
+ *   `mouseenter` set the pitch, React rendered it as picked, and the click then
+ *   read that fresh `on` and toggled it straight back off. Measured on the live
+ *   Arsenal tab under touch emulation: **a tap selected nothing, and it took two
+ *   taps of the same button to light one** — so tapping a *different* pitch type
+ *   left the reader looking at neither. It is the trap `ArmAngleMark` records a
+ *   few hundred lines down, unfixed on these two buttons.
+ * - **And the clear was a different element from the setter.** The plot sits
+ *   inside `.mv-chart`, so moving the pointer off a legend column and onto the
+ *   circle left that column lit with nothing under the pointer — measured,
+ *   `legOn` stayed `["4-Seam Fastball"]` with 60 of 101 dots still dimmed.
+ *   Tabbing past the last legend column left the last one lit for the same
+ *   reason: nothing answered the blur.
+ *
  * **Hover is for pointers; the press is for everyone.** Every highlightable
- * thing here is a real `<button>` (the usage rows, the legend columns), so a
- * touch reader taps to select and taps again to clear, and the `:hover` tints
- * are scoped to `(hover: hover)` in the stylesheet — the app-wide rule, argued
- * under *A card doesn't highlight when you scroll past it*.
+ * thing here is a real `<button>` (the usage rows, the legend columns). The
+ * preview is filtered on `pointerType === 'mouse'` — `ArmAngleMark`'s own rule,
+ * and the reason a tap now selects on the first press — and on the keyboard it
+ * is `:focus-visible` that previews, which is the same discrimination read off
+ * the platform rather than guessed at: Chrome matches it on a Tab and not on a
+ * click or a tap (measured, `false` on both). The `:hover` tints are scoped to
+ * `(hover: hover)` in the stylesheet, the app-wide rule argued under *A card
+ * doesn't highlight when you scroll past it*.
  */
+
+/**
+ * What the two charts are handed. Four fields rather than the two this used to
+ * be, and each answers a question the others cannot:
+ *
+ * - `selected` — what is lit. The preview if there is one, else the pin.
+ * - `picked` — what is pinned, which is what `aria-pressed` reports. A toggle
+ *   button owes assistive technology its *toggle* state, and reporting
+ *   `selected` there would have it flicker as the pointer crossed the row.
+ * - `onPreview(type, on)` — a pointer or the keyboard arriving at or leaving a
+ *   button. It takes the type on the way out as well as in, so a leave can only
+ *   ever clear **its own** preview: focus can leave one button while the pointer
+ *   sits on another, and a bare `onPreview(null)` would clear the wrong one.
+ * - `onPick(type)` — a press.
+ */
+export interface PitchSelection {
+  selected: string | null;
+  picked: string | null;
+  onPreview: (pitchType: string, on: boolean) => void;
+  onPick: (pitchType: string) => void;
+}
+
+/**
+ * The handlers every pitch button carries, written once so the usage rows and
+ * the legend columns cannot come to answer a gesture differently.
+ *
+ * `data-pitch` is what the tab's outside-press listener tests against — a press
+ * that lands on a pitch button is the pick itself and must not also be read as
+ * a press "outside" one.
+ */
+function pitchButtonProps(pitchType: string, sel: PitchSelection) {
+  return {
+    'data-pitch': pitchType,
+    'aria-pressed': sel.picked === pitchType,
+    onPointerEnter: (e: PointerEvent) => {
+      if (e.pointerType === 'mouse') sel.onPreview(pitchType, true);
+    },
+    onPointerLeave: (e: PointerEvent) => {
+      if (e.pointerType === 'mouse') sel.onPreview(pitchType, false);
+    },
+    onFocus: (e: FocusEvent<HTMLButtonElement>) => {
+      // Only a keyboard focus previews. A click and a tap both focus the button
+      // too, and previewing there is what let the click cancel its own press.
+      if (e.currentTarget.matches(':focus-visible')) sel.onPreview(pitchType, true);
+    },
+    onBlur: () => sel.onPreview(pitchType, false),
+    onClick: () => sel.onPick(pitchType),
+  } as const;
+}
 
 /**
  * Black or white on a pitch's own colour, whichever a reader can actually see.
@@ -125,15 +208,13 @@ export function PitchUsageChart({
   pitches,
   vsRight,
   vsLeft,
-  hovered,
-  onHover,
+  selection,
 }: {
   season: number | null;
   pitches: SeasonArsenalPitch[];
   vsRight: SeasonArsenalPitch[] | null;
   vsLeft: SeasonArsenalPitch[] | null;
-  hovered: string | null;
-  onHover: (pitchType: string | null) => void;
+  selection: PitchSelection;
 }) {
   const shareIn = (list: SeasonArsenalPitch[] | null, type: string): number | null =>
     list ? (list.find((p) => p.pitchType === type)?.share ?? 0) : null;
@@ -149,11 +230,13 @@ export function PitchUsageChart({
   if (!pitches.length) return null;
   const hasSplits = !!(vsRight || vsLeft);
 
+  // No `onMouseLeave` on the figure: a leave belongs to the button the pointer
+  // actually left, which is what `pitchButtonProps` carries. A figure-wide one
+  // cannot tell "off the button" from "off the chart", and on the movement
+  // chart next door that difference is the whole of the stuck highlight — the
+  // plot is inside the figure.
   return (
-    <figure
-      className={`pu-chart${hasSplits ? '' : ' solo'}`}
-      onMouseLeave={() => onHover(null)}
-    >
+    <figure className={`pu-chart${hasSplits ? '' : ' solo'}`}>
       <figcaption className="chart-title">
         {season != null && <span className="chart-title-year">{season}</span>} Pitch Usage
       </figcaption>
@@ -169,17 +252,14 @@ export function PitchUsageChart({
           const { abbr, color } = pitchStyle(p.pitchType);
           const l = shareIn(vsLeft, p.pitchType);
           const r = shareIn(vsRight, p.pitchType);
-          const on = hovered === p.pitchType;
-          const dim = hovered !== null && !on;
+          const on = selection.selected === p.pitchType;
+          const dim = selection.selected !== null && !on;
           return (
             <button
               key={p.pitchType}
               type="button"
               className={`pu-row${on ? ' on' : ''}${dim ? ' dim' : ''}`}
-              aria-pressed={on}
-              onMouseEnter={() => onHover(p.pitchType)}
-              onFocus={() => onHover(p.pitchType)}
-              onClick={() => onHover(on ? null : p.pitchType)}
+              {...pitchButtonProps(p.pitchType, selection)}
               title={`${p.pitchType} — ${pctText(p.share)} of his season's pitches${
                 l === null ? '' : `, ${pctText(l)} vs LHH`
               }${r === null ? '' : `, ${pctText(r)} vs RHH`}`}
@@ -565,8 +645,7 @@ export function MovementChart({
   armAngle,
   pitches,
   samples,
-  hovered,
-  onHover,
+  selection,
 }: {
   season: number | null;
   /** His throwing arm, which names the league line he is measured against. */
@@ -575,17 +654,16 @@ export function MovementChart({
   armAngle: ArmAngleInfo | null;
   pitches: SeasonArsenalPitch[];
   samples: MovementSample[];
-  hovered: string | null;
-  onHover: (pitchType: string | null) => void;
+  selection: PitchSelection;
 }) {
   // Patterns are document-global by id, and this chart can be on screen twice
   // (a player page over a matchup team page), so the ids carry a per-instance
   // prefix rather than the pitch name alone.
   const uid = useId().replace(/:/g, '');
 
-  // The arm mark's own reveal. Independent of `hovered`, which is a *pitch* type
-  // — one selection for two different kinds of thing would be one of them
-  // clearing the other for no reason a reader could see.
+  // The arm mark's own reveal. Independent of the pitch selection — one state
+  // for two different kinds of thing would be one of them clearing the other
+  // for no reason a reader could see.
   const [armOpen, setArmOpen] = useState(false);
   const plotRef = useRef<HTMLDivElement | null>(null);
   const closeArm = useCallback(() => setArmOpen(false), []);
@@ -618,7 +696,11 @@ export function MovementChart({
   const avgLabel = hand === 'R' ? 'RHP AVG' : hand === 'L' ? 'LHP AVG' : 'LEAGUE AVG';
   // The same fact in the legend's own sentence case, beside `Usage` and `MPH`.
   const rowAvgLabel = hand === 'R' ? 'RHP avg' : hand === 'L' ? 'LHP avg' : 'Lg avg';
-  const hot = hovered !== null && types.has(hovered) ? hovered : null;
+  // What the *cloud* can honour. A pitch with no measured break is on the usage
+  // butterfly and on no part of this chart, so it lights nothing here rather
+  // than dimming everything against a blob that is not drawn.
+  const sel = selection.selected;
+  const hot = sel !== null && types.has(sel) ? sel : null;
   const focus = hot ? (shown.find((p) => p.pitchType === hot) ?? null) : null;
 
   // The two callouts: how his pitch differs from the league's own. Horizontal
@@ -674,7 +756,7 @@ export function MovementChart({
   const fy = focus?.vBreak !== null && focus?.vBreak !== undefined ? CY - px(focus.vBreak) : 0;
 
   return (
-    <figure className="mv-chart" onMouseLeave={() => onHover(null)}>
+    <figure className="mv-chart">
       <figcaption className="chart-title">
         {season != null && <span className="chart-title-year">{season}</span>} Movement Profile{' '}
         <span className="chart-title-sub">(Induced Break)</span>
@@ -779,11 +861,21 @@ export function MovementChart({
       </div>
 
       <div className="mv-plot-wrap" ref={plotRef}>
+        {/* **The arrow is outboard of its label, in the direction it means** —
+            above `More rise` and below `More drop`. It reads as one word with
+            the label and it was drawn as one: `More rise ▲` in a 4.4em box
+            wraps, so the ▲ fell onto a second line *under* the words, and
+            `▼ More drop` put its ▼ on a first line *above* them. Both arrows
+            pointed away from the half of the plot they name. Its own block is
+            what fixes it rather than the source order alone: a wrapped inline
+            arrow lands wherever the line break puts it. */}
         <span className="mv-axis-side mv-axis-rise" aria-hidden="true">
-          More rise ▲
+          <span className="mv-axis-arrow">▲</span>
+          More rise
         </span>
         <span className="mv-axis-side mv-axis-drop" aria-hidden="true">
-          ▼ More drop
+          More drop
+          <span className="mv-axis-arrow">▼</span>
         </span>
 
         <svg
@@ -963,11 +1055,8 @@ export function MovementChart({
                 key={p.pitchType}
                 type="button"
                 className={`mv-legend-col${on ? ' on' : ''}${dim ? ' dim' : ''}`}
-                aria-pressed={on}
                 aria-label={p.pitchType}
-                onMouseEnter={() => onHover(p.pitchType)}
-                onFocus={() => onHover(p.pitchType)}
-                onClick={() => onHover(on ? null : p.pitchType)}
+                {...pitchButtonProps(p.pitchType, selection)}
               >
                 {/* The abbreviation at rest and the whole name when it is the
                     one being read — five full pitch names across a 470px chart
