@@ -972,6 +972,22 @@ shorter — a team name, a toggle and two entries, 242px with its foot 148px
 inside a 390px window — so it never actually scrolls; one rule for both beats
 two that agree today and stop agreeing when something is added to either.
 
+**And so does every `InfoKey`, which for a long time only carried half of it.**
+Those panels have always had `.settings-popover` — so they read `--popover-max-h`
+— and nothing was ever *publishing* one for them, so all four fell back to
+`calc(100dvh - 70px)`: a cap measured from the **top of the viewport** for a box
+that opens part-way down it, which is no cap at all for the box it is applied to.
+It went unnoticed while the tallest key was two sentences. Measured on the League
+Scoreboard's projection key, which is four paragraphs, that put a **537px panel at
+y=265 and let it run 182px past the bottom of a 620px window**, and a 641px one
+54px past the bottom of a 900px one. `InfoKey` calls `usePopoverFit` now, which is
+completing the pattern rather than changing it. Re-measured at 1200×900, 390×844,
+390×620, 320×900 and 1400×380: **0px past the bottom at every one**, with 37px and
+185px of scroll at the two short ones and the cap reading the measured figure
+(343px, 195px) rather than the fallback — and the three older keys are a strict
+improvement, the Splits, Charts and Rankings panels all opening in view with a
+measured cap (626 / 624 / 721px) and 0 page overflow.
+
 ### The invite page offers one too
 
 **The first screen a new user sees is the one place the app can reasonably ask**,

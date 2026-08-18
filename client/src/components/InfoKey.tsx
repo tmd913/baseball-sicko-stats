@@ -1,5 +1,5 @@
 import { useCallback, useId, useRef, useState, type ReactNode } from 'react';
-import { useDismissable } from '../hooks';
+import { useDismissable, usePopoverFit } from '../hooks';
 
 /**
  * An **ⓘ beside a heading that opens a small popover** — the app's disclosure for
@@ -56,6 +56,20 @@ export function InfoKey({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLSpanElement | null>(null);
+  /**
+   * **Capped against the window and scrolling, like the settings popover it is.**
+   *
+   * The panel already carries `.settings-popover`, whose `max-height` reads
+   * `--popover-max-h` — and nothing was publishing one, so it fell back to
+   * `calc(100dvh - 70px)`, a cap measured from the *top of the viewport* for a box
+   * that opens part-way down it. Measured on the League page's projection key at
+   * 390×620, that put a 537px panel at y=265 and let it run **182px past the
+   * bottom of the window**; at 320×900 the same panel is 641px tall and ran 54px
+   * past. `usePopoverFit` is the hook the gear's own menu uses for exactly this,
+   * and giving it to every key completes the pattern rather than changing it.
+   */
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  usePopoverFit(open, panelRef);
   const close = useCallback(() => setOpen(false), []);
   useDismissable(open, ref, close);
   // Generated rather than passed: `aria-controls` only has to be unique in the
@@ -89,7 +103,7 @@ export function InfoKey({
         </svg>
       </button>
       {open && (
-        <div className="settings-popover info-key-panel" id={panelId}>
+        <div className="settings-popover info-key-panel" id={panelId} ref={panelRef}>
           {children}
         </div>
       )}
