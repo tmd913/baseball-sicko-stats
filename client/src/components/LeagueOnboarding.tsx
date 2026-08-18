@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { answersEscape, useDelayedFlag, useLockBodyScroll, useOverlayFocus } from '../hooks';
 import { api } from '../api';
 import type { EspnStatus, EspnTeam } from '../types';
+import type { ThemeId } from '../theme';
 import { LoadingBlock, SpinningBaseball } from './Loading';
+import { ThemeSwatches } from './ThemePicker';
 
 /**
  * The page an invite link lands on: the league you have just joined, a list of
@@ -29,11 +31,17 @@ import { LoadingBlock, SpinningBaseball } from './Loading';
  */
 export function LeagueOnboarding({
   status,
+  theme,
+  onTheme,
   onConfirm,
   onDone,
 }: {
   /** The connection as it stands, straight off the join. */
   status: Extract<EspnStatus, { connected: true }>;
+  /** The scheme in force, and the app's own setter for it — see the picker
+   *  below for why this page offers one at all. */
+  theme: ThemeId;
+  onTheme: (id: ThemeId) => void;
   /**
    * Name the team and start the app on it — the whole of the last step, App's
    * to do because it is the one that knows which list the views should read
@@ -183,6 +191,38 @@ export function LeagueOnboarding({
               ))}
             </select>
           </label>
+        )}
+
+        {/* **The color scheme, under the one question this page is for.**
+
+            It is here because this is the first screen a new user sees and the
+            app has six palettes — two of them light — so a reader on a bright
+            screen, or one who simply wants the plain pair, is otherwise
+            committed to Midnight's navy until they find a gear they have no
+            reason to open yet. The settings menu is still where it lives; this
+            is the one moment the app can reasonably ask, because it is already
+            asking something.
+
+            **Second, not first.** The team is what the page is *for* — the lede
+            says so, and naming it is what turns the roster views over — so the
+            required question leads and the optional one follows it. Putting a
+            preference above the task is the settings-page mistake this whole
+            page exists to avoid.
+
+            **It is the settings menu's own swatches** (`ThemeSwatches`), so a
+            reader who meets the gear later meets a control they have already
+            used. What it does not borrow is the heading: this page labels its
+            fields `.espn-label`, and the popover's small-caps section label
+            would be a second vocabulary on one screen.
+
+            A press applies immediately and saves itself — the page changing
+            colour under the reader is the whole confirmation, and there is
+            nothing here for the button below to commit. */}
+        {phase === 'ready' && (
+          <div className="espn-field onboard-field onboard-scheme">
+            <span className="espn-label">Color scheme</span>
+            <ThemeSwatches theme={theme} onPick={onTheme} />
+          </div>
         )}
 
         {phase === 'ready' && saveError !== null && (

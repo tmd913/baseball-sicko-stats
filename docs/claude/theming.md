@@ -857,7 +857,9 @@ viewport).
 
 **Those are the four-theme figures and the argument is theirs; the current ones
 are six rows at 30px, a 403px popover with its foot at 461** — see *The Dark and
-Light pair* above, where the row is re-measured at three window sizes. The two
+Light pair* above, where the row is re-measured at three window sizes, and *The
+menu is capped against the window* below, which is what 461 turned out to cost
+on a short one. The two
 that were added cost the picker no width and no rule: `Powder Blue` is still the
 longest label, so the popover is unchanged at 193.3px at 1200 and 251.2 at 390,
 and the markup is a `map` over `THEMES` that grew by two rows without being
@@ -900,6 +902,178 @@ mirror would leave it **1.6px** of slack, and the next theme name to arrive woul
 clip. So the cheaper centring is the one that keeps the control working at the
 width it is tightest at, and it buys the thing that actually reads as centered —
 four names sharing one center.
+
+### The menu is capped against the window and scrolls
+
+**Six themes is where the settings popover outgrew a short screen.** It hangs
+off the gear at `top: calc(100% + 8px)` with no cap at all, so its height was
+simply the sum of what is in it, and the picker at its head is one row per
+theme. At four it was 329px; at six it is **403px with its foot at 461**, and
+measured across eight window sizes that foot is:
+
+| window | foot | past the bottom | `How to use` reachable |
+| --- | --- | --- | --- |
+| 1200×900 | 461 | — | yes |
+| 1200×500 | 461 | — | yes |
+| 740×420 | 461 | **41px** | **no** |
+| 844×390 *(a phone held sideways)* | 461 | **71px** | **no** |
+| 1400×380 | 461 | **81px** | **no** |
+
+A menu whose last entries cannot be reached is a menu with controls nobody can
+press, and the ones off the bottom were `Mute clip audio` and `How to use`.
+
+**So the popover is capped at whatever is left of the window below where it
+starts, and scrolls** — `max-height: var(--popover-max-h, …)` with `overflow-y:
+auto` and the app's own `overscroll-behavior: none`, which is the rule for
+anything in this app that scrolls (the gesture is consumed where it lands
+rather than chaining on to the page behind).
+
+**The cap is measured rather than declared, for the reason `--chrome-h` is.**
+It is the window less the popover's own distance from the top of it, and nothing
+in CSS can read that: the popover is `position: absolute` inside the header, so
+its offset is the *header's* geometry — which wraps to two and three rows as the
+window narrows, and which moves again the day anything joins the brand row.
+Measured, the anchor sits at **58px in all eight states above** — every width,
+every view, sticky chrome or fixed-height column — so a constant would be right
+today and quietly wrong later, which is the trap `--research-pin-left` and
+`left: 63px` are both on the record for. `hooks.ts::usePopoverFit` reads the
+element's own top and publishes `--popover-max-h` onto it; the stylesheet's
+fallback (`calc(100dvh - 70px)`) is what it resolves to for the one frame before
+that lands, and is deliberately generous rather than exact.
+
+**Three triggers, each for something the others cannot see.** *Opening* is when
+the element exists to be measured. *`resize`* is a window that changed under an
+open menu, which is the case this is for at all — measured, a phone turned
+sideways with the menu open takes it **403 → 320px** and its foot 461 → 378, and
+turning it back restores both. And a **capture-phase `scroll`** is the one that
+is easy to miss: under `max-height: 560px` the app's chrome is deliberately
+*not* sticky, which is precisely a short window, so scrolling there carries the
+anchor up the page and the room below it grows — measured on a 900×420 feed
+(chrome confirmed `static`), scrolling 300px takes the anchor to −242 and the
+cap from 350px to 650, so the menu un-caps to its natural height. A scroll event
+does not bubble, hence capture.
+
+It cannot feed back on itself: capping a box's height does not move its top, so
+the measurement is the same before and after it is applied.
+
+**Measured after, at six short windows:** the foot lands **12px inside** the
+window in every one (844×390, 1400×380, 740×420, 390×380, 320×300), `How to
+use` is reachable by scrolling and `document.elementFromPoint` returns *it*
+rather than something over it, there is **no horizontal scroll** (`overflow-y`
+computes `overflow-x: auto` alongside it, and nothing here is wide enough to
+use it) and page overflow is 0. Even 320×300 works, at 173px of scroll.
+
+**The fantasy popover takes the same cap**, sharing the class. It is much
+shorter — a team name, a toggle and two entries, 242px with its foot 148px
+inside a 390px window — so it never actually scrolls; one rule for both beats
+two that agree today and stop agreeing when something is added to either.
+
+### The invite page offers one too
+
+**The first screen a new user sees is the one place the app can reasonably ask**,
+and with six palettes — two of them light — a reader on a bright screen was
+otherwise committed to Midnight's navy until they found a gear they had no
+reason to open yet. So the invite-link onboarding page carries a `Color scheme`
+field, under the team picker and above the button.
+
+**Second, not first.** The team is what that page is *for* — its lede says so,
+and naming it is what turns the roster views over to the fantasy team — so the
+required question leads and the optional one follows. A preference above the
+task is the settings-page mistake that page was created to avoid.
+
+**The swatches are the settings menu's own**, extracted to
+`components/ThemePicker.tsx` when the second caller arrived, which is this app's
+rule for a control drawn twice (`DateControls`, `StartersToggle`,
+`PlayerIdentity`, `ColumnPicker` all moved on the same trigger). It matters more
+than usual here: a swatch's whole claim is that it **is** a picture of the
+palette it selects, and a second copy is a picture that will one day be of
+something else. A reader who meets the gear later meets a control they have
+already used.
+
+**What is not shared is the heading**, because the two surfaces genuinely label
+things differently — the popover's is a `.settings-popover-label` over a menu
+section, the invite page's is the `.espn-label` its team picker already uses —
+so each caller supplies its own, the way `PlayerIdentity` takes its name line as
+`children`.
+
+**And the role turns on where it is drawn**, which is the one thing the
+component cannot decide for itself. Inside the popover — which is a
+`role="menu"` — a swatch is a `menuitemradio` and the grouping belongs to the
+menu; on a page there is no menu, and an orphaned `menuitemradio` is a lie about
+its container, so it is a plain `radio` inside a `radiogroup` the component
+labels itself. Measured: the popover draws six `menuitemradio` under
+`role="menu"` with `role="group"` on `.theme-picker` and **no** role on
+`.theme-swatches`; the page draws six `radio` inside a `radiogroup` labelled
+`Color scheme`.
+
+**The layout is the one thing the page overrides, and both halves are the
+popover's own reasoning failing to transfer.** That control is argued for a menu
+193–251px wide; the invite page's field is **460px from 640px up** and 288–358
+below.
+
+- **It wraps into columns instead of stacking.** A *basis* rather than a column
+  count, so the count falls out of the width and no breakpoint has to be
+  maintained: **160px** gives two per row from 390px of window up (the field is
+  358 there, so each is 175.5) and 226.5 at 640 and above, dropping to one at
+  320, where the field is 288. Three would need a basis under 148.7 at the 460px
+  field, and `Powder Blue` — the longest label the picker has, 75.7px of ink —
+  needs 129.7 with its pill and padding, so three columns would be nine pixels
+  from clipping. Six rows became three: the block **235px → 124**, and the page
+  **712 → 601**.
+- **The label sits beside its own pill rather than centered.** The popover
+  centers it because its rows are narrow and a column of names down one center
+  is what makes six buttons read as one list; at 460px that same rule left the
+  26px pill at the far left with the name **114px** away, which reads as two
+  things on a row rather than as a labelled swatch.
+
+**A press applies immediately and saves itself** — the page changing color under
+the reader is the whole confirmation, and there is nothing here for the button
+below to commit. Driven end to end: pressing `Light` stamps `data-theme`, sets
+`color-scheme: light`, resolves `--bg: #fff` and `--accent: #004a8b`, writes the
+localStorage mirror and fires `PUT /api/prefs/theme`; `Not now` and Escape leave
+the scheme where the reader put it and set no team.
+
+**It goes with the field it belongs to.** Both are gated on `phase === 'ready'`,
+so a league whose teams could not be read shows the message, `Try again` and
+`Not now` and **no picker** — there is nothing to pick a team from, and offering
+a preference on a page that has failed its own question is chrome over a
+failure. Measured: 0 swatches on that state, 6 back after a successful retry.
+
+#### The confirm now drains the write queue, and that was a real loss
+
+**`confirmEspnOnboarding` ends by reloading the tab**, which is argued at length
+in **ESPN fantasy league**, *The pick ends in a boot*. A scheme picked on this
+page is a `PUT` on the **same user record**, fired through `App.tsx::queueUserWrite`
+and not awaited — so the reload can tear down a write that has not been sent.
+
+**It is reachable and it was reproduced.** `queueUserWrite` is one promise
+chain, so a *second* pick is queued behind the first and has not left the
+browser when the button is pressed. Driven against a stub holding the
+preference PUT 1.5s, picking `Lavender` then `Maroon` and pressing in the same
+breath:
+
+| | server saw | after the reload |
+| --- | --- | --- |
+| **before** | `theme:start · team:start · team:done · theme:done:lavender` | **Lavender** |
+| **after** | `theme:start · team:start · team:done · theme:done:lavender · theme:start · theme:done:maroon` | **Maroon** |
+
+The reader picked Maroon and got Lavender. `await queueUserWrite(async () =>
+undefined)` before the navigation resolves only once everything already in the
+chain has settled, which is the same reason `saveRosterSource` beside it is
+awaited rather than fired and forgotten. It costs nothing when the queue is
+empty.
+
+**The scheme itself survives either way** — `storeTheme` writes the localStorage
+mirror synchronously, so the boot after the reload paints the right palette
+whatever the record says. What the drain saves is the *record*, and with it the
+choice following its owner to another device; without it the next load reads the
+stale saved value back and overwrites the mirror with it, which is what the
+table above measures.
+
+**Bundle: 559.06 → 560.00 KB of JS** (166.03 → 166.32 gzipped) and **151.55 →
+151.73 KB of CSS** (27.09 → 27.15) — 0.94KB and 0.18KB raw, 0.29KB and 0.06KB
+over the wire, for a shared component, a measured cap, a second picker and the
+paragraphs above restated where the rules are.
 
 ### Measured — the first Lavender, and the sweep that made a theme possible
 

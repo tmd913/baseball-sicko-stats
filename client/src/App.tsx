@@ -32,7 +32,7 @@ import {
   startedOn,
 } from './lib';
 import { takeInvite } from './invite';
-import { applyTheme, DEFAULT_THEME, readStoredTheme, storeTheme, THEMES, toThemeId } from './theme';
+import { applyTheme, DEFAULT_THEME, readStoredTheme, storeTheme, toThemeId } from './theme';
 import type { ThemeId } from './theme';
 import { BaseballMark } from './components/BaseballMark';
 import { PlayerAdder } from './components/PlayerAdder';
@@ -70,6 +70,7 @@ import {
   RecentNewsContext,
   useDelayedFlag,
   useDismissable,
+  usePopoverFit,
   useStickyChromeOffset,
 } from './hooks';
 import type { FantasySlot } from './hooks';
@@ -78,6 +79,7 @@ import { StartersToggle } from './components/StartersToggle';
 import { Tutorial } from './components/Tutorial';
 import { EspnSettings } from './components/EspnSettings';
 import { LeagueOnboarding } from './components/LeagueOnboarding';
+import { ThemeSwatches } from './components/ThemePicker';
 import LeagueView, { LEAGUE_TABS } from './components/LeagueView';
 import LeagueMatchupView from './components/LeagueMatchup';
 import { spanDetail } from './components/LeagueRankings';
@@ -2205,6 +2207,19 @@ export default function App() {
       // `league` because a code redeemed twice is a code redeemed once and then
       // refused — `takeInvite` has already spent it, and App's URL sync would
       // drop the param anyway; this only makes sure the reload doesn't carry it.
+      // **Drain the write queue before the tab is torn down.** The page above
+      // this now offers a color scheme, and picking one is a `PUT` on the same
+      // user record fired through `queueUserWrite` and not awaited — so a
+      // reader who picks a palette and presses the button in the next breath
+      // could have that write killed by the reload. Enqueueing a no-op and
+      // awaiting it resolves only once everything already in the chain has
+      // settled, which is the same reason `saveRosterSource` above is awaited
+      // rather than fired and forgotten. It costs nothing when the queue is
+      // empty, and the *scheme* survives either way — `storeTheme` writes the
+      // localStorage mirror synchronously, so the boot after the reload comes
+      // up on the right palette regardless; what this saves is the record, and
+      // with it the choice following its owner to another device.
+      await queueUserWrite(async () => undefined);
       const params = new URLSearchParams(window.location.search);
       params.delete('league');
       if (turnOn || rosterSource === 'fantasy') params.set('roster', 'fantasy');
@@ -2213,15 +2228,19 @@ export default function App() {
       // re-enters a flow which is over.
       window.location.replace(`${window.location.pathname}${qs ? `?${qs}` : ''}`);
     },
-    [espnStatus, rosterSource],
+    [espnStatus, rosterSource, queueUserWrite],
   );
   // The settings popover (gear next to the title) — the hide-injured toggle
   // (and the simulate one, when it's shown), then the way into the how-to page.
   // Closes on outside click or Escape.
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsRef = useRef<HTMLDivElement | null>(null);
+  // The popover itself rather than the wrapper the dismiss test reads: what is
+  // being capped is the box that scrolls. See `hooks.ts::usePopoverFit`.
+  const settingsPopRef = useRef<HTMLDivElement | null>(null);
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
   useDismissable(settingsOpen, settingsRef, closeSettings);
+  usePopoverFit(settingsOpen, settingsPopRef);
   // Everything to do with the fantasy league, behind its own button beside the
   // gear. It was two entries in the settings menu — a "Use my fantasy team"
   // toggle and a "Fantasy league" page link — plus a chip in the view bar
@@ -2232,8 +2251,13 @@ export default function App() {
   // team) is the first line inside it.
   const [fantasyOpen, setFantasyOpen] = useState(false);
   const fantasyRef = useRef<HTMLDivElement | null>(null);
+  const fantasyPopRef = useRef<HTMLDivElement | null>(null);
   const closeFantasy = useCallback(() => setFantasyOpen(false), []);
   useDismissable(fantasyOpen, fantasyRef, closeFantasy);
+  // The same cap. This menu is shorter than the gear's — a team name, two
+  // entries and a toggle — but it hangs off the same row and would run off the
+  // same short window, and one rule for both beats two that agree today.
+  usePopoverFit(fantasyOpen, fantasyPopRef);
   // Edit mode (the pencil in the header): swaps the player list for the
   // drag-to-reorder edit screen. Deliberately not persisted in the URL — it's a
   // transient mode, not a view.
@@ -3825,7 +3849,7 @@ export default function App() {
               </svg>
             </button>
             {settingsOpen && (
-              <div className="settings-popover" role="menu">
+              <div className="settings-popover" role="menu" ref={settingsPopRef}>
                 {/* **The color scheme**, as a row of swatches rather than as a
                     third toggle. Two reasons, and the second is the one that
                     decides it. A toggle can only ever hold two, and there is
@@ -3855,26 +3879,10 @@ export default function App() {
                     describes rather than the whole popover. */}
                 <div className="theme-picker" role="group" aria-label="Color scheme">
                   <span className="settings-popover-label">Color scheme</span>
-                  <div className="theme-swatches">
-                    {THEMES.map((t) => (
-                      <button
-                        key={t.id}
-                        type="button"
-                        className={`theme-swatch${theme === t.id ? ' active' : ''}`}
-                        role="menuitemradio"
-                        aria-checked={theme === t.id}
-                        onClick={() => setTheme(t.id)}
-                        title={t.hint}
-                      >
-                        <span className="theme-chips" aria-hidden="true">
-                          {t.swatch.map((c) => (
-                            <span key={c} style={{ background: c }} />
-                          ))}
-                        </span>
-                        <span className="theme-swatch-label">{t.label}</span>
-                      </button>
-                    ))}
-                  </div>
+                  {/* The swatches themselves are `ThemeSwatches`, shared with
+                      the invite page's onboarding flow — see that component for
+                      why the row is shared and the heading above it is not. */}
+                  <ThemeSwatches theme={theme} onPick={setTheme} inMenu />
                 </div>
                 <span className="settings-popover-label">Settings</span>
                 {SHOW_SIMULATE_TOGGLE && (
@@ -4058,7 +4066,7 @@ export default function App() {
               <BaseballMark size={17} width={2} />
             </button>
             {espnConnected && fantasyOpen && (
-              <div className="settings-popover fantasy-popover" role="menu">
+              <div className="settings-popover fantasy-popover" role="menu" ref={fantasyPopRef}>
                 <span className="settings-popover-label">Fantasy</span>
                 {/* What the chip in the view bar used to say, kept because the
                     button can only report *that* the roster is fantasy, not
@@ -4835,6 +4843,8 @@ export default function App() {
       {espnOnboard && espnStatus?.connected === true && (
         <LeagueOnboarding
           status={espnStatus}
+          theme={theme}
+          onTheme={setTheme}
           onConfirm={confirmEspnOnboarding}
           onDone={() => setEspnOnboard(false)}
         />
