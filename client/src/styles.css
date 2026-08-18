@@ -14270,11 +14270,27 @@ html[data-theme='powder'] .league-table thead th {
   line-height: 1.25;
   pointer-events: none;
 }
-.mv-axis-rise {
-  top: 26%;
+/* Its own block, so the arrow keeps its line whatever the label does — see the
+   note beside the markup. */
+.mv-axis-arrow {
+  display: block;
+  line-height: 1.25;
 }
+/* **The rise block grows upward, so its bottom edge does not move.** The arrow
+   adds a line, and the edge nearest the disc is the bottom one — so the top is
+   pulled up by exactly that line rather than the block reaching further down
+   into the circle. Measured, the box's nearest approach to the painted disc is
+   the same figure it was before the arrow moved: +1.4px at 470px of chart. */
+.mv-axis-rise {
+  top: calc(26% - 12.5px);
+}
+/* The drop block was already three lines (`▼ MORE DROP` wrapped), so the arrow
+   moving to the foot of it changes no height. 64% rather than 62% squares it up
+   against the rise block — both centres now sit ~87px either side of the disc's
+   own centre at 470px — and it is what takes its corner clear of the painted
+   disc (−1.7px → +1.1px). */
 .mv-axis-drop {
-  top: 62%;
+  top: 64%;
 }
 
 .mv-svg {
@@ -14508,6 +14524,22 @@ html[data-theme='powder'] .league-table thead th {
      at every width the app is checked at. Measured, not guessed. */
   .mv-plot-wrap {
     margin-top: -18px;
+  }
+  /* **The axis labels move outboard, because they do not shrink and the disc
+     does.** Their size is a type size and the circle's is a share of the chart,
+     so the same 26% / 64% that clears it at 470px has the block sitting on the
+     24" ring by 320px — measured on `main`, 7.2px inside it. Pulled out to 17%
+     and 70% every part of both labels clears that ring at every width the app
+     is checked at (+2.3px at 320, +15px at 390). What they still overlap at
+     phone widths, as they always have, is the soft field wash — the 7% accent
+     tint drawn 2.4" past the last ring so an outlier lands on something — which
+     is a wash rather than a mark, and the two corners the arm and the hatch key
+     sit in are spoken for. */
+  .mv-axis-rise {
+    top: calc(17% - 12.5px);
+  }
+  .mv-axis-drop {
+    top: 70%;
   }
   /* The row labels stay — three unlabelled numbers under a swatch are not a
      legend — and give up type size instead, which is the cheaper thing here. */
