@@ -483,12 +483,24 @@ question later — the two places that need the board are the two that can proje
 it — and Rankings and Transactions drop the param exactly as they did, a lens
 naming figures that are not on screen being the thing that rule forbids.
 
-**On the Summary page alone.** A team page is that manager's roster and feed over
-a span the reader picks, and nothing on it is a category total — so the toggle is
-not drawn there, and the `Projected` tag is gated with it rather than sitting in
-a shared head calling a roster table a projection. Crossing to a team page and
-back leaves the lens where the reader put it. See **Client — a league matchup**,
-*The Projected toggle*, for what it draws and what it measured.
+**On the Summary page alone, and inside the card rather than in the head.** The
+Scoreboard keeps its toggle beside the period it governs, which is that page's
+whole subject; the matchup page's head is shared by three pages and only one of
+them has a category total on it, so the control sits at the **foot of the
+comparison, above `Moves`** — inside the thing it swaps, which is a stronger gate
+than a condition (a control cannot be on a page it has nothing to act on if it
+lives in the thing it acts on) and gives the pinned band its wrapped line back on
+a phone. What keeps a gate there is the `Projected` **tag**, which would otherwise
+sit in that shared head calling a roster table a projection. Crossing to a team
+page and back leaves the lens where the reader put it. See **Client — a league
+matchup**, *The Projected toggle*, for what it draws and what it measured.
+
+**And the key's wording is tightened**, which reaches both surfaces: the four
+paragraphs keep all four facts and every measured figure and lose the scaffolding
+around them, the label goes `How the projection is worked out` → **`How the
+projection works`**, and the button's tooltip goes `Show where each matchup is
+heading by the end of the week` → **`Project every total to the end of the
+week`**. Measured, the panel is **311px against 380** at 390.
 
 ### Measured
 

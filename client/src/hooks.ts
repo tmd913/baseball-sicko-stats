@@ -824,18 +824,41 @@ export function useDismissable(
  * It cannot feed back on itself: capping a box's height does not move its top,
  * so the measurement is the same before and after it is applied.
  */
-export function usePopoverFit(open: boolean, ref: RefObject<HTMLElement | null>) {
+export function usePopoverFit(
+  open: boolean,
+  ref: RefObject<HTMLElement | null>,
+  /**
+   * **Which way the caller's CSS opens it.** A panel anchored by `bottom` grows
+   * *upward*, so the room it has is what is above its own bottom edge — measure
+   * it downward and the cap is a number about the wrong half of the window,
+   * which lets it run off the top and out of reach.
+   *
+   * It is a flag rather than something read off the computed style, and
+   * deliberately: `top` resolves to a used pixel value on an absolutely
+   * positioned box whether or not the author wrote `auto`, so the stylesheet
+   * cannot be interrogated for the answer. The two therefore have to agree by
+   * hand, which is what this parameter is for saying out loud.
+   */
+  up = false,
+) {
   useLayoutEffect(() => {
     if (!open) return;
     const el = ref.current;
     if (!el) return;
     const sync = () => {
-      const top = el.getBoundingClientRect().top;
+      const r = el.getBoundingClientRect();
       // The floor is for the degenerate case only — an anchor scrolled off the
       // bottom of the window would otherwise compute a negative height, which
       // is an invalid `max-height` and so no cap at all, i.e. the bug back
       // again. Below it the popover is off screen whatever it is told.
-      const room = Math.max(POPOVER_MIN_H, window.innerHeight - top - POPOVER_GUTTER);
+      //
+      // Neither measurement can feed back on itself: the anchored edge is where
+      // the caller's CSS puts it and does not move when the height it is being
+      // told changes.
+      const room = Math.max(
+        POPOVER_MIN_H,
+        up ? r.bottom - POPOVER_GUTTER : window.innerHeight - r.top - POPOVER_GUTTER,
+      );
       el.style.setProperty('--popover-max-h', `${Math.round(room)}px`);
     };
     sync();
@@ -845,7 +868,7 @@ export function usePopoverFit(open: boolean, ref: RefObject<HTMLElement | null>)
       window.removeEventListener('resize', sync);
       document.removeEventListener('scroll', sync, true);
     };
-  }, [open, ref]);
+  }, [open, ref, up]);
 }
 /** Breathing room left under a capped popover, so it stops short of the edge
  *  rather than on it. */

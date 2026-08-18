@@ -568,10 +568,18 @@ function MatchupCard({
  * **Written for the reader rather than for the code.** Every figure it names is a
  * measured one — the 40% cap on the recent month, the league's own 5.5% platoon
  * edge, the 20% ceiling on any one adjustment — but not one of them is named as a
- * constant, and the three paragraphs are the three questions somebody actually
- * asks of a projection: what is it made of, what does it take account of, and
- * what does it not know. The last of those is the one a projection most owes its
- * reader, so it is a paragraph rather than a footnote.
+ * constant, and the four paragraphs are the four questions somebody actually
+ * asks of a projection: what is it made of, how is a player's rate arrived at,
+ * what does it take account of, and what does it not know. The last of those is
+ * the one a projection most owes its reader, so it is a paragraph rather than a
+ * footnote.
+ *
+ * **Each of them is one sentence and a clause**, which is a tightening rather
+ * than a trim: the four facts are all still here and none of the figures went,
+ * but the scaffolding around them did — "every player in a lineup slot keeps his
+ * season rate, weighted with the last month" says in fourteen words what "each
+ * man in a lineup slot blends his season rate with his last month" says in
+ * eleven, and a key that is read once is read faster than it is written.
  *
  * **It says how much is left**, off the projection itself rather than from a
  * count of its own, so the sentence cannot come to disagree with the cards.
@@ -579,34 +587,34 @@ function MatchupCard({
 function ProjectionKey({
   projection,
   categories,
+  drop,
 }: {
   projection: EspnProjection | null;
   categories: number;
+  drop?: 'up' | 'down';
 }) {
   const days = projection?.daysLeft ?? 0;
   return (
-    <InfoKey label="How the projection is worked out" className="lg-proj-key">
+    <InfoKey label="How the projection works" className="lg-proj-key" drop={drop}>
       <p>
-        Each total is <b>what has already been scored</b> plus what the{' '}
+        <b>What has been scored</b>, plus what the{' '}
         {days > 0 ? `${days} ${days === 1 ? 'day' : 'days'} left are` : 'rest of the week is'}{' '}
-        worth. All {categories} categories are projected separately, and the win–loss–tie is those{' '}
+        worth — each of the {categories} categories on its own, and the win–loss–tie is those{' '}
         {categories} compared.
       </p>
       <p>
-        Every player in a <b>lineup slot</b> keeps his season rate, weighted with{' '}
-        <b>the last month</b> — up to 40%, less if he has hardly played. Times the chances he has
-        left: a hitter's club games and how often he is in them, a starter's remaining turns, a
-        reliever's usual workload.
+        <b>Each man in a lineup slot</b> blends his season rate with his last month (up to 40%,
+        less if he has hardly played), times the chances he has left: a hitter's games, a
+        starter's turns, a reliever's usual workload.
       </p>
       <p>
-        Then <b>who he is up against</b>: a hitter moves with the opposing starter and the
-        left/right matchup (worth about 5½% league-wide), a pitcher with how that club has been
-        hitting against his hand. Nothing shifts a figure by more than a fifth.
+        <b>Then the matchup</b> — the opposing starter and the platoon edge (about 5½%
+        league-wide) for a hitter, how that club has hit his hand for a pitcher. Nothing moves a
+        figure by more than a fifth.
       </p>
       <p>
-        <b>It doesn't know</b> today's game in progress (counted as it stands), or tomorrow's
-        lineup changes. And it is one likely outcome, not a probability — a category won by a run
-        here is not one to count on.
+        <b>It can't know</b> tomorrow's lineup changes, and a game in progress counts as it
+        stands. One likely outcome, not a probability.
       </p>
     </InfoKey>
   );
@@ -640,9 +648,13 @@ export function ProjectedTools({
   showing,
   projected,
   onProjected,
+  drop,
 }: {
   projection: EspnProjection | null;
   categories: number;
+  /** Which way the key opens — `up` where the caller has put this control near
+   *  the foot of a long page, and the caller's own CSS anchors it to match. */
+  drop?: 'up' | 'down';
   /** Whether the figures on screen *are* the projection — which is not the same
    *  as whether the reader has asked for it: a period with none, or one still
    *  being read, shows the live figures under an unlit button. */
@@ -657,11 +669,7 @@ export function ProjectedTools({
         className={`research-toggle lg-proj-btn${showing ? ' on' : ''}`}
         aria-pressed={showing}
         onClick={() => onProjected(!projected)}
-        title={
-          showing
-            ? 'Back to what has actually happened so far'
-            : 'Show where each matchup is heading by the end of the week'
-        }
+        title={showing ? 'Back to the figures so far' : 'Project every total to the end of the week'}
       >
         {/* A rising line, which is what a projection is. `flex: none` for the
             reason every glyph on a control in this app carries it. */}
@@ -681,7 +689,7 @@ export function ProjectedTools({
         </svg>
         <span className="lg-proj-label">Projected</span>
       </button>
-      <ProjectionKey projection={projection} categories={categories} />
+      <ProjectionKey projection={projection} categories={categories} drop={drop} />
     </div>
   );
 }

@@ -46,12 +46,24 @@ import { useDismissable, usePopoverFit } from '../hooks';
 export function InfoKey({
   label,
   className,
+  drop = 'down',
   children,
 }: {
   /** The button's accessible name and its tooltip — say what the key explains. */
   label: string;
   /** The caller's own anchor class, which owns where the panel opens. */
   className?: string;
+  /**
+   * **Which way it opens, for the cap alone** — the anchoring itself is still
+   * the caller's CSS, and the two have to agree.
+   *
+   * A key near the foot of a long page has almost no room under it: measured on
+   * the matchup page's projection key, whose button sits above `Moves` at the
+   * bottom of the comparison, the panel came out at the hook's own 120px floor
+   * and read as a scroller. Told it opens upward it is capped against the room
+   * *above* its own bottom edge instead, which there is a page of.
+   */
+  drop?: 'up' | 'down';
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -69,7 +81,7 @@ export function InfoKey({
    * and giving it to every key completes the pattern rather than changing it.
    */
   const panelRef = useRef<HTMLDivElement | null>(null);
-  usePopoverFit(open, panelRef);
+  usePopoverFit(open, panelRef, drop === 'up');
   const close = useCallback(() => setOpen(false), []);
   useDismissable(open, ref, close);
   // Generated rather than passed: `aria-controls` only has to be unique in the

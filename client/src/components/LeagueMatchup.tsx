@@ -642,18 +642,17 @@ export default function LeagueMatchupView({
   }, [sideTab, reading]);
 
   /**
-   * **The toggle and the tag are the Summary page's**, and both turn on the
-   * same flag.
+   * **The `Projected` tag is the Summary page's**, because the figures it
+   * describes are.
    *
-   * A team page is that manager's roster and feed over a span the reader picks
-   * — nothing on it is a category total — so a control there would be a setting
-   * lying about its reach, which is the test this app applies to every control
-   * it declines to draw on a page it cannot act on. And the head is shared by
-   * all three pages, so the `Projected` tag has to be gated with it or it would
-   * sit over a roster table calling its figures a projection.
+   * The head is shared by all three pages, so without this gate it would sit
+   * over a *roster table* calling that manager's stats a projection. The toggle
+   * itself needs no gate of its own any more — it is drawn inside the card, and
+   * the card is the Summary page (see the row above `Moves`), which is the
+   * tidier version of the same rule: a control cannot be on a page it has
+   * nothing to act on if it lives in the thing it acts on.
    */
   const onSummary = matchup !== null && active === 'summary';
-  const offerProjected = onSummary && projectable;
   const headProj = onSummary && showingProj;
 
   /**
@@ -691,8 +690,14 @@ export default function LeagueMatchupView({
     </span>
   );
 
-  const head = (extra: ReactNode) => (
+  /**
+   * The pinned band: the Back row, whatever navigation the page has under it
+   * (the strip, or the team itself on a bye), and a **corner** — the top right
+   * of the screen, which is where the bars key sits.
+   */
+  const head = (extra: ReactNode, corner?: ReactNode) => (
     <div className="mup-chrome">
+      {corner}
       <div className="mup-bar">
         {/* The way back, and the only one this page needs: it was opened from a
             card on the Scoreboard and returns to it. It is `BackButton` — the
@@ -707,15 +712,6 @@ export default function LeagueMatchupView({
             days played so far, which is why the dates and the state are
             together. */}
         {period}
-        {offerProjected && (
-          <ProjectedTools
-            projection={projection}
-            categories={board.categories.length}
-            showing={showingProj}
-            projected={projected}
-            onProjected={onProjected}
-          />
-        )}
       </div>
       {/* **The strip is part of the head rather than of the page.** It is this
           page's own navigation — which of the three readings of the matchup is
@@ -862,6 +858,58 @@ export default function LeagueMatchupView({
           }`,
         }
       : null;
+
+  /**
+   * **The key to the bars, in the top right corner of the screen.**
+   *
+   * It sat beside the meter it describes, which is where a key usually belongs
+   * and is the one place on this page it could not stay: the meter is a row in
+   * the middle of a card that scrolls, so the key scrolled away with it — and
+   * what it explains is not that bar alone but every bar under it, ten category
+   * rows the reader is still going down when the button has gone. In the pinned
+   * head it is on screen for the whole of that reading, at the corner of the
+   * band rather than inside the centered Back row, which is what puts it at the
+   * corner of the *screen* rather than of a 896px column.
+   *
+   * It is the head's `corner` rather than a child of `.mup-bar` for exactly that
+   * reason, and it is drawn only where there is something to explain — a points
+   * league has no bars and a bye has no comparison, which is `meter`'s own test,
+   * and a team page has no card, which is `onSummary`'s.
+   */
+  const barsKey =
+    onSummary && meter !== null ? (
+      <InfoKey className="mup-key" label="How to read these bars">
+        <p>
+          The bar under the two records is the <strong>whole matchup</strong> — the categories
+          each side holds, ties between them, and the leader&rsquo;s share in green.
+        </p>
+        <p>
+          Each category&rsquo;s own bar runs from its label toward whoever is ahead, and its
+          length is the gap as a share of the two figures together. A long bar is a category one
+          side is running away with; a sliver is a coin flip.
+        </p>
+        {/* **The gesture, third — where a line of its own over the comparison
+            used to say it.** It reads here because this panel is already the
+            answer to *what are these bars*, and what you can do to one is the
+            last sentence of that rather than a separate caption.
+
+            What it costs is that a reader has to open the key to be told —
+            which is a real cost, this feature having shipped invisible once
+            already (on the scoreboard, where it had to be reported). What is
+            different here is the target: a category row is the full width of
+            the card with a hover tint on it, where that one was four characters
+            inside a card that was itself a press, so the affordance is doing
+            most of the work and the sentence is the backstop.
+
+            Kept on `groups.length` — its own gate before either move — so a
+            categories league with nothing to press is not told to press it. */}
+        {groups.length > 0 && (
+          <p>
+            <strong>Press any category</strong> for a day-by-day chart of the week.
+          </p>
+        )}
+      </InfoKey>
+    ) : null;
 
   /**
    * What a category row says on hover: the two figures and who is ahead, which
@@ -1159,7 +1207,7 @@ export default function LeagueMatchupView({
         tabIndex={-1}
         className={`mup-view${sideTeamId !== null && reading === 'roster' ? ' roster-mode' : ''}`}
       >
-        {head(nav)}
+        {head(nav, barsKey)}
 
         {sideTeamId !== null ? (
           <>
@@ -1253,42 +1301,6 @@ export default function LeagueMatchupView({
                     />
                   )}
                 </div>
-                <InfoKey className="mup-key" label="How to read these bars">
-                  <p>
-                    The bar under the two records is the <strong>whole matchup</strong> — the
-                    categories each side holds, ties between them, and the leader&rsquo;s share in
-                    green.
-                  </p>
-                  <p>
-                    Each category&rsquo;s own bar runs from its label toward whoever is ahead, and
-                    its length is the gap as a share of the two figures together. A long bar is a
-                    category one side is running away with; a sliver is a coin flip.
-                  </p>
-                  {/* **The gesture, third — where a line of its own over the
-                      comparison used to say it.** It reads here because this
-                      panel is already the answer to *what are these bars*, and
-                      what you can do to one is the last sentence of that rather
-                      than a separate caption; the page gets the row of prose
-                      back, on a card that is read as a list of ten.
-
-                      What it costs is that a reader has to open the key to be
-                      told — which is a real cost, this feature having shipped
-                      invisible once already (on the scoreboard, where it had to
-                      be reported). What is different here is the target: a
-                      category row is the full width of the card with a hover
-                      tint on it, where that one was four characters inside a
-                      card that was itself a press, so the affordance is doing
-                      most of the work and the sentence is the backstop.
-
-                      Kept on `groups.length` — its own gate before the move —
-                      so a categories league with nothing to press is not told
-                      to press it. */}
-                  {groups.length > 0 && (
-                    <p>
-                      <strong>Press any category</strong> for a day-by-day chart of the week.
-                    </p>
-                  )}
-                </InfoKey>
               </div>
             )}
 
@@ -1387,6 +1399,52 @@ export default function LeagueMatchupView({
                   </div>
                 );
               })
+            )}
+
+            {/* **The `Projected` toggle, at the foot of the comparison rather
+                than in the head.**
+
+                It sat at the far end of the Back row, beside the `Projected`
+                tag it lights — which is the Scoreboard's own arrangement and
+                the wrong one here, for two reasons this page has and that one
+                does not. The head is **shared by three pages**, so a control
+                belonging to one of them had to be gated out of the other two
+                and cost the band a wrapped line on a phone (114 → 160px)
+                whichever page was on screen. And it is the *card* whose figures
+                it swaps: below them it reads as the comparison's own control,
+                where above them it read as one more thing about the week
+                alongside the dates.
+
+                Directly above `Moves` because that is where the categories end
+                — everything under it is a fact about the period so far and is
+                not projected either way, so the toggle is the last line of the
+                thing it governs rather than the first line of the thing it does
+                not. The tag in the head still says what the figures **are**,
+                which is the one half of this that has to stay visible while the
+                reader scrolls.
+
+                Centered rather than at an edge: this card is a symmetric
+                comparison and a control at one end of it would read as
+                belonging to that manager. `.lg-proj-tools` carries a
+                `margin-left: auto` for its place on the scoreboard's head row,
+                which the stylesheet resets here — an auto margin eats the free
+                space `justify-content` would have divided. */}
+            {projectable && (
+              <div className="mup-proj-row">
+                <ProjectedTools
+                  projection={projection}
+                  categories={board.categories.length}
+                  showing={showingProj}
+                  projected={projected}
+                  onProjected={onProjected}
+                  /* Upward, because this row is at the foot of a card that runs
+                     past the bottom of the window: opening downward left the
+                     panel at the hook's own 120px floor, a four-paragraph key
+                     read through a letterbox. The stylesheet anchors it to
+                     match. */
+                  drop="up"
+                />
+              </div>
             )}
 
             {/* Under the categories, because it is what a manager does *about*
