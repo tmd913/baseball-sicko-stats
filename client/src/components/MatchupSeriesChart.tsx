@@ -125,7 +125,14 @@ export function MatchupSeriesChart({
     // the same comparison the card makes and so the same color.
     const raw = teamIds.map((teamId) => ({
       teamId,
-      label: teams.get(teamId)?.abbrev || teams.get(teamId)?.name || `Team ${teamId}`,
+      // **The full name, not the abbreviation.** The legend is the one place
+      // this chart says whose line is whose, and it sits *under* the plot with
+      // a whole row to itself — so there is room for the name a manager
+      // actually knows his leaguemates by, where `B&T` is a thing you have to
+      // decode. The row wraps (`flex-wrap` on `.mser-legend`, `nowrap` inside
+      // each item), so two long names stack rather than overflowing. The
+      // abbreviation stays as the fallback for a team with no name at all.
+      label: teams.get(teamId)?.name || teams.get(teamId)?.abbrev || `Team ${teamId}`,
       values: series.teams[teamId]?.[category.statId] ?? [],
     }));
     let leader: number | null = null;
@@ -315,15 +322,18 @@ export function MatchupSeriesChart({
           );
         })}
       </div>
-      {/* What the chart cannot say for itself, and only where it applies. */}
+      {/* What the chart cannot say for itself, and only where it applies —
+          which is now a *gap* in the data alone. The note that used to sit
+          beside it ("The last point is today so far") is gone: the header
+          already prints the week and its Live tag, the chart's own x axis ends
+          on today, and a running total that stops at the current day is what a
+          live week *is* — so it was restating the page rather than qualifying
+          the chart. A missing day is a different matter and still says so. */}
       {known < days.length && (
         <p className="mser-note">
           ESPN would not answer for {days.length - known === 1 ? 'the last day' : `the last ${days.length - known} days`} of
           this period, so the lines stop where the totals stop being knowable.
         </p>
-      )}
-      {series.live && known === days.length && (
-        <p className="mser-note">The last point is today so far — the day is still being played.</p>
       )}
     </>
   );

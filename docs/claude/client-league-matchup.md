@@ -464,8 +464,17 @@ width**.
 - **A legend under the chart rather than labels inside the plot**, for the
   reason that one records: a label painted at the end of a line sits exactly
   where the *other* line is most likely to be. Each item is the swatch, the
-  team's abbreviation and its final figure, and `.mser-legend` is folded onto
-  `.summary-legend`'s rule — the app has one legend.
+  team's **full name** and its final figure, and `.mser-legend` is folded onto
+  `.summary-legend`'s rule — the app has one legend. The name rather than the
+  abbreviation, which is what it drew first: this legend is the one place the
+  chart says whose line is whose, and it has a whole row under the plot to say
+  it in, where the tab strip's `BOZO` is a compression forced by three tabs
+  sharing 262px. Measured at 390 and 1200 on the live league, `Baldy's Bozos 33`
+  and `Sho me the Parlay 26` are **128.5px and 151.3px** and share **one row**
+  of the same **25px** the abbreviations took, with the dialog body and the page
+  each overflowing by 0; the row wraps (`flex-wrap` on the legend, `nowrap`
+  inside each item), so a longer pair stacks rather than overflowing. The
+  abbreviation stays as the fallback for a team with no name at all.
 
 **Color marks state, and the state is who is taking the category**: `--win` for
 the side ahead at the last day both are known for, `--muted` for the other. That
@@ -498,13 +507,31 @@ the reader's own bye: one path, one legend item, and no `--win` mark, there bein
 nobody to be ahead of. **A points league has no category line at all** so nothing
 is pressable, and a roto league has no matchups; neither can reach this.
 
-**What the chart cannot say for itself, it says in a line under the legend.** A
-live period reads `The last point is today so far — the day is still being
-played`, and a series short of its days names them: measured with the last three
-days marked unreadable, the note reads `ESPN would not answer for the last 3 days
-of this period, so the lines stop where the totals stop being knowable`, the
-lines stop at five points and the legend shows the last **known** figure (19/17
-rather than 33/25) rather than a total it cannot stand behind.
+**What the chart cannot say for itself, it says in a line under the legend —
+and that is now a *gap* alone.** A series short of its days names them:
+measured with the last three days marked unreadable, the note reads `ESPN would
+not answer for the last 3 days of this period, so the lines stop where the
+totals stop being knowable`, the lines stop at five points and the legend shows
+the last **known** figure (19/17 rather than 33/25) rather than a total it
+cannot stand behind.
+
+**A second note used to sit beside it on a live week** — `The last point is
+today so far — the day is still being played` — and it is gone. It was
+restating the page rather than qualifying the chart: the header above already
+prints the week and its `Live` tag, the x axis already ends on today, and a
+running total that stops at the current day is what a live week *is*. A caveat
+that every reader of a live chart sees, saying what the chart already shows, is
+a line that trains people to skip the line that matters — which is the one
+above it, drawn only when a day genuinely could not be read.
+
+**`EspnMatchupSeries.live` went with it**, both halves of the hand-mirrored
+pair, on this repo's own rule that a field nobody reads is a field nobody
+misses: that flag existed for exactly this label — its doc comment said so —
+and had no other reader in either workspace. The **local** `live` in
+`getMatchupSeries` stays and is load-bearing, being what `const frozen = !live`
+reads to decide whether the period takes a blob with no freshness test. Nothing
+versioned moved: a stored blob carrying the extra field simply deserializes
+without anything reading it.
 
 **The read is lazy and one per page**, held by the matchup page rather than
 by the card: the series is a fact about the *week*, so one read serves all ten

@@ -1723,9 +1723,6 @@ export interface EspnSeriesDay {
  */
 export interface EspnMatchupSeries {
   matchupPeriod: number;
-  /** Whether this is the week being played, so the last point can be labeled
-   *  as the day so far rather than as a finished day. */
-  live: boolean;
   days: EspnSeriesDay[];
   /** Team id -> stat id -> the running figure **after** each day, index-aligned
    *  with `days`. Null is "not known", never zero — an ERA before anybody has

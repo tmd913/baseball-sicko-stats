@@ -3041,9 +3041,6 @@ export interface EspnSeriesDay {
 
 export interface EspnMatchupSeries {
   matchupPeriod: number;
-  /** Whether this is the week being played, so the last point can be labeled
-   *  as the day so far rather than as a finished day. */
-  live: boolean;
   days: EspnSeriesDay[];
   /** Team id → stat id → the running figure **after** each day, index-aligned
    *  with `days`. Null is "not known", never zero: a category with no
@@ -3097,7 +3094,7 @@ export async function getMatchupSeries(
   const live = asked !== null && asked === current;
 
   if (asked === null || span === null || meta.format !== 'h2h-categories') {
-    return { matchupPeriod: asked ?? 0, live, days: [], teams: {}, fetchedAt: Date.now() };
+    return { matchupPeriod: asked ?? 0, days: [], teams: {}, fetchedAt: Date.now() };
   }
 
   const key = `${creds.leagueId}:${asked}`;
@@ -3173,7 +3170,6 @@ export async function getMatchupSeries(
 
     const value: EspnMatchupSeries = {
       matchupPeriod: asked,
-      live,
       days,
       teams,
       fetchedAt: Date.now(),
