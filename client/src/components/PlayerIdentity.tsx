@@ -19,7 +19,7 @@ import type { PlayerKind } from '../types';
  * Shared rather than copied, on the rule `PhotoStatus` follows for the marks on
  * a headshot: two tables that merely resemble each other are two tables that
  * will one day differ, and the identity block is the thing a reader is meant to
- * recognise as *the same block* moving between two pages. Both boards are 58px
+ * recognize as *the same block* moving between two pages. Both boards are 58px
  * rows built from a 42px circle, so the sizing is shared too and there is no
  * per-caller class — where `PhotoStatus` needs one, because a row circle and a
  * 64px header portrait want the same mark at different sizes.
@@ -32,7 +32,7 @@ import type { PlayerKind } from '../types';
  * image's `alt` and its tooltip, it is what the research board's search still
  * matches on, and it is what shows outright when there is no logo to draw. A
  * player MLB files under no club at all — a leaderboard row for a man between
- * organisations — keeps the three letters, and so does one whose SVG fails to
+ * organizations — keeps the three letters, and so does one whose SVG fails to
  * load; that second case is why this holds a `failed` flag rather than trusting
  * the CDN, the same courtesy `OrderPhoto` extends to a headshot.
  */
@@ -45,7 +45,7 @@ export function TeamMark({ teamId, team }: { teamId: number | null; team: string
     <img
       className="row-id-logo"
       src={teamLogoUrl(teamId)}
-      /* The club's own colour, inline rather than as a token for the reason the
+      /* The club's own color, inline rather than as a token for the reason the
          theme picker's swatches are: it is one of thirty values keyed by club,
          not one value the page has. See `teamColor`, which is also where the
          `on-dark` cut's need for a dark ground is argued. */

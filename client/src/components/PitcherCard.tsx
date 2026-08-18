@@ -90,7 +90,7 @@ export function lineSummary(l: PitchingLine): string {
  * twenty pixels under it saying `Line` again is the same word twice, which is
  * exactly the argument `defaultOpen` makes about the bar it replaced. Three
  * modes rather than two because the three are genuinely three: a section on a
- * long page folds away, a section in a box opened for it is labelled, and a
+ * long page folds away, a section in a box opened for it is labeled, and a
  * section that *is* the page needs no label at all.
  *
  * The collapsible half is kept, unrendered, because `PitcherCard` still names
@@ -448,7 +448,7 @@ function creditTally(games: PlayerGame[]): { credit: PitchingCredit; n: number }
  * there because the dependency runs one way — `LiveFeed` and `OutingPage` both
  * import from this file, and this file imports neither, so moving it up is what
  * keeps the pair out of a cycle. It is `PitchingTag`'s and `lineSummary`'s own
- * neighbourhood anyway, both of which it reads.
+ * neighborhood anyway, both of which it reads.
  */
 export function outingBar(game: PlayerGame, pg: NonNullable<PlayerGame['pitching']>) {
   return (

@@ -374,7 +374,7 @@ app.get(
         // The **range**, not just its end: a fantasy team is a range of rosters
         // exactly as the saved one is, so the report reads one per day and is
         // told which of them each player was on. A read that fails leaves
-        // `held` null, which is the old behaviour — today's team over every day
+        // `held` null, which is the old behavior — today's team over every day
         // of the range.
         const fan = await fantasyWatchlist(
           userId(req),
@@ -516,7 +516,7 @@ app.put(
 );
 
 /**
- * The reader's colour scheme. A route of its own for the reason each of the
+ * The reader's color scheme. A route of its own for the reason each of the
  * preferences around it has one — its update semantics are its own: it is
  * neither a boolean that is always set nor a list a null clears, but **one id,
  * where `null` means "back to the default"** and is stored as the absence of
@@ -836,7 +836,7 @@ async function fantasyWatchlist(
   // is `byDate[end]` where there is one.
   //
   // **Where there isn't, today's roster stands**, which is the pre-per-day
-  // behaviour and the right direction to fail in: a day ESPN wouldn't answer
+  // behavior and the right direction to fail in: a day ESPN wouldn't answer
   // for costs its precision, not the chips. That covers a failed read, a
   // caller that named no range at all, and every range ending today or later —
   // the last of which needs no fallback at all, `getTeamRosters` having seeded
@@ -924,7 +924,7 @@ app.get(
 // The point of this: the *second* person in a league should not have to go
 // hunting for cookies. ESPN publishes no member emails — checked across every
 // league view and the member and invite endpoints, there is no email anywhere
-// in the payload — so leaguemates cannot be recognised automatically. What it
+// in the payload — so leaguemates cannot be recognized automatically. What it
 // does publish is enough for the connection to be *shared* deliberately: one
 // person connects, turns sharing on, and hands out a link.
 //
@@ -1322,7 +1322,7 @@ app.get(
   asyncRoute(async (req, res) => {
     const raw = req.query.span;
     // The five spans, validated against the union rather than trusted. An
-    // unrecognised one is null, which `getRankings` reads as "the default",
+    // unrecognized one is null, which `getRankings` reads as "the default",
     // so an older tab's `?span=` is a season rather than an error.
     const span =
       raw === 'season' ||
@@ -1393,7 +1393,7 @@ app.get(
   requireUser,
   asyncRoute(async (req, res) => {
     const kind = req.query.type === 'pitcher' ? 'pitcher' : 'batter';
-    // An unrecognised window is the season, not a 400: the param is a view
+    // An unrecognized window is the season, not a 400: the param is a view
     // preference carried in a shareable URL, and an older link naming a window
     // this build no longer offers should still open the board.
     const asked = Number(req.query.window);
@@ -1594,7 +1594,7 @@ app.get(
 // for most of the month the honest answer to "when does he pitch next" is one
 // nobody has published and everybody can work out.
 //
-// **No `?type=`**, unlike its neighbours: a rotation slot is a fact about a
+// **No `?type=`**, unlike its neighbors: a rotation slot is a fact about a
 // pitcher, so there is no batting half of this question to ask for. Whether the
 // player *is* a rotation starter is still not decided here — `projectedStarts.ts`
 // answers honestly for whoever is asked and says `not-a-starter` when there are

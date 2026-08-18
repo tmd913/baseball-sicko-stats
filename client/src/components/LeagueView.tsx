@@ -449,7 +449,7 @@ function MatchupCard({
               {sides.map((side, i) => {
                 // Nobody to compare against on a bye, which is what makes the
                 // figures plain: a category is neither won nor lost, so the
-                // cells take no colour and say only what he did.
+                // cells take no color and say only what he did.
                 const other = away ? (i === 0 ? home : away) : null;
                 const team = teams.get(side.teamId);
                 return (

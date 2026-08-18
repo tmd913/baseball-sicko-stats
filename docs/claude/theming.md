@@ -1,6 +1,6 @@
 ### Themes: the palette, and the switch that changes it
 
-The app has **four colour schemes** — **Midnight**, the navy original and still
+The app has **four color schemes** — **Midnight**, the navy original and still
 the default; **Lavender**, dark gray and violet; and **Maroon** and **Powder
 Blue**, the dark and light halves of one 1980 Phillies road uniform — and a
 picker in the settings menu. This file is the whole of it: how a theme is
@@ -8,7 +8,7 @@ expressed, what had to change before a second one was possible, how the choice i
 stored and how it reaches the first painted frame.
 
 **A theme is a palette, not a stylesheet.** `client/src/styles.css` opens with a
-`:root` block of colour tokens and closes with three blocks that redeclare the
+`:root` block of color tokens and closes with three blocks that redeclare the
 same names against **`html[data-theme='lavender']`**,
 **`html[data-theme='maroon']`** and **`html[data-theme='powder']`**. Nothing else
 in 12,000 lines of stylesheet knows there is more than one, and no component
@@ -27,7 +27,7 @@ picker's stylesheet, which is the only *layout* any of the four has cost.
 ### What had to change first: 88 literals and a dozen hexes
 
 **A token is only a token if the rules use it, and they didn't.** The palette
-had names for its colours and then spelled the colours out again wherever a
+had names for its colors and then spelled the colors out again wherever a
 *tint* of one was wanted: `rgba(56, 189, 248, 0.12)` for a 12% accent wash, the
 same four numbers in forty places — 88 of them across ten palette entries. A
 theme moving `--accent` would have moved the accent and left every wash it backs
@@ -35,7 +35,7 @@ sitting on the old hue, which is the failure mode that looks like the theme half
 worked.
 
 They are `color-mix(in srgb, var(--accent) 12%, transparent)` now. That is the
-**identical colour by construction** — the mix is against `transparent`, so the
+**identical color by construction** — the mix is against `transparent`, so the
 percentage *is* the alpha — and it follows whatever the token holds. The
 conversion was mechanical and exact (a script over the ten known literals, 88
 substitutions, no hand edits), which is what makes it checkable: see the pixel
@@ -83,7 +83,7 @@ it could do three jobs at one lightness: printed as text **on the pale page**,
 filled **under white ink**, and — the one that is easy to miss and was missed on
 its first pass — printed as text **on a live-role row**, whose ground is that
 same palette washed over the page. On a dark theme the third is nearly free: a
-colour sitting 9–11:1 from the page barely notices a 20% wash. On a light one the
+color sitting 9–11:1 from the page barely notices a 20% wash. On a light one the
 wash eats most of a 4.5, and the first pass put the live inning's green on a
 tinted row at **2.90:1**.
 
@@ -115,7 +115,7 @@ redeclare them at all** — which is not an omission but a property of custom
 properties: they are substituted after the cascade, on the element they are used
 from, and `html[data-theme='lavender']` *is* `:root`, so the four `color-mix()`es
 declared up there resolve against the palette declared here. (The light theme
-raised them to 24/22, a 20% wash of a deep colour over a near-white page being a
+raised them to 24/22, a 20% wash of a deep color over a near-white page being a
 tint you have to look for; over graphite the same mix lands at ΔE 15.1–19.0 from
 the page against Midnight's own 13.5–22.7, so there is nothing to correct.) Their
 six pairwise ΔE2000 distances come to at bat/on deck **14.4**, at bat/on base
@@ -139,7 +139,7 @@ chrome against a live mark.
 uniform: powder-blue body, maroon `P` and maroon sleeve stripes, white piping
 between them. They are the first palettes here taken off an image rather than
 reasoned out, and the sampling is written down because the alternative is
-remembering a colour. **Maroon** is the dark one, below; **Powder Blue** is the
+remembering a color. **Maroon** is the dark one, below; **Powder Blue** is the
 same jersey the other way up and has its own section after it. Neither is called
 after the uniform, because either alone would be a poor description of it.
 
@@ -191,7 +191,7 @@ meant to be adjacent (Midnight's is 11.6).
 **`--win` is `--hit` here too**, and `--logo-plate` does not exist: both are the
 light theme's problems, and all three shipped themes are dark.
 
-### The Powder Blue palette, and the page that gave up its colour
+### The Powder Blue palette, and the page that gave up its color
 
 **The same jersey the other way up**: the piping's white on the page, the maroon
 written on it, and the powder carried by everything drawn on it — the zebra
@@ -205,11 +205,11 @@ A wide table's header runs `--panel-2` → `--bg-2` (#eef5fc → #c7dcf1) and it
 first row was `--bg` (#dceaf7): **ΔE2000 4.6** between the header's own foot and
 the row directly under it, so a reader could not see where the header stopped.
 Starting the zebra on **white** puts **ΔE 13.0** at that boundary and costs the
-stripe nothing — the two row colours are the same two the other way round.
+stripe nothing — the two row colors are the same two the other way round.
 
 **And every measured figure in this section improved with it**, which is the
-page's colour being handed back. What the coloured page cost was measured when
-it was chosen: holding the four role colours fixed and walking the page from
+page's color being handed back. What the colored page cost was measured when
+it was chosen: holding the four role colors fixed and walking the page from
 neutral (`#f3f1f8`, the old light Lavender's) to the jersey's own body
 (`#b9d3ec`), the tightest pair of the four live-role grounds falls **12.6 →
 9.2** — a page with chroma in it has less room left for four washes to differ
@@ -239,14 +239,14 @@ pushed to from a gold.
   before; Midnight's own is 12.1), the other five pairs 13.5, 13.9, 22.7, 22.8
   and 24.5. They are still **redeclared at 24/22** rather than `:root`'s 22/20,
   which is the light Lavender's own correction and for its reason: a 20% wash of
-  a deep colour over a light page is a tint you have to look for.
+  a deep color over a light page is a tint you have to look for.
 - **white on each fill** — accent 8.5, hit 9.1, hr 7.8, walk 8.4, strikeout 7.8,
   on-base 8.5, mound 8.1, out 6.4. Unchanged, the fills not having moved — and
   now the same figures as the first line, since with a white page "printed on
   the page" and "white on the fill" are one measurement.
 
 **The zebra is what a white page threatens, and it is why `--row-alt` exists.**
-The stripe was `--panel`, which is right on a coloured page — the card colour
+The stripe was `--panel`, which is right on a colored page — the card color
 and the stripe are both the white it is read against — and impossible once the
 page is white too. It carries the jersey's own #dceaf7 instead: **1.22:1**
 against the white beside it (light Lavender 1.15, Midnight 1.11), which is the
@@ -270,7 +270,7 @@ behind an uploaded team badge, which only a white card needs, at the value the
 light Lavender measured and with the same `.lg-logo-none` exclusion. The third
 is **`body`, which is now one declaration**: the page's three-layer ombré (a
 white lift at the top right, a 9% accent wash in the bottom-left corner, and a
-linear down to `--bg-2`) went with the colour it was made of — the first layer
+linear down to `--bg-2`) went with the color it was made of — the first layer
 is white on white and the third would take the foot of every page to #c7dcf1,
 which is not a white page by any reading. It stays a rule of this theme's own
 rather than a deletion, because the base `body` rule would otherwise put
@@ -293,7 +293,7 @@ the top right, a wash of the theme's own accent in the bottom-left corner), a
 four wide tables that reads as a header.
 
 **The rules are shared and their declarations name only tokens**, so each palette
-supplies its own colours to one written shape. That is what made Maroon three
+supplies its own colors to one written shape. That is what made Maroon three
 selector lines rather than a second copy of the section — and it is the same rule
 the stylesheet applies to `.settings-toggle` on `.sim-toggle`'s list: two things
 that are the same object must not be able to become two.
@@ -305,7 +305,7 @@ and on this theme that header is what the white first row is read against. It
 writes the card gradient, which runs *lighter at the top* and so flips token
 order with the polarity: `--panel-2` → `--panel` on a dark theme and `--panel` →
 `--panel-2` here. And it has **no page ombré at all** — the page is flat white
-(see its own section above), so the three layers went with the colour they were
+(see its own section above), so the three layers went with the color they were
 made of and the theme's `body` rule is one declaration whose only job is to keep
 `:root`'s blue lift off the white.
 
@@ -325,20 +325,20 @@ board, whose table carries `.summary-table` too — draws a **6px strip of
 `var(--cell-bg)` straddling every cell's left edge**, the cover for the sub-pixel
 seam between two cell grounds (see **Client — the Roster view**, where that
 mechanism is argued at length). Assigning `background` directly left the strip on
-the *solid* colour the token still held while the cell had become a gradient, so
+the *solid* color the token still held while the cell had become a gradient, so
 every column boundary in the header wore a vertical bar of `--panel-2` over a
 ground that had darkened to `--bg-2` by the bottom of the row: **ten light bars
 across the header of every roster page**, measured at `rgb(241,236,250)` against
-`rgb(233,229,243)`, and nineteen colour steps along a text-free row of the header
+`rgb(233,229,243)`, and nineteen color steps along a text-free row of the header
 where there should be one.
 
 The token's own comment says exactly what went wrong — *"two things need the same
-colour and must not be able to disagree: the cell's own background, and the
+color and must not be able to disagree: the cell's own background, and the
 hairline of it drawn just outside its left edge"* — so the fix is to set the name
 rather than to paint behind it. A `background` shorthand takes an image, so the
 token holds a gradient happily, and because the strip spans `top: 0; bottom: 0`
 of the very cell it sits in, a **vertical** gradient lands on the same stops in
-both. Measured after: **one** colour step along that row on the roster and the
+both. Measured after: **one** color step along that row on the roster and the
 game log and the league table, **two** on the research board — each of them a
 pinned column's own edge shadow, which is meant to be there.
 
@@ -348,7 +348,7 @@ how two halves of one surface come to disagree.
 
 ### Three things a theme is allowed to move, and one of them does now
 
-**The winner's colour** (`--win`). Four rules make one statement — the
+**The winner's color** (`--win`). Four rules make one statement — the
 scoreboard card's winning figure, the matchup Summary's, its diverging category
 bar and the run of the whole-matchup meter the leader holds — and all four wrote
 `--hit` out. They read a token now, so a theme can move the statement rather than
@@ -384,7 +384,7 @@ that a shipped theme actually moves. Four wide tables draw a zebra — the summa
 table, the research board (which carries `.summary-table` too), the game log's
 family and the League table — and all four wrote `--panel`, which is right for a
 dark theme and says two things at once: *a card is a step up from the page* and
-*so is the stripe*. Those are one answer only while the page has a colour. On
+*so is the stripe*. Those are one answer only while the page has a color. On
 Powder Blue the page is white, so a card wants to be white as well and a stripe
 cannot be — and the token is what lets the palette say so in one line rather
 than the stylesheet say it in three overrides. `:root` declares it
@@ -406,20 +406,20 @@ DET, KC, LAD, WSH, ATH, PHI, ATL, CWS and NYY among them — so on Powder Blue's
 page they disappeared. The Yankees' white `NY` on white is the one that gets
 reported.
 
-**So the mark carries its own ground, in the club's colour** (`lib.ts::teamColor`,
+**So the mark carries its own ground, in the club's color** (`lib.ts::teamColor`,
 a 3px-radius tile the same proportion `.lg-logo`'s 5px is at its own size). It is
 set **inline**, for the reason the theme picker's swatches are: it is one of
 thirty values keyed by club rather than one value the page has, so it cannot be a
 token. That also means it is **not a theme's to move** — a cap is the club's
-colours in every palette, which is the same argument `lib.ts::pitchStyle` already
+colors in every palette, which is the same argument `lib.ts::pitchStyle` already
 makes for the pitch dots.
 
 **Why it is a table and how it was checked** are in `lib.ts` beside it, and the
-short version is this file's own method: no MLB endpoint publishes a team colour
-(probed — `teams/{id}` carries no colour field and `hydrate=team(colors)` changes
+short version is this file's own method: no MLB endpoint publishes a team color
+(probed — `teams/{id}` carries no color field and `hydrate=team(colors)` changes
 nothing), deriving one from the `on-light` cut gets 24 of 30 and fails silently on
 the other six, so the table is curated and the **check** is mechanical — every
-colour in every mark measured against its ground, requiring the mark's best ink to
+color in every mark measured against its ground, requiring the mark's best ink to
 clear 4.5:1. All thirty pass, the tightest being PHI at **4.57** (a white P on
 Phillies red, which is their cap exactly). Two clubs are not on their primary
 because the mark *contains* it: NYM sits a shade under their blue (4.13 → 4.93)
@@ -430,13 +430,13 @@ is the 15px box the mark already occupied, so rows stay **58.00px** and the
 identity block **31.08** — measured in all four themes, along with the table's own
 width and 0 page overflow. And it is drawn in all four rather than only the light
 one: on a dark page a navy tile behind a white mark is invisible and harmless,
-which is what the page was doing before, and one behaviour beats a rule that
+which is what the page was doing before, and one behavior beats a rule that
 changes with the palette.
 
 **`--logo-plate` is the other half of this and is deliberately still separate.**
 That is the well behind an **ESPN fantasy** team's logo — an arbitrary image a
-manager uploaded, with no colour to look up — so it stays a single theme-level
-token that only a light theme declares. A club's cap has a colour; a leaguemate's
+manager uploaded, with no color to look up — so it stays a single theme-level
+token that only a light theme declares. A club's cap has a color; a leaguemate's
 avatar does not. Both are drawn on the League page's Transactions feed, a row
 apart, and were checked together on Powder Blue: **43 cap marks, all 43 with
 their club's ground, and 25 ESPN logos on `#bcd2e8`**.
@@ -448,7 +448,7 @@ one `border-radius`.
 
 ### The winner is the theme's own accent now, not the app's green
 
-**`--win` — the colour of a category a manager is taking** — is read by four
+**`--win` — the color of a category a manager is taking** — is read by four
 rules (the scoreboard card's winning figure, the matchup Summary's, its diverging
 category bar and the run of the whole-matchup meter the leader holds), which is
 why it is a token at all: they are one statement made four ways.
@@ -460,7 +460,7 @@ and moved `--win` to its accent for the duration, and a bottle-green winner on
 Powder Blue's maroon-and-sky page is the same observation again.
 
 **So it is the accent, in `:root`, for all four.** Not three overrides and a
-default: the rule is one sentence — *the winner is the theme's hero colour* —
+default: the rule is one sentence — *the winner is the theme's hero color* —
 which every palette is built to make the loudest thing it has, and Midnight's
 green went with the rest rather than becoming an exception. **The muted loser is
 untouched**, and it is the half that carries the comparison: the app's green/red
@@ -474,11 +474,11 @@ is bolder besides. Green's own gap was 35–44, so this is a real narrowing rath
 than a free lunch; 16 is where the light Lavender shipped it and is a plain
 difference at a glance. One line restores any of them.
 
-### Cards that were the page's own colour
+### Cards that were the page's own color
 
 **"Some of the cards look flat"**, and five of them literally were:
 `.pa-card`, `.faced-card`, `.faced-row`, `.inning-head` and `.ars-row` were
-painted `--bg` — the page colour — so on every theme they were a bordered box the
+painted `--bg` — the page color — so on every theme they were a bordered box the
 same shade as whatever was behind them. The rest of the app's cards have carried
 `--panel` → `--bg-2` for a long time (`.player-card`, `.feed-item-toggle`,
 `.upcoming-head`, `.pday-game`, `.lg-matchup`, `.lg-tx`), which is the wash the
@@ -495,7 +495,7 @@ further down — that one adds a wash to the large flat surfaces (cards, popover
 the tables' header row) which Midnight leaves flat. A card gets its top and
 bottom either way.
 
-**Bundle for this round** — the winner colour, the five cards, the 5px rail and
+**Bundle for this round** — the winner color, the five cards, the 5px rail and
 the two palette values it moved: **CSS 145.42 → 145.71 KB** (25.86 → 25.90
 gzipped) and **JS unchanged at 544.45** (161.65). Nothing here is a component;
 it is five declarations, two tokens and the paragraphs arguing them.
@@ -512,7 +512,7 @@ on nothing. See **Roster, watchlist, users and auth** for the record it rides on
 and **Date handling and server routing** for the route.
 
 **It is deliberately not in the URL**, which is the line `muteAudio` is on and
-one step further from the data than `hideil=1`: a colour scheme is a fact about
+one step further from the data than `hideil=1`: a color scheme is a fact about
 this person and this room, not about the view a link describes.
 
 **And it is the one preference this app mirrors into `localStorage`.** The rule
@@ -545,7 +545,7 @@ all three toggles now use; the server half is `store.ts::fileWriteDb`, which
 writes to a temp file and renames. Both are set out under **Roster, watchlist,
 users and auth**.
 
-**The boot script is the only place a palette colour is written outside the
+**The boot script is the only place a palette color is written outside the
 stylesheet** — two `--bg` values and two `color-scheme` words — and it is inline,
 blocking and tiny because it has to have finished before the first paint.
 
@@ -557,7 +557,7 @@ background on `body` is **propagated to the canvas** — but only while the root
 element has none of its own. The paint-ahead gives the root one, and left
 standing it outlives its purpose for the life of the page: `body` then paints
 its gradient inside its own box, which is as tall as the content, so every page
-shorter than the window ended on a hard seam with the flat root colour under it.
+shorter than the window ended on a hard seam with the flat root color under it.
 Reported as *"the bottom of the page is white when there isn't enough content"*
 and measured on the League view at 900×3000 under the light Lavender:
 `rgb(235, 232, 244)` at the last row of content and **`rgb(243, 241, 248)`** —
@@ -569,7 +569,7 @@ exactly why it is written down here rather than left to be rediscovered by
 whoever writes the third one.
 
 **Midnight hid it, which is why it went unnoticed**: that gradient's own foot is
-`--bg` at its 55% stop, which is exactly the colour the boot script paints, so
+`--bg` at its 55% stop, which is exactly the color the boot script paints, so
 the seam had nothing to show. Measured after the fix, Midnight is
 `rgb(11, 18, 32)` from the last row of content to the foot of the window —
 byte-identical to before — while Lavender continues its gradient and its glow to
@@ -586,7 +586,7 @@ than a broken one.
 
 A **row of swatches** in the settings menu, under the two toggles, rather than a
 third toggle. A toggle holds two and there is no reason a third palette should
-mean redrawing the control; and a colour scheme is the one preference in that
+mean redrawing the control; and a color scheme is the one preference in that
 menu whose *answer* can be shown rather than described — each button is three
 stops of the palette it selects (the page, an edge on it, the accent), which is a
 truer statement of what it does than any name.
@@ -596,7 +596,7 @@ is a step off the page in every theme (`#0b1220` → `#16213a`, `#1c1b22` →
 `#2a2833`, `#1d1319` → `#2b1d26`) and at 8px wide that step is invisible, so the
 swatch read as two stops. It pays off a third time in Powder Blue, whose
 `--border` *is* the jersey's maroon piping — so that swatch is literally the
-three colours of the uniform, in the order the uniform has them. The stops are **inline styles off `theme.ts`**, deliberately — they are
+three colors of the uniform, in the order the uniform has them. The stops are **inline styles off `theme.ts`**, deliberately — they are
 *another theme's* values, so they cannot be tokens, which would resolve to the
 palette currently in force and draw every swatch the same. The hairline around
 them is `--border`, which does follow the page.
@@ -629,18 +629,18 @@ injured players · Mute clip audio · How to use`, and its height is unchanged a
 **329px** — a reorder costs nothing.
 
 **The chips lead each row and the name is centered in what is left.** The button
-used to centre the pair as a group (`justify-content: center`), so the pill sat
+used to center the pair as a group (`justify-content: center`), so the pill sat
 at a different x on every row — it moved with the length of the name beside it —
 and four rows of a picture-and-a-word read as four unrelated buttons rather than
 as one column of themes. Pinned left (`.theme-swatch-label { flex: 1;
 text-align: center }`), the four pills line up down one edge and so do the four
 names: measured, `chipsX` is **223.2 on every row at 1200** and **46 at 390**,
-and the four labels' ink shares one centre — **312.8 at 1200, 164.6 at 390** —
+and the four labels' ink shares one center — **312.8 at 1200, 164.6 at 390** —
 with nothing clipped.
 
-**That centre is 17px right of the button's own midline**, which is half the
+**That center is 17px right of the button's own midline**, which is half the
 pill plus the gap, and the alternative was measured rather than waved away. A
-mirrored 34px spacer on the right is what centres the name truly, and it spends
+mirrored 34px spacer on the right is what centers the name truly, and it spends
 the same 34px out of the name column. The binding width is not the phone but the
 **desktop**, where the popover hangs off the gear and is *narrower* than it is at
 390 — **193.3px against 251.2**. Measured there the name column is **111.3px**
@@ -648,7 +648,7 @@ and `Powder Blue`, the longest label the picker has, is **75.7px** of ink: a
 mirror would leave it **1.6px** of slack, and the next theme name to arrive would
 clip. So the cheaper centring is the one that keeps the control working at the
 width it is tightest at, and it buys the thing that actually reads as centered —
-four names sharing one centre.
+four names sharing one center.
 
 ### Measured — the first Lavender, and the sweep that made a theme possible
 
@@ -768,7 +768,7 @@ overflow at 390 with 465 rows on the research board.
 **Bundle: CSS 142.26 → 143.36 KB** (25.14 → 25.40 gzipped) and **JS 543.50 →
 543.71** (161.16 → 161.25) — **1.1KB of CSS and 0.2KB of JS raw**, a quarter of a
 kilobyte over the wire, for a whole theme. Most of the CSS is the comment
-recording where the three colours were sampled from.
+recording where the three colors were sampled from.
 
 ### Measured — Powder Blue, and the rename
 
@@ -799,7 +799,7 @@ Powder Blue is the **highest** of the four on it.
 **The audit's own page fallback had to be fixed to run it**, and it is worth
 recording because it would have produced a confident wrong answer: the walker
 composites an element's background stack and, finding nothing opaque, fell back
-to a **hard-coded** page colour. On a light theme that compared dark text against
+to a **hard-coded** page color. On a light theme that compared dark text against
 a dark ground and reported `.research-count` at 1.8:1 and the chrome labels at
 2.01 — all of them false. It reads `--bg` off the document now. The dark themes'
 figures are unchanged by the fix, because every element it flagged sits on a

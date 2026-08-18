@@ -77,8 +77,8 @@ cards, so a mark alone would have been a mark you had to go and find.
 **The winning side of each category is green and the losing side muted**, which
 is deliberately *not* the `--hit`/`--strikeout` pair this app uses for a delta.
 Red on the loser would put ten red cells on one side of every card — the whole
-row shouting where the job is to mark a winner — so the app's rule that colour
-is spent on **state** is honoured by marking one state and letting the other go
+row shouting where the job is to mark a winner — so the app's rule that color
+is spent on **state** is honored by marking one state and letting the other go
 quiet. A tie is `--faint`, neither. Each cell's `title` spells it out in words
 (`Runs: 32 — winning so far`), the `so far` appearing on a live period alone.
 
@@ -97,7 +97,7 @@ matters because the tally is the thing that has been *checked*: ESPN fills its
 every matchup live and final alike, and the computed answer matched ESPN's on
 all 1,080 category comparisons of the league's eighteen completed periods (see
 **ESPN fantasy league**, *The category winner is computed here, not read*). The
-client's own `outcome()` still decides the *cell* colours, which is a per-cell
+client's own `outcome()` still decides the *cell* colors, which is a per-cell
 question the tally cannot answer; what it does not do is add itself up into a
 second definition of who is winning a category.
 
@@ -157,7 +157,7 @@ See *The name over the record* below for the measurement. The card is 800px at
 both the scoreboard's line and the Rankings table read it — so a cell, its
 header and the block it belongs to cannot come to disagree about which column is
 which. The two surfaces use it differently and deliberately: the scoreboard
-*draws* the split (a labelled block per side, which is also what stops that line
+*draws* the split (a labeled block per side, which is also what stops that line
 overflowing a phone), where the Rankings table only *orders* by it and names the
 side in each header's tooltip — see **The Rankings table groups its columns and
 does not label them**, which is where that asymmetry is argued.
@@ -204,7 +204,7 @@ was there all along and the card simply declined to draw it.
 **So the card is one shape with one or two sides.** `sides` is `[away, home]` or
 `[home]`, and the grid draws a row per side; what a bye loses is only what it
 genuinely hasn't got — an **opponent** to be winning or losing against, so the
-cells take no colour (measured: 0 coloured of 10), and the **headline triple**,
+cells take no color (measured: 0 colored of 10), and the **headline triple**,
 which is a count of categories won and is nothing at all with nobody to win them
 from. The word `Bye` takes the slot that triple would have had, which is where a
 reader's eye already is.
@@ -303,7 +303,7 @@ cell there anyway (a grid row whose first cell is missing puts every label a
 column left of its own numbers), so what was an empty spacer now carries the
 word, and the word sits directly over the badges it names. It is
 **left-aligned** with no side padding where every other cell in the row is
-centred, which puts its left edge on the badges below it and on the matchup
+centered, which puts its left edge on the badges below it and on the matchup
 row's own badge above — one edge down the card.
 
 **The column is 58px and the category floor pays for it.** 58 is `PITCHERS` at
@@ -312,7 +312,7 @@ down `minmax(42px, 1fr)` → `minmax(36px, 1fr)`, which is what keeps a 320px
 phone from scrolling: 58 + 5×36 + 10 of gaps is 248 against the 250 the card
 has there. 36 is still above what any cell in this block needs — the widest
 header is `SVHD` at ~30px and the widest value a four-character rate — and the
-row's own `min-width: min-content` is what makes a longer-labelled league
+row's own `min-width: min-content` is what makes a longer-labeled league
 scroll rather than clip.
 
 **It costs the block no scroll**, which is the measurement that mattered: the
@@ -480,7 +480,7 @@ categories:
   number becomes `totalPoints` and the category grid is not rendered at all,
   since there is none. **Unverified against a real league** — there was one
   league to test against and it is a category league — so this is the one part
-  of the page a reviewer should be sceptical of.
+  of the page a reviewer should be skeptical of.
 - **`ROTO` / `TOTAL_POINTS`** — no matchups by design. The scoreboard half says
   so, naming ESPN's own word for the format, and the table stands alone, which
   in a roto league is the whole of what the league *is*.
@@ -841,7 +841,7 @@ object as the pills above it by construction.
 
 **The span strip lost its reading column with it.** It carried
 `max-width: var(--card-column); margin: 0 auto` from when the page under it was
-a list of cards; the table under it now spans the window, so a strip centred in
+a list of cards; the table under it now spans the window, so a strip centered in
 an 800px column floated in the middle of the page with the thing it governs
 running past it on both sides. It sits at the app's gutters now, over a table
 that bleeds past them — which is the arrangement the research board's own count
@@ -861,7 +861,7 @@ matchup.
   Feed views read for one manager.
 - **`client-league-rankings.md`** — the **Rankings** tab: every team against
   every category over one of five spans, the three summary columns, the rank
-  badge that colours it, and the press that opens a team's own matchup.
+  badge that colors it, and the press that opens a team's own matchup.
 - **`client-league-transactions.md`** — the **Transactions** tab: the feed, what
   a row says about a player, and the dot on the tab.
 

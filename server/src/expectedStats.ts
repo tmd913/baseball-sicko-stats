@@ -77,7 +77,7 @@ async function getLeague(): Promise<LeagueXera> {
  * Every pitcher's season xERA, keyed by MLB id — Statcast's contact-quality ERA
  * estimator, the third of the three the card's season line shows (ERA, what
  * happened; xERA, what the contact he allowed was worth; FIP/xFIP, what's left
- * once the defence behind him is taken out of it).
+ * once the defense behind him is taken out of it).
  *
  * Failures resolve to an empty map rather than throwing, the same rule the team
  * lookup follows: this is one figure on a card and must never 502 a report.

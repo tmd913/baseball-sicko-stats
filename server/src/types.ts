@@ -255,7 +255,7 @@ export interface ProjectedStarts {
  * page's **News** tab and the section that previews it.
  *
  * The two sources are genuinely different kinds of fact and the field says
- * which, because a section labelled News that quietly mixes them would be
+ * which, because a section labeled News that quietly mixes them would be
  * lying about half its rows:
  *
  * - **`rotowire`** — a **report**. A short dated note from RotoWire's baseball
@@ -317,7 +317,7 @@ export type NewsRecency = 'today' | 'yesterday';
  */
 export interface RecentNews {
   /** `YYYY-MM-DD`, the day the newest item is stamped — the one the tooltip
-   *  names, so the reader can check the colour against a date. */
+   *  names, so the reader can check the color against a date. */
   date: string;
   level: NewsRecency;
   /** The headline of that newest item, which is what turns the mark from "go
@@ -544,7 +544,7 @@ export interface ArmAngleInfo {
 
 /**
  * One pitch as a point on the Arsenal tab's Movement Profile — where it broke,
- * and nothing else: the plot draws a coloured dot at (`hBreak`, `vBreak`) and
+ * and nothing else: the plot draws a colored dot at (`hBreak`, `vBreak`) and
  * reads no other field. A `velo` and a `stand` rode along until the tab's split
  * tabs were removed and took their last reader with them (the rule
  * `teamProbablePitcher`'s removal sets); both are one line to put back if a
@@ -610,7 +610,7 @@ export interface PitcherSeasonStats {
   era: string;
   whip: string;
   // His record and his credits, which are MLB's own tallies on this same line
-  // rather than anything derived. The player page's Overview summarises a
+  // rather than anything derived. The player page's Overview summarizes a
   // pitcher's season as `IP · W-L · SV · HD · ERA · WHIP · K%`, and these four
   // are the half of that no rate can express — a closer's year is his saves.
   // The game log counts the same credits a game at a time (`decisionOf` there),
@@ -650,7 +650,7 @@ export interface PitcherSeasonStats {
 
 /**
  * Where a team places among all 30 in each category — 1 is always the **best
- * offence**, so a low strikeout rate ranks 1st, not 30th. Computed here rather
+ * offense**, so a low strikeout rate ranks 1st, not 30th. Computed here rather
  * than read off the API, which ranks by its own default sort and doesn't rank
  * splits at all. Each cut ranks within **its own** population: a 30-day
  * home-vs-LHP line is placed against the other 29 teams' 30-day home-vs-LHP

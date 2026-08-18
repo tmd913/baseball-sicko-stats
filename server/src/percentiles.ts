@@ -124,7 +124,7 @@ const SECTIONS: SectionDef[] = [
       { key: 'sprint', label: 'Sprint Speed', pct: 'percent_speed_order', raw: 'sprint_speed', fmt: 'dec1' },
       // Baserunning run value split into its stealing and extra-base-taking
       // parts. These two are the only rows on either card that an unqualified
-      // player gets no bar for, and it is deliberate: Savant summarises neither
+      // player gets no bar for, and it is deliberate: Savant summarizes neither
       // (so there is nothing to estimate from) and the page prints each as a
       // **whole run**, which is far too coarse to rank. Measured against the
       // 242-man baserunning-run-value board: a printed "0" of Basestealing Runs
@@ -547,9 +547,9 @@ interface RankBoardDef {
   /** The column the population slice is taken in order of — playing time on
    *  whatever this board measures (batted balls, competitive swings). */
   volume: string;
-  /** The summarised metric off the same page whose `n` sizes that slice. Savant
+  /** The summarized metric off the same page whose `n` sizes that slice. Savant
    *  publishes the size of the population it ranks within beside every metric it
-   *  does summarise, and a sibling read off the same board is the closest thing
+   *  does summarize, and a sibling read off the same board is the closest thing
    *  to the one it used here (checked below). Missing, the whole board stands. */
   population: string;
 }
@@ -897,7 +897,7 @@ interface Computed {
   hrCounts: number[]; // batter
   pitcherDists: Record<string, number[]>; // pitcher, keyed by leaderboard column
   // The fallback distributions behind the scraped rows Savant ranks but doesn't
-  // summarise, keyed by the metric's raw field (see RANK_FALLBACK). Empty for a
+  // summarize, keyed by the metric's raw field (see RANK_FALLBACK). Empty for a
   // qualified player, whose rows all carry a `percent_rank_` of their own.
   rankDists: Record<string, number[]>;
 }
@@ -987,7 +987,7 @@ function cacheFile(playerId: number, year: number, kind: 'batter' | 'pitcher'): 
  * widened the pitcher card (run value, OBP/ISO/HR pairs, BABIP, curve spin, run
  * value by pitch group, command rates, swings against, more batted ball), v4
  * split the batter card's one long Batting section into Batting / Batted Ball /
- * Swing / Plate Discipline, v5 gave the rows Savant ranks but doesn't summarise
+ * Swing / Plate Discipline, v5 gave the rows Savant ranks but doesn't summarize
  * (Air %, Pull Air %, Blast %) a leaderboard to be ranked against, which a
  * stored v4 card holds as a bar-less row and would go on serving that way. */
 const CARD_VERSION = 5;

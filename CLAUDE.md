@@ -18,6 +18,32 @@ Per-workspace: `npm run dev --workspace server` (tsx watch), `npm run dev --work
 
 There is **no test runner and no linter** configured. "Verifying" a change means running `npm run build` (typecheck via `tsc`) and exercising the flow in the running app.
 
+## Spelling: American, with two exceptions
+
+Prose, comments, documentation and every user-visible string in this repo are
+written in **American English** — color, center, behavior, gray, canceled,
+labeled, recognize. The whole corpus was swept for it in one pass (79 files,
+842 lines), so a British spelling introduced now is a spelling that will read
+as a typo against everything around it.
+
+**Two things are deliberately not swept, and both would be silent breakages
+rather than cosmetic ones:**
+
+- **Values that come off the wire.** MLB spells a called-off game
+  `Cancelled` in `status.detailedState` — measured, 3 games of the 2026 season
+  — so `schedule.ts::stateOf` compares against *that* spelling and carries a
+  comment saying so. Americanizing it does not fail the build; it quietly files
+  a postponement as a game played, which the comment above that function names
+  as "the one error that would make the per-row game count lie". The same rule
+  covers any ESPN or Savant value.
+- **Names the platform owns.** `aria-labelledby` is a DOM attribute, not a word
+  we chose. `overscroll-behavior`, `color` and the rest of CSS are already
+  American and were never at issue.
+
+And note two words that only *look* British: **`analysis`/`analyses`** are the
+correct American spellings (only `analyse`/`analysed` would move), and
+**`cancellation`** keeps its double `l` on both sides of the Atlantic.
+
 ## Architecture
 
 Two npm workspaces — `server/` (Express 5 + TypeScript, ESM, run via `tsx`) and `client/` (React 19 + Vite). The client talks to the server through a single typed `fetch` layer (`client/src/api.ts`). `client/src/types.ts` mirrors `server/src/types.ts` by hand — **keep them in sync when changing the data model.**
@@ -64,11 +90,11 @@ letting it grow past it.
 
 @docs/claude/server.md
 
-**Client** — the shell every view sits in: the roster and the watchlist, player keys, the pinned chrome and the app's scroll behaviour, the loading system, the kind tabs, the header and its search, the date controls and the hide-injured filter. It was one 443KB file and is now six, split by the surface being described rather than by size; this one closes with a map of the other five.
+**Client** — the shell every view sits in: the roster and the watchlist, player keys, the pinned chrome and the app's scroll behavior, the loading system, the kind tabs, the header and its search, the date controls and the hide-injured filter. It was one 443KB file and is now six, split by the surface being described rather than by size; this one closes with a map of the other five.
 
 @docs/claude/client.md
 
-**Client — the Roster view** — the summary table, its identity block and colour legend, the `Starters` filter, and the full-page mode all three wide tables share.
+**Client — the Roster view** — the summary table, its identity block and color legend, the `Starters` filter, and the full-page mode all three wide tables share.
 
 @docs/claude/client-summary.md
 
@@ -96,7 +122,7 @@ letting it grow past it.
 
 @docs/claude/client-league-matchup.md
 
-**Client — the League view's Rankings tab** — every team against every category over one of five spans, the three summary columns, and the rank badge that colours it.
+**Client — the League view's Rankings tab** — every team against every category over one of five spans, the three summary columns, and the rank badge that colors it.
 
 @docs/claude/client-league-rankings.md
 
@@ -104,7 +130,7 @@ letting it grow past it.
 
 @docs/claude/client-league-transactions.md
 
-**Themes** — the palette as a set of tokens, the four colour schemes (Midnight, the navy original; Lavender, dark gray and violet; and Maroon and Powder Blue, the dark and light halves of a 1980 road uniform), the picker in the settings menu, and why the choice is the one thing in this app mirrored into localStorage.
+**Themes** — the palette as a set of tokens, the four color schemes (Midnight, the navy original; Lavender, dark gray and violet; and Maroon and Powder Blue, the dark and light halves of a 1980 road uniform), the picker in the settings menu, and why the choice is the one thing in this app mirrored into localStorage.
 
 @docs/claude/theming.md
 

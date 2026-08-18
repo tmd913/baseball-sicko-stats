@@ -21,7 +21,7 @@ import type { PlayerKind, ResearchIncludeKey, WatchPlayer } from './types.js';
  * changed meaning**: it used to return the roster and now returns the
  * watchlist's keys. The types differ (`WatchPlayer[]` against `string[]`), so
  * every call site of the old one is a compile error rather than a silent
- * change of behaviour. Two names are deliberately *not* touched: the
+ * change of behavior. Two names are deliberately *not* touched: the
  * `WATCHLIST_TABLE` environment variable, which infra owns and which naming is
  * not worth a stack update over, and the `/api/watchlist` routes, which every
  * browser tab open at deploy time is still calling for its roster.
@@ -61,7 +61,7 @@ const DEV_USER = process.env.DEV_USER_ID ?? 'local';
 export interface UserPrefs {
   /** The research board's visible columns, per board. Absent means that
    *  board's defaults; the client owns the column vocabulary and narrows
-   *  anything it doesn't recognise, so nothing here is validated against it. */
+   *  anything it doesn't recognize, so nothing here is validated against it. */
   researchColumns?: Partial<Record<PlayerKind, string[]>>;
   /**
    * The **player page's Stats tab** columns, per kind — a separate entry from
@@ -96,13 +96,13 @@ export interface UserPrefs {
    *  this is a habit of reading rather than a setting on a table. */
   statRanks?: boolean;
   /**
-   * The colour scheme, by id — `'midnight'` (the dark original) or
+   * The color scheme, by id — `'midnight'` (the dark original) or
    * `'lavender'`. Absent means the default, which is the convention every
    * toggle above follows and is the right one here for the same reason: the
    * default can change without anyone's record needing revisiting.
    *
    * A string rather than a boolean because there can be a third theme, and an
-   * id the client does not recognise is read as the default rather than
+   * id the client does not recognize is read as the default rather than
    * rejected — so a record written by a newer build opens an older tab on
    * Midnight instead of on nothing. Which ids exist is the **client's**
    * business (`client/src/theme.ts`): this is the same split `researchColumns`
@@ -172,7 +172,7 @@ export interface UserPrefs {
    * to another league — or joins a leaguemate's — would otherwise have that
    * league's whole history silently marked read by a timestamp with nothing to
    * do with it. Requiring the id to match fails in the one safe direction: an
-   * unrecognised league draws the dot, which is news offered rather than news
+   * unrecognized league draws the dot, which is news offered rather than news
    * hidden.
    *
    * **A date rather than a transaction id**, because the feed's own order is by
@@ -282,7 +282,7 @@ export interface RosterRemoval extends RosterEntry {
  * and the picker allows the rest of the season). Pruned on every write that
  * touches the list, or the item grows for the life of the account.
  *
- * Pruning too eagerly fails **into the old behaviour and no further**: a player
+ * Pruning too eagerly fails **into the old behavior and no further**: a player
  * whose tombstone has gone is simply absent from that range, which is what
  * every dropped player was from every range before any of this existed.
  */
@@ -923,7 +923,7 @@ export async function setMuteAudio(userId: string, mute: boolean): Promise<UserP
 }
 
 /**
- * Save the reader's colour scheme.
+ * Save the reader's color scheme.
  *
  * Absence is the default theme, so switching *back* to it deletes the entry —
  * the same convention as the three toggles above, and the same benefit: nobody's

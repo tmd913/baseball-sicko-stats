@@ -75,7 +75,7 @@ const LEAGUE_BY_HAND: Record<'R' | 'L', Record<string, Partial<ArsenalPitch>>> =
  * How far a league-average pitch of each type strays from that average — the
  * standard spread of the per-pitcher means, in inches, horizontally and
  * vertically. Read off Baseball Savant's own league movement table (RHP, 2026;
- * a left-hander's spreads are the same, only the horizontal *centre* flips,
+ * a left-hander's spreads are the same, only the horizontal *center* flips,
  * which `getLeaguePitchAverage`'s caller already orients).
  *
  * The one reader is the Arsenal tab's Movement Profile, which draws each pitch

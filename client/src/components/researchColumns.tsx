@@ -35,8 +35,8 @@ export interface Column {
   // What the cell prints. Every sortable value is a number on the row, so the
   // formatter is about presentation alone (`.265`, `3.52`, `20.8%`) — and it
   // returns a node rather than a string because one column is not a number at
-  // all: the opponent cell is two lines and colours its live inning, which is
-  // state rather than value and so is exactly what this table does colour.
+  // all: the opponent cell is two lines and colors its live inning, which is
+  // state rather than value and so is exactly what this table does color.
   format: (r: ResearchRow) => ReactNode;
   // What the sort compares. Null sorts to the bottom in both directions — a
   // player with no barrel rate is neither the best nor the worst at it.
@@ -61,7 +61,7 @@ export interface Column {
   ascFirst?: boolean;
   // A class for the cell, chosen from the value. Only the trend column uses it,
   // and it earns its place there: a rise and a fall are different *kinds* of
-  // news, and a signed number in the same colour as everything around it makes
+  // news, and a signed number in the same color as everything around it makes
   // the reader do the arithmetic.
   cellClass?: (r: ResearchRow) => string | undefined;
   // Names the run of columns this one *starts*, for the column picker's
@@ -82,7 +82,7 @@ export interface Column {
   headNode?: ReactNode;
 }
 
-/** The column list cut into the picker's labelled sections. */
+/** The column list cut into the picker's labeled sections. */
 export function columnGroups(columns: Column[]): { title: string; columns: Column[] }[] {
   const out: { title: string; columns: Column[] }[] = [];
   for (const c of columns) {
@@ -416,7 +416,7 @@ export const opponentColumn = (statuses: Map<number, PlayerStatus> | null): Colu
   // Nothing numeric to compare, and nothing to threshold — see `Column.text`.
   value: () => null,
   // The cell is words on two lines rather than a number, and its live inning is
-  // one of the few things on this board worth colouring — `cellClass` carries
+  // one of the few things on this board worth coloring — `cellClass` carries
   // both, the same hook the trend columns use for their rise and fall.
   cellClass: (r) => {
     const st = statuses?.get(r.id);

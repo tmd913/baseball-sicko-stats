@@ -56,7 +56,7 @@ export interface FantasySlot {
    * lineups (an older tab, a failed read), where the slot beside it is the
    * whole of what is known.
    *
-   * The chip's letters and its colour are still **one** day's — the last day of
+   * The chip's letters and its color are still **one** day's — the last day of
    * the range — because that is what a slot *is*, and there is no honest way to
    * draw seven of them in one pill. Over a range that is not the whole truth:
    * the row beside it sums the days he was started, so a muted `BE` can sit
@@ -140,7 +140,7 @@ export function usePlayerStatus(id: number): PlayerStatus | null {
  * says which half of a two-way player it is drawing (`lib.ts::positionCell`
  * takes the kind).
  *
- * **Deliberately not `FantasyRosterContext`**, which is the obvious neighbour
+ * **Deliberately not `FantasyRosterContext`**, which is the obvious neighbor
  * and is the wrong vehicle: that map is null whenever the views are reading the
  * *saved* roster, where eligibility is a fact about the league and applies the
  * moment one is connected, whatever list is on screen. And deliberately not

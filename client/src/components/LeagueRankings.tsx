@@ -67,38 +67,38 @@ function ordinal(n: number): string {
  * The badge's own fill, from its rank.
  *
  * **A diverging scale over the teams in one category — red at the top, blue at
- * the bottom, grey in the middle.** It is a departure from a rule this codebase
+ * the bottom, gray in the middle.** It is a departure from a rule this codebase
  * states at length, so it is worth stating why here rather than leaving a
  * reader to find the contradiction: the research board's stat columns are
  * deliberately **monochrome** and its percentile badges deliberately `--faint`,
- * on the grounds that "colour is reserved for *state*" (see
+ * on the grounds that "color is reserved for *state*" (see
  * `client-research.md`). That rule is right for a six-hundred-row leaderboard
  * whose job is to be *scanned* for names, where a heat map would be a second
- * colour system beside the live inning, the postponement and the trend. This
+ * color system beside the live inning, the postponement and the trend. This
  * table is the other thing: **twelve rows read for standing**, with no live
  * state on it at all, and where the board says "here is a number, judge it" a
- * league table says "here is where you are". The colour *is* the reading, and
+ * league table says "here is where you are". The color *is* the reading, and
  * on a table this small it is the difference between finding your weak category
  * at a glance and reading twelve ordinals.
  *
  * **It is on the badge, where it used to wash the whole cell.** A cell wash had
  * to be a translucent layer over whatever ground the row resolved, so it could
- * only ever be faint (22% at its strongest) and it painted a colour across the
+ * only ever be faint (22% at its strongest) and it painted a color across the
  * *value* as well as the rank — a figure tinted by its own standing, which is
  * the one thing a raw number on this page is there to avoid. On the chip the
  * scale can be strong enough to read at a glance and it stops where the claim
  * stops: `1st` is red, the figure beside it is just the figure.
  *
- * **It colours the rank, never the value**, which is what makes it right for a
+ * **It colors the rank, never the value**, which is what makes it right for a
  * `lowerBetter` category with no special case at all: the server has already
  * computed the rank with the direction baked in (`rankBy`, `1` is best whichever
  * way the category runs), so a 3.29 ERA and 232 home runs are both `1st` and
- * both take the same red. **Ties share a rank and so share a colour** by the
+ * both take the same red. **Ties share a rank and so share a color** by the
  * same construction.
  *
  * **The fill carries the scale and the text does not.** `--text` on these
  * grounds measures 5.1–5.7:1 at the ends and 12.8:1 in the middle, where
- * colouring the *text* instead — the obvious first move, and the one the old
+ * coloring the *text* instead — the obvious first move, and the one the old
  * badge made against the cell wash — puts a mid-luminance red on a
  * mid-luminance ground at 3.1:1, under the 4.5 an 11px label owes a reader.
  *
@@ -518,7 +518,7 @@ function RankTable({
                               folded onto rather than restyled, so a second line
                               under a number is one object in this app. What this
                               table adds is the fill: the scale rides as a custom
-                              property, so the colour is computed here (where the
+                              property, so the color is computed here (where the
                               rank and its population are) and painted there
                               (where the chip's shape and its contrast rule
                               live). */}

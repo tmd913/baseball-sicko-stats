@@ -230,7 +230,7 @@ export const boardPopulation = (rows: ResearchRow[], kind: PlayerKind): Research
  * things to fall back *to*. A batter has MLB's single listed position, which is
  * what the board read before any of this. A pitcher's MLB position is `P`, which
  * no pill has ever been able to use — so his fallback is `starter`, the exact
- * behaviour the whole pitching board had until now, window and all. It is
+ * behavior the whole pitching board had until now, window and all. It is
  * narrow: on a checked board **5 of 749 pitchers** take it (4 ESPN has no list
  * for at all, and the mis-joined Fernando Cruz above).
  */
@@ -444,7 +444,7 @@ export function toResearchInclude(inc: string | null, scope: string | null): Res
       .filter((k): k is ResearchIncludeKey =>
         RESEARCH_INCLUDE_KEYS.includes(k as ResearchIncludeKey),
       );
-    // Nothing recognised — an older build's spelling — falls back to the
+    // Nothing recognized — an older build's spelling — falls back to the
     // default rather than to an empty board, the rule `toColumnKeys` follows.
     return keys.length ? fromIncludeKeys(keys) : { ...DEFAULT_INCLUDE };
   }
@@ -518,7 +518,7 @@ export function researchKindFor(pos: ResearchPos): PlayerKind {
   return POSITION_BY_KEY.get(pos)?.kind ?? 'batter';
 }
 
-/** Narrows an unrecognised `pos=` from the URL back to the default board. */
+/** Narrows an unrecognized `pos=` from the URL back to the default board. */
 export function toResearchPos(v: string | null): ResearchPos {
   return v !== null && POSITION_BY_KEY.has(v as ResearchPos) ? (v as ResearchPos) : 'batters';
 }
@@ -667,7 +667,7 @@ interface Props {
   controlsHost: HTMLElement | null;
 }
 
-/** An unrecognised `win=` is the season, matching `toResearchPos`'s rule and the
+/** An unrecognized `win=` is the season, matching `toResearchPos`'s rule and the
  *  server's: a link from a build that offered a different set of windows should
  *  still open the board rather than 404 on a query param. */
 export function toResearchWindow(v: string | null): ResearchWindow {
@@ -1055,7 +1055,7 @@ export function ResearchTable({
   /** The columns actually on screen, by key. The sort resolves through this
    *  first and `columnsByKey` second: in schedule mode the sorted column is a
    *  day and exists nowhere in the stat vocabulary, and out of it the fallback
-   *  is what preserves the old behaviour of sorting by a column the reader has
+   *  is what preserves the old behavior of sorting by a column the reader has
    *  unticked. */
   const drawnByKey = useMemo(() => new Map(columns.map((c) => [c.key, c])), [columns]);
 
@@ -1167,7 +1167,7 @@ export function ResearchTable({
    * With a league connected but the read still in flight, everything but your
    * own roster and your watchlist falls out rather than falling *in*: an empty
    * table under "Reading your league…" is honest, where the whole league
-   * labelled free agents is not. The watchlist is exempt from that wait for the
+   * labeled free agents is not. The watchlist is exempt from that wait for the
    * same reason it is unioned — it needs no ownership to be known.
    */
   /** The board's own population — everyone of this trade on this window's
@@ -1357,7 +1357,7 @@ export function ResearchTable({
    *  already in memory. */
   const [loadingMore, setLoadingMore] = useState(false);
   const beat = useRef<number | null>(null);
-  // A beat outlives nothing: it is cancelled when the table changes under it
+  // A beat outlives nothing: it is canceled when the table changes under it
   // (the signature effect below) and when the board goes away.
   useEffect(
     () => () => {
@@ -2314,7 +2314,7 @@ export function ResearchTable({
 
       {/* Suppressed behind a failed load, where "0 of 0 batters" would read as
           a finding about the league rather than as nothing having arrived. It
-          stays on the page rather than travelling up into the chrome with the
+          stays on the page rather than traveling up into the chrome with the
           controls: a board that failed to load is news about the table, the
           same argument that keeps App's own error banner outside the chrome. */}
       {error && <div className="error-banner">⚠ {error}</div>}

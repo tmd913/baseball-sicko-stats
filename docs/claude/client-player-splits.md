@@ -15,7 +15,7 @@ them. So the tab (`components/PlatoonSplits.tsx`) draws each stat **once**, as a
 bar that says which side he is stronger against and by how much, and the reader
 sees "Perez mashes lefties" without doing any arithmetic at all.
 
-**The bar's zero is the centre of the rail, and the fill grows toward the side he
+**The bar's zero is the center of the rail, and the fill grows toward the side he
 is *better* against.** Length is the size of that edge measured against a
 per-stat `full`; the two figures are printed either side of the track, the
 stronger one in the accent and the weaker one muted, so the direction is stated
@@ -27,7 +27,7 @@ slugging — .750 vs LHP, .587 vs RHP: .163 better vs LHP.`).
 
 **The sentence that says how to read a bar has been over the bars and under
 them, and is now behind an icon on the card's title row.** It is a key to a chart
-— *"Each bar runs from the centre toward the side he is **stronger** against — the
+— *"Each bar runs from the center toward the side he is **stronger** against — the
 further it runs, the bigger the split. A full bar is one of the biggest splits in
 the league for that stat. Each stat has its own scale, so a long OPS bar and a
 long K% bar mean the same thing."* — and moving it from the top of the card to
@@ -94,7 +94,7 @@ either side of that move.)
 
 **It was at the far right of the card, which is not where a key goes.** The
 button was `position: absolute; right: 0` on the card head, and what that bought
-was worth having — a title centred in the card with the control out of flow — at
+was worth having — a title centered in the card with the control out of flow — at
 a price nobody had priced: **228px between the ⓘ and the words it belongs to at
 1200, and 77px at 390** (658.66 → 887 and 253.66 → 331, measured). At that
 distance the icon reads as a control over the
@@ -103,11 +103,11 @@ looks at the heading. So it is laid out immediately after the title instead.
 
 **The title still sits exactly where it did**, which is the half of the old rule
 worth keeping rather than trading: `.pct-card-head` is shared with the percentile
-card, whose title is centred by `text-align`, so one tab's heading sitting 19px
+card, whose title is centered by `text-align`, so one tab's heading sitting 19px
 off where every other tab's sits is a difference nothing on screen explains. The
 button is in flow after the title and **gives its own width back** — 4px on the
 left, 4 + its own 30 returned on the right, which is exactly 0 of the flex line's
-main size — so the line centres as though the button were not there and the
+main size — so the line centers as though the button were not there and the
 button hangs to the right of it. Measured before → after, at 1200 and 390: the
 title's box is **byte-identical** (541.34 → 658.66, 117.31 wide at 1200; 136.34 →
 253.66 at 390), the head and the card are unchanged, and the only thing that
@@ -130,7 +130,7 @@ its own trigger**, which reads as a popover belonging to something else.
 
 **The stacking rule this key has always had to obey is kept, and `static` is a
 second guarantee of it.** The first version of the button used `transform:
-translateY(-50%)` to centre itself, which makes a stacking context and trapped the
+translateY(-50%)` to center itself, which makes a stacking context and trapped the
 popover's `z-index: 40` inside a box that paints *before* the table — so the key
 opened underneath the very bars it explains. A static, untransformed box cannot
 make one at all. Checked rather than assumed: with the panel open,
@@ -174,9 +174,9 @@ under it, and it is not under it.
 **Direction carries the polarity and nothing else does**, which is the decision
 the whole shape was chosen for. A row where less is better — a pitcher's FIP and
 WHIP, a batter's K% — is **not** drawn with a reversed scale or a different
-colour: `lowerBetter` flips which side counts as stronger and flips nothing else,
+color: `lowerBetter` flips which side counts as stronger and flips nothing else,
 so a bar pointing left means the same sentence on every row of the card. That is
-what a centre anchor buys, and it is why the obvious alternative was rejected:
+what a center anchor buys, and it is why the obvious alternative was rejected:
 `RateBar` (`Arsenal.tsx`) is anchored at the left and scaled to a share, and
 expressing this as L/(L+R) would **invert its meaning** on exactly those rows and
 flatten every other one — .900 against .700 is a 56/44 bar, which is not what a
@@ -238,7 +238,7 @@ the rounded cap of a bar that merely came close. It did not survive being looked
 at twice more; see below. (**"All four sides" is now three**: the two long ones
 and the *outer* end. The horizontal inset was only ever spent at the outer end —
 it is subtracted from the fill's length while the inner edge is pinned to the
-rail's centre — and the inner **cap** went flat in the fourth round, so there is
+rail's center — and the inner **cap** went flat in the fourth round, so there is
 nothing there to nest inside anything. The sentence is left as it was written
 because the nesting argument it makes is the outer end's and is still exactly
 right.)
@@ -257,7 +257,7 @@ replaces them.
 
 **The first squared the fill's outer end off.** That reads as a bar with its
 corner cut off, and it cost real geometry: a square corner sits at the fill's
-extreme height, 5px off the rail's centre line, where the rail's own cap has
+extreme height, 5px off the rail's center line, where the rail's own cap has
 already receded `8 − √(8² − 5²)` = **1.76px** — so at the sides' 3px inset it had
 1.24px of rail beside it against its own midline's 3px, and the ends had to take
 a larger token of their own (`--spl-inset-x`, 5px). Its quietest fault was that
@@ -267,7 +267,7 @@ end with no key to it.
 **The second made every cap round again and knocked a chevron out of the fill
 just inside its tip**, with the key behind the ⓘ to explain it — which is what
 made a mark defensible at all, and is also what retires `--spl-inset-x`. A
-radius-5 cap 3px inside a radius-8 one **shares its centre**, so the track shows
+radius-5 cap 3px inside a radius-8 one **shares its center**, so the track shows
 exactly 3px of itself at *every* angle rather than 5px at the midline and 3.24 at
 the corner, and every bar is **2px longer** than it was. **That is still the
 geometry today**, and these are its measurements: a clamped bar's tightest row
@@ -285,7 +285,7 @@ all to say a thing the row was already saying in words.
 
 **What decides it is the two figures printed either side of the rail.** The
 picture gives up precision at the end of its scale; the exact numbers it gave up
-are ten pixels away on the same row, in the accent and the muted grey. So the
+are ten pixels away on the same row, in the accent and the muted gray. So the
 mark was flagging a loss the reader could already read off, in a glyph they had
 to open a popover to decode — which is the same fault the squared end was
 retired for, arrived at from the other direction. And the sentence a full bar makes is true of
@@ -322,7 +322,7 @@ clamped solid row of every card; `::before` and `::after` both compute `none` on
 every drawn fill where they were `""` on the clamped ones. Everything else is
 byte-identical: worst outer clearance **2.881px**, worst `fillWidth − half`
 **−3.000px**, inner recess **0.000 at 1200** (0.500 at 390, where the rail's
-centre falls on a half-pixel), rows **34px**, rails **434 / 173**, cards **680 /
+center falls on a half-pixel), rows **34px**, rails **434 / 173**, cards **680 /
 358**, and page and overlay overflow **0 / 0** at both widths. The one figure
 that is not identical is Josh Hader's clearance, **2.881 → 2.952px**, and it is
 the hatch rather than the cap — on a striped fill the outermost accent pixel is
@@ -358,9 +358,9 @@ argue away.
 
 ### The inner end is flat, because the bar grows out of the zero
 
-**A bar anchored at a centre must look anchored at it, and a round cap there says
+**A bar anchored at a center must look anchored at it, and a round cap there says
 the opposite.** Both ends of the fill were pills, so the ink pulled away from the
-rail's centre everywhere except one row through the fill's own middle: measured on
+rail's center everywhere except one row through the fill's own middle: measured on
 Perez's card at 1200, **3px of recess** at the rows a reader takes the shape from,
 5px at the extreme rows in principle. What that draws is a lozenge sitting *near*
 the middle of the rail, which is a picture of a quantity that begins somewhere
@@ -388,14 +388,14 @@ outright and leaves this end exactly as this round left it.)
   cap has already receded 1.76px. **The inner end has no such problem and takes
   no inset**: the horizontal inset is spent entirely at the outer end, by being
   subtracted from the fill's *length*, while the inner edge is pinned to the
-  rail's centre by `left: 50%` / `right: 50%`. The rail is straight-sided there —
+  rail's center by `left: 50%` / `right: 50%`. The rail is straight-sided there —
   it is 217px from either cap — so there is nothing for a corner to run into. The
   token stays a single 3px and `--spl-inset-x` stays retired.
 - It *"was never explained anywhere on the card"*, which is the sharpest of the
   three and the one that decides this. A clamp marker is a **claim** — *this bar
   is not the real number* — and a claim a reader cannot decode is worse than
   none. A flat edge on the zero is not a claim, it is the shape of the
-  measurement, and it needs no key: the card already says the centre is zero,
+  measurement, and it needs no key: the card already says the center is zero,
   with a dashed guide down it. (That sentence outlived the mark it was written
   about: the chevron *was* explained, behind the ⓘ, and went anyway — a claim a
   reader has to open a popover to decode is not much better than one they
@@ -411,7 +411,7 @@ it lands.
 row by row against the rail — the same scan the third round used, run on real
 screenshots at device-pixel resolution. On the six solid cards (Perez, Turang,
 Contreras, Sánchez, Betts, Sale) the worst inner recess goes **3 → 0.000 at
-1200**; at 390, where the rail's centre falls on a half-pixel, it goes 2.5–3.5 →
+1200**; at 390, where the rail's center falls on a half-pixel, it goes 2.5–3.5 →
 −0.5–0.5, which is the sampling grid rather than a recess. `fillWidth − half`
 is unchanged on every row of every card and still **≤ 0** (−3.000 on a clamped
 row, −50.56 down to −189.17 on Perez's unclamped ones), and the outer clearance
@@ -440,7 +440,7 @@ cap this round is about is not, and re-measures at **0.000** inner recess at 120
 after its removal.
 
 **The zero guide costs two device pixels, and nothing about it changed.**
-`.spl-track::before` is a 1px dashed border-left at the rail's centre, drawn
+`.spl-track::before` is a 1px dashed border-left at the rail's center, drawn
 6px proud of the rail top and bottom, so it is a ~28px column of which the fill
 can only ever reach 10. A **right**-pointing bar starts on that column and so
 covers a little of it; a **left**-pointing one stops at its edge and covers none.
@@ -452,8 +452,8 @@ line.
 
 **The two ends of the length range were forced onto a real row**, since the
 formulas did not move but the caps did. A width of `0` resolves to the **3px
-`min-width` nub** (a D of ink with its flat edge on the centre and its outer end
-rounded), `overHalf −214`, inner edge **0.000** off the centre; a width of
+`min-width` nub** (a D of ink with its flat edge on the center and its outer end
+rounded), `overHalf −214`, inner edge **0.000** off the center; a width of
 `5000px` resolves to **214** against a half of 217, `overHalf −3`, inner edge
 0.000. Both directions, both radii sets, checked.
 
@@ -503,7 +503,7 @@ split earned runs, so a platoon half has no ERA at all — but it has the counts
 FIP is made of, and `PlatoonSplits` reads the `fip` the server already computes
 per split off `leagueRates.ts::fipLike`, the same function (and so the same
 `FIP_CONSTANT`) the pitcher card, the game log and the research board use. It
-honours that function's own floor: a half under three innings carries null and
+honors that function's own floor: a half under three innings carries null and
 **dashes** rather than reporting one afternoon as a season (checked on a 5-BF
 side, which dashes while the 12-BF side beside it reads 2.88).
 
@@ -524,7 +524,7 @@ and builds the report itself — the same test that passage sets for `teamId`,
 anything reads it back out of one.
 
 **The tab keys were swapped and the swap is the honest one.** `splits` used to
-name the tab labelled **Stats**, a leftover from when that tab *was* the platoon
+name the tab labeled **Stats**, a leftover from when that tab *was* the platoon
 card, kept through the rename on the reasoning that a key in no URL is not worth
 churning. That stops being true the moment a tab called Splits exists beside it:
 two tabs, one named after the other's subject, reads fine today and is a trap the
@@ -532,7 +532,7 @@ next time anybody touches the file. So the window table is **`stats`** and the
 platoon comparison is **`splits`**, each named for what it holds. Nothing outside
 `PlayerDetails.tsx` had to change but one prop type — the open tab is component
 state and is in no URL, and `PlayerOverview`'s `Stats →` link (`onTab`) is the
-only caller, which is a compile error rather than a silent change of behaviour if
+only caller, which is a compile error rather than a silent change of behavior if
 it is missed.
 
 **It costs no request.** The splits fetch is the page's own **eager** one, made
@@ -546,7 +546,7 @@ feed's **Upcoming** row draws `BatterSplitsTab` in its dialog with the announced
 starter's half marked — the same component, the same `SeasonStats` objects (the
 report's `splitVsLeft`/`splitVsRight` are what `getPlayerStats` puts on the
 splits route as well), the marked column taking `.spl-head-side--on`'s accent
-colour and the pitcher's hand and name on the head's own tooltip. This tab
+color and the pitcher's hand and name on the head's own tooltip. This tab
 passes no `highlight`, so neither is rendered at all here and every figure this
 section records is unmoved (re-measured: heads 25.19px, card 680 / 358, row
 34px, rail 434 / 173). The whole of that argument — why the row shows the
@@ -600,7 +600,7 @@ rounds above were: a 2.000 OPS against a .200 over 40 PA, a −4.00 against an
 identical halves, and a zero PA denominator. At both widths, **no row's fill
 exceeds its half of the rail** (worst `fillWidth − half` **−3.000px** on the
 clamped cases) and none is a non-finite length; the null rows dash with no bar,
-the dead-even rows draw the 3px nub at the centre, and the zero-PA card draws no
+the dead-even rows draw the 3px nub at the center, and the zero-PA card draws no
 bars and says `No plate appearances vs LHP this season, so there is nothing to
 compare against.`
 

@@ -239,7 +239,7 @@ function TxPhoto({
  * widely he is rostered.
  *
  * **Three of the four facts are on the row and the fourth is a tooltip**, which
- * is a judgement about what a *feed* is for rather than a shortage of room. A
+ * is a judgment about what a *feed* is for rather than a shortage of room. A
  * reader here is scanning events, so what earns a place is what changes whether
  * this event matters to them:
  *

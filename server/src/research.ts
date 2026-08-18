@@ -392,7 +392,7 @@ const CUSTOM_COLUMNS = [
   'f_strike_percent',
   // Bat tracking. Checked populated on **both** boards before being added —
   // 420/420 batters and 96/96 pitchers at `min=100` — which matters here more
-  // than usual, because its obvious neighbour `swing_length` is one of the
+  // than usual, because its obvious neighbor `swing_length` is one of the
   // columns this board accepts and returns **empty**: 0/420, the same failure
   // `pull_air_rate` is recorded for above. Bat speed is real, swing length is
   // not reachable from any leaderboard, so only the one is asked for.

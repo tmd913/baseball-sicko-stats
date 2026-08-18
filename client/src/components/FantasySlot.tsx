@@ -11,7 +11,7 @@ import { prettyGameDate } from '../lib';
  * the rest of the time.
  *
  * **The distinction it exists to draw is starting versus not**, which is why
- * that is carried by colour and weight rather than left to the reader to infer
+ * that is carried by color and weight rather than left to the reader to infer
  * from the slot name: a lineup spot takes the accent, the bench and the IL go
  * muted and outlined. Someone scanning their team wants to know who was
  * actually accruing stats that day, and `BE` versus `2B/SS` is not a

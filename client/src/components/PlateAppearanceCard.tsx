@@ -78,15 +78,15 @@ export function VideoClip({ playId, gamePk }: { playId: string; gamePk: number }
   }, [state]);
 
   useEffect(() => {
-    let cancelled = false;
+    let canceled = false;
     setState('checking');
     lookupClip(playId, gamePk).then((resolved) => {
-      if (cancelled) return;
+      if (canceled) return;
       setUrl(resolved);
       setState(resolved ? 'available' : 'unavailable');
     });
     return () => {
-      cancelled = true;
+      canceled = true;
     };
   }, [playId, gamePk]);
 
@@ -131,17 +131,17 @@ export function InlineVideoClip({ playId, gamePk }: { playId: string; gamePk: nu
   const wrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    let cancelled = false;
+    let canceled = false;
     const known = clipUrls.get(clipKey(playId, gamePk));
     setUrl(known ?? null);
     setNear(false);
     // Already answered — and already rendered, this render.
     if (known !== undefined) return;
     lookupClip(playId, gamePk).then((resolved) => {
-      if (!cancelled) setUrl(resolved);
+      if (!canceled) setUrl(resolved);
     });
     return () => {
-      cancelled = true;
+      canceled = true;
     };
   }, [playId, gamePk]);
 

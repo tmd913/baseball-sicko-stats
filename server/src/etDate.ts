@@ -5,7 +5,7 @@
  * Coast finishes around 1am, so at 12:30am the day anyone means by "today" is
  * still the one whose games are ending — and a date-picker preset that had
  * already rolled over would show them an empty slate. The day therefore turns
- * at 3am ET: later than any game realistically runs, earlier than anything the
+ * at 3am ET: later than any game realiztically runs, earlier than anything the
  * next day starts.
  *
  * `client/src/App.tsx` mirrors these (its presets have to land on the same day

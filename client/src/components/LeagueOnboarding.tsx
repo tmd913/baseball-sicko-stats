@@ -87,22 +87,22 @@ export function LeagueOnboarding({
    * the SWID usually names on its own, and here it is the whole page.
    */
   useEffect(() => {
-    let cancelled = false;
+    let canceled = false;
     setReadError(null);
     api
       .espnOwnership()
       .then((o) => {
-        if (cancelled) return;
+        if (canceled) return;
         setTeams(o.teams);
         // ESPN names the team itself when the SWID identifies one, which for a
-        // joiner it does not — but the answer costs nothing to honour.
+        // joiner it does not — but the answer costs nothing to honor.
         setPicked((cur) => (cur === '' && o.myTeamId != null ? String(o.myTeamId) : cur));
       })
       .catch((e: Error) => {
-        if (!cancelled) setReadError(e.message);
+        if (!canceled) setReadError(e.message);
       });
     return () => {
-      cancelled = true;
+      canceled = true;
     };
   }, [attempt]);
 

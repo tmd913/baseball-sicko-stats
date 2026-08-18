@@ -242,7 +242,7 @@ export interface ProjectedStarts {
  * page's **News** tab and the section that previews it.
  *
  * The two sources are genuinely different kinds of fact and the field says
- * which, because a section labelled News that quietly mixes them would be
+ * which, because a section labeled News that quietly mixes them would be
  * lying about half its rows:
  *
  * - **`rotowire`** — a **report**. A short dated note from RotoWire's baseball
@@ -304,7 +304,7 @@ export type NewsRecency = 'today' | 'yesterday';
  */
 export interface RecentNews {
   /** `YYYY-MM-DD`, the day the newest item is stamped — the one the tooltip
-   *  names, so the reader can check the colour against a date. */
+   *  names, so the reader can check the color against a date. */
   date: string;
   level: NewsRecency;
   /** The headline of that newest item, which is what turns the mark from "go
@@ -516,7 +516,7 @@ export interface ArmAngleInfo {
 
 /**
  * One pitch as a point on the Arsenal tab's Movement Profile — where it broke,
- * and nothing else: the plot draws a coloured dot at (`hBreak`, `vBreak`) and
+ * and nothing else: the plot draws a colored dot at (`hBreak`, `vBreak`) and
  * reads no other field.
  *
  * `hBreak`/`vBreak` are the app's usual convention, inches: positive `hBreak`
@@ -545,7 +545,7 @@ export interface SeasonArsenal {
   season: number;
   /** Which arm he throws with, off the season CSV's own `p_throws`. It picks
    *  the per-hand league line the charts compare against, and it is what lets
-   *  that line be labelled `RHP AVG` / `LHP AVG` rather than a blended
+   *  that line be labeled `RHP AVG` / `LHP AVG` rather than a blended
    *  "League". Null falls both back to the blended figure. */
   hand: 'R' | 'L' | null;
   /** His arm slot, off Savant's own leaderboard — null where it has no row for
@@ -632,7 +632,7 @@ export interface PitcherSeasonStats {
 
 /**
  * Where a team places among all 30 in each category — 1 is always the **best
- * offence**, so a low strikeout rate ranks 1st, not 30th. Computed here rather
+ * offense**, so a low strikeout rate ranks 1st, not 30th. Computed here rather
  * than read off the API, which ranks by its own default sort and doesn't rank
  * splits at all. Each cut ranks within **its own** population: a 30-day
  * home-vs-LHP line is placed against the other 29 teams' 30-day home-vs-LHP
@@ -1227,7 +1227,7 @@ export interface UserPrefs {
   hideInjured?: boolean;
   /** Play every video clip with the sound off. Absent means off. */
   muteAudio?: boolean;
-  /** The colour scheme, by id — see `theme.ts`, which owns the vocabulary.
+  /** The color scheme, by id — see `theme.ts`, which owns the vocabulary.
    *  Absent means the default (Midnight), the same convention as the toggles
    *  around it, and an id this build does not know is read as the default
    *  rather than as an error. */
@@ -1262,7 +1262,7 @@ export interface UserPrefs {
    *  last open, and the league it belonged to. What draws the red dot on the
    *  tab, and what clears it. The league id is stored with the date because a
    *  marker only means anything against the feed it came from — an
-   *  unrecognised league draws the dot, which is news offered rather than news
+   *  unrecognized league draws the dot, which is news offered rather than news
    *  hidden. Absent means nothing has been read, which is right for a reader
    *  who has never opened the tab. */
   seenTransactions?: { leagueId: number; ts: number };

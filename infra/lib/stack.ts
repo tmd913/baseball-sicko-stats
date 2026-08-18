@@ -287,7 +287,7 @@ export class SickoStack extends Stack {
         userPoolEmail = cognito.UserPoolEmail.withSES({
           fromEmail: sesFromEmail,
           // What a mail client shows instead of the address. The whole point
-          // of the exercise is that the reader recognises the sender.
+          // of the exercise is that the reader recognizes the sender.
           fromName: 'Statcast Sicko',
           sesVerifiedDomain: domainName,
           sesRegion: this.region,

@@ -34,9 +34,9 @@ the two tabs beside it each time; a row of tabs that changes width under the
 reader is worse than no mark at all. Measured at 320 / 375 / 390 / 640 / 900 /
 1200 / 1920: the tab is **104.2px wide with the dot and without it** at every one
 of them, the dot lands inside its own tab at every one, and the page body
-overflows by **0**. The colour is `--strikeout`, the app's red and the tone
+overflows by **0**. The color is `--strikeout`, the app's red and the tone
 `NewsMark` already gives news filed today; it is `aria-hidden` with the fact
-given to a screen reader as words, since a coloured circle names nothing.
+given to a screen reader as words, since a colored circle names nothing.
 
 **Not on the League pill itself**, which was the obvious extension and is not
 what was asked for: the tabs are drawn only on the League view, so the dot is a
@@ -85,11 +85,11 @@ league: **42 of 42 names on the first page are links, 0 plain.**
 **The name was the whole of a player row, and a name is not enough to decide
 anything on.** A waiver feed is read to answer *does this matter to me* — which
 turns on where he plays, how widely he is rostered and, at a glance, whether you
-recognise him at all — and the row said none of it. It now carries his headshot,
+recognize him at all — and the row said none of it. It now carries his headshot,
 his club's cap logo, ESPN's own position eligibility and his global roster %.
 
 **Three of the four are on the row and the fourth is the mark alone**, which is a
-judgement about density rather than about room. The **positions** are the most
+judgment about density rather than about room. The **positions** are the most
 actionable thing a feed of adds and drops can say (*somebody just dropped a
 shortstop*). The **roster %** is how big a deal the move is — a 78%-rostered
 player being dropped is news where a 2% one is noise — and it is four characters,

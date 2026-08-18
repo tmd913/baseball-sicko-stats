@@ -1430,7 +1430,7 @@ export async function getReport(
 
   // How each opposing lineup has hit this season — one fetch per team, however
   // many watched pitchers face it, and only for the pitchers (a batter's card
-  // has no use for the other side's offence).
+  // has no use for the other side's offense).
   const opponentIds = new Set<number>();
   for (const day of days) {
     for (const dg of day.games) {

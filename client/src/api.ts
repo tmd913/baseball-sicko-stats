@@ -275,7 +275,7 @@ export const api = {
       body: JSON.stringify({ mute }),
     });
   },
-  /** The colour scheme. `null` is "back to the default", which the server
+  /** The color scheme. `null` is "back to the default", which the server
    *  stores as the absence of the entry — the same null-clears rule
    *  `saveResearchColumns` follows, and the reason this is a route of its own
    *  rather than a boolean. */

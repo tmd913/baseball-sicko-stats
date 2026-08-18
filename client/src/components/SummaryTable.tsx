@@ -145,7 +145,7 @@ function aggregatePitching(report: PlayerReport): PitchingLine {
 /**
  * Headshot for a summary row; falls back to a blank circle when MLB has none.
  * `role` paints the live-role ring (at bat / on deck / on base) and `corner`
- * pins the lineup-spot pip — the same colours and treatment the cards and feed use.
+ * pins the lineup-spot pip — the same colors and treatment the cards and feed use.
  */
 /**
  * The player's status as a short code on the bottom edge of his headshot —
@@ -646,7 +646,7 @@ function PitcherTable({
  *
  * **It is always drawn, and it always names all four rules.** Both halves of
  * that are a reversal, and both reversals are the same correction: this is a
- * *key to the app's colour vocabulary*, not a report on what happens to be live
+ * *key to the app's color vocabulary*, not a report on what happens to be live
  * this half-inning.
  *
  * What stood here argued the opposite, and the argument reads well until you
@@ -668,12 +668,12 @@ function PitcherTable({
  * had to already know the purple meant something in order to go and find out
  * what. A vocabulary is not per-page. All four are drawn on both tabs, which
  * also puts the on-base and on-mound swatches side by side for the first time —
- * and that is what showed they were **literally the same colour**. It was
+ * and that is what showed they were **literally the same color**. It was
  * argued for at the time as the app's own convention (a man on base and a man on
  * the mound are both *in the game right now*), which reads well and is wrong
  * where it matters: a key exists to tell one shade from another, so two labels
  * over one swatch is the key saying these are the same row tint when the table
- * calls them two roles. On the mound has its own colour now — `--mound-teal`,
+ * calls them two roles. On the mound has its own color now — `--mound-teal`,
  * beside `--live-purple` in `styles.css`, where the hue and the measured gaps
  * between all four grounds are set out.
  *
@@ -686,7 +686,7 @@ function PitcherTable({
  * The labels are `liveRoleLabel`'s, the same strings the live tag on a feed row
  * and a player card carry, and the swatches read the same `--role-*` tokens the
  * row tints do, so the key and the thing it explains cannot come to call one
- * role by two names or paint it in two colours.
+ * role by two names or paint it in two colors.
  */
 function RoleLegend() {
   return (

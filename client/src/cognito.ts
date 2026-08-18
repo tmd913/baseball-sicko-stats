@@ -274,7 +274,7 @@ export function confirmForgotPassword(
  * Invalidate a refresh token server-side.
  *
  * Signing out clears local storage either way, so this is about the copy
- * Cognito would otherwise keep honouring for a year. It's best-effort by
+ * Cognito would otherwise keep honoring for a year. It's best-effort by
  * design: the caller must not leave someone signed in because a revoke call
  * failed.
  */
@@ -358,7 +358,7 @@ export function oauthError(): CognitoError | null {
 function friendlyOAuth(error: string, description: string): string {
   switch (error) {
     case 'access_denied':
-      return 'Google sign-in was cancelled.';
+      return 'Google sign-in was canceled.';
     case 'invalid_request':
     case 'server_error':
     case 'temporarily_unavailable':

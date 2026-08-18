@@ -13,7 +13,7 @@ import type { PitcherSeasonStats, SeasonStats } from '../types';
  *
  * ### What the bar means
  *
- * The track's **centre is zero and means no split at all**. The fill grows from
+ * The track's **center is zero and means no split at all**. The fill grows from
  * it toward the side he is *better* against, and its length is the size of that
  * edge measured against `full` — **the 90th percentile of that stat's real
  * platoon gaps**, measured rather than guessed (see the two tables below). So a
@@ -47,17 +47,17 @@ import type { PitcherSeasonStats, SeasonStats } from '../types';
  * it on Willson Contreras's clamped K% row, where every unclamped row on the
  * card sat 2.25px inside. The fill is inset for that reason — **`--spl-inset`
  * (3px), one number for the two long sides and the outer end** — which makes a
- * radius-5 cap concentric inside the rail's radius-8 one: both caps centre on the
+ * radius-5 cap concentric inside the rail's radius-8 one: both caps center on the
  * same point, so the track shows exactly 3px of itself all the way around that
  * end. The **inner** end takes none of it and never did: the horizontal inset is
  * spent by being subtracted from the *length*, while the inner edge is pinned to
- * the rail's centre by the inline `left: 50%` / `right: 50%`.
+ * the rail's center by the inline `left: 50%` / `right: 50%`.
  *
  * **The outer ends took a bigger inset than the sides for a while**
  * (`--spl-inset-x`, 5px) and no longer do, because the thing it was written for
  * is gone. That token existed for the **square** outer end a clamped bar used to
  * draw: a square corner sits at the fill's extreme height, 5px off the rail's
- * centre line, where the cap's ink has already receded 1.76px, so at 3px it had
+ * center line, where the cap's ink has already receded 1.76px, so at 3px it had
  * 1.24px of rail beside it against its own midline's 3px and read as a bar
  * running out of its rail with the corner cut off. **Every outer cap is round
  * now** — a clamped bar draws exactly like one at full scale (see `over` below)
@@ -67,7 +67,7 @@ import type { PitcherSeasonStats, SeasonStats } from '../types';
  * length written here cannot drift apart.
  *
  * **The inner end is flat**, which is a later round and the opposite end of the
- * bar rather than a reversal of the one above. A bar anchored at a centre has to
+ * bar rather than a reversal of the one above. A bar anchored at a center has to
  * *look* anchored at it, and a round cap there pulled the ink up to 3px back from
  * the zero at the rows a reader takes the shape from — a lozenge sitting near the
  * middle of the rail instead of a quantity measured from it. It costs the clamp
@@ -79,16 +79,16 @@ import type { PitcherSeasonStats, SeasonStats } from '../types';
  *
  * **Direction carries the polarity, and nothing else does.** A row where less is
  * better (`lowerBetter` — a pitcher's FIP, a batter's K%) is not drawn with a
- * reversed scale or a differently-coloured fill; it points at whichever side the
+ * reversed scale or a differently-colored fill; it points at whichever side the
  * *smaller* number belongs to, which is the same sentence as every other row:
  * "he is stronger against this side". That is the whole reason the bar is
- * anchored at a centre rather than at an end. A fill anchored left and scaled to
+ * anchored at a center rather than at an end. A fill anchored left and scaled to
  * a share of L+R — the shape `RateBar` already draws — inverts its meaning on
  * exactly those rows, and flattens every other one: .900 against .700 is a 56/44
  * bar, which is not what a .200 OPS gap looks like.
  *
  * The two figures are printed either side of the track, the stronger one in the
- * text colour and the weaker one muted, so the direction is stated twice and the
+ * text color and the weaker one muted, so the direction is stated twice and the
  * exact numbers are never hidden behind the picture. Each row's tooltip spells
  * the whole thing out in a sentence, gap and all.
  *
@@ -183,7 +183,7 @@ function railFraction(gap: number, full: number): number {
  * rates, which is where a platoon split usually *comes from* — a right-handed
  * hitter's trouble with a right-handed slider shows up in K% long before it
  * shows up in OPS. K% is also the batter side's one `lowerBetter` row, which is
- * the case the centre anchor exists for.
+ * the case the center anchor exists for.
  *
  * **The `full` figures were measured off the league rather than chosen.** Every
  * 2026 batter with at least 100 PA against each hand (167 of them) had his gap
@@ -280,7 +280,7 @@ const BATTER_STATS: SplitStat<SeasonStats>[] = [
  * **The pitcher's rows** — the same shape from the other side of the plate, and
  * five of the seven are `lowerBetter`. On his card almost every bar points at
  * the *smaller* number and still means "he handles this side better", which is
- * the whole argument for a centre-anchored rail rather than a left-anchored one.
+ * the whole argument for a center-anchored rail rather than a left-anchored one.
  *
  * ERA is absent because MLB does not split it. FIP is not: it is computed from
  * the split's own home runs, walks, hit batsmen, strikeouts and outs by the same
@@ -431,7 +431,7 @@ const THIN_SAMPLE = 100;
  *
  * **It sits immediately after the title**, where it once hung off the card's
  * right edge, 228px from the words it belongs to at 1200px wide. The title still
- * centres exactly where the percentile card's does — the button is in flow and
+ * centers exactly where the percentile card's does — the button is in flow and
  * gives its own width back in a negative margin — and the panel opens from the
  * *card's* right edge rather than the button's, which is the only anchor that
  * stays on screen at 390 now the button is near the middle. `.spl-card-head` owns
@@ -453,7 +453,7 @@ function SplitsKey() {
   return (
     <InfoKey className="spl-key" label="How to read these bars">
       <p>
-        Each bar runs from the centre toward the side he is <strong>stronger</strong> against — the
+        Each bar runs from the center toward the side he is <strong>stronger</strong> against — the
         further it runs, the bigger the split.
       </p>
       <p>
@@ -489,7 +489,7 @@ function SplitRow<T>({
   const both = l !== null && r !== null;
   // Which side is *better*, which is the only question the direction answers.
   // `lowerBetter` flips this test and nothing else — not the scale, not the
-  // colour — so "the bar points left" means the same thing on a FIP row as on an
+  // color — so "the bar points left" means the same thing on a FIP row as on an
   // OPS row.
   const leftStronger = both ? (stat.lowerBetter ? l < r : l > r) : false;
   const gap = both ? Math.abs(l - r) : 0;
@@ -515,7 +515,7 @@ function SplitRow<T>({
   // One token for the two long sides and the outer end, which is only correct
   // because that cap is round — a radius-5 cap 3px inside a radius-8 one is
   // concentric with it. The inner end takes none of it: it is pinned to the
-  // rail's centre by the `left`/`right` below and meets it flat.
+  // rail's center by the `left`/`right` below and meets it flat.
   const width = `calc(${frac} * (50% - var(--spl-inset)))`;
   const strong = both && gap > 0;
 
@@ -568,13 +568,13 @@ function SplitRow<T>({
 
 /**
  * One of the two column heads: the side and its sample size. When a caller has
- * named a half (`marked`) the head takes the accent colour, and `title` — the
+ * named a half (`marked`) the head takes the accent color, and `title` — the
  * whole sentence, e.g. "Andrew Alvarez throws left-handed, so this is the half
  * that applies to this game." — carries the reason on hover or tap. That used
  * to be restated as a two-word line under the sample (`this game`), which said
- * nothing the colour and the tooltip didn't already say and cost the head a
+ * nothing the color and the tooltip didn't already say and cost the head a
  * reserved line on both sides to hold it; it's gone, and the mark is the
- * colour alone.
+ * color alone.
  */
 function SplitHead({
   label,
@@ -630,11 +630,11 @@ function SplitCard<T>({
    *  announced, and the whole comparison is what makes his half mean anything
    *  (`.750 vs LHP` is nothing until you know the other side reads `.587`). So
    *  the card is unchanged and the head *says which column is his*: absent
-   *  everywhere else, which is why the accent colour is drawn only when a
+   *  everywhere else, which is why the accent color is drawn only when a
    *  caller asks for one. */
   highlight?: 'left' | 'right' | null;
   /** The whole sentence, for the head's tooltip, where there is room to name the
-   *  pitcher the mark is about — the tooltip and the accent colour are the
+   *  pitcher the mark is about — the tooltip and the accent color are the
    *  whole of the mark now; see `SplitHead`. */
   highlightTitle?: string;
 }) {
@@ -649,7 +649,7 @@ function SplitCard<T>({
           popover anchors to. The ⓘ is laid out **immediately after the title**,
           where a key belongs — it sat at the far right of the card for a while,
           240px from the words it explains — and gives its own width back in a
-          negative margin, so the title still centres exactly where the
+          negative margin, so the title still centers exactly where the
           percentile card's does. `.pct-card-head` is untouched for that card. */}
       <div className="pct-card-head spl-card-head">
         <span className="pct-card-title">Platoon splits</span>

@@ -7,20 +7,20 @@
    the same names against `html[data-theme='lavender']`; nothing else in 12,000
    lines of stylesheet knows there is more than one.
 
-   That is only true because a colour a rule wants is a **token** rather than a
+   That is only true because a color a rule wants is a **token** rather than a
    literal, and it was not true when the second theme was written: 88 palette
    `rgba()` literals were spelled out where they were used — `rgba(56, 189, 248,
    0.12)` for a 12% accent wash, the same four numbers in forty places — so a
    theme could move `--accent` and leave every tint it backs sitting on the old
    hue. They are `color-mix(in srgb, var(--accent) 12%, transparent)` now, which
-   is the identical colour by construction (the mix is against `transparent`, so
+   is the identical color by construction (the mix is against `transparent`, so
    it *is* the alpha) and follows whatever `--accent` is. The same sweep gave a
    name to the dozen hard-coded hexes that were not palette entries at all —
    `--on-accent`, `--prose`, `--chip-solid`, the scrims and the glows, each
    documented where it is declared below.
 
    **What a theme may redeclare is exactly the block between here and
-   `--live-purple`'s neighbours**, plus the four role grounds. Everything after
+   `--live-purple`'s neighbors**, plus the four role grounds. Everything after
    that — the pin edges, the control heights, the radii, the column widths — is
    geometry, is the same in both themes, and is declared once.
    --------------------------------------------------------------------------- */
@@ -47,7 +47,7 @@
      the three dark palettes has to say anything. **Powder Blue is where they
      separate.** Its page is white, so a card wants to be white as well — and a
      stripe cannot be, or there is no stripe. It carries the jersey's own powder
-     here instead, which is the colour its page gave up.
+     here instead, which is the color its page gave up.
 
      Read by the zebra rule of all four wide tables — the summary table, the
      research board (which carries `.summary-table` too), the game log's family
@@ -73,7 +73,7 @@
      `--bg` is the near-white the fill has to be told apart from. A name for the
      role rather than a reuse of the surface is the whole of the fix, and both
      shipped themes are dark, so both leave it as `var(--bg)` and each gets its
-     own page colour out of it for nothing.
+     own page color out of it for nothing.
 
      One rule *did* change and it is worth stating: `.lineup-spot.spot-out` — the
      red "!" pip on a headshot — spelled its ink `#fff` where its five siblings
@@ -83,7 +83,7 @@
      it. */
   --on-accent: var(--bg);
 
-  /* **The colour a won category takes** — the scoreboard card's winning figure,
+  /* **The color a won category takes** — the scoreboard card's winning figure,
      the matchup Summary's, its diverging category bar and the run of the
      whole-matchup meter the leader holds. Four rules, one name, because they
      are one statement made four ways and a fifth reader would otherwise have to
@@ -103,7 +103,7 @@
      and moved `--win` to its accent, and a bottle-green winner on Powder Blue's
      maroon-and-sky page is the same observation again. Rather than three themes
      overriding and one not, the rule is one sentence: **the winner is the theme's
-     hero colour**, which every palette is built to make the loudest thing it has.
+     hero color**, which every palette is built to make the loudest thing it has.
 
      Measured against the `--muted` a losing figure takes, which is the comparison
      the card actually asks a reader to make: ΔE2000 **17.9** on Midnight, 16.4 on
@@ -119,18 +119,18 @@
      than as a value; a token because the step is a hand-picked distance from
      `--text` rather than a formula, so each theme names its own. */
   --prose: #cdd8f0;
-  /* The ink on an `--out`-toned badge, which is the one badge whose own colour
+  /* The ink on an `--out`-toned badge, which is the one badge whose own color
      is too quiet to write in. */
   --out-ink: #cbd5e1;
   /* The error banner's ink — a tint of `--strikeout` light enough to read at
-     paragraph weight, which the pure colour is not. */
+     paragraph weight, which the pure color is not. */
   --error-ink: #fecaca;
   /* The number printed inside a pitch dot on the strike-zone plot. The dots are
      saturated in both themes, so this is a near-black in both. */
   --pitch-ink: #06121f;
   /* The solid ground under a status code on a headshot (`IL10`, `DTD`). Solid
      rather than the tinted `--panel` every other chip takes, because it sits on
-     a **photograph** — a different colour behind every player — so it carries
+     a **photograph** — a different color behind every player — so it carries
      its own contrast with it rather than borrowing the page's. */
   --chip-solid: #0a1120;
   /* The chip over a playing clip (the mute control), on the same argument one
@@ -155,7 +155,7 @@
 
   /* The live/on-base purple — the ring, tag and rail on a batter who is at
      large in a live game: at bat, on deck or aboard. It used to be the accent on
-     a watched pitcher's live inning as well; that meaning has its own colour
+     a watched pitcher's live inning as well; that meaning has its own color
      now, directly below. */
   --live-purple: #c084fc;
 
@@ -163,7 +163,7 @@
      right now*: his row tint, his headshot ring, his `On mound` tag, his rail in
      the feed, and the accent on the half-inning he is throwing.
 
-     It exists because the two live meanings were **literally the same colour**.
+     It exists because the two live meanings were **literally the same color**.
      `--role-pitching-bg` and `--role-on-base-bg` were the same `color-mix` of
      the same purple, and the app folded `.role-pitching` onto `.role-on-base` in
      five more rules, so a runner aboard and a pitcher on the mound were one
@@ -195,7 +195,7 @@
      used. Two things draw them now and they must agree exactly: the summary
      table's row tint, and the swatches in the legend under that table, whose
      whole job is to say "this shade means this". A legend mixing its own
-     approximation of a row's colour is the one way a legend can lie.
+     approximation of a row's color is the one way a legend can lie.
 
      The mix is against `--bg` rather than an alpha, because these back the
      table's sticky cells and have to be opaque; the percentages are the ones
@@ -253,11 +253,11 @@
      media query at the end of the file. */
   --stack-gap: 12px;
 
-  /* **The feed's rail — the coloured bar down the left of an item.** It carries
+  /* **The feed's rail — the colored bar down the left of an item.** It carries
      the outcome of a plate appearance, the tone of a base-running play, a
      pitcher's decision and the live role of whoever is in a game, and it is the
-     smallest coloured thing in the app: at 3px it was reported as hard to tell
-     apart, which is what too little ink of a well-separated colour looks like.
+     smallest colored thing in the app: at 3px it was reported as hard to tell
+     apart, which is what too little ink of a well-separated color looks like.
 
      5px, and the padding gives back the 2 so **nothing moves**: the rail is a
      border and the content starts at `border + padding`, which is 14px either
@@ -356,7 +356,7 @@ html {
      propagation for the life of the page: `body` then paints its gradient
      inside its own box, which is as tall as the content, and every page shorter
      than the window showed a hard seam at the foot of the content with the flat
-     root colour below it. Measured on the League view at 900×3000 under the
+     root color below it. Measured on the League view at 900×3000 under the
      *light* Lavender, before this rule: `rgb(235, 232, 244)` at the last row of
      content and `rgb(243, 241, 248)` — a whiter band — for the 720px under it.
      Midnight hid it, its gradient ending on the very `--bg` the boot script
@@ -424,7 +424,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* No width cap. The app used to be a 1180px column centred in the window, which
+/* No width cap. The app used to be a 1180px column centered in the window, which
    on anything wider than a laptop spent the difference on two empty margins —
    and the things that suffer for it are exactly the things this app is for: the
    three wide stat tables, which are what the room would have gone to. So the
@@ -509,7 +509,7 @@ body {
   border-bottom: 1px solid var(--border);
   box-shadow: var(--shadow-bar);
 }
-/* A short window gets the old behaviour back. Pinned chrome is a bargain — a
+/* A short window gets the old behavior back. Pinned chrome is a bargain — a
    fixed cost at the top in exchange for never having to scroll up for it — and
    the bargain stops being worth it when the cost is most of the screen: a phone
    held sideways is about 390px tall, against a chrome that reaches 303px at its
@@ -1101,12 +1101,12 @@ body {
 /* One seam's turn. `translateX` is `9·sin θ` and `scaleX` is `cos θ`, sampled
    every eighth of a revolution and interpolated linearly between — which is
    the projection a point on a sphere actually has, and is why the seams bunch
-   and thin at the limbs rather than at the centre. Opacity carries a seam
+   and thin at the limbs rather than at the center. Opacity carries a seam
    round the back: it fades out over the last eighth before the limb, where the
    seam is already a hairline, so nothing pops.
 
    `transform-box: view-box` is what makes `9px` mean nine *viewBox units* and
-   `transform-origin: 12px 12px` the ball's own centre, so one keyframe set is
+   `transform-origin: 12px 12px` the ball's own center, so one keyframe set is
    correct at 14px and at 44px alike. The stroke is deliberately left to scale
    with the transform: a seam near the limb thinning as it foreshortens is the
    same fact stated twice, and `non-scaling-stroke` would have pinned the ink
@@ -1219,7 +1219,7 @@ body {
   font-weight: 600;
 }
 
-/* A pane with nothing in it yet: the ball centred over a line naming what is
+/* A pane with nothing in it yet: the ball centered over a line naming what is
    being read. `.details-status` is folded onto it rather than restyled to
    resemble it — the player page's five lazily-fetched tabs are the same wait
    as the report's and the board's, and two rules would be two things to keep
@@ -1328,7 +1328,7 @@ body {
    cannot reach, and the Roster view was the sole outlier. It is deliberately not
    the block wait's 54: that number is `.loading-block`'s own reading-block
    `margin: 40px auto` *plus* the bar's 14, and `.empty-state` has never had a
-   margin of its own to add — it is a full-width card, not a centred column of
+   margin of its own to add — it is a full-width card, not a centered column of
    prose. Making it 54 would have put the same box at two heights depending on
    which view emptied, which is the inconsistency these rules exist to remove.
 
@@ -1361,7 +1361,7 @@ body {
 /* ---- Edit screen: drag-to-reorder the watchlist ---- */
 /* The edit page and the list inside it share one column, folded into one rule
    so the heading and the kind switch line up with the rows under them rather
-   than spanning a page the list is centred in. */
+   than spanning a page the list is centered in. */
 .order-editor,
 .edit-page {
   max-width: 620px;
@@ -1541,7 +1541,7 @@ body {
 .lineup-spot.spot-relief {
   background: var(--hr);
 }
-/* How the text inside a pip is centred is shared with the status code and so
+/* How the text inside a pip is centered is shared with the status code and so
    lives with it, below `.sum-photo-status` — it has to come after every rule it
    overrides, a `@supports` block adding no specificity. */
 
@@ -1724,7 +1724,7 @@ body {
   outline-offset: 2px;
 }
 /* Live-role ring on the headshot, matching the nav avatar (red at bat, amber on
-   deck, purple on base). The hover rule above still recolours the border; the
+   deck, purple on base). The hover rule above still recolors the border; the
    box-shadow keeps the role ring visible through it. */
 .player-photo-link.role-at-bat .player-photo {
   border-color: var(--strikeout);
@@ -2373,7 +2373,7 @@ body {
   color: var(--faint);
   font-variant-numeric: tabular-nums;
 }
-/* A labelled rate bar: label, track, percentage, then the raw counts. */
+/* A labeled rate bar: label, track, percentage, then the raw counts. */
 .ars-usage {
   flex: none;
   display: flex;
@@ -2547,7 +2547,7 @@ body {
 /* The row the pitcher's own hand makes relevant, marked the way the Splits card
    marks the half that applies to a game: the accent on the label, and the
    reason in the title rather than a third line of text. The cells keep the
-   zebra ground — a wash across the row would be a second colour system beside
+   zebra ground — a wash across the row would be a second color system beside
    the rank badges, which is the argument the League table's own row wash lost.
    `!important` is not needed: this rule sits after the zebra stripe and names
    one more class. */
@@ -2644,9 +2644,9 @@ body {
   color: var(--faint);
 }
 /* The half-inning this pitcher is throwing right now — `--mound-teal`, the same
-   colour his row, his ring, his tag and his rail take, so "this man is working"
+   color his row, his ring, his tag and his rail take, so "this man is working"
    reads as one thing across the app. It was the on-base purple, which said the
-   same thing in the colour a *runner* wears. */
+   same thing in the color a *runner* wears. */
 .inning-block.active {
   border-color: var(--mound-teal);
 }
@@ -2826,7 +2826,7 @@ body {
 /* **The card ombré.** `--panel` at the top into `--bg-2` at the foot, which is
    the wash `.player-card`, `.feed-item-toggle`, `.upcoming-head`, `.pday-game`,
    `.lg-matchup` and `.lg-tx` have always carried. These five were `--bg` — the
-   page's own colour — so on every theme they were a bordered box the same shade
+   page's own color — so on every theme they were a bordered box the same shade
    as whatever was behind them, which is what "some of the cards look flat" is.
    They are cards by every other measure (a radius, a border, a tone rail,
    something you can press), so they take the card surface. */
@@ -2866,9 +2866,9 @@ body {
 .faced-card.kind-out,
 /* `other` is an at-bat MLB filed no event for at all, and it took `--faint`
    until the rails were measured: that is 5.5 ΔE2000 from the `--out` beside it
-   on three of the four themes, which is two greys nobody can tell apart drawn
+   on three of the four themes, which is two grays nobody can tell apart drawn
    for two meanings nobody can tell apart either. One quiet rail for "nothing
-   came of it" says the same thing and leaves one fewer grey in the feed's
+   came of it" says the same thing and leaves one fewer gray in the feed's
    vocabulary. */
 .pa-card.kind-other,
 .faced-row.kind-other,
@@ -2878,7 +2878,7 @@ body {
 /* A base-running event inside an inning block — the balk, the wild pitch, the
    bag taken off him. It takes `.faced-row` outright so it lines up with the
    batters around it, and only its left accent differs: the same four tones the
-   feed's rail uses, so one event reads the same colour on the card as it does
+   feed's rail uses, so one event reads the same color on the card as it does
    in the stream. It carries a quieter ground than a batter's row, being
    background to the at-bat it happened inside rather than a result of its own.
    The class rides on whichever of the two shapes the event takes — the static
@@ -3144,7 +3144,7 @@ body {
   border-radius: var(--control-radius);
   border: 1px solid rgba(255, 255, 255, 0.22);
   /* Its own dark chip rather than --panel: it sits on video, which can be any
-     colour from frame to frame, so it carries its own contrast with it. */
+     color from frame to frame, so it carries its own contrast with it. */
   background: var(--video-chip);
   color: #fff;
   cursor: pointer;
@@ -3363,7 +3363,7 @@ body {
 .pa-video-el {
   /* Size to the clip's own dimensions, bounded by the column width and a height
      cap. With width/height auto a replaced element keeps its intrinsic aspect
-     ratio while honouring both maxes, so the player box always matches the
+     ratio while honoring both maxes, so the player box always matches the
      video instead of letterboxing it inside a fixed frame. */
   display: block;
   width: auto;
@@ -3726,7 +3726,7 @@ body {
     inset 0 -1px 0 var(--border),
     var(--shadow-bar);
 }
-/* A short window gets the old behaviour back, on the page's own threshold and
+/* A short window gets the old behavior back, on the page's own threshold and
    for its own reason: a phone held sideways is about 390px tall, and 139px of
    chrome is 36% of it. Less brutal than the 303-of-390 the page's bar reaches —
    this is a closer call — but the bargain is the same one, and one threshold
@@ -3980,7 +3980,7 @@ body {
 
    **The tab takes the tab's width and the reading column moves inside it**,
    which is a reversal of what stood here. The box was capped at `--card-column`
-   and centred, on the sound argument that what is in it is exactly what the
+   and centered, on the sound argument that what is in it is exactly what the
    feed holds — an at-bat card, a clip, an outing's innings — and those were
    sized against that number. What that argument missed is that two of the three
    blocks are not cards at all but **stat tables**, and a stat table is the one
@@ -4239,7 +4239,7 @@ button.start-line:focus-visible {
 .start-row--estimated {
   color: var(--muted);
 }
-/* The muted row's own cells have to give up their colours, or the two ways of
+/* The muted row's own cells have to give up their colors, or the two ways of
    saying "guess" come down to one: `.ovw-next-when` and `.ovw-next-opp` are
    `--text` on the block above and would keep it here. */
 .start-row--projected .ovw-next-when,
@@ -4363,7 +4363,7 @@ button.start-line:focus-visible {
 }
 /* What kind of thing the row is, in the upstream's own word. An outlined pill
    rather than a filled one and in `--faint` rather than a tone, because this is
-   a *label* and not a state — the app's colour is spent on what is happening to
+   a *label* and not a state — the app's color is spent on what is happening to
    a player, and "Status Change" against "Report" is a fact about where the row
    came from. */
 .news-kind {
@@ -4683,7 +4683,7 @@ button.start-line:focus-visible {
    is the one place the 8px between two `.research-toggle`s is written. Only the
    two things that are this row's own are here. Left to itself the row declared
    a bare `display: flex` and the pair sat edge to edge at both widths (measured
-   0px at 1200 and at 390, labelled and icon-only alike). */
+   0px at 1200 and at 390, labeled and icon-only alike). */
 .stats-tools {
   justify-content: flex-end;
   margin: 0 0 8px;
@@ -4741,7 +4741,7 @@ button.start-line:focus-visible {
 }
 /* A game the log has a score for but no result — still being played, or
    suspended. It carries the same chip so the column doesn't shift, without the
-   colour, which here means won or lost. */
+   color, which here means won or lost. */
 .glog-res-none {
   color: var(--muted);
   background: var(--panel-2);
@@ -4837,10 +4837,10 @@ button.start-line:focus-visible {
 }
 /* Everything above the table keeps its natural height; only the pane flexes.
    The head and the tabs are one flex item now rather than two, which is also
-   what retired the `width: 100%` this rule used to carry: each of them centres
+   what retired the `width: 100%` this rule used to carry: each of them centers
    itself with `margin: 0 auto`, and an auto margin on the cross axis suppresses
    a flex item's stretch — so in this mode alone they shrank to their content
-   and centred *that*, sitting a good 30px right of where every other tab puts
+   and centered *that*, sitting a good 30px right of where every other tab puts
    them. Inside `.details-chrome` they are ordinary blocks again and the auto
    margins do what they were written to do.
 
@@ -5071,7 +5071,7 @@ button.start-line:focus-visible {
 /* **One definition of the guide line, read by the chart and by its legend.**
    The swatch in `.roll-legend` is a `<line>` carrying this same class rather
    than a second `stroke`/`stroke-dasharray` written out beside it, so the mark
-   the reader is shown and the mark it explains cannot come to be two colours or
+   the reader is shown and the mark it explains cannot come to be two colors or
    two dash patterns — the fold-don't-copy rule this stylesheet applies to
    `.settings-toggle`/`.sim-toggle` and to `.stats-table`/`.glog-table`.
 
@@ -5090,7 +5090,7 @@ button.start-line:focus-visible {
    and `.roll-ref` above paints its `4 4` as 4px dashes at a 1.5px stroke. The
    chart's own dashes are those same units *scaled with the plot* (3.52px at
    1200, 1.85px at 390), and matching that here was rejected on the phone case:
-   a 1.85px dash inside a 24px swatch reads as a grey smudge rather than as a
+   a 1.85px dash inside a 24px swatch reads as a gray smudge rather than as a
    dashed line, where a legend's job is to show the pattern at the size the
    words beside it are read at. */
 .roll-legend-swatch {
@@ -5264,8 +5264,8 @@ button.start-line:focus-visible {
   background: var(--muted);
   z-index: 1;
 }
-/* Actual marker: hollow ring (vs the solid expected bubble). Colour is set
-   inline per percentile; the panel-filled centre keeps its number legible. */
+/* Actual marker: hollow ring (vs the solid expected bubble). Color is set
+   inline per percentile; the panel-filled center keeps its number legible. */
 .pct-bubble-x {
   background: var(--panel);
   border: 2px solid currentColor;
@@ -5326,11 +5326,11 @@ button.start-line:focus-visible {
 /* ---- The Splits tab: one platoon comparison per row ------------------------
    It rides on `.pct-card` for the box, the head and the title — the same card
    the percentile rankings and the platoon panel before it were drawn in, since
-   this is the same object: a titled column of labelled bars inside the player
+   this is the same object: a titled column of labeled bars inside the player
    overlay. What is under its own name here is the grid, the diverging rail and
    the two states a thin sample puts the fill in. */
 /* Label · left figure · rail · right figure. The two value columns are equal
-   and fixed so the rail is centred in the row as well as in itself — a rail
+   and fixed so the rail is centered in the row as well as in itself — a rail
    whose zero sat off the middle of the card would undo the whole device. */
 .spl-table {
   --spl-label-w: 62px;
@@ -5344,10 +5344,10 @@ button.start-line:focus-visible {
 
      **The inner end takes none of it, and never did.** The token is spent at
      the outer end by being subtracted from the *length* (`calc(frac × (50% −
-     inset))`), while the inner edge is pinned to the rail's centre by the
+     inset))`), while the inner edge is pinned to the rail's center by the
      inline `left: 50%` / `right: 50%` — so there is no gap at the zero to close
      and none was closed. What changed with the flat cap is only which rows of
-     the fill reach that edge: a round cap put ink on the centre at the fill's
+     the fill reach that edge: a round cap put ink on the center at the fill's
      midline and receded up to 5px from it at the extreme rows, where a flat one
      lands on it at every row (measured below).
 
@@ -5355,13 +5355,13 @@ button.start-line:focus-visible {
      5px) and it is gone with the thing it was written for. A **clamped** bar
      used to square off its outer end, and a square corner does not nest inside a
      round cap the way a round one does: the rail caps at radius 8 and the fill's
-     corners sat at its own extreme height, 5px off the centre line, where the
+     corners sat at its own extreme height, 5px off the center line, where the
      cap's ink has already receded `8 - sqrt(8^2 - 5^2)` = **1.76px** — so at 3px
      that corner had 1.24px of rail beside it against its own midline's 3px, and
      read as a bar running out of its rail with the corner cut off. **A clamped
      bar is drawn no differently from one at full scale now** — see the note
      above `.spl-fill--thin` — so every outer cap is round, which is the case 3px
-     was chosen for: a radius-5 cap 3px inside a radius-8 one shares its centre,
+     was chosen for: a radius-5 cap 3px inside a radius-8 one shares its center,
      so the track shows exactly 3px of itself at **every** angle rather than 5px
      at the midline and 3.24 at the corner. Every bar is 2px longer for it. (That
      argument is about the **outer** cap; the inner one is flat and nests inside
@@ -5414,7 +5414,7 @@ button.start-line:focus-visible {
    a second line saying so in words (`this game`), reserved on both heads
    whether or not either was marked so a third line on one side alone couldn't
    push its label and sample off the baseline its twin sits on; the words are
-   gone; the accent colour and the head's own `title` tooltip are the whole of
+   gone; the accent color and the head's own `title` tooltip are the whole of
    the mark now, and neither costs the head a line. */
 .spl-head-side--on {
   color: var(--accent);
@@ -5474,12 +5474,12 @@ button.start-line:focus-visible {
    never breach it on a narrow rail.
 
    **The inner end is flat**, and the two ends being different shapes is the
-   point rather than an oversight. This bar is anchored at a centre: it does not
+   point rather than an oversight. This bar is anchored at a center: it does not
    *sit* near the zero, it **grows out of** it, and a round cap says the opposite
    — it pulls the ink away from the zero everywhere except one row through the
    fill's own middle, so the bar read as a detached pill floating beside the
    guide rather than as a quantity measured from it. Measured on Perez's card at
-   1200: the inner ink was up to 3px short of the centre at the rows a reader
+   1200: the inner ink was up to 3px short of the center at the rows a reader
    sees the shape by, and is 0.000 short at every row now. Nothing about the
    length moved — the inline width and `max-width` are untouched — so the clamp,
    the hatch and `railFraction`'s invariant are all exactly as they were; what
@@ -5560,8 +5560,8 @@ button.start-line:focus-visible {
   color: var(--hr);
 }
 /* The card head gains a containing block for the key's popover and a floor the
-   height of the button, so a 30px control centred on a 22px title line cannot
-   overhang into the table under it. The title is centred by the flex rather than
+   height of the button, so a 30px control centered on a 22px title line cannot
+   overhang into the table under it. The title is centered by the flex rather than
    by `.pct-card-head`'s `text-align`, which is the same result for one span and
    is untouched on the percentile card that shares that class. */
 .spl-card-head {
@@ -5573,19 +5573,19 @@ button.start-line:focus-visible {
 }
 /* **The key sits beside the title, not across the card from it.** It hung off
    the head's right edge for a while — `position: absolute; right: 0` — and what
-   that bought was a title centred in the card with the button out of flow, at
+   that bought was a title centered in the card with the button out of flow, at
    the price of putting the ⓘ 228px from the words it belongs to at 1200 (77 at
    390): the title ends at 658.66 and the button began at 887. An icon
    that far from its own heading reads as a control over the *card*, and a reader
    looking for the key looks at the heading.
 
-   **The title is still centred in the card**, which is the half of the old rule
+   **The title is still centered in the card**, which is the half of the old rule
    worth keeping: `.pct-card-head` is shared with the percentile card, whose
-   title is centred by `text-align`, and one tab's heading sitting 19px off where
+   title is centered by `text-align`, and one tab's heading sitting 19px off where
    every other tab's sits is a difference nothing on screen explains. So the
    button is in flow immediately after the title and gives its own width back:
    4px on the left, 4 + its own 30 returned on the right, which is exactly 0 of
-   the flex line's main size — the title centres as though the button were not
+   the flex line's main size — the title centers as though the button were not
    there, and the button hangs to the right of it. Measured at 1200 and 390: the
    title's box is byte-identical to where the absolute button left it.
 
@@ -5593,7 +5593,7 @@ button.start-line:focus-visible {
    panel's containing block from the 30px button up to `.spl-card-head`, which is
    the whole of the anchoring fix below; and it is a second guarantee of the
    stacking rule this rule has always had to obey. The first version used
-   `transform: translateY(-50%)` to centre the button, which makes a stacking
+   `transform: translateY(-50%)` to center the button, which makes a stacking
    context and trapped the popover's own `z-index: 40` *inside* this box — a
    `z-index: auto` box sitting **before** the table in the DOM, so the rows'
    absolutely-positioned `.spl-fill`s painted after it and the key opened
@@ -5715,7 +5715,7 @@ button.start-line:focus-visible {
 
 /* The header's icon cluster — the roster search and the refresh button. Edit
    was the third of them and is an entry in the settings menu now, which on a
-   desktop buys the header back the ~66px its labelled pill cost and on a phone
+   desktop buys the header back the ~66px its labeled pill cost and on a phone
    a whole square: the field is 418px measured, and this row is where the
    header's line budget is spent, so a control read once a session is the wrong
    thing to keep in it.
@@ -5903,7 +5903,7 @@ button.start-line:focus-visible {
    width on the very button where the glyph is all there is. That, rather than
    the number in the attribute, is why raising it from 15 to 17 to 20 kept
    looking small. Only the calendar takes the muted fill; the toggle's glyph
-   follows its own text colour, which is what carries its `.on` state. */
+   follows its own text color, which is what carries its `.on` state. */
 .date-toggle svg,
 .starters-toggle svg,
 .schedule-toggle svg {
@@ -5918,7 +5918,7 @@ button.start-line:focus-visible {
 }
 /* The bubble on the calendar's corner, and the phone swap that reveals it.
 
-   From 641px up the roster row carries two labelled buttons — Starters and the
+   From 641px up the roster row carries two labeled buttons — Starters and the
    calendar — and on a 390px phone they are 82px and 92px of a line that already
    holds three tab groups, which is exactly the width that pushed the calendar
    onto a row of its own. Under 640 both go to their glyphs, the way the
@@ -5947,7 +5947,7 @@ button.start-line:focus-visible {
      as wide, so the bubble's width is its text's and the anchor decides which
      way that growth goes. Anchored *right* it grew leftwards across its own
      button and straight into the starters toggle beside it, which is what this
-     was centred to avoid — but centring only halves that problem and pays for
+     was centered to avoid — but centring only halves that problem and pays for
      the other half in a margin, holding the calendar 10px further from the
      button it belongs beside at every width and on every range for the sake of
      the widest one. Anchored left it grows in the one direction that is free:
@@ -5970,7 +5970,7 @@ button.start-line:focus-visible {
   box-shadow: 0 0 0 2px var(--bg);
   pointer-events: none;
 }
-/* Open, the button fills with the accent and the bubble was the same colour
+/* Open, the button fills with the accent and the bubble was the same color
    sitting on it — the two merged into one lollipop with a dark seam through
    the middle. Inverted, it is a dark pill on an accent square, which is the
    same badge stated the other way round; its `--bg` ring simply joins its own
@@ -6453,7 +6453,7 @@ button.start-line:focus-visible {
   white-space: nowrap;
   border-bottom: 1px solid var(--border);
   /* Every cell in this table is opaque, and its ground is *named* rather than
-     assigned, because two things need the same colour and must not be able to
+     assigned, because two things need the same color and must not be able to
      disagree: the cell's own background, and the hairline of it drawn just
      outside its left edge by the rule below. Everything that follows sets
      `--cell-bg` alone — the paint happens here, once, and resolves whichever
@@ -6504,11 +6504,11 @@ button.start-line:focus-visible {
    **It straddles rather than butts**, 3px either side. A 1px strip laid against
    the boundary has fractional edges of its own and still measured a Δ4–6 blend;
    pushed out to 3px, both its edges land inside solid ground **of the same
-   colour**, because every cell in a row of this table carries one ground — the
+   color**, because every cell in a row of this table carries one ground — the
    zebra stripe, the three role tints, the header and the Total row each name
    the pinned headshot cell alongside the rest. So the cover introduces no edge
-   anywhere, and its overspill is the row's own colour over the row's own
-   colour, into 5px of padding at its narrowest.
+   anywhere, and its overspill is the row's own color over the row's own
+   color, into 5px of padding at its narrowest.
 
    `position: relative` is declared on the body cells alone: the header's and
    the Total row's are `position: sticky` already, and a rule naming all of them
@@ -6577,7 +6577,7 @@ button.start-line:focus-visible {
    `C` the narrowest at 24, so anything less than 42 leaves the UTIL rows out of
    line.
 
-   `vertical-align: middle` on both the chip and the name is what centres them
+   `vertical-align: middle` on both the chip and the name is what centers them
    against each other: they are inline boxes of different heights, and the
    default baseline alignment sits a 15px pill and a 13px name on their
    type baselines rather than through their middles. */
@@ -6596,7 +6596,7 @@ button.start-line:focus-visible {
 
    It must not be a flex `<th>`: making the cell itself a flex box takes it out
    of table layout altogether, which is the mistake the game log's corner header
-   already documents. `vertical-align: middle` on both is what centres a 15px
+   already documents. `vertical-align: middle` on both is what centers a 15px
    pill against a two-line block — the default baseline alignment would sit the
    chip on the *name's* baseline and hang the club line below it. */
 .summary-table .sum-name-col .row-id {
@@ -6659,7 +6659,7 @@ button.start-line:focus-visible {
 /* Bottom-left corner, and it has to name its ground the way the top-left one
    does. `.summary-table .sum-img-col` carries two classes where
    `.summary-table tfoot td` carries one, so without this the pinned cell of the
-   Total row won the cascade with `--bg` and painted the *page* colour inside a
+   Total row won the cascade with `--bg` and painted the *page* color inside a
    `--panel-2` row — a dark block the width of the headshot column at the foot
    of the table, with a Δ41 edge against the row beside it. The header row has
    had its own copy of this rule since it was written; this is the same
@@ -6669,7 +6669,7 @@ button.start-line:focus-visible {
   --cell-bg: var(--panel-2);
 }
 /* A live player's whole row is tinted by their role (at bat / on deck / on
-   base / on the mound) — the same colours as the headshot ring, blended into an
+   base / on the mound) — the same colors as the headshot ring, blended into an
    opaque shade so it also backs the sticky cells and overrides the zebra
    stripe. Defined after the stripe rules so it wins the same-specificity tie.
    The four shades are `--role-*-bg` on `:root`, because the legend below the
@@ -6682,13 +6682,13 @@ button.start-line:focus-visible {
    live role the summary table drew nothing for. It went unnoticed because the
    tab most people read is the batter one and because nothing on the page named
    the vocabulary; adding the legend is what made the gap a visible claim rather
-   than a quiet absence, since a legend naming a colour the table never paints
+   than a quiet absence, since a legend naming a color the table never paints
    is worse than no legend at all.
 
    **It landed folded onto the on-base rules and now has its own**, which is the
    same correction made in five other places (`.live-role`, `.live-entry`,
    `.sum-photo`, `.feed-photo-link`, `.summary-legend-swatch`): sharing the
-   purple meant the legend's `On base` and `On mound` swatches were one colour
+   purple meant the legend's `On base` and `On mound` swatches were one color
    under two labels, which is the one thing a key must not do. On the mound is
    `--role-pitching-bg` off `--mound-teal` now — see that token's own note for
    how the hue was chosen and what the four grounds measure. */
@@ -6715,7 +6715,7 @@ button.start-line:focus-visible {
 
 /* The key to those four shades, under the table rather than over it: a caption
    is read after the thing it captions, and putting it above would have cost the
-   pane a row of players to explain a colour nobody had seen yet.
+   pane a row of players to explain a color nobody had seen yet.
 
    **It is also the room at the bottom of this view**, and that is the whole of
    how it squares with the passage above that took this column's vertical
@@ -6780,8 +6780,8 @@ button.start-line:focus-visible {
   white-space: nowrap;
 }
 /* The fill is the row's own ground, read from the same token the row reads, so
-   the swatch and the row it explains are the same colour by construction. The
-   **border** is the role's pure hue — the very colour the headshot ring takes —
+   the swatch and the row it explains are the same color by construction. The
+   **border** is the role's pure hue — the very color the headshot ring takes —
    and it is there because the fill alone cannot carry this: a 22% mix over the
    page reads across a 58px row and is close to invisible in a 14px square. So
    the square states the ground and the outline names the family, which together
@@ -6868,8 +6868,8 @@ button.start-line:focus-visible {
      further outside the edge as the image grows, so the bigger headshot needs
      a smaller offset to keep the pip sitting on the rim. The −2 survived the
      circle growing to 42 because the two effects cancel — the pip grew with it.
-     Worked through: a 15px pip at −2 on a 37px circle has its centre 15.8px
-     from the photo's centre against a rim at 18.5, i.e. 2.7px inside it; a 17px
+     Worked through: a 15px pip at −2 on a 37px circle has its center 15.8px
+     from the photo's center against a rim at 18.5, i.e. 2.7px inside it; a 17px
      pip at −2 on a 42px circle sits 17.9 against a rim at 21, 3.1px inside.
      Same mark in the same place, a fifth of a pixel apart. */
   top: -2px;
@@ -6885,12 +6885,12 @@ button.start-line:focus-visible {
 }
 /* Roster status as a short code on the bottom edge of the headshot — IL10, RA,
    DTD, OUT, DFA. The opposite pole of the circle from the lineup-spot pip, so
-   the two never collide, and centred because unlike the pip it is a word rather
+   the two never collide, and centered because unlike the pip it is a word rather
    than a mark and reads from its middle.
 
    It carries a **solid** ground rather than the tinted one `.roster-status` uses
    beside a name — the same reasoning `.clip-audio` follows over video: this sits
-   on a photograph, which is a different colour behind every player, and a 13%
+   on a photograph, which is a different color behind every player, and a 13%
    wash over one is unreadable on the next. Tone therefore lives in the text and
    the border, which is all that is left once the fill is spoken for.
 
@@ -6949,15 +6949,15 @@ button.start-line:focus-visible {
 /* ---- Centring the marks on a headshot -------------------------------------
    Every badge the app draws on a photograph — the lineup pip and the status
    code, at the tables' 42px circle and at the details view's 64px portrait —
-   centres its text here, in one place, because all four of them had it wrong
+   centers its text here, in one place, because all four of them had it wrong
    and each was wrong by a different amount.
 
-   **`align-items: center` centres the line box, and the ink is not centred in
+   **`align-items: center` centers the line box, and the ink is not centered in
    the line box.** A line box is the font's ascent plus its descent; every code
    this app can print (`IL10` `IL60` `RA` `DTD` `OUT` `DFA` `MIN` `SUS`, the
    batting numbers, `!`, `SP` and a reliever's entry inning) is caps and digits
    with **no descender at all**, so its ink runs from cap height down to the
-   baseline and sits above the middle of the box it is centred in by
+   baseline and sits above the middle of the box it is centered in by
    `(ascent − descent − capHeight) / 2` — a number that belongs to the font,
    not to the design. Measured with a canvas against the rendered baseline, the
    digit pip in the summary table had 3.31px of air above it and 5.22px below
@@ -6967,7 +6967,7 @@ button.start-line:focus-visible {
    the row circle — 17px pip, 12px pill — and the rule below was re-measured at
    the new sizes rather than assumed to carry: see the figures at the end.)
 
-   The direction was not even consistent, which is what "not *always* centred"
+   The direction was not even consistent, which is what "not *always* centered"
    was: on the details portrait, in the app's own font rather than the tables'
    (see `.sum-photo-wrap` above), the pips read 0.18–0.53px **high** while the
    status pill read 4.55/3.30 — 0.63px **low** — so no single nudge could have
@@ -6976,17 +6976,17 @@ button.start-line:focus-visible {
    +0.33 to +0.11 and the tables' Arial one from −0.68 to −0.90. It is gone.
 
    **`text-box: trim-both cap alphabetic` trims the box to the ink instead**, so
-   what gets centred is the cap-height box and the font's metrics stop mattering.
+   what gets centered is the cap-height box and the font's metrics stop mattering.
    It has to be set on the block container that holds the line, and an anonymous
    flex item does not inherit it — measured, a flex or grid container with the
    property set is byte-for-byte the unfixed layout — so the badge becomes a
    plain block and `align-content: center` does the centring. Measured after:
-   every code, at both sizes, lands within **0.015px** of dead centre, and `!` —
+   every code, at both sizes, lands within **0.015px** of dead center, and `!` —
    fractionally taller than cap height in this face — within 0.09.
 
    Behind `@supports` because the two features it needs shipped together-ish and
    `align-content` on a block container alone would drop the text to the top of
-   the pill where the trim isn't understood. Without it the badges centre their
+   the pill where the trim isn't understood. Without it the badges center their
    line box exactly as they did before, which is a fraction of a pixel and not a
    regression. `width` stays `auto` on the widened pills: each of these is
    absolutely positioned, so a block shrink-to-fits rather than filling a row.
@@ -6994,7 +6994,7 @@ button.start-line:focus-visible {
    It sits **here**, past the last of the three families it names, rather than
    beside `.lineup-spot` where it was written: `@supports` adds no specificity,
    so up there it lost `display` to `.sum-photo-status`'s and
-   `.details-photo-status`'s own `inline-flex` and centred the pip alone —
+   `.details-photo-status`'s own `inline-flex` and centered the pip alone —
    measured, the two status pills came back at their old offsets while the pips
    were fixed. Same trap as the narrow-screen block at the end of the file. */
 @supports (text-box: trim-both cap alphabetic) {
@@ -7010,7 +7010,7 @@ button.start-line:focus-visible {
 .sum-photo-empty {
   display: inline-block;
 }
-/* Live-role ring on the headshot — same colours as the nav and feed. */
+/* Live-role ring on the headshot — same colors as the nav and feed. */
 .sum-photo.role-at-bat {
   border-color: var(--strikeout);
   box-shadow: 0 0 0 2px var(--strikeout);
@@ -7053,7 +7053,7 @@ button.start-line:focus-visible {
   outline-offset: 2px;
   border-radius: 4px;
 }
-/* The table is deliberately monochrome: every value reads in the same colour,
+/* The table is deliberately monochrome: every value reads in the same color,
    with the secondary line muted. What a cell *says* — "Top 8", "Final", a dash
    — carries the state; tinting columns just made the eye jump between them. */
 .sum-hab {
@@ -7107,7 +7107,7 @@ button.start-line:focus-visible {
 }
 /* A live game's inning gets the same green accent the app uses elsewhere, and a
    postponed one reads as an amber caution. Game state and player state are what
-   the table still colours — the stat columns themselves stay monochrome. */
+   the table still colors — the stat columns themselves stay monochrome. */
 .sum-opp-live .sum-opp-detail {
   color: var(--hit);
 }
@@ -7120,7 +7120,7 @@ button.start-line:focus-visible {
 /* The settings popover's items. `.settings-toggle` (hide injured) and
    `.help-btn` (How to use) are folded into the simulate toggle's selector lists
    rather than restyled to match it, so every row of the menu is the same
-   control by construction. They differ only in what an active one is coloured:
+   control by construction. They differ only in what an active one is colored:
    the simulate overlay is a loud, temporary lie about the data (red), hiding
    injured players is an ordinary preference (accent), and How to use is a link
    out rather than a toggle, so it has no active state at all. */
@@ -7169,7 +7169,7 @@ button.start-line:focus-visible {
 }
 .fantasy-refresh:disabled {
   cursor: default;
-  /* Held at the hover colour rather than dimmed: it is disabled *because* it is
+  /* Held at the hover color rather than dimmed: it is disabled *because* it is
      working, which is a busier state than idle and not a lesser one. */
   color: var(--text);
   border-color: var(--accent);
@@ -7199,7 +7199,7 @@ button.start-line:focus-visible {
   background: var(--accent);
 }
 
-/* ---- The colour-scheme picker ---------------------------------------------
+/* ---- The color-scheme picker ---------------------------------------------
    A row of swatches in the settings menu — see `App.tsx`, where the choice of a
    radio group over a third toggle is argued. What it needs of its own is a
    label over a wrapping row (the menu is 180–320px wide and a third theme must
@@ -7235,7 +7235,7 @@ button.start-line:focus-visible {
   font-size: 12.5px;
 }
 /* **The chips lead and the name is centered in what is left.** The swatch used
-   to centre the pair as a group (`justify-content: center` on the button), so
+   to center the pair as a group (`justify-content: center` on the button), so
    the pill sat at a different x on every row — it moved with the length of the
    name beside it — and four rows of a picture-and-a-word read as four unrelated
    buttons rather than as one column of themes. Pinned left, the four pills line
@@ -7251,7 +7251,7 @@ button.start-line:focus-visible {
    75.7px of ink, so a mirror would leave it **1.6px** of slack and the next
    theme name to arrive would clip. The cheaper centring keeps that margin, and
    it buys what was actually asked for: all four names share one center
-   (measured, ink centre 312.8 on every row at 1200 and 164.6 at 390), which is
+   (measured, ink center 312.8 on every row at 1200 and 164.6 at 390), which is
    what reads as a centered column. */
 .theme-swatch-label {
   flex: 1;
@@ -7269,7 +7269,7 @@ button.start-line:focus-visible {
    one 26×14 pill divided in three. A picture of the answer rather than a
    description of it, and the reason this control is worth its extra row.
 
-   The colours are inline styles off `theme.ts`, deliberately: they are *another
+   The colors are inline styles off `theme.ts`, deliberately: they are *another
    theme's* values, so they cannot be tokens (a token here would resolve to the
    palette currently in force and every swatch would draw the same). The
    hairline is `--border`, which does follow the page, so the pill reads on
@@ -7313,7 +7313,7 @@ button.start-line:focus-visible {
    would sit beside the Roster/Research pills or drop wholesale to the next line
    with nothing in between. With it, a wide window finishes the tab row with the
    whole set and a narrower one peels the last group off the end, which is the
-   behaviour the kind tabs and the date button have always had here. The gap
+   behavior the kind tabs and the date button have always had here. The gap
    becomes the row's own 10/12px rather than the bar's old 8, which is right: it
    is that row now.
 
@@ -7555,7 +7555,7 @@ button.start-line:focus-visible {
 /* It sits in the wrapping tab row, where every group is atomic: no shrink, and
    it breaks to the next line whole rather than folding in half — the same two
    declarations `.date-toggle` carries for the same reason, it being the other
-   labelled button on that row. Its label has a class of its own rather than
+   labeled button on that row. Its label has a class of its own rather than
    `.research-toggle-label` deliberately: that one is visually hidden on a
    phone, which is right for four icons in a known run and wrong for a lone
    button on a row of tabs, where nothing beside it would say what the glyph
@@ -7653,7 +7653,7 @@ button.start-line:focus-visible {
    **A modal, where Search and Filters are inline panels**, and the reason is
    volume: those two are a field and a three-part sentence, one line of the
    wrapping tab row each, where this holds the order row and every column the
-   board has in four labelled runs — 39 on the batting board and 44 on the
+   board has in four labeled runs — 39 on the batting board and 44 on the
    pitching one. Inline that is several hundred pixels of chips wedged into the
    chrome, pushing the table it describes down the page and taking a phone's
    screen outright; a picker that costs you sight of the thing it is picking for
@@ -7822,7 +7822,7 @@ button.start-line:focus-visible {
    is right to hold the common width; here *every* tab is the 860 column, so a
    680 head would be indented 90px from the content under it on all four and the
    active tab's underline would stop short of the table it names. `.details-head`
-   is otherwise unchanged — a wrapping flex row, centred by its own auto
+   is otherwise unchanged — a wrapping flex row, centered by its own auto
    margins — and all this adds is the wrap and the two-line identity stack. */
 .outing-head,
 .outing-view .details-tabs {
@@ -7919,8 +7919,8 @@ button.start-line:focus-visible {
 }
 /* The checkbox itself is hidden and the label is the control — a grid of forty
    native boxes is twice the height and half as scannable, and the chip can
-   carry the on/off state in its own colour. It stays a real <label> around a
-   real <input>, so it keeps the keyboard and screen-reader behaviour. */
+   carry the on/off state in its own color. It stays a real <label> around a
+   real <input>, so it keeps the keyboard and screen-reader behavior. */
 .research-col-chip {
   display: inline-flex;
   align-items: center;
@@ -7964,7 +7964,7 @@ button.start-line:focus-visible {
    The first block of the picker, and a flat one: an arrangement is a single
    sequence that crosses every heading below it, so it cannot be a handle on
    the grouped chips — see `ColumnOrder`. It reads as the same chip in a
-   different grammar: on-coloured throughout (every column in it is shown, that
+   different grammar: on-colored throughout (every column in it is shown, that
    being what it lists) with a grip at the end. */
 /* The whole block, not the chips alone: a mouse drag that leaves a chip would
    otherwise paint a selection across whatever it crossed, `pointerdown`'s
@@ -8157,7 +8157,7 @@ button.start-line:focus-visible {
    first written: a media query adds no specificity, so `padding: 0` there lost
    to `.research-toggle, .starters-toggle { padding: 0 12px }` five hundred
    lines further down, and the 20px clipboard was overflowing a 12px content
-   box — centred, so it *looked* right, and shrinking to fit it before the
+   box — centered, so it *looked* right, and shrinking to fit it before the
    glyph was given `flex: none`. That is the same trap `.date-row
    .date-presets` and the `.research-bar` dropdowns are each written two
    classes deep to avoid; the honest fix for a whole block is to put it after
@@ -8189,7 +8189,7 @@ button.start-line:focus-visible {
   .date-toggle-bubble {
     display: block;
   }
-  /* **No margin of its own**, where a centred bubble needed 10px of one to
+  /* **No margin of its own**, where a centered bubble needed 10px of one to
      clear the starters toggle. Left-anchored, the whole overhang is on the
      right — the widest the app can print is `10/29–10/31` at 65px, i.e. 29px
      past a 36px square — and to the right of this button there is nothing but
@@ -8417,7 +8417,7 @@ button.start-line:focus-visible {
      not where a name reads from — so the ball hung a pixel and a half low,
      dipping below the baseline of the name beside it. The nudge is the gap
      between the two anchors, (cap height - x-height) / 2, in em so it scales
-     with the type: the ball now centres on the cap band. Done here rather
+     with the type: the ball now centers on the cap band. Done here rather
      than by making the cell a flex box, which would take a `<td>` out of
      table layout — and this one is sticky and sizes a column. */
   vertical-align: middle;
@@ -8846,7 +8846,7 @@ button.start-line:focus-visible {
    wins and nothing moves (measured: button 35.00px and its top 208.5 in both
    states, every width). That is four pixels of accidental slack in a box whose
    contents we do not choose: at a 13px arrow the button goes to 36 and at 14px
-   to 37, and because a `th` centres its content the sorted header's label then
+   to 37, and because a `th` centers its content the sorted header's label then
    sits 0.5–1px above every unsorted one beside it — the report exactly.
 
    So the box is fixed rather than floored, in both axes, and a glyph too big
@@ -9008,7 +9008,7 @@ button.start-line:focus-visible {
   font-weight: 600;
 }
 /* Who is pitching is context rather than state, so it takes the quieter of the
-   two greys — the same one `.sum-opp-sp` takes. Surname only, and the full name
+   two grays — the same one `.sum-opp-sp` takes. Surname only, and the full name
    is on the cell's own tooltip. */
 .research-opp-sp {
   color: var(--faint);
@@ -9016,7 +9016,7 @@ button.start-line:focus-visible {
 .research-opp-detail {
   color: var(--muted);
 }
-/* Colour is for state on these tables and nothing else, which is why the stat
+/* Color is for state on these tables and nothing else, which is why the stat
    columns are monochrome and these two are not: a live inning is the green the
    summary table's own cell uses, and a postponement its amber. Scoped to the
    span rather than the cell so sorting *by* this column — which tints the whole
@@ -9234,7 +9234,7 @@ button.start-line:focus-visible {
 }
 /* The identity row is BARE — headshot, name, matchup, role tag — exactly like
    the Recent and Upcoming items' identity rows. It used to carry the panel
-   gradient, a border, a role-coloured left accent and a 12px radius: the very
+   gradient, a border, a role-colored left accent and a 12px radius: the very
    chrome of the `.feed-item-toggle` bar and the at-bat card it sits above, so a
    static row of two links read as a collapsed card and invited a tap that did
    nothing (worse on deck, where there's nothing under it to open at all). The
@@ -9295,13 +9295,13 @@ button.start-line:focus-visible {
 }
 /* The rail, the last of the feed's five item shapes to take one — the identity
    row, the bar and whatever the bar opens onto are one thing to read, and
-   without it the section was a run of loose blocks beside four neighbours that
+   without it the section was a run of loose blocks beside four neighbors that
    group themselves. Same 3px/11px as `.live-entry`, `.feed-at-bat`,
    `.feed-base-item` and `.feed-outing`, and a plain border rather than the
    base event's gradient: that mechanism exists for a play that was two things
    at once, and nothing scheduled is.
 
-   `--muted`, which is `.feed-outing`'s colour for an outing with no decision
+   `--muted`, which is `.feed-outing`'s color for an outing with no decision
    yet, and for the same reason: the game hasn't been played. Every other rail
    in the feed says what happened, and the honest thing for this one to say is
    nothing — it groups the item and claims no more than that. The row's own
@@ -9384,7 +9384,7 @@ button.start-line:focus-visible {
   margin-bottom: 4px;
 }
 /* **The card has to be told to take the width, and the reason is a trap this
-   stylesheet already documents once.** `.pct-card` centres itself with `margin:
+   stylesheet already documents once.** `.pct-card` centers itself with `margin:
    0 auto`, which is right in the block flow of the player page's Splits tab —
    and an auto margin on the cross axis **suppresses a flex item's stretch**, so
    inside the dialog's flex column it shrank to its own content: measured at
@@ -9469,7 +9469,7 @@ button.start-line:focus-visible {
   gap: 12px;
 }
 /* `.feed-game-head` stood here — the static row of date, matchup, line and
-   badge that labelled the plays under it. Those two facts are the *card* now
+   badge that labeled the plays under it. Those two facts are the *card* now
    (`.pday-game`, folded into `.feed-item-toggle` below), and the box the plays
    are drawn in has a title of its own, so a header inside it would name the
    game a second time. Its two children stay: the card is what draws them. */
@@ -9667,14 +9667,14 @@ button.start-line:focus-visible {
    because nothing here opens, and in this feed a box is what something you can
    open looks like. Same 3px/11px as the live entry, so the two read as the one
    device used twice. */
-/* An at-bat is grouped the same way a base event is: the outcome's colour runs
+/* An at-bat is grouped the same way a base event is: the outcome's color runs
    as a rail down the whole item — header, card and clip — instead of being the
    card's own left edge with the name loose above it and the video adrift
    below. The card keeps its box, unlike a base event's detail: it opens, and a
-   box is what that means here. What it gives up is the coloured edge, which
+   box is what that means here. What it gives up is the colored edge, which
    would otherwise draw a second vertical line 11px inside the first saying the
    same thing. Scoped to the feed — in the players view the card is the whole
-   item and its edge is the only place the outcome's colour can live. */
+   item and its edge is the only place the outcome's color can live. */
 .feed-at-bat {
   border-left: var(--rail-w) solid var(--border);
   border-radius: 3px;
@@ -9706,13 +9706,13 @@ button.start-line:focus-visible {
 }
 /* The rail is one gradient at every width, and the two tone classes are what
    fill it. A rail with one tone sets only `--rail-a`, and `--rail-b` resolves
-   through it, so the gradient paints one colour top to bottom and reads as a
+   through it, so the gradient paints one color top to bottom and reads as a
    solid edge; a play that was two things (a steal of home is a steal *and* a
    run) adds `rail2-*` and the two halves show, in the badges' own order —
    whatever moved him above, the run below.
 
-   It has to be a gradient rather than a border colour even in the one-tone
-   case: a border takes one colour and has no half to give a second, and
+   It has to be a gradient rather than a border color even in the one-tone
+   case: a border takes one color and has no half to give a second, and
    switching between the two mechanisms per item would mean every tone written
    twice. `background-origin: border-box` starts the gradient *on* the rail
    rather than inside it, the border itself going transparent to let it through.
@@ -9754,7 +9754,7 @@ button.start-line:focus-visible {
 .feed-base-item.rail2-run {
   --rail-b: var(--hit);
 }
-/* A pitcher's outing takes the same rail, in `decisionColor`'s colour — set
+/* A pitcher's outing takes the same rail, in `decisionColor`'s color — set
    inline, since that function is the app's one definition of what a W, an L, a
    save and a hold look like and a second copy here would drift from the credit
    chip sitting on the bar an inch away. On the mound he is a `.live-entry`
@@ -9789,7 +9789,7 @@ button.start-line:focus-visible {
 }
 /* Keyed off the badge's own tone rather than the item's: a play can be both a
    steal and the run it turned into, and then the two badges sit side by side
-   and have to keep their own colours where the rail carries them in halves. */
+   and have to keep their own colors where the rail carries them in halves. */
 .feed-base-badge.tone-take {
   color: var(--live-purple);
 }
@@ -9938,7 +9938,7 @@ button.start-line:focus-visible {
   font-size: 22px;
   letter-spacing: -0.01em;
 }
-/* The boot splash: the same card with the ball centred in it. `align-self` on
+/* The boot splash: the same card with the ball centered in it. `align-self` on
    the ball rather than `align-items` on the card, since the card is a stretch
    column and every other thing in it — the fields, the buttons — wants that. */
 .auth-splash .ball-spin {
@@ -9991,7 +9991,7 @@ button.start-line:focus-visible {
   font-size: 13px;
 }
 
-/* The card's own form. The card is centred text — a doorway, not a page — but
+/* The card's own form. The card is centered text — a doorway, not a page — but
    labels and fields read down the left like every other form. */
 .auth-form {
   display: flex;
@@ -10032,7 +10032,7 @@ button.start-line:focus-visible {
 .auth-input:disabled {
   opacity: 0.6;
 }
-/* Six digits, spaced out and centred so a typo is visible at a glance. */
+/* Six digits, spaced out and centered so a typo is visible at a glance. */
 .auth-code {
   text-align: center;
   font-variant-numeric: tabular-nums;
@@ -10421,7 +10421,7 @@ button.start-line:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-/* .empty-state is centred block flow, so the two buttons would flow inline
+/* .empty-state is centered block flow, so the two buttons would flow inline
    separated by a single collapsed space. One row with a real gap instead, and
    the margin moves here so it is stated once for the pair. */
 .empty-actions {
@@ -10818,7 +10818,7 @@ button.start-line:focus-visible {
   display: flex;
   flex-direction: column;
 }
-/* Centred in the window rather than hung off the top of it. This page is one
+/* Centered in the window rather than hung off the top of it. This page is one
    question and its answer — some 340px of it on a desktop — and at the top left
    of a 900px viewport that reads as a page whose rest failed to load, where the
    two overlays it borrows from are long documents that top-align naturally.
@@ -10828,7 +10828,7 @@ button.start-line:focus-visible {
    window: centring the *container* overflows equally in both directions, so the
    top of the block goes above the scrollport's start and is unreachable — a
    short phone in landscape would have lost the league's name. Auto margins in a
-   flex container resolve to 0 against negative free space, so this centres when
+   flex container resolve to 0 against negative free space, so this centers when
    there is room and top-aligns when there isn't. */
 .onboard-inner {
   margin: auto 0;
@@ -10915,7 +10915,7 @@ button.start-line:focus-visible {
 /* The trends beside the rostered figure, and in the board's own columns. Green
    up, red down — the app's `--hit` and `--strikeout`, the same pair the arsenal
    tables use for a delta, so a rise reads the same way everywhere. A flat
-   player takes neither: nothing happened, and colouring that would give the
+   player takes neither: nothing happened, and coloring that would give the
    eye something to catch on.
 
    There are up to five of them now, one per span, so they are a wrapping row
@@ -10968,7 +10968,7 @@ button.start-line:focus-visible {
 /* Scoped to `td` so they outrank `.research-table td.research-sorted`, which
    paints the sorted column in the accent. Sorting *by* the trend is the first
    thing anyone does with it, and that must not be the moment the up/down
-   colour disappears — the emphasis is already carried by the pinning and the
+   color disappears — the emphasis is already carried by the pinning and the
    header, so the cell keeps its own meaning. */
 .research-table td.research-trend-up {
   color: var(--hit);
@@ -10994,8 +10994,8 @@ button.start-line:focus-visible {
    that leaves.
 
    **Monochrome**, which is this table's standing rule rather than a shortcut —
-   "the stat columns are monochrome … colour is reserved for *state*" — so a
-   heat scale here would be a second colour system beside the live inning, the
+   "the stat columns are monochrome … color is reserved for *state*" — so a
+   heat scale here would be a second color system beside the live inning, the
    postponement and the trend. `--faint` is the tone the board already gives the
    quieter of two lines in a cell (`.research-opp-sp`).
 
@@ -11027,7 +11027,7 @@ button.start-line:focus-visible {
    control radius is for things you press.
 
    The distinction it carries is **starting versus not**, not which slot — so
-   that is what the colour says. A lineup spot takes the accent and a filled
+   that is what the color says. A lineup spot takes the accent and a filled
    ground; the bench and the IL go muted and outlined, which is the same
    quieter treatment the roster-status tags use for a player who isn't
    available. */
@@ -11052,7 +11052,7 @@ button.start-line:focus-visible {
   letter-spacing: 0.02em;
   white-space: nowrap;
   /* It sits inside a <button> in the summary table and the feed, both of which
-     set their own cursor and colour; this is a label either way. */
+     set their own cursor and color; this is a label either way. */
   cursor: inherit;
 }
 .fantasy-slot.starting {
@@ -11120,7 +11120,7 @@ button.start-line:focus-visible {
   font-weight: 700;
   white-space: nowrap;
 }
-/* **Colour is spent on state and on nothing else**, which is the rule both
+/* **Color is spent on state and on nothing else**, which is the rule both
    tables already keep for their stat columns: a game in progress takes the
    accent green the summary table's own opponent cell gives a live inning, a
    postponement the amber that cell gives `PPD`, and a game already final goes
@@ -11139,8 +11139,8 @@ button.start-line:focus-visible {
 .sched-off {
   color: var(--faint);
 }
-/* He is starting this game. A chip rather than a colour on the opponent, because
-   the opponent's colour is already spoken for by the game's own state above and a
+/* He is starting this game. A chip rather than a color on the opponent, because
+   the opponent's color is already spoken for by the game's own state above and a
    starter can be announced for a game that is live.
 
    **Three weights, because the chip now says three things** — his club has named
@@ -11170,7 +11170,7 @@ button.start-line:focus-visible {
 }
 /* Our own measurement of his slot: the fill goes, so the chip reads as an
    outline against the announced one's solid ground. `--muted` rather than the
-   accent, which is this view's colour for a fact. */
+   accent, which is this view's color for a fact. */
 .sched-sp-projected {
   color: var(--muted);
   background: none;
@@ -11521,7 +11521,7 @@ button.start-line:focus-visible {
    320px phone from scrolling; 36 is still above what any cell in this block
    actually needs (the widest header is `SVHD` at ~30px and the widest value a
    four-character rate), and the row's `min-width: min-content` is what stops a
-   longer-labelled league clipping rather than scrolling. */
+   longer-labeled league clipping rather than scrolling. */
 .lg-cat-row {
   display: grid;
   grid-auto-flow: column;
@@ -11578,7 +11578,7 @@ button.start-line:focus-visible {
    390 and the column is free there. What it buys is 15px a block and **30px a
    card**, on a card that draws two of them and is read as a list of ten.
    Left-aligned, over the badges it now shares a column with, where the
-   categories beside it are centred. Small caps in `--faint`, unchanged. */
+   categories beside it are centered. Small caps in `--faint`, unchanged. */
 .lg-cat-side {
   font-size: 10px;
   font-weight: 800;
@@ -11597,7 +11597,7 @@ button.start-line:focus-visible {
    losing side of every card, which is the whole row shouting rather than the
    winner being marked. A tie is neither.
 
-   The colour is `--win` rather than `--hit` directly, so a theme can move the
+   The color is `--win` rather than `--hit` directly, so a theme can move the
    four rules that make this statement together — see the token. */
 .lg-cat-win {
   color: var(--win);
@@ -11894,7 +11894,7 @@ button.start-line:focus-visible {
    A heading rather than a rule between the two, because the reader is looking
    for one half of the list rather than for a break in it.
 
-   **It takes the row's own grid**, so the label centres over the column of
+   **It takes the row's own grid**, so the label centers over the column of
    category names it heads and each side's tally lands in the column its own
    figures are in. It was a left-aligned word at the card's edge, which named
    the group and pointed at nothing in it. */
@@ -11973,7 +11973,7 @@ button.start-line:focus-visible {
   border-radius: calc(var(--mup-track-h) / 2);
   /* Faint, because there are twenty of these on the card and only one of each
      pair is ever filled: at the border's full weight the empty halves were the
-     loudest thing on the page, twenty grey rails around ten green bars. What
+     loudest thing on the page, twenty gray rails around ten green bars. What
      the rail is for is the **scale** — where the end is, so a bar reaching it
      reads as a category that is gone — and that survives at a third of it. */
   background: color-mix(in srgb, var(--border) 32%, transparent);
@@ -11984,7 +11984,7 @@ button.start-line:focus-visible {
    length is by how much; a tie fills neither.
 
    Green, because that is what a winning figure takes in the row already and
-   what the leader's share of the meter above takes: one colour, one meaning,
+   what the leader's share of the meter above takes: one color, one meaning,
    on a page that has no room for a second. The 2px floor is what keeps a
    near-dead-level category visible as a sliver rather than as nothing. */
 .mup-fill {
@@ -12012,7 +12012,7 @@ button.start-line:focus-visible {
   text-transform: uppercase;
   color: var(--muted);
   text-align: center;
-  /* The column is `--mup-cat-w` and the label is centred in it; a wider one
+  /* The column is `--mup-cat-w` and the label is centered in it; a wider one
      overflows into the tracks rather than widening the row out of line with
      every other row. */
   white-space: nowrap;
@@ -12101,8 +12101,8 @@ button.start-line:focus-visible {
 }
 /* **Not `.lg-tx-name`'s accent**, although it is the same kind of control. On
    this card the accent is *the side that is ahead* and green is *winning this
-   category*; a column of blue names would be a third meaning for a colour that
-   already has one here. So the name carries the app's plain text colour, the
+   category*; a column of blue names would be a third meaning for a color that
+   already has one here. So the name carries the app's plain text color, the
    press is said by the hover and the focus ring, and the direction is said by
    the heading above and the weight below.
 
@@ -12167,10 +12167,10 @@ span.mup-move-name:hover {
 /* ---- The matchup meter --------------------------------------------------
    **The whole matchup as one bar**, under the two records it is made of: the
    categories each side holds with the ties between them, so the boundary
-   sitting left or right of centre is the week at a glance.
+   sitting left or right of center is the week at a glance.
 
    Only the **leader's** run is green, which is what keeps this on the page's
-   one colour rule: green marks whoever is winning, here as in every row below
+   one color rule: green marks whoever is winning, here as in every row below
    and as on the scoreboard card this page was opened from. The trailing run is
    `--faint` and the ties are dimmer again, which is the honest ordering — a
    tied category is not a category anybody holds. */
@@ -12603,16 +12603,16 @@ span.mup-move-name:hover {
    are the view switch one tier down, so it is that control and only its
    placement and its labels are its own.
 
-   Centred over the card it selects, and at the card's own width so the strip
+   Centered over the card it selects, and at the card's own width so the strip
    and the thing under it are one object rather than a control floating over a
    page. */
-/* **The strip hugs its tabs and centres**, where it used to stretch them across
+/* **The strip hugs its tabs and centers**, where it used to stretch them across
    the whole card column: `flex: 1 1 0` on the two team tabs made each of them
    **351px at 1200** — a segmented control the width of a paragraph, with a
    short name adrift in the middle of its own pill. A tab should be as wide as
    what is written on it, within bounds, which is what every other member of
    `.view-switch` already is. `fit-content` is what lets the shell shrink-wrap
-   the result, and the auto margins then centre it over the card it selects. */
+   the result, and the auto margins then center it over the card it selects. */
 .mup-sides {
   display: flex;
   width: fit-content;
@@ -12624,7 +12624,7 @@ span.mup-move-name:hover {
 }
 /* **The label is the team's name, truncated rather than abbreviated.** ESPN's
    `abbrev` is manager-chosen and often opaque (`HOME`, `PIRA`), where the first
-   dozen characters of a real name are recognisable at a glance; the whole of it
+   dozen characters of a real name are recognizable at a glance; the whole of it
    is on the tab's `title`. */
 .mup-sides .view-tab {
   min-width: 0;
@@ -12708,7 +12708,7 @@ span.mup-move-name:hover {
    what it was folded onto before and is the whole of what was wrong with it.
    The log is a list of one player's games read down inside an overlay: its
    rows are presses, its table is `width: 100%`, and its cells paint an opaque
-   `--bg` because nothing under them ever changes colour. None of those three
+   `--bg` because nothing under them ever changes color. None of those three
    is true here. This is the league read *across* — twelve teams by ten
    categories, each cell two lines — which is the board's shape exactly, so it
    takes the board's answers: a table sized to its content inside a scrollport
@@ -12734,7 +12734,7 @@ span.mup-move-name:hover {
      washed the whole cell until the scale moved onto the chip. Table-local
      rather than on `:root`: this is the one surface in the app that reads a
      diverging scale, and a palette entry would invite a second reader to
-     import the argument with the colour. */
+     import the argument with the color. */
   --rank-hot: var(--strikeout);
   --rank-cold: var(--walk);
   /* The header's own line, declared for the reason the board and the Stats tab
@@ -12751,8 +12751,8 @@ span.mup-move-name:hover {
 }
 /* Every cell opaque, and its ground **named** rather than assigned — the rule
    the summary table states at length and for exactly this reason: the pinned
-   first column must paint the same colour as the row it is part of, and a
-   second declaration of that colour is a second thing to keep in step. Anything
+   first column must paint the same color as the row it is part of, and a
+   second declaration of that color is a second thing to keep in step. Anything
    below sets `--cell-bg` alone; the paint happens here, once. */
 .league-table th,
 .league-table td {
@@ -12858,7 +12858,7 @@ span.mup-move-name:hover {
 }
 /* **The reader's own row is marked on its badge, not by washing the row.** It
    was a 12% accent `--cell-bg` across all twelve cells, which is one wash too
-   many now that every rank cell carries a colour of its own: a row tinted
+   many now that every rank cell carries a color of its own: a row tinted
    accent-blue under a column of blue-to-red badges is two scales competing for
    one reading, and on the cold end of a category the two were very nearly the
    same ink. The team's badge is where the row says who it is anyway — the logo,
@@ -12920,7 +12920,7 @@ span.mup-move-name:hover {
    pointer to move away, so a tint would sit on the last row a finger crossed
    in a table twelve rows long, and an accented *team name* is loud enough to
    read as a selection this table cannot act on. The headshot circles take the
-   exemption that rule allows and this deliberately does not: those recolour a
+   exemption that rule allows and this deliberately does not: those recolor a
    1px border on a 32px mark, where this is a name.
 
    The badge's hover ring is a **mix** where `.lg-row-mine`'s is the flat
@@ -12960,14 +12960,14 @@ span.mup-move-name:hover {
   font-weight: 800;
   color: var(--text);
 }
-/* **`OVR` takes no colour of its own**, and the rule that gave it the accent is
+/* **`OVR` takes no color of its own**, and the rule that gave it the accent is
    gone rather than tuned. The argument for it was a one-step ladder — the
    summary of the whole row a shade louder than the two halves it is made of —
-   and it lost to the rule this table already states at length: **colour here is
+   and it lost to the rule this table already states at length: **color here is
    the rank badge's**, a red-to-blue scale over twelve teams, and it is the one
    thing on the page carrying meaning in hue. An accent column beside it is a
-   second colour system in the same row, saying "this column is important"
-   where every other coloured thing on the table is saying "this figure is
+   second color system in the same row, saying "this column is important"
+   where every other colored thing on the table is saying "this figure is
    good". `OVR` is marked by where it sits and by the weight `.lg-side-col`
    gives all three summary columns, which is what a summary needs. */
 
@@ -12982,10 +12982,10 @@ span.mup-move-name:hover {
 
    The one thing each adds is the row it sits in: the League strip leads the
    view and the span strip leads its table, both left-aligned rather than
-   centred, because the page under them starts at the left edge. */
+   centered, because the page under them starts at the left edge. */
 /* The strip hugs its own pills and sits at the left edge of the reading column
    the header under it uses, which needs a block row of its own: the shell is
-   `inline-flex` (it is `.view-switch`), and an auto margin does not centre an
+   `inline-flex` (it is `.view-switch`), and an auto margin does not center an
    inline-level box — left to itself it would sit at the far left of the window
    while the scoreboard's own header sat 200px in. */
 .lg-tabs-row {
@@ -12996,7 +12996,7 @@ span.mup-move-name:hover {
    the rule `.view-bar-tabs` states one tier up. Without it `Current matchup`
    wraps inside its own button on a phone — a two-line pill in a row of
    one-line ones, which `align-items: center` then leaves at a different top
-   from its neighbours. */
+   from its neighbors. */
 .lg-span-row {
   flex-wrap: wrap;
 }
@@ -13111,27 +13111,27 @@ span.mup-move-name:hover {
    percentile badge takes — `.col-rank`, folded onto rather than restyled, so a
    second line under a number is one object in this app.
 
-   **Every rank is coloured and first place is not marked apart**, which is a
+   **Every rank is colored and first place is not marked apart**, which is a
    reversal of the rule this table borrowed from the scoreboard (there the
    winning side of a category is green and the loser goes quiet). That rule is
    right for a card showing one matchup, where the job is to mark a *winner*;
    this is twelve teams ranked in one category, where the job is to say **where
    each of them stands**, and a green `1st` inside a red-to-blue scale would be
-   a third colour system saying what the reddest chip already says. The scale
+   a third color system saying what the reddest chip already says. The scale
    marks first place by being at its own end. */
 /* **Here the rank is a filled pill and the scale is its fill**, where the board
    and the Stats tab draw the same class as a bare second line. The cells used
-   to carry the colour and the badge was `--muted` text on top of it; the wash
-   is gone (see `.lg-row-mine` above) and the colour has come down onto the chip
+   to carry the color and the badge was `--muted` text on top of it; the wash
+   is gone (see `.lg-row-mine` above) and the color has come down onto the chip
    it was always describing.
 
    **The fill carries the scale and the text does not**, which is what makes it
    legible at every rank: `--text` on the tinted grounds measures 5.1–5.7:1 at
-   the ends of the scale and 12.8:1 at its neutral middle, where colouring the
+   the ends of the scale and 12.8:1 at its neutral middle, where coloring the
    *text* instead put a mid-luminance red on a mid-luminance ground at 3.1:1 —
    under the 4.5 a 11px label owes a reader. `--panel-2` is the base the tone is
    mixed into, so a team in the middle of a category gets a plain neutral chip
-   and the scale passes through grey rather than through nothing.
+   and the scale passes through gray rather than through nothing.
 
    Opaque rather than a `color-mix(…, transparent)` layer, unlike the wash it
    replaces: that one had to let the zebra stripe through because it covered a
@@ -13539,7 +13539,7 @@ html[data-theme='lavender'] {
      page, the page's second step, a card, and a card's stronger surface. Neutral
      gray with a few points of violet in it — enough that the accent reads as
      belonging to the page rather than as sitting on it, and not so much that the
-     surfaces themselves read as coloured. */
+     surfaces themselves read as colored. */
   --bg: #1c1b22;
   --bg-2: #232229;
   --panel: #2a2833;
@@ -13609,7 +13609,7 @@ html[data-theme='lavender'] {
    other way up — a powder page with the maroon written on *it* — and the two
    together are why neither is called after the uniform.
 
-   **The three colours are sampled from the jersey rather than remembered.** The
+   **The three colors are sampled from the jersey rather than remembered.** The
    image was decoded and its pixels binned: the body reads **#527dae at the 10th
    percentile, #6d98ce at the median and #86aede at the 90th**, and the maroon of
    the lettering and the stripes clusters hard on **#66283b** (family #5a2737 to
@@ -13668,7 +13668,7 @@ html[data-theme='maroon'] {
   --faint: #8f7684;
 
   /* The hero, and a lighter one to hover into. The accent is the jersey's body
-     colour lifted until it carries text on the page (9.4:1); `--accent-2` is
+     color lifted until it carries text on the page (9.4:1); `--accent-2` is
      that lift continued, so a hover moves toward the light exactly as Midnight's
      cyan does over its blue. */
   --accent: #8fc0ea;
@@ -13696,13 +13696,13 @@ html[data-theme='maroon'] {
 
   --scrim: rgba(20, 8, 13, 0.66);
   /* The lift at the top right of the page's own radial: the maroon again, a step
-     above the page, so the page reads as lit in its own colour rather than in a
+     above the page, so the page reads as lit in its own color rather than in a
      borrowed one. */
   --page-glow: #3a1f2c;
   /* The second stop of the brand mark, which runs `--accent` → this: the jersey
      read across, powder blue into maroon. A cranberry rather than #66283b
      itself, which at a page's own lightness would end the gradient in the dark
-     instead of in a colour. */
+     instead of in a color. */
   --brand-2: #e2607f;
 
   /* pitch dot colors — the semantic set, separated from each other by ΔE 32.7
@@ -13726,21 +13726,21 @@ html[data-theme='maroon'] {
    was the powder itself on the page for a spell, which is the jersey as you look
    at it and is what was asked for once the dark one existed to be compared with;
    what a white page buys instead is set out below, and the short of it is that
-   the header row and the first row of a table stopped being the same colour.
-   The two themes are built from the same sampled colours (see that block for
+   the header row and the first row of a table stopped being the same color.
+   The two themes are built from the same sampled colors (see that block for
    where they came from) and neither is called after the uniform, because either
    alone would be a poor description of it.
 
    **It is the app's only light theme, and Lavender's own light incarnation is
    the record of what that costs.** Every note in that block still applies: a
-   semantic colour here is printed as text **on the page**, filled **under white
+   semantic color here is printed as text **on the page**, filled **under white
    ink**, and printed as text **on a live-role row** whose ground is that same
    palette washed over the page — and the third is what a light theme has to be
    measured for.
 
    **The page was the jersey's own powder and is now white, and the whole of
    this block's arithmetic got better for it.** What that page cost was measured
-   when it was chosen rather than assumed: holding the role colours fixed and
+   when it was chosen rather than assumed: holding the role colors fixed and
    walking the page from neutral (`#f3f1f8`) to the jersey's body (`#b9d3ec`),
    the tightest pair of the four role grounds falls **12.6 → 9.2**, because a
    page with chroma in it leaves less room for four washes to differ in.
@@ -13767,18 +13767,18 @@ html[data-theme='maroon'] {
      before, and Midnight's own is 12.1), the other five pairs 13.5, 13.9, 22.7,
      22.8 and 24.5. They are still redeclared at **24/22** rather than `:root`'s
      22/20, which is the light Lavender's own correction and for its reason: a
-     20% wash of a deep colour over a light page is a tint you have to look for.
+     20% wash of a deep color over a light page is a tint you have to look for.
    - **white on each fill** — accent 8.5, hit 9.1, hr 7.8, walk 8.4, strikeout
      7.8, on-base 8.5, mound 8.1, out 6.4. Unchanged, the fills not having
      moved, and now the same figures as the line above them: with a white page,
      "printed on the page" and "white on the fill" are one measurement.
 
    **The zebra is what a white page threatens, and it is why `--row-alt`
-   exists.** The stripe was `--panel` — right on a coloured page, where the card
-   colour and the stripe are both white against it, and impossible once the page
+   exists.** The stripe was `--panel` — right on a colored page, where the card
+   color and the stripe are both white against it, and impossible once the page
    is white too. It is the jersey's own #dceaf7 now: **1.22:1** against the white
    beside it (light Lavender 1.15, Midnight 1.11), which is the same step the
-   table always had, drawn in the same two colours the other way round.
+   table always had, drawn in the same two colors the other way round.
    --------------------------------------------------------------------------- */
 html[data-theme='powder'] {
   /* **The page is white and the jersey is everything drawn on it.** It was the
@@ -13788,7 +13788,7 @@ html[data-theme='powder'] {
      (#c7dcf1) and row one was `--bg` (#dceaf7), ΔE2000 **4.6** apart, so a
      reader could not see where the header stopped. White first fixes that at
      the boundary that matters (**ΔE 13.0**) and costs the stripe nothing, the
-     two row colours being the same two the other way round.
+     two row colors being the same two the other way round.
 
      So the powder moves off the page and onto the things drawn on it: the
      stripe (`--row-alt`), the header (`--panel-2` → `--bg-2`), every card's own
@@ -13798,7 +13798,7 @@ html[data-theme='powder'] {
      everywhere — and `--bg-2`/`--panel-2` stop meaning "a step off the page"
      and mean "the foot of a card, and of the header row".
 
-     **Every measured figure below improved**, which is the page's colour being
+     **Every measured figure below improved**, which is the page's color being
      given back: mixing a role wash into white rather than into a blue leaves
      more room for four of them to differ in, and dark ink on a lighter ground
      reads better. */
@@ -13806,8 +13806,8 @@ html[data-theme='powder'] {
   --bg-2: #c7dcf1;
   --panel: #ffffff;
   --panel-2: #eef5fc;
-  /* The jersey's own powder, off the page and onto the zebra. It is the colour
-     row one used to be, so the table is the same two colours in the other
+  /* The jersey's own powder, off the page and onto the zebra. It is the color
+     row one used to be, so the table is the same two colors in the other
      order — 1.22:1 against the white beside it, a step rather than a band. */
   --row-alt: #dceaf7;
   --border: #b4cfe6;
@@ -13832,7 +13832,7 @@ html[data-theme='powder'] {
      slate — the same hue family as `--walk` — and as the *out* tone of a base
      event beside a *free base* one it measured ΔE2000 14.5, the tightest pair of
      the four in any theme. Off the blue axis it is **28.2** from the walk and
-     7.09:1 on the page, which is the whole trade: a grey has no hue to lose and
+     7.09:1 on the page, which is the whole trade: a gray has no hue to lose and
      a light page has no lightness to spare. `--ball`, the
      pitch dot, keeps the cool slate — it is not a rail, and its own separations
      from the other four dots were measured where they are. */
@@ -13846,7 +13846,7 @@ html[data-theme='powder'] {
   --prose: #3a2f34;
   --out-ink: #3f4a56;
   --error-ink: #8b1a1a;
-  /* Both invert with the polarity: the dots are deep colours on a pale plot, and
+  /* Both invert with the polarity: the dots are deep colors on a pale plot, and
      the status chip on a headshot carries its own contrast rather than the
      page's — and this theme's semantic inks are dark, so the chip is white. */
   --pitch-ink: #ffffff;
@@ -13874,7 +13874,7 @@ html[data-theme='powder'] {
   /* The dimmer behind a dialog. Not a darker version of a dark theme's — that is
      near-black at two thirds, which over a pale page reads as a muddy brown and
      swallows the ombré it is dimming. A blue veil at 42% keeps the page
-     recognisable underneath while the card on top of it is unmistakably in
+     recognizable underneath while the card on top of it is unmistakably in
      front. */
   --scrim: rgba(16, 28, 46, 0.42);
 
@@ -13905,7 +13905,7 @@ html[data-theme='powder'] {
 }
 
 /* **The page is flat white, and the ombré it used to carry is gone with the
-   colour it was made of.** It ran a white lift at the top right, a 9% wash of
+   color it was made of.** It ran a white lift at the top right, a 9% wash of
    the accent in the bottom-left corner and a linear from `--bg` down to
    `--bg-2` — three layers, of which the first is now white on white and the
    third would take the foot of every page to #c7dcf1, which is not a white
@@ -13952,13 +13952,13 @@ html[data-theme='powder'] .lg-logo:not(.lg-logo-none) {
    rule read the other way up: there `--panel` was white and `--panel-2` a step
    down, so the gradient ran `panel → panel-2`; here `--panel-2` is the *lighter*
    surface, so it leads. Deliberately shallow — one step of the palette in force,
-   the same distance the pinned bar has always travelled. Anything deeper and a
+   the same distance the pinned bar has always traveled. Anything deeper and a
    card reads as a photograph of a card.
 
    **The selectors list both themes and the declarations name only tokens**,
    which is the whole reason a third theme cost three selector lines rather than
    thirty rules: what is written here is the *shape* of the wash, and each
-   palette supplies its own colours to it. A fourth theme that wants the ombré
+   palette supplies its own colors to it. A fourth theme that wants the ombré
    joins these lists; one that does not, does not. */
 html[data-theme='lavender'] body,
 html[data-theme='maroon'] body {
@@ -14004,13 +14004,13 @@ html[data-theme='maroon'] .order-row {
    `.summary-table` as well) draws a **6px strip of `var(--cell-bg)` straddling
    every cell's left edge** — the cover for the sub-pixel seam between two cell
    grounds, argued in full up beside that rule. Painting `background` directly
-   left that strip on the *solid* colour the token still held while the cell
+   left that strip on the *solid* color the token still held while the cell
    itself had become a gradient, so each column boundary in the header wore a
    vertical bar over a ground that had darkened by the bottom of the row: ten
    bars across the header of every roster page.
 
    The stylesheet's own comment on `--cell-bg` says exactly what went wrong —
-   *"two things need the same colour and must not be able to disagree: the
+   *"two things need the same color and must not be able to disagree: the
    cell's own background, and the hairline of it drawn just outside its left
    edge"* — so the fix is to set the name rather than to paint behind it. A
    `background` shorthand takes an image, so the token holds the gradient
@@ -14069,12 +14069,12 @@ html[data-theme='powder'] .league-table thead th {
    The Arsenal tab's two charts — Pitch Usage and Movement Profile.
 
    Both are recreations of the charts on a Baseball Savant player page, and both
-   are drawn in the app's own tokens so they follow the colour scheme; the one
-   thing that does NOT theme is the pitch colours themselves, which are a fixed
+   are drawn in the app's own tokens so they follow the color scheme; the one
+   thing that does NOT theme is the pitch colors themselves, which are a fixed
    vocabulary (`lib.ts::pitchStyle`, Savant's own palette) shared with the
    arsenal rows below, the per-game rows and the pitch dots in a plate
    appearance. A four-seamer is that red in both schemes for the same reason a
-   team's cap logo is its own colours.
+   team's cap logo is its own colors.
    --------------------------------------------------------------------------- */
 
 .arsenal-charts {
@@ -14417,8 +14417,8 @@ html[data-theme='powder'] .league-table thead th {
 }
 /* The drop block was already three lines (`▼ MORE DROP` wrapped), so the arrow
    moving to the foot of it changes no height. 64% rather than 62% squares it up
-   against the rise block — both centres now sit ~87px either side of the disc's
-   own centre at 470px — and it is what takes its corner clear of the painted
+   against the rise block — both centers now sit ~87px either side of the disc's
+   own center at 470px — and it is what takes its corner clear of the painted
    disc (−1.7px → +1.1px). */
 .mv-axis-drop {
   top: 64%;
@@ -14672,7 +14672,7 @@ html[data-theme='powder'] .league-table thead th {
   .mv-axis-drop {
     top: 70%;
   }
-  /* The row labels stay — three unlabelled numbers under a swatch are not a
+  /* The row labels stay — three unlabeled numbers under a swatch are not a
      legend — and give up type size instead, which is the cheaper thing here. */
   .mv-legend {
     gap: 5px;
@@ -14821,7 +14821,7 @@ html[data-theme='powder'] .league-table thead th {
 }
 /* The hatch swatch is the same 45° pattern the league blobs are filled with,
    drawn here in the neutral the key wants rather than in any one pitch's
-   colour — it stands for all five. */
+   color — it stands for all five. */
 .mv-hatchkey-dot {
   fill: url(#mv-hatch-key);
   stroke: var(--border);

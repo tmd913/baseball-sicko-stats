@@ -108,7 +108,7 @@ function pitchButtonProps(pitchType: string, sel: PitchSelection) {
 }
 
 /**
- * Black or white on a pitch's own colour, whichever a reader can actually see.
+ * Black or white on a pitch's own color, whichever a reader can actually see.
  *
  * The pitch palette is a fixed vocabulary spanning a crimson four-seamer and a
  * near-yellow slider, so one ink cannot serve it: white on `#c9b200` measures
@@ -131,13 +131,13 @@ function inkOn(hex: string): string {
 }
 
 /**
- * The same colour, darker — what a movement dot is outlined in.
+ * The same color, darker — what a movement dot is outlined in.
  *
- * A cloud is a hundred overlapping circles of one colour, and without an edge a
+ * A cloud is a hundred overlapping circles of one color, and without an edge a
  * dense cluster is a single blob whose shape says how *far* the pitches spread
  * and nothing about how many are stacked where. The outline is a darker version
- * of the dot's **own** colour rather than a neutral: a grey or a black ring
- * would be a second thing to look at on a chart already carrying five colours,
+ * of the dot's **own** color rather than a neutral: a gray or a black ring
+ * would be a second thing to look at on a chart already carrying five colors,
  * and it reads as ink rather than as the edge of the mark.
  *
  * Multiplied rather than mixed toward black in CSS, because this is an SVG
@@ -319,7 +319,7 @@ const R_PX = 156;
  * title and the top of the circle — space no margin can take back, because it
  * is inside the picture. **The crop is measured against the soft disc**, which
  * is the outermost thing drawn — y = 24.4…367.6, being `R_PX` plus 2.4" of
- * margin either side of centre — so 22…370 keeps all of it with the ring
+ * margin either side of center — so 22…370 keeps all of it with the ring
  * labels (y≈44 and y≈356) comfortably inside. A first pass cut at 26 and
  * clipped 1.6 units off the top of the disc; it took a check on the *painted*
  * pixels to see it, which is the only kind that can.
@@ -338,7 +338,7 @@ const inches1 = (n: number) => `${n >= 0 ? '' : '−'}${Math.abs(n).toFixed(1)}"
  * rather than nudged**, because "in the corner" is not the same as "clear of the
  * circle" and the first pass was neither.
  *
- * A mark is clear when the corner of its box **nearest the centre** is more than
+ * A mark is clear when the corner of its box **nearest the center** is more than
  * the disc's radius away: the top-*inner* corner, since both marks sit low and
  * outboard. With the disc at (200, 196) r 171.6 that gives, for the arm at
  * `ARM_SY`, a shoulder no further in than x ≈ 319 — it was at 314, six units
@@ -363,7 +363,7 @@ const KEY_Y = 362;
  * single box containing both the shoulder (low and inboard) and the ball at the
  * steepest slot the leaderboard carries (70°, high and outboard) has a
  * top-*inner* corner at (316, 314), which is **165.5 units from the disc's
- * centre against its 171.6 radius** — inside it. Two elements each clear it: the
+ * center against its 171.6 radius** — inside it. Two elements each clear it: the
  * line's closest approach is its own shoulder at 198 less 8 of half-width, and
  * the label box's inner corner (320, 354) is at 198.4.
  *
@@ -696,7 +696,7 @@ export function MovementChart({
   const avgLabel = hand === 'R' ? 'RHP AVG' : hand === 'L' ? 'LHP AVG' : 'LEAGUE AVG';
   // The same fact in the legend's own sentence case, beside `Usage` and `MPH`.
   const rowAvgLabel = hand === 'R' ? 'RHP avg' : hand === 'L' ? 'LHP avg' : 'Lg avg';
-  // What the *cloud* can honour. A pitch with no measured break is on the usage
+  // What the *cloud* can honor. A pitch with no measured break is on the usage
   // butterfly and on no part of this chart, so it lights nothing here rather
   // than dimming everything against a blob that is not drawn.
   const sel = selection.selected;
@@ -733,9 +733,9 @@ export function MovementChart({
   // the one Savant's own percentile card reads in. Which *way* is better is not
   // ours to assume: a four-seamer wants more ride and a curveball wants more
   // drop, so it comes off `pitchDirections` — the same per-pitch table the
-  // arsenal rows colour their ▲▼ with, rather than a second opinion beside it.
+  // arsenal rows color their ▲▼ with, rather than a second opinion beside it.
   // A metric that table calls `none` (a slider's induced break sits near zero
-  // by design) takes no colour at all.
+  // by design) takes no color at all.
   const better = focus ? pitchDirections(focus.pitchType) : null;
   const vTone =
     better === null || vDiff === null || better.ivb === 'none'
@@ -766,10 +766,10 @@ export function MovementChart({
             spinless path — left and right toward the bases, up and down as{' '}
             <b>induced</b> break, which is the movement his spin creates rather than the
             drop gravity gives every pitch. The rings are inches; the solid ones are
-            labelled and the dashed ones halve them.
+            labeled and the dashed ones halve them.
           </p>
           <p>
-            The hatched blob behind each colour is where the average of that pitch
+            The hatched blob behind each color is where the average of that pitch
             sits for pitchers of <b>his own hand</b>, drawn as wide as the league's own
             spread — average is a cloud too, so daylight narrower than the blob is not a
             difference. (A right-hander throws about two miles an hour harder than a
@@ -931,7 +931,7 @@ export function MovementChart({
           <line className="mv-axis" x1={CX - R_PX} y1={CY} x2={CX + R_PX} y2={CY} />
           <line className="mv-axis" x1={CX} y1={CY - R_PX} x2={CX} y2={CY + R_PX} />
 
-          {/* Only the solid rings are labelled — the dashed ones halve them, so
+          {/* Only the solid rings are labeled — the dashed ones halve them, so
               the scale reads without eight figures crowding the middle, which is
               exactly where the pitches are. Savant labels the inner rings on one
               side only; symmetric is the better answer here, since which side is
@@ -1064,18 +1064,18 @@ export function MovementChart({
                     pushes the numbers under it apart, and only one column is
                     ever the answer to a question. The full name is absolutely
                     placed so the grid holds still while it appears, and it may
-                    overhang its neighbours, which are dimmed at that moment
+                    overhang its neighbors, which are dimmed at that moment
                     anyway. Same move the usage badge makes. */}
                 <span className="mv-legend-name">
-                  {/* Not in the pitch's own colour: this palette is built to
+                  {/* Not in the pitch's own color: this palette is built to
                       be a *fill* with computed ink over it (see `inkOn`), and as
                       text several of its members fail outright — measured
                       against the two themes' card grounds, 4 of the 15 land
                       under 3:1 somewhere (FC 2.28/2.06, KC 2.23/2.02, FF and KN
-                      3.21/2.91 on Midnight/Lavender). Colouring the label would
+                      3.21/2.91 on Midnight/Lavender). Coloring the label would
                       leave a cutter and a knuckle curve unreadable to buy the
                       others nothing the swatch below does not already say —
-                      which is where the colour belongs. (Measured again when
+                      which is where the color belongs. (Measured again when
                       Lavender went from a light theme to graphite: on the pale
                       page it was 6 of 9 in a real arsenal, and the conclusion
                       is the one that survived.) */}

@@ -22,7 +22,7 @@ import type { ReactNode } from 'react';
  * placed by the projection a point on a sphere actually has: horizontal
  * position `9·sin θ` and horizontal foreshortening `cos θ`, so a seam is widest
  * face-on, narrows to a hairline as it reaches the limb, and *bunches* there
- * rather than at the centre — which is the tell that separates a sphere from a
+ * rather than at the center — which is the tell that separates a sphere from a
  * disc, whose marks bunch the other way. Opacity carries it round the back.
  *
  * **Four seams, 90° apart, bulging alternately left and right.** Three things
@@ -31,7 +31,7 @@ import type { ReactNode } from 'react';
  * seams a quarter of every turn had nothing on it at all. At 90° there are
  * always two seams on the front (or one face-on and two edge-on), and the pose
  * at every odd eighth of the turn is *exactly* `BaseballMark`: one seam right
- * of centre bulging left, one left of centre bulging right. So the spinner
+ * of center bulging left, one left of center bulging right. So the spinner
  * passes through the app's own mark four times a revolution, which is why the
  * two read as the same object.
  *

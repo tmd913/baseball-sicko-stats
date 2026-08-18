@@ -50,10 +50,10 @@ import { DialogLayerContext, OVERLAY_LAYER } from './Modal';
 import { BackButton } from './BackButton';
 
 /**
- * Savant's diverging percentile scale: deep blue (poor, 0) → neutral grey
+ * Savant's diverging percentile scale: deep blue (poor, 0) → neutral gray
  * (average, 50) → red (great, 100). The bubble is filled solid at this color
  * and carries the percentile number in white, so identity never rests on hue
- * alone; the bar behind it is the same color at reduced opacity. The grey
+ * alone; the bar behind it is the same color at reduced opacity. The gray
  * midpoint is kept dark enough that white numerals stay legible across the range.
  */
 const POOR: [number, number, number] = [50, 90, 161];
@@ -260,7 +260,7 @@ function renderMetricRows(metrics: PercentileMetric[], overlapPct: number): Reac
 
 /**
  * **Two of these keys were swapped, and the swap is the honest one.** `splits`
- * used to name the tab labelled **Stats** — a leftover from when that tab was
+ * used to name the tab labeled **Stats** — a leftover from when that tab was
  * the platoon card and nothing else, kept through the rename on the reasoning
  * that a key in no URL is not worth churning. It is worth churning now that a
  * tab called **Splits** exists beside it: two tabs, one of them named after the
@@ -271,7 +271,7 @@ function renderMetricRows(metrics: PercentileMetric[], overlapPct: number): Reac
  * Nothing outside this file had to change but one prop type: the open tab is
  * component state and appears in no URL, and `PlayerOverview`'s `Stats →` link
  * is the only caller (`onTab`), which is a compile error rather than a silent
- * change of behaviour if it is missed.
+ * change of behavior if it is missed.
  *
  * **`rolling` became `charts` on the same reasoning**, and the same check was
  * run rather than assumed: the key is named nowhere outside this file (the tab
@@ -1142,7 +1142,7 @@ export function PlayerDetails({
                       trend used to read ("▲ 1.2 in 7d"): five of those is a
                       paragraph, where the span up front and the move behind it
                       is a row that can be scanned across. A flat window keeps
-                      its 0.0 in the muted colour — the server drops zeroes from
+                      its 0.0 in the muted color — the server drops zeroes from
                       the wire and the client fills them back, so flat is a real
                       answer here and not an absence. */}
                   {rosterPct !== null && rosterTrends && rosterTrends.length > 0 && (
@@ -1391,7 +1391,7 @@ export function PlayerDetails({
           /* The season line and the game log are the page's own reads, handed
              down rather than fetched again: the Stats tab and the Game Log tab
              already hold them, and a second copy would be a second answer free
-             to disagree with the tab it summarises. */
+             to disagree with the tab it summarizes. */
           season={splits?.season ?? null}
           pitcherSeason={pitcherSplits?.season ?? null}
           seasonLoading={splitsLoading}

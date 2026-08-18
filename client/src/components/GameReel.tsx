@@ -87,7 +87,7 @@ export function GameReel({
   // Sequential (not parallel) so the first request warms the server's per-game
   // highlight cache that the rest then hit, and so clips stay in order.
   useEffect(() => {
-    let cancelled = false;
+    let canceled = false;
     setClips([]);
     setAttempted(0);
     setLoading(true);
@@ -96,7 +96,7 @@ export function GameReel({
       const list = pasRef.current;
       const out: ReelClip[] = [];
       for (let i = 0; i < list.length; i++) {
-        if (cancelled) return;
+        if (canceled) return;
         const pa = list[i];
         if (pa.playId) {
           try {
@@ -110,17 +110,17 @@ export function GameReel({
               description: pa.description,
               pitcherName: pa.pitcherName,
             });
-            if (!cancelled) setClips([...out]);
+            if (!canceled) setClips([...out]);
           } catch {
             // No clip for this at-bat — skip it.
           }
         }
-        if (!cancelled) setAttempted(i + 1);
+        if (!canceled) setAttempted(i + 1);
       }
-      if (!cancelled) setLoading(false);
+      if (!canceled) setLoading(false);
     })();
     return () => {
-      cancelled = true;
+      canceled = true;
     };
   }, [reelKey, gamePk]);
 

@@ -262,7 +262,7 @@ const DOTS_PER_ARSENAL = 100;
  * Read rather than inferred: the sign of his four-seam's horizontal break gives
  * the same answer nearly always and is an inference where an exact column is
  * sitting in the rows already being parsed. Taken as the **majority** of the
- * season rather than the first row, so one mislabelled row cannot flip a
+ * season rather than the first row, so one mislabeled row cannot flip a
  * pitcher's hand — and so a genuine switch-pitcher (Pat Venditte is the whole
  * population) resolves to the arm he mostly uses rather than to whichever row
  * came back first.
