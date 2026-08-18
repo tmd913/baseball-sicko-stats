@@ -12084,15 +12084,6 @@ button.start-line:focus-visible {
 
    `minmax(0, 1fr)` on the tracks rather than `1fr`, so a figure that overflows
    its column cannot push the grid wider than the card. */
-/* One line naming the press, once per page — see `LeagueMatchup.tsx`. The
-   app's own caption: 12px `--muted`, centered over the comparison it describes
-   the way the group heads are, and clear of the first group below it. */
-.mup-cat-hint {
-  margin: 0 0 10px;
-  font-size: 12px;
-  color: var(--muted);
-  text-align: center;
-}
 /* **The row is the press, and it opens that category's day-by-day chart.**
    A real `<button>` rather than a `role="button"` div, because a div *can* be
    one here — nothing inside it is interactive, so Enter and Space come from
