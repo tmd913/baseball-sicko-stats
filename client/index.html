@@ -71,14 +71,20 @@
           dark: 'dark',
           light: 'light',
         };
-        var id = 'midnight';
+        /* `dark` rather than `midnight`, and the attribute is stamped either
+           way. `:root` in the stylesheet is still Midnight — it is the block
+           every theme redeclares tokens against — so the default is no longer
+           the palette a bare document draws, and an unstamped `<html>` would be
+           a reader who has never chosen looking at the wrong one. Kept in step
+           with `DEFAULT_THEME` and `applyTheme` in client/src/theme.ts. */
+        var id = 'dark';
         try {
           var saved = localStorage.getItem('sicko:theme');
           if (saved && BG[saved]) id = saved;
         } catch (e) {
           /* a browser refusing storage gets the default */
         }
-        if (id !== 'midnight') document.documentElement.setAttribute('data-theme', id);
+        document.documentElement.setAttribute('data-theme', id);
         document.documentElement.style.colorScheme = SCHEME[id];
         var meta = document.querySelector('meta[name="color-scheme"]');
         if (meta) meta.content = SCHEME[id];

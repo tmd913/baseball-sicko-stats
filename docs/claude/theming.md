@@ -1,10 +1,10 @@
 ### Themes: the palette, and the switch that changes it
 
-The app has **six color schemes** — **Midnight**, the navy original and still
-the default; **Lavender**, dark gray and violet; **Maroon** and **Powder Blue**,
-the dark and light halves of one 1980 Phillies road uniform; and the plain
-**Dark** and **Light** pair off VS Code's own defaults — and a picker in the
-settings menu. This file is the whole of it: how a theme is expressed, what had
+The app has **six color schemes** — the plain **Dark** and **Light** pair off VS
+Code's own defaults, of which **Dark is the app's default**; **Midnight**, the
+navy original; **Lavender**, dark gray and violet; and **Maroon** and **Powder
+Blue**, the dark and light halves of one 1980 Phillies road uniform — and a
+picker in the settings menu, which lists them in that order. This file is the whole of it: how a theme is expressed, what had
 to change before a second one was possible, how the choice is stored and how it
 reaches the first painted frame.
 
@@ -309,9 +309,13 @@ for its jersey.
 shrug.** Midnight, Lavender, Maroon and Powder Blue each have a character to
 name; these are deliberately plain — one near-neutral surface ramp, one accent,
 no cast — and there is no noun for that but the polarity itself. A reader who
-wants exactly that is looking for exactly those two words. They are **not**
-`DEFAULT_THEME`, which is still Midnight: the names describe the palettes, not
-the app's default, and `theme.ts` says so where the pair is declared.
+wants exactly that is looking for exactly those two words.
+
+**That sentence used to close on "they are *not* `DEFAULT_THEME`, which is still
+Midnight", and both halves of it have been overturned** — `Dark` is the default
+now, and the pair leads the picker rather than trailing it. See *The default is
+Dark, and the plain pair leads the list* below, which is where the two are
+argued and what they cost is measured.
 
 #### What was copied and what was not
 
@@ -1074,6 +1078,115 @@ table above measures.
 151.73 KB of CSS** (27.09 → 27.15) — 0.94KB and 0.18KB raw, 0.29KB and 0.06KB
 over the wire, for a shared component, a measured cap, a second picker and the
 paragraphs above restated where the rules are.
+
+### The default is Dark, and the plain pair leads the list
+
+**Two changes and one reason.** The picker listed the four named palettes first
+and the plain pair last, and `DEFAULT_THEME` was Midnight — the app's original,
+and the palette `:root` itself declares. Both are reversed: `Dark` and `Light`
+lead, and `Dark` is what a reader who has never chosen gets.
+
+**The order first, because it is the smaller of the two.** A reader opening this
+picker is answering *light or dark* before they are answering *which navy*, and
+the two entries that say only that should be the two they meet first; Midnight,
+Lavender, Maroon and Powder Blue each have a character to them, which is what
+makes them the choice you make once you have one. And a picker whose default is
+sixth in its own list is a picker that opens on somebody else's answer. Nothing
+about the control changed — its markup is a `map` over `THEMES`, so reordering
+the array is the whole of it, and the popover is unchanged at **193 × 403px with
+its foot at 461**.
+
+**The array's order is now the picker's alone, and `themeById` had to be told
+so.** It fell back to `THEMES[0]` for an id it did not recognize, which was
+right only while the first entry and the default were the same entry. It reads
+`DEFAULT_THEME` now — the fallback being a statement about which palette an
+unknown id resolves to, where the array's order is a statement about a list.
+
+### `:root` is still Midnight, so every theme is stamped now
+
+**The default and the palette `:root` declares used to be one thing, and
+`applyTheme` leaned on it**: the default carried **no attribute at all**, on the
+sound reasoning that a bare `:root` already *was* Midnight, so a reader who had
+never chosen had nothing stamped on their document. Moving the default breaks
+exactly that coupling.
+
+**Two ways out, and the cheap one is right.** Either move the Midnight palette
+into an `html[data-theme='midnight']` block of its own and put Dark's on
+`:root`, or leave the palette where it is and stamp the attribute
+unconditionally. The first is a hundred-line move of the block **every theme
+redeclares tokens against**, to buy back one attribute; the second is one line.
+So `:root` is still Midnight — it is the base rather than the default now — and
+`applyTheme` sets `data-theme` for all six.
+
+**It is safe because nothing keys on the attribute's absence**, which was
+checked rather than assumed: the stylesheet contains no `:not([data-theme])` and
+no bare-`:root`-only rule. The one visible consequence is that **Midnight now
+carries `data-theme="midnight"` and there is no block by that name** — the
+attribute is inert for that one theme and it resolves `:root` exactly as it
+always did, which is measured below.
+
+**`html[data-theme='dark']` was already known to be complete**, which is what
+makes this a default change rather than a palette change: it redeclares all 30
+color tokens `:root` declares and leaves the derived ones — `--row-alt`, the
+four role grounds, the geometry, the shadows — to resolve against it, which is
+what every theme block does and what this one has been measured at (its
+role-ground floor of **13.32** is the widest of the six).
+
+**The boot script moved with it**, and has to: `index.html` paints the base
+color before the stylesheet loads, so its own default went `midnight` → `dark`
+and it stamps the attribute unconditionally too. The three places that have to
+agree about what the default is are that script, `DEFAULT_THEME` and
+`applyTheme`, and each carries a comment naming the other two.
+
+**Nothing about the stored preference changed shape.** `setTheme` still writes
+`null` for the default, which the server stores as the absence of the entry — so
+"back to the default" goes on meaning *whatever the default is now*, which is
+the property that rule was written for and the reason a record saved before this
+needs no revisiting. A reader who explicitly picked Midnight has `midnight` in
+their record and keeps it; a reader who never chose has no entry and now gets
+Dark, which is the intent.
+
+### Measured — the default and the order
+
+**A reader who has never chosen**, driven with the localStorage mirror cleared
+and `theme` stripped from the `/api/prefs` response: `data-theme="dark"`,
+`color-scheme: dark`, the `<meta>` at `dark`, and the tokens resolving
+**`--bg: #121314` / `--accent: #63b4d8`** — VS Code's own dark surfaces, which
+is what the palette should be.
+
+**The picker**, at 1200×900: six rows reading **`Dark · Light · Midnight ·
+Lavender · Maroon · Powder Blue`** with **`Dark`** the one carrying
+`aria-checked`, the popover **193 × 403px** with its foot at 461, and page-body
+overflow **0**. Pressing `Light` stamps `light`, sets `color-scheme: light` and
+resolves `#ffffff / #004a8b`, writing the mirror; pressing `Dark` puts both
+back.
+
+**All six resolve, and Midnight's inert attribute with them.** Driven one at a
+time with the prefs response stubbed to each, on the research board at 1200×900
+— every row `attr`, `--bg` and `--row-alt` as its block declares:
+
+| | attr | `color-scheme` | `--bg` | `--row-alt` |
+| --- | --- | --- | --- | --- |
+| Dark | `dark` | dark | #121314 | #202122 |
+| Light | `light` | **light** | #ffffff | #ebebef |
+| Midnight | `midnight` | dark | **#0b1220** | **#16213a** |
+| Lavender | `lavender` | dark | #1c1b22 | #2a2833 |
+| Maroon | `maroon` | dark | #1d1319 | #2b1d26 |
+| Powder Blue | `powder` | light | #ffffff | #dceaf7 |
+
+Midnight's row is the one that matters: it is stamped for the first time and
+reads `:root`'s own values to the byte. Rows are **58.00px** and the header row
+**51.00** in all six, with **page-body overflow 0** at every one.
+
+**And the geometry did not move**, checked across the four main views at 390×844
+and 1200×900: `Roster`, `Feed`, `Research` and `League` each render with **0**
+horizontal overflow and no error banner.
+
+**Bundle: 559.06 → 559.86 KB of JS** (166.03 → 166.28 gzipped) and **151.55 →
+151.77 KB of CSS** (27.09 → 27.17) — 0.8KB and 0.22KB raw, 0.25KB and 0.08KB
+over the wire, and that figure carries the two other changes of this round (the
+`[inert] video` rule and the onboarding button) as well as this one; the
+paragraphs arguing them cost the bundle nothing.
 
 ### Measured — the first Lavender, and the sweep that made a theme possible
 

@@ -214,3 +214,65 @@ What it costs is that the box goes on release rather than on press, which is wha
 **Nothing else moved.** The modal backdrop still arms on `pointerdown` and dismisses on the `click` — a press at the corner with only the dialog open closes it and leaves the view untouched — and `useDismissable`'s click-swallowing is untouched.
 
 **Bundle: 465.65 → 466.02 KB of JS** (138.48 → 138.59 gzipped), CSS unchanged at 106.85 (19.09) — 0.37KB raw and 0.11KB over the wire, most of it the comments arguing the registry.
+
+### A video behind an overlay paints over it, and covering it was not enough
+
+**Reported as: navigating from the feed to a batter's page leaves the video
+visible on many of the tabs.** Every word of that is literal, and the last
+clause is the tell — a fault that follows the reader from tab to tab is not
+about any of them.
+
+**The DOM says nothing is wrong, which is why this needed measuring rather than
+reading.** Measured on the live app at 1200×900, opening a batter's page from
+the feed: **three `<video>` elements stay mounted behind it, and all three are
+still there on every one of the seven tabs** — `Overview`, `Percentile
+Rankings`, `Splits`, `News`, `Stats`, `Game Log`, `Charts`. And they are
+correctly covered by every test this app has: `.details-view` is
+`position: fixed; inset: 0` over an opaque `--bg`, `#root` carries `inert`, and
+`elementFromPoint` at each of their centers returns the overlay's own content.
+In headless Chrome with the GPU off they are occluded and the screenshot is
+clean.
+
+**What escapes is the compositing layer.** A `<video>` is promoted to a layer of
+its own, and on a real GPU that layer can be painted over the box that covers
+it. Which tab it surfaces on is then a fact about the page *underneath* — the
+clips sit at whatever y the feed's own scroll left them at — which is exactly
+the shape of "many of the tabs".
+
+**So a covered video does not paint**, and the whole of it is one rule keyed on
+the attribute the app already stamps for this:
+
+```css
+[inert] video { visibility: hidden; }
+```
+
+**`[inert]` rather than a class of any overlay's**, which is what makes it one
+rule for all six box shapes and every depth of the ladder rather than six. It is
+`useInertBackground`'s own mark — *everything outside the top box*, walked up the
+tree and counted — so it reaches the player page, the matchup page, the how-to
+and league pages, a `Modal`, and the full-page table mode without naming any of
+them, and it composes with the stack for free: a dialog opened over a dialog
+marks the one below it inert too, so a clip in the lower box stops painting for
+exactly as long as something covers it and comes back when the hold is released.
+
+**`visibility: hidden` rather than `opacity: 0`**, and the two are not
+interchangeable here for the reason the reverse choice is made on the
+onboarding page: a transparent element is still **painted**, and painting is the
+whole of the problem. The objection that retires `visibility` elsewhere — that
+it takes a box out of the accessibility tree — costs nothing in this one place,
+an `inert` subtree being out of that tree already.
+
+**It deliberately does not pause the clip.** The audio of a playing clip carries
+on behind the overlay, which is the honest reading of the reader's own press —
+they started it — and clips run six to twelve seconds and are muted by default
+(`MutedContext`). Pausing would mean `ClipVideo` watching an ancestor's
+attribute, which is real machinery for a state that lasts a few seconds.
+
+**Measured after, at 1200×900 and 390×844, before → after.** Behind the player
+page: **0 of 3 hidden → 3 of 3**, on every one of the seven tabs at both widths.
+Closing the page restores all three (`3 visible, 0 [inert]`). And the case that
+had to survive it — a clip *inside* the top box — was driven rather than
+reasoned about: a Game Log row's popup over the player page holds **3 of 3
+visible** while the feed's 3 behind it are hidden, with `[inert]` reading
+`#root`, `.app-chrome`, `.live-feed` and the float button. Page and view
+overflow **0** at both widths.

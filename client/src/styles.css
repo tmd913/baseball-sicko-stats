@@ -1,9 +1,13 @@
 /* ---------------------------------------------------------------------------
    The palette is a theme, and there are six of them.
 
-   Everything below `:root` is **Midnight**, the app's original dark palette and
-   still its default — every value here is the one it has always had. The other
-   five are blocks near the foot of this file that redeclare the same names
+   Everything below `:root` is **Midnight**, the app's original dark palette —
+   every value here is the one it has always had. It is no longer the app's
+   *default*, which is `Dark`: `client/src/theme.ts` stamps `data-theme` on
+   every theme now, the default included, precisely because a bare `:root` and
+   the default stopped being the same thing. What `:root` still is, is the block
+   every theme redeclares against, which is why the palette stayed put. The
+   other five are blocks near the foot of this file that redeclare the same names
    against `html[data-theme='…']` — **Lavender**, **Maroon**, **Powder Blue**,
    and the plain **Dark** and **Light** pair off VS Code's own defaults; nothing
    else in 14,000 lines of stylesheet knows there is more than one.
@@ -370,6 +374,49 @@ html {
      boot script appends its style while parsing `<head>`, and Vite's stylesheet
      link is the last thing in it. */
   background: none;
+}
+
+/* ---------------------------------------------------------------------------
+   A video behind an overlay does not paint.
+
+   Every full-screen box in this app — the player page, the matchup page, the
+   how-to and league pages, a `Modal`, the full-page table mode — covers the
+   thing it was opened from with an opaque `position: fixed` box, and marks
+   everything outside itself `inert` (`hooks.ts::useInertBackground`). That is
+   enough for every element in the app except one: a `<video>` is promoted to a
+   compositing layer of its own, and on a real GPU that layer can be painted
+   **over** the box that covers it. Reported as the feed's clips showing through
+   the player page — "the video is still visible in many of the tabs", which is
+   exactly the shape of it: the clips sit at whatever y the feed left them at, so
+   which tab they surface on is a fact about the page underneath rather than
+   about the tab.
+
+   Measured on the live app at 1200x900: opening a batter's page from the feed
+   leaves **three** `<video>`s mounted behind it, and all three are still there
+   on every one of the seven tabs. In headless Chrome with the GPU off they are
+   correctly occluded, which is why the DOM says nothing is wrong — the element
+   really is covered, and `elementFromPoint` at each of their centers returns the
+   overlay's own content.
+
+   `visibility: hidden` is the fix rather than `opacity: 0` — a transparent
+   element is still painted, and painting is the whole of the problem — and it
+   costs nothing here that it costs elsewhere in the app: hiding a box takes it
+   out of the accessibility tree, and an `inert` subtree is already out of it.
+   Keying it on `[inert]` rather than on a class of the overlay's is what makes
+   it one rule for all six box shapes and every depth of the ladder: a dialog
+   opened over a dialog marks the one below it inert too, so a clip in the lower
+   box stops painting for exactly as long as something covers it, and comes back
+   when the hold is released.
+
+   What this deliberately does not do is **pause** the clip. The audio of a
+   playing clip carries on behind the overlay, which is the honest reading of
+   the reader's own press — they started it — and clips run six to twelve
+   seconds and are muted by default (see `MutedContext`). Pausing would mean
+   `ClipVideo` watching an ancestor's attribute, which is real machinery for a
+   state that lasts a few seconds.
+   --------------------------------------------------------------------------- */
+[inert] video {
+  visibility: hidden;
 }
 
 /* ---------------------------------------------------------------------------
@@ -1092,10 +1139,23 @@ body {
    rather than by a `width`/`height` attribute so a slot that has its own idea
    of the size — the fantasy popover's 15px glyph column — can say so in one
    place, the way it already did for the ring this replaces. */
+/* One loading color in the app and it is the accent — with a hook for the one
+   place that cannot take it. A ball inside a *filled* control is drawn on the
+   accent, so `color: var(--accent)` there is accent on accent at 1.00:1: the
+   mark that says the press landed, invisible. `--ball-ink` is the container's
+   say in it, the way `--cell-bg` and `--sort-gutter` are; the two filled
+   controls that hold a ball (`.espn-submit`, `.auth-btn-primary`) set it to
+   their own ink, and everything else falls through to the accent untouched.
+
+   Restored: the variable and its two container declarations were deleted
+   wholesale by the commit that added the Dark and Light palettes (58cdcf0),
+   which is the `styles.css` merge hazard this repo already warns about. The
+   measurements behind it stand — 1.00:1 to 7.39–9.40 across the schemes — and
+   are in **Client**, under Loading. */
 .ball-spin {
   display: block;
   flex: none;
-  color: var(--accent);
+  color: var(--ball-ink, var(--accent));
 }
 .ball-spin-sm {
   width: 14px;
@@ -9991,6 +10051,9 @@ button.start-line:focus-visible {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--on-accent);
+  /* Filled, so the ball takes the button's ink rather than the accent it is
+     drawn on — see `.ball-spin`. */
+  --ball-ink: var(--on-accent);
 }
 .auth-btn-primary:hover {
   background: var(--accent-2);
@@ -10798,6 +10861,9 @@ button.start-line:focus-visible {
   border: 1px solid var(--accent);
   border-radius: var(--control-radius);
   color: var(--on-accent);
+  /* The ball on this ground is the button's own ink, not the accent — see
+     `.ball-spin`. */
+  --ball-ink: var(--on-accent);
   font-size: 14px;
   font-weight: 800;
   padding: 9px 18px;
@@ -10808,6 +10874,26 @@ button.start-line:focus-visible {
 .espn-submit:disabled {
   opacity: 0.45;
   cursor: default;
+}
+/* Disabled *because it is working* is not the same as unavailable, which is the
+   rule the app already keeps for the ball's color ("inside a control that is
+   `:disabled` while it works and otherwise muted, since it is disabled because
+   it is working"). At 0.45 the whole button — ball included — read as a control
+   you may not press, on the one frame that is saying the opposite.
+
+   **`:has(.ball-spin)` is what it is scoped on, and the ball is the point.**
+   This class is worn by three buttons and only two of them show one: the ESPN
+   page's `Connect league` and the auth form's submit both hold a reader on the
+   page afterwards through a round trip with no fast answer, which is what a
+   spinner is for. The invite page's `Start using the app` deliberately has
+   none — it is pressed once, its errand is to leave, and the ask there was that
+   it *just be disabled* — so for that one the dimming is the whole of the
+   state, and un-dimming it would leave a press with no visible answer at all.
+   Keying on the ball rather than on a class says exactly that: a busy control
+   keeps its full weight while something in it is saying so. `aria-busy` stays
+   on all three, being what a screen reader is told either way. */
+.espn-submit[aria-busy='true']:disabled:has(.ball-spin) {
+  opacity: 1;
 }
 .espn-submit:focus-visible {
   outline: 2px solid var(--accent);
