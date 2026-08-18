@@ -55,8 +55,22 @@
          length. -->
     <script>
       (function () {
-        var BG = { midnight: '#0b1220', lavender: '#1c1b22', maroon: '#1d1319', powder: '#ffffff' };
-        var SCHEME = { midnight: 'dark', lavender: 'dark', maroon: 'dark', powder: 'light' };
+        var BG = {
+          midnight: '#0b1220',
+          lavender: '#1c1b22',
+          maroon: '#1d1319',
+          powder: '#ffffff',
+          dark: '#121314',
+          light: '#ffffff',
+        };
+        var SCHEME = {
+          midnight: 'dark',
+          lavender: 'dark',
+          maroon: 'dark',
+          powder: 'light',
+          dark: 'dark',
+          light: 'light',
+        };
         var id = 'midnight';
         try {
           var saved = localStorage.getItem('sicko:theme');
