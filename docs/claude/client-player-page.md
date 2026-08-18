@@ -75,7 +75,83 @@ change of *when* rather than of anything drawn.
 opening a player fires **5 player requests → 4** and the percentile scrape moves
 to the tab that draws it (2,151ms there, on its own, with the page already up).
 Pressing the tab twice fetches once; leaving the tab and coming back draws from
-what it has.
+what it has — which was measured on a read that had already landed, and is the
+half of it the section below is about.
+
+### Leaving a tab mid-read hung it, for ever
+
+**Reported as the percentile tab hanging "sometimes", and the sometimes is a
+race with one's own reader.** That card is the slowest thing on the page — a
+Savant player-page scrape, measured at 1.07s and 2.15s on two players against
+the 0.16s the splits take and the 0.05s the day and the game log do — so it is
+the one tab with a window wide enough to get bored in and press something else.
+Doing that is what hung it.
+
+**One shape, seven copies, and the mark was the bug.** Each lazy read marked its
+ref *before* firing and bailed on a later run that found the mark, while the
+answer was gated on a `live` flag the effect cleanup clears. Switching tab runs
+that cleanup, so the answer was thrown away with the mark still standing; coming
+back found the mark, returned early, and left `loading` **true** with no second
+request coming. The wait is `useDelayedFlag(loading)`, so `Reading the percentile
+card` stayed on screen for the life of the page, and nothing short of a reload
+undid it.
+
+**Reproduced before it was touched**, against the built client with the
+percentile read held 2.5s in the page: press the tab, press **Splits** 400ms
+later, come back once the read has landed — **`Reading the percentile card` at
+t+1s and still at t+6s, 0 rows**, against the control (press it and stay) which
+draws its **35 rows**.
+
+**It is the trap this repo has now written down four times** — `auth.tsx`'s
+`exchangeOnce`, the research board's scroll memory, and the matchup page's two
+reads, whose passage states the rule outright: *never mark a request answered
+before it is answered, or unmark it in the cleanup*. Each of the first three
+found it through StrictMode's double invoke, which is a **development** thing
+and is why this one looked new: the percentile effect fires on a *tab press*
+rather than on mount, so StrictMode never doubles it and the only way in is a
+reader switching away — in production as readily as in dev.
+
+**So the ref is the test, and the `live` flag is gone from all seven.** An answer
+lands if `pctReq.current` still names the request that asked for it, which is
+false in exactly one case — the player or the kind changed under it, which is
+when a landing answer really is stale (the per-player reset nulls every ref).
+Leaving the tab changes neither, so the answer lands, and coming back finds the
+card rather than a wait. **`.then(ok, err)` rather than `.catch().finally()`**,
+which is not a preference: the error path nulls the ref so a re-open retries,
+and a `finally` reading that ref a moment later would find its own `catch` had
+just nulled it and skip clearing the wait — the same hang by the other door.
+
+**The eager splits read keeps its `live` flag**, correctly: it has no mark to
+bail on, so every player change re-runs it and clears its own wait, and the flag
+is doing the one job it is right for — dropping a superseded player's answer.
+
+**Two reads also gained `playerId` in their deps.** News and Arsenal listed
+`[tab]` alone, so on a player change the reset nulled their refs and nothing
+re-ran them: a page opened on a new player from the Overview's own
+scheduled-game link kept an empty News tab — and with it an empty News block on
+the Overview — until some tab was pressed. The other five were already keyed on
+the player.
+
+**And the rest of the app was swept for the same shape.** `let live = true`
+appears in six other components and none of them is this: five have no
+persistent mark at all, so a dep change re-runs them and resets their own wait,
+and `PlayerOverview`'s `asked` set is a **press handler** with no cleanup, whose
+deliberate unmark-on-failure is argued where it sits.
+
+**Measured after, same build, same 2.5s hold**, at 1200×900:
+
+| | before | after |
+| --- | --- | --- |
+| percentiles — away mid-read, then back | wait at t+6s, 0 rows | **35 rows, no wait** |
+| … away and back three times over one read | — | **35 rows** |
+| … press and stay (control) | 35 rows | 35 rows |
+| Stats / Game Log / News, away and back | — | **5 / 25 / 11 rows** |
+| Charts and Arsenal, away and back | — | **drawn** (in flight at 1s, there by 4s) |
+| a 502 on the read | — | `Couldn't load percentile rankings: Upstream is having a day` |
+| … re-opening the tab after it | — | **retries and draws 35 rows** |
+
+**Bundle: 549.91 → 549.74 KB of JS** (162.93 → 162.96 gzipped), CSS unchanged —
+seven cleanups removed and a guard put back, which nets to nothing.
 
 ### The player page's Overview tab: the player as a summary page
 
