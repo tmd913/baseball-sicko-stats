@@ -3858,6 +3858,56 @@ export default function App() {
             </button>
             {settingsOpen && (
               <div className="settings-popover" role="menu">
+                {/* **The colour scheme**, as a row of swatches rather than as a
+                    third toggle. Two reasons, and the second is the one that
+                    decides it. A toggle can only ever hold two, and there is
+                    no reason a third palette should mean re-drawing this
+                    control; and a colour scheme is the one preference in this
+                    menu whose *answer* can be shown rather than described —
+                    each button is three stops of the palette it selects, which
+                    is a truer statement of what it does than any name.
+
+                    A radio group rather than menu items: this is one question
+                    with one answer, and `menuitemradio` is what says so to a
+                    screen reader, where a row of `menuitemcheckbox`es would
+                    claim as many independent switches. The menu deliberately **stays
+                    open** across a press, the way `Refresh from ESPN` does and
+                    for the same reason: the result is a change in the page
+                    behind it, so shutting the menu would hide the thing the
+                    press was for.
+
+                    **It leads the menu**, where it used to trail the two
+                    toggles. It is the one entry here that changes the whole
+                    app's appearance rather than one view's contents, and it is
+                    the one a reader opens this menu *for* — the toggles beside
+                    it are set once and then left. Leading also puts the picture
+                    at the top of the popover, so what the menu opens on says
+                    what it is rather than making the reader read two labels to
+                    find out. `Settings` therefore heads the run it actually
+                    describes rather than the whole popover. */}
+                <div className="theme-picker" role="group" aria-label="Color scheme">
+                  <span className="settings-popover-label">Color scheme</span>
+                  <div className="theme-swatches">
+                    {THEMES.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        className={`theme-swatch${theme === t.id ? ' active' : ''}`}
+                        role="menuitemradio"
+                        aria-checked={theme === t.id}
+                        onClick={() => setTheme(t.id)}
+                        title={t.hint}
+                      >
+                        <span className="theme-chips" aria-hidden="true">
+                          {t.swatch.map((c) => (
+                            <span key={c} style={{ background: c }} />
+                          ))}
+                        </span>
+                        <span className="theme-swatch-label">{t.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <span className="settings-popover-label">Settings</span>
                 {SHOW_SIMULATE_TOGGLE && (
                   <button
@@ -3894,46 +3944,6 @@ export default function App() {
                   <span className="settings-dot" aria-hidden="true" />
                   Mute clip audio
                 </button>
-                {/* **The colour scheme**, as a row of swatches rather than as a
-                    third toggle. Two reasons, and the second is the one that
-                    decides it. A toggle can only ever hold two, and there is
-                    no reason a third palette should mean re-drawing this
-                    control; and a colour scheme is the one preference in this
-                    menu whose *answer* can be shown rather than described —
-                    each button is three stops of the palette it selects, which
-                    is a truer statement of what it does than any name.
-
-                    A radio group rather than menu items: this is one question
-                    with one answer, and `menuitemradio` is what says so to a
-                    screen reader, where a row of `menuitemcheckbox`es would
-                    claim as many independent switches. The menu deliberately **stays
-                    open** across a press, the way `Refresh from ESPN` does and
-                    for the same reason: the result is a change in the page
-                    behind it, so shutting the menu would hide the thing the
-                    press was for. */}
-                <div className="theme-picker" role="group" aria-label="Colour scheme">
-                  <span className="settings-popover-label">Colour scheme</span>
-                  <div className="theme-swatches">
-                    {THEMES.map((t) => (
-                      <button
-                        key={t.id}
-                        type="button"
-                        className={`theme-swatch${theme === t.id ? ' active' : ''}`}
-                        role="menuitemradio"
-                        aria-checked={theme === t.id}
-                        onClick={() => setTheme(t.id)}
-                        title={t.hint}
-                      >
-                        <span className="theme-chips" aria-hidden="true">
-                          {t.swatch.map((c) => (
-                            <span key={c} style={{ background: c }} />
-                          ))}
-                        </span>
-                        {t.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
                 {/* The fantasy entries used to sit here — the roster-source
                     toggle and the league page — and have moved out to their own
                     button beside the gear, where the state they control can be

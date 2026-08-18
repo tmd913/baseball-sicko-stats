@@ -92,6 +92,41 @@ So the page-level wait takes **`margin-top: 54px`** and both views land on it id
 
 **Re-measured with the gate off, on the live roster and at 390 / 1200 / 1920.** With **nothing live**, `main` draws no legend at all and the pane's bottom is 0 from the window; this draws `At bat · On deck · On base · On mound` in **one 37px row at every one of those widths** with the pane's bottom 37px up, and the legend's own box landing on the window with its 12px inside it. On the **pitcher tab**, `main` draws nothing and this draws the same four. Everything else the table is measured against is unchanged at all three widths, scrolled to the far right and the foot: `--table-bleed` **−22px** with the pane at **0 from both edges**, **no border above** the pane, the sticky header row **flush at the top of its scrollport (0)**, the pinned total row **1px off the bottom**, the headshot column **pinned at 0**, **58.00px** rows, tables at **690.33 / 1200 / 1920**, and **no horizontal overflow of the page body** at any width. In the full-page box the legend comes along as an ordinary column child under the pane, which keeps its `10px 12px` padding, its `--table-bleed: 12px`, its pane at 0 from both edges and its 1px top border. The short-roster case still shrinks the pane to its rows (854px of pane in a 1400px window). **320px is the one width where the key takes two rows** (58px), which is where the app already pays a line for everything else.
 
+**And the key is centered under the table, which it was not.** It sat at the
+app's own left gutter — `x=22` at every width, because the shared
+`.summary-legend, .roll-legend` rule declares no `justify-content` and flex
+therefore starts it at the box's leading edge. That is fine on a phone, where
+the four items very nearly fill the row anyway, and it is the wrong answer on a
+desktop: the pane this key belongs to bleeds to both gutters, so on a 1920px
+screen the four items ended at **x=340** with 1,536px of nothing to their right,
+reading as a line left over rather than as the table's caption. `justify-content:
+center` on `.summary-legend` is the whole of it.
+
+**It is one declaration on one caller rather than a split of the shared rule**,
+which is the same shape `.pct-card .roll-legend` already takes to give back its
+padding. The Charts tab's legend keeps its left edge deliberately: it is a
+**single** item inside an 800px reading column, under a chart with a paragraph
+and an info button above it, each of which establishes a left edge it lines up
+with — centring one item there would set it adrift from the card's own copy.
+This one has four items and nothing above it to line up with.
+
+**Measured before → after at 320 / 390 / 1200 / 1920**, on the live roster with
+the pane scrolled to its foot. The first item's x goes **22 → 800.9 at 1920**,
+**22 → 440.9 at 1200** and **22 → 35.9 at 390** (a phone barely moves, the row
+being nearly full), and the item span's midpoint lands on the box's own midpoint
+to a tenth of a pixel at every width — 960.0 of 960 at 1920, 600.0 of 600 at
+1200, 195.0 of 195 at 390. **Nothing else moves**: the row is **37px** before and
+after, the pane's bottom is **37px** up from the window at both, page-body
+overflow is **0** at all four widths, and **320 still takes two rows** (58px) —
+three items on the first and `On mound` on the second, each run centered on its
+own line, which is the width this table already pays a line for everything at.
+
+**And the Charts tab's own legend was checked rather than reasoned about**, that
+being the caller a shared selector list most easily breaks: opened on a real
+player page at 1200, `.roll-legend` computes `justify-content: normal` with its
+one item at **x=283** — the legend box's own x — so it is still exactly where it
+was.
+
 **The bundle, for the legend and the padlock together**: **436.13 → 437.51 KB** of JS (129.23 → 129.71 gzipped) and **96.75 → 97.95 KB** of CSS (17.33 → 17.53 gzipped) — 1.4KB and 1.2KB raw, under half a kilobyte each over the wire, most of the CSS being the paragraphs explaining the two rules.
 
 **And for the three presentational fixes that followed** — the legend's gate coming off, the research header's height reservation and the Overview tab's tables taking the tab — **435.02 → 434.91 KB** of JS (127.17 → 127.14 gzipped) and **97.64 → 97.78 KB** of CSS (17.42 → 17.45 gzipped). The JS *falls*: a legend that is always drawn needs no `anyLive` scan and no per-kind assembly, which is more code than the fourth entry costs. The CSS grows by 143 bytes raw and 28 over the wire, and nearly all of it is the comments.

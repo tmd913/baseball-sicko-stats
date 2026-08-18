@@ -6730,6 +6730,24 @@ button.start-line:focus-visible {
   font-size: 12px;
   color: var(--muted);
 }
+/* **Centered under the table, and only this caller.** The summary view is a
+   fixed-height column whose table bleeds to the app's own gutters, so this key
+   is the one thing on the page under a band that runs the whole width of the
+   window — at the far left of a 1920px screen four items read as a line left
+   over rather than as the table's caption. Centered, the key sits under the
+   middle of the thing it explains at every width.
+
+   The Charts tab's `.roll-legend` deliberately keeps its left edge, which is
+   why this is one declaration on one caller rather than a split of the shared
+   rule (the same shape `.pct-card .roll-legend` already takes to give back its
+   padding). That one is a **single** item inside an 800px reading column, under
+   a chart with a paragraph and an info button above it, and every one of those
+   establishes a left edge it lines up with; centering one item there would set
+   it adrift from the card's own copy. This one has four items and nothing to
+   line up with. */
+.summary-legend {
+  justify-content: center;
+}
 .summary-legend-item,
 .roll-legend-item {
   display: inline-flex;
@@ -7188,10 +7206,32 @@ button.start-line:focus-visible {
    and which costs a 390px phone ~38px of a popover that has 500px to spare. */
 .theme-swatch {
   flex: 1 1 100%;
-  justify-content: center;
   gap: 8px;
   padding: 7px 10px;
   font-size: 12.5px;
+}
+/* **The chips lead and the name is centered in what is left.** The swatch used
+   to centre the pair as a group (`justify-content: center` on the button), so
+   the pill sat at a different x on every row — it moved with the length of the
+   name beside it — and four rows of a picture-and-a-word read as four unrelated
+   buttons rather than as one column of themes. Pinned left, the four pills line
+   up down the menu's own left edge and the names line up with each other.
+
+   The name is centered in the space **after** the chips rather than on the
+   button's own midline, which leaves it 17px right of it — half the pill plus
+   the gap. Centring it truly wants a mirrored spacer on the right, and that
+   spends the same 34px out of the name column; the binding case is not the
+   phone but the **desktop**, where the popover hangs off the gear and is
+   narrower than it is at 390 (193.3px against 251.2). Measured there, the name
+   column is 111.3px and `Powder Blue` — the longest label the picker has — is
+   75.7px of ink, so a mirror would leave it **1.6px** of slack and the next
+   theme name to arrive would clip. The cheaper centring keeps that margin, and
+   it buys what was actually asked for: all four names share one center
+   (measured, ink centre 312.8 on every row at 1200 and 164.6 at 390), which is
+   what reads as a centered column. */
+.theme-swatch-label {
+  flex: 1;
+  text-align: center;
 }
 /* The selected theme fills, which is what every other disclosure and toggle in
    the app does when it is on — see `.settings-toggle.active` directly above,
