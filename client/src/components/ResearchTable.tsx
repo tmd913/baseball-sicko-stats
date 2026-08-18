@@ -2430,6 +2430,8 @@ export function ResearchTable({
                         teamId={r.teamId}
                         team={r.team}
                         pos={posCell}
+                        playerId={r.id}
+                        kind={r.kind}
                       >
                       <button
                         type="button"

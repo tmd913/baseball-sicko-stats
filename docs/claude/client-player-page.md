@@ -23,6 +23,54 @@ The batter's line then **leads its stats on `H/AB`** — one cell where AB and H
 
 **Measured at 390px on the real log**: the batting table goes **688px → 753** for one column and the pitching table **659 → 789** for two, against a 390px scrollport that was always going to scroll — and the page body overflows at **no** width (checked 320 / 390 / 640 / 1200 on both tabs, document overflow 0 at every one). The two sticky axes are untouched at every one of them: the date column pins at **0** from the scrollport's left edge with the table scrolled to its far right, and the header row at **1px**, which is the border.  It carries the same **full-page button** the other two wide tables do, inline in its Date header — the corner cell, pinned on both axes, so it is the way out as well as in; expanding now drops nothing but the app's own chrome, the log having stopped capping itself), a **Stats** tab — the research board transposed onto one player, five spans down the side and the board's own columns across (see **The Stats tab: the board, transposed** below) — and a **Splits** tab, which is that same season cut by *handedness* instead of by time: one diverging bar per stat, pointing at the side he is stronger against (`components/PlatoonSplits.tsx`, and **The Splits tab** below for the whole of its reasoning). Those two were one tab until the platoon card became a comparison rather than a table; `SeasonPanel` / `PitcherSeasonPanel` and their `.split-block` stat pills are gone from `PlayerDetails.tsx` with it, and the `.split-block` / `.stat-pill` rules are now read by nothing that renders — `PlayerCard.tsx`'s `PlatoonSplit` was their last live caller, and the feed's Upcoming row draws `BatterSplitsTab` instead. The player page is a fixed full-screen overlay with its own scroller, so it pins the body (`hooks.ts::useLockBodyScroll`, restoring the scroll on close) and sets `overscroll-behavior: none` — without both, scrolling it chained through to the list behind and closing it landed the user somewhere they never scrolled to; `none` rather than the `contain` that stood here for a while, since that stops the chaining and keeps the overlay's own iOS bounce (see **A table stops when its rows do** above). `GameReel`'s `.reel-view` is the same shape and does the same. `PlayerAdder` searches the season roster; the settings menu's **Edit players** entry swaps the card list for `PlayerOrderEditor.tsx` — a drag-to-reorder screen showing only each player's number, headshot, name and a remove button. It drags via Pointer Events (mouse + touch). **On touch only the ⠿ grip starts a drag** — `touch-action: none` sits on `.order-grip` alone, so a finger anywhere else on the row scrolls the list as usual (with it on `.order-row` the whole page was unscrollable in edit mode); a mouse has no such conflict and can still grab the row anywhere (`startRowDrag` bails on non-mouse pointers, the grip stops propagation so one press starts one drag). It reorders the live list as the dragged row passes another (the row under the pointer is found with `elementFromPoint`; the dragged row sets `pointer-events: none` so it resolves to its drop target), auto-scrolls the page while a drag is held within `EDGE_ZONE` of the viewport top/bottom, and persists the order (`PUT /api/watchlist/order` — the roster's route, old name and all) once on release. Each row's ✕ removes that player: two taps, the first arming the button into a red "Remove?" (a row you drag shouldn't delete a player on one stray tap, and there's no undo), the second calling `App.tsx::removeFromEditor` — which drops him from `reports`/`reportsRef` immediately so the row goes before the roster-triggered refetch lands, and so a drag right after commits the order without him. The button stops `pointerdown` propagating, or the row's drag handler would `preventDefault` the click away. That button is **`RemoveButton.tsx`**, shared with `PlayerDetails`' header so the roster's one destructive control looks and behaves the same wherever it appears — controlled rather than self-arming, because the editor keeps a single armed row across the whole list. Edit mode is transient — deliberately **not** in the URL — and clears on a view switch. There is no longer a player-nav strip; a player can also be removed from `PlayerDetails`.
 
+### Which hand, on the heading
+
+**The page's `<h1>` says which way he does it, right after where he does it** —
+`RHB` / `LHB` / `SH` on a batter's page, `RHP` / `LHP` on a pitcher's, beside the
+position chip. That line is already the page's run of facts *about him* — the
+position, the padlock, the newspaper — where the cluster on the right is things
+you *do* to him, and a hand is as plainly one of the first as the position it
+follows. The vocabulary and the one-token-per-kind rule are `lib.ts::handCell`;
+where the fact comes from is **Data sources**, *Handedness rides on the season
+roster*, which is also why this page can say it about a man nobody has rostered.
+
+**It says it at the tables' width, and that is the one place this parts from the
+chip beside it.** The position chip is here *in full* because the board's cell
+may truncate a six-position list and this never does — the two read one fact at
+two widths, which is that chip's own argument. A hand is not a list. `LHB` is the
+whole of it, so there is no longer form for the page's extra room to buy, and
+spelling out `Bats left-handed` here would hand the reader a second wording to
+learn for a fact they already recognize from every row they arrived through. The
+sentence is the `title`, where it costs the heading nothing.
+
+**Text, not a second chip.** `.player-pos`'s ground and border are what this page
+uses to mean *position*, and `LHB` inside one would read as a place he can be
+started — so the token keeps that chip's type and spacing and gives up the box,
+in the same `--faint` the two tables give it and a step behind the position for
+the same reason it is a step behind it there.
+
+**Drawn twice, for the reason `posChip` is**: the Game Log's own head puts the
+identity back when that table takes the page and covers this one, and a head that
+dropped the hand would be the same man reading two ways depending on which was on
+screen.
+
+**It costs the heading nothing, including on the names that were already
+wrapping.** Measured at 390 and 1200 with the token stripped out of the same page
+at the same instant, the `<h1>` is **28 → 28px** on Aaron Judge, Paul Skenes and
+Ozzie Albies at both widths; and on the three longest names in the league it is
+**77 → 77** (Christian Encarnacion-Strand, Simeon Woods Richardson) and **49 →
+49** (Deyvison De Los Santos) at 390 — they wrapped before this and wrap no
+further for it — with 28 → 28 at 1200. Page and view overflow **0** in every one.
+`.details-name` is a wrapping flex line, so the heading gives way at a width
+rather than overflowing.
+
+**Every case was driven rather than reasoned about**, at 390 and 1200: `RHB`
+(Aaron Judge), `LHB` (Corbin Carroll), `SH` (Ozzie Albies), `LHP` (Chris Sale),
+`RHP` (Paul Skenes) — and the two-way player on both of his pages, **Ohtani's
+batter page reading `LHB` and his pitcher page `RHP`**, which is the rule stated
+as a measurement. With `/api/players` blocked the chip is simply absent and the
+heading is 28px, which is the honest answer for a fact the app has not been told.
+
 **The chip beside a card's name is his ESPN eligibility**, whenever a league is connected — the same swap the research board's pills and Pos cell made, arriving on the cards for the same reason. MLB's one word is the wrong answer to the question a card in this app is read with: it is single-valued where a fantasy position is not, it is sometimes flatly different (Curtis Mead is listed at 2B and is eligible at 1B and 3B), and on a **pitcher's card it was `P`** — one letter, true of everybody on the tab, where `SP` and `RP` are the distinction a reader actually wants. Without a league, or for a player ESPN can't be joined to, it is MLB's listed position exactly as before, so nothing changes for a user without one. It costs no fetch: the map rides on the `/api/espn/ownership` response the board and the player page already read (see **ESPN fantasy league**, where the read losing its laziness is set out).
 
 **Narrowed to the card's own kind** (`lib.ts::eligibleForKind`), exactly as each board is: a two-way player's bat reads `DH` where his arm reads `SP`, and the mis-joined Fernando Cruz reads his fallback rather than `2B/SS` on a pitcher's card. **And capped at two codes and a count** (`positionCodes`, which is now the *card's* rule alone — the board's cell prints the list whole and takes only the shared hoist, `positionOrder`, from it), because a card's header is a name and this chip on one line: measured on a real roster at 390px, the uncapped list wraps **8 of 14 names** and at 360 **13 of 14**, against the 1 and 3 that wrap today; capped, the worst the league can produce (`1B/2B+3`) wraps 3 and 6, and the roster as it actually stands wraps 2 and 3. The whole list is on the chip's `title` and printed whole on the player page, which is the one place with room for it.

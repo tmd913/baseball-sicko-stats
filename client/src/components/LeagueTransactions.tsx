@@ -343,7 +343,13 @@ function PlayerLine({
         // what it has rather than drawing an identity block of two em dashes.
         <span className="lg-tx-bare">{name}</span>
       ) : (
-        <PlayerIdentity teamId={player.mlbTeamId} team={player.team ?? ''} pos={pos}>
+        <PlayerIdentity
+          teamId={player.mlbTeamId}
+          team={player.team ?? ''}
+          pos={pos}
+          playerId={player.mlbId}
+          kind={kind}
+        >
           {name}
         </PlayerIdentity>
       )}
