@@ -13,25 +13,43 @@ it could not do was answer *what actually happened today* without the reader
 scrolling past every strikeout in between. It has a filter set now, and a red
 button that says how many plays have arrived since they last looked.
 
-**Seven kinds, and they union**: `HR · Hits · XBH · SB · Runs · RBI · Video`.
-That is the research board's include-button model rather than a segmented
-control, and for its reason: the sets genuinely **overlap** — a home run is a hit
-*and* an extra-base hit *and* an RBI *and* nearly always a play with film — so
-"pick one" would be a lie about the vocabulary where independent switches say all
-of their states. Nothing selected is the **whole stream**, so the feed opens
-exactly as it always did and the default is a lens rather than a wall.
+**Six kinds, and they union**: `HR · Hits · Runs · RBI · SB · Video`. That is
+the research board's include-button model rather than a segmented control, and
+for its reason: the sets genuinely **overlap** — a home run is a hit *and* an RBI
+*and* nearly always a play with film — so "pick one" would be a lie about the
+vocabulary where independent switches say all of their states. Nothing selected
+is the **whole stream**, so the feed opens exactly as it always did and the
+default is a lens rather than a wall.
 
-**The labels are abbreviations because seven of them share a 390px phone**, and
+**The order is a box score's rather than the vocabulary's history**: the two ways
+of reaching a base by hitting it, then the two halves of a run — `Runs` he
+scored, `RBI` he drove in — then the base he took with no hit at all, and last
+the one chip that is not a kind of play but a fact about whether there is film of
+it. `SB` reads after `RBI` for that reason rather than beside the hits, where it
+sat only because it was added with them.
+
+**`XBH` was a seventh chip and is gone**, and the two reasons are the ones that
+decide any chip on this row. It answered a question nobody asks of a *stream*: a
+double and a home run are two plays a reader recognizes on sight, and a chip's
+job here is to cut hundreds of items down rather than to name a class of hit. And
+it barely cut — on the checked day it was **11 of 51 items against `Hits`' 18**,
+two thirds of a set already one chip away, on a row where every chip costs the
+next one its place on the line. An old `plays=xbh` link is read as the wider
+stream it no longer names, which is the direction `toPlayFilters` fails in for
+every key it does not know.
+
+**The labels are abbreviations because six of them share a 390px phone**, and
 each is a form a box score already uses. What an abbreviation cannot say is which
-plays it takes — that a home run is inside `Hits` and inside `XBH` and inside
-`RBI`, that `Runs` is him crossing the plate where `RBI` is him driving somebody
-in — so every chip carries the sentence as its `title`.
+plays it takes — that a home run is inside `Hits` and inside `RBI`, that `Runs`
+is him crossing the plate where `RBI` is him driving somebody in — so every chip
+carries the sentence as its `title`.
 
 **`Hits` reads `outcomeKind` rather than a list of its own**, which is the same
 function the at-bat card's rail is colored by, so a chip and the card it selects
-cannot come to disagree about what a hit is. `XBH` needs a set of its own
-(`XBH_EVENTS`) because that function files the three non-homer hits under one
-`hit` — the right grain for a rail and one short of the grain a chip needs.
+cannot come to disagree about what a hit is. `XBH` was the one chip that needed a
+set of its own (`XBH_EVENTS`), that function filing the three non-homer hits
+under one `hit`; the set went with the chip, on this repo's own rule that a
+definition nobody reads is a definition nobody misses.
 
 **`RBI` reads the plate appearance's own `rbi` rather than its event**, and that
 is the difference between a chip that is right and one that enumerates. A run
@@ -51,7 +69,7 @@ would send hundreds of requests to draw one screen. The cost is that a play whos
 clip does not come back is still selected, which is exactly what the item itself
 already does: it draws the play and no frame.
 
-**`New` is not one of the seven and is deliberately kept out of that list.** It asks
+**`New` is not one of the six and is deliberately kept out of that list.** It asks
 *when* rather than *what kind*, so it **narrows** whatever the chips selected
 instead of adding to it — which is the split `inc=` and `watch=1` already make on
 the research board, where the ownership sets union and the watchlist is a separate
@@ -65,20 +83,20 @@ says, so at 390px `New` drops to a second line and the rule was left at the end
 of the first with nothing after it, a mark separating a group from nothing. It
 was then a **wider gap**, which cannot dangle and so was the right shape for the
 wrong claim — a chip set apart from its neighbours reads as a second *group*, and
-at seven chips the row breaks often enough that the daylight lands wherever the
-window puts it rather than where the argument wanted it. What carries the
+the row breaks wherever the window says, so the daylight lands where the break
+puts it rather than where the argument wanted it. What carries the
 distinction is what always did: the **word**, which is not a stat, and the chip's
 own **red count**, which is the only color in the row. Neither depends on where
 the line happens to break.
 
-Measured on the panel before and after, at 320 / 375 / 390 / 480 / 560 / 640 /
-900 / 1200: the extra chip and the retired gap cost it **no height at any
-width** — 68px on two rows below 640 and 30px on one above it, either way — with
-0 horizontal overflow of the page body and none of the panel itself. The chips
-sit at a **uniform 8px** apart, `New` included, where it was 18 before it.
+Measured on the panel at 320 / 375 / 390 / 480 / 640 / 900 / 1200 / 1920, and
+A/B'd against the gap: it costs **no height at any width** — **68px on two rows
+at 320–390 and 30px on one row from 480 up**, either way — with 0 horizontal
+overflow of the page body and none of the panel itself. The chips sit at a
+**uniform 8px** apart, `New` included, where the gap made that one 18.
 
 **Batter tab only.** A pitcher's stream item is his whole *outing* rather than a
-play — the same fact the kind tabs exist for — so none of the seven can match one.
+play — the same fact the kind tabs exist for — so none of the six can match one.
 **That is gated on the same flag that draws the control**, and it had to be: a
 `plays=hr` link opened on `kind=pitcher` drew **0 outings** before the gate, the
 filters having been passed through unconditionally. The *state* survives the
@@ -168,13 +186,15 @@ singles, 1 steal, 5 runs, 9 plate appearances with an RBI, every play with a
 | --- | --- | --- |
 | `HR` | **6** | 6 home runs |
 | `Hits` | **18** | 6 HR + 5 2B + 7 1B |
-| `XBH` | **11** | 5 2B + 6 HR |
-| `SB` | **1** | 1 steal |
 | `Runs` | **5** | 5 runs scored |
 | `RBI` | **9** | 9 plate appearances with an RBI |
+| `SB` | **1** | 1 steal |
 | `Video` | **51** | every item |
 | `HR + SB` | **7** | the union, 6 + 1 |
 | `HR + RBI` | **9** | the union — every home run is an RBI |
+
+(`XBH` drew **11** — 5 doubles and 6 home runs — on that same day, which is the
+figure its own removal is argued from above.)
 
 **The whole cycle, driven end to end** with a marker planted at 2026-08-17 20:00Z:
 the button reads `48 new plays` and the chip `New 48`; scrolled to 600, pressing

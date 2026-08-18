@@ -7,16 +7,26 @@
  * actually happened today* — the home runs, the steals, the plays there is film
  * of — without the reader scrolling past every strikeout in between.
  *
- * **Seven kinds, and they union.** That is the research board's include-button
+ * **Six kinds, and they union.** That is the research board's include-button
  * model rather than a segmented control, and for its reason: the sets genuinely
- * overlap (a home run is a hit, an extra-base hit and — nearly always — an RBI),
- * so "pick one" would be a lie about the vocabulary, where independent switches
- * say every one of their states. Nothing selected is the whole stream — a filter
- * set that defaults to *everything* rather than to nothing, so the feed opens as
- * it always did.
+ * overlap (a home run is a hit and — nearly always — an RBI and a play with
+ * film), so "pick one" would be a lie about the vocabulary, where independent
+ * switches say every one of their states. Nothing selected is the whole stream —
+ * a filter set that defaults to *everything* rather than to nothing, so the feed
+ * opens as it always did.
+ *
+ * **`XBH` was a seventh and is gone**, and the two reasons are the ones that
+ * decide any chip here. It answered a question nobody asks of a *stream*: a
+ * double and a home run are two plays a reader recognizes on sight, and the
+ * chip's job is to cut hundreds of items down rather than to name a category of
+ * hit. And it barely cut — on a checked day it was 11 of 51 items against
+ * `Hits`' 18, so it selected two thirds of a set already one chip away, on a row
+ * where every chip costs the next one its place on the line. An old
+ * `plays=xbh` link is read as the wider stream it no longer names, which is the
+ * direction `toPlayFilters` fails in for every key it does not know.
  *
  * **`New` is not one of them and is deliberately kept out of this list.** It
- * asks *when* rather than *what kind*, so it narrows whatever the seven selected
+ * asks *when* rather than *what kind*, so it narrows whatever the six selected
  * instead of adding to it — which is exactly the split `inc=` and `watch=1`
  * already make on the research board, where the ownership sets union and the
  * watchlist is a separate axis. Read `HR + New` as "the new home runs", never as
@@ -27,22 +37,21 @@
  * select on, and the control is not drawn.
  */
 
-/** The seven kinds a play can be asked for, in the order the chips read. */
-export type PlayFilterKey = 'hr' | 'hit' | 'xbh' | 'sb' | 'run' | 'rbi' | 'video';
+/**
+ * The six kinds a play can be asked for, **in the order the chips read** — which
+ * is a box score's own order and not the vocabulary's history: the two ways of
+ * reaching a base by hitting it (`HR`, `Hits`), then the two halves of a run
+ * (`Runs` he scored, `RBI` he drove in), then the base he took without a hit at
+ * all (`SB`), and last the one chip that is not a kind of play but a fact about
+ * whether there is film of it.
+ */
+export type PlayFilterKey = 'hr' | 'hit' | 'run' | 'rbi' | 'sb' | 'video';
 
-export const PLAY_FILTER_KEYS: PlayFilterKey[] = [
-  'hr',
-  'hit',
-  'xbh',
-  'sb',
-  'run',
-  'rbi',
-  'video',
-];
+export const PLAY_FILTER_KEYS: PlayFilterKey[] = ['hr', 'hit', 'run', 'rbi', 'sb', 'video'];
 
 export interface PlayFilterDef {
   key: PlayFilterKey;
-  /** Short enough for seven of them to share a phone's width. */
+  /** Short enough for six of them to share a phone's width. */
   label: string;
   /** What the chip is actually selecting, in words — the label cannot say it. */
   title: string;
@@ -51,11 +60,11 @@ export interface PlayFilterDef {
 /**
  * The chips' own vocabulary.
  *
- * The labels are abbreviations because seven of these share one row on a 390px
+ * The labels are abbreviations because six of these share one row on a 390px
  * phone, and every one of them is a form a box score already uses. What an
  * abbreviation cannot say is which plays it takes — that a home run is inside
- * `Hits` and inside `XBH` and inside `RBI`, that `Runs` is him crossing the
- * plate where `RBI` is him driving somebody in — so each carries the sentence.
+ * `Hits` and inside `RBI`, that `Runs` is him crossing the plate where `RBI` is
+ * him driving somebody in — so each carries the sentence.
  */
 export const PLAY_FILTERS: PlayFilterDef[] = [
   { key: 'hr', label: 'HR', title: 'Home runs' },
@@ -64,12 +73,6 @@ export const PLAY_FILTERS: PlayFilterDef[] = [
     label: 'Hits',
     title: 'Hits — singles, doubles, triples and home runs',
   },
-  {
-    key: 'xbh',
-    label: 'XBH',
-    title: 'Extra-base hits — doubles, triples and home runs',
-  },
-  { key: 'sb', label: 'SB', title: 'Stolen bases' },
   {
     key: 'run',
     label: 'Runs',
@@ -80,6 +83,7 @@ export const PLAY_FILTERS: PlayFilterDef[] = [
     label: 'RBI',
     title: 'Plate appearances he drove a run in on — the other half of Runs',
   },
+  { key: 'sb', label: 'SB', title: 'Stolen bases' },
   {
     key: 'video',
     label: 'Video',
@@ -137,8 +141,8 @@ export function playFiltersParam(keys: Set<PlayFilterKey>): string | null {
  * first with nothing after it, a mark separating a group from nothing. It was
  * then a wider gap, which cannot dangle and so was the right shape for the
  * wrong claim: a chip set an inch apart from its neighbours reads as a second
- * *group*, and at seven chips the row breaks often enough that the daylight
- * lands wherever the window puts it rather than where the argument wanted it.
+ * *group*, and the row breaks wherever the window says, so the daylight lands
+ * where the break puts it rather than where the argument wanted it.
  *
  * What actually carries the distinction is what it always did: the **word**,
  * which is not a stat, and the chip's own **red count**, which is the only
