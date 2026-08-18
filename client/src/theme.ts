@@ -1,7 +1,7 @@
 /**
  * The color scheme, and everything that has to know one exists.
  *
- * There are four, and they are **palettes rather than stylesheets**: `styles.css`
+ * There are six, and they are **palettes rather than stylesheets**: `styles.css`
  * declares every color the app draws as a token on `:root`, and a theme is a
  * block that redeclares those tokens against `html[data-theme='…']`. No
  * component reads a theme, and nothing here knows a single class name.
@@ -11,7 +11,7 @@
  * choice survives a reload.
  */
 
-export type ThemeId = 'midnight' | 'lavender' | 'maroon' | 'powder';
+export type ThemeId = 'midnight' | 'lavender' | 'maroon' | 'powder' | 'dark' | 'light';
 
 /** The one a reader who has never chosen gets, and the one `:root` declares. */
 export const DEFAULT_THEME: ThemeId = 'midnight';
@@ -40,13 +40,30 @@ export type Theme = {
    *  invisible, so the swatch read as two stops rather than three. On Powder
    *  Blue there is no step at all — the page and the card are both white — so
    *  the middle stop is the only thing carrying the theme's own color, which
-   *  is the argument for it made twice over. The edge is the widest step a
+   *  is the argument for it made twice over, and `Light` is in the same case. The edge is the widest step a
    *  palette has short of its accent, which for Maroon is the jersey's own
    *  piping: that swatch is literally the three colors of the uniform, and
    *  Powder Blue's is the same three the other way round. */
   swatch: [string, string, string];
 };
 
+/**
+ * The order is the order the picker draws them in: the four *named* palettes
+ * first, then the plain pair.
+ *
+ * **`Dark` and `Light` are named for what they are rather than for a color**,
+ * and that is the whole distinction between them and the four above. Midnight,
+ * Lavender, Maroon and Powder Blue each have a character to name — a navy, a
+ * graphite-and-violet, and the two halves of one uniform. These are VS Code's
+ * own defaults (`2026 Dark` and `2026 Light`), which are deliberately plain:
+ * a near-neutral surface, one accent, no cast. There is no noun for that but
+ * the polarity itself, and a reader who wants exactly that is looking for
+ * exactly those two words.
+ *
+ * They are **not** `DEFAULT_THEME`, which is still Midnight and still what a
+ * reader who has never chosen gets — the names describe the palette, not this
+ * app's default. What they came from is in `styles.css` beside each block.
+ */
 export const THEMES: Theme[] = [
   {
     id: 'midnight',
@@ -84,6 +101,28 @@ export const THEMES: Theme[] = [
     scheme: 'light',
     bg: '#ffffff',
     swatch: ['#ffffff', '#b4cfe6', '#8c2545'],
+  },
+  /* The plain pair, off VS Code's own `2026 Dark` and `2026 Light`. Each takes
+     that theme's surfaces unaltered and its marks' hues at this app's own
+     saturation and lightness — the trade `Maroon` makes with its jersey, and
+     the reason is measured in `styles.css` beside each block: VS Code tunes for
+     syntax on a large surface, so its `disabledForeground` is 2.5:1 on its own
+     page against the 3.7–5.3 the four themes above run. */
+  {
+    id: 'dark',
+    label: 'Dark',
+    hint: 'Plain near-black and steel blue.',
+    scheme: 'dark',
+    bg: '#121314',
+    swatch: ['#121314', '#3a3d3f', '#63b4d8'],
+  },
+  {
+    id: 'light',
+    label: 'Light',
+    hint: 'Plain white and blue.',
+    scheme: 'light',
+    bg: '#ffffff',
+    swatch: ['#ffffff', '#d4d4da', '#004a8b'],
   },
 ];
 

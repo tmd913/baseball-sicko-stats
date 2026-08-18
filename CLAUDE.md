@@ -130,7 +130,7 @@ letting it grow past it.
 
 @docs/claude/client-league-transactions.md
 
-**Themes** — the palette as a set of tokens, the four color schemes (Midnight, the navy original; Lavender, dark gray and violet; and Maroon and Powder Blue, the dark and light halves of a 1980 road uniform), the picker in the settings menu, and why the choice is the one thing in this app mirrored into localStorage.
+**Themes** — the palette as a set of tokens, the six color schemes (Midnight, the navy original; Lavender, dark gray and violet; Maroon and Powder Blue, the dark and light halves of a 1980 road uniform; and the plain Dark and Light pair off VS Code's own `2026 Dark`/`2026 Light` defaults), the picker in the settings menu, and why the choice is the one thing in this app mirrored into localStorage.
 
 @docs/claude/theming.md
 

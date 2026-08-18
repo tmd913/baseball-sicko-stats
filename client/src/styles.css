@@ -1,11 +1,12 @@
 /* ---------------------------------------------------------------------------
-   The palette is a theme, and there are two of them.
+   The palette is a theme, and there are six of them.
 
    Everything below `:root` is **Midnight**, the app's original dark palette and
-   still its default — every value here is the one it has always had. A second
-   theme, **Lavender**, is a block near the foot of this file that redeclares
-   the same names against `html[data-theme='lavender']`; nothing else in 12,000
-   lines of stylesheet knows there is more than one.
+   still its default — every value here is the one it has always had. The other
+   five are blocks near the foot of this file that redeclare the same names
+   against `html[data-theme='…']` — **Lavender**, **Maroon**, **Powder Blue**,
+   and the plain **Dark** and **Light** pair off VS Code's own defaults; nothing
+   else in 14,000 lines of stylesheet knows there is more than one.
 
    That is only true because a color a rule wants is a **token** rather than a
    literal, and it was not true when the second theme was written: 88 palette
@@ -26,12 +27,12 @@
    --------------------------------------------------------------------------- */
 :root {
   /* The surface ramp, dark to light: the page, the page's second step, a card,
-     and a card's stronger surface (the zebra stripe, a hover). Both shipped
-     themes run it in this direction; a light one would invert the last two —
-     `--panel` white and `--panel-2` a step *down* — and nothing would have to be
+     and a card's stronger surface (the zebra stripe, a hover). The four dark
+     themes run it in this direction and the two light ones invert the last two
+     — `--panel` white and `--panel-2` a step *down* — and nothing had to be
      told, because what every rule actually asks for is "the more prominent
-     surface", not "the lighter one". (Lavender *was* that light theme for a
-     spell; see its block at the foot of the file for why it is graphite now.) */
+     surface", not "the lighter one". (Lavender *was* a light theme for a spell;
+     see its block at the foot of the file for why it is graphite now.) */
   --bg: #0b1220;
   --bg-2: #111a2e;
   --panel: #16213a;
@@ -1073,17 +1074,10 @@ body {
    rather than by a `width`/`height` attribute so a slot that has its own idea
    of the size — the fantasy popover's 15px glyph column — can say so in one
    place, the way it already did for the ring this replaces. */
-/* One loading color in the app and it is the accent — with a hook for the one
-   place that cannot take it. A ball inside a *filled* control is drawn on the
-   accent, so `color: var(--accent)` there is accent on accent at 1.00:1: the
-   mark that says the press landed, invisible. `--ball-ink` is the container's
-   say in it, the way `--cell-bg` and `--sort-gutter` are; the two filled
-   controls that hold a ball (`.espn-submit`, `.auth-btn-primary`) set it to
-   their own ink, and everything else falls through to the accent untouched. */
 .ball-spin {
   display: block;
   flex: none;
-  color: var(--ball-ink, var(--accent));
+  color: var(--accent);
 }
 .ball-spin-sm {
   width: 14px;
@@ -9979,9 +9973,6 @@ button.start-line:focus-visible {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--on-accent);
-  /* Filled, so the ball takes the button's ink rather than the accent it is
-     drawn on — see `.ball-spin`. */
-  --ball-ink: var(--on-accent);
 }
 .auth-btn-primary:hover {
   background: var(--accent-2);
@@ -10789,9 +10780,6 @@ button.start-line:focus-visible {
   border: 1px solid var(--accent);
   border-radius: var(--control-radius);
   color: var(--on-accent);
-  /* The ball on this ground is the button's own ink, not the accent — see
-     `.ball-spin`. */
-  --ball-ink: var(--on-accent);
   font-size: 14px;
   font-weight: 800;
   padding: 9px 18px;
@@ -10802,14 +10790,6 @@ button.start-line:focus-visible {
 .espn-submit:disabled {
   opacity: 0.45;
   cursor: default;
-}
-/* Disabled *because it is working* is not the same as unavailable, which is
-   the rule the app already keeps for the ball's color ("inside a control that
-   is `:disabled` while it works and otherwise muted, since it is disabled
-   because it is working"). At 0.45 the whole button — ball included — read as
-   a control you may not press, on the one frame that is saying the opposite. */
-.espn-submit[aria-busy='true']:disabled {
-  opacity: 1;
 }
 .espn-submit:focus-visible {
   outline: 2px solid var(--accent);
@@ -10887,35 +10867,6 @@ button.start-line:focus-visible {
 }
 .onboard-actions {
   margin-bottom: 22px;
-}
-/* The button holds its box across the press. The label and the ball share one
-   grid cell, so the width and the height are the label's in both states and
-   nothing moves when it is pressed — neither the button, nor `Not now`, which
-   sits next to it in a flex row and used to jump 36px left the moment a reader
-   committed. It is `.research-order-hint`'s own one-cell grid, with the
-   difference that there the reservation is made by a *ghost* and here by the
-   real label.
-
-   Which is why this one is `opacity: 0` where that one is `visibility:
-   hidden`, and the two opposite choices are the same reasoning: `visibility`
-   takes a box out of the accessibility tree as well as off the screen. There
-   that is the point — a live region must announce its sentence once, not
-   twice. Here it would leave the button with **no accessible name** for as
-   long as it is working, which is worse than the `Setting up` this replaces.
-   Transparent, the name stands, `aria-busy` says what is happening, and a
-   screen reader hears the control it pressed rather than a new one. */
-.onboard-start {
-  display: grid;
-  place-items: center;
-}
-.onboard-start > * {
-  grid-area: 1 / 1;
-}
-/* Keyed off `aria-busy` rather than a class of its own, so the state a screen
-   reader is told and the state that is drawn are one attribute and cannot come
-   to disagree. It fails safe: lose the attribute and the label is visible. */
-.onboard-start[aria-busy='true'] .onboard-start-label {
-  opacity: 0;
 }
 .onboard-note {
   max-width: 52ch;
@@ -13812,6 +13763,149 @@ html[data-theme='maroon'] {
 }
 
 /* ---------------------------------------------------------------------------
+   Dark — the plain near-black, and one half of the pair asked for as "default
+   light and default dark".
+
+   **Its source is VS Code's own `2026 Dark`**, the default that ships with the
+   editor (`theme-defaults/themes/2026-dark.json`, read out of the installed
+   app rather than remembered). It is the first palette here taken off *another
+   product's* tokens rather than off a photograph or a hue sweep, so what was
+   copied and what was not is worth stating precisely.
+
+   **The surfaces are its own, unaltered.** `editor.background` #121314,
+   `sideBar.background` #191A1B, `editorWidget.background` #202122,
+   `widget.border` #2A2B2C — a near-neutral gray with about five points of blue
+   in it (hsl 210, sat 2–5) — mapped straight onto the ramp `:root` runs. The
+   steps come out at ΔE2000 **2.07 / 2.20 / 3.16** against Midnight's 3.98 /
+   2.89 / 3.42, and the border sits **8.9** off the card it edges (Midnight
+   7.74, Lavender 10.61). `--border` is the one surface lifted — #333536
+   (`input.border`) to #3a3d3f — because in VS Code that value edges an *input*
+   and here it edges every card in the app.
+
+   **The hues of the marks are its own and the lightnesses are not**, which is
+   the same trade `Maroon` makes with its jersey ("the powder lifted until it
+   carries text on a dark page, the maroon taken down until it *is* one"). VS
+   Code's palette is tuned for syntax on a large surface and reads softer than
+   anything this app draws: its `foreground` #bfbfbf is **10.1:1** on its own
+   page where the four themes here run 14.3–17.8, its `descriptionForeground`
+   5.5 against 6.9–9.5, and its `disabledForeground` #555555 **2.5** against
+   3.7–5.2 — under the 3.18 this app already documents as the quietest thing it
+   draws. The same is true of the chart colors: #EF8773 and #E0B97F are a
+   salmon and a tan at 61–79% saturation, and washed into the at-bat and
+   on-deck row grounds at 22/20 they land **ΔE 10.48** apart, under the 11.98
+   floor the three shipped themes hold. So each mark keeps VS Code's hue and
+   takes this app's saturation and lightness, and the result is measured below
+   rather than asserted.
+
+   **The one hue moved is the walk**, and for the reason `Maroon` records for
+   its own: this app carries *two* blues and a code editor carries one. VS
+   Code's `charts.blue` #57A3F8 (hue 212) against an accent at hue 198 is ΔE
+   **11.07**, under Midnight's own accent/walk pair at 11.67; four degrees to
+   hue 216 makes it **11.81**.
+
+   **`--mound-teal` is not in the source at all** — 2026 Dark's whole accent
+   family is one steel blue (hue 198–200: #297AA0 the button, #3994BC the badge,
+   #48A0C7 the link) and there is no teal in its 293 colors. It is picked here
+   on the sweep Midnight's own note describes, and against a *desaturated*
+   accent it is the tighter problem: #5ad6cb lands **19.4** from the accent,
+   **12.9** from `--accent-2` (Midnight 12.29) and **18.9** from `--hit`
+   (Midnight 14.63).
+
+   **As it renders, against Midnight / Lavender / Maroon:**
+
+   - **on `--bg`** — text **14.2:1** (16.1 / 14.3 / 14.9), muted 7.2 (7.1 / 6.9
+     / 8.3), faint 3.9 (3.7 / 4.0 / 5.3), accent **8.0** (8.7 / 7.4 / 9.4), hit
+     10.0, hr 11.0, walk 7.7, strikeout 7.2, on-base 7.2, mound 10.6, out 4.6.
+     Text is deliberately the softest of the four — that is 2026 Dark's own
+     character, kept as far as the app's floor allows.
+   - **on the worst live-role ground** (on deck, #3e3624) — faint 2.49, out
+     2.95, muted 4.59, strikeout 4.59, on-base 4.64, walk 4.95, accent 5.15,
+     hit 6.42, mound 6.78, hr 7.03, text 9.10, against Midnight's own worst row
+     at 2.41 / 2.54 / 4.60 / 4.38 / 4.58 / 4.76 / 5.65.
+   - **the four role grounds** — `:root`'s own 22/20 mixes, which resolve
+     against this palette for the reason the Lavender block gives — are ΔE
+     **13.32** apart at the tightest (at bat against on base, which is the
+     binding pair in Midnight and Maroon too), the other five 13.7, 16.8, 21.2,
+     21.2 and 26.6. That is the widest floor of the five themes.
+   - **`--on-accent` on each fill** — it resolves to `--bg` here, as it does in
+     every dark theme, so these are the line above read the other way: accent
+     8.0, hit 10.0, hr 11.0, walk 7.7, strikeout 7.2, on-base 7.2, mound 10.6.
+
+   It joins the shared ombré below, `--row-alt` resolves to `--panel` as it does
+   in every dark palette, and it declares no rule of its own.
+   --------------------------------------------------------------------------- */
+html[data-theme='dark'] {
+  /* VS Code's own four surfaces, in `:root`'s direction, plus a border lifted
+     one step off `input.border` — see the note above. */
+  --bg: #121314;
+  --bg-2: #191a1b;
+  --panel: #202122;
+  --panel-2: #2a2b2c;
+  --border: #3a3d3f;
+
+  /* Neutral grays with the surfaces' own trace of blue, each set against this
+     app's band rather than VS Code's: #bfbfbf, #8C8C8C and #555555 measure
+     10.1 / 5.5 / 2.5 on this page, where the four themes here run 14.3–17.8,
+     6.9–9.5 and 3.7–5.3. */
+  --text: #dfe1e2;
+  --muted: #9ea1a2;
+  --faint: #6f7375;
+
+  /* The steel blue the whole of 2026 Dark is accented in, at hue 198 — its own
+     `textLink.foreground` #48A0C7 lifted from 6.3:1 to 8.0. `--accent-2` is the
+     hover on a filled button and the wordmark's second stop, so it is the
+     *brighter* sibling here as the cyan is in Midnight: 11.5:1 against the
+     accent's 8.0, so a hover moves toward the light rather than sideways. */
+  --accent: #63b4d8;
+  --accent-2: #84d8ec;
+
+  /* VS Code's chart hues at this app's saturation — see the note above for why
+     its own values put the at-bat and on-deck row grounds 1.5 points under the
+     floor the shipped themes hold. `--walk` is four degrees off its hue 212 as
+     well, to clear the accent. */
+  --hr: #eec066;
+  --hit: #86cf86;
+  --walk: #6ea8ff;
+  --out: #7a7f82;
+  --strikeout: #f2806a;
+
+  /* The three inks that are a step off `--text` rather than a hue, each the
+     same distance from it as its Midnight twin: prose 10.4:1 on a card
+     (Midnight 11.2), the out badge's ink 8.4 on its own 22% tint (8.5), the
+     error line 10.5 (11.1). */
+  --prose: #cdd0d1;
+  --out-ink: #d4d7d8;
+  --error-ink: #f8c5b8;
+  /* Near-blacks for the reason they are near-blacks in every dark theme: the
+     pitch dots are saturated lights (7.4–11.4:1 on the four of them), and the
+     status chip sits on a *photograph* and carries its own contrast rather
+     than borrowing the page's. */
+  --pitch-ink: #0d0e0f;
+  --chip-solid: #131415;
+
+  /* The dimmer behind a dialog and the lift at the top right of the page's own
+     radial — `:root`'s in kind and this palette's in cast, which for a
+     near-neutral theme means very nearly no cast at all. */
+  --scrim: rgba(8, 9, 10, 0.66);
+  --page-glow: #24282b;
+  /* The wordmark runs `--accent` → this. VS Code's own `charts.purple`, so the
+     mark travels from the theme's steel blue into another of its colors rather
+     than into one invented for it. */
+  --brand-2: #ad80d7;
+
+  /* pitch dot colors — the semantic set, separated from each other by ΔE 28.8
+     at the tightest. */
+  --inplay: #86cf86;
+  --whiff: #f2806a;
+  --foul: #eec066;
+  --called: #b98fe8;
+  --ball: #4a4d4f;
+
+  --live-purple: #b98fe8;
+  --mound-teal: #5ad6cb;
+}
+
+/* ---------------------------------------------------------------------------
    Powder Blue — the same jersey the other way up, and the one light theme.
 
    `Maroon` above puts the uniform's maroon on the page and writes the powder on
@@ -13999,6 +14093,198 @@ html[data-theme='powder'] {
   --role-pitching-bg: color-mix(in srgb, var(--mound-teal) 22%, var(--bg));
 }
 
+/* ---------------------------------------------------------------------------
+   Light — the plain white, and the other half of the pair.
+
+   **Its source is VS Code's own `2026 Light`** (`theme-defaults/themes/
+   2026-light.json`), read out of the installed app beside the dark one, and it
+   is built on the terms `Powder Blue` above sets out: the page is white,
+   `--panel` is white with it, and what a card is told from the page by is its
+   border, its shadow and its own wash down to `--panel-2`.
+
+   **The surfaces are its own.** `editor.background` #FFFFFF, `sideBar.
+   background` #FAFAFD, `dropdown.border` #D8D8D8 — a neutral with a point or
+   two of blue, which is the mirror of the dark block's five.
+
+   **`--bg-2` is the one that had to be found rather than taken, and Powder
+   Blue's own note says why.** That token is the foot of the wide tables' header
+   row, and the boundary that matters is the header's bottom edge against row
+   one, which is `--bg` — white. Powder records the failure: at ΔE2000 **4.6** a
+   reader could not see where the header stopped. Its own fix lands at 12.96,
+   and a *neutral* cannot reach that without going visibly dark, because ΔE
+   counts chroma as well as lightness and a gray has none to spend — at Powder's
+   own 1.36:1 a neutral is only 7.8 apart. #d7d7dc is **8.86** and 1.42:1, which
+   is nearly twice the measured failure and as far as a white theme's header can
+   go before it reads as a band rather than a heading.
+
+   **The marks are its own hues, deepened.** 2026 Light's palette is already
+   dark where it counts (`charts.red` #ad0707, `charts.purple` #652D90) and
+   light where this app cannot use it: `charts.green` #388A34 is **4.3:1** on
+   white and 3.3 on the at-bat row ground, `charts.orange` #d18616 is **2.6**,
+   `disabledForeground` #BBBBBB is **1.9**, and the accent #0069CC is 5.4
+   against the 8.5 Powder carries. So each keeps its hue and is taken down to
+   where it reads — which is Powder's own sentence about its jersey, applied to
+   a set of tokens instead.
+
+   **Two hues moved and each was forced by a pair.** The **walk** goes from VS
+   Code's `charts.blue` #1A5CFF (hue 223) to hue 238, because against a deepened
+   #0069CC it is ΔE **8.0** — this app's two-blues problem in its sharpest form,
+   the accent and the walk being the same hue family with the page's lightness
+   no longer available to separate them; at 238 it is **13.41**, wider than
+   Midnight's own 11.67. The **purple** then goes from #652D90 (hue 274) to hue
+   280, because an indigo walk crowds it: 12.87 → **13.63**.
+
+   **The role grounds are mixed at 26/22/22/22** where Powder uses 24/22 and
+   `:root` 22/20 — the red taking four extra points rather than Powder's two,
+   which is the same correction `:root`'s own comment makes ("the red needs the
+   extra two to read as the same weight") sized for a page with no color in it
+   to help. At 24 the at-bat and on-base grounds sit **11.94** apart, a hair
+   under Maroon's 11.98 floor; at 26 they are **12.55**.
+
+   **As it renders, against Powder Blue — the only other light theme, and so the
+   comparison that means anything:**
+
+   - **on `--bg`** — text **16.3:1** (Powder 17.8), muted 7.3 (9.5), faint 5.5
+     (5.2), accent **8.9** (8.5), hit 7.6, hr 7.5, walk 7.5, strikeout 7.5,
+     on-base 8.7, mound 7.3, out 7.2.
+   - **on the worst live-role ground** (at bat, #eabfbf, which is Powder's worst
+     row too) — faint **3.35** (Powder 3.32), out 4.37, muted 4.40, mound 4.43,
+     walk 4.51, strikeout 4.52, hr 4.55, hit 4.60, on-base 5.26, accent 5.40
+     (Powder 5.47), text 9.86. Every non-`--faint` mark clears 4.3, which is the
+     floor the five themes hold (Lavender's muted is 4.37 and its on-base
+     4.28).
+   - **the four role grounds** are ΔE **12.55** apart at the tightest, the other
+     five 13.1, 17.5, 20.6, 21.1 and 27.5.
+   - **white on each fill** — the same figures as the first line, `--on-accent`
+     being white and the page being white: accent 8.9, hit 7.6, hr 7.5, walk
+     7.5, strikeout 7.5, on-base 8.7, mound 7.3, out 7.2.
+
+   **The zebra is #ebebef**, 1.19:1 against the white beside it (Powder 1.22,
+   Midnight 1.11) — the same step the table has always had, in this theme's own
+   neutral.
+
+   It joins Powder Blue's three rules below rather than carrying its own: the
+   flat page, the card ombré the polarity flips the token order of, and the well
+   behind an uploaded team logo.
+   --------------------------------------------------------------------------- */
+html[data-theme='light'] {
+  /* White page, white card — a card is told from the page by its border, its
+     shadow and its own wash to `--panel-2`, which is how every light UI
+     separates the two and is Powder Blue's arrangement exactly. `--bg-2` and
+     `--panel-2` stop meaning "a step off the page" and mean "the foot of a
+     card, and of the header row"; the header's is the one measured above. */
+  --bg: #ffffff;
+  --bg-2: #d7d7dc;
+  --panel: #ffffff;
+  --panel-2: #f7f7fa;
+  /* The stripe, which a white page threatens: `--row-alt` resolves to `--panel`
+     everywhere else and cannot here, both being white. 1.19:1 against the row
+     beside it. */
+  --row-alt: #ebebef;
+  --border: #d4d4da;
+
+  /* VS Code's own `foreground` and a `descriptionForeground` taken down a step;
+     `--faint` is *not* its `disabledForeground` #BBBBBB, which is 1.9:1 on this
+     page against the 5.2 the other light theme carries. */
+  --text: #202020;
+  --muted: #545759;
+  --faint: #68686e;
+
+  /* Its `button.background` / `textLink.foreground` #0069CC at a lightness that
+     carries on the page (8.9:1) and under white ink (8.9 — the same figure
+     twice, the page being white).
+
+     **The lightness is set by the app's tightest instance of an accent, not by
+     the page**, which is worth recording because it is two whole steps below VS
+     Code's own: `.feed-more-count` is the accent printed on its *own* 18% wash
+     over `--bg-2`, which on a white theme is the darkest surface there is. At
+     #0069CC's own lightness that badge measures **4.03:1** at 12px/800 — under
+     the bar, and the one element the audit flagged across six views. At #004a8b
+     it is **4.72**, against Powder Blue's 4.54 and Lavender's 4.84 for the same
+     badge, and every other figure on this palette improves with it.
+
+     `--accent-2` is the hover and the wordmark's first stop; on a light theme
+     "brighter" is not available, so it is a *lighter* blue that still holds
+     white as a fill (5.8:1), held ΔE 10.3 from the accent — Powder Blue's own
+     pair is 10.2 and 5.8. */
+  --accent: #004a8b;
+  --accent-2: #0a66b8;
+
+  /* Its chart hues, deepened until they read — see the note above for the four
+     that could not be used as they are. `--walk` and `--live-purple` are the
+     two whose hue moved as well, each forced by a pair. */
+  --hr: #754c00;
+  --hit: #186116;
+  --walk: #3b3fd1;
+  /* A warm neutral, which is what the rails asked for and what Powder Blue
+     found for the same reason: a cool gray is the walk's own hue family, and as
+     the *out* tone of a base event beside a *free base* one that is the tightest
+     pair on the card. Off the blue axis it is ΔE 13.0 from `--muted` and 7.2:1
+     on the page. `--ball`, the pitch dot, keeps a cool slate — it is not a rail,
+     and its own separations were measured where it is drawn. */
+  --out: #635540;
+  --strikeout: #ad0707;
+
+  /* White, because every fill above is dark enough to carry it — which, with
+     the tinted-row constraint, is what set their lightness. */
+  --on-accent: #ffffff;
+
+  --prose: #33383b;
+  --out-ink: #3d3830;
+  --error-ink: #8f1111;
+  /* Both invert with the polarity: the dots are deep colors on a pale plot, and
+     the status chip on a headshot carries its own contrast rather than the
+     page's — and this theme's semantic inks are dark, so the chip is white. */
+  --pitch-ink: #ffffff;
+  --chip-solid: #ffffff;
+
+  /* The plate behind an uploaded team logo, which only a light theme needs —
+     the whole of that argument is in Powder Blue's block. White on it is
+     **1.45:1** where white on `--panel` is 1.00 and on the stripe 1.19, and it
+     reads as a tile against both grounds a table cell can give it (ΔE 9.4 from
+     the white row, 4.9 from the striped one). */
+  --logo-plate: #d6d6dd;
+
+  /* No `--page-glow`: the page is flat white here, as Powder Blue's is, so
+     nothing in this theme reads it. */
+
+  /* The wordmark runs `--accent` → this: the theme's blue into its own purple,
+     which is VS Code's `charts.purple` at the hue this palette moved it to. */
+  --brand-2: #722399;
+
+  /* The dimmer behind a dialog — a veil rather than a darkening, on Powder
+     Blue's own argument: near-black at two thirds over a pale page reads as
+     mud and swallows what it is dimming. Neutral here rather than blue, this
+     palette having no cast to carry. */
+  --scrim: rgba(24, 26, 30, 0.42);
+
+  /* Cast neutral at a fraction of the weight — black at 35% over a white card
+     reads as dirt rather than as depth. */
+  --shadow: 0 10px 30px rgba(30, 32, 38, 0.14);
+  --shadow-bar: 0 6px 16px rgba(30, 32, 38, 0.10);
+  --shadow-pop: 0 12px 30px rgba(30, 32, 38, 0.20);
+  --pin-edge: 6px 0 8px -6px rgba(30, 32, 38, 0.20);
+  --pin-edge-left: -6px 0 8px -6px rgba(30, 32, 38, 0.20);
+
+  /* pitch dot colors — the semantic set, deepened for a pale plot on the rule
+     above them, and separated from each other by ΔE 21.1 at the tightest. */
+  --inplay: #186116;
+  --whiff: #ad0707;
+  --foul: #754c00;
+  --called: #722399;
+  --ball: #5f6670;
+
+  --live-purple: #722399;
+  --mound-teal: #00615c;
+
+  /* 26/22 rather than Powder Blue's 24/22 or `:root`'s 22/20 — see the note
+     above the block. */
+  --role-at-bat-bg: color-mix(in srgb, var(--strikeout) 26%, var(--bg));
+  --role-on-deck-bg: color-mix(in srgb, var(--hr) 22%, var(--bg));
+  --role-on-base-bg: color-mix(in srgb, var(--live-purple) 22%, var(--bg));
+  --role-pitching-bg: color-mix(in srgb, var(--mound-teal) 22%, var(--bg));
+}
+
 /* **The page is flat white, and the ombré it used to carry is gone with the
    color it was made of.** It ran a white lift at the top right, a 9% wash of
    the accent in the bottom-left corner and a linear from `--bg` down to
@@ -14015,24 +14301,36 @@ html[data-theme='powder'] {
    the wide tables' header row, still needs no version of its own: `--panel-2`
    is lighter than `--bg-2` in every theme, and on this one that header is what
    the white first row is read against. */
-html[data-theme='powder'] body {
+html[data-theme='powder'] body,
+html[data-theme='light'] body {
   background: var(--bg);
   background-attachment: fixed;
 }
 html[data-theme='powder'] .pct-card,
+html[data-theme='light'] .pct-card,
 html[data-theme='powder'] .empty-state,
+html[data-theme='light'] .empty-state,
 html[data-theme='powder'] .auth-card,
+html[data-theme='light'] .auth-card,
 html[data-theme='powder'] .app-dialog-box,
+html[data-theme='light'] .app-dialog-box,
 html[data-theme='powder'] .settings-popover,
+html[data-theme='light'] .settings-popover,
 html[data-theme='powder'] .drp-popover,
+html[data-theme='light'] .drp-popover,
 html[data-theme='powder'] .tut-note,
+html[data-theme='light'] .tut-note,
 html[data-theme='powder'] .espn-status,
+html[data-theme='light'] .espn-status,
 html[data-theme='powder'] .lg-matchup,
-html[data-theme='powder'] .order-row {
+html[data-theme='light'] .lg-matchup,
+html[data-theme='powder'] .order-row,
+html[data-theme='light'] .order-row {
   background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
 }
 /* The well behind a team logo — see `--logo-plate` above. */
-html[data-theme='powder'] .lg-logo:not(.lg-logo-none) {
+html[data-theme='powder'] .lg-logo:not(.lg-logo-none),
+html[data-theme='light'] .lg-logo:not(.lg-logo-none) {
   background: var(--logo-plate);
 }
 
@@ -14056,7 +14354,8 @@ html[data-theme='powder'] .lg-logo:not(.lg-logo-none) {
    palette supplies its own colors to it. A fourth theme that wants the ombré
    joins these lists; one that does not, does not. */
 html[data-theme='lavender'] body,
-html[data-theme='maroon'] body {
+html[data-theme='maroon'] body,
+html[data-theme='dark'] body {
   /* Lit from the top right, cooler toward the foot, with a wash of the theme's
      own accent in the bottom-left corner — the same three layers the light
      theme carried, with the linear one the other way up. */
@@ -14068,24 +14367,34 @@ html[data-theme='maroon'] body {
 }
 html[data-theme='lavender'] .pct-card,
 html[data-theme='maroon'] .pct-card,
+html[data-theme='dark'] .pct-card,
 html[data-theme='lavender'] .empty-state,
 html[data-theme='maroon'] .empty-state,
+html[data-theme='dark'] .empty-state,
 html[data-theme='lavender'] .auth-card,
 html[data-theme='maroon'] .auth-card,
+html[data-theme='dark'] .auth-card,
 html[data-theme='lavender'] .app-dialog-box,
 html[data-theme='maroon'] .app-dialog-box,
+html[data-theme='dark'] .app-dialog-box,
 html[data-theme='lavender'] .settings-popover,
 html[data-theme='maroon'] .settings-popover,
+html[data-theme='dark'] .settings-popover,
 html[data-theme='lavender'] .drp-popover,
 html[data-theme='maroon'] .drp-popover,
+html[data-theme='dark'] .drp-popover,
 html[data-theme='lavender'] .tut-note,
 html[data-theme='maroon'] .tut-note,
+html[data-theme='dark'] .tut-note,
 html[data-theme='lavender'] .espn-status,
 html[data-theme='maroon'] .espn-status,
+html[data-theme='dark'] .espn-status,
 html[data-theme='lavender'] .lg-matchup,
 html[data-theme='maroon'] .lg-matchup,
+html[data-theme='dark'] .lg-matchup,
 html[data-theme='lavender'] .order-row,
-html[data-theme='maroon'] .order-row {
+html[data-theme='maroon'] .order-row,
+html[data-theme='dark'] .order-row {
   background: linear-gradient(180deg, var(--panel-2) 0%, var(--panel) 100%);
 }
 /* The three wide tables keep a flat ground on purpose: a gradient down a
@@ -14117,15 +14426,23 @@ html[data-theme='maroon'] .order-row {
 html[data-theme='lavender'] .summary-table thead th,
 html[data-theme='maroon'] .summary-table thead th,
 html[data-theme='powder'] .summary-table thead th,
+html[data-theme='dark'] .summary-table thead th,
+html[data-theme='light'] .summary-table thead th,
 html[data-theme='lavender'] .research-table thead th,
 html[data-theme='maroon'] .research-table thead th,
 html[data-theme='powder'] .research-table thead th,
+html[data-theme='dark'] .research-table thead th,
+html[data-theme='light'] .research-table thead th,
 html[data-theme='lavender'] .glog-table thead th,
 html[data-theme='maroon'] .glog-table thead th,
 html[data-theme='powder'] .glog-table thead th,
+html[data-theme='dark'] .glog-table thead th,
+html[data-theme='light'] .glog-table thead th,
 html[data-theme='lavender'] .league-table thead th,
 html[data-theme='maroon'] .league-table thead th,
-html[data-theme='powder'] .league-table thead th {
+html[data-theme='powder'] .league-table thead th,
+html[data-theme='dark'] .league-table thead th,
+html[data-theme='light'] .league-table thead th {
   --cell-bg: linear-gradient(180deg, var(--panel-2) 0%, var(--bg-2) 100%);
   background: var(--cell-bg);
 }

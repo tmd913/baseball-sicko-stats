@@ -1,28 +1,40 @@
 ### Themes: the palette, and the switch that changes it
 
-The app has **four color schemes** — **Midnight**, the navy original and still
-the default; **Lavender**, dark gray and violet; and **Maroon** and **Powder
-Blue**, the dark and light halves of one 1980 Phillies road uniform — and a
-picker in the settings menu. This file is the whole of it: how a theme is
-expressed, what had to change before a second one was possible, how the choice is
-stored and how it reaches the first painted frame.
+The app has **six color schemes** — **Midnight**, the navy original and still
+the default; **Lavender**, dark gray and violet; **Maroon** and **Powder Blue**,
+the dark and light halves of one 1980 Phillies road uniform; and the plain
+**Dark** and **Light** pair off VS Code's own defaults — and a picker in the
+settings menu. This file is the whole of it: how a theme is expressed, what had
+to change before a second one was possible, how the choice is stored and how it
+reaches the first painted frame.
 
 **A theme is a palette, not a stylesheet.** `client/src/styles.css` opens with a
-`:root` block of color tokens and closes with three blocks that redeclare the
-same names against **`html[data-theme='lavender']`**,
-**`html[data-theme='maroon']`** and **`html[data-theme='powder']`**. Nothing else
-in 12,000 lines of stylesheet knows there is more than one, and no component
-reads a theme at all. The only rules a theme adds of its own are a short run of
-gradients Midnight does not want (below), and those are *shared* wherever the
-polarity allows it.
+`:root` block of color tokens and closes with five blocks that redeclare the same
+names against **`html[data-theme='…']`**. Nothing else in 14,000 lines of
+stylesheet knows there is more than one, and no component reads a theme at all.
+The only rules a theme adds of its own are a short run of gradients Midnight does
+not want (below), and those are *shared* wherever the polarity allows it.
 
 **What a theme costs, end to end**, is the measurement that says whether the
-first two were built right. **Maroon**: one `ThemeId` union member, one `THEMES`
-entry, two map keys in the boot script, one token block, three selector lines,
-and **not one component, rule or class name**. **Powder Blue** is the same plus
-**three rules of its own** — the two ombré gradients whose token order flips with
-the polarity, and the logo plate only a light theme needs — and one line in the
-picker's stylesheet, which is the only *layout* any of the four has cost.
+first two were built right, and it has now been paid four times. **Maroon**: one
+`ThemeId` union member, one `THEMES` entry, two map keys in the boot script, one
+token block, three selector lines, and **not one component, rule or class name**.
+**Powder Blue** is the same plus **three rules of its own** — the two ombré
+gradients whose token order flips with the polarity, and the logo plate only a
+light theme needs — and one line in the picker's stylesheet, which is the only
+*layout* any of the six has cost.
+
+**And the pair added last cost less again, which is the point of having paid it
+twice.** **Dark** is a token block and **five selector-list entries** — the page
+ombré, the card ombré and the wide tables' header row — and **no rule of its
+own** at all. **Light** is a token block and five more entries on the three lists
+Powder Blue already carries (its flat page, its card ombré, its logo plate) plus
+the shared header. Neither touched a component, a class name or the picker's
+stylesheet; the picker's own markup is a `map` over `THEMES` and grew by two rows
+without being edited. Measured, that is **149.08 → 151.55 KB of CSS** (26.59 →
+27.09 gzipped) and **558.81 → 559.06 KB of JS** (165.93 → 166.03) — 2.5KB and
+0.25KB raw, half a kilobyte and a tenth over the wire, for two whole palettes;
+and better than half the CSS is the two comment blocks arguing them.
 
 ### What had to change first: 88 literals and a dozen hexes
 
@@ -189,7 +201,8 @@ meant to be adjacent (Midnight's is 11.6).
   against Midnight's 12.1.
 
 **`--win` is `--hit` here too**, and `--logo-plate` does not exist: both are the
-light theme's problems, and all three shipped themes are dark.
+light theme's problems, and the three themes shipped at the time were all
+dark. (`Dark`, added later, is in the same case; `Light` declares both.)
 
 ### The Powder Blue palette, and the page that gave up its color
 
@@ -281,6 +294,233 @@ palette with it, nothing in this theme reading it any more.
 lighter than `--bg-2` in all four palettes — and on this one that header is what
 the white first row is read against.
 
+### The Dark and Light pair, off VS Code's own defaults
+
+**They were asked for as "default light and default dark", inspired by VS Code's
+`Dark 2026` and `Light 2026`** — which are that editor's shipped defaults, and
+which are the first source here that is *another product's tokens* rather than a
+photograph or a hue sweep. Both were read out of the installed app
+(`/Applications/Visual Studio Code.app/Contents/Resources/app/extensions/
+theme-defaults/themes/2026-dark.json` and `2026-light.json`, 293 and 299 colors
+apiece) rather than remembered, which is the same rule the Maroon block follows
+for its jersey.
+
+**They are named `Dark` and `Light`, and that is a decision rather than a
+shrug.** Midnight, Lavender, Maroon and Powder Blue each have a character to
+name; these are deliberately plain — one near-neutral surface ramp, one accent,
+no cast — and there is no noun for that but the polarity itself. A reader who
+wants exactly that is looking for exactly those two words. They are **not**
+`DEFAULT_THEME`, which is still Midnight: the names describe the palettes, not
+the app's default, and `theme.ts` says so where the pair is declared.
+
+#### What was copied and what was not
+
+**The surfaces are VS Code's, unaltered.** Dark takes `editor.background`
+#121314, `sideBar.background` #191A1B, `editorWidget.background` #202122 and
+`widget.border` #2A2B2C straight onto the ramp `:root` runs; Light takes
+#FFFFFF, `sideBar.background` #FAFAFD and `dropdown.border` #D8D8D8. Dark's
+steps come out at ΔE2000 **2.07 / 2.20 / 3.16** against Midnight's 3.98 / 2.89 /
+3.42, with the border **8.9** off the card it edges (Midnight 7.74, Lavender
+10.61). One surface is lifted: Dark's `--border` goes #333536 → #3a3d3f, because
+in VS Code that value edges an *input* and here it edges every card in the app.
+
+**The hues of the marks are VS Code's and the lightnesses are not**, which is
+the trade the Maroon block already makes with its jersey — *"the powder lifted
+until it carries text on a dark page, the maroon taken down until it is one"* —
+applied to a set of tokens instead. The reason is measured rather than asserted:
+VS Code tunes for syntax on a large surface and reads a good deal softer than
+anything this app draws.
+
+| | VS Code's own value | on its own page | this app's band |
+| --- | --- | --- | --- |
+| Dark `foreground` | #bfbfbf | **10.1:1** | 14.3–17.8 |
+| Dark `descriptionForeground` | #8C8C8C | 5.5 | 6.9–9.5 |
+| Dark `disabledForeground` | #555555 | **2.5** | 3.7–5.3 |
+| Dark `textLink.foreground` | #48A0C7 | 6.3 | 7.4–9.4 (accent) |
+| Light `charts.green` | #388A34 | **4.3** | 7.6–9.1 (hit) |
+| Light `charts.orange` | #d18616 | **2.6** | 7.5–7.8 (hr) |
+| Light `disabledForeground` | #BBBBBB | **1.9** | 5.2 (Powder's faint) |
+| Light `button.background` | #0069CC | 5.4 | 8.5 (Powder's accent) |
+
+That `2.5` is the one that decides it: this app already documents **3.18** as the
+quietest thing it draws (`--faint` on a live-role row), so VS Code's disabled
+gray would be a new floor rather than a palette. The same is true of the *chart*
+colors on the dark side — #EF8773 and #E0B97F are a salmon and a tan at 61–79%
+saturation, and washed into the at-bat and on-deck row grounds at `:root`'s own
+22/20 they land **ΔE 10.48** apart, under the **11.98** floor the three shipped
+themes hold. So each mark keeps its hue and takes this app's saturation and
+lightness.
+
+#### Three hues moved, and each was forced by a pair
+
+**The walk, on both.** This app carries *two* blues where a code editor carries
+one, which is the problem the Maroon block records for its own periwinkle. On
+Dark, `charts.blue` #57A3F8 (hue 212) against an accent at hue 198 is ΔE
+**11.07**, under Midnight's own accent/walk pair at 11.67; four degrees to hue
+216 makes it **11.81**. On Light it is far sharper — a light page has no
+lightness left to separate them with — so `charts.blue` #1A5CFF (hue 223)
+against a deepened #0069CC is **8.01**, and it goes to hue 238, where it is
+**13.54**.
+
+**The purple, on Light**, because an indigo walk then crowds it: `charts.purple`
+#652D90 (hue 274) goes to hue 280, taking walk-against-purple from 12.87 to
+**13.63**.
+
+**And `--mound-teal` is in neither source at all.** 2026 Dark's whole accent
+family is one steel blue — #297AA0 the button, #3994BC the badge, #48A0C7 the
+link, hue 198–200 across 293 colors — and there is no teal in it. It is picked on
+the sweep Midnight's own note describes, and against a *desaturated* accent it is
+the tighter problem: Dark's #5ad6cb lands **19.4** from the accent, **12.9** from
+`--accent-2` (Midnight 12.29) and **18.9** from `--hit` (Midnight 14.63).
+
+#### Two numbers each block had to find rather than take
+
+**Light's `--bg-2`, which is the foot of the wide tables' header row.** Powder
+Blue's own note is the record of what happens when that is wrong: the boundary
+that matters is the header's bottom edge against row one, which is `--bg`, and at
+ΔE **4.6** a reader could not see where the header stopped. Powder's fix lands at
+12.96 — and a *neutral* cannot reach that without going visibly dark, because ΔE
+counts chroma as well as lightness and a gray has none to spend. At Powder's own
+1.36:1 a neutral is only **7.77** apart. **#d7d7dc is 8.86 and 1.43:1**, which is
+nearly twice the measured failure and as far as a white theme's header can go
+before it reads as a band rather than a heading.
+
+**Light's accent, which is set by the app's tightest instance of one rather than
+by the page**, and which is two whole steps below VS Code's #0069CC because of
+it. `.feed-more-count` — the count badge on the Load-more button — is the accent
+printed on its *own* 18% wash over `--bg-2`, which on a white theme is the
+darkest surface there is. It was the one element the six-view audit flagged:
+**4.03:1 at 12px/800**. At **#004a8b** it is **4.72**, against Powder Blue's 4.54
+and Lavender's 4.84 for the same badge — and every other figure on the palette
+improved with it (accent on the page 7.50 → **8.93**, on the worst role ground
+4.54 → **5.40**). Worth recording as a general fact about this app: *an accent's
+floor is not its contrast with the page, it is its contrast with its own 18%
+wash on the deepest surface a theme has.*
+
+#### The role grounds, and Light's 26
+
+Dark takes `:root`'s own **22/20** mixes, which resolve against its palette for
+the reason the Lavender block gives, and comes out at **13.32** apart at the
+tightest — the widest floor of the six.
+
+Light redeclares them at **26/22/22/22**, where Powder Blue uses 24/22 and
+`:root` 22/20 — the red taking four extra points rather than Powder's two, which
+is the correction `:root`'s own comment already makes (*"the red needs the extra
+two to read as the same weight"*) sized for a page with no color in it to help.
+At 24 the at-bat and on-base grounds sit **11.94** apart, a hair under Maroon's
+11.98 floor; at 26 they are **12.55**.
+
+#### As they render
+
+Every figure below was read off the running app rather than computed — the four
+role grounds were compared against the predicted hexes and match to the byte
+(Dark `#432b27 / #3e3624 / #332c3e / #203a39`, Light `#eabfbf / #e1d8c7 /
+#e0cfe9 / #c7dcdb`), and their pairwise ΔE reproduce the predicted set exactly.
+
+| | Midnight | Lavender | Maroon | **Dark** | Powder | **Light** |
+| --- | --- | --- | --- | --- | --- | --- |
+| text on `--bg` | 16.1 | 14.3 | 14.9 | **14.2** | 17.8 | **16.3** |
+| muted | 7.1 | 6.9 | 8.3 | **7.2** | 9.5 | **7.3** |
+| faint | 3.7 | 4.0 | 5.3 | **3.9** | 5.2 | **5.5** |
+| accent | 8.7 | 7.4 | 9.4 | **8.0** | 8.5 | **8.9** |
+| role grounds, tightest ΔE | 12.13 | 12.90 | 11.98 | **13.32** | 12.77 | **12.55** |
+| accent/walk ΔE | 11.67 | 15.98 | 12.77 | **11.81** | 34.82 | **13.54** |
+| worst-ground floor | 2.41 | 2.49 | 3.36 | **2.49** | 3.32 | **3.35** |
+| `--win` against `--muted` ΔE | 17.9 | 16.4 | 28.2 | **18.0** | 16.5 | **19.6** |
+
+Dark's text is deliberately the softest of the six — that is 2026 Dark's own
+character, kept as far as the app's floor allows. On its **worst live-role
+ground** (on deck, #3e3624) it reads faint 2.49, out 2.95, muted 4.59, strikeout
+4.59, on-base 4.64, walk 4.95, accent 5.15, hit 6.42, mound 6.78, hr 7.03, text
+9.10 — against Midnight's own worst row at 2.41 / 2.54 / 4.60 / 4.38 / 4.58 /
+4.76 / 5.65. Light's (at bat, #eabfbf, which is Powder's worst row too) reads
+faint 3.35, out 4.37, muted 4.40, mound 4.43, walk 4.51, strikeout 4.52, hr 4.55,
+hit 4.60, on-base 5.26, accent 5.40, text 9.86: **every non-`--faint` mark clears
+4.3**, which is the floor the six hold.
+
+#### Measured — the audit, and what the two pay in geometry
+
+**The same text-node audit the three themes before them took**, over five views
+(roster, feed, research board, League, how-to) at 1400×950 against the running
+app, compositing each element's real background stack:
+
+| view | Dark, under 4.5 | worst real | Light, under 4.5 | worst real |
+| --- | --- | --- | --- | --- |
+| roster | 18 | **3.37** `--faint` | 1 | *(none)* |
+| feed | 0 | — | 1 | *(none)* |
+| research | 1,311 | **3.37** `--faint` | 1 | *(none)* |
+| League | 1 | **3.37** `--faint` | 1 | *(none)* |
+| how-to | 23 | **3.37** `--faint` | 2 | *(none)* |
+
+**Every element under the bar in Dark is `--faint`** — the percentile badge under
+a value, an opponent cell's second line, the handedness token on a name — which
+is the tone this app spends deliberately and which is 3.18 in Midnight, 3.35 in
+Lavender and 3.90 in Maroon. **Light has none at all**: its only entries are
+`.brand-sicko`, which is `color: transparent` with a gradient clipped to the
+text, so the audit reads 1.00 for it in every theme including the three shipped
+ones. It is the cleanest of the six by that measure.
+
+**The four existing themes were re-run through the same audit and are
+byte-identical** to their recorded worst figures — Midnight 3.18, Lavender 3.35,
+Maroon 3.90, Powder Blue 4.23 — which is what had to be true of a change that
+edited three shared selector lists.
+
+**And a theme costs no geometry, which was checked rather than assumed.** At 320
+/ 390 / 1400 / 1920 on the research board, both new themes: rows **58.00px**, the
+header row **51.00**, the headshot column pinned at **0** with the pane scrolled
+to its far right, the table at **1750.14 / 1822.70 / 2294.36 / 2294.36**, and
+**page-body overflow 0** at every width — identical figures in both, and to the
+other four.
+
+#### Measured — the picker, the boot script and the three shared rules
+
+**The picker draws six rows and needed nothing.** Measured at 1200×900, 390×844
+and 390×620: **six** `menuitemradio` rows at 30px each, the popover **403px**
+tall (it was 329 with four — 74px for two rows) with its foot at **461**, chips
+at one x (223.2 at 1200, 46 at 390), **0 labels clipped**, no internal scroll,
+and page overflow 0. It still fits a 620px-tall window. Its width is unchanged at
+**193.3px at 1200 and 251.2 at 390**, `Powder Blue` still being the widest label.
+
+**Each press applies live**, driven rather than reasoned about: `Dark` sets
+`data-theme="dark"`, `colorScheme: dark`, the localStorage mirror and `--bg:
+#121314 / --accent: #63b4d8`; `Light` sets `light`, `colorScheme: light` (which
+is what hands the browser's own form controls, scrollbars and address bar the
+right polarity), and `#ffffff / #004a8b`; `Midnight` **removes** the attribute.
+`aria-checked` follows, and the menu stays open across the press.
+
+**The boot script paints the right base color**, checked with `/api/prefs`
+blocked so localStorage is the only input — the server is the source of truth and
+would otherwise overrule the mirror:
+
+| stored | attribute | `color-scheme` | injected style | after boot |
+| --- | --- | --- | --- | --- |
+| `dark` | `dark` | dark | `html{background:#121314}` | `--bg: #121314` |
+| `light` | `light` | **light** | `html{background:#ffffff}` | `--bg: #fff`, body white |
+| `powder` | `powder` | light | `#ffffff` | unchanged |
+| `midnight` | *(none)* | dark | `#0b1220` | `#0b1220` |
+| **nonsense** | *(none)* | dark | `#0b1220` | `#0b1220` |
+
+That last row is the `BG[saved]` guard in the boot script and `toThemeId` in the
+app both holding. `html` computes `rgba(0, 0, 0, 0)` in every case afterwards,
+which is `html { background: none }` clearing the paint-ahead — the rule that
+stops the page's gradient being clipped to the height of its content.
+
+**The three shared rules resolve per palette**, which is what makes a theme
+three selector lines rather than thirty rules. Read off the running app:
+
+| | page | card ombré | wide-table header |
+| --- | --- | --- | --- |
+| **Dark** | the shared radial, its own `--page-glow` `rgb(36,40,43)` | `#2a2b2c → #202122` | `#2a2b2c → #191a1b` |
+| **Light** | **`none`** — flat white, on Powder Blue's rule | `#ffffff → #f7f7fa` | `#f7f7fa → #d7d7dc` |
+
+The card ombré's token order flips with the polarity exactly as Powder Blue's
+note describes (*lighter at the top* is `--panel-2` on a dark theme and `--panel`
+on a light one), and the header keeps its single form in all six, `--panel-2`
+being the lighter of that pair in every palette. **The logo plate** — the well
+behind an uploaded team logo, which only a light theme needs — draws
+`rgb(214, 214, 221)` on Light and the page color on the dark themes, and is
+excluded from `.lg-logo-none` as it is on Powder Blue.
+
 ### Ombré
 
 Midnight gradients the things that are *lit* — the page, the pinned bar, a card
@@ -299,8 +539,8 @@ the stylesheet applies to `.settings-toggle` on `.sim-toggle`'s list: two things
 that are the same object must not be able to become two.
 
 **Powder Blue shares one of the three, writes one and has none of the third.**
-It shares the wide tables' header, which runs `--panel-2` → `--bg-2` in all four
-palettes because `--panel-2` is the lighter of that pair in every one of them —
+It shares the wide tables' header, which runs `--panel-2` → `--bg-2` in every
+palette because `--panel-2` is the lighter of that pair in every one of them —
 and on this theme that header is what the white first row is read against. It
 writes the card gradient, which runs *lighter at the top* and so flips token
 order with the polarity: `--panel-2` → `--panel` on a dark theme and `--panel` →
@@ -355,8 +595,8 @@ bar and the run of the whole-matchup meter the leader holds — and all four wro
 four rules. Lavender moved it to the **accent** while it was a light theme, on
 the grounds that the app's green was the one loud thing on a page of violet and
 read as an import from the other palette; it took that back when the page became
-graphite, where the green reads exactly as it does in Midnight. So all four
-shipped themes are on `--hit` — Powder Blue included, where a deep green on a
+graphite, where the green reads exactly as it does in Midnight. So all the
+shipped themes were on `--hit` — Powder Blue included, where a deep green on a
 powder page is as plain a winner as it is anywhere — and the token is kept for
 what it is: the one place a fifth reader of that statement would otherwise have
 to be found.
@@ -374,8 +614,9 @@ excluded from it.
 Both the token and its one rule went when the light theme did, because the
 problem is the pale page's — and **both are back with Powder Blue**, at the same
 measured value and with the same `.lg-logo-none` exclusion, which is why the
-paragraphs above were kept rather than deleted. The three dark themes have the
-mirror of it instead — a *black* logo on a dark card — and all three leave that
+paragraphs above were kept rather than deleted. `Light` declares it too, at its
+own value. The four dark themes have the mirror of it instead — a *black* logo on
+a dark card — and all four leave that
 alone for the reason Midnight always did: nobody has reported it, and `--bg` is
 doing the same job the plate was.
 
@@ -388,9 +629,10 @@ dark theme and says two things at once: *a card is a step up from the page* and
 Powder Blue the page is white, so a card wants to be white as well and a stripe
 cannot be — and the token is what lets the palette say so in one line rather
 than the stylesheet say it in three overrides. `:root` declares it
-`var(--panel)`, so the three dark themes resolve exactly what they always drew
-(checked in a browser: `--row-alt` reads `#16213a` / `#2a2833` / `#2b1d26` and
-the rows are byte-identical), and Powder Blue declares the jersey's own #dceaf7.
+`var(--panel)`, so the four dark themes resolve exactly what they always drew
+(checked in a browser: `--row-alt` reads `#16213a` / `#2a2833` / `#2b1d26` /
+`#202122` and the rows are byte-identical), and the two light ones declare their
+own — the jersey's #dceaf7 and a neutral #ebebef.
 
 ### The third thing a light theme took back: a cap needs a ground
 
@@ -427,9 +669,9 @@ and STL on the navy of its own cap rather than on Cardinal red (5.84 → 15.79).
 
 **It costs the tables nothing and it is not conditional on the theme.** The tile
 is the 15px box the mark already occupied, so rows stay **58.00px** and the
-identity block **31.08** — measured in all four themes, along with the table's own
-width and 0 page overflow. And it is drawn in all four rather than only the light
-one: on a dark page a navy tile behind a white mark is invisible and harmless,
+identity block **31.08** — measured in every theme, along with the table's own
+width and 0 page overflow. And it is drawn in all of them rather than only the
+light ones: on a dark page a navy tile behind a white mark is invisible and harmless,
 which is what the page was doing before, and one behavior beats a rule that
 changes with the palette.
 
@@ -459,7 +701,7 @@ the page belonging to no other mark on it — the light Lavender said exactly th
 and moved `--win` to its accent for the duration, and a bottle-green winner on
 Powder Blue's maroon-and-sky page is the same observation again.
 
-**So it is the accent, in `:root`, for all four.** Not three overrides and a
+**So it is the accent, in `:root`, for all of them.** Not five overrides and a
 default: the rule is one sentence — *the winner is the theme's hero color* —
 which every palette is built to make the loudest thing it has, and Midnight's
 green went with the rest rather than becoming an exception. **The muted loser is
@@ -613,6 +855,14 @@ is, and it costs a phone about 38px of a popover with 500px to spare (measured:
 four rows at 37px, the menu 329px tall with its foot at 387 of an 844px
 viewport).
 
+**Those are the four-theme figures and the argument is theirs; the current ones
+are six rows at 30px, a 403px popover with its foot at 461** — see *The Dark and
+Light pair* above, where the row is re-measured at three window sizes. The two
+that were added cost the picker no width and no rule: `Powder Blue` is still the
+longest label, so the popover is unchanged at 193.3px at 1200 and 251.2 at 390,
+and the markup is a `map` over `THEMES` that grew by two rows without being
+edited.
+
 It is a **radio group** (`menuitemradio`), this being one question with one
 answer where a checkbox each would claim independent switches, and the
 menu **stays open** across a press — the rule `Refresh from ESPN` follows, and
@@ -633,10 +883,11 @@ used to center the pair as a group (`justify-content: center`), so the pill sat
 at a different x on every row — it moved with the length of the name beside it —
 and four rows of a picture-and-a-word read as four unrelated buttons rather than
 as one column of themes. Pinned left (`.theme-swatch-label { flex: 1;
-text-align: center }`), the four pills line up down one edge and so do the four
-names: measured, `chipsX` is **223.2 on every row at 1200** and **46 at 390**,
-and the four labels' ink shares one center — **312.8 at 1200, 164.6 at 390** —
-with nothing clipped.
+text-align: center }`), the pills line up down one edge and so do the names:
+measured, `chipsX` is **223.2 on every row at 1200** and **46 at 390**, and the
+labels' ink shares one center — **312.8 at 1200, 164.6 at 390** — with nothing
+clipped. Both figures are unchanged with six rows in the list, which is the
+property pinning them bought.
 
 **That center is 17px right of the button's own midline**, which is half the
 pill plus the gap, and the alternative was measured rather than waved away. A
