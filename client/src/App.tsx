@@ -857,6 +857,15 @@ export default function App() {
     },
     [saveInclude, researchInclude],
   );
+  /**
+   * Has `/api/prefs` answered — read or failed.
+   *
+   * One entry in it decides **which roster the report is about**, and it is the
+   * one preference that costs a request rather than a re-render, so the first
+   * report has to wait for it. See the report effect below, where the whole of
+   * that is argued.
+   */
+  const [prefsSettled, setPrefsSettled] = useState(false);
   // The user's saved columns, fetched once. Applied only to boards the URL
   // didn't already speak for, and only where the user hasn't already changed
   // something in the seconds before this landed.
@@ -967,7 +976,14 @@ export default function App() {
       })
       // A preference is not worth an error banner over: the board opens on its
       // defaults, which is exactly what a user with nothing saved gets.
-      .catch((e: Error) => console.error('preferences unavailable:', e.message));
+      .catch((e: Error) => console.error('preferences unavailable:', e.message))
+      // Settled either way, and a failed read has to settle it too — the first
+      // report waits on this, and a preference that isn't coming must not hold
+      // the page for ever. The same rule `espnStatusSettled` follows, and for
+      // the same reason one question earlier.
+      .finally(() => {
+        if (!cancelled) setPrefsSettled(true);
+      });
     return () => {
       cancelled = true;
     };
@@ -2587,15 +2603,48 @@ export default function App() {
   // one refetch on a change that can't happen while the editor is hidden, and
   // dropping it would mean a switch back showing the pre-edit list.
   useEffect(() => {
-    // A session that opens on `roster=fantasy` waits for the connection status
-    // first. Firing now would read the saved watchlist, render it, and replace
-    // it a moment later — a flash of the wrong list of players, which is worse
-    // than a slightly longer wait.
+    /**
+     * **The saved preference decides which roster this is about, so the first
+     * read waits for it** — unless the URL has already said, in which case
+     * nothing `/api/prefs` can hold could change the answer.
+     *
+     * Without it every plain visit spent its most expensive request on the
+     * wrong list. `rosterSource` starts at `saved` because that is the default
+     * a URL with no `roster=` on it means, the effect fired on the very first
+     * render, and `/api/prefs` then landed with `fantasy` and fired it again —
+     * so a fantasy user's boot was **two** full report reads, the first of them
+     * about a roster nobody was going to be shown. Measured on the live app,
+     * bare URL: `/api/report?…` at 38ms and `/api/report?…&source=fantasy` at
+     * 48ms, against one read on the same load with `roster=fantasy` in the URL.
+     * The wasted one is not free anywhere and is least free where it hurts —
+     * cold, it is seconds of MLB data, and it competes with the real read for
+     * the one Lambda behind them both.
+     *
+     * What it costs is one round trip on a load whose answer is `saved`, and
+     * `/api/prefs` is a single small read fired at the same instant the report
+     * would have been. The saved-roster user waits for that and nothing else.
+     *
+     * This is the same argument as the line below it, one question earlier: a
+     * session that opens on `roster=fantasy` waits for the connection status,
+     * because firing now would read the saved watchlist, render it, and replace
+     * it a moment later — a flash of the wrong list of players, which is worse
+     * than a slightly longer wait. The preference deserved the same treatment
+     * and had never been given it.
+     */
+    if (!prefsSettled && !rosterSourceFromUrl) return;
     if (rosterSource === 'fantasy' && !espnStatusSettled) return;
     loadReport();
     // `fantasyTeamId` because the report is *about* that team's players: pick a
     // different one on the Fantasy league page and this is what re-reads it.
-  }, [loadReport, roster, rosterSource, espnStatusSettled, fantasyTeamId]);
+  }, [
+    loadReport,
+    roster,
+    rosterSource,
+    prefsSettled,
+    rosterSourceFromUrl,
+    espnStatusSettled,
+    fantasyTeamId,
+  ]);
 
   /**
    * Re-read everything that comes from ESPN, past the server's ten-minute
