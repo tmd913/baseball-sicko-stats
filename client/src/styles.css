@@ -594,6 +594,24 @@ body {
      less the app's own side padding — and let the button ellipsize inside,
      rather than letting one long address decide how wide the menu is. */
   max-width: min(320px, calc(100vw - 44px));
+  /* And capped against the window's *height*, so it cannot run off the bottom
+     of a short one — see `hooks.ts::usePopoverFit`, which measures how much
+     room there is below where this starts and publishes it here. With the
+     color-scheme picker at its head this menu is 403px tall, which is 71px past
+     the foot of a phone held sideways; capped, it scrolls instead and every
+     entry is reachable.
+
+     The fallback is what it resolves to for the one frame before the
+     measurement lands, and is deliberately generous rather than exact: the
+     anchor measures 58px from the top of the window in every state checked, so
+     70 is that plus the gutter, and being a frame late with a slightly wrong
+     cap is better than being a frame early with none. */
+  max-height: var(--popover-max-h, calc(100dvh - 70px));
+  overflow-y: auto;
+  /* The app's own rule for anything that scrolls: the gesture is consumed where
+     it lands rather than chaining on to the page behind — see the note beside
+     `html { overscroll-behavior: none }`. */
+  overscroll-behavior: none;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -10864,6 +10882,34 @@ button.start-line:focus-visible {
 }
 .onboard-field {
   margin-bottom: 18px;
+}
+/* **The color-scheme picker on the invite page**, which is the settings
+   popover's own `ThemeSwatches` in a field three times as wide — and the two
+   things that follow from the width.
+
+   **It wraps into columns instead of stacking.** The popover's `flex: 1 1 100%`
+   is argued for a menu 193–251px wide, where two labels genuinely do not fit
+   and a wrapping row packed them 1 / 2 / 1; neither is true here. A basis
+   rather than a column count, so the count falls out of the width and no
+   breakpoint has to be maintained: **160px** puts two per row from 390px of
+   window up (the field is 358 there, so each is 175.5) and 226.5 at 640 and
+   above, and drops to one at 320, where the field is 288. Three would need a
+   basis under 148.7 at the 460px field, and `Powder Blue` — the longest label
+   the picker has, 75.7px of ink — needs 129.7 with its pill and padding, so
+   three columns would be nine pixels from clipping. Six rows became three:
+   **235px → 118**.
+
+   **And the label sits beside its own pill rather than centered.** The popover
+   centers it because its rows are narrow and a column of names reading down one
+   center is what makes six buttons read as one list; measured at this page's
+   460px field that same rule left the 26px pill at the far left with the name
+   114px away, which reads as two things on a row rather than a labelled swatch.
+   Left-aligned, the pair is one object at every width. */
+.onboard-scheme .theme-swatch {
+  flex: 1 1 160px;
+}
+.onboard-scheme .theme-swatch-label {
+  text-align: left;
 }
 .onboard-actions {
   margin-bottom: 22px;

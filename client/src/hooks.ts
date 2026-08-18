@@ -789,6 +789,72 @@ export function useDismissable(
 }
 
 /**
+ * The most a popover may be tall: whatever is left of the window below where it
+ * starts. Published onto the element as `--popover-max-h`, which the stylesheet
+ * turns into a `max-height` beside an `overflow-y: auto`.
+ *
+ * **The settings popover outgrew the window, which is what this is for.** It
+ * hangs off the gear at `top: calc(100% + 8px)` with no cap at all, so its
+ * height was simply the sum of what is in it — and the color-scheme picker at
+ * the head of it is one row per theme. At four themes it was 329px; at six it
+ * is **403px, with its foot at 461**, and measured across eight window sizes
+ * that foot is 41px past the bottom of a 420px window, **71px past a phone held
+ * sideways (844×390)** and 81px past a 380px one, with `How to use` unreachable
+ * in every one of them. A menu that cannot be reached to the end is a menu with
+ * entries nobody can press.
+ *
+ * **Measured rather than declared, for the reason `--chrome-h` is.** The cap is
+ * the window less the popover's own distance from the top of it, and nothing in
+ * CSS can read that: the popover is `position: absolute` inside the header, so
+ * its offset is the header's geometry, which wraps to two and three rows as the
+ * window narrows and which moves again the day anything is added to the brand
+ * row. Measured, the anchor is at **58px in all eight states** — every width,
+ * every view, sticky chrome or fixed-height column — so a constant would be
+ * right today and silently wrong later, which is exactly the trap
+ * `--research-pin-left` and `left: 63px` are on the record for.
+ *
+ * **Three triggers, each for something the others cannot see.** Opening is when
+ * the element exists to be measured; `resize` is a window that changed under an
+ * open menu (a phone turned sideways is the case this whole hook is about); and
+ * a **capture-phase `scroll`** is the one that is easy to miss — under
+ * `max-height: 560px` the app's chrome is deliberately *not* sticky, which is
+ * precisely a short window, so scrolling there carries the anchor up the page
+ * and the room below it grows. A scroll event does not bubble, hence capture.
+ *
+ * It cannot feed back on itself: capping a box's height does not move its top,
+ * so the measurement is the same before and after it is applied.
+ */
+export function usePopoverFit(open: boolean, ref: RefObject<HTMLElement | null>) {
+  useLayoutEffect(() => {
+    if (!open) return;
+    const el = ref.current;
+    if (!el) return;
+    const sync = () => {
+      const top = el.getBoundingClientRect().top;
+      // The floor is for the degenerate case only — an anchor scrolled off the
+      // bottom of the window would otherwise compute a negative height, which
+      // is an invalid `max-height` and so no cap at all, i.e. the bug back
+      // again. Below it the popover is off screen whatever it is told.
+      const room = Math.max(POPOVER_MIN_H, window.innerHeight - top - POPOVER_GUTTER);
+      el.style.setProperty('--popover-max-h', `${Math.round(room)}px`);
+    };
+    sync();
+    window.addEventListener('resize', sync);
+    document.addEventListener('scroll', sync, true);
+    return () => {
+      window.removeEventListener('resize', sync);
+      document.removeEventListener('scroll', sync, true);
+    };
+  }, [open, ref]);
+}
+/** Breathing room left under a capped popover, so it stops short of the edge
+ *  rather than on it. */
+const POPOVER_GUTTER = 12;
+/** See the note in `usePopoverFit` — a floor for an anchor that is itself off
+ *  screen, not a minimum anybody is meant to read a menu at. */
+const POPOVER_MIN_H = 120;
+
+/**
  * Give one element the whole browser page, and take it back.
  *
  * These tables are the app's widest things by some way — the research board
