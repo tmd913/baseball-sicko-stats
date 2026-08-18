@@ -10072,23 +10072,23 @@ button.start-line:focus-visible {
 .view-bar > .plays-panel {
   flex: 1 1 100%;
 }
-/* Tighter than a control on the tab row: six of these plus `New` share one line,
-   and each is two to five characters where a labeled toggle is a word. */
+/* Tighter than a control on the tab row: seven of these plus `New` share the
+   row, and each is two to five characters where a labeled toggle is a word. */
 .plays-chip {
   height: 30px;
   padding: 0 10px;
   font-size: 12px;
 }
-/* `New` composes differently from the six before it — they union with each other
-   and it narrows what they selected — so a wider gap says so.
+/* `New` composes differently from the seven before it — they union with each
+   other and it narrows what they selected — and it says so with its **word** and
+   its red count rather than with any spacing of its own.
 
-   It was a 1px hairline and the wrap is what retired it: this panel breaks where
-   the window says, so at 390px `New` drops to a second line and the rule was
-   left at the end of the first with nothing after it. A gap cannot dangle. Its
-   own red count and its word carry the rest of the distinction. */
-.plays-chip-new {
-  margin-left: 10px;
-}
+   Two devices came before that and each failed on the wrap. A 1px hairline was
+   left dangling at the end of a line with nothing after it once the panel broke;
+   a wider gap cannot dangle, and at seven chips it read as a second *group*
+   whose daylight landed wherever the window put the break rather than where the
+   argument wanted it. So the chip is spaced like every one beside it and only
+   `.plays-chip-new.on` still has a rule, for the count's own colour. */
 /* The unseen count, on the chip as well as on the red button — one figure read
    in two places, so the panel says how much `New` would show before it is
    pressed. Red for the reason the button is, and dropped once the filter is on:
@@ -12116,6 +12116,13 @@ button.start-line:focus-visible {
   max-width: var(--mup-card-w);
   margin: 0 auto;
 }
+/* **A projected comparison is drawn as a projection.** The scoreboard card says
+   it with a dashed border and this is the same claim about the same twenty
+   figures, so it says it the same way — one mark for the whole card, every
+   figure on it being projected, rather than a mark per cell repeating it. */
+.mup-card.mup-proj {
+  border-style: dashed;
+}
 /* The two names, with the categories' own middle column between them: `1fr auto
    1fr` so the two sides are the same width whatever their names are, which is
    what keeps the figures under them in two straight columns. */
@@ -12857,6 +12864,13 @@ span.mup-move-name:hover {
   max-width: var(--card-column);
   margin: 0 auto;
   padding-bottom: 12px;
+  /* The anchor the `Projected` key opens from — `.lg-head`'s own job on the
+     Scoreboard, and here for the identical measured reason: `.lg-proj-key` is
+     `position: static` so its 320px panel hangs off the **row** rather than off
+     a 30px button, which at the right edge of a phone would put it off the
+     screen. `right: 0` then means this row's right edge, which is inside the
+     reading column at every width. */
+  position: relative;
 }
 /* On a bye the head names the team where the strip would be — there is nothing
    to choose between, and the reader still has to be told whose roster this is.

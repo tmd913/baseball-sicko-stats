@@ -372,6 +372,109 @@ KB** (22.59 → 22.69) — 0.52KB raw and 0.10KB over the wire, nearly all of it
 comments arguing the two derivations and the cascade fix. The JS is flat because
 nothing about the components moved: this is `styles.css` alone.
 
+### The Projected toggle
+
+**The Summary's figures are where the week has got to, and one press swaps them
+for where it is heading** — the same control the Scoreboard carries, drawn in the
+matchup's own head. Why this page did not have one, and why each of the three
+arguments against it is answered rather than waved away, is in **Client — the
+League view**, *The matchup page follows now*; where the projection itself comes
+from is **ESPN fantasy league**, *Where a live matchup is heading*. What is this
+page's own is set out here.
+
+**It is `ProjectedTools` and `asProjected`, both the Scoreboard's** — one button
+and one swap drawn in two places, rather than two that agree today. The card's
+whole job is to set two sides against each other across the categories and mark
+the winner, and that arithmetic is identical whether the figures are what has
+happened or what is going to, so the **data** is swapped and every line below it
+is code that was already checked: the rows, the bars, the group tallies, the
+meter and the leading name are untouched.
+
+**Three things say it is a projection**, which is this app's standing rule that an
+estimate never wears the same clothes as a measurement. The head's tag reads
+**`Projected`** in the accent where it read `Live` — *replacing* it rather than
+joining it, since the tag says what the figures **are** and two of them would be
+the page claiming to be both. The dates beside it run to the **end of the period**
+(`projection.end`) where `board.end` truncates at today, which is right for
+figures that are what has happened and a lie over figures that reach the end of
+the week. And the card takes a **dashed border** (`.mup-proj`), which is the
+scoreboard card's own mark at the same size and for its reason: every figure on it
+is projected, so marking each cell would be the same claim made twenty times.
+
+**On the Summary page alone**, and the tag is gated with the button rather than
+left in the shared head: a team page is that manager's roster and feed over a span
+the reader picks, so a control there would be a setting lying about its reach and
+a `Projected` tag over a roster table would be calling its figures something they
+are not. Crossing to a team page and back leaves the lens where the reader put it.
+
+**And on a live categories week alone**, which is the Scoreboard's own pair of
+gates: a points league's Summary is one number a side and the projection fills
+categories, and a settled week has nothing left to happen — which the server says
+in as many words (`ok: false`, `note: 'settled'`), and which is why the button is
+**absent rather than disabled**, a disabled control inviting the reader to work
+out why. A **bye** has no Summary page at all, so it has no toggle either.
+
+**What the chart behind a row is, is unchanged**, and the row's title says so
+while projected: the series is a **running total of the days played**, which a
+projection is not, so a reader pressing a projected `63` and finding a line
+ending at 35 is told before they press rather than after. The card's own ⓘ is the
+`How to read these bars` key and the toggle's is `How the projection is worked
+out`, which are two different questions and stay two panels.
+
+**Measured on the live 12-team league, matchup 110, at 1200×900**, pressing the
+toggle and pressing it back:
+
+| | live | projected |
+| --- | --- | --- |
+| head tag | `Live` (`lg-state-live`) | **`Projected`** (`lg-state-proj`) |
+| dates | Aug 10 – Aug 18 | **Aug 10 – Aug 23** |
+| card | `mup-card`, `border-style: solid` | **`mup-card mup-proj`, dashed** |
+| `R` | 35 – 27 | **63 – 57** |
+| `HR` | 13 – 2 | **24 – 11** |
+| URL | *(no `proj`)* | **`proj=1`** |
+| the button's own box | 111.5 × 36 at x=854.5 | **unchanged** |
+
+and pressing it back gives the live column byte for byte.
+
+**The four gates were driven rather than reasoned about**, each scoped to the page
+rather than to the document — the League view *behind* the overlay draws its own
+`Projected` button, which is what made a first pass read as the toggle leaking
+onto every page:
+
+| | toggle in the page | head tag |
+| --- | --- | --- |
+| Summary, live week | **yes** | `Projected` |
+| a team page (`mt=`) | **no** | `Live` |
+| a bye (`mup=109`) | **no** | `Live` |
+| a settled week (`mp=18`) | **no** | `Final` |
+
+**The ladder is unmoved**, one press of Escape undoing one thing: with the key
+open, the first press closes the key and leaves the page (`[inert]` still
+`.app-chrome`, `.league-view`, `.float-btn`), and the second closes the page,
+clearing `mup=`, keeping `proj=1` on the board behind it and leaving **0** inert.
+
+**What it costs the head is a wrapped line below 640**, measured by A/B'ing the
+control out of the same page: `.mup-chrome` **114 → 160px** at 375, 390 and 480,
+and **145 → 191** at 320, with **0 horizontal overflow of the page body or the
+view** at 320 / 375 / 390 / 480 / 640 / 900 / 1200 / 1920 and the button at a
+constant 111.5 × 36 throughout. Dropping the label to the glyph below 640 was
+measured and buys the line back only at **430 and 480** — at 390 the row comes to
+389.6px against the 358 a phone leaves, so it costs the word where it does not
+help — which is the Scoreboard's own recorded conclusion, and the label stays for
+the second reason besides: it is one control drawn twice, and a media query here
+that the Scoreboard has not would make the two differ.
+
+**The key's panel is anchored to the Back row**, which is why `.mup-bar` gained
+`position: relative`: `.lg-proj-key` is `position: static` so a 320px panel hangs
+off the **row** rather than off a 30px button, which at the right edge of a phone
+would put it off the screen. Measured at 390: **320 × 380 at x=48, fully inside
+the viewport**.
+
+**Bundle: 568.44 → 569.24 KB of JS** (169.15 → 169.38 gzipped) and **153.52 →
+153.55 KB of CSS** (27.39 → 27.48) — 0.8KB and 0.03KB raw, 0.23KB and 0.09KB over
+the wire, and that figure carries the feed's RBI chip as well as this; the
+paragraphs arguing them cost the bundle nothing.
+
 ### A category row opens its chart
 
 **A row of the comparison is a press, and it draws that category day by day for

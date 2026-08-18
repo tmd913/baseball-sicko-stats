@@ -2482,11 +2482,15 @@ export default function App() {
     // param here follows.
     if (view === 'league' && leagueTab !== 'scoreboard') p.set('lt', leagueTab);
     // Where the week is heading rather than where it has got to. Scoped to the
-    // Scoreboard tab, which is the one page that draws it — Rankings has its own
-    // spans and Transactions has no figures to project, so carrying it there
-    // would be a param naming a lens that is not in force, which is the test
-    // `starters=1` already applies to itself.
-    if (view === 'league' && leagueTab === 'scoreboard' && projected) p.set('proj', '1');
+    // two pages that draw it — the Scoreboard and a matchup opened over any tab
+    // — where Rankings has its own spans and Transactions has no figures to
+    // project, so carrying it there would be a param naming a lens that is not
+    // in force, which is the test `starters=1` already applies to itself. The
+    // pair is `needsScoreboard`'s own, one question later: the same two places
+    // that need the board are the two that can project it.
+    if (view === 'league' && (leagueTab === 'scoreboard' || matchupId != null) && projected) {
+      p.set('proj', '1');
+    }
     // Which matchup is open **over** the view, which is a page rather than a
     // tab — so it is written whatever tab is behind it, and a link carrying it
     // opens that page the way `player=` opens a player's.
@@ -5060,6 +5064,13 @@ export default function App() {
             setMatchupTeam(null);
           }}
           onOpenDetails={setDetailsKey}
+          /* The same three the Scoreboard gets, so the `Projected` toggle is
+             one control over one lens rather than two that can disagree: the
+             state is in the URL up here and the read is one per period, so
+             projecting the board and then opening a card fetches nothing. */
+          projection={projection}
+          projected={projected}
+          onProjected={setProjected}
           /* The app's own named spans, so `Today` means one thing in the app —
              the matchup's own week is added to them in there, that being the
              one named range which means something only on this page. */

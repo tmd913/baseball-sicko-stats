@@ -130,8 +130,8 @@ const XBH_EVENTS = new Set(['double', 'triple', 'home_run']);
 /**
  * Which of the filter chips a stream item answers to.
  *
- * A **set** rather than one kind, because the six overlap by construction: a
- * home run is a hit and an extra-base hit and — nearly always — a play with
+ * A **set** rather than one kind, because the seven overlap by construction: a
+ * home run is a hit, an extra-base hit, an RBI and — nearly always — a play with
  * film. That overlap is the whole reason the chips union rather than partition
  * (see `FeedFilters.tsx`), and it is why the test is "does this item answer any
  * of the chips that are on" rather than "is its kind among them".
@@ -150,6 +150,12 @@ function playKinds(e: FeedEntry): Set<PlayFilterKey> {
     if (kind === 'hr') out.add('hr');
     if (kind === 'hr' || kind === 'hit') out.add('hit');
     if (e.pa.event && XBH_EVENTS.has(e.pa.event)) out.add('xbh');
+    // The other half of `run`: that one is him crossing the plate and this is
+    // him sending somebody else over it. Read off the plate appearance's own
+    // `rbi` rather than off the event, because a run bats in on plays that are
+    // not hits at all — a sacrifice fly, a groundout, a bases-loaded walk — and
+    // an event list would have to enumerate them and would miss the next one.
+    if (e.pa.rbi > 0) out.add('rbi');
     if (e.pa.playId) out.add('video');
     return out;
   }
@@ -165,7 +171,7 @@ function playKinds(e: FeedEntry): Set<PlayFilterKey> {
 }
 
 /**
- * **Whether an item survives the filters** — the six union, `New` narrows.
+ * **Whether an item survives the filters** — the seven union, `New` narrows.
  *
  * Two axes rather than one, which is `inc=`/`watch=1`'s own split on the
  * research board: the chips ask *what kind of play* and `New` asks *when*, so
