@@ -327,188 +327,35 @@ The badge lands at the same x as the matchup row's own (35 at 390, 213 at
 a line that was already 19px of text and padding — and the block itself is
 **84 → 69px**, taking a matchup card from **281.97 → 251.97**.
 
-### A category opens a chart of how it moved
+### A category's chart is on the matchup page, not here
 
-**A cell on the category line is a press, and it draws that category day by day
-for both sides of the matchup.** `R 31–23` is where the week got to; the chart
-is how it got there, which is the half a manager can still act on — a lead built
-on the Monday and defended since reads identically on the card to one taken on
-the Saturday.
+**This section used to describe a press on a scoreboard cell, and the press has
+moved.** What stood here was the whole of it — the value cell as the target, a
+real `<button>` stopping the press reaching the card, 20 tab stops a card and
+200 on a ten-card board, the dotted underline and the measured 50%, and a hint
+line under the period head. It shipped working and **nobody could find it**,
+which is on the record because it had to be reported: *"how do I view it? I
+don't see it."*
 
-**The value cell is the target rather than the column header.** That is where
-the eye and the finger already are on a five-column grid of numbers, and the
-header is deliberately **not** a second target: it would put a third tab stop on
-every category for a chart the cells already open. Both rows of a column open
-the same chart, which is right — the chart is about the *category* rather than
-about one side's figure — and it means whichever number the reader is looking at
-is the one they can press.
+**The placement was the fault rather than the affordance.** A card here is a
+*summary* — ten of them, each a grid of twenty figures, on a page whose job is
+to be scanned — and a chart of one category is a thing you *study*. Hanging the
+study tool off one number of the summary put the two at odds: the figure is four
+characters wide, and the card around it is itself a press into the matchup, so
+the plain reading is "the card is the button" and the numbers in it are text.
+Marking the numbers harder was answering the wrong question; the underline and
+the hint are gone with the press.
 
-**It is a real `<button>` inside the cell, and it stops the press reaching the
-card.** The whole card is a door into the matchup page, so without that a press
-on a number would open the matchup rather than the chart; Enter and Space bubble
-as *keydowns* to the card's own handler, so both are stopped too. Measured: a
-click, an Enter and a Space each open the chart with the URL unchanged and no
-`.mup-view` drawn, while a press on the card itself still writes `mup=110` and
-opens the page.
+**It is the matchup page's now**, where the rows *are* the category comparison
+and a row is 862 × 40px rather than four characters — see **Client — a league
+matchup**, *A category row opens its chart*. The scoreboard cell is a plain
+`<span>` again with its title, exactly as it was before any of this: measured on
+the built client, **0** `.lg-cat-btn`, **0** `.lg-cat-hint`, and
+`text-decoration: none` on the cell.
 
-**The cost is 20 tab stops a card, 200 on a ten-card board.** That is the price
-of the value being the target, and it is the price this app's widest tables
-already pay by the row; the alternative — the header alone — halves it and puts
-the target where nobody is looking.
-
-**A category with no figure is not a press.** A side ESPN reports as ineligible
-has no score, and the cell stays the plain span it always was, so a press can
-never open a chart with nothing in it.
-
-**The state class stays on the cell and the button inherits it**, which is the
-one thing that had to be got right: `color: inherit` on the button is what makes
-the reset invisible, and at equal specificity it *beats* `.lg-cat-win`'s own
-color — measured before the fix, a winning cell came back `--text` instead of
-`--win` in all three themes checked. Inherited from the span, the three color
-rules are untouched and the bold weight comes along with them.
-
-**The hover is scoped to `(hover: hover)`**, the app's own rule: on a touch
-device `:hover` has no pointer to move away, so a finger dragged down the board
-would leave the last cell it crossed looking chosen. Measured under touch
-emulation after a tap-and-close, the cell is still `:hover` and its background is
-back to `rgba(0, 0, 0, 0)` — the element is still hovered and the *rule* is what
-stopped applying.
-
-**Nothing at rest said the figures were pressable, and that was reported as
-"I don't see it".** Everything above describes a working control that a reader
-could not find: the cell drew as a plain number on a transparent ground, and its
-only two signals — `cursor: pointer` and the hover tint — both need a pointer.
-On a touch device there was no affordance at all, and with a pointer you had to
-already be hovering the thing you were looking for. Worse, the **card around it
-is itself a press** (it opens the matchup page), so the natural reading is "the
-card is the button" and the numbers inside it are text. Measured on the built
-client: `text-decoration: none`, background `rgba(0, 0, 0, 0)`, no border, no
-icon.
-
-**A dotted underline is the standing mark**, drawn in `currentColor` rather than
-a token so it is each cell's own state at a lower strength — the winning figure
-is `--win` and the losing one muted, and the underline can therefore never
-contradict the colour the table is already spending on the outcome. It costs
-**no layout**: `text-decoration` is not in flow, so the card is **189.98px**
-and its category rows **[18, 21, 18, 21]** before and after, at 320, 390 and
-1200 alike. Under the pointer it goes to full strength, so the hover tint says
-*which* cell and the mark says what in it is pressable.
-
-**50% is a measurement.** A dotted underline is a meaningful non-text indicator
-and owes 3:1 against its ground, and the binding theme is the light one — a mix
-toward a white page loses far more than the same mix toward a dark one. Swept
-across all four themes on a real card, 45% gave 3.94 / 3.85 / 4.00 on Midnight,
-Lavender and Maroon and **2.93 on Powder Blue**, under the bar on exactly the
-theme where a faint mark is hardest to see. 50% is the lowest step that clears
-it everywhere (3.40 on Powder, 4.57–4.75 on the darks); 55% and up clears it
-further and starts reading as a second underline of the text rather than a hint
-under it.
-
-**And one line names the gesture, once for the page.** `.lg-cat-hint` sits under
-the period head — *Press any figure for a day-by-day chart of that category.* —
-rather than on each card, which would be ten copies of one sentence on the app's
-densest page. It is drawn on the **categories** format alone: a points league has
-one number a side and no pressable cell, so the hint would name a gesture that
-isn't there. The wording was cut down to fit: the first draft wrapped to two
-lines at 390, and this one is **15px at 390 and 1200** and two lines only at 320,
-which is the width this page already pays a line for everything at.
-
-**Re-checked after both marks**, with a real dispatched mouse click rather than a
-synthetic one: the press opens `Runs — week 19` with its chart drawn, does **not**
-fall through to the matchup page, leaves one `inert` while open, and one Escape
-closes it with **0** left inert and the URL untouched. Page-body overflow is 0 at
-320, 390 and 1200.
-
-### The chart itself
-
-`components/MatchupSeriesChart.tsx`, in the app's shared `Modal` — so it
-inherits the layer ladder, the body lock, the `inert` background and the rule
-that one press of Escape undoes one thing. Measured: `inert` is `#root` while it
-is open, one Escape closes it and leaves the League view standing, and nothing is
-left inert afterwards.
-
-**Every figure is a running total after that day**, which is the only reading
-that ends where the card above it does. Checked in a browser rather than
-inferred: over **all 20 category charts of one card, at 1200 and at 390, the
-last point of a series equals the cell that opened it — 0 mismatches at either
-width**.
-
-**The house style is `RollingXwoba`'s and each borrowing is deliberate.**
-
-- **Labels are sized in rendered pixels, not viewBox units.** A viewBox unit is
-  a different number of pixels in every box this is drawn in — the dialog is
-  720px wide on a desktop and 358 inside a phone's — so a label declared in
-  units renders at half the size at one of them. `--mser-font` carries the unit
-  count that renders at 12px whatever the width, published from a
-  `ResizeObserver` exactly as `--roll-font` is. Measured, the label's line box
-  is **15px at both widths**.
-- **`touch-action: pan-y` on the plot.** This chart consumes no gesture at all,
-  so the declaration claims nothing; it is there because `none` is the mistake
-  `.roll-chart` already records, where a thumb landing on the plot could not
-  scroll the page under it.
-- **A legend under the chart rather than labels inside the plot**, for the
-  reason that one records: a label painted at the end of a line sits exactly
-  where the *other* line is most likely to be. Each item is the swatch, the
-  team's abbreviation and its final figure, and `.mser-legend` is folded onto
-  `.summary-legend`'s rule — the app has one legend.
-
-**Color marks state, and the state is who is taking the category**: `--win` for
-the side ahead at the last day both are known for, `--muted` for the other. That
-is the same pair the card's own cells use, so the reader has one key rather than
-two, and it is the same comparison `outcome` makes — a tie leaves both lines
-muted, which is what a tie looks like. The swatch carries the class itself
-rather than inheriting it, which was a bug worth measuring: with the class on the
-wrapping `<svg>` both swatches came back `--muted` in all three themes.
-
-**The axis is in round numbers.** Three intervals over a `nice` step, so the four
-gridlines land on figures a reader recognizes — `0 · 15 · 30 · 45` rather than
-the `0 · 11.9 · 23.8 · 35.6` a bare min-to-max range produces. A counting
-category is anchored at **zero** besides, which is what makes the shape of a week
-readable: a run of home runs from 9 to 13 on its own range is a cliff and on a
-zero axis is four home runs. **The step has to cover the range as well as be
-round** — the bottom line is snapped down to a multiple of the step, so three
-intervals from there need not reach the top — and walking the ladder until it
-does makes clipping a point off the plot impossible rather than unlikely
-(checked over 13 hostile shapes including a flat series, a zero range and a
-0–0.001 one: **0 uncovered**).
-
-**The x ticks are walked back from the last day**, which keeps the spacing even
-*and* always labels the day the reader cares most about. Forward, an eight-day
-week labeled `Aug 10 · 12 · 14 · 16` and then forced the 17th on as well, so the
-two ran together at the right edge of a phone.
-
-**A bye is one line and says so**, which is a real shape rather than a failure —
-the live league's first playoff round is two matchups and eight byes. Measured on
-the reader's own bye: one path, one legend item, and no `--win` mark, there being
-nobody to be ahead of. **A points league has no category line at all** so nothing
-is pressable, and a roto league has no matchups; neither can reach this.
-
-**What the chart cannot say for itself, it says in a line under the legend.** A
-live period reads `The last point is today so far — the day is still being
-played`, and a series short of its days names them: measured with the last three
-days marked unreadable, the note reads `ESPN would not answer for the last 3 days
-of this period, so the lines stop where the totals stop being knowable`, the
-lines stop at five points and the legend shows the last **known** figure (19/17
-rather than 33/25) rather than a total it cannot stand behind.
-
-**The read is lazy and one per period**, held by the Scoreboard tab rather than
-by the card: the series is a fact about the *week*, so one read serves all ten
-cards and a second category costs nothing. A period change throws it away. A
-failed read draws the server's own message inside the box (`Couldn't read the
-day-by-day totals: Upstream is having a day`) and, because the request is marked
-answered only once it *is* answered, pressing again retries it.
-
-**Measured at 1200×900 and 390×844**: the box is **720 × (svg 694 × 289)** and
-**358 × (332 × 138)**, the dialog body and the page body each overflow by **0**,
-`touch-action` computes `pan-y`, and the chart draws in all four color schemes
-with the two lines resolving each theme's own `--win` and `--muted` (Midnight
-`rgb(56, 189, 248)` / `rgb(142, 160, 196)`, Maroon `rgb(143, 192, 234)` /
-`rgb(189, 163, 174)`, Powder Blue `rgb(140, 37, 69)` / `rgb(85, 64, 74)`).
-
-**Bundle for both features together: 550.02 → 557.30 KB of JS** (163.06 → 165.46
-gzipped) and **147.02 → 148.08 KB of CSS** (26.21 → 26.42) — 7.3KB and 1.1KB
-raw, 2.4KB and 0.21KB over the wire, for a chart, a route, a shared toggle, a
-shared projection and the paragraphs above restated where the rules are.
+**What survives untouched is everything below the press** — the route, its
+caching, the series semantics and the chart component — which is why moving it
+cost the server nothing at all.
 
 ### The four league formats, and the two it refuses to guess at
 

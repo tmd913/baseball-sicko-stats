@@ -369,6 +369,162 @@ KB** (22.59 → 22.69) — 0.52KB raw and 0.10KB over the wire, nearly all of it
 comments arguing the two derivations and the cascade fix. The JS is flat because
 nothing about the components moved: this is `styles.css` alone.
 
+### A category row opens its chart
+
+**A row of the comparison is a press, and it draws that category day by day for
+both sides of the matchup.** `R 31–23` is where the week got to; the chart is
+how it got there, which is the half a manager can still act on — a lead built on
+the Monday and defended since reads identically on the card to one taken on the
+Saturday.
+
+**This is where the press moved to, and the move is the interesting part.** It
+was first built on the **scoreboard**, hung off a single figure in a matchup
+card, and it shipped working and undiscoverable — it had to be reported (*"how
+do I view it? I don't see it"*) before anyone found it. Two things were wrong
+and only one of them was the affordance. A scoreboard card is a **summary**: ten
+of them on one page, each a grid of twenty figures, read by scanning. A chart of
+one category is a thing you **study**. And the card is *itself* a press into the
+matchup, so the plain reading is "the card is the button" and the figures in it
+are text — which is what they looked like, a four-character number on a
+transparent ground. Marking those numbers harder (a dotted underline, measured
+to 3:1 across four themes, and a hint line) was answering the wrong question,
+and all of it went with the press.
+
+**The matchup page is where the question is already being asked.** It is the
+page you open to study one matchup; its rows *are* the category comparison, each
+carrying both figures, both bars and the category between them; and a row is one
+object about one category, so pressing any part of it asks the obvious thing.
+Measured, the target goes from four characters to **862 × 40px** at 1200 and the
+full width of the card at every width.
+
+**A real `<button>`, not a `role="button"` div**, because here it can be one —
+nothing inside the row is interactive, so Enter and Space come from the browser
+rather than from a keydown handler of ours. That costs a reset (`appearance`,
+border, background, font, color, text-align) and a `width: 100%`, a button being
+shrink-to-fit; and it costs **no layout at all**. Measured before → after at 320
+/ 390 / 1200, the row is **37 / 37 / 40px**, the grid resolves
+`52px 46px 42px 46px 52px` / `52px 81px 42px 81px 52px` /
+`64px 321px 52px 321px 64px`, the group head resolves the *same* template, the
+category label still centers on the row's own category column (160 / 195 / 600)
+and the card is 1038.47 / 1038.47 / 1061.50 — every figure byte-identical.
+
+**The hover is scoped to `(hover: hover)`**, the app-wide rule: a touch device
+has no pointer to move away, so an unscoped tint stays on the last row a finger
+crossed and reads as a selection the page then declines to act on.
+
+**And one line names the gesture, once for the page.** *Press any category for a
+day-by-day chart of the week.* — centered over the comparison the way the group
+heads are, on the **categories** format alone, since a points league has one
+number a side and no row to press. It is there because the hover is not enough
+on touch, and because this feature has already been invisible once. It costs the
+card **25px** (15px of line and its 10px margin) at 390 and 1200, and 40 at 320
+where it takes two lines.
+
+**Measured end to end on the live league**, with a real dispatched mouse click
+rather than a synthetic one: 10 rows, each a `BUTTON` with `cursor: pointer` and
+an `aria-label` naming the category; the press opens `Runs — week 19` with its
+chart drawn at **z-index 49** — the matchup page is 48, so this is the next rung
+of the ladder — with 4 elements `inert` behind it; one Escape closes the chart
+and **leaves the matchup page standing**, a second closes the page, clearing
+`mup=` and leaving **0** inert. Page and view overflow are **0** at 320, 390 and
+1200.
+
+**A bye has no Summary page at all**, so it has no category rows and nothing to
+press — the door on a bye card goes straight to that manager's roster. Worth
+knowing when testing: in a playoff week 8 of the 10 cards are byes, and clicking
+the first card lands on a roster rather than a comparison.
+
+### The chart itself
+
+`components/MatchupSeriesChart.tsx`, in the app's shared `Modal` — so it
+inherits the layer ladder, the body lock, the `inert` background and the rule
+that one press of Escape undoes one thing. Measured: `inert` is `#root` while it
+is open, one Escape closes it and leaves the League view standing, and nothing is
+left inert afterwards.
+
+**Every figure is a running total after that day**, which is the only reading
+that ends where the card above it does. Checked in a browser rather than
+inferred: over **all 20 category charts of one card, at 1200 and at 390, the
+last point of a series equals the cell that opened it — 0 mismatches at either
+width**.
+
+**The house style is `RollingXwoba`'s and each borrowing is deliberate.**
+
+- **Labels are sized in rendered pixels, not viewBox units.** A viewBox unit is
+  a different number of pixels in every box this is drawn in — the dialog is
+  720px wide on a desktop and 358 inside a phone's — so a label declared in
+  units renders at half the size at one of them. `--mser-font` carries the unit
+  count that renders at 12px whatever the width, published from a
+  `ResizeObserver` exactly as `--roll-font` is. Measured, the label's line box
+  is **15px at both widths**.
+- **`touch-action: pan-y` on the plot.** This chart consumes no gesture at all,
+  so the declaration claims nothing; it is there because `none` is the mistake
+  `.roll-chart` already records, where a thumb landing on the plot could not
+  scroll the page under it.
+- **A legend under the chart rather than labels inside the plot**, for the
+  reason that one records: a label painted at the end of a line sits exactly
+  where the *other* line is most likely to be. Each item is the swatch, the
+  team's abbreviation and its final figure, and `.mser-legend` is folded onto
+  `.summary-legend`'s rule — the app has one legend.
+
+**Color marks state, and the state is who is taking the category**: `--win` for
+the side ahead at the last day both are known for, `--muted` for the other. That
+is the same pair the card's own cells use, so the reader has one key rather than
+two, and it is the same comparison `outcome` makes — a tie leaves both lines
+muted, which is what a tie looks like. The swatch carries the class itself
+rather than inheriting it, which was a bug worth measuring: with the class on the
+wrapping `<svg>` both swatches came back `--muted` in all three themes.
+
+**The axis is in round numbers.** Three intervals over a `nice` step, so the four
+gridlines land on figures a reader recognizes — `0 · 15 · 30 · 45` rather than
+the `0 · 11.9 · 23.8 · 35.6` a bare min-to-max range produces. A counting
+category is anchored at **zero** besides, which is what makes the shape of a week
+readable: a run of home runs from 9 to 13 on its own range is a cliff and on a
+zero axis is four home runs. **The step has to cover the range as well as be
+round** — the bottom line is snapped down to a multiple of the step, so three
+intervals from there need not reach the top — and walking the ladder until it
+does makes clipping a point off the plot impossible rather than unlikely
+(checked over 13 hostile shapes including a flat series, a zero range and a
+0–0.001 one: **0 uncovered**).
+
+**The x ticks are walked back from the last day**, which keeps the spacing even
+*and* always labels the day the reader cares most about. Forward, an eight-day
+week labeled `Aug 10 · 12 · 14 · 16` and then forced the 17th on as well, so the
+two ran together at the right edge of a phone.
+
+**A bye is one line and says so**, which is a real shape rather than a failure —
+the live league's first playoff round is two matchups and eight byes. Measured on
+the reader's own bye: one path, one legend item, and no `--win` mark, there being
+nobody to be ahead of. **A points league has no category line at all** so nothing
+is pressable, and a roto league has no matchups; neither can reach this.
+
+**What the chart cannot say for itself, it says in a line under the legend.** A
+live period reads `The last point is today so far — the day is still being
+played`, and a series short of its days names them: measured with the last three
+days marked unreadable, the note reads `ESPN would not answer for the last 3 days
+of this period, so the lines stop where the totals stop being knowable`, the
+lines stop at five points and the legend shows the last **known** figure (19/17
+rather than 33/25) rather than a total it cannot stand behind.
+
+**The read is lazy and one per page**, held by the matchup page rather than
+by the card: the series is a fact about the *week*, so one read serves all ten
+cards and a second category costs nothing. A period change throws it away. A
+failed read draws the server's own message inside the box (`Couldn't read the
+day-by-day totals: Upstream is having a day`) and, because the request is marked
+answered only once it *is* answered, pressing again retries it.
+
+**Measured at 1200×900 and 390×844**: the box is **720 × (svg 694 × 289)** and
+**358 × (332 × 138)**, the dialog body and the page body each overflow by **0**,
+`touch-action` computes `pan-y`, and the chart draws in all four color schemes
+with the two lines resolving each theme's own `--win` and `--muted` (Midnight
+`rgb(56, 189, 248)` / `rgb(142, 160, 196)`, Maroon `rgb(143, 192, 234)` /
+`rgb(189, 163, 174)`, Powder Blue `rgb(140, 37, 69)` / `rgb(85, 64, 74)`).
+
+**Bundle for both features together: 550.02 → 557.30 KB of JS** (163.06 → 165.46
+gzipped) and **147.02 → 148.08 KB of CSS** (26.21 → 26.42) — 7.3KB and 1.1KB
+raw, 2.4KB and 0.21KB over the wire, for a chart, a route, a shared toggle, a
+shared projection and the paragraphs above restated where the rules are.
+
 ### The Summary page ends on the acquisitions
 
 **It is the one thing a category matchup turns on that is not a category.** A

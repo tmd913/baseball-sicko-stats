@@ -204,10 +204,12 @@ the League view**, *A bye card shows his week*.
 **A scoreboard cell is one number and the week that produced it is not.** `R
 31–23` says who is ahead and nothing about how: a lead built on the Monday and
 defended since reads identically to one taken on the Saturday, and only the
-second is still worth doing something about. So each category cell opens a chart
-of that category **day by day, both sides** (see **Client — the League view**,
-*A category opens a chart of how it moved*), and the whole of the work was
-establishing whether ESPN can answer for a day at all.
+second is still worth doing something about. So a category row on the **matchup
+page** opens a chart of that category **day by day, both sides** (see **Client —
+a league matchup**, *A category row opens its chart*; it was first hung off the
+scoreboard's own cells, and the passage there records why it moved). The whole
+of the work was establishing whether ESPN can answer for a day at all — and
+none of it changed with the caller.
 
 **It cannot, and the probes are written down here so nobody repeats them.** All
 figures the live 12-team league, matchup period 18, scoring periods 132–138.
@@ -302,7 +304,7 @@ paid on the first press.
 
 **Validated end to end through both routes**, which is the check that matters
 for a series whose whole claim is that it ends where the card does: the last
-point of every series equals the figure on the scoreboard cell that opened it —
+point of every series equals the figure on the card the chart is drawn beside —
 **120 of 120 cells on settled period 18** (worst 4.86e-9) and **120 of 120
 exactly** on the live period 19, where the two are bit-identical because the
 scoreboard's own figure is `cumulativeScore` plus the same day this sums.

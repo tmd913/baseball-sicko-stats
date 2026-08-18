@@ -1,7 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { answersEscape, useLockBodyScroll, useOverlayFocus } from '../hooks';
-import { DialogLayerContext } from './Modal';
+import { DialogLayerContext, Modal } from './Modal';
+import { MatchupSeriesChart } from './MatchupSeriesChart';
+import { LoadingLine } from './Loading';
+import { api } from '../api';
 import { BackButton } from './BackButton';
 import { InfoKey } from './InfoKey';
 import { DateRow, DateToggle } from './DateControls';
@@ -24,6 +27,7 @@ import { moveLabel } from './LeagueTransactions';
 import { easternDate } from '../lib';
 import type {
   EspnCategory,
+  EspnMatchupSeries,
   EspnMatchupSide,
   EspnScoreboard,
   EspnStandingsTeam,
@@ -636,6 +640,49 @@ export default function LeagueMatchupView({
     </div>
   );
 
+  /**
+   * **The chart behind a category row.** A press on a row of the comparison
+   * opens that category's day-by-day series for this matchup's two sides.
+   *
+   * It lives here rather than on the scoreboard, where it was first built. A
+   * scoreboard card is a *summary* — ten of them on one page, each a grid of
+   * twenty figures — and hanging a dialog off one of those numbers put a study
+   * tool on the page whose job is to be scanned; nothing about a bare figure
+   * said it was pressable, and the card around it is itself a press, so the
+   * plain reading was "the card is the button". This page is the one you open
+   * to *study* one matchup, its rows are already the category comparison, and
+   * a row is a target a finger can find.
+   *
+   * **Lazy on the first press**, which is what earns the series a route of its
+   * own: a week of ESPN rosters summed a day at a time has no business on the
+   * boot path of a page most readers open to look at a roster. Cached for the
+   * life of the page — a second category is free, and the page is remounted
+   * per matchup anyway.
+   */
+  const [openStat, setOpenStat] = useState<number | null>(null);
+  const [series, setSeries] = useState<EspnMatchupSeries | null>(null);
+  const [seriesError, setSeriesError] = useState<string | null>(null);
+  const asked = useRef(false);
+
+  const openCategory = useCallback(
+    (statId: number) => {
+      setOpenStat(statId);
+      if (asked.current) return;
+      // **Marked only once it is answered** — the rule this repo has written
+      // down four times now: a mark set before the fetch makes a failed read
+      // unrepeatable, and a failed chart has to be retryable by pressing again.
+      setSeriesError(null);
+      api
+        .espnMatchupSeries(board.matchupPeriod)
+        .then((r) => {
+          asked.current = true;
+          setSeries(r);
+        })
+        .catch((e: Error) => setSeriesError(e.message));
+    },
+    [board.matchupPeriod],
+  );
+
   if (!matchup) {
     return (
       <DialogLayerContext.Provider value={MATCHUP_LAYER}>
@@ -654,6 +701,8 @@ export default function LeagueMatchupView({
   }
 
   const { home, away } = matchup;
+  const openCat =
+    openStat === null ? null : board.categories.find((c) => c.statId === openStat) ?? null;
   /**
    * **Who is ahead**, which is deliberately not the same claim as who won.
    *
@@ -1107,6 +1156,22 @@ export default function LeagueMatchupView({
               </div>
             )}
 
+            {/* **One line naming the gesture, once for the page.** The row is
+                a large target with a hover tint, which is most of the job with
+                a pointer — and on touch there is no hover at all, so without a
+                sentence the chart is a feature nobody finds. That is not
+                hypothetical: it is exactly how this shipped the first time, on
+                the scoreboard, and had to be reported before anyone saw it.
+
+                Categories only, for the reason the note below it exists: a
+                points league has one number a side and no row to press, so the
+                hint would name a gesture that isn't there. */}
+            {board.format !== 'h2h-points' && groups.length > 0 && (
+              <p className="mup-cat-hint">
+                Press any category for a day-by-day chart of the week.
+              </p>
+            )}
+
             {board.format === 'h2h-points' ? (
               <div className="mup-note">
                 A points league has one number a side, so there is no category line to break down.
@@ -1153,7 +1218,15 @@ export default function LeagueMatchupView({
                       const state = (s: 'left' | 'right') =>
                         w === null ? '' : w === s ? ' mup-win' : w === 'tie' ? ' mup-tie' : ' mup-loss';
                       return (
-                        <div className="mup-row" key={c.statId} title={rowTitle(c, l, r, w)}>
+                        <button
+                          type="button"
+                          className="mup-row"
+                          key={c.statId}
+                          aria-haspopup="dialog"
+                          aria-label={`${c.name} — chart of how it moved through this matchup`}
+                          title={`${rowTitle(c, l, r, w)} — press for the day-by-day chart`}
+                          onClick={() => openCategory(c.statId)}
+                        >
                           <span className={`mup-val mup-val-left${state('left')}`}>
                             {fmtValue(l, c)}
                           </span>
@@ -1181,7 +1254,7 @@ export default function LeagueMatchupView({
                           <span className={`mup-val mup-val-right${state('right')}`}>
                             {fmtValue(r, c)}
                           </span>
-                        </div>
+                        </button>
                       );
                     })}
                   </div>
@@ -1259,6 +1332,33 @@ export default function LeagueMatchupView({
           </div>
         )}
       </div>
+
+      {/* Above the page rather than beside it: `DialogLayerContext` is set to
+          MATCHUP_LAYER here, so this takes the next rung and one press of
+          Escape closes the chart while the matchup stays put. */}
+      {openStat !== null && openCat && (
+        <Modal
+          title={`${openCat.name} — week ${board.matchupPeriod}`}
+          titleId="mup-series-title"
+          className="lg-series-box"
+          onClose={() => setOpenStat(null)}
+        >
+          {seriesError ? (
+            <div className="mser-none">
+              <p>Couldn&rsquo;t read the day-by-day totals: {seriesError}</p>
+            </div>
+          ) : series && series.matchupPeriod === board.matchupPeriod ? (
+            <MatchupSeriesChart
+              series={series}
+              category={openCat}
+              teamIds={away ? [away.teamId, home.teamId] : [home.teamId]}
+              teams={teams}
+            />
+          ) : (
+            <LoadingLine>Reading the week a day at a time</LoadingLine>
+          )}
+        </Modal>
+      )}
     </DialogLayerContext.Provider>
   );
 }
