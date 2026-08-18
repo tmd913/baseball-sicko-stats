@@ -9,6 +9,8 @@ import { getAllRosterPlayers } from './store.js';
 import { mapLimit } from './limit.js';
 import { baseballToday } from './etDate.js';
 import { getRosterTrend } from './espn.js';
+import { buildLeagueXwoba } from './leagueWoba.js';
+import { warmXwobaSeries } from './xwoba.js';
 
 /**
  * The scheduled cache warmer.
@@ -91,6 +93,25 @@ async function warmPlayers(): Promise<void> {
       console.error(`percentiles warm failed for ${p.id}:`, err);
     }
   });
+
+  // The rolling chart's per-PA season series. Another season CSV per player,
+  // and the slowest read on the player page — 5.7 to 6.6 seconds when Savant
+  // has no warm copy of the query, against 0.12 when it does.
+  //
+  // The route serves a stale copy and refreshes behind it, so this is not what
+  // stops a reader waiting; what it buys is that a rostered player's copy is
+  // never older than last night, which is the window that rule serves stale
+  // inside. Past a day it blocks, and this is what keeps anybody from getting
+  // there. `warmXwobaSeries` rather than the reader's own door, which would
+  // answer from the stale copy and leave the refresh running into a frozen
+  // container — see the note on it.
+  await mapLimit(players, 4, async (p) => {
+    try {
+      await warmXwobaSeries(p.id, p.kind);
+    } catch (err) {
+      console.error(`xwOBA series warm failed for ${p.id}:`, err);
+    }
+  });
 }
 
 export async function warm(event: WarmEvent = {}): Promise<{ mode: string; dates: string[] }> {
@@ -153,6 +174,21 @@ export async function warm(event: WarmEvent = {}): Promise<{ mode: string; dates
     await getRosterTrend().catch((err) =>
       console.error('ESPN ownership snapshot failed:', err),
     );
+    // The rolling chart's reference line: what an average plate appearance has
+    // been worth this season, summed from the same per-date exports the two
+    // boards above are built from. **The read path never builds this** — a
+    // chart opening must not be the thing that reduces 142 days of Statcast —
+    // so if this does not run the client falls back to the old fixed .315 and
+    // says so in the legend.
+    //
+    // Cheap after the first night: each day's two numbers are stored as they
+    // are computed, so a run that dies half way leaves its work behind and the
+    // next one has a single new day to add.
+    await buildLeagueXwoba()
+      .then((l) =>
+        console.log(`league xwOBA ${l.xwoba} over ${l.pa} PA, ${l.days} days through ${l.through}`),
+      )
+      .catch((err) => console.error('league xwOBA build failed:', err));
     return { mode, dates };
   }
 

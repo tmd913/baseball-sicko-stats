@@ -993,7 +993,15 @@ export interface XwobaPa {
 export interface XwobaSeries {
   season: number;
   seasonXwoba: number; // the player's season average, shown as caption text
-  leagueXwoba: number; // MLB league average, drawn as the reference line
+  /** MLB league average, drawn as the reference line — **measured** from the
+   *  season's own plate appearances by the nightly job (see `leagueWoba.ts`),
+   *  and the old fixed benchmark where that has not run. */
+  leagueXwoba: number;
+  /** How many wOBA events the average above is drawn from, and **0 where it is
+   *  the benchmark rather than a measurement**. The legend reads it to say
+   *  which, since a line a reader is judging a season against should not have
+   *  to be taken on trust. Absent from a response written before this existed. */
+  leagueXwobaPa?: number;
   pas: XwobaPa[]; // in play order
 }
 

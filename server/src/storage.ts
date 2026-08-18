@@ -161,12 +161,34 @@ export async function readJsonBlob<T>(
   key: string,
   isFresh: (value: T, cachedAt: number) => boolean,
 ): Promise<T | null> {
+  const stamped = await readStampedBlob<T>(key);
+  if (stamped === null) return null;
+  return isFresh(stamped.value, stamped.cachedAt) ? stamped.value : null;
+}
+
+/**
+ * The same read with the stamp handed back rather than spent on a freshness
+ * test — for a caller that wants a **stale** value as well as a fresh one.
+ *
+ * `xwoba.ts` is the one: a player's per-PA season series is append-only and its
+ * source is a 6s Savant query, so serving the copy on disk and refreshing
+ * behind it beats making the reader wait for a chart that will differ by a
+ * handful of plate appearances. That decision needs the age, which
+ * `readJsonBlob` deliberately swallows.
+ *
+ * `readJsonBlob` is written in terms of this so there is one definition of the
+ * stored envelope — a second reader of `{ cachedAt, value }` is a second thing
+ * to keep in step with `writeJsonBlob`.
+ */
+export async function readStampedBlob<T>(
+  key: string,
+): Promise<{ value: T; cachedAt: number } | null> {
   const raw = await readBlob(key);
   if (raw === null) return null;
   try {
     const { cachedAt, value } = JSON.parse(raw) as { cachedAt: number; value: T };
     if (typeof cachedAt !== 'number') return null;
-    return isFresh(value, cachedAt) ? value : null;
+    return { value, cachedAt };
   } catch {
     return null;
   }
