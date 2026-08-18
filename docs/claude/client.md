@@ -271,6 +271,52 @@ So foreground reads are counted in and out, and the wait goes when the last of
 them lands. `reportSettled` is deliberately neither — it is "has an answer come
 back at all", which a superseded read answers as well as any other.
 
+### The boot spent a whole report on the wrong roster
+
+**A plain visit fired two `/api/report` reads and only ever drew the second**,
+which is the same waste the sequence guard above was written to make *harmless*
+and is worth not doing at all.
+
+`rosterSource` starts at `saved`, which is what a URL with no `roster=` on it
+means, and the report effect fires on the very first render. `/api/prefs` then
+lands with `fantasy` and it fires again. So every load of the bare site by a
+fantasy user spent its most expensive request on a roster nobody was going to be
+shown — measured on the live app: `/api/report?…` at **38ms** and
+`/api/report?…&source=fantasy` at **48ms**, against one read on the same load
+with `roster=fantasy` in the URL, which is why a *reload* never showed it (App
+writes that param whenever the fantasy roster is on, so only a first visit, a
+bookmark or a typed domain is affected).
+
+**So the first read waits for the preference that decides what it is about**,
+unless the URL has already said — in which case nothing `/api/prefs` can hold
+could change the answer, and `rosterSourceFromUrl` is the same flag the prefs
+handler already consults before applying a saved value.
+
+**This is the line under it, one question earlier.** That one holds a
+`roster=fantasy` session until the ESPN status settles, on the stated grounds
+that firing now "would read the saved watchlist, render it, and replace it a
+moment later — a flash of the wrong list of players, which is worse than a
+slightly longer wait". The preference deserved exactly the same treatment and
+had never been given it; the only difference is that the flash was invisible,
+the wrong list being empty on most of the accounts it happened to.
+
+**What it costs is one round trip on a load whose answer is `saved`**, and
+`/api/prefs` is a single small read fired at the same instant the report would
+have been. Against it: a whole report that is thrown away, and — on the deployed
+app, where each request is one Lambda invocation — one fewer concurrent request
+for the real read to get through. `prefsSettled` is set in the read's `finally`,
+so a **failed** `/api/prefs` settles it too; without that a preference that isn't
+coming would hold the page for ever, which is the rule `espnStatusSettled`
+already follows.
+
+**Measured on the live app, bare URL, before → after**: boot requests **12 → 11**
+with the `saved` report gone, and the first row still on screen at **67ms**.
+Driven against a stub for the three cases the gate has to survive: a fantasy
+record sends **one** report and it is the fantasy one; a **failed** `/api/prefs`
+still fires the report (and draws `Your roster is empty`, which is the correct
+answer for that account); and a `/api/prefs` held for 1.2s delays the report to
+1,245ms rather than hanging.
+
 **Where it sits and what colour it is.** The ball is `currentColor` and `.ball-spin` sets `color: var(--accent)`, so there is one loading colour in the app and it is the accent — including inside a control that is `:disabled` while it works and otherwise muted, since it is disabled *because* it is working. The rim carries `stroke-opacity: 0.5`: at full accent the silhouette is the loudest thing in the mark and the seams — the only part that moves — read as detail inside it, which is backwards for something whose whole job is to look like it is turning. **Inside an overlay** it is the same `md` block the page uses, centred in the player page's own reading column, and the details view's five tabs get it in the box `.details-status` already owned — that class is folded into `.loading-block`'s selector list rather than restyled to match it, the rule this stylesheet applies everywhere, and what is left under its own name is only what a *failed* tab adds (`.details-error`'s colour).
 
 **`.refreshing` keeps its name and its pill and is now `.loading-line` plus that pill**, so the badge and the board's bare caption are one object cut two ways. `LoadingLine` takes an `announce` flag that is off inside a control: the button already says `aria-busy`, and a live region nested in a button is the same news announced twice.

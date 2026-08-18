@@ -35,6 +35,48 @@ The batter's line then **leads its stats on `H/AB`** — one cell where AB and H
 
 **With nothing yet to add up, the game info takes the slot.** A range he hasn't played in has no line to print and used to print the season's; the line now names the game instead — the matchup where there is a single one to name, `ATH · 3 games` where there are several — which is the whole of what such a card is about and costs the row nothing, where a line of dashes plus the same fact stated below would cost it two. On a pitcher's no-outing card that line is joined by the opposing probable (`vs LHP Thornton` — `ProbablePitcher`'s `opposing` prop, which changes only the tooltip, the wording being right either way) and the first-pitch badge, with the lineup waiting for him below; the **SP pip stays on the headshot** rather than becoming a chip beside the name, and now shows on any range holding one game rather than only on a single day, a pip belonging to a game and not to a date. The batter card takes the pitcher's `.empty` rule with it: the dashed border claims nothing is coming, so it belongs only on a batter who can't still come to the plate. That is reachable there for a postponement alone — a range of finals with no plate appearance in it is `didNotAppear`'s card, which was already dashed.
 
+### Every tab's read is lazy now, including the percentile card's
+
+**The percentile card was the one eager fetch on this page and it was the
+dearest of them.** Six of the seven tabs read on first open — the day, the game
+log, the news, the windows, the arsenal, the rolling series — and `percentiles`
+fired on **mount**, whatever the reader was looking at, for a card that is not
+the tab the page opens on.
+
+**What it costs, measured on a player nobody had opened**: `/api/percentiles`
+**1.07s** against 0.16s for the splits and 0.05s each for the day and the game
+log, and **2.15s** on another. It is a Savant player-page scrape, so it is the
+slowest thing on the page by an order of magnitude and it was on the critical
+path of every open — including from a research-board row, where the reader is
+skimming strangers and may open a dozen.
+
+**And a page that opens is a burst rather than a queue.** Opening anybody fired
+**five** requests in one tick (percentiles, splits, day, game log, news) plus
+App's own `/api/statuses`; behind one Lambda, which handles one request per
+instance, those do not overlap so much as queue or cold-start alongside each
+other. Taking the dearest of them off the burst is worth more than the second it
+saves on its own.
+
+**`splits` stays eager, and that is not an inconsistency**: the Overview's own
+season strip reads it, so it *is* the visible tab's data — which is the same test
+that makes the game log and the news eager-for-Overview (each is previewed
+there) and the windows lazy.
+
+**The mechanics are the six tabs' own, restated in one place.** A `pctReq` ref
+keyed `${kind}-${playerId}` so a re-open of the same tab is free and a two-way
+player's two cards are two reads; `loading` starts **false** rather than true,
+since nothing is in flight until the tab is opened; a failure clears the ref, so
+re-opening the tab retries; and the per-player reset clears the ref and the data
+with the other six. Nothing else on the page reads `data`, `loading` or `error`
+— all three appear only under `tab === 'percentiles'`, which is what made this a
+change of *when* rather than of anything drawn.
+
+**Measured in a browser at 1400×950 against the real server**, before → after:
+opening a player fires **5 player requests → 4** and the percentile scrape moves
+to the tab that draws it (2,151ms there, on its own, with the page already up).
+Pressing the tab twice fetches once; leaving the tab and coming back draws from
+what it has.
+
 ### The player page's Overview tab: the player as a summary page
 
 **It was his day and nothing else, and one thing is not what a page opened on a stranger is opened for.** A research-board row is a man you are deciding about, and the three questions under that decision are *how good is he*, *what is he doing* and *how has he been going* — of which the tab answered the middle one and left the other two behind two more tabs. So it is three blocks in that order (`PlayerOverview.tsx`), each a summary with a door to the tab that holds it whole:

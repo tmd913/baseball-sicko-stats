@@ -579,9 +579,26 @@ export function PlayerDetails({
   // player's bat and his arm are two days, and neither may stand in for the
   // other.
   const dayReq = useRef<string | null>(null);
+  /**
+   * The percentile card, **lazy on first open of its own tab** like every other
+   * tab on this page — and it was the one exception, fetched eagerly on mount
+   * whatever the reader was looking at.
+   *
+   * It is also the most expensive read the page makes: a Savant player-page
+   * scrape, measured at **1.07s cold** against 0.16s for the splits and 0.05s
+   * for the day and the game log. So opening anybody fired five requests at
+   * once, the dearest of them for a card that is not the tab the page opens on
+   * — and behind one Lambda those five do not overlap so much as queue.
+   *
+   * `splits` beside it stays eager and that is not an inconsistency: the
+   * Overview's own season strip reads it, so it *is* the visible tab's data.
+   */
   const [data, setData] = useState<PlayerPercentiles | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  // Keyed by kind as well as player, the way the day and the game log are: the
+  // card is a batting one or a pitching one.
+  const pctReq = useRef<string | null>(null);
   // The season line and platoon splits are fetched here (not passed in) so the
   // details view works for any player, whether or not they're on the watchlist.
   const [splits, setSplits] = useState<{
@@ -702,17 +719,22 @@ export function PlayerDetails({
   }, [onClose]);
 
   useEffect(() => {
+    const req = `${kind}-${playerId}`;
+    if (tab !== 'percentiles' || pctReq.current === req) return;
+    pctReq.current = req;
     let live = true;
     setLoading(true);
     setError(null);
-    setData(null);
     api
       .percentiles(playerId, kind)
       .then((d) => {
         if (live) setData(d);
       })
       .catch((e: unknown) => {
-        if (live) setError(e instanceof Error ? e.message : 'Failed to load');
+        if (live) {
+          setError(e instanceof Error ? e.message : 'Failed to load');
+          pctReq.current = null; // allow a retry on re-open
+        }
       })
       .finally(() => {
         if (live) setLoading(false);
@@ -720,7 +742,7 @@ export function PlayerDetails({
     return () => {
       live = false;
     };
-  }, [playerId, kind]);
+  }, [tab, playerId, kind]);
 
   useEffect(() => {
     let live = true;
@@ -780,6 +802,9 @@ export function PlayerDetails({
     dayReq.current = null;
     setDay(null);
     setDayError(null);
+    pctReq.current = null;
+    setData(null);
+    setError(null);
     windowsReq.current = null;
     setWindows(null);
     setWindowsError(null);
