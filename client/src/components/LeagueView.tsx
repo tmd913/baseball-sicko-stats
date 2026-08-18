@@ -37,9 +37,11 @@
  * the page is on screen, quietly and only for what can still change
  * (`App.tsx::LEAGUE_POLL_MS`). See `docs/claude/client-league.md`.
  */
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { api } from '../api';
 import type {
   EspnCategory,
+  EspnMatchupSeries,
   EspnCategorySide,
   EspnMatchup,
   EspnRankSpan,
@@ -49,7 +51,9 @@ import type {
   EspnTransactions,
   SeasonPlayer,
 } from '../types';
-import { LoadingBlock } from './Loading';
+import { LoadingBlock, LoadingLine } from './Loading';
+import { Modal } from './Modal';
+import { MatchupSeriesChart } from './MatchupSeriesChart';
 import LeagueRankings from './LeagueRankings';
 import LeagueTransactions, { type TrendDeltas } from './LeagueTransactions';
 
@@ -308,6 +312,7 @@ function MatchupCard({
   format,
   live,
   onOpen,
+  onOpenCategory,
 }: {
   matchup: EspnMatchup;
   categories: EspnCategory[];
@@ -316,6 +321,10 @@ function MatchupCard({
   format: EspnScoreboard['format'];
   live: boolean;
   onOpen: (id: number) => void;
+  /** Open the chart of one category, for the sides of *this* matchup. Held one
+   *  level up because the series is one read for the whole board — the ten
+   *  cards of a 12-team league are six matchups over the same twelve teams. */
+  onOpenCategory: (statId: number, teamIds: number[]) => void;
 }) {
   const { home, away } = matchup;
   const mine = myTeamId != null && (home.teamId === myTeamId || away?.teamId === myTeamId);
@@ -460,22 +469,61 @@ function MatchupCard({
                     {g.categories.map((c) => {
                       const v = side.scores[c.statId];
                       const state = other ? outcome(v, other.scores[c.statId], c) : null;
+                      const note = `${c.name}: ${fmtValue(v, c)}${
+                        state === 'win'
+                          ? ' — winning'
+                          : state === 'loss'
+                            ? ' — losing'
+                            : state === 'tie'
+                              ? ' — tied'
+                              : ''
+                      }${live ? ' so far' : ''}`;
+                      // **A category with no figure is not a press**, there
+                      // being nothing to chart: a side ESPN reports as
+                      // ineligible has no score, and the cell says so by being
+                      // the plain span it always was.
+                      if (typeof v !== 'number') {
+                        return (
+                          <span key={c.statId} role="cell" title={note}>
+                            {fmtValue(v, c)}
+                          </span>
+                        );
+                      }
                       return (
-                        <span
-                          key={c.statId}
-                          role="cell"
-                          className={state ? `lg-cat-${state}` : undefined}
-                          title={`${c.name}: ${fmtValue(v, c)}${
-                            state === 'win'
-                              ? ' — winning'
-                              : state === 'loss'
-                                ? ' — losing'
-                                : state === 'tie'
-                                  ? ' — tied'
-                                  : ''
-                          }${live ? ' so far' : ''}`}
-                        >
-                          {fmtValue(v, c)}
+                        <span key={c.statId} role="cell" className={state ? `lg-cat-${state}` : undefined}>
+                          {/*
+                            **A real `<button>` inside the cell**, and it stops
+                            the press reaching the card. The whole card is a
+                            door into the matchup, so without that a press on a
+                            number would open the matchup page rather than the
+                            chart — and Enter and Space bubble as keydowns to
+                            the card's own handler, so both are stopped too.
+
+                            The **value** is the target rather than the column
+                            header, because that is where the eye and the finger
+                            already are on a five-column grid of numbers; the
+                            header is deliberately not a second target, which
+                            would put a third tab stop on every category. Both
+                            rows of a column open the same chart, that chart
+                            being about the category rather than about one
+                            side's figure.
+                          */}
+                          <button
+                            type="button"
+                            className="lg-cat-btn"
+                            aria-haspopup="dialog"
+                            aria-label={`${c.name} — chart of how it moved through this matchup`}
+                            title={`${note} — press for the day-by-day chart`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onOpenCategory(c.statId, sides.map((x) => x.teamId));
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') e.stopPropagation();
+                            }}
+                          >
+                            {fmtValue(v, c)}
+                          </button>
                         </span>
                       );
                     })}
@@ -531,6 +579,49 @@ function Scoreboard({
   onOpenMatchup: (id: number) => void;
 }) {
   const teamMap = useMemo(() => new Map(board.teams.map((t) => [t.id, t])), [board.teams]);
+
+  /**
+   * **The chart behind a category cell**, and it is held here rather than in
+   * the card for one reason: the series is a fact about the *period*, so one
+   * read serves every card on the board.
+   *
+   * It is **lazy on the first press**, which is what earns it a route of its
+   * own — a week of ESPN rosters summed a day at a time is not something to
+   * put on the boot path of everybody who opens this page. Cached per period
+   * for the life of the tab, so a second category is free; a period change
+   * throws it away, `open` and the read both being about one week.
+   */
+  const [open, setOpen] = useState<{ statId: number; teamIds: number[] } | null>(null);
+  const [series, setSeries] = useState<EspnMatchupSeries | null>(null);
+  const [seriesError, setSeriesError] = useState<string | null>(null);
+  const asked = useRef<number | null>(null);
+  const period = board.matchupPeriod;
+  if (asked.current !== null && asked.current !== period) {
+    asked.current = null;
+  }
+
+  const openCategory = useCallback(
+    (statId: number, teamIds: number[]) => {
+      setOpen({ statId, teamIds });
+      if (asked.current === period) return;
+      // **Marked only once it is answered**, which is the rule this app has
+      // written down three times: a mark set before the fetch leaves the read
+      // unrepeatable when it fails, and a failed chart has to be retryable by
+      // pressing again.
+      setSeriesError(null);
+      api
+        .espnMatchupSeries(period)
+        .then((s) => {
+          asked.current = period;
+          setSeries(s);
+        })
+        .catch((e: Error) => setSeriesError(e.message));
+    },
+    [period],
+  );
+
+  const openCat = open ? board.categories.find((c) => c.statId === open.statId) ?? null : null;
+  const ready = series !== null && series.matchupPeriod === period;
 
   // The reader's own matchup leads. That is what this page is opened for, and
   // it is a *sort* rather than a mark on its own — the accent border says which
@@ -626,9 +717,34 @@ function Scoreboard({
               format={board.format}
               live={board.live}
               onOpen={onOpenMatchup}
+              onOpenCategory={openCategory}
             />
           ))}
         </div>
+      )}
+
+      {open && openCat && (
+        <Modal
+          title={`${openCat.name} — week ${board.matchupPeriod}`}
+          titleId="lg-series-title"
+          className="lg-series-box"
+          onClose={() => setOpen(null)}
+        >
+          {seriesError ? (
+            <div className="mser-none">
+              <p>Couldn&rsquo;t read the day-by-day totals: {seriesError}</p>
+            </div>
+          ) : ready ? (
+            <MatchupSeriesChart
+              series={series}
+              category={openCat}
+              teamIds={open.teamIds}
+              teams={teamMap}
+            />
+          ) : (
+            <LoadingLine>Reading the week a day at a time</LoadingLine>
+          )}
+        </Modal>
       )}
     </>
   );

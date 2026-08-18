@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
 import { FantasyRosterContext, useDelayedFlag } from '../hooks';
+import { projectStarters, rangeDatesOf } from '../lib';
 import type { FantasySlot } from '../hooks';
 import { LoadingBlock } from './Loading';
 import { LiveFeed, FEED_PAGE_SIZE } from './LiveFeed';
@@ -57,6 +58,7 @@ export default function LeagueTeam({
   end,
   kind,
   reading,
+  starters,
   schedule,
   onOpenDetails,
 }: {
@@ -70,6 +72,11 @@ export default function LeagueTeam({
   kind: PlayerKind;
   /** The table or the stream: the app's own two roster views, as two tabs. */
   reading: 'roster' | 'feed';
+  /** **Only the players this manager actually had in his lineup**, and over a
+   *  range only the days he had them there. The overlay owns the flag so it
+   *  survives crossing from one manager to the other, exactly as the reading,
+   *  the kind and the dates do. */
+  starters: boolean;
   /** The Schedule view's index, or null for the ordinary stat columns — the
    *  same "the mode is the presence of an index" rule App applies, so a table
    *  can never be in schedule mode with no schedule in it. */
@@ -80,6 +87,22 @@ export default function LeagueTeam({
   onOpenDetails: (key: string) => void;
 }) {
   const [report, setReport] = useState<PlayerReport[] | null>(null);
+  /**
+   * **Which of this team's players were in its lineup on each day of the
+   * range** — what `Starters` reads, and it rides on the report rather than on
+   * a second request.
+   *
+   * `fantasyWatchlist` reads one roster per day to work out which days each man
+   * was *held* for, so the lineups fall out of work `/api/report` already does:
+   * the filter costs this page no upstream read at all. It also means the
+   * lineups describe exactly the rows beside them, which two reads a moment
+   * apart could not promise.
+   *
+   * Null where the per-day read failed or an older server answered, and there
+   * the filter falls back to the end-of-range roster below — one lineup applied
+   * to the range, which is what the app did before per-day lineups existed.
+   */
+  const [lineups, setLineups] = useState<Record<string, number[]> | null>(null);
   const [roster, setRoster] = useState<EspnRosterPlayer[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -104,6 +127,7 @@ export default function LeagueTeam({
     setLoading(true);
     setError(null);
     setReport(null);
+    setLineups(null);
     setRoster(null);
     Promise.all([
       api.report(start, end, 'fantasy', false, teamId),
@@ -119,6 +143,7 @@ export default function LeagueTeam({
       .then(([rep, ros]) => {
         if (!live) return;
         setReport(rep.players);
+        setLineups(rep.lineups ?? null);
         setRoster(ros);
       })
       .catch((e: Error) => live && setError(e.message))
@@ -165,10 +190,40 @@ export default function LeagueTeam({
     return map;
   }, [roster, team, end]);
 
-  const cards = useMemo(
+  const kindCards = useMemo(
     () => (report ?? []).filter((r) => (kind === 'pitcher' ? r.kind === 'pitcher' : r.kind !== 'pitcher')),
     [report, kind],
   );
+
+  /** The per-day lineup map, as `projectStarters` wants it. Collapsed to null
+   *  when it is empty, so "no lineups" and "not asked for" are one state. */
+  const byDate = useMemo(() => {
+    if (!lineups) return null;
+    const map = new Map<string, Set<number>>();
+    for (const [date, ids] of Object.entries(lineups)) map.set(date, new Set(ids));
+    return map.size > 0 ? map : null;
+  }, [lineups]);
+
+  const dates = useMemo(() => rangeDatesOf(start, end), [start, end]);
+  const perDay = byDate !== null && dates.length > 1;
+
+  /**
+   * **The app's own projection, over somebody else's lineup.**
+   *
+   * `lib.ts::projectStarters` is what the reader's own roster views run, so a
+   * range here cuts *days* rather than only rows in exactly the way it does
+   * there — a man started on Monday and benched on Wednesday keeps Monday's
+   * line and loses Wednesday's — and the two cannot drift.
+   *
+   * The end-of-range fallback is the roster this page already read for its slot
+   * chips: `starting` is the flag on the day the span ends, which is the same
+   * answer the app falls back to when a per-day read fails.
+   */
+  const cards = useMemo(() => {
+    if (!starters) return kindCards;
+    const startingIds = new Set((roster ?? []).flatMap((p) => (p.starting && p.mlbId !== null ? [p.mlbId] : [])));
+    return projectStarters(kindCards, dates, byDate, (r) => startingIds.has(r.id));
+  }, [kindCards, starters, roster, byDate, dates]);
 
   // Never over data: the block wait is behind the app's own delay, so a warm
   // answer never flashes one, and a span change re-reads with the old rows
@@ -183,13 +238,38 @@ export default function LeagueTeam({
     );
   }
   if (!report) return null;
+  const who = team?.name ?? `Team ${teamId}`;
+  const kinds = kind === 'pitcher' ? 'pitchers' : 'batters';
+  if (kindCards.length === 0) {
+    return (
+      <div className="empty-state">
+        <h3>No {kinds} on this team over these days</h3>
+        <p>
+          {who} had nobody of this kind on the roster over the days in view. The date control
+          above is what changes them.
+        </p>
+      </div>
+    );
+  }
+  /* **Two ways to empty this page, two messages**, which is the app's own rule
+     for its own roster views: the message above names the days, and a page
+     narrowed by a button in the row above has to name that button instead. The
+     wording is the one that is true here — it is *his* lineup, not the
+     reader's, so neither of the app's own sentences would do. */
   if (cards.length === 0) {
     return (
       <div className="empty-state">
-        <h3>No {kind === 'pitcher' ? 'pitchers' : 'batters'} on this team over these days</h3>
+        <p className="empty-title">
+          {/* `possessive` rather than a plain `+ "’s"`, which on this league
+              produced `The Homewreckers’s` — the same typo the slot chip's own
+              owner already avoids, and the reason that helper is above. */}
+          {perDay
+            ? `Nothing to show — none of these ${kinds} were in ${possessive(who)} lineup on any of these days`
+            : `Nothing to show — none of these ${kinds} are in ${possessive(who)} lineup`}
+        </p>
         <p>
-          {team?.name ?? `Team ${teamId}`} had nobody of this kind on the roster over the days in
-          view. The date control above is what changes them.
+          Turn off “Starters” in the row above to see his whole team — the days he had these
+          players on his bench or his IL are what it is leaving out.
         </p>
       </div>
     );

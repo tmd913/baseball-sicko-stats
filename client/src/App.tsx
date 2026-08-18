@@ -23,7 +23,14 @@ import type {
   TrendWindow,
   WatchPlayer,
 } from './types';
-import { baseballDay, isInjured, isStartingOn } from './lib';
+import {
+  baseballDay,
+  isInjured,
+  isStartingOn,
+  projectStarters,
+  rangeDatesOf,
+  startedOn,
+} from './lib';
 import { takeInvite } from './invite';
 import { applyTheme, DEFAULT_THEME, readStoredTheme, storeTheme, THEMES, toThemeId } from './theme';
 import type { ThemeId } from './theme';
@@ -66,6 +73,7 @@ import {
 } from './hooks';
 import type { FantasySlot } from './hooks';
 import { LoadingBlock, LoadingLine, SpinningBaseball } from './components/Loading';
+import { StartersToggle } from './components/StartersToggle';
 import { Tutorial } from './components/Tutorial';
 import { EspnSettings } from './components/EspnSettings';
 import { LeagueOnboarding } from './components/LeagueOnboarding';
@@ -160,25 +168,10 @@ function addDays(date: string, delta: number): string {
   return dt.toISOString().slice(0, 10);
 }
 
-/**
- * Was this player in your fantasy lineup on `date`?
- *
- * The one place that question is answered, so the filter that credits a
- * player's day and the count on his slot chip cannot come to disagree. A date
- * the map has no entry for is a day the server couldn't read, not a day nobody
- * started: it falls back to `fallback`, the single end-of-range lineup the
- * chips are drawn from, which is the answer the app gave before per-day lineups
- * existed and the right direction to fail in.
- */
-function startedOn(
-  lineups: Map<string, Set<number>>,
-  date: string,
-  mlbId: number,
-  fallback: boolean,
-): boolean {
-  const day = lineups.get(date);
-  return day ? day.has(mlbId) : fallback;
-}
+/* `startedOn` and the projection below it are `lib.ts`'s now — a matchup's
+   team pages ask the same question of a leaguemate's lineup, and one definition
+   of "was he in it that day" is what keeps the two surfaces answering it the
+   same way. */
 
 /** Today's baseball date — the Eastern date of a clock set back to the rollover
  *  hour, so the small hours still belong to the night before. */
@@ -1782,11 +1775,7 @@ export default function App() {
 
   /** The dates in the range, which the count on a slot chip and the per-day
    *  filter both walk. Cheap — `MAX_RANGE_DAYS` is 62. */
-  const rangeDates = useMemo(() => {
-    const out: string[] = [];
-    for (let d = start; d <= end; d = addDays(d, 1)) out.push(d);
-    return out;
-  }, [start, end]);
+  const rangeDates = useMemo(() => rangeDatesOf(start, end), [start, end]);
 
   /**
    * Slot by player key, for the chips. Null when the views are reading the
@@ -3066,21 +3055,18 @@ export default function App() {
     // honest answer to "am I starting him". Dropped means you were not playing
     // him on any day in view — including every day before you picked him up,
     // where his line belonged to whoever held him.
-    if (fantasyLineups) {
-      const out: PlayerReport[] = [];
-      for (const r of kindCards) {
-        const fallback = fantasySlots?.get(playerKey(r))?.starting === true;
-        const days = new Set(
-          rangeDates.filter((d) => startedOn(fantasyLineups, d, r.id, fallback)),
-        );
-        if (days.size === 0) continue;
-        const games = r.games.filter((g) => days.has(g.date));
-        out.push(games.length === r.games.length ? r : { ...r, games });
-      }
-      return out;
-    }
-    if (fantasySlots) {
-      return kindCards.filter((r) => fantasySlots.get(playerKey(r))?.starting === true);
+    if (fantasyLineups || fantasySlots) {
+      // Both fantasy tiers are `lib.ts::projectStarters` — the per-day
+      // projection where there is a map, and the single end-of-range answer
+      // where there isn't. A matchup's team pages run the identical arithmetic
+      // over a leaguemate's lineup, which is why it is shared rather than
+      // written here.
+      return projectStarters(
+        kindCards,
+        rangeDates,
+        fantasyLineups,
+        (r) => fantasySlots?.get(playerKey(r))?.starting === true,
+      );
     }
     const today = baseballToday();
     return kindCards.filter((r) => isStartingOn(r, today));
@@ -3537,11 +3523,9 @@ export default function App() {
   );
 
   const startersToggle = startersOffered ? (
-      <button
-        type="button"
-        className={`starters-toggle${startersOnly ? ' on' : ''}`}
-        aria-pressed={startersOnly}
-        onClick={() => setStartersOnly((v) => !v)}
+      <StartersToggle
+        on={startersOnly}
+        onToggle={() => setStartersOnly((v) => !v)}
         /* The word means one thing on your own roster and another on your
            fantasy team, so the tooltip says which. The label can't — it is one
            word, and "Starters" is the right word for both readings. */
@@ -3552,39 +3536,7 @@ export default function App() {
               ? 'Only the players in your fantasy starting lineup — your bench and IL are hidden whatever their clubs do with them'
               : "Only the players starting today — hitters in a posted lineup, pitchers named as today's starter"
         }
-      >
-        {/* A lineup card, which is what the filter is: the men written on
-            tonight's. It was three shortening rules — a "list" glyph, and a
-            fair drawing of a filtered list, but on a phone this button is the
-            icon and nothing else, and that one was *optically* tiny rather than
-            small: its strokes span 10 of the viewBox's 24 units, so at 15px they
-            came to about 6px of ink adrift in the middle of a 36px square.
-
-            Which is also why the first clipboard drawn here still read small at
-            17px and then at 20: it was 16 units wide against the calendar's 18,
-            and a tall narrow outline carries less weight than a wide one
-            whatever its box says. This one spans **3–21 across and 2–22 down**,
-            so the glyph is the size the number claims. 20px in a 36px square,
-            with the calendar beside it raised to the 17 every other icon button
-            in the app uses — the pair has to read as a pair, and this one leads
-            it. */}
-        <svg
-          viewBox="0 0 24 24"
-          width="20"
-          height="20"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <rect x="8" y="2" width="8" height="4" rx="1" />
-          <path d="M16 5h3a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h3" />
-          <path d="M7 12.5h10M7 17h6" />
-        </svg>
-        <span className="starters-toggle-label">Starters</span>
-      </button>
+      />
     ) : null;
 
   /* The calendar, which is both the disclosure for the date controls and the

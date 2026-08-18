@@ -783,12 +783,106 @@ for the week being played — the same two dates this page prints in its head an
 the wrong two to draw a forward-looking grid from (see **ESPN fantasy league**,
 *The matchup window*).
 
-**What a team page does *not* carry is the `Starters` filter**, and that is a
-scope line rather than an oversight: that control reads the day-by-day lineup
-map, which the app has for the reader's own team and no route returns for
-anybody else's. It would be a server change to add, and the page is honest
-without it — the slot chip on every row says who was in the lineup on the day
-the span ends.
+**A team page carries the `Starters` filter too, and this reverses the paragraph
+that stood here.** What it said was: *what a team page does **not** carry is the
+`Starters` filter, and that is a scope line rather than an oversight — that
+control reads the day-by-day lineup map, which the app has for the reader's own
+team and no route returns for anybody else's. It would be a server change to
+add.* Every clause of that was true, and the last one was the whole of the
+objection: it *was* a server change, and it is one field.
+
+**The lineups were being computed and thrown away.** `fantasyWatchlist` has read
+one roster per day since a range became a range of rosters — it is where `held`
+comes from, and it has taken a `teamId` override since the team pages were
+written — so `/api/report?source=fantasy&teamId=` already knew, for every day of
+the range, exactly who this manager had in his lineup. It answered with the
+players and the days each was *held* and dropped the lineups on the floor. They
+ride on the response now, and the filter therefore costs this page **no upstream
+read at all**: measured, the field is **1,252 bytes of a 2,026,989-byte report
+(0.06%)**, and 220 bytes of it over the wire once `compression()` has had it.
+
+**It rides on the report rather than on `/api/espn/roster`**, which is where the
+reader's own views take the same map from, and the reason is worth stating: the
+team page fetches this report anyway, so the filter costs it no second request —
+and the lineups then describe **exactly** the rows beside them, which two reads a
+moment apart cannot promise.
+
+**It cuts days rather than only rows**, which is the whole of what the filter
+means over a range: a man started on Monday and benched on Wednesday keeps
+Monday's line and loses Wednesday's. That is not a second implementation of the
+app's own rule — `lib.ts::projectStarters` is what both surfaces run, lifted out
+of `App.tsx` for this, with `startedOn` and `rangeDatesOf` beside it. Which is
+also why a shared helper rather than a copy: two projections of one idea are two
+things that will one day disagree about a day.
+
+**Measured on the live 12-team league**, The Homewreckers over their own matchup
+week (Aug 10–17), off → on:
+
+| | rows | totals |
+| --- | --- | --- |
+| batters | 14 → **13** | `70/294 · 41 R · 10 HR · 32 RBI · .701` → **`70/291 · 41 R · 10 HR · 32 RBI · .708`** |
+| pitchers | 18 → **16** | `109.2 IP · 51 ER · 89 K · 4.19 ERA · 1.26 WHIP` → **`106.0 IP · 44 ER · 87 K · 3.74 ERA · 1.22 WHIP`** |
+
+**The days are what moved, not only the rows**, which is the property a row
+filter could not produce and which was checked player by player against the
+route: **3 batters and 8 pitchers stayed on the table and lost days** — Geraldo
+Perdomo and Vladimir Guerrero Jr. 7 games to 6, Kaelen Culpepper 3 to 2, Logan
+Henderson **7 to 2** — while 1 batter and 2 pitchers were dropped outright for
+having been in the lineup on none of the days.
+
+**The end-of-range roster is the fallback**, exactly as it is on the reader's own
+roster: where the per-day map is missing — an older server, or a read that failed
+— the single `starting` flag on the roster this page already fetched for its slot
+chips keeps or drops a whole row. Driven with `lineups` stripped from the
+response: 13 rows → 11, which is the pre-per-day behavior rather than an empty
+table.
+
+**The toggle is `components/StartersToggle.tsx`, shared with the roster row**
+rather than a lookalike — the same `.starters-toggle` class folded onto
+`.research-toggle`, the same lineup-card glyph, the same `.on` and never
+`.active`, and the same phone rule: measured, **105px with its label at 1200 and
+a 36px square at 390** with the label visually hidden rather than removed. It was
+inline in `App.tsx` while the roster row was its only home; a second button would
+be two controls that will one day differ, which is the rule that pulled
+`DateControls` out of the same file when these pages needed the dates.
+
+**It sits in the icon pair, between the reading and the days** — the roster row's
+own order, the questions coming as *which page, which kind, which reading of it,
+which players, which days*. It costs the row no line at either width: measured,
+`.mup-tools` is **36px at 1200 and 84px at 390 with the filter on or off**, and
+the page body and the view each overflow by **0**.
+
+**The overlay owns the flag**, for the reason it owns the reading, the kind and
+the dates: those are chrome above *both* team pages and must not reset when the
+reader crosses from one manager to the other (checked — it survives the crossing
+and re-applies to the other side's rows). And it is **state rather than anything
+in the URL**, which is where every other control on this page sits: `mup` and
+`mt` are the whole of what a matchup link carries.
+
+**It is always offered**, unlike the roster row's own, which is hidden over a
+range with no today in it. That gate exists because the *MLB* reading of the word
+is a fact about tonight, and there is no MLB reading here: a leaguemate's lineup
+is a real fact about every day of every range, and where the per-day map is
+missing the end-of-range roster answers for it.
+
+**The empty state names its cause in the wording that is true here** — it is
+*his* lineup, not the reader's, so neither of the app's own two sentences would
+do. Driven with every day's lineup emptied: `Nothing to show — none of these
+batters were in The Homewreckers’ lineup on any of these days` over a range and
+`… are in The Homewreckers’ lineup` on a single day, both over `Turn off
+“Starters” in the row above to see his whole team — the days he had these players
+on his bench or his IL are what it is leaving out`. It takes `possessive()`, the
+helper the slot chip's own owner already uses, which is what stops the live
+league producing `The Homewreckers’s`.
+
+**What it costs the page**, measured through the route on the live league: a team
+page's report is **2.00s genuinely cold** (a fresh process with that team's
+per-day roster blobs deleted), **759ms from the blobs in a fresh process** and
+**5.9ms warm**, for a 1.5MB response — the per-day reads being the same seven
+`espn-lineup-…` blobs (**32,830 bytes** for a week of one team) the held-days map
+already paid for. The filter itself adds nothing to any of those three: it is
+that response read a second way.
+
 
 **The chrome sits on the page rather than in the pinned head**, which holds the
 way back and the week alone: this row belongs to two of the three pages and

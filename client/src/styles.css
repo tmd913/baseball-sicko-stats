@@ -6720,7 +6720,8 @@ button.start-line:focus-visible {
    summary table's has a tinted square. Only the swatch differs, so only the
    swatch has a rule of its own (`.roll-legend-swatch`, up with the chart). */
 .summary-legend,
-.roll-legend {
+.roll-legend,
+.mser-legend {
   flex: none;
   display: flex;
   flex-wrap: wrap;
@@ -6731,7 +6732,8 @@ button.start-line:focus-visible {
   color: var(--muted);
 }
 .summary-legend-item,
-.roll-legend-item {
+.roll-legend-item,
+.mser-legend-item {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -11520,6 +11522,47 @@ button.start-line:focus-visible {
   color: var(--faint);
 }
 
+/* **A category cell is a press, and it opens that category's day-by-day
+   chart.** The app's own bare-button reset, sized to fill the cell it sits in
+   so the grid is laid out exactly as it was when these were spans — the cell
+   keeps its own `padding` from `.lg-cat-row > *` and the button takes none,
+   which is what makes the change invisible at rest.
+
+   **The state class stays on the cell and the button inherits it**, which is
+   the one thing that had to be got right: `color: inherit` on the button is
+   what makes the reset invisible, and at equal specificity it *beats*
+   `.lg-cat-win`'s own color — measured, a winning cell came back `--text`
+   instead of `--win`. Inherited from the span, the three color rules above are
+   untouched and the weight comes along with them.
+
+   The hover is scoped to `(hover: hover)` for the app's own reason: on a touch
+   device `:hover` has no pointer to move away, so a finger dragged down the
+   board would leave the last cell it crossed looking chosen. See the note at
+   the top of this file. */
+.lg-cat-btn {
+  appearance: none;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-variant-numeric: inherit;
+  color: inherit;
+  text-align: inherit;
+  cursor: pointer;
+  border-radius: 4px;
+}
+@media (hover: hover) {
+  .lg-cat-btn:hover {
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+  }
+}
+.lg-cat-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 /* **The whole card is the way through to that matchup's page.** It was a
    `Breakdown →` text door at the card's foot, argued from accessibility rather
    than from the reader — a hundred titled cells inside one tab stop and one
@@ -14663,4 +14706,87 @@ html[data-theme='powder'] .league-table thead th {
   fill: url(#mv-hatch-key);
   stroke: var(--border);
   stroke-width: 1;
+}
+
+/* ---- The chart a scoreboard category opens ------------------------------- */
+
+/* Wider than the default dialog: this is a plot read across, and 720 viewBox
+   units in a 720px box is one unit per pixel — the width the geometry was
+   measured at. */
+.lg-series-box {
+  max-width: 760px;
+}
+.mser-chart-wrap {
+  position: relative;
+  margin-top: 4px;
+}
+.mser-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  /* **`pan-y`, not `none`.** This chart consumes no gesture at all — it has no
+     crosshair — so the browser keeps both axes anyway; the declaration is here
+     to say so rather than to claim anything, and `none` is the mistake
+     `.roll-chart` already records: on a phone the plot is a band across the
+     middle of the dialog, and claiming the vertical axis would stop a thumb
+     landing on it from scrolling the dialog at all. */
+  touch-action: pan-y;
+}
+.mser-grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+/* **The one number here is measured, not declared** — `--mser-font` is
+   published on the `<svg>` from a `ResizeObserver`, because a viewBox unit is a
+   different number of pixels in every box this is drawn in: the dialog is 720px
+   wide on a desktop and ~326 inside a phone's, so a label declared in units
+   renders at half the size at one of them. The var carries the unit count that
+   renders at 12px whatever the width; the 11px fallback is the first paint of
+   an unmeasured box. Exactly `.roll-axis-label`'s rule, and for its reason. */
+.mser-axis-label {
+  fill: var(--muted);
+  font-size: var(--mser-font, 11px);
+  font-variant-numeric: tabular-nums;
+}
+/* **Color marks state, and the state here is who is taking the category** —
+   the same `--win`/`--muted` pair the card's own cells use, so the reader has
+   one key rather than two. A tie leaves both lines muted, which is what a tie
+   looks like.
+
+   One definition of the line, read by the plot and by its legend swatch: the
+   swatch is a `<line>` carrying this same class rather than a second `stroke`
+   written beside it, the fold-don't-copy rule `.roll-ref` already follows. */
+.mser-line {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.mser-line.mser-win {
+  stroke: var(--win);
+}
+.mser-dot {
+  fill: var(--muted);
+}
+.mser-dot.mser-win {
+  fill: var(--win);
+}
+/* The swatch is 24 x 2 over a matching viewBox, so a unit is a pixel and the
+   2px stroke paints at the size the words beside it are read at — rather than
+   at the plot's own scale, which on a phone is under half of it. */
+.mser-legend-swatch {
+  flex: none;
+}
+/* Folded onto `.summary-legend`'s rule — the app has one legend, a wrapping row
+   of swatch-and-word items in 12px `--muted` under the thing it explains. */
+.mser-legend {
+  padding-bottom: 0;
+}
+.mser-note,
+.mser-none {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
 }

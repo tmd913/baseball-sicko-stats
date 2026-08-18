@@ -5,6 +5,7 @@ import type {
   EspnRoster,
   EspnRankings,
   EspnRankSpan,
+  EspnMatchupSeries,
   EspnScoreboard,
   EspnTransactions,
   EspnStatus,
@@ -194,6 +195,12 @@ export const api = {
     players: PlayerReport[];
     source?: RosterSource;
     teamName?: string | null;
+    /** Which of this team's players were in its lineup on each day of the
+     *  range, keyed by date — what the `Starters` filter reads on a matchup's
+     *  team pages. Present only with `source=fantasy`, and absent where the
+     *  per-day read failed, which is the old behavior: one lineup applied to
+     *  the whole range. */
+    lineups?: Record<string, number[]> | null;
   }> {
     const src = source === 'fantasy' ? '&source=fantasy' : '';
     const fresh = refresh && source === 'fantasy' ? '&refresh=1' : '';
@@ -413,6 +420,21 @@ export const api = {
     if (refresh) q.set('refresh', '1');
     const qs = q.toString();
     return request(`/api/espn/scoreboard${qs ? `?${qs}` : ''}`);
+  },
+
+  /** **One matchup period's categories, day by day** — the chart a scoreboard
+   *  category opens.
+   *
+   *  A route of its own rather than a field on the scoreboard: it is a week of
+   *  ESPN rosters summed a day at a time, so it is fetched on the first press
+   *  rather than by everyone who opens the League page. `period` and `refresh`
+   *  mean what they mean on the scoreboard beside it. */
+  async espnMatchupSeries(period?: number | null, refresh = false): Promise<EspnMatchupSeries> {
+    const q = new URLSearchParams();
+    if (period != null) q.set('period', String(period));
+    if (refresh) q.set('refresh', '1');
+    const qs = q.toString();
+    return request(`/api/espn/matchup-series${qs ? `?${qs}` : ''}`);
   },
 
   /** The League page's Rankings tab: every team's figure in each of the

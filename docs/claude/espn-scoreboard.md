@@ -199,6 +199,114 @@ as it does for a matchup — checked on the live league, all 23 stats with the
 had to change for it; the card was simply declining to read them. See **Client —
 the League view**, *A bye card shows his week*.
 
+### A category day by day, and the four ways ESPN cannot be asked for it
+
+**A scoreboard cell is one number and the week that produced it is not.** `R
+31–23` says who is ahead and nothing about how: a lead built on the Monday and
+defended since reads identically to one taken on the Saturday, and only the
+second is still worth doing something about. So each category cell opens a chart
+of that category **day by day, both sides** (see **Client — the League view**,
+*A category opens a chart of how it moved*), and the whole of the work was
+establishing whether ESPN can answer for a day at all.
+
+**It cannot, and the probes are written down here so nobody repeats them.** All
+figures the live 12-team league, matchup period 18, scoring periods 132–138.
+
+- **`cumulativeScore` is not parameterised by `scoringPeriodId`.** This is the
+  one that would have made the series free *and* authoritative — one read per
+  day of ESPN's own running total, with no summation of ours anywhere. It is a
+  fact about the **matchup** period and nothing else: asked at
+  `scoringPeriodId` 0, 132, 134, 136, 138 and 146, the same matchup comes back
+  with **byte-identical scores every time** (`R 32 · HR 13 · RBI 28 · K 45 ·
+  ERA 4.43283582`). What the day *does* change is the payload — **23,511 bytes**
+  at a day outside the period against **521,748–579,080** at one inside it,
+  which is the two rosters `scoringPeriodId=0` empties.
+- **A response carries exactly one day's stat lines.** The obvious escape —
+  read one day and take the whole week out of it — does not exist: over the 28
+  roster entries of one side, every stat line present is
+  `scoringPeriodId/statSourceId/statSplitTypeId` = **`136/0/5`, 28 of 28**.
+- **`players.filterStatsForTopScoringPeriodIds` is a 400**, as it already is on
+  the Rankings tab's own probe table.
+- **`schedule.filterScoringPeriodIds` is ignored** — **125,723 bytes** and the
+  same single day back, whatever it names. So is `filterStatsForSplitTypeIds` on
+  `mScoreboard`, which still empties the roster (23,511 bytes, 0 entries).
+- **`mBoxscore` is `mScoreboard` under another name** — **577,813 bytes**, one
+  day, both roster forms.
+
+**So a day is one read, and the series is the days summed** — which is
+`scoringPeriodTotals`' own arithmetic, already validated at 120 of 120 cells
+against ESPN's final `cumulativeScore` and **re-validated for this**: summing
+the seven days of period 18 reproduces every one of its **120 category cells**,
+worst delta **4.86e-9**, which is ESPN's own eight-decimal rounding of an OPS
+rather than a disagreement.
+
+**Counting stats add and rates are rebuilt**, the rule `getSpanTotals` and
+`withScoringPeriod` both obey: the running ERA on day four is four days of
+earned runs over four days of outs, never four ERAs averaged. Every `DERIVED` id
+is recomputed from the running components at each day.
+
+**A day that cannot be read stops the series rather than being skipped.** Every
+figure is a running total, so a hole in the middle is not a missing point but a
+wrong one for every day after it — the sum would be short by that day's
+production with nothing on screen to say so. The first failure marks its own day
+`ok: false` and every point from there is null, and the chart draws the days it
+actually knows.
+
+### A day's own counts are a blob, which is what makes the chart affordable
+
+**`espn-day-totals-{leagueId}-{scoringPeriod}-v1.json` is one scoring period's
+production per team**, keyed by stat id — **~7.5KB** on the live league against
+the **77,483–126,786 bytes** it is reduced from. Store the answer, not the
+payload, which is the rule `espn-period-anchor` and the RotoWire index already
+follow.
+
+**A finished day is a fact**, which is the one split here and it is
+`getTeamRoster`'s exactly: a scoring period strictly before ESPN's
+`latestScoringPeriod` is a day whose games have been played and whose lineups
+can no longer be edited, so it is read back with **no freshness test at all**.
+The day being played is memory-only on `LIVE_TTL_MS`. That is what makes the
+chart affordable on the week anybody is looking at — the first press pays for
+the whole week, and every minute after it re-reads the one day that can still
+move.
+
+**The live scoreboard reads through it too, which it did not before.**
+`fetchMatchups` only ever asks for `latestScoringPeriod`, so it always takes the
+live path and its behavior is unchanged; what it gains is the `inFlight` guard,
+so a cold container serving three tabs sends one upstream rather than three.
+
+**`getMatchupSeries` is keyed by team and stat rather than by matchup**, so one
+read serves every card on the board: the ten cards of a 12-team league are six
+matchups over the same twelve teams and the same ten categories. **The span is
+clamped to the day ESPN is on**, so a period that declares more days than have
+been played is never asked for a day that has not happened — on a settled period
+that is the period's own last day, and on the live one `latestScoringPeriod`,
+which is the same day the scoreboard adds to `cumulativeScore`. The fan-out is
+the repo's own `mapLimit` at **6**; the assembled series is memoized per league
+and period, frozen with no freshness test and live on `LIVE_TTL_MS`, and `force`
+reaches the live one while the frozen day blobs stand.
+
+**Measured through the route on the live league.** A settled seven-day week is
+**797,498 bytes and 1,588ms of upstream**, paid once ever: **675ms** genuinely
+cold in a fresh process with no blobs, **320ms** from the fourteen blobs in a
+fresh process, and **1.3ms** warm. The live week is **509ms / 219ms / 1.3ms** on
+the same three, its eighth day being the only one re-read. The response itself
+is **6,827 bytes** for a seven-day period and **7,663** for the live eight-day
+one.
+
+**Which is exactly why it is a route of its own** rather than a field on
+`/api/espn/scoreboard`: that board is read by everybody who opens the League
+page, and this is a week of ESPN rosters summed a day at a time. It is the split
+`/api/espn/matchup-window` already makes for the same page from the other
+direction — that one is 103 bytes and is fetched once a session, and this one is
+paid on the first press.
+
+**Validated end to end through both routes**, which is the check that matters
+for a series whose whole claim is that it ends where the card does: the last
+point of every series equals the figure on the scoreboard cell that opened it —
+**120 of 120 cells on settled period 18** (worst 4.86e-9) and **120 of 120
+exactly** on the live period 19, where the two are bit-identical because the
+scoreboard's own figure is `cumulativeScore` plus the same day this sums.
+
 ### How many acquisitions a manager gets, which ESPN does not publish
 
 **`transactionCounter.matchupAcquisitionTotals` on every `mTeam` row is how many
