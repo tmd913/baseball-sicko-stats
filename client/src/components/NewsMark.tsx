@@ -20,8 +20,8 @@ export function PlayerNewsMark({ id, name, size }: { id: number; name: string; s
  * The newspaper: this player has been in the news, and how recently.
  *
  * The precedent is `LockMark` and the shape is deliberately the same one —
- * a labelled component that owns its own words, plus the bare path beside it
- * for a caller that supplies its own name and its own colour. A glyph copied
+ * a labeled component that owns its own words, plus the bare path beside it
+ * for a caller that supplies its own name and its own color. A glyph copied
  * into three callers is a glyph that eventually differs in one of them, and
  * this one is drawn in three: a research row, a summary row and the player
  * page's `<h1>`.
@@ -40,7 +40,7 @@ export function PlayerNewsMark({ id, name, size }: { id: number; name: string; s
  * you last looked" has to be the one that catches the eye and the mark that
  * means "the day before" has to be the one that doesn't. Red is the app's red —
  * the same token the arsenal tables spend on a delta going the wrong way — and
- * grey is the tone the identity block's own sub-line takes, one step quieter
+ * gray is the tone the identity block's own sub-line takes, one step quieter
  * than the lock's `--muted` because a day-old note is a quieter fact than a man
  * being unavailable.
  *
@@ -52,7 +52,7 @@ export function NewsMark({ name, news, size = 13 }: { name: string; news: Recent
   // The headline is in the title because it is what turns the mark from "go and
   // look" into "he is on the IL" — and it is free, the map having had to carry
   // *something* to date and the newest item's own words being the honest thing
-  // to carry. The day is named beside it so a reader can check the colour
+  // to carry. The day is named beside it so a reader can check the color
   // against a date rather than having to trust it.
   const when = news.level === 'today' ? 'today' : 'yesterday';
   const label = `${name} was in the news ${when} — ${news.headline}`;
@@ -65,7 +65,7 @@ export function NewsMark({ name, news, size = 13 }: { name: string; news: Recent
 }
 
 /** The newspaper alone, in `currentColor` and saying nothing — for a caller
- *  that supplies its own name and its own colour, the split `BaseballMark` and
+ *  that supplies its own name and its own color, the split `BaseballMark` and
  *  `LockMark` both have. Nothing needs it yet; it exists so that the day a
  *  control has to wear this mark, it wears *this* mark. */
 export function NewsGlyph({ size = 13, width = 2 }: { size?: number; width?: number }) {
@@ -89,7 +89,7 @@ export function NewsGlyph({ size = 13, width = 2 }: { size?: number; width?: num
           **Two lines of type rather than three**, and it is a legibility figure
           rather than a taste: at 13px a viewBox unit is 0.54px, so the three
           lines a newspaper wants would sit 1.9px apart under a stroke that
-          paints 1.08px, and would read as a grey block. Two lines 5 units apart
+          paints 1.08px, and would read as a gray block. Two lines 5 units apart
           clear each other by 2.7px, and the short second line is what says
           "text" rather than "two rules". */}
       <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />

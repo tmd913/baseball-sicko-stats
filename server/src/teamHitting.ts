@@ -317,7 +317,7 @@ function toLine(c: HitCounts): TeamHittingLine | null {
   };
 }
 
-/** Which categories get a rank, and which end of each is the better offence. */
+/** Which categories get a rank, and which end of each is the better offense. */
 const RANKED: {
   key: keyof TeamHittingRanks;
   of: (l: TeamHittingLine) => number | null;
@@ -329,7 +329,7 @@ const RANKED: {
   { key: 'slg', of: (l) => Number(l.slg) },
   { key: 'ops', of: (l) => Number(l.ops) },
   { key: 'homeRuns', of: (l) => l.homeRuns },
-  // Striking out less is the better offence, so 1st here is the *fewest* K.
+  // Striking out less is the better offense, so 1st here is the *fewest* K.
   { key: 'kRate', of: (l) => Number(l.kRate), lowIsBest: true },
   { key: 'bbRate', of: (l) => Number(l.bbRate) },
 ];

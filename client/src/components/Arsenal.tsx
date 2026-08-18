@@ -14,7 +14,7 @@ export const pct = (x: number | null): string => (x === null ? '—' : `${Math.r
 /** Baseball rate line ".265" / "1.250" — drops the leading zero below 1.000. */
 export const avg3 = (n: number | null): string => (n === null ? '—' : n.toFixed(3).replace(/^0\./, '.'));
 
-/** One labelled stat in a results strip — the arsenal's, or the game line's. */
+/** One labeled stat in a results strip — the arsenal's, or the game line's. */
 export function ResultStat({
   label,
   value,
@@ -154,7 +154,7 @@ export function ArsenalMetric({
 }
 
 /**
- * A labelled rate bar — the arsenal row's usage share and strike rate, and the
+ * A labeled rate bar — the arsenal row's usage share and strike rate, and the
  * game line's strike rate. `counts` spells out the numbers behind the
  * percentage (pitches thrown, or strikes and balls).
  */

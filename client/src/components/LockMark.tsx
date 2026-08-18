@@ -6,11 +6,11 @@
  * glyph that eventually differs in one of them.
  *
  * **Two exports, because the mark has two kinds of caller.** `LockMark` is the
- * labelled mark on a row: a fact about a player, never a control, and the same
+ * labeled mark on a row: a fact about a player, never a control, and the same
  * label in both places it appears, so the title lives here and neither caller
  * can give it different words. `LockGlyph` is the path alone, which is what the
  * research board's `Other Rosters` button draws — a *control*, whose accessible
- * name is its own label and whose colour is the button's `.on` state rather
+ * name is its own label and whose color is the button's `.on` state rather
  * than this file's. That split is the one `BaseballMark` has always had (it
  * exports the glyph and lets each caller wrap it); the lock only needed it once
  * a button had to wear the same mark as the rows it selects.
@@ -20,7 +20,7 @@
  * lock says "this one isn't available", which is the reader ruling a row *out*.
  * A mark that shouted about unavailability would make the board's own answer —
  * the free agents, the rows with no mark at all — the quietest thing on it. The
- * colour is `--muted`, one step down from the accent and the same tone the
+ * color is `--muted`, one step down from the accent and the same tone the
  * identity block's own sub-line takes.
  *
  * It is drawn only where a fantasy league is connected: with no league there is
@@ -51,7 +51,7 @@ export function LockMark({
 }
 
 /** The padlock alone, in `currentColor` and saying nothing — for a caller that
- *  supplies its own name and its own colour. */
+ *  supplies its own name and its own color. */
 export function LockGlyph({ size = 13, width = 2 }: { size?: number; width?: number }) {
   return (
     <svg
@@ -65,7 +65,7 @@ export function LockGlyph({ size = 13, width = 2 }: { size?: number; width?: num
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      {/* Body and shackle, balanced about the box's own centre the way the
+      {/* Body and shackle, balanced about the box's own center the way the
           baseball's seams are: the ink runs 3 → 20.5 down and 4.5 → 19.5
           across, so the mark sits on the same optical middle as the ball it
           stands beside and needs no nudge of its own — it takes the

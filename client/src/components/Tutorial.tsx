@@ -595,7 +595,7 @@ const CHAPTERS: Chapter[] = [
           <dt>Splits</dt>
           <dd>
             His season cut by the hand he faced, as one bar per stat running from the
-            centre toward the side he is <em>stronger</em> against — so the question a
+            center toward the side he is <em>stronger</em> against — so the question a
             platoon split is opened with is answered without any subtraction. A hatched
             bar means one side is too thin to lean on.
           </dd>
@@ -713,7 +713,7 @@ const CHAPTERS: Chapter[] = [
         </p>
         <ul className="tut-list">
           <li>
-            Headshots pick up a coloured ring for a player who's{' '}
+            Headshots pick up a colored ring for a player who's{' '}
             <strong>at bat</strong>, <strong>on deck</strong>,{' '}
             <strong>on base</strong> or <strong>on the mound</strong>, on the cards
             and in the summary table alike, with a matching tag beside the name.
@@ -766,12 +766,12 @@ const CHAPTERS: Chapter[] = [
               <GearIcon /> Settings
             </strong>{' '}
             — beside the title: hiding injured players, muting clip audio, the
-            colour scheme, editing your player order, this guide, and sign out. The
+            color scheme, editing your player order, this guide, and sign out. The
             two toggles and the scheme are saved to your account, so they follow you
             to another device.
           </li>
           <li>
-            <strong>Four colour schemes.</strong> <Ui>Midnight</Ui> is the navy
+            <strong>Four color schemes.</strong> <Ui>Midnight</Ui> is the navy
             original, <Ui>Lavender</Ui> is dark gray and violet, and{' '}
             <Ui>Maroon</Ui> and <Ui>Powder Blue</Ui> are the two halves of a 1980
             road uniform — one dark, one light. Pick one under{' '}

@@ -15,7 +15,7 @@
  *
  * 2. **Matching ESPN players to MLB ids.** ESPN numbers players in its own
  *    space and publishes no MLB id, so the join is by **name plus team**: the
- *    normalised full name, disambiguated by the club, since ESPN's player
+ *    normalized full name, disambiguated by the club, since ESPN's player
  *    universe carries minor leaguers and duplicate names are real (two Fernando
  *    Cruzes, two Wilmer Floreses). Checked against a live 12-team league: 317
  *    of 319 rostered players matched, and the two that didn't are players the
@@ -295,7 +295,7 @@ export interface IndexEntry {
 }
 
 export interface MlbIndex {
-  /** Normalised name to every MLB player who has it — a list, because the
+  /** Normalized name to every MLB player who has it — a list, because the
    *  season roster really does hold three collisions of its own. */
   byName: Map<string, IndexEntry[]>;
 }
@@ -303,7 +303,7 @@ export interface MlbIndex {
 let indexCache: { index: MlbIndex; fetchedAt: number } | null = null;
 
 /**
- * Every player on the season's MLB roster, by normalised name. Its own fetch
+ * Every player on the season's MLB roster, by normalized name. Its own fetch
  * rather than `getSeasonPlayers`, which resolves a player's club to its full
  * name — this needs the **team id**, since that is the currency the ESPN team
  * table above is written in and a name is one rename away from breaking.
@@ -352,7 +352,7 @@ export async function getMlbIndex(): Promise<MlbIndex> {
  * neither.
  *
  * **Exported because `rotowire.ts` runs the identical join** and a second
- * normalisation beside this one is exactly the drift this codebase spends its
+ * normalization beside this one is exactly the drift this codebase spends its
  * comments avoiding: one fold, one index, one tie-break rule, two upstreams.
  */
 export function matchMlbPlayer(
@@ -678,7 +678,7 @@ export interface RosterTrendWindow {
    *  saved column set and a `cols=` link go on naming the same column. */
   window: TrendWindow;
   /** The span actually measured, within `TREND_DRIFT[window]` of it. Reported
-   *  rather than assumed because the header says it: a column labelled "7d"
+   *  rather than assumed because the header says it: a column labeled "7d"
    *  that measured five days would be a lie the reader has no way to catch. */
   days: number;
   /** Change in roster % per MLB player id over `days`. */
@@ -1121,7 +1121,7 @@ async function currentScoringPeriod(creds: EspnCreds): Promise<number | null> {
  * The anchor answers whenever the schedule could be read, and the arithmetic
  * touches no clock of ours. Failing that it is the old rule — ESPN's pointer
  * plus the days from `baseballToday()` — which is right whenever the two clocks
- * agree and is the behaviour this file had for its whole life; the point of the
+ * agree and is the behavior this file had for its whole life; the point of the
  * anchor is that agreement is no longer something we have to hope for.
  *
  * Null only when neither could answer, which leaves the request
@@ -1227,7 +1227,7 @@ export interface EspnRosterPlayer {
    * ESPN's injury designation, raw (`DAY_TO_DAY`, `OUT`, `TEN_DAY_DL`, …), or
    * null when he is `ACTIVE` or it is absent.
    *
-   * Carried raw rather than pre-labelled, the way `RosterStatus` carries MLB's
+   * Carried raw rather than pre-labeled, the way `RosterStatus` carries MLB's
    * code and description: presentation is `lib.ts`'s job on the client, and one
    * of these maps to a badge the app already draws.
    *
@@ -1280,7 +1280,7 @@ function toRosterPlayer(
     starting: slotId !== BENCH_SLOT && slotId !== IL_SLOT,
     injured: player.injured === true,
     // 'ACTIVE' is the overwhelming majority and means nothing worth saying, so
-    // it is normalised to null here rather than filtered at every read site.
+    // it is normalized to null here rather than filtered at every read site.
     injuryStatus:
       player.injuryStatus && player.injuryStatus !== 'ACTIVE' ? player.injuryStatus : null,
   };
@@ -1354,7 +1354,7 @@ const inFlight = new Map<string, Promise<EspnOwnership>>();
 /**
  * `date` is the day the caller wants the **lineup** for — the last day of the
  * range the roster views are reporting on. Today and anything before it read
- * ESPN's current period, so the default is the behaviour this has always had;
+ * ESPN's current period, so the default is the behavior this has always had;
  * see `ownershipDay` above for why a past day reads as today here.
  *
  * `force` drops **every** period of the league, not just the one being asked
@@ -1454,7 +1454,7 @@ export async function getOwnership(
 // this section for the roster half, which is the later of the two and reverses
 // a rule stated above.
 //
-// **A range of days is a range of lineups.** The roster views summarise a date
+// **A range of days is a range of lineups.** The roster views summarize a date
 // range, and until now they applied *one* lineup — the one set for the end of
 // it — to every day in it. That is the wrong arithmetic for the thing the
 // summary table is: a player started on Monday and benched on Wednesday earned
@@ -1560,7 +1560,7 @@ const lineupInFlight = new Map<string, Promise<EspnRosterPlayer[]>>();
  * `docs/claude/espn.md`. `startedIds` derives the old answer from the new one.
  *
  * **Read `forTeamId`, not the whole league.** The consumer is always one team on
- * one day, and ESPN honours the filter: measured, `view=mRoster` for a single
+ * one day, and ESPN honors the filter: measured, `view=mRoster` for a single
  * team is **197,554 bytes against the full league's 2,237,620** — 11.3× smaller
  * — and the 28 entries it returns are byte-identical to that team's entries in
  * the full read (checked name and `lineupSlotId` for all 28, 0 differences),
@@ -1681,7 +1681,7 @@ export function startedIds(roster: EspnRosterPlayer[]): number[] {
  * it draws its chips from, which is exactly what the app did before any of this
  * — instead of quietly reporting a day of your team as a day of nobody's. One
  * bad day therefore costs that day's precision and nothing else; the whole
- * thing failing costs the feature and leaves the old behaviour standing.
+ * thing failing costs the feature and leaves the old behavior standing.
  *
  * `seed` is a day already read by the caller — `fantasyWatchlist` has the
  * end-of-range roster in hand from the ownership read, so asking ESPN for it a
@@ -1876,7 +1876,7 @@ export function rosterToWatchlist(roster: EspnRosterPlayer[]): WatchPlayer[] {
 // back with `result: null`, `wins/losses/ties: 0` and `winner: 'UNDECIDED'`, so
 // a scoreboard that only reported ESPN's answer would say nothing at all about
 // the week being played — which is the week anybody is looking at. So the
-// comparison is done here for every matchup, live and final alike, honouring
+// comparison is done here for every matchup, live and final alike, honoring
 // `isReverseItem` (ERA and WHIP, where the smaller number wins).
 //
 // **Checked against ESPN's own answer rather than reasoned about**: over all 18
@@ -1887,7 +1887,7 @@ export function rosterToWatchlist(roster: EspnRosterPlayer[]): WatchPlayer[] {
 // ESPN's `cumulativeScore` on all 108. So a live matchup and a final one are
 // drawn by the same arithmetic, and the final one is drawn by arithmetic known
 // to reproduce ESPN's. `ineligible` was scanned for over the same 5,244
-// score cells and is false on every one; it is nonetheless honoured, since a
+// score cells and is false on every one; it is nonetheless honored, since a
 // category a team cannot score in is not a category it is losing.
 
 /** How a league decides who wins — and therefore what this view can honestly
@@ -2263,7 +2263,7 @@ interface EspnScheduleSide {
  * the new matchup period, so on a Monday morning the highest period it carries
  * is the week that has just ended. There is nothing to read for the new one.
  * That is shown as what it is: the period's own dates, and `Final` rather than
- * `Live`, with the arrows to move. A wrong week silently labelled "this week"
+ * `Live`, with the arrows to move. A wrong week silently labeled "this week"
  * is the failure being avoided, and dates are what avoid it.
  */
 interface LeagueMeta {
@@ -3718,7 +3718,7 @@ function rankBy(
  * **`matchup` means the week being played, not the week the Scoreboard tab is
  * navigated to.** The tabs are independent pages of one view — the period
  * arrows belong to the Scoreboard because they govern only it — and a span
- * labelled `Current matchup` that silently followed somebody else's arrows
+ * labeled `Current matchup` that silently followed somebody else's arrows
  * would be a label that is false as often as it is true. Which week it is, is
  * printed under the tabs.
  */

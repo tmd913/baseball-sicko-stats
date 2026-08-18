@@ -488,19 +488,19 @@ export function rangePitchingSummary(line: PitchingLine): string {
 }
 
 /**
- * What a base-running event did for the runner, which is what its colour says.
+ * What a base-running event did for the runner, which is what its color says.
  *
- * Ten kinds is far too many colours, and the distinction the eye actually wants
+ * Ten kinds is far too many colors, and the distinction the eye actually wants
  * off a feed is not *which* rule sent him down the line but whether he gained,
  * was given, lost or scored:
  *
  * - `take` he took the base himself (a steal) — the live purple the on-base
  *   ring already uses;
  * - `free` he was handed it (a balk, a wild pitch, a passed ball, a pickoff
- *   throw into right field, the defence declining to contest) — `--walk`, the
- *   colour of a free base at the plate, which is what this is on the paths;
+ *   throw into right field, the defense declining to contest) — `--walk`, the
+ *   color of a free base at the plate, which is what this is on the paths;
  * - `out` he was thrown out (caught stealing, picked off) — `--out`, the same
- *   grey an at-bat's out takes;
+ *   gray an at-bat's out takes;
  * - `run` he scored — `--hit`.
  */
 export type BaseEventTone = 'take' | 'free' | 'out' | 'run';
@@ -707,7 +707,7 @@ export function teamLogoUrl(teamId: number): string {
 }
 
 /**
- * **The ground a cap mark is drawn on, in the club's own colour.**
+ * **The ground a cap mark is drawn on, in the club's own color.**
  *
  * `teamLogoUrl` above asks MLB for the **`on-dark`** cut, and the note there
  * says why: the light cut is drawn in the club's own navy for half the league,
@@ -726,18 +726,18 @@ export function teamLogoUrl(teamId: number): string {
  * **It is a curated table because no upstream publishes one**, which is the same
  * answer `STAT_META` and `pitchLeague.ts` give to the same question. Probed
  * rather than assumed: `statsapi.mlb.com/api/v1/teams/{id}` carries `name`,
- * `abbreviation`, `venue`, `league`, `division` and no colour field of any kind,
+ * `abbreviation`, `venue`, `league`, `division` and no color field of any kind,
  * and `hydrate=team(colors)` changes nothing about the response.
  *
  * **Deriving it from the `on-light` cut was tried and gets 24 of 30.** That cut
- * is drawn in the club's own dark colours, so its darkest ink is a fair proxy —
+ * is drawn in the club's own dark colors, so its darkest ink is a fair proxy —
  * NYY yields `#132448`, DET `#0a2240`, KC `#004687`, ATH `#003831`. It breaks on
- * the six clubs whose cap colour appears in neither cut (CWS's carries no hex at
+ * the six clubs whose cap color appears in neither cut (CWS's carries no hex at
  * all, and PIT, SF, BAL, AZ and MIA are drawn in a bright secondary), and a rule
  * that is right four times in five is worse than a table, because nothing on
  * screen would say which five were wrong.
  *
- * **What is mechanical is the check.** Every colour in every mark was read out
+ * **What is mechanical is the check.** Every color in every mark was read out
  * of the thirty SVGs and measured against the ground below, requiring the
  * mark's *best* ink to clear **4.5:1** — the best rather than the worst, because
  * a cap really is red-on-navy in places and the question is whether the mark
@@ -1236,7 +1236,7 @@ export function liveRoleLabel(role: LiveRole): string {
  * own team came up to bat, and climbed back in an inning later, all game. He is
  * pitching until he is taken out, and the section should say so without
  * flickering; a pitcher who *has* been replaced falls out of it for good, which
- * is the half of the old behaviour that was right.
+ * is the half of the old behavior that was right.
  */
 export function liveRoleGame(
   report: PlayerReport,
@@ -1528,7 +1528,7 @@ export function finalSwingBatSpeed(pa: PlateAppearance): number | null {
  * off-by-one from a local or a UTC date — and a baseball day does not end at
  * midnight either: a 10pm ET first pitch out west finishes around 1am, so at
  * 12:30am the day this should name is still the one whose games are ending.
- * The day turns at **3am ET**: later than any game realistically runs, earlier
+ * The day turns at **3am ET**: later than any game realiztically runs, earlier
  * than anything the next day starts. `server/src/etDate.ts` mirrors the pair
  * (the two workspaces cannot share code, and the API's default date has to land
  * where the client's presets do) — change both.

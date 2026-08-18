@@ -1249,7 +1249,7 @@ const eventTypeBase = (et: string): string | null => {
 };
 
 /** A base as MLB's `movement` spells it ("2B", or "score") in the form the app
- *  prints. Unrecognised values pass through rather than becoming null — an
+ *  prints. Unrecognized values pass through rather than becoming null — an
  *  unfamiliar spelling is better read literally than dropped. */
 const movementBase = (base: string | null | undefined): string | null => {
   if (!base) return null;
@@ -1318,7 +1318,7 @@ const baseEventKind = (et: string): BaseEventKind | null => BASE_EVENT_KINDS[et]
  * balk and his wild pitch.
  *
  * Three are deliberately absent. A **passed ball** is charged to the catcher; a
- * **defensive indifference** is the defence declining to contest and belongs to
+ * **defensive indifference** is the defense declining to contest and belongs to
  * nobody; and a **run** is already on his line twice over — the boxscore counts
  * it and the innings section shows the play that scored it — where an item per
  * run allowed would be four or five a start of pure repetition.

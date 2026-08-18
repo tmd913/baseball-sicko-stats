@@ -211,7 +211,7 @@ export function PlayerAdder({
         />
         {/* The field is disabled until the roster lands, so the ball takes the
             clear button's slot — nothing can be typed for it to clear, and a
-            disabled box with a greyed placeholder is otherwise the one wait in
+            disabled box with a grayed placeholder is otherwise the one wait in
             the app that says nothing is happening. */}
         {loading && (
           <span className="adder-busy" role="status">

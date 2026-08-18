@@ -28,7 +28,7 @@ import type {
  * — the research board's own percentile badge folded onto rather than
  * restyled, so a second line under a number is one object in this app. A rank
  * is what makes a team line readable at all: `.231` says nothing until you know
- * it is 28th. **1st is always the best offence**, so the fewest strikeouts
+ * it is 28th. **1st is always the best offense**, so the fewest strikeouts
  * ranks 1st rather than 30th, and every cut ranks within **its own**
  * population — a 30-day home line against the other 29 teams' 30-day home
  * lines, never against the season board.
@@ -76,7 +76,7 @@ const COLUMNS: {
   { key: 'hr', label: 'HR', title: 'Home runs', of: (l) => String(l.homeRuns), rank: 'homeRuns' },
   {
     key: 'k', label: 'K%',
-    title: 'Strikeout rate — 1st is the fewest, this being a ranking of offences',
+    title: 'Strikeout rate — 1st is the fewest, this being a ranking of offenses',
     of: (l) => pct(l.kRate), rank: 'kRate',
   },
   { key: 'bb', label: 'BB%', title: 'Walk rate', of: (l) => pct(l.bbRate), rank: 'bbRate' },

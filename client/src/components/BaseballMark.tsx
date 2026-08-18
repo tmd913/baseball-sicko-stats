@@ -8,7 +8,7 @@
  * A path duplicated five times is a path that eventually differs in one of
  * them.
  *
- * The two seams run from 7 to 17 — symmetric about the ball's own centre, so
+ * The two seams run from 7 to 17 — symmetric about the ball's own center, so
  * the ink is balanced top to bottom. They used to hang from the upper edge
  * (7.5 down to 15, leaving the bottom third empty), which made the mark read
  * as riding high wherever it sat beside text however well its box was aligned.

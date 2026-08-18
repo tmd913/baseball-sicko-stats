@@ -55,7 +55,7 @@ export const SCHEDULE_SPANS: ScheduleSpan[] = [7, 14];
  *  (including absence) is off. A span this reader is not offered resolves to
  *  the one that *is* when it is **drawn** rather than being dropped here — see
  *  `effectiveSpan`, and the rule `cols=` follows: a link says what it meant
- *  even where this reader cannot honour it. */
+ *  even where this reader cannot honor it. */
 export function toScheduleSpan(v: string | null): ScheduleSpan | null {
   return v === '7' ? 7 : v === '14' ? 14 : v === 'matchup' ? 'matchup' : v === 'next' ? 'next' : null;
 }
@@ -464,7 +464,7 @@ export function StartChip({ tier, cadence }: { tier: StartTier; cadence?: number
  * table needing a `cellClass` rule for the other's sake.
  *
  * Three things are drawn and each is a state rather than a value, which is the
- * only thing these tables spend colour on: a **live** game's opponent takes the
+ * only thing these tables spend color on: a **live** game's opponent takes the
  * accent green the summary table's own opponent cell gives a live inning, a
  * **postponement** reads `PPD` in the same amber that cell uses, and a game
  * already **final** goes muted, so today's column says at a glance which of its

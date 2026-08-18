@@ -32,7 +32,7 @@ import type { PlayerKind } from '../types';
  * Search and Filters stay inline and this one does not, and the difference is
  * volume: those two are a field and a three-part sentence, one line of the
  * wrapping tab row each, where this holds the order row **and** every column
- * the board has in four labelled runs — 39 of them on the batting board and 44
+ * the board has in four labeled runs — 39 of them on the batting board and 44
  * on the pitching one. Opened inline that is a block of chips several hundred
  * pixels tall wedged into the chrome, pushing the table it describes down the
  * page and, on a phone, taking the screen outright while pretending to be a
@@ -65,7 +65,7 @@ import type { PlayerKind } from '../types';
 /**
  * The dialog shell. Portal, body lock, Escape, backdrop, head and one scrolling
  * body are the app's shared `Modal`; what is left here is the title and the
- * width, this box being sized for four labelled runs of chips where the pitcher
+ * width, this box being sized for four labeled runs of chips where the pitcher
  * breakdown next door is sized for an arsenal table.
  *
  * The heading id is fixed rather than per-caller because only one of these can
@@ -513,7 +513,7 @@ function ColumnOrder({
 }
 
 /**
- * The picker itself: the order row, then the columns in their labelled runs,
+ * The picker itself: the order row, then the columns in their labeled runs,
  * then the way back to the defaults — inside the dialog above.
  *
  * **It takes the vocabulary and the selection, and hands back a selection.**
@@ -608,7 +608,7 @@ export function ColumnPicker({
     <ColumnsDialog onClose={onClose}>
       {/* Which order, then which columns. The two questions this picker
           answers are different shapes — one flat sequence against four
-          labelled runs — and each is drawn the way its own wants; see
+          labeled runs — and each is drawn the way its own wants; see
           `ColumnOrder`. */}
       <ColumnOrder columns={shown} onReorder={reorder} />
       {columnGroups(all).map((g) => {

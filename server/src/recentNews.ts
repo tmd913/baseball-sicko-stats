@@ -10,7 +10,7 @@ const UA = { 'User-Agent': 'statcast-sicko/1.0' };
  * # Who in the league has news, and when — one read for everybody.
  *
  * The mark beside a player's name says *there is something in his News tab and
- * it is from today* (red) *or from yesterday* (grey). That mark is drawn on the
+ * it is from today* (red) *or from yesterday* (gray). That mark is drawn on the
  * research board, which is six hundred names at once, so the one thing this
  * could not be is `/api/players/:id/news` six hundred times. It is the class
  * `getPlayerPool` and the ESPN ownership map are in: **one upstream sweep,
@@ -42,7 +42,7 @@ const UA = { 'User-Agent': 'statcast-sicko/1.0' };
  * It is the right thing to re-measure if the mark ever starts missing a player
  * on a deadline day, and the failure is benign in the meantime: a club whose 25
  * items were all filed today would still mark every red row correctly and would
- * only lose greys.
+ * only lose grays.
  *
  * **ESPN's club article feed was the third candidate and is deliberately not
  * here.** It would answer in bulk — it is already fetched and cached per club —
@@ -109,7 +109,7 @@ const TTL = 30 * 60 * 1000;
  * would be a stored answer that goes wrong at 3am whether or not anything about
  * it was stale. Holding the date and classifying at read time makes the blob
  * mean the same thing whenever it is read, and makes the rollover self-correct
- * with no refetch: an item that was red yesterday is grey this morning and
+ * with no refetch: an item that was red yesterday is gray this morning and
  * falls out of the map tomorrow, off one comparison.
  */
 const BLOB_KEY = 'news-recent-v1.json';

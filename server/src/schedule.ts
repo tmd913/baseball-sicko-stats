@@ -125,6 +125,10 @@ interface ScheduleResponse {
 function stateOf(s: StatusFields | undefined): ScheduleGame['state'] {
   const d = s?.detailedState ?? '';
   if (s?.codedGameState === 'D' || d.startsWith('Postponed')) return 'postponed';
+  // `Cancelled` is **MLB's own spelling** and is a value off the wire rather
+  // than prose of ours — do not Americanize it. Measured against the 2026
+  // schedule, it is the `detailedState` of 3 games; spelled `Canceled` this
+  // test silently stops matching and each of them is filed as a game played.
   if (d.startsWith('Cancelled') || d.startsWith('Suspended')) return 'postponed';
   if (s?.abstractGameState === 'Live') return 'live';
   if (s?.abstractGameState === 'Final') return 'final';

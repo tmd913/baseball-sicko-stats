@@ -17,7 +17,7 @@
  * it's fixed in `stack.ts` by sending through SES on a domain we own and sign.
  *
  * Failure is the important case. A throw here fails the *sign-up*, not just
- * the email — so everything is wrapped, and anything unrecognised or unhandled
+ * the email — so everything is wrapped, and anything unrecognized or unhandled
  * returns the event untouched, which leaves Cognito to send its own default.
  * A plain-looking email beats an account that can't be created.
  */
@@ -93,7 +93,7 @@ function copyFor(source: string): Copy | null {
  * something, and there is nothing here worth risking on a stylesheet. No
  * images either — a remote image blocked by default leaves a broken frame
  * above the one thing the reader came for, and hurts more than it helps with
- * filters. Colours are the app's own, but light-background: a mail client's
+ * filters. Colors are the app's own, but light-background: a mail client's
  * dark mode inverts what it likes, and a dark card is the thing it most often
  * gets wrong.
  */

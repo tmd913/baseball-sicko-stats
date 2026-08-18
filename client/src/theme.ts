@@ -1,8 +1,8 @@
 /**
- * The colour scheme, and everything that has to know one exists.
+ * The color scheme, and everything that has to know one exists.
  *
  * There are four, and they are **palettes rather than stylesheets**: `styles.css`
- * declares every colour the app draws as a token on `:root`, and a theme is a
+ * declares every color the app draws as a token on `:root`, and a theme is a
  * block that redeclares those tokens against `html[data-theme='…']`. No
  * component reads a theme, and nothing here knows a single class name.
  *
@@ -25,24 +25,24 @@ export type Theme = {
    *  controls, scrollbars and the address bar follow the page rather than
    *  sitting on it in the other polarity. */
   scheme: 'dark' | 'light';
-  /** The page colour, painted before the stylesheet has loaded — see
+  /** The page color, painted before the stylesheet has loaded — see
    *  `index.html` — so a reload does not flash the other theme. It is the
    *  theme's own `--bg` and is the one value duplicated outside the CSS. */
   bg: string;
   /** Three stops for the swatch beside the name in the picker: the page, an
    *  edge on it, and the accent. Real palette values rather than a flattering
    *  approximation — a picture of the thing is the only honest way to offer a
-   *  colour scheme, and the reason the picker is swatches rather than words.
+   *  color scheme, and the reason the picker is swatches rather than words.
    *
    *  The middle stop is `--border` rather than `--panel`, which is what it was
    *  first: a card is a step off the page in every theme (`#0b1220` → `#16213a`,
    *  `#1c1b22` → `#2a2833`, `#1d1319` → `#2b1d26`) and at 8px wide that step is
    *  invisible, so the swatch read as two stops rather than three. On Powder
    *  Blue there is no step at all — the page and the card are both white — so
-   *  the middle stop is the only thing carrying the theme's own colour, which
+   *  the middle stop is the only thing carrying the theme's own color, which
    *  is the argument for it made twice over. The edge is the widest step a
    *  palette has short of its accent, which for Maroon is the jersey's own
-   *  piping: that swatch is literally the three colours of the uniform, and
+   *  piping: that swatch is literally the three colors of the uniform, and
    *  Powder Blue's is the same three the other way round. */
   swatch: [string, string, string];
 };
@@ -59,7 +59,7 @@ export const THEMES: Theme[] = [
   {
     id: 'lavender',
     label: 'Lavender',
-    hint: 'Dark gray and violet, with a wash of colour.',
+    hint: 'Dark gray and violet, with a wash of color.',
     scheme: 'dark',
     bg: '#1c1b22',
     swatch: ['#1c1b22', '#46415a', '#b49cfb'],
@@ -76,7 +76,7 @@ export const THEMES: Theme[] = [
      with the powder carried by the borders, the table headers and the zebra
      stripe, and the maroon written on it. It is `scheme: 'light'`, which is what
      hands the browser's own form controls, scrollbars and address bar the right
-     polarity — the one line in this file that is not a colour. */
+     polarity — the one line in this file that is not a color. */
   {
     id: 'powder',
     label: 'Powder Blue',

@@ -149,15 +149,15 @@ export function EspnSettings({
    */
   useEffect(() => {
     if (status !== null) return;
-    let cancelled = false;
+    let canceled = false;
     api
       .espn()
       .then((s) => {
-        if (!cancelled) onStatusChange(s);
+        if (!canceled) onStatusChange(s);
       })
       .catch((e: Error) => console.error('ESPN status unavailable:', e.message));
     return () => {
-      cancelled = true;
+      canceled = true;
     };
   }, [status, onStatusChange]);
 
@@ -183,17 +183,17 @@ export function EspnSettings({
       setTeams([]);
       return;
     }
-    let cancelled = false;
+    let canceled = false;
     api
       .espnOwnership()
       .then((o) => {
-        if (!cancelled) setTeams(o.teams);
+        if (!canceled) setTeams(o.teams);
       })
       // The picker is a convenience over a team the SWID usually names on its
       // own; failing to list the league's teams is not worth an error here.
       .catch((e: Error) => console.error('ESPN teams unavailable:', e.message));
     return () => {
-      cancelled = true;
+      canceled = true;
     };
   }, [connected, status?.connected ? status.leagueId : null]);
 
@@ -304,7 +304,7 @@ export function EspnSettings({
   /**
    * Paste handling for the league field: a URL collapses to the id it contains
    * the moment it lands, so what stays on screen is the number the app will
-   * use. Anything unrecognised is left exactly as typed — silently blanking a
+   * use. Anything unrecognized is left exactly as typed — silently blanking a
    * field someone is halfway through is worse than letting the submit fail.
    */
   const onLeagueInput = (raw: string) => {

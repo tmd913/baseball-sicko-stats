@@ -408,7 +408,7 @@ export default function App() {
    *
    * It was one press of ＋ that first needed this — the roster and the search
    * history, measured losing the pick on the very machine it was made on — and
-   * the **settings menu** is the same shape one press further: the colour
+   * the **settings menu** is the same shape one press further: the color
    * scheme and the two toggles sit in one popover and are pressed in sequence
    * by the same person. Driven back to back before this covered them, a theme
    * and a mute-audio press left the dev record **corrupt** and both writes
@@ -520,7 +520,7 @@ export default function App() {
      cleanup: StrictMode's second pass finds the flag and returns while the
      first pass's answer still lands. The trap this codebase records (*the
      roster read hung under StrictMode*) is marking a request answered **and**
-     cancelling its result with a `live` flag the teardown flips. */
+     canceling its result with a `live` flag the teardown flips. */
   const matchupWindowAsked = useRef(false);
 
   /**
@@ -548,22 +548,22 @@ export default function App() {
   const needSchedule = useCallback(() => setScheduleWanted(true), []);
   useEffect(() => {
     if ((scheduleSpan === null && !scheduleWanted) || scheduleWindow) return;
-    let cancelled = false;
+    let canceled = false;
     setScheduleLoading(true);
     setScheduleError(null);
     api
       .schedule()
       .then((w) => {
-        if (!cancelled) setScheduleWindow(w);
+        if (!canceled) setScheduleWindow(w);
       })
       .catch((e: Error) => {
-        if (!cancelled) setScheduleError(e.message);
+        if (!canceled) setScheduleError(e.message);
       })
       .finally(() => {
-        if (!cancelled) setScheduleLoading(false);
+        if (!canceled) setScheduleLoading(false);
       });
     return () => {
-      cancelled = true;
+      canceled = true;
     };
   }, [scheduleSpan, scheduleWanted, scheduleWindow]);
   /**
@@ -614,7 +614,7 @@ export default function App() {
     );
   }, [queueUserWrite]);
   /**
-   * **The colour scheme.** Saved per user like the two toggles above and, like
+   * **The color scheme.** Saved per user like the two toggles above and, like
    * them, deliberately **not in the URL**: it is a fact about this person and
    * this room rather than about the view a link describes — the line `muteAudio`
    * is on, and one step further from the data than `hideil=1`, which is in the
@@ -864,11 +864,11 @@ export default function App() {
   // didn't already speak for, and only where the user hasn't already changed
   // something in the seconds before this landed.
   useEffect(() => {
-    let cancelled = false;
+    let canceled = false;
     api
       .prefs()
       .then((prefs) => {
-        if (cancelled) return;
+        if (canceled) return;
         if (!hideInjuredTouched.current && !hideInjuredFromUrl && prefs.hideInjured) {
           setHideInjuredState(true);
         }
@@ -976,10 +976,10 @@ export default function App() {
       // the page for ever. The same rule `espnStatusSettled` follows, and for
       // the same reason one question earlier.
       .finally(() => {
-        if (!cancelled) setPrefsSettled(true);
+        if (!canceled) setPrefsSettled(true);
       });
     return () => {
-      cancelled = true;
+      canceled = true;
     };
   }, [urlColumns, hideInjuredFromUrl, rosterSourceFromUrl, includeFromUrl, watchlistFromUrl]);
 
@@ -1250,20 +1250,20 @@ export default function App() {
    */
   const espnStatusWritten = useRef(false);
   useEffect(() => {
-    let cancelled = false;
+    let canceled = false;
     api
       .espn()
       .then((s) => {
-        if (!cancelled && !espnStatusWritten.current) setEspnStatus(s);
+        if (!canceled && !espnStatusWritten.current) setEspnStatus(s);
       })
       // Not banner-worthy: with no status the board simply doesn't offer the
       // pill, which is what an unconnected user sees anyway.
       .catch((e: Error) => console.error('ESPN status unavailable:', e.message))
       .finally(() => {
-        if (!cancelled) setEspnStatusSettled(true);
+        if (!canceled) setEspnStatusSettled(true);
       });
     return () => {
-      cancelled = true;
+      canceled = true;
     };
   }, []);
 
@@ -1289,11 +1289,11 @@ export default function App() {
   const inviteCode = useMemo(takeInvite, []);
   useEffect(() => {
     if (!inviteCode) return;
-    let cancelled = false;
+    let canceled = false;
     api
       .joinEspn(inviteCode)
       .then((s) => {
-        if (cancelled) return;
+        if (canceled) return;
         espnStatusWritten.current = true;
         setEspnStatus(s);
         // The onboarding page, not the settings page: what this reader has to
@@ -1302,7 +1302,7 @@ export default function App() {
         setEspnOnboard(true);
       })
       .catch((e: Error) => {
-        if (cancelled) return;
+        if (canceled) return;
         // A link that didn't work is not an onboarding flow — there is no
         // league to name a team in — so this falls back to the settings page
         // with the reason on it, which is also the way to connect one by hand.
@@ -1312,10 +1312,10 @@ export default function App() {
         setEspnOpen(true);
       })
       .finally(() => {
-        if (!cancelled) setEspnStatusSettled(true);
+        if (!canceled) setEspnStatusSettled(true);
       });
     return () => {
-      cancelled = true;
+      canceled = true;
     };
   }, [inviteCode]);
 
@@ -1415,22 +1415,22 @@ export default function App() {
     // entry to the view for the dot on its tab. `matchupId` is in the test so
     // a `?mup=` link landing on the Transactions tab still has a board to draw.
     if (!needsScoreboard) return;
-    let cancelled = false;
+    let canceled = false;
     setScoreboardLoading(true);
     setScoreboardError(null);
     api
       .espnScoreboard(matchupPeriod)
       .then((b) => {
-        if (!cancelled) setScoreboard(b);
+        if (!canceled) setScoreboard(b);
       })
       .catch((e: Error) => {
-        if (!cancelled) setScoreboardError(e.message);
+        if (!canceled) setScoreboardError(e.message);
       })
       .finally(() => {
-        if (!cancelled) setScoreboardLoading(false);
+        if (!canceled) setScoreboardLoading(false);
       });
     return () => {
-      cancelled = true;
+      canceled = true;
     };
     // Deliberately not `scoreboard` or `scoreboardLoading`, either of which
     // would re-run the effect on its own result and spin — the same dependency
@@ -1451,22 +1451,22 @@ export default function App() {
    */
   useEffect(() => {
     if (view !== 'league' || leagueTab !== 'rankings' || !espnConnected) return;
-    let cancelled = false;
+    let canceled = false;
     setRankingsLoading(true);
     setRankingsError(null);
     api
       .espnRankings(rankSpan)
       .then((r) => {
-        if (!cancelled) setRankings(r);
+        if (!canceled) setRankings(r);
       })
       .catch((e: Error) => {
-        if (!cancelled) setRankingsError(e.message);
+        if (!canceled) setRankingsError(e.message);
       })
       .finally(() => {
-        if (!cancelled) setRankingsLoading(false);
+        if (!canceled) setRankingsLoading(false);
       });
     return () => {
-      cancelled = true;
+      canceled = true;
     };
   }, [view, leagueTab, espnConnected, rankSpan, espnLeagueId]);
 
@@ -1489,22 +1489,22 @@ export default function App() {
   useEffect(() => {
     if (view !== 'league' || !espnConnected) return;
     if (transactionsRef.current) return;
-    let cancelled = false;
+    let canceled = false;
     setTransactionsLoading(true);
     setTransactionsError(null);
     api
       .espnTransactions()
       .then((t) => {
-        if (!cancelled) setTransactions(t);
+        if (!canceled) setTransactions(t);
       })
       .catch((e: Error) => {
-        if (!cancelled) setTransactionsError(e.message);
+        if (!canceled) setTransactionsError(e.message);
       })
       .finally(() => {
-        if (!cancelled) setTransactionsLoading(false);
+        if (!canceled) setTransactionsLoading(false);
       });
     return () => {
-      cancelled = true;
+      canceled = true;
     };
     // `transactionsRef` rather than `transactions`, deliberately: depending on
     // the state itself would re-run the effect on its own result and spin,
@@ -1704,7 +1704,7 @@ export default function App() {
    * cache; the previous roster is left in place while the read is in flight, so
    * a re-read never blanks the slot chips.
    *
-   * The sequence number is what the effect's `cancelled` flag used to be, and
+   * The sequence number is what the effect's `canceled` flag used to be, and
    * is needed for the same reason in a different shape: two team picks in quick
    * succession are two reads in flight, and without it the slower one lands
    * last and leaves the chips describing a team nobody chose.
@@ -2385,25 +2385,25 @@ export default function App() {
       return;
     }
     if (view !== 'research') return;
-    let cancelled = false;
+    let canceled = false;
     setResearchLoading(true);
     setResearchError(null);
     api
       .research(researchKind, researchWindow)
       .then((r) => {
         // Keyed off what came back rather than what was asked for, so a server
-        // that fell back to the season (an unrecognised window from an older
+        // that fell back to the season (an unrecognized window from an older
         // link) caches under the window it actually served.
-        if (!cancelled) setResearch((prev) => ({ ...prev, [`${r.kind}:${r.window}`]: r.rows }));
+        if (!canceled) setResearch((prev) => ({ ...prev, [`${r.kind}:${r.window}`]: r.rows }));
       })
       .catch((e: Error) => {
-        if (!cancelled) setResearchError(e.message);
+        if (!canceled) setResearchError(e.message);
       })
       .finally(() => {
-        if (!cancelled) setResearchLoading(false);
+        if (!canceled) setResearchLoading(false);
       });
     return () => {
-      cancelled = true;
+      canceled = true;
     };
   }, [view, researchKind, researchWindow, researchCacheKey, research]);
 
@@ -2450,22 +2450,22 @@ export default function App() {
 
   // Load the season's player list once, for search/autocomplete.
   useEffect(() => {
-    let cancelled = false;
+    let canceled = false;
     setPlayersLoading(true);
     setError(null);
     api
       .players()
       .then((r) => {
-        if (!cancelled) setSeasonPlayers(r.players);
+        if (!canceled) setSeasonPlayers(r.players);
       })
       .catch((e: Error) => {
-        if (!cancelled) setError(e.message);
+        if (!canceled) setError(e.message);
       })
       .finally(() => {
-        if (!cancelled) setPlayersLoading(false);
+        if (!canceled) setPlayersLoading(false);
       });
     return () => {
-      cancelled = true;
+      canceled = true;
     };
   }, []);
 
@@ -2491,15 +2491,15 @@ export default function App() {
    * never watchlisted anyone sees.
    */
   useEffect(() => {
-    let cancelled = false;
+    let canceled = false;
     api
       .watchlist()
       .then((keys) => {
-        if (!cancelled) setWatchlistKeys(new Set(keys));
+        if (!canceled) setWatchlistKeys(new Set(keys));
       })
       .catch((e: Error) => console.error('watchlist unavailable:', e.message));
     return () => {
-      cancelled = true;
+      canceled = true;
     };
   }, []);
 
@@ -2660,7 +2660,7 @@ export default function App() {
    * old link has always done (`readKeys`).
    *
    * A player that list has never heard of opens nothing, which is
-   * `detailsPlayer`'s own standing behaviour rather than a rule invented here:
+   * `detailsPlayer`'s own standing behavior rather than a rule invented here:
    * it renders the page only for a key one of its two sources can resolve.
    */
   const openLeaguePlayer = useCallback(
@@ -3205,7 +3205,7 @@ export default function App() {
     //
     // `overflow-anchor` is untouched now, where the hold used to switch the
     // browser's anchoring off across the whole document for the length of it.
-    // That was a defence against a stale pixel target being dragged about by
+    // That was a defense against a stale pixel target being dragged about by
     // content arriving above the viewport; with nothing arriving, anchoring is
     // on our side — it is what keeps a reader's place when the 20s live poll
     // inserts an at-bat above them, and it has no business being off.
@@ -3330,7 +3330,7 @@ export default function App() {
              13px the moment something happens and shrink back when it is read
              — a row of tabs that changes width under the reader is worse than
              no mark at all. The dot is `aria-hidden` and the fact is given to a
-             screen reader as words, since a coloured circle names nothing. */
+             screen reader as words, since a colored circle names nothing. */
           const dot = t.tab === 'transactions' && unseenTransactions;
           return (
             <button
@@ -3404,7 +3404,7 @@ export default function App() {
   // the controls that act on the whole app already are. What is left is the one
   // thing in this header that belongs to the roster rather than to the app.
   //
-  // Icons rather than labelled buttons because a full search field is the
+  // Icons rather than labeled buttons because a full search field is the
   // widest thing in the row and is wanted for a few seconds at a time, so it
   // earns its space only while it is being used; pressing one opens its own bar
   // across the top instead.
@@ -3826,11 +3826,11 @@ export default function App() {
             </button>
             {settingsOpen && (
               <div className="settings-popover" role="menu">
-                {/* **The colour scheme**, as a row of swatches rather than as a
+                {/* **The color scheme**, as a row of swatches rather than as a
                     third toggle. Two reasons, and the second is the one that
                     decides it. A toggle can only ever hold two, and there is
                     no reason a third palette should mean re-drawing this
-                    control; and a colour scheme is the one preference in this
+                    control; and a color scheme is the one preference in this
                     menu whose *answer* can be shown rather than described —
                     each button is three stops of the palette it selects, which
                     is a truer statement of what it does than any name.
@@ -4335,7 +4335,7 @@ export default function App() {
                 group is atomic and the wrap fits as many whole ones per line as
                 the width allows. So on a wide screen the whole control set
                 finishes the tab row, and as the window narrows the last group
-                drops to a line of its own — the same behaviour the kind tabs and
+                drops to a line of its own — the same behavior the kind tabs and
                 the date button have always had here, and nothing pins which
                 group lands where. `.research-chrome` and `.research-bar` are
                 `display: contents` for exactly that reason: the groups have to

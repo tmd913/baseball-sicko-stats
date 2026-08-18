@@ -42,7 +42,7 @@ const LABEL_PX = 12;
  * Two facts put them in the same place. The lowest gridline is always exactly on
  * the plot's bottom edge (`yMin` is floored to a step, so `sy(yMin)` *is*
  * `PAD.top + PLOT_H`), and its label hangs `0.32em` below that line — the `dy`
- * on the `<text>`. And an x tick is centred on its own tick, the first of which
+ * on the `<text>`. And an x tick is centered on its own tick, the first of which
  * lands at or just past the plot's left edge, so half of it hangs back into the
  * left pad where the y labels live. Measured on the real chart, ink against ink:
  * the `100` tick overlapped the `.200` label by **2.46 × 0.69px at 1200 and
@@ -410,7 +410,7 @@ export function RollingXwoba({ series, name }: { series: XwobaSeries; name: stri
               every chart wants — a swatch of the mark and a word for it, under the
               picture, read once and then ignored.
 
-              **The swatch is the guide line's own class**, so the colour and the
+              **The swatch is the guide line's own class**, so the color and the
               dash pattern have one definition in the stylesheet rather than a
               hand-written copy that drifts the next time either moves; the swatch's
               `<svg>` is 24 × 2 over a matching viewBox, so a unit is a pixel and
@@ -420,7 +420,7 @@ export function RollingXwoba({ series, name }: { series: XwobaSeries; name: stri
               own dashes, which are viewBox units scaled with the plot — 3.52px at
               1200 and 1.85px at 390. Matching those would mean scaling the swatch by
               the chart's factor, and on a phone that is a 1.85px dash in a 24px
-              swatch: six cycles of sub-2px marks, which reads as a grey smudge
+              swatch: six cycles of sub-2px marks, which reads as a gray smudge
               rather than as a dashed line. A legend owes the reader the *pattern*,
               at the size the label beside it is read at. */}
           {/* **The figure is measured, and the legend says how deeply.** It was a

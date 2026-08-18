@@ -112,7 +112,7 @@ card. What the rail is for is the *scale*, and that survives at a third of it.
 
 **The whole matchup is one bar under the two records** (`.mup-meter`) — the
 categories each side holds with the ties between them, so the boundary sitting
-left or right of centre is the week at a glance. Only the **leader's** run is
+left or right of center is the week at a glance. Only the **leader's** run is
 green; the trailing run is `--faint` and the ties are dimmer again, which is the
 honest ordering, a tied category being one nobody holds. The counts are the
 **server's own tally** (`side.wins/losses/ties`), the one checked against ESPN
@@ -125,7 +125,7 @@ live page marked with neither.** `matchup.winner` is null for the whole of the
 week being played — the server sets it only once the period is settled
 (`espn.ts`: `else if (live) winner = null`), because a winner is a settled fact
 and ESPN's own field says `UNDECIDED` until it is one. Taken straight, that gave
-the *live* matchup — the one anybody is looking at — two grey triples, an
+the *live* matchup — the one anybody is looking at — two gray triples, an
 unmarked pair of names and a meter with no green in it. So the page reads the
 tally instead (`ahead`), which is the same comparison the server makes when it
 does settle one (`hw > aw ? 'home' : …`) and which agrees with ESPN's own
@@ -140,7 +140,7 @@ arms*. It is `winnerOf` over that group alone, the same function the rows
 themselves use, so a heading and the green figures under it are one arithmetic;
 the server publishes a tally for the matchup and not for half of it.
 
-**The heading takes the row's own grid**, so the label centres over the column
+**The heading takes the row's own grid**, so the label centers over the column
 of category names it heads and each tally lands in the column its own figures
 are in. It was a left-aligned word at the card's edge, which named the group and
 pointed at nothing in it.
@@ -216,7 +216,7 @@ So the loudest thing on a page about two teams was 1.27× the smallest, and the
 bars — which are what the page was redrawn around — were hairlines.
 
 **The scale is spent on the reading order rather than evenly**, which is the
-whole of the judgement. What a manager reads in this order gets the room in that
+whole of the judgment. What a manager reads in this order gets the room in that
 order:
 
 - **The headline triple `19 → 26px`** — the one number the page is about, and now
@@ -378,13 +378,13 @@ manager two behind in saves with `2/10` left has a move to make and one at
 7/10` — in the same grid as every category above it, so each figure lands under
 the name it belongs to. It is **at the foot rather than the head** because it is
 what a manager does *about* the categories rather than one of them, and it takes
-**no colour**: neither side is winning acquisitions.
+**no color**: neither side is winning acquisitions.
 
 **The counts are the heading and there is no `Acq` row.** They were a category
 row of their own under a bare `MOVES` label, which is two lines spent on a
 heading and a subtitle for one section — and which drew a *category*'s shape
 around the one figure on this card that is not one: nobody is winning
-acquisitions, so that row had no bar, no colour, and two deliberately empty
+acquisitions, so that row had no bar, no color, and two deliberately empty
 track cells whose only job was to hold its figures in the right columns. The
 heading is the row now, exactly as `BATTERS` carries its own side's
 won-lost-tied at the same two edges — one line, the same grid, the same
@@ -410,7 +410,7 @@ name. Under the heading that carries those counts are two columns — mirrored
 like every other pair on this card, each hugging the edge its own team's figures
 are on — of the players that side took **In** and let **Out**.
 
-**Grouped by direction rather than labelled per row.** The Transactions tab's
+**Grouped by direction rather than labeled per row.** The Transactions tab's
 own shape is the move's word before each name, and it fails on the one case this
 page has that the tab has not: a trade between *these two teams* puts the same
 man in both columns, and `Traded` on both says nothing about which way he went.
@@ -420,11 +420,11 @@ under it, and a trade needs no case of its own. What the grouping gives up is
 the claim-against-pickup distinction that tab spends a word on; the row's
 tooltip carries it, with the day and the bid.
 
-**No colour, which is this card's own rule rather than a new one.** That tab
-draws an add in `--hit`, right on a page whose only colour it is; here green
+**No color, which is this card's own rule rather than a new one.** That tab
+draws an add in `--hit`, right on a page whose only color it is; here green
 means **ahead in this category** and the accent means **the side that is
 ahead**, so a green `Added` or a column of blue names would each be a second
-meaning for a colour that already has one. The direction is said by the heading
+meaning for a color that already has one. The direction is said by the heading
 and by the weight under it: a man coming in reads at full strength, one going
 out reads muted. Every name that joined to exactly one major leaguer opens his
 page on the app's one route in, which on the live league is 412 of 415 rows —
@@ -590,7 +590,7 @@ ones do not fit: measured at 320, `Baldy's Bozos` and `Sho me the Parlay`
 **both clipped mid-word**, and above that width three full names filled the
 strip at 346px. `LeagueView.tsx::teamAbbrev` reads **ESPN's own abbreviation**
 where the manager has set one, which is what ESPN's own scoreboard shows and so
-what a leaguemate already recognises — and which is often *not* derivable from
+what a leaguemate already recognizes — and which is often *not* derivable from
 the name (`GREG` for The Homewreckers, `HOFF` for THE BRONX FLOATERS, `BETS`
 for Sho me the Parlay), the strongest argument for reading it rather than
 computing one. On the live league all twelve have one, 2 to 4 characters.
@@ -740,7 +740,7 @@ other manager's page (`5/32 · 3 R`, his own team over the same day), back again
 **And the no-dates fallback was driven with `board.start`/`end` stubbed away**:
 the header loses its week dates, the preset row is `Today · Tomorrow ·
 Yesterday · This week · Last 15 days` with **no `Matchup` in it**, and the page
-opens on **`Today`** with `Today` marked — the pre-change behaviour exactly, at
+opens on **`Today`** with `Today` marked — the pre-change behavior exactly, at
 both widths, with 0 overflow.
 
 **Bundle: 526.70 → 526.77 KB of JS** (155.69 → 155.72 gzipped), **CSS unchanged
@@ -1228,7 +1228,7 @@ where the rules are.
   Adventure · 13-4-1 · Bye`), 0 strips, 0 `.mup-card`s and 14 rows. On the board
   its card carries the week's own line, `R 24 · HR 7 · RBI 27 · SB 4 · OPS .677`
   over `K 61 · W 2 · ERA 2.73 · WHIP 0.91 · SVHD 5`, with **0 of 10 cells
-  coloured** (nobody to be winning against).
+  colored** (nobody to be winning against).
 - **The strip is pinned**: scrolled 219px into a team page, `.mup-chrome` is
   still at `top: 0` with the three tabs in it.
 - **Legacy links**: `?lt=matchup` opens the Scoreboard with `lt` dropped;

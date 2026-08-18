@@ -188,10 +188,10 @@ function barShare(left: number | undefined, right: number | undefined): number {
  * ### It does not say green
  *
  * The Transactions tab draws an add in `--hit`, which is right on a page whose
- * only colour it is. Here green means **ahead in this category** — the winning
+ * only color it is. Here green means **ahead in this category** — the winning
  * figure, its bar, and the leader's run of the meter — and an add is not a
  * category anybody is winning, so the section stays the one part of this card
- * with no colour in it. What separates the two directions is the heading over
+ * with no color in it. What separates the two directions is the heading over
  * each run and the weight under it: a man coming in reads at full strength,
  * one going out reads muted.
  */
@@ -236,7 +236,7 @@ function movesFor(
 }
 
 /**
- * One side's moves, **grouped by direction rather than labelled per row**.
+ * One side's moves, **grouped by direction rather than labeled per row**.
  *
  * The alternative was the Transactions tab's own shape — the move's word before
  * each name — and it fails on the one case this page has that the tab does not:
@@ -662,7 +662,7 @@ export default function LeagueMatchupView({
    * winner = null`), because a winner is a settled fact and ESPN's own field
    * says `UNDECIDED` until it is one. Read straight, that left the *live*
    * matchup — the one anybody is actually looking at — with neither side
-   * marked: two grey triples, and a meter with no green in it.
+   * marked: two gray triples, and a meter with no green in it.
    *
    * So the page reads the tally instead, which is the same comparison the
    * server makes when it does settle one (`hw > aw ? 'home' : …`) and which
@@ -746,7 +746,7 @@ export default function LeagueMatchupView({
    * mid-word at 320 — measured, two of the three — and filled the strip at
    * every width above it. `teamAbbrev` reads ESPN's own abbreviation where the
    * manager has set one, which is what ESPN's scoreboard shows and so what a
-   * leaguemate already recognises, and derives one only where the field is
+   * leaguemate already recognizes, and derives one only where the field is
    * empty. The full name goes on the tab's `title`, where it was already.
    */
   const sides: { tab: MatchupSideTab; label: string; title: string }[] = away
@@ -1058,7 +1058,7 @@ export default function LeagueMatchupView({
                 records it is made of: the categories each side holds, the ties
                 between them, and the leader's share in green — the same green
                 the winning figure in every row below takes, so the page has
-                one colour meaning one thing.
+                one color meaning one thing.
 
                 The counts are the **server's own tally** (`side.wins/losses/
                 ties`) rather than a second count made here: ESPN fills its own
@@ -1132,7 +1132,7 @@ export default function LeagueMatchupView({
                 return (
                   <div className="mup-group" key={g.side}>
                     {/* The heading takes the row's own grid, so the label
-                        centres over the category column it names and each
+                        centers over the category column it names and each
                         side's tally lands in the column its figures are in —
                         which is also the one number this page could not say
                         before: you are winning the bats and losing the arms. */}
@@ -1199,7 +1199,7 @@ export default function LeagueMatchupView({
                 a subtitle for the same section, and which drew a *category*'s
                 shape around the one figure on this card that is not one:
                 nobody is winning acquisitions, so the row had no bar, no
-                colour and two deliberately empty track cells holding its
+                color and two deliberately empty track cells holding its
                 figures in place. The heading is the row now, exactly as
                 `BATTERS` carries its side's won-lost-tied at the same two
                 edges — one line, the same grid, and the lists start where the

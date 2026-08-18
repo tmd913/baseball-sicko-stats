@@ -3,7 +3,7 @@
 Split out of `client-league.md`, which holds the view this tab sits in. Every
 team against every category the league scores, over a span the reader picks,
 with each figure's standing under it — the table, its three summary columns, the
-rank badge that colours it, and the press that opens a team's matchup.
+rank badge that colors it, and the press that opens a team's matchup.
 
 **Each cell carries the rank under the figure, and carries the figure**, because
 a rank with no number behind it cannot be acted on: `1st` is what you are looking
@@ -31,13 +31,13 @@ them for that reason: the three read as a summary and its two parts rather than
 as three peers, and a reader can check the derived figure by adding the two
 columns beside it. It is drawn only where there is more than one side to
 combine — the server declines to compute it otherwise, and the client reads that
-decision rather than repeating the test. **It takes no colour of its own**, which is a reversal: it
+decision rather than repeating the test. **It takes no color of its own**, which is a reversal: it
 had the accent for a round, on the argument that the summary of a row should be
 a shade louder than the two halves it is made of. That lost to the rule this
-table already states at length — **colour here is the rank badge's**, a
+table already states at length — **color here is the rank badge's**, a
 red-to-blue scale over twelve teams, and it is the one thing on the page
-carrying meaning in hue. An accent column beside it is a second colour system in
-the same row, saying *this column is important* where everything else coloured
+carrying meaning in hue. An accent column beside it is a second color system in
+the same row, saying *this column is important* where everything else colored
 is saying *this figure is good*. What marks `OVR` is where it sits and the
 weight `.lg-side-col` gives all three summary columns, which is what a summary
 needs. Measured after: the `OVR` cell computes `rgb(232, 238, 252)` at weight
@@ -185,17 +185,17 @@ both.
 
 ### The rank is a badge and the badge is the scale
 
-**More red the better the rank, more blue the worse, grey in the middle** — a
+**More red the better the rank, more blue the worse, gray in the middle** — a
 diverging scale over the teams ranked in one category. **It is on the chip,
 where it used to wash the whole cell**, and the reader's own row is marked by a
 ring on its team badge where it used to be washed accent-blue across all twelve
-cells. The three changes are one change: there were three colour systems on this
+cells. The three changes are one change: there were three color systems on this
 table and now there is one.
 
 **Why the cell wash went.** It had to be a translucent layer over whatever
 ground the row resolved — that is what made it compose with the zebra stripe —
 so it could only ever be faint (22% at its strongest, and 2% either side of the
-middle, where it said nothing at all), and it painted a colour across the
+middle, where it said nothing at all), and it painted a color across the
 **value** as well as the rank. A figure tinted by its own standing is the one
 thing a raw number on this page is there to avoid: the whole argument for
 carrying the value beside the rank is that *a rank with no number behind it
@@ -204,7 +204,7 @@ the chip the scale can be strong enough to read at a glance and it stops where
 the claim stops — `1st` is red, and the figure beside it is just the figure.
 
 **Why the row wash went with it.** The reader's own row was a 12% accent
-`--cell-bg`, which is one wash too many once every rank cell carries a colour of
+`--cell-bg`, which is one wash too many once every rank cell carries a color of
 its own: an accent-blue row under a column of blue-to-red badges is two scales
 competing for one reading, and on the cold end of a category the two were very
 nearly the same ink. The team's badge is where the row says who it is anyway —
@@ -222,28 +222,28 @@ read.
 **The departure from the research board's rule is unchanged and still worth
 saying plainly.** That board's stat columns are deliberately **monochrome** and
 its percentile badges deliberately `--faint`, on the stated grounds that
-*"colour is reserved for state"* — a heat scale there would be a second colour
+*"color is reserved for state"* — a heat scale there would be a second color
 system beside the live inning, the postponement and the trend. That rule is
 right for what it governs: a six-hundred-row leaderboard whose job is to be
 **scanned for names**. This table is the other thing. It is **twelve rows read
 for standing**, it carries no live state at all, and where the board says *here
-is a number, judge it* a league table says *here is where you are*. The colour
+is a number, judge it* a league table says *here is where you are*. The color
 **is** the reading, and at this size it is the difference between finding your
 weak category at a glance and reading a hundred and twenty ordinals. The board
 is untouched, and `.col-rank` is still one object in this app — the League table
 adds a fill to it and the two other callers draw it bare.
 
-**It colours the rank and never the value**, which is what makes `lowerBetter`
+**It colors the rank and never the value**, which is what makes `lowerBetter`
 need no special case at all: the server has already computed the rank with the
 direction baked in (`rankBy`, 1 is best whichever way the category runs), so a
 3.29 ERA and 232 home runs are both `1st` and both take the deepest red.
-**Ties share a rank and so share a colour** by the same construction. `n` is the
+**Ties share a rank and so share a color** by the same construction. `n` is the
 teams *ranked in that category* rather than the twelve rows, matching the
 badge's own denominator, so a team with no figure gets no badge at all any more
 than it gets a rank.
 
 **The fill carries the scale and the text does not**, and that is a measurement
-rather than a preference. Colouring the *text* is the obvious first move — it is
+rather than a preference. Coloring the *text* is the obvious first move — it is
 what the old badge did on top of the wash — and it puts a mid-luminance red on a
 mid-luminance ground: `--rank-hot` on the reddest chip is **3.09:1**, under the
 4.5 an 11px label owes a reader, and no amount of tuning the tint fixes it
@@ -251,7 +251,7 @@ because both ends of the pair move together. `--text` on the same grounds is
 **5.12:1 at its worst and 11.72 at its best**, measured over all 120 badges the
 live board draws. `--panel-2` is the base the tone is mixed into, which is what
 makes the middle of a category a plain neutral chip and the scale pass through
-grey rather than through nothing.
+gray rather than through nothing.
 
 **48% at the ends**, and the scale is symmetric and monotone in the rank —
 measured on the live twelve-team board, `1st` resolves to `rgb(133, 76, 92)` and
@@ -268,7 +268,7 @@ learned it on one tab reads it on the other.* That is true and it lost to the
 scale. The scoreboard's rule is right for a card showing **one matchup**, where
 the job is to mark a *winner*; this is twelve teams ranked in one category,
 where the job is to say **where each of them stands**, and a green `1st` inside
-a red-to-blue scale is a third colour system saying what the reddest chip
+a red-to-blue scale is a third color system saying what the reddest chip
 already says. First place is marked by being at the end of the scale.
 
 **What it costs is 5px a row**, which is the honest price of turning a bare
@@ -357,7 +357,7 @@ be a claim.
 
 **`Current matchup` means the week being played, not the week the Scoreboard tab
 is navigated to.** The tabs are independent pages of one view — which is the
-whole reason the period arrows belong to the Scoreboard — and a span labelled
+whole reason the period arrows belong to the Scoreboard — and a span labeled
 `Current matchup` that silently followed somebody else's arrows would be a label
 that is false as often as it is true. Which week it is, is printed under the tabs.
 
@@ -377,7 +377,7 @@ table with a sticky first column", which is true as far as it goes and misses
 what the log actually is: a list of *one player's games*, read **down**, inside
 an overlay. Its rows are presses, its table is `width: 100%` because fourteen
 columns have to fit a box, and its cells paint an opaque `--bg` because nothing
-underneath them ever changes colour. None of those three holds for twelve teams
+underneath them ever changes color. None of those three holds for twelve teams
 by ten categories read **across**, which is the research board's shape exactly.
 
 **Three faults came out of that one fold, and all three had a single cause.**
@@ -405,8 +405,8 @@ cells were crushed to fit.
   a scrollport of its own, so a wide table overflows and the pane scrolls under
   it rather than the columns being squeezed into the window.
 - **A ground named once as `--cell-bg`**, the rule the summary table states at
-  length. The pinned column must paint the same colour as the row it belongs to,
-  and a second declaration of that colour is a second thing to keep in step —
+  length. The pinned column must paint the same color as the row it belongs to,
+  and a second declaration of that color is a second thing to keep in step —
   which is precisely how the row wash became a rectangle. `.lg-row-mine` sets the
   variable rather than a `background`, so it resolves on every cell of the row
   including the sticky one.

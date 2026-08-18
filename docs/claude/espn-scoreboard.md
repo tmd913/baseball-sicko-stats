@@ -149,7 +149,7 @@ ESPN's calendar** measures at 03:39–05:19 ET — ESPN has not yet opened the n
 matchup period, so on a Monday morning the highest period it carries is the week
 that has just ended. There is nothing to read for the new one, by anybody. That
 is shown as what it is: the period's own dates, and `Final` rather than `Live`,
-with the arrows to move. A wrong week silently labelled "this week" is the
+with the arrows to move. A wrong week silently labeled "this week" is the
 failure being avoided, and **printing the dates is what avoids it** — which is
 also why the header prints them rather than a bare week number.
 
@@ -163,7 +163,7 @@ wins/losses/ties tally only once a matchup is **over**: a live one comes back
 with `result: null`, `wins/losses/ties: 0` and `winner: 'UNDECIDED'`, so a page
 that only reported ESPN's answer would say nothing at all about the week being
 played — which is the week anybody is looking at. So the comparison is done here
-for every matchup, live and final alike, honouring `isReverseItem` (ERA and
+for every matchup, live and final alike, honoring `isReverseItem` (ERA and
 WHIP, where the smaller number wins).
 
 **Checked against ESPN's own answer rather than reasoned about.** Over all 18
@@ -173,7 +173,7 @@ comparisons** — the computed per-category result matched ESPN's `result`
 108, and the computed win/loss/tie tally matched ESPN's own `cumulativeScore` on
 all 108. So a live matchup and a final one are drawn by one arithmetic, and that
 arithmetic is known to reproduce ESPN's. `ineligible` was scanned for over the
-same **5,244 score cells** and is false on every one; it is honoured anyway,
+same **5,244 score cells** and is false on every one; it is honored anyway,
 since a category a team cannot score in is not a category it is losing, and a
 zero in a `lowerBetter` category would otherwise read as the best score in the
 league.
@@ -739,11 +739,11 @@ the rule `sideFrom` already follows for a category a side is ineligible for.
 Checked against an independent recompute over all **five** spans: **600 of 600
 cells match, 0 wrong, with 73 tied cells among them.**
 
-**And the rank is what the client colours**, which is the whole reason the
+**And the rank is what the client colors**, which is the whole reason the
 direction can be baked in here and needs no special case there: a `lowerBetter`
 category's `1st` is its lowest figure, so the reddest badge on the ERA column
 and the reddest badge on the HR column mean the same thing. Ties share a rank
-and so share a colour by the same construction. See **Client — the League
+and so share a color by the same construction. See **Client — the League
 view**, *The rank is a badge and the badge is the scale*, which is also where
 the departure from the research board's monochrome rule is argued.
 

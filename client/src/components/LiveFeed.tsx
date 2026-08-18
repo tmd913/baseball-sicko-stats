@@ -309,11 +309,11 @@ function FeedAtBat({
    * (the game blocks that used to say it went with the Games view). */
   multiGame?: boolean;
 }) {
-  // The outcome's colour rides on the *item*, not the card, so one rail runs
+  // The outcome's color rides on the *item*, not the card, so one rail runs
   // the header, the at-bat and the clip — who it was, what he did and the
   // video of it, which is one thing to read. The card keeps its box because it
   // opens, and in this feed that is what a box means; it gives up only its own
-  // coloured edge, which the rail outside it now carries (styles.css).
+  // colored edge, which the rail outside it now carries (styles.css).
   //
   // Nothing scrolls on open any more: the card raises a dialog rather than
   // unrolling in place, so the item it sits in never moves.
@@ -511,7 +511,7 @@ function FeedBaseEvent({
   // The rail says what the play was, and with two events off one play that is
   // two things: a steal of home is a steal *and* a run, so the rail splits in
   // half rather than picking one of them and stating half of what happened.
-  // Tones rather than kinds — ten kinds would be ten colours and a hundred
+  // Tones rather than kinds — ten kinds would be ten colors and a hundred
   // pairs, where four tones are four and a handful (see `baseEventTone`). The
   // first two are enough: no play in the vocabulary puts three on one runner.
   const tones = evs.map((ev) => baseEventTone(ev.kind)).filter((t, i, all) => all.indexOf(t) === i);
@@ -612,17 +612,17 @@ function FeedPitcherGame({
   // in, everywhere this item is drawn.
   const [open, setOpen] = useState(false);
   // The rail. Every other item shape in this feed groups itself with one — the
-  // outcome's colour on an at-bat, the role's on a live entry, the event's on a
+  // outcome's color on an at-bat, the role's on a live entry, the event's on a
   // base event — and the outing was the one that didn't, so the pitcher feed
   // read as a list of loose blocks where the batter feed read as items.
   //
-  // The colour is **`decisionColor`**, which is the pitcher side's existing
+  // The color is **`decisionColor`**, which is the pitcher side's existing
   // answer to "what did this outing come to": the same green/red/accent/amber
   // the credit chip on the bar takes, the game line's own accent on the card,
   // and the log's W/L/S/HLD. A fifth definition here would be a fourth place
-  // for those four colours to drift. `--muted` for a start still in progress or
+  // for those four colors to drift. `--muted` for a start still in progress or
   // a no-decision relief appearance — the item is grouped either way, and a
-  // grey rail claims nothing about how it went, which is the truth at that
+  // gray rail claims nothing about how it went, which is the truth at that
   // point. While he is **on the mound** the role rail wins outright: `.live-entry`
   // is what says a group is happening now, and a decision he hasn't got yet is
   // the lesser fact.
@@ -854,7 +854,7 @@ export function UpcomingRow({
                     which `PlayerDetails` opens on as a matter of course. Drawn
                     with the feed's own `FeedHeadshot`/`FeedPlayerName` rather
                     than a third headshot circle, so it is the same target with
-                    the same click behaviour as every other name in this stream.
+                    the same click behavior as every other name in this stream.
                     It carries **no lineup pip or status code**: those are
                     `PhotoStatus`'s marks and read off `/api/statuses`, which the
                     feed does not fetch — and both would only restate the bar

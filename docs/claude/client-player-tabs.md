@@ -73,7 +73,7 @@ could invent, with `Report` on the notes it files under nothing; the server fill
 it, so the pill is RotoWire's word rather than a mapping of it. (ESPN's `type`
 was the one that needed translating, being a CMS label, and it went with the
 feed.) Outlined and `--faint` rather than toned: this is a *label*, and the app's
-colour is spent on state.
+color is spent on state.
 
 **Both sources date to the day** — MLB publishes no time with a transaction and
 RotoWire stamps a note `August 14, 2026` — so every row reads `Aug 11` today.
@@ -331,7 +331,7 @@ Refusing them cost this tab the one thing it can offer that the board cannot.
 **So the picker moved rather than being copied.** `ColumnsDialog` and
 `ColumnOrder` came out of `ResearchTable.tsx` into **`components/ColumnPicker.tsx`**
 — the dialog shell, the order row and its whole press-and-press gesture, the
-labelled runs of chips, the group All/None, the last-column guard and the reset —
+labeled runs of chips, the group All/None, the last-column guard and the reset —
 and **the board reads the extracted version**, so there is one implementation and
 not two that resemble each other. That is the same rule `researchColumns.tsx`
 already applies to the vocabulary, and it matters more here than it looks: the
@@ -384,7 +384,7 @@ its label to the icon and the badge, as the board's four disclosures do.
 **And the space between the two buttons is the board's, because the row is now
 folded onto the board's own run.** `.stats-tools` declared a bare
 `display: flex` and its two placement rules and nothing else, so the pair sat
-**edge to edge** — measured 0px at 1200 and at 390, labelled and icon-only
+**edge to edge** — measured 0px at 1200 and at 390, labeled and icon-only
 alike, `gap` computing `normal`. The number was never in doubt: the board puts
 these same two controls beside each other in `.research-tools` at **8px**, and
 every one of its five buttons is spaced by it (checked at both widths, all four
@@ -460,7 +460,7 @@ span that has no length). Descending is then `60d → season`, the other order
 these rows can honestly be read in.
 
 Everything else is the board's rule, read off the same `Column`: **`ascFirst`**
-is honoured per column, so ERA, WHIP and a batter's K open on their good end
+is honored per column, so ERA, WHIP and a batter's K open on their good end
 (checked: one press of `ERA` gives ▲ and `2.01 · 2.16 · 2.20 · 2.25 · 4.50`,
 where `K` gives ▼); the ▲▼ span is `.research-arrow`, reserved in **both** axes
 whether or not its column is the sorted one, so pressing a header moves nothing;
@@ -1032,7 +1032,7 @@ miss: measured ink against ink on the real chart, the `100` tick overlapped the
 that were each right on their own put them in the same place. The lowest
 gridline is *always* exactly on the plot's bottom edge — `yMin` is floored to a
 step, so `sy(yMin)` is `PAD.top + PLOT_H` — and its label hangs `0.32em` below
-that line, which is the `dy` on the `<text>`. And an x tick is centred on its own
+that line, which is the `dy` on the `<text>`. And an x tick is centered on its own
 tick, the first of which lands at or just past the plot's **left** edge, so half
 of it hangs back into the left pad where the y labels live. The horizontal figure
 differs between the two widths because that first tick's distance from the edge
@@ -1091,7 +1091,7 @@ under the text.
 
 **The swatch is the guide line's own class**, which is the whole of "one
 definition rather than a copy": the legend's `<line>` carries `.roll-ref`, the
-same rule the chart's reference line is drawn by, so the colour and the dash
+same rule the chart's reference line is drawn by, so the color and the dash
 pattern cannot come to be two of each the next time either moves. Checked in a
 browser at every width: the swatch and the guide both compute
 `stroke: rgb(92, 111, 151)`, `stroke-dasharray: 4px, 4px`, `stroke-width: 1.5px`.
@@ -1101,7 +1101,7 @@ and the phone is why. The chart's dashes are viewBox units scaled with the plot 
 4 units paints **3.52px at 1200 and 1.85px at 390** — so matching them here would
 mean scaling the swatch by the chart's own factor, and on a phone that is a
 1.85px dash inside a 24px swatch: six cycles of sub-2px marks, which reads as a
-grey smudge rather than as a dashed line. A legend owes the reader the *pattern*,
+gray smudge rather than as a dashed line. A legend owes the reader the *pattern*,
 at the size the words beside it are read at. The swatch is therefore 24 × 2 CSS
 px over a matching viewBox, so one unit is one pixel and `.roll-ref`'s `4 4`
 paints 4px dashes at a 1.5px stroke.

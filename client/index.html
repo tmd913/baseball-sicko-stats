@@ -9,7 +9,7 @@
          instead of being inflated to 16px (and the tabs beside it with it).
          Applied only on iOS: Safari has ignored the constraint for pinch-zoom
          since iOS 10, so nothing is taken away from the user there, but other
-         browsers do honour it and would lose zoom entirely. -->
+         browsers do honor it and would lose zoom entirely. -->
     <script>
       (function () {
         var ua = navigator.userAgent;
@@ -32,8 +32,8 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="alternate icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <!-- Paint the base colour on the very first frame so a reload doesn't flash
-         before the stylesheet loads — and paint the *reader's own* base colour,
+    <!-- Paint the base color on the very first frame so a reload doesn't flash
+         before the stylesheet loads — and paint the *reader's own* base color,
          which is why this is a script rather than the one rule it used to be.
 
          `client/src/theme.ts` mirrors the chosen theme into localStorage purely
@@ -41,7 +41,7 @@
          round trip after the page has painted, so without a local copy the app
          would open in the wrong palette and swap a moment later on every load.
          The values below are each theme's own `--bg`, and they are the one
-         place in the app a palette colour is written outside the stylesheet.
+         place in the app a palette color is written outside the stylesheet.
 
          Deliberately inline, blocking and tiny: it has to have finished before
          the first paint, and a failed read simply leaves the default.

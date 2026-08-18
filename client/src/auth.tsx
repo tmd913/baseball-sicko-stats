@@ -55,18 +55,18 @@ export function useAuthConfig(): { config: AuthConfig | null; loading: boolean }
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let cancelled = false;
+    let canceled = false;
     fetch('/config.json')
       .then((r) => (r.ok ? r.json() : null))
       .catch(() => null)
       .then((c: AuthConfig | null) => {
-        if (!cancelled) setConfig(c);
+        if (!canceled) setConfig(c);
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!canceled) setLoading(false);
       });
     return () => {
-      cancelled = true;
+      canceled = true;
     };
   }, []);
 
@@ -98,7 +98,7 @@ const RETURN_KEY = 'sicko:return-query';
  * An authorization code is single-use and `exchangeCode` consumes the PKCE
  * verifier on the way in, so the boot effect must not be able to run it twice —
  * and under StrictMode it runs twice by design. The first pass used to take the
- * verifier and be cancelled, and the second found nothing stashed, answered
+ * verifier and be canceled, and the second found nothing stashed, answered
  * "not a callback" and dropped the user on the sign-in screen: Google sign-in
  * could not work at all under `npm run dev` against a real pool. A module-level
  * promise makes both passes await the same exchange, so whichever of them is
@@ -239,7 +239,7 @@ function Gate({ config, children }: { config: CognitoConfig; children: ReactNode
   if (!reauthRef.current) {
     reauthRef.current = async () => {
       const fresh = await renewRef.current();
-      // A refresh token Cognito has stopped honouring is a session that is
+      // A refresh token Cognito has stopped honoring is a session that is
       // genuinely over — the honest answer is the sign-in screen, not a retry
       // loop against a token that will never work.
       if (!fresh) clear();
@@ -260,7 +260,7 @@ function Gate({ config, children }: { config: CognitoConfig; children: ReactNode
    * often" was; one exchange here removes it.
    */
   useEffect(() => {
-    let cancelled = false;
+    let canceled = false;
 
     /**
      * Strip the redirect's own `?code=`/`?error=` before App mounts and starts
@@ -285,7 +285,7 @@ function Gate({ config, children }: { config: CognitoConfig; children: ReactNode
       const failed = oauthError();
       if (failed) {
         restoreQuery();
-        if (!cancelled) {
+        if (!canceled) {
           setBootError(failed.message);
           setPhase('out');
         }
@@ -295,11 +295,11 @@ function Gate({ config, children }: { config: CognitoConfig; children: ReactNode
         const fromRedirect = await exchangeOnce(config);
         if (fromRedirect) {
           restoreQuery();
-          if (!cancelled) adopt(fromRedirect, true);
+          if (!canceled) adopt(fromRedirect, true);
           return;
         }
       } catch (err) {
-        if (!cancelled) {
+        if (!canceled) {
           restoreQuery();
           setBootError(err instanceof Error ? err.message : 'Sign-in failed.');
           setPhase('out');
@@ -309,11 +309,11 @@ function Gate({ config, children }: { config: CognitoConfig; children: ReactNode
 
       const stored = loadSession();
       if (!stored) {
-        if (!cancelled) setPhase('out');
+        if (!canceled) setPhase('out');
         return;
       }
       if (isFresh(stored)) {
-        if (!cancelled) {
+        if (!canceled) {
           setSessionState(stored);
           setPhase('in');
         }
@@ -321,21 +321,21 @@ function Gate({ config, children }: { config: CognitoConfig; children: ReactNode
       }
       if (!stored.refreshToken) {
         saveSession(null);
-        if (!cancelled) setPhase('out');
+        if (!canceled) setPhase('out');
         return;
       }
       try {
         const tokens = await refreshTokens(config, stored.refreshToken);
-        if (!cancelled) {
+        if (!canceled) {
           adopt({ ...tokens, refreshToken: tokens.refreshToken ?? stored.refreshToken }, stored.federated);
         }
       } catch {
         saveSession(null);
-        if (!cancelled) setPhase('out');
+        if (!canceled) setPhase('out');
       }
     })();
     return () => {
-      cancelled = true;
+      canceled = true;
     };
     // Runs once: `config` is fixed for the lifetime of the app, and re-running
     // would re-consume a `?code=` that has already been exchanged.
@@ -358,7 +358,7 @@ function Gate({ config, children }: { config: CognitoConfig; children: ReactNode
    * Sign out.
    *
    * For an email/password user this never leaves the page: clear the stored
-   * tokens, tell Cognito to stop honouring the refresh token, and render the
+   * tokens, tell Cognito to stop honoring the refresh token, and render the
    * sign-in screen. The old code did `removeUser()` and then a `signoutRedirect()`
    * — which sends OIDC's `post_logout_redirect_uri`, a parameter Cognito's
    * logout endpoint does not accept — so it landed on a Cognito error page
@@ -477,7 +477,7 @@ function AuthScreen({
    * confirming a sign-up code signs you straight in rather than asking for the
    * password you typed a minute ago. A link is the other case — walking from
    * sign-in to a reset shouldn't leave the password you failed to sign in with
-   * sitting in a box labelled "New password".
+   * sitting in a box labeled "New password".
    */
   const go = (next: Mode) => {
     setMode(next);

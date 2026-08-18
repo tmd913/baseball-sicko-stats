@@ -273,8 +273,8 @@ function ordinal(n: number): string {
  * **Monochrome, deliberately.** A heat scale is the obvious thing to reach for
  * and this table has already refused it once: "the stat columns are monochrome
  * — OPS and ERA used to be `--accent`, which just made the eye jump between
- * columns. Colour is reserved for *state*." A green 94 beside a red 12 would be
- * a second colour system on the one table whose colour vocabulary is already
+ * columns. Color is reserved for *state*." A green 94 beside a red 12 would be
+ * a second color system on the one table whose color vocabulary is already
  * spoken for by the live inning, the postponement and the trend.
  */
 export function RankBadge({
