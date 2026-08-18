@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { answersEscape, useDelayedFlag, useLockBodyScroll, useOverlayFocus } from '../hooks';
 import { api } from '../api';
 import type { EspnStatus, EspnTeam } from '../types';
-import { LoadingBlock, LoadingLine } from './Loading';
+import { LoadingBlock, SpinningBaseball } from './Loading';
 
 /**
  * The page an invite link lands on: the league you have just joined, a list of
@@ -132,9 +132,9 @@ export function LeagueOnboarding({
     }
     // Deliberately no `finally`: on the way through the tab reloads, and
     // clearing a flag on a page that is being torn down is a state update
-    // nobody reads — it would also blink the button back from `Setting up` to
-    // its label for the frame before the boot takes the screen. Only the
-    // failing path stays on screen, and it clears its own.
+    // nobody reads — it would also blink the ball off the button for the frame
+    // before the boot takes the screen. Only the failing path stays on screen,
+    // and it clears its own.
   };
 
   return (
@@ -198,18 +198,27 @@ export function LeagueOnboarding({
             {phase === 'ready' ? (
               <button
                 type="button"
-                className="espn-submit"
+                className="espn-submit onboard-start"
                 /* The one control on the page, so it says what pressing it
-                   does rather than `OK`: it names the team *and* leaves. */
+                   does rather than `OK`: it names the team *and* leaves — and
+                   it goes on saying so while it works, the ball being drawn
+                   over the label rather than in place of it. */
                 disabled={picked === '' || saving}
                 aria-busy={saving}
                 onClick={confirm}
               >
-                {saving ? (
-                  <LoadingLine announce={false}>Setting up</LoadingLine>
-                ) : (
-                  'Start using the app'
-                )}
+                {/* The label stays laid out while the save is in flight and
+                    is drawn as nothing, with the ball over it in the same grid
+                    cell — so the button is the same box before and after the
+                    press. Swapping the words for a shorter `Setting up` took
+                    it 164.8 → 128.44px wide and 36 → 38 tall, and dragged
+                    `Not now` 36px left: a press that moves the thing it was
+                    aimed at, and the control beside it. Same one-cell-grid
+                    reservation the Columns dialog's hint line makes, and the
+                    reason it is `opacity` rather than `visibility` is in
+                    `.onboard-start`. */}
+                <span className="onboard-start-label">Start using the app</span>
+                {saving && <SpinningBaseball />}
               </button>
             ) : (
               <button

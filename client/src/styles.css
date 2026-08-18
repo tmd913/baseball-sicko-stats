@@ -1073,10 +1073,17 @@ body {
    rather than by a `width`/`height` attribute so a slot that has its own idea
    of the size — the fantasy popover's 15px glyph column — can say so in one
    place, the way it already did for the ring this replaces. */
+/* One loading color in the app and it is the accent — with a hook for the one
+   place that cannot take it. A ball inside a *filled* control is drawn on the
+   accent, so `color: var(--accent)` there is accent on accent at 1.00:1: the
+   mark that says the press landed, invisible. `--ball-ink` is the container's
+   say in it, the way `--cell-bg` and `--sort-gutter` are; the two filled
+   controls that hold a ball (`.espn-submit`, `.auth-btn-primary`) set it to
+   their own ink, and everything else falls through to the accent untouched. */
 .ball-spin {
   display: block;
   flex: none;
-  color: var(--accent);
+  color: var(--ball-ink, var(--accent));
 }
 .ball-spin-sm {
   width: 14px;
@@ -9972,6 +9979,9 @@ button.start-line:focus-visible {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--on-accent);
+  /* Filled, so the ball takes the button's ink rather than the accent it is
+     drawn on — see `.ball-spin`. */
+  --ball-ink: var(--on-accent);
 }
 .auth-btn-primary:hover {
   background: var(--accent-2);
@@ -10779,6 +10789,9 @@ button.start-line:focus-visible {
   border: 1px solid var(--accent);
   border-radius: var(--control-radius);
   color: var(--on-accent);
+  /* The ball on this ground is the button's own ink, not the accent — see
+     `.ball-spin`. */
+  --ball-ink: var(--on-accent);
   font-size: 14px;
   font-weight: 800;
   padding: 9px 18px;
@@ -10789,6 +10802,14 @@ button.start-line:focus-visible {
 .espn-submit:disabled {
   opacity: 0.45;
   cursor: default;
+}
+/* Disabled *because it is working* is not the same as unavailable, which is
+   the rule the app already keeps for the ball's color ("inside a control that
+   is `:disabled` while it works and otherwise muted, since it is disabled
+   because it is working"). At 0.45 the whole button — ball included — read as
+   a control you may not press, on the one frame that is saying the opposite. */
+.espn-submit[aria-busy='true']:disabled {
+  opacity: 1;
 }
 .espn-submit:focus-visible {
   outline: 2px solid var(--accent);
@@ -10866,6 +10887,35 @@ button.start-line:focus-visible {
 }
 .onboard-actions {
   margin-bottom: 22px;
+}
+/* The button holds its box across the press. The label and the ball share one
+   grid cell, so the width and the height are the label's in both states and
+   nothing moves when it is pressed — neither the button, nor `Not now`, which
+   sits next to it in a flex row and used to jump 36px left the moment a reader
+   committed. It is `.research-order-hint`'s own one-cell grid, with the
+   difference that there the reservation is made by a *ghost* and here by the
+   real label.
+
+   Which is why this one is `opacity: 0` where that one is `visibility:
+   hidden`, and the two opposite choices are the same reasoning: `visibility`
+   takes a box out of the accessibility tree as well as off the screen. There
+   that is the point — a live region must announce its sentence once, not
+   twice. Here it would leave the button with **no accessible name** for as
+   long as it is working, which is worse than the `Setting up` this replaces.
+   Transparent, the name stands, `aria-busy` says what is happening, and a
+   screen reader hears the control it pressed rather than a new one. */
+.onboard-start {
+  display: grid;
+  place-items: center;
+}
+.onboard-start > * {
+  grid-area: 1 / 1;
+}
+/* Keyed off `aria-busy` rather than a class of its own, so the state a screen
+   reader is told and the state that is drawn are one attribute and cannot come
+   to disagree. It fails safe: lose the attribute and the label is visible. */
+.onboard-start[aria-busy='true'] .onboard-start-label {
+  opacity: 0;
 }
 .onboard-note {
   max-width: 52ch;
