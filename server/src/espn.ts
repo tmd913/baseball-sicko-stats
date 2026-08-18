@@ -873,19 +873,67 @@ function validDate(date: string | null | undefined): string | null {
 }
 
 /**
- * Which **calendar day** the caller wants, for the reads that may only ever
- * look forward.
+ * **The day whose scoring period carries ESPN's roster as it stands right now**
+ * — which is *tomorrow*, not today, and the reason is a fact about how ESPN
+ * books a transaction rather than anything about our own calendar.
  *
- * Clamped at today, which is what keeps the **league-wide** read — the
- * ownership map every member of a league shares, and the one roster the slot
- * chips are drawn from — on one entry rather than one per person's date range.
- * `lineupPeriodFor` takes the date unclamped, because the per-team, per-day
- * read below is precisely the one that wants a past day.
+ * **A move made after about 1pm ET takes effect from the *next* scoring
+ * period.** Measured on the live 12-team league against its own activity feed,
+ * which stamps every topic with an instant, by reading `mRoster` at four
+ * consecutive periods and asking which one each move first shows up in:
+ *
+ * | move | when (ET) | 144 | 145 | 146 | 147 |
+ * | --- | --- | --- | --- | --- | --- |
+ * | add of 4417208 | 08-16 11:27 | — | **12** | — | — |
+ * | add of 34973 | 08-16 19:55 | — | — | **1** | 1 |
+ * | drop of 34984 | 08-16 19:55 | 1 | 1 | **—** | — |
+ * | drop of 36071 | 08-16 14:32 | 6 | 6 | **—** | — |
+ * | add of 32667 (Gausman) | 08-17 22:30 | — | — | — | **1** |
+ * | drop of 4872649 | 08-17 22:22 | 1 | 1 | 1 | **—** |
+ *
+ * Period 145 is 08-16 and 146 is 08-17, so the 11:27 add lands on its own day
+ * and everything after 1pm lands on the day after — the same 13:00 ET boundary
+ * `acquisitionLimitFor` already measures for the acquisition *counter*, here
+ * deciding the roster itself.
+ *
+ * **So asking for today's period answers with a roster that is stale from
+ * lunchtime onwards.** That is not a small-hours edge case: with our own day
+ * turning at 3am ET it is about fourteen hours in twenty-four during which a
+ * player somebody has just picked up still reads as a free agent, everywhere
+ * ownership is drawn — the research board's free-agent set, the padlock, the
+ * roster baseball, `players` on `/api/espn/roster`. It is what "Kevin Gausman
+ * was added today and still shows as a free agent" was.
+ *
+ * **Tomorrow's period is the fix and costs nothing**, because a future period
+ * returns ESPN's *current* roster — the file has measured that since the
+ * `Tomorrow` preset was written ("periods 141 through 200 carry the same 28
+ * players as today"), and what the table above sharpens is that "current" means
+ * *including the moves booked forward*, which today's period does not. It is
+ * one entry rather than one per user for the same reason today's was: every
+ * member of a league resolves the same tomorrow.
+ *
+ * A date **beyond** tomorrow is left alone — it reads its own period, which
+ * answers with this same roster anyway — and `lineupPeriodFor` takes the date
+ * unclamped throughout, because the per-team, per-day read below is precisely
+ * the one that wants a *day's* answer rather than the freshest one.
  */
-function ownershipDay(date: string | null | undefined): string {
-  const today = baseballToday();
+export function liveRosterDay(): string {
+  return addDays(baseballToday(), 1);
+}
+
+/**
+ * Which **calendar day** the caller wants, for the reads that may only ever
+ * look forward. Clamped at `liveRosterDay()` — see above for why that is
+ * tomorrow.
+ *
+ * Exported because `fantasyWatchlist` seeds the per-day roster map with the
+ * array this read answered with, and a seed filed under the wrong day is the
+ * one way this change could put tomorrow's lineup under today's chips.
+ */
+export function ownershipDay(date: string | null | undefined): string {
+  const live = liveRosterDay();
   const day = validDate(date);
-  return day === null || day <= today ? today : day;
+  return day === null || day <= live ? live : day;
 }
 
 // ---- The period a day falls in --------------------------------------------
@@ -1338,10 +1386,11 @@ export interface EspnOwnership extends EspnLeagueInfo {
 
 /**
  * Keyed by league **and scoring period**, not by league alone: a lineup is a
- * fact about a day, so two days are two answers. The key for today is the
- * league's own id with no period on it, which is what keeps the blob every user
- * of a league shares — the free-agent set, the roster %, the trend — one entry
- * rather than one per person's date range.
+ * fact about a day, so two days are two answers. The key for the *live* day —
+ * `liveRosterDay()`, which every at-or-before-today request clamps onto — is
+ * the league's own id with no period on it, which is what keeps the blob every
+ * user of a league shares (the free-agent set, the roster %, the trend) one
+ * entry rather than one per person's date range.
  */
 const cacheKey = (leagueId: number, period: number | null) =>
   period === null ? `${leagueId}` : `${leagueId}:${period}`;
@@ -1354,8 +1403,8 @@ const inFlight = new Map<string, Promise<EspnOwnership>>();
 /**
  * `date` is the day the caller wants the **lineup** for — the last day of the
  * range the roster views are reporting on. Today and anything before it read
- * ESPN's current period, so the default is the behavior this has always had;
- * see `ownershipDay` above for why a past day reads as today here.
+ * the *live* period, which is tomorrow's; see `liveRosterDay` above for the
+ * measurement that says so and for what asking today's period got wrong.
  *
  * `force` drops **every** period of the league, not just the one being asked
  * for. "Read my league again" is a statement about the league rather than about
@@ -1371,14 +1420,14 @@ export async function getOwnership(
   date?: string | null,
 ): Promise<EspnOwnership> {
   // The day first, then the period it falls in. The two are separate because
-  // the **key** wants the day and the **request** wants the period: today's
-  // entry keeps the bare league id, so the map every member of a league shares
-  // stays one entry, while the request still names the period rather than
-  // letting ESPN's own pointer answer — which in the small hours is a different
-  // day (see **The period a day falls in** above).
+  // the **key** wants the day and the **request** wants the period: the live
+  // day's entry keeps the bare league id, so the map every member of a league
+  // shares stays one entry, while the request still names the period rather
+  // than letting ESPN's own pointer answer — which is today's, and so is
+  // missing every move made since about 1pm (see `liveRosterDay` above).
   const day = ownershipDay(date);
   const period = await periodFor(creds, day);
-  const key = cacheKey(creds.leagueId, day === baseballToday() ? null : period);
+  const key = cacheKey(creds.leagueId, day === liveRosterDay() ? null : period);
   if (force) {
     const prefix = `${creds.leagueId}`;
     for (const k of ownershipCache.keys()) {

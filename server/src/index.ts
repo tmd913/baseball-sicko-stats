@@ -67,6 +67,7 @@ import {
   getLeagueInfo,
   getMatchupWindow,
   getOwnership,
+  ownershipDay,
   getRankings,
   getRosterOn,
   getMatchupSeries,
@@ -803,12 +804,22 @@ async function fantasyWatchlist(
   // is that same map read a second way. See `espn.ts`'s **A range is a range of
   // rosters** for why the roster rule reversed and what it costs.
   //
-  // The seed is the day `getOwnership` has just answered for — today, or the
-  // future day a `Tomorrow` view asked for — so the map and the slot chips
-  // beside it come from one read and cannot disagree about that day.
+  // The seed is the day `getOwnership` has just answered for, which is
+  // **`ownershipDay`'s own answer and not today's** — that read is clamped
+  // forward onto the live period so that a player picked up this afternoon is
+  // owned rather than free (see `espn.ts::liveRosterDay`), and filing its
+  // roster under today would put tomorrow's lineup behind today's slot chips
+  // and behind the `Starters` filter. Asking the helper rather than restating
+  // the clamp is what keeps the two from drifting.
+  //
+  // So a range ending today no longer has its last day seeded and reads it
+  // instead — one `forTeamId` request (198KB, memory-cached ten minutes like
+  // every other mutable day), which is also what makes `endRoster` a genuinely
+  // different list from `players` on that range and so sent rather than
+  // elided.
   let byDate: Record<string, EspnRosterPlayer[]> | null = null;
   if (range) {
-    const seedDate = date && date > baseballToday() ? date : baseballToday();
+    const seedDate = ownershipDay(date);
     byDate = await getTeamRosters(
       creds,
       teamId,
@@ -826,27 +837,53 @@ async function fantasyWatchlist(
     });
   }
   // **The slot chip and the roster's order are anchored to the end of the
-  // range, not to today.** `getOwnership` clamps anything at or before today
-  // back onto ESPN's current period — deliberately, since *which players the
+  // range, not to today.** `getOwnership` clamps anything at or before
+  // tomorrow onto the live period — deliberately, since *which players the
   // views report on* must not become a team the manager no longer has — so on
-  // a past range the roster it answers with is today's, and reading the chips
-  // and the order off it says a man was benched yesterday because he is on the
-  // bench now, and files the catcher you did start under "no longer on the
-  // team". The per-day map has that day's roster, slots and all, so the anchor
-  // is `byDate[end]` where there is one.
+  // a past range the roster it answers with is the one he has now, and reading
+  // the chips and the order off it says a man was benched yesterday because he
+  // is on the bench now, and files the catcher you did start under "no longer
+  // on the team". The per-day map has that day's roster, slots and all, so the
+  // anchor is `byDate[end]` where there is one.
   //
   // **Where there isn't, today's roster stands**, which is the pre-per-day
   // behavior and the right direction to fail in: a day ESPN wouldn't answer
   // for costs its precision, not the chips. That covers a failed read, a
-  // caller that named no range at all, and every range ending today or later —
-  // the last of which needs no fallback at all, `getTeamRosters` having seeded
-  // the map with this very array (`byDate[end] === roster` by construction), so
-  // the two agree by identity rather than by luck.
+  // caller that named no range at all, and a range ending on the live day
+  // itself — the last of which needs no fallback, `getTeamRosters` having
+  // seeded the map with this very array (`byDate[end] === roster` by
+  // construction), so the two agree by identity rather than by luck. A range
+  // ending **today** now takes the read rather than the seed, since today's
+  // lineup and the live roster are two different answers.
   const endRoster = (range && byDate?.[range.end]) ?? null;
   const anchor = endRoster ?? roster;
   const over = byDate && Object.keys(byDate).length > 0 ? rostersToWatchlist(byDate, anchor) : null;
+  // **And whoever is on the team now but on none of the days in view**, which
+  // is a set the union cannot reach and which had nowhere else to go. ESPN
+  // books a move made after about 1pm ET against the *next* scoring period
+  // (`espn.ts::liveRosterDay`), so a player picked up this afternoon is on the
+  // live roster and on no day of a range ending today — and `players` is what
+  // the client's `rosterKeys` reads to answer *is he on my team*, which is a
+  // question about now whatever range is on screen. Left out, your own new
+  // pickup would sit on the research board under `Other Rosters` wearing
+  // neither the roster baseball nor a padlock, which is worse than the free
+  // agent he used to read as.
+  //
+  // He carries an **empty** held-days set rather than none: `getReport` reads
+  // an absent key as held every day and an empty set as held on none, so this
+  // is the difference between a row of dashes — which is the honest line for a
+  // man who has played you no games yet — and a whole week of somebody else's.
+  // He goes after the men who were actually on the team over the range, that
+  // list being what the table is *about*.
+  const held = over?.heldDays ?? null;
+  const nowOnly = rosterToWatchlist(roster).filter((p) => {
+    const key = `${p.kind}-${p.id}`;
+    if (!held || held.has(key)) return false;
+    held.set(key, new Set());
+    return true;
+  });
   return {
-    players: over?.players ?? rosterToWatchlist(roster),
+    players: over ? [...over.players, ...nowOnly] : rosterToWatchlist(roster),
     teamName: team?.name ?? espn.teamName ?? null,
     roster,
     // Sent only when it is genuinely a *different* day's list. Ending today or
@@ -855,7 +892,7 @@ async function fantasyWatchlist(
     // fallback doesn't.
     endRoster: endRoster === roster ? null : endRoster,
     lineups: byDate && lineupsFrom(byDate),
-    held: over?.heldDays ?? null,
+    held,
   };
 }
 
@@ -873,9 +910,9 @@ app.get(
 //
 // `?end=` (`?date=` is the older tab's name for it) is the day to read the
 // *roster* for — the end of the range on screen. Validated for shape and
-// otherwise left to `getOwnership`, which clamps anything at or before today
-// back onto ESPN's current period, so a nonsense date can only ever cost the
-// caller today's answer rather than someone else's team from June.
+// otherwise left to `getOwnership`, which clamps anything at or before
+// tomorrow onto the live period, so a nonsense date can only ever cost the
+// caller the roster as it stands rather than someone else's team from June.
 //
 // `?start=` opts the response into `lineups`: which of your players were in
 // your lineup on **each** day of `start`…`end`, so the summary table can
