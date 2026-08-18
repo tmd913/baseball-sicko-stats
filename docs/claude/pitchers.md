@@ -115,15 +115,65 @@ different true things.
 
 **A press anywhere else unpins**, which is the other half of a press meaning
 something: on touch there is nothing to move away, so without it a tapped pitch
-would stay lit until the reader remembered which one it was. It is a
-`pointerdown` listener in `ArsenalTab` testing `[data-pitch]` — the attribute
-both buttons carry, so the test names *a pitch button* rather than either chart's
-markup — and it is deliberately **not `useDismissable`**, though it is the same
-shape. That hook also spends the press (`swallowNextClick`), because a popover is
-in the reader's way and a press past it is aimed at getting rid of it; a lit pitch
-covers nothing, so the press that clears it should also do what it was aimed at.
+would stay lit until the reader remembered which one it was. It is a listener in
+`ArsenalTab` testing `[data-pitch]` — the attribute both buttons carry, so the
+test names *a pitch button* rather than either chart's markup — and it is
+deliberately **not `useDismissable`**, though it is the same shape. That hook
+also spends the press (`swallowNextClick`), because a popover is in the reader's
+way and a press past it is aimed at getting rid of it; a lit pitch covers
+nothing, so the press that clears it should also do what it was aimed at.
 Measured: with a pitch pinned, one press of the `Splits` tab switches the tab
 **and** clears the pin.
+
+### A scroll is not a press, and for a while it was
+
+**Reported as the arsenal page dropping its touch highlight when you scroll**,
+and the mechanism is the one word in the paragraph above: it cleared on the
+**`pointerdown`**, and on a touch device a scroll *begins* with a `pointerdown`
+on whatever happens to be under the finger. So dragging the player page anywhere
+but on a pitch button unpinned the pitch — which is the gesture a reader makes
+constantly on a chart taller than a phone, and the pin is the only selection
+touch has.
+
+**Reproduced before it was touched**, at 390×844 with real `Input.dispatchTouchEvent`
+gestures: tap the `4-Seam Fastball` legend column → `pinned 4-Seam Fastball · 60
+of 101 dots dimmed · AVG marker in`; then one touch drag → **`pinned [] · 0
+dimmed · no marker`**, with a second drag no different.
+
+**So the press only arms and the release decides.** A gesture that stayed within
+`TAP_SLOP` of where it went down is a tap and clears the pin; one that travelled
+further is a drag and does not; and a scroll the browser takes over fires
+`pointercancel` with no `pointerup` at all, so it disarms without ever reaching
+the test. **Arming is judged on where the gesture *started*** — a drag that
+begins on a pitch button and releases on the page is that button's, and the
+reverse is the page's — which is the modal backdrop's own rule
+(**Client — popups**, *A tap can still reach behind a popup*). What this does
+*not* borrow from that one is dismissing on the `click`: that fault was a box
+torn out mid-gesture, and with no box here the release can be judged directly
+and iOS's reluctance to deliver a `click` from a non-interactive element never
+comes into it.
+
+**`PairRow` in this same file already had every line of it**, which is the part
+worth keeping: the percentile card's rows reveal on a deliberate tap and its
+comment is this bug stated one tab over — *"the card is a list of rows inside a
+scroller, and toggling on pointerdown meant every flick that happened to start on
+a row flipped it"*. That was fixed; the arsenal pin was written afterwards
+without it. It reuses that `TAP_SLOP` (8, Chromium's own figure) rather than
+declaring a second, two numbers for one question being two numbers to keep true.
+
+**Measured after, same build, same gestures**: the tap lights it, **two touch
+drags leave `pinned 4-Seam Fastball · 60 dimmed · marker in`** throughout, and a
+genuine tap off a pitch button still clears the lot (`pinned [] · 0 dimmed · no
+marker`). **And the mouse is untouched**, driven at 1200×900: hovering a column
+previews it (`lit Sweeper`, `pinned []`), a click pins it, moving the pointer
+away keeps the pin, clicking another moves it, clicking the same again unpins,
+and a click on the axis foot clears everything.
+
+**Bundle, for the gesture and the lift together: 559.85 → 560.15 KB of JS**
+(166.28 → 166.36 gzipped) and **151.79 → 151.76 KB of CSS** (27.22 → 27.21) —
+0.3KB of JS raw and 0.08KB over the wire, and the CSS *falls*, a phone override
+having gone. Page-body and view overflow are **0** at 320 / 390 / 480 / 640 /
+900 / 1400 in both states.
 
 **The pitch colors do not theme.** They are `lib.ts::pitchStyle`'s — Savant's
 own palette, already shared with the arsenal rows, the per-game rows and the
@@ -455,16 +505,36 @@ every one.
 about 70px of empty SVG between the title and the top of the circle — space no
 margin can take back, because it is *inside the picture*. `VIEW_TOP` / `VIEW_H`
 crop to 22…370, measured against the soft disc (y = 24.4…367.6) rather than the
-rings, and the plot is then pulled up under the callout row by a further 40px on
-a desktop: the two blocks sit in the corners the circle never reaches, and at
-its top the circle is a point. **Title to circle: ~70px → 20px.**
+rings, and the plot is then pulled up under the callout row: the two blocks sit
+in the corners the circle never reaches, and at its top the circle is a point. A
+first crop at 26 clipped 1.6 units off the top of the disc and it took a check
+on the **painted pixels** to see it, the DOM being perfectly happy.
 
-**The lift is smaller on a phone, and that is measured rather than tapered by
-taste.** The SVG shrinks with its container and the chips do not, so the corners
-close up — at 320px a 40px lift puts a chip *inside* the painted disc. 18px
-leaves 7px of clearance there and 21px at 390, against 29px at every width from
-640 up. A first crop at 26 clipped 1.6 units off the top of the disc and it took
-a check on the **painted pixels** to see it, the DOM being perfectly happy.
+**The lift is 20px, and it was 40 on a desktop and 18 on a phone.** Both of those
+were measured against the **chips**, which is the state the row is in once a
+pitch is picked — and the state it is in at rest is the **hint**, `Pick a pitch
+to compare it with the league`, which is *centered*. That is exactly where the
+disc's apex is. Measured on the live page, the hint's bottom edge sat **4px
+inside the SVG at every width from 480 up** against **+18 at 390**, which is the
+report — cramped on a wide screen, fine on a phone — and on screen the field wash
+began where the sentence ended.
+
+**There is one lever and it reaches both states.** The plot's top is the row's
+height plus the margin, so growing the row and shrinking the lift are the same
+move; and a lever *per state* is a jolt on the very press that picks a pitch,
+because the legend a reader presses sits **below** the plot and would move under
+their finger — which is what the ghost row exists to prevent. So one value for
+both states and every width: **-20px**, which puts the hint **16px clear of the
+SVG at 320, 390, 480, 640, 900 and 1400 alike**, where it was −4/−4/−4/−4/−4/+18.
+
+**The chips gain by it rather than lose**, which is what had to be checked before
+spending the phone's own number: measuring every `.mv-cal`/`.mv-cal-tag` box
+against the painted soft disc, clearance goes **33.2 → 48.1px at 1400** and **7.5
+→ 23.1 at 390**, and at 320 — the width the phone override was written for —
+**−8.2px at the old desktop 40 → +8.2 at 20**, against the override's own 9.9.
+So the override's reason is gone with it, and the file carries one number where
+it carried two. **Title to circle: ~70px → 40px**, which is the 20px the hint
+needed and still a good deal less than the crop was worth.
 
 **The domain is fixed at 24", not fitted to the pitcher**, so two pitchers'
 charts can be read against each other. It is wide enough that only a genuine
