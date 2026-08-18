@@ -691,13 +691,20 @@ export default function LeagueMatchupView({
   );
 
   /**
-   * The pinned band: the Back row, whatever navigation the page has under it
-   * (the strip, or the team itself on a bye), and a **corner** — the top right
-   * of the screen, which is where the bars key sits.
+   * The pinned band: the Back row, and under it whatever navigation the page
+   * has — the strip of three pages, or the team itself on a bye — with the bars
+   * key beside it where there is one.
+   *
+   * **The key is a sibling of the strip rather than a corner of the band.** It
+   * spent a round absolutely positioned at the top right of the screen, which
+   * put it as far from the tabs as the window is wide and made the Back row
+   * reserve 34px for a box it knew nothing about. Beside the strip it is where a
+   * reader's eye already is, and the row can keep the tabs centered *and* hold
+   * it — see `.mup-nav-row`, which does that with a grid rather than by
+   * centering the pair (which would sit the tabs 19px left of center).
    */
-  const head = (extra: ReactNode, corner?: ReactNode) => (
+  const head = (extra: ReactNode, key?: ReactNode) => (
     <div className="mup-chrome">
-      {corner}
       <div className="mup-bar">
         {/* The way back, and the only one this page needs: it was opened from a
             card on the Scoreboard and returns to it. It is `BackButton` — the
@@ -719,7 +726,14 @@ export default function LeagueMatchupView({
           under a reader partway down a team's feed. It is the argument
           `.details-chrome` makes for the player page's tabs and `.app-chrome`
           makes for the view bar, one page along. */}
-      {extra}
+      {key ? (
+        <div className="mup-nav-row">
+          {extra}
+          {key}
+        </div>
+      ) : (
+        extra
+      )}
     </div>
   );
 
@@ -860,21 +874,24 @@ export default function LeagueMatchupView({
       : null;
 
   /**
-   * **The key to the bars, in the top right corner of the screen.**
+   * **The key to the bars, beside the strip of three pages.**
    *
    * It sat beside the meter it describes, which is where a key usually belongs
    * and is the one place on this page it could not stay: the meter is a row in
    * the middle of a card that scrolls, so the key scrolled away with it — and
    * what it explains is not that bar alone but every bar under it, ten category
    * rows the reader is still going down when the button has gone. In the pinned
-   * head it is on screen for the whole of that reading, at the corner of the
-   * band rather than inside the centered Back row, which is what puts it at the
-   * corner of the *screen* rather than of a 896px column.
+   * head it is on screen for the whole of that reading.
    *
-   * It is the head's `corner` rather than a child of `.mup-bar` for exactly that
-   * reason, and it is drawn only where there is something to explain — a points
-   * league has no bars and a bye has no comparison, which is `meter`'s own test,
-   * and a team page has no card, which is `onSummary`'s.
+   * **Beside the tabs rather than in the band's far corner**, which is where it
+   * went first: at 1920 that is a thousand pixels from anything it explains, and
+   * it made the Back row reserve space for a box positioned against the band
+   * rather than laid out in it. The row keeps the tabs centered and holds the
+   * key to their right, and gives that reservation back.
+   *
+   * Drawn only where there is something to explain — a points league has no bars
+   * and a bye has no comparison, which is `meter`'s own test, and a team page has
+   * no card, which is `onSummary`'s.
    */
   const barsKey =
     onSummary && meter !== null ? (
