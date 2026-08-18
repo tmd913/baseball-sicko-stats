@@ -340,29 +340,78 @@ function ArsenalTab({ arsenal }: { arsenal: SeasonArsenal }) {
   );
 
   /**
-   * **A press anywhere else unpins**, which is the other half of a press meaning
-   * something: on touch there is no pointer to move away, so without this a
-   * tapped pitch would stay lit until the reader remembered which one it was and
-   * tapped it again.
+   * **A tap anywhere else unpins, and a scroll does not** — which is the other
+   * half of a press meaning something: on touch there is no pointer to move
+   * away, so without the first clause a tapped pitch would stay lit until the
+   * reader remembered which one it was and tapped it again.
+   *
+   * **The second clause is what this used to get wrong.** It cleared on the
+   * `pointerdown` itself, and on a touch device a *scroll* begins with a
+   * `pointerdown` on whatever happens to be under the finger — so dragging the
+   * player page anywhere but on a pitch button unpinned the pitch, which is the
+   * one gesture a reader makes constantly while reading a chart that is taller
+   * than a phone. Reported as the arsenal page dropping its touch highlight on
+   * scroll.
+   *
+   * So the press only **arms** and the release decides: a gesture that stayed
+   * within `TAP_SLOP` of where it started is a tap and clears the pin, and one
+   * that travelled further is a drag and does not. A scroll the browser takes
+   * over fires `pointercancel` and no `pointerup` at all, which disarms without
+   * ever reaching the test.
+   *
+   * **`PairRow` in this same file already had all of this**, and its comment is
+   * this bug stated one tab over — *"the card is a list of rows inside a
+   * scroller, and toggling on pointerdown meant every flick that happened to
+   * start on a row flipped it"*. The percentile card was fixed and the arsenal
+   * pin was written afterwards without it. Same constant, deliberately: two
+   * numbers for one question is two numbers to keep true.
+   *
+   * Judged on the release rather than on the `click` — which is the modal
+   * backdrop's own answer (**Client — popups**, *A tap can still reach behind a
+   * popup*) — because that fault was a box torn out mid-gesture and this has no
+   * box, so iOS's reluctance to deliver a `click` from a non-interactive
+   * element never has to be reasoned about.
+   *
+   * **Arming is judged on where the gesture started**, not where it ended: a
+   * drag that begins on a pitch button and releases on the page is that
+   * button's gesture, and a press that begins on the page and releases over a
+   * button is the page's.
    *
    * Deliberately **not `useDismissable`**, though it is the same shape: that hook
    * also spends the press (`swallowNextClick`), because a popover is *in the
    * reader's way* and a press past it is aimed at getting rid of it. A lit pitch
    * covers nothing, so the press that clears it should also do what it was aimed
-   * at — a first tap on the Splits tab must switch tabs, not be eaten.
+   * at — a first tap on the Splits tab must switch tabs, not be eaten. Nothing
+   * here calls `preventDefault` or `stopPropagation`, so the click that follows
+   * a clearing tap still lands on whatever it was aimed at.
    *
    * `[data-pitch]` rather than the two class names, so the test names the thing
    * (a pitch button) rather than either chart's markup.
    */
   useEffect(() => {
     if (picked === null) return;
+    let armed: { x: number; y: number } | null = null;
     const onDown = (e: globalThis.PointerEvent) => {
       const t = e.target as Element | null;
-      if (t?.closest?.('[data-pitch]')) return;
-      setPicked(null);
+      armed = t?.closest?.('[data-pitch]') ? null : { x: e.clientX, y: e.clientY };
+    };
+    const onUp = (e: globalThis.PointerEvent) => {
+      const start = armed;
+      armed = null;
+      if (!start) return;
+      if (Math.hypot(e.clientX - start.x, e.clientY - start.y) <= TAP_SLOP) setPicked(null);
+    };
+    const onCancel = () => {
+      armed = null;
     };
     window.addEventListener('pointerdown', onDown);
-    return () => window.removeEventListener('pointerdown', onDown);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onCancel);
+    return () => {
+      window.removeEventListener('pointerdown', onDown);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+    };
   }, [picked]);
 
   const selection = useMemo(

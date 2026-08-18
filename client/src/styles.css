@@ -14951,8 +14951,22 @@ html[data-theme='light'] .league-table thead th {
   /* The viewBox is cropped to the disc, so the SVG's own top edge is now very
      nearly the top of the circle — and the circle is a *point* there, widening
      slowly. The callouts sit in the two corners it never reaches, so it is
-     pulled up under them by a little rather than clearing a whole row. */
-  margin-top: -40px;
+     pulled up under them by a little rather than clearing a whole row.
+
+     **It was -40px, and that was measured against the chips alone.** They sit
+     in the two corners; the hint that stands in for them at rest is *centered*,
+     which is exactly where the disc's apex is — so at -40 its bottom edge
+     landed 4px *inside* the SVG at every width from 480 up, and the circle
+     started where the sentence ended. There is only one lever: the plot's top
+     is the row's height plus this margin, so growing the row and shrinking the
+     lift are the same move, and either reaches both states. Shifting only the
+     hint state is what a lever per state would mean, and that is the jolt the
+     ghost row exists to prevent — the legend a reader is pressing sits below
+     the plot, so it would move under the finger on the very press that picked
+     a pitch. So one value, both states: -20 puts the hint 18px clear of the
+     SVG, which is what a phone already had, and gives the chips 20px more
+     clearance than they were measured with rather than less. */
+  margin-top: -20px;
 }
 /* Over the SVG, which comes after it in the DOM and would otherwise paint on
    top of the two corners it is sharing. */
@@ -15219,13 +15233,6 @@ html[data-theme='light'] .league-table thead th {
   }
   .pu-pct {
     font-size: 12px;
-  }
-  /* The circle rises less far here. The SVG shrinks with the container and the
-     chips do not, so the two corners the disc tucks into close up: at 320px a
-     40px lift puts a chip *inside* the painted disc, where 18 leaves clearance
-     at every width the app is checked at. Measured, not guessed. */
-  .mv-plot-wrap {
-    margin-top: -18px;
   }
   /* **The axis labels move outboard, because they do not shrink and the disc
      does.** Their size is a type size and the circle's is a share of the chart,
