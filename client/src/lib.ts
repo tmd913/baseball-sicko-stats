@@ -219,6 +219,51 @@ export function positionCell(
   return { text: ordered.join('/'), title };
 }
 
+/**
+ * Which side of the plate he stands on, or which arm he throws with — the one
+ * fact of the pair that is about the half of him the caller is drawing.
+ *
+ * **One token per kind, and that is the whole design.** A batter's row says
+ * `RHB`, a pitcher's says `RHP`, and a two-way player says one on each of his
+ * two pages because the app is two entries about him and each is about a
+ * different half. That is the rule `positionCell` beside it already follows
+ * (`eligibleForKind` narrows Ohtani's bat to `DH` and his arm to `SP`), and
+ * here it is the *useful* reading as well as the consistent one: which arm a
+ * designated hitter throws with decides nothing, and nor does which side a
+ * closer bats from. Drawing both on the player page — the one surface with the
+ * room — was tried and rejected for exactly that: it would make handedness the
+ * single fact on the page describing a half of him the page is not about.
+ *
+ * **The words are the app's own, extended rather than invented.** `RHP` and
+ * `LHP` are already everywhere — the summary table's opponent cell (`RHP
+ * Alcantara`), the feed's Upcoming bar, the Splits card's `vs LHP`, the next
+ * game's line — so the batting side is that vocabulary said of a batter:
+ * `RHB` / `LHB`, and `SH` for a switch hitter, which is the term itself rather
+ * than a fourth letter pattern. Three characters, and no position code collides
+ * with any of them, which is what lets the token sit unlabeled on a line that
+ * already holds `1B/3B`.
+ *
+ * **Anything that is not `R`, `L` or `S` draws nothing.** MLB files two
+ * ambidextrous *position players* as `pitchHand: 'S'` on a checked season, and
+ * there is no honest word for a switch-throwing pitcher, so absence is the
+ * answer — the same direction every join in this app fails in.
+ */
+export function handCell(
+  kind: PlayerKind,
+  hand: { bats: string | null; throws: string | null } | null | undefined,
+): { text: string; title: string } | null {
+  if (!hand) return null;
+  if (kind === 'pitcher') {
+    if (hand.throws === 'R') return { text: 'RHP', title: 'Throws right-handed' };
+    if (hand.throws === 'L') return { text: 'LHP', title: 'Throws left-handed' };
+    return null;
+  }
+  if (hand.bats === 'R') return { text: 'RHB', title: 'Bats right-handed' };
+  if (hand.bats === 'L') return { text: 'LHB', title: 'Bats left-handed' };
+  if (hand.bats === 'S') return { text: 'SH', title: 'Switch hitter — bats from both sides' };
+  return null;
+}
+
 /** Category used for color-coding an outcome. */
 export type OutcomeKind = 'hr' | 'hit' | 'walk' | 'out' | 'strikeout' | 'other';
 

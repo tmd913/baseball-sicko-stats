@@ -102,9 +102,19 @@ tooltip: on a *fantasy* feed it is the least decision-relevant of the four, and
 drawn as `MIL` it would have been a third string on a line already carrying two.
 
 **The block is `PlayerIdentity`**, the same component the summary table and the
-research board draw a name over a club and a position list with, and the position
-itself is `lib.ts::positionCell` — one definition rather than a third copy, which
-is the rule those two already state for each other. What this caller adds is the
+research board draw a name over a club, a position list and a handedness token
+with, and the position itself is `lib.ts::positionCell` — one definition rather
+than a third copy, which is the rule those two already state for each other.
+
+**The hand arrived here for free, which is the sharing paying out.** Nothing in
+this file asked for it: the block reads the map itself, so the day the two roster
+tables gained `RHB` / `LHP` under a name, so did every row of this feed — and
+*"somebody just dropped a left-handed reliever"* is a fair thing for a waiver
+feed to be able to say. The kind it needs is the one this row already computes
+for `positionCell`. It costs the rows nothing, measured with the token stripped
+out of the same page at the same instant: **32 / 39 / 40px at 1200 and 49 / 56 /
+57 at 390, byte-identical either way** over 42 rows, all 42 carrying a hand, page
+overflow 0 at both. What this caller adds is the
 two things a row in a *feed* needs of it: room to shrink, and a name line that
 carries the trade destination beside the name. (The waiver bid was the third
 thing on that line and has gone — see *The waiver bid is a word, not a figure*

@@ -66,6 +66,7 @@ import {
   FantasyRosterContext,
   MutedContext,
   PlayerStatusContext,
+  HandednessContext,
   RecentNewsContext,
   useDelayedFlag,
   useDismissable,
@@ -2889,6 +2890,15 @@ export default function App() {
     () => new Map(seasonPlayers.map((p) => [p.id, p.position])),
     [seasonPlayers],
   );
+  /* Handedness off the same list and by the same trick — two more leaves on a
+     request this app already makes at boot, which is what lets a fact about
+     *who a player is* reach the research board's strangers at all. One entry
+     per person carrying both facts (a two-way player is two rows of that list
+     under one id, and they agree), with the reader picking the half it draws. */
+  const handById = useMemo(
+    () => new Map(seasonPlayers.map((p) => [p.id, { bats: p.bats, throws: p.throws }])),
+    [seasonPlayers],
+  );
   // The player backing an open details view. Name comes from the report if the
   // player is watchlisted, otherwise from the season roster — so details can be
   // opened for any player, on the watchlist or not. Position always comes from
@@ -3741,6 +3751,12 @@ export default function App() {
         until the one request that fills it lands, and every reader draws
         nothing for a null. */}
     <RecentNewsContext.Provider value={recentNews}>
+    {/* Which side each man bats from and which arm he throws with — read by
+        `PlayerIdentity`, the block three tables share, and by the player page's
+        own heading. Off the season roster this app already holds, so it costs
+        no request; null until that one boot read lands, and every reader draws
+        nothing for a null. */}
+    <HandednessContext.Provider value={handById}>
     <div
       /* `summary-mode` is the fixed-height flex column the table needs, and
          the edit screen is a long scrolling list that must not be trapped in
@@ -4814,6 +4830,7 @@ export default function App() {
         />
       )}
     </div>
+    </HandednessContext.Provider>
     </RecentNewsContext.Provider>
     </EligibilityContext.Provider>
     </PlayerStatusContext.Provider>

@@ -243,7 +243,7 @@ function RowIdentity({ r, children }: { r: PlayerReport; children: ReactNode }) 
     unknownTitle: (p) => `${p} — MLB's listed position`,
   });
   return (
-    <PlayerIdentity teamId={r.teamId} team={r.team ?? ''} pos={pos}>
+    <PlayerIdentity teamId={r.teamId} team={r.team ?? ''} pos={pos} playerId={r.id} kind={r.kind}>
       {children}
     </PlayerIdentity>
   );

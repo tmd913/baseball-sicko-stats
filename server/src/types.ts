@@ -1042,6 +1042,29 @@ export interface PlayerReport extends WatchPlayer {
 export interface SeasonPlayer extends WatchPlayer {
   team: string;
   position: string;
+  /**
+   * Which side he bats from (`R` / `L` / `S`) and which arm he throws with
+   * (`R` / `L`), off MLB's own `batSide` and `pitchHand`.
+   *
+   * They are **here** rather than on `PlayerReport` because this is the list
+   * that answers for everybody: the client holds it from boot for the header
+   * search, so one lookup by id serves the research board — six hundred rows of
+   * players nobody has rostered, with no report behind any of them — as readily
+   * as it serves a roster table. One source, so a man cannot read one hand in
+   * one place and another somewhere else.
+   *
+   * Both facts ride on **one entry per person**, and the caller picks by kind:
+   * a two-way player is two rows of this list under one id, and each of them is
+   * about a different half of him. Null where MLB lists neither, which every
+   * reader draws as nothing rather than as a dash.
+   *
+   * Note `pitchHand` is `S` for two position players on a checked season
+   * (Carlos Cortes, Anthony Seigler — ambidextrous, and neither of them a
+   * pitcher), so the client's own vocabulary answers for `R` and `L` and draws
+   * nothing for anything else rather than inventing a word for it.
+   */
+  bats: string | null;
+  throws: string | null;
 }
 
 // ---- Statcast percentile rankings -----------------------------------------

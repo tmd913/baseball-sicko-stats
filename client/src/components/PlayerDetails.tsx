@@ -15,7 +15,7 @@ import type {
   SeasonStats,
   XwobaSeries,
 } from '../types';
-import { headshotUrl, savantPlayerUrl, statusCorner } from '../lib';
+import { handCell, headshotUrl, savantPlayerUrl, statusCorner } from '../lib';
 import { MovementChart, PitchUsageChart } from './ArsenalCharts';
 import { RemoveButton } from './RemoveButton';
 import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
@@ -35,6 +35,7 @@ import {
   useOverlayFocus,
   useOverlayChromeOffset,
   usePlayerStatus,
+  useHandedness,
 } from '../hooks';
 import { OverviewTab } from './PlayerOverview';
 import { DialogLayerContext, OVERLAY_LAYER } from './Modal';
@@ -514,6 +515,31 @@ export function PlayerDetails({
     ) : position ? (
       <span className="player-pos">{position}</span>
     ) : null;
+
+  /**
+   * Which side he bats from, or which arm he throws with — the same token the
+   * two roster tables print under a name, off the same map and the same rule.
+   *
+   * **The page says it at the tables' width, which is the one place this parts
+   * from the chip above it.** That one is here in full because the board's cell
+   * may truncate a six-position list and this never does — the two read one
+   * fact at two widths. A hand is not a list: `LHB` is the whole of it, so
+   * there is no longer form for the page's extra room to buy, and printing
+   * `Bats left-handed` here would give the reader a second wording to learn for
+   * a fact they already recognize from every row they arrived through. The
+   * sentence is the tooltip, where it costs the heading nothing.
+   *
+   * Drawn twice for the reason `posChip` is: the game log's own head puts the
+   * identity back when that table takes the page and covers this one, and a
+   * head that dropped the hand would be the same man reading two ways
+   * depending on which was on screen.
+   */
+  const hand = handCell(kind, useHandedness(playerId));
+  const handChip = hand ? (
+    <span className="player-hand" title={hand.title}>
+      {hand.text}
+    </span>
+  ) : null;
 
   // Five tabs overflow a phone, so the selected one can sit off the end of the
   // strip — cut in half, or out of sight entirely on a pitcher. Scrolled by
@@ -1004,6 +1030,14 @@ export function PlayerDetails({
                 {/* ESPN's eligibility where there is a league to read it from,
                     MLB's listed position otherwise — see `posChip`. */}
                 {posChip}
+                {/* And which way he does it, immediately after where he does
+                    it — the two are one kind of fact and the heading reads
+                    outward from the name through them. Text rather than a
+                    second bordered chip, and in the same `--faint` the tables
+                    give it: a grounded pill beside a grounded pill would put
+                    `LHB` in exactly the shape this page uses for a *position*
+                    and invite a reader to take it for one. */}
+                {handChip}
                 {/* The padlock: somebody else in the league already has him.
                     It sits on the **name line** rather than out in the control
                     cluster on the right, for the reason the Rostered line under
@@ -1345,6 +1379,7 @@ export function PlayerDetails({
               <img className="glog-id-photo" src={headshotUrl(playerId)} alt="" />
               {name}
               {posChip}
+              {handChip}
             </span>
           }
         />

@@ -956,6 +956,15 @@ export interface PlayerReport extends WatchPlayer {
 export interface SeasonPlayer extends WatchPlayer {
   team: string;
   position: string;
+  /** Which side he bats from (`R` / `L` / `S`) and which arm he throws with
+   *  (`R` / `L`). This list is the app's one source for handedness, because it
+   *  is the one that answers for **anybody**: the client holds it from boot for
+   *  the header search, so a lookup by id serves the research board's strangers
+   *  as readily as a roster row. One entry per person carrying both facts — a
+   *  two-way player is two rows under one id — and the reader picks by kind.
+   *  Null where MLB lists neither, drawn as nothing rather than as a dash. */
+  bats: string | null;
+  throws: string | null;
 }
 
 // ---- Statcast percentile rankings -----------------------------------------

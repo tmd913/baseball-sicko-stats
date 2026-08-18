@@ -179,6 +179,39 @@ export function useRecentNews(id: number): RecentNews | null {
   return useContext(RecentNewsContext)?.get(id) ?? null;
 }
 
+/** Which side a man bats from and which arm he throws with, as MLB codes. */
+export interface Handedness {
+  bats: string | null;
+  throws: string | null;
+}
+
+/**
+ * Every player's handedness by MLB id, reduced from the season roster the app
+ * already holds — or null before that one boot request has landed.
+ *
+ * A context for the reason the three above are: the token is drawn by leaves.
+ * `PlayerIdentity` is the shared block on three tables and is several
+ * components below App on each of them, and the research board draws its rows
+ * inside a `map`, where a hook cannot be called at all — which is why the board
+ * takes *eligibility* as a prop. Reading the map inside the block instead
+ * answers both: the board's rows get it with no prop threaded, and the three
+ * tables cannot come to disagree, since there is one lookup in one place.
+ *
+ * Keyed by **id** rather than by the `${kind}-${id}` player key, exactly as the
+ * two above are: handedness is a fact about a *person*, so a two-way player has
+ * one entry here where he has two of everything else, and the caller picks the
+ * half it is drawing (`lib.ts::handCell`).
+ *
+ * **A null map and a missing id both draw nothing**, which is the same answer
+ * and is the right one: the season roster is what would say, so before it lands
+ * — and for a man it has never listed — the app has not been told.
+ */
+export const HandednessContext = createContext<Map<number, Handedness> | null>(null);
+
+export function useHandedness(id: number): Handedness | null {
+  return useContext(HandednessContext)?.get(id) ?? null;
+}
+
 /**
  * Returns a ref to attach to a collapsible element. When `expanded` flips from
  * false to true, the element scrolls to the top of the viewport (its own

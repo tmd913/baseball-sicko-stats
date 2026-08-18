@@ -94,6 +94,8 @@ interface SportsPlayersPerson {
   fullName: string;
   primaryPosition?: { code?: string; abbreviation?: string };
   currentTeam?: { id?: number };
+  batSide?: { code?: string };
+  pitchHand?: { code?: string };
 }
 interface SportsPlayersResponse {
   people?: SportsPlayersPerson[];
@@ -166,7 +168,7 @@ export async function getSeasonPlayers(
 
   const url =
     `https://statsapi.mlb.com/api/v1/sports/1/players?season=${season}` +
-    `&fields=people,id,fullName,primaryPosition,code,abbreviation,currentTeam,id`;
+    `&fields=people,id,fullName,primaryPosition,code,abbreviation,currentTeam,id,batSide,pitchHand`;
   const [res, teamNames] = await Promise.all([fetch(url, { headers: UA }), getTeamNamesById()]);
   if (!res.ok) {
     throw new Error(`MLB Stats API sports/players returned ${res.status} for season ${season}`);
@@ -180,6 +182,17 @@ export async function getSeasonPlayers(
       savantName: toSavantName(p.fullName),
       team: (p.currentTeam?.id !== undefined && teamNames.get(p.currentTeam.id)) || '',
       position: p.primaryPosition?.abbreviation ?? '',
+      // Which side he bats from and which arm he throws with. Two more leaves
+      // on a call this module already makes, which is the whole reason they are
+      // here rather than on a route or a blob of their own: the client fetches
+      // this list at boot for the header search, so one lookup by id then
+      // answers for **anybody** — which is what the research board needs, its
+      // rows being mostly players nobody has rostered and so having no report
+      // behind them. Both are populated on every row of a checked season
+      // (1,393 of 1,393); the pair costs 2.0KB gzipped upstream, once an hour,
+      // shared by every user.
+      bats: p.batSide?.code ?? null,
+      throws: p.pitchHand?.code ?? null,
     };
     // A two-way player (position code 'Y') gets a row per kind, so he can be
     // watched as a hitter, as a pitcher, or both — they're separate entries.

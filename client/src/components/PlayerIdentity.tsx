@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { teamColor, teamLogoUrl } from '../lib';
+import { handCell, teamColor, teamLogoUrl } from '../lib';
+import { useHandedness } from '../hooks';
+import type { PlayerKind } from '../types';
 
 /**
  * A name over its club and positions — the identity block, in the one place
@@ -70,14 +72,30 @@ export function PlayerIdentity({
   teamId,
   team,
   pos,
+  playerId,
+  kind,
   children,
 }: {
   teamId: number | null;
   team: string;
   /** The text and tooltip `lib.ts::positionCell` computed. */
   pos: { text: string; title: string };
+  /** Whose handedness to look up, and which half of him to say — see below. */
+  playerId: number;
+  kind: PlayerKind;
   children: ReactNode;
 }) {
+  /* **Read here rather than passed in**, which is where this parts from `pos`.
+     That one is a prop because the three callers genuinely disagree about it —
+     different sources, different fallbacks, different tooltips — where this is
+     the same lookup and the same rule for all of them, so a prop would be three
+     copies of one line waiting to drift. It also has to be read here to work at
+     all on the research board, whose rows are drawn inside a `map` where no
+     hook can be called; that is why the board takes eligibility as a prop, and
+     it is why a context read from inside the block is the one shape that serves
+     every caller. Null until the boot request lands, and for a man MLB lists
+     neither hand for — both draw nothing. */
+  const hand = handCell(kind, useHandedness(playerId));
   return (
     <div className="row-id">
       <div className="row-id-name">{children}</div>
@@ -86,6 +104,19 @@ export function PlayerIdentity({
         <span className="row-id-pos" title={pos.title}>
           {pos.text}
         </span>
+        {/* **Last on the line, and it never gives way.** The order is club →
+            where he plays → which way he does it, which reads outward from the
+            cap; and it leaves the pair that was here before this exactly where
+            it was. The position list is the one thing on this line allowed to
+            ellipsize, so the hand is `flex: none` behind it: on a row narrow
+            enough to truncate `1B/2B/3B/SS/OF` the three characters that say
+            he is a lefty survive, which is the right way round — a truncated
+            list still reads as a list, where half a hand reads as nothing. */}
+        {hand && (
+          <span className="row-id-hand" title={hand.title}>
+            {hand.text}
+          </span>
+        )}
       </div>
     </div>
   );

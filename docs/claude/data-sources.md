@@ -137,7 +137,68 @@ changes next April is the line.
 - `xwoba-*`/`arsenal-*` — `xwoba.ts` and `pitcherArsenal.ts` were memory-only; both now have a storage tier because each is backed by a *full-season* Savant CSV, and `getReport` pulls one arsenal per watched pitcher.
 - `league-woba-{date}-v1.json` / `league-xwoba-{season}-v1.json` — **the rolling chart’s reference line, measured rather than declared**: two numbers a day (111 bytes) and one season total, both read back with no freshness test and built by the nightly warmer alone. See *What an average plate appearance is worth* above.
 - **Live-game freshness:** a game for the current day is re-fetched via `diffPatch` deltas at most once per `LIVE_GAME_TTL` (10s); the parsed day is memoized with a `TODAY_TTL` (10min). Past dates are treated as immutable.
-- `getSeasonPlayers` (roster for the add-player search) cached with a 1h TTL.
+- `getSeasonPlayers` (roster for the add-player search) cached with a 1h TTL. It
+  also carries **`bats` and `throws`** — see below.
+
+### Handedness rides on the season roster, because that is the list that answers for everybody
+
+**Which side a man bats from and which arm he throws with are two more leaves on
+a request this app already makes**, and choosing *which* request is the whole of
+the decision. Three were available and only one of them can answer for a
+stranger.
+
+- **`getRosterInfo`'s people call** already hydrates `pitchHand` — it is what
+  `PlayerReport.throws` is, and what a pitcher's card reads before he has thrown
+  a pitch — and `batSide` is one more leaf on it. It answers for the players a
+  **report** was built for, which is a roster and nothing else.
+- **The research blob** (`research-{kind}-{window}-{SEASON}-v7.json`) would put
+  it on the row that needs it most, and is the wrong home for the reason
+  `rosterPct` and `eligible` are kept off it: that blob is cached per kind and
+  per window and served to every user alike, so a fact about a player would ride
+  in ten copies and a fifth window would have to learn it too.
+- **`getSeasonPlayers`** is every player of the season, `fields`-filtered, cached
+  an hour, and — the part that decides it — **already fetched by the client at
+  boot** for the header search. One lookup by id then answers for *anybody*,
+  which is what the research board needs: six hundred rows of players nobody has
+  rostered, with no report behind a single one of them.
+
+So it is the third, and `bats`/`throws` join `SeasonPlayer`. Measured against
+MLB, the pair takes that call from **161,842 to 228,706 bytes raw and 21,989 to
+24,061 gzipped** — 2.0KB over the wire, once an hour, shared by every user of the
+installation — and both fields come back populated on **1,393 of 1,393** rows of
+a checked season, so this is not a column that will quietly be mostly empty.
+
+**One source rather than two, which is why `PlayerReport` gained nothing.**
+Adding `bats` beside the `throws` already on a report is nearly free and would
+have given the summary table an answer off its own row — and then the board and
+the player page would still have needed the season list, and the app would hold
+two definitions of one displayed fact, free to disagree the next time either was
+touched. `PlayerReport.throws` is untouched and keeps its own readers, which are
+a different question: it is the hand a **game** is read against, standing in for
+`PlayerGame.stand` before he has appeared in one, and it is what accents the
+opposing lineup's platoon row. Who a man *is* comes off the list that knows
+about everybody.
+
+**One entry per person, carrying both facts**, and the reader picks the half it
+is drawing. A two-way player is two rows of this list under one id — checked,
+Ohtani's batter row and his pitcher row agree, `L` and `R` on both — so the
+client reduces it to a map keyed by **id** the way the news map is, and
+`lib.ts::handCell` takes the kind. See **Client — the Roster view** for the
+vocabulary that comes out of it and what it costs the two wide tables (nothing).
+
+**Nothing versioned moved, and the test is the repo's own.** `seasonPlayersCache`
+is **memory only** — `getSeasonPlayers` writes no `storage.ts` blob at all — so
+there is no stored shape that could deserialize with the pair missing, which is
+the hazard a version guards against. `SeasonPlayer` is also not what a roster
+entry is stored as: `store.ts` persists `WatchPlayer` (+ `addedAt`), and the two
+new fields are deliberately on `SeasonPlayer` alone rather than on the type every
+report, card and stored entry in both workspaces is built on.
+
+**`pitchHand` is `S` for two players on a checked season** — Carlos Cortes and
+Anthony Seigler, ambidextrous, and **neither of them a pitcher** (MLB lists them
+RF and 2B). There is no honest word for a switch-throwing pitcher, so the client
+answers for `R` and `L` and draws nothing for anything else, which is the
+direction every join in this app fails in.
 
 **`getDay(date, filter?)`** takes an optional `DayFilter` (`dayFilterFor(players)`). A day holds a report for *every* player who appeared — ~600, several MB — so `getReport` narrows each day to the rostered players as it parses. The filter carries **names as well as ids**, because `findPlayerDay` falls back to a same-kind `savantName` match when an id isn't present that day; filtering on ids alone would silently break that. Frozen, filtered days are memoized in a bounded `projectedCache` keyed by date + roster; only still-mutable days are kept whole in `memCache`. `mapLimit` (`limit.ts`) caps the fan-out at `DAY_CONCURRENCY` (6) and `GAME_CONCURRENCY` (8) — this bounds peak heap as much as it bounds sockets.
 

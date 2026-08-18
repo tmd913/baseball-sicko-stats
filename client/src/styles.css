@@ -1763,6 +1763,28 @@ body {
   padding: 2px 7px;
   white-space: nowrap;
 }
+/* Which side he bats from, or which arm he throws with, beside the position
+   chip on the player page's heading — the same three characters the two roster
+   tables print under a name (`lib.ts::handCell`).
+
+   **Deliberately not a second `.player-pos`.** That chip's ground and border
+   are what this page uses to say *position*, and `LHB` inside one would read as
+   a place he can be started. So the token keeps the chip's type and spacing and
+   gives up the box: text alone, in the `--faint` the sub-line version already
+   takes, which puts it a step behind the position for the same reason it is a
+   step behind it there — where he plays is actionable and which hand he does it
+   with is a standing fact about the man. It sits on `.details-name`, a wrapping
+   flex line, so the heading gives way at a width rather than overflowing; at
+   390 it is still one line on every name checked. */
+.player-hand {
+  margin-left: 7px;
+  vertical-align: middle;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--faint);
+  white-space: nowrap;
+}
 /* Off-roster flag (IL / suspended / optioned) beside the name — a tinted
    variant of .player-pos, colored by severity via the tone modifier. */
 .roster-status {
@@ -8659,6 +8681,32 @@ button.start-line:focus-visible {
 .row-id-pos {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* Which side he bats from, or which arm he throws with — `RHB` / `LHB` / `SH`,
+   `RHP` / `LHP`, from `lib.ts::handCell`.
+
+   **On this line because it costs the table nothing to be here.** The column is
+   sized by the *names* above, which are longer than anything this line can hold
+   — which is the same argument that let the position list off the grid and into
+   the block, and it is why three more characters here are free where three more
+   in a column of their own would be ~40px on a board that already overflows a
+   1920px screen with a third of its columns showing. Measured before and after
+   on both boards at 390 / 1200 / 1920: not one pixel of table width, and rows
+   still 58.00px — this line has the three pixels of slack `.row-id` records,
+   and adds no height at all, being the same 11px line the position sits on.
+
+   **`--faint` rather than the sub-line's own `--muted`**, which is the whole of
+   how it stays out of the way: it is the least actionable thing on the line —
+   the cap says who employs him and the positions say where you may start him,
+   where this is a standing fact about the man — so it reads a step quieter than
+   the pair it follows and the eye lands on them first. It is the tone this app
+   already spends on the quieter of two things in one cell.
+
+   `flex: none` so the position list is the one thing here that ever gives way;
+   see `PlayerIdentity` for why that is the right way round. */
+.row-id-hand {
+  flex: none;
+  color: var(--faint);
 }
 /* The whole header cell is the hit target, so the button fills it rather than
    sitting as a smaller shape inside a cell that also looks clickable. */

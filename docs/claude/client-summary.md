@@ -114,6 +114,52 @@ Two things follow from that, and they are exactly the report. It is visible **on
 
 **Club and position sit under the name here too, and it is the research board's own block.** This table said neither. Which club a man plays for, and where a fantasy league will let you start him, are the two standing facts about a roster row — the same pair the board moved off its `Tm` and `Pos` columns and under the name, for a reason that reads the same way from this side: they are facts about *who the player is*, and the name is the one column already carrying one of those and already absorbing the table's slack. What the summary table adds to that argument is that it had nothing at all to lose here — no columns were cut, because there were none — so the block is pure addition on the one view read as a roster.
 
+**And which way he does it, after where he does it.** `RHB` / `LHB` / `SH` for a
+hitter, `RHP` / `LHP` for a pitcher, last on the sub-line — the club, then where
+he plays, then which hand he plays it with, which reads outward from the cap and
+leaves the pair that was here before it exactly where it was. It is a fact of the
+same kind as the two beside it and the argument for putting it here is the one
+above, one item further along: the name column absorbs the table's slack, so this
+line has room the grid has not.
+
+**It is one token per kind, and a two-way player is the case that shows why.**
+Ohtani's batter row reads `LHB` and his pitcher row `RHP` — the same man, two
+entries, each describing the half of him the row is about, which is the rule the
+position cell beside it already follows (`eligibleForKind` narrows his bat to
+`DH` and his arm to `SP`). It is the *useful* reading as well as the consistent
+one: which arm a designated hitter throws with decides nothing. The whole
+vocabulary, and the two forms that were rejected, are in `lib.ts::handCell`.
+
+**`--faint`, a step behind the position**, which is how it stays out of the way:
+the cap says who employs him and the positions say where your league will let you
+start him, where this is a standing fact about the man, so the eye lands on the
+two actionable things first. Measured, it resolves each theme's own token at
+**3.72 / 3.95 / 4.39 / 5.17** against the ground it sits on in Midnight,
+Lavender, Maroon and Powder Blue — the same band every other `--faint` reader in
+the app occupies.
+
+**It costs this table nothing, measured rather than assumed** — the geometry read
+and then the token stripped out of the same page at the same instant, at 390 /
+1200 / 1920 on both tabs with the pane scrolled to its far right. The table is
+**595.84 / 1200 / 1920 on the batter tab and 717.42 / 1200 / 1920 on the
+pitcher's, byte-identical either way**; the name column identical (111.55 /
+204.64 / 309.78 and 105.38 / 159.86 / 234.45); rows **58.00px**; the identity
+block **31.00**; the headshot column pinned at **0**; the pinned total row 1px off
+the pane's bottom; and **page-body overflow 0** at every width in both states.
+Three characters on the sub-line are free because that line was never what sizes
+the column.
+
+**A player MLB lists no hand for draws nothing** — not a dash and not a guess —
+and so does every row before the boot request that fills the map has landed.
+Checked with `/api/players` blocked outright: **0 tokens over 50 rows**, rows
+still 58.00px, the headshot still pinned at 0 and the page still overflowing by 0.
+
+**Bundle, for the whole of it — the field, the vocabulary, the context, three
+tables and the player page's heading: 550.02 → 550.90 KB of JS** (163.06 → 163.28
+gzipped) and **147.02 → 147.21 KB of CSS** (26.21 → 26.24) — 0.88KB and 0.19KB
+raw, 0.22KB and 0.03KB over the wire, for a fact on every name in the app. The
+CSS is two rules; the comments arguing them cost the bundle nothing.
+
 **Shared rather than copied**, which is the rule `PhotoStatus` already sets for the marks on a headshot: two tables that merely resemble each other are two tables that will one day differ, and this is the block a reader is meant to *recognise* moving between two pages. `components/PlayerIdentity.tsx` holds it — `PlayerIdentity` (the column, the sub-line) and `TeamMark` (the cap logo on a ground in the club's own colour, moved out of `ResearchTable.tsx`; see **Client — the research board** for where that ground comes from and why the mark needs one) — and the name line is a `children`, because that is the one part the two genuinely disagree about: the board trails a name with the roster baseball and the watchlist star, where this table leads it with the fantasy slot chip. The CSS is shared outright and unscoped (`.row-id*`, renamed from `.research-id*` — `.player-id` was already the player card's header block and had been for far longer), since both tables are 58px rows off a 42px circle and there is one set of numbers to keep true. **The only thing this table adds is `display: inline-flex`**, so the block sits *beside* the slot chip rather than under it; it must not be a flex `<th>`, which takes the cell out of table layout, the mistake the game log's corner header already documents.
 
 **The position rule moved to `lib.ts::positionCell`** and is now one definition for both. It was `posCellText` on the board, three fallbacks deep — ESPN's eligibility narrowed to the row's kind, then MLB's listed position for a batter and `starter` for a pitcher, then MLB's own spelling — and a second copy of that on a table that draws exactly the same cell would have been the drift this codebase spends its comments avoiding. `eligibleCodes` is the same rule without the tooltip, which is what the board's **position pills** read, so a pill and the cell beside it cannot come to disagree. Each caller keeps the two things that really are its own: the board hoists the pill in force to the front and says its pitcher fallback is measured "over the window", where a report's is `isRotationStarter`'s season.
