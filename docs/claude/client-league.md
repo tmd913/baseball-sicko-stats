@@ -374,6 +374,51 @@ emulation after a tap-and-close, the cell is still `:hover` and its background i
 back to `rgba(0, 0, 0, 0)` — the element is still hovered and the *rule* is what
 stopped applying.
 
+**Nothing at rest said the figures were pressable, and that was reported as
+"I don't see it".** Everything above describes a working control that a reader
+could not find: the cell drew as a plain number on a transparent ground, and its
+only two signals — `cursor: pointer` and the hover tint — both need a pointer.
+On a touch device there was no affordance at all, and with a pointer you had to
+already be hovering the thing you were looking for. Worse, the **card around it
+is itself a press** (it opens the matchup page), so the natural reading is "the
+card is the button" and the numbers inside it are text. Measured on the built
+client: `text-decoration: none`, background `rgba(0, 0, 0, 0)`, no border, no
+icon.
+
+**A dotted underline is the standing mark**, drawn in `currentColor` rather than
+a token so it is each cell's own state at a lower strength — the winning figure
+is `--win` and the losing one muted, and the underline can therefore never
+contradict the colour the table is already spending on the outcome. It costs
+**no layout**: `text-decoration` is not in flow, so the card is **189.98px**
+and its category rows **[18, 21, 18, 21]** before and after, at 320, 390 and
+1200 alike. Under the pointer it goes to full strength, so the hover tint says
+*which* cell and the mark says what in it is pressable.
+
+**50% is a measurement.** A dotted underline is a meaningful non-text indicator
+and owes 3:1 against its ground, and the binding theme is the light one — a mix
+toward a white page loses far more than the same mix toward a dark one. Swept
+across all four themes on a real card, 45% gave 3.94 / 3.85 / 4.00 on Midnight,
+Lavender and Maroon and **2.93 on Powder Blue**, under the bar on exactly the
+theme where a faint mark is hardest to see. 50% is the lowest step that clears
+it everywhere (3.40 on Powder, 4.57–4.75 on the darks); 55% and up clears it
+further and starts reading as a second underline of the text rather than a hint
+under it.
+
+**And one line names the gesture, once for the page.** `.lg-cat-hint` sits under
+the period head — *Press any figure for a day-by-day chart of that category.* —
+rather than on each card, which would be ten copies of one sentence on the app's
+densest page. It is drawn on the **categories** format alone: a points league has
+one number a side and no pressable cell, so the hint would name a gesture that
+isn't there. The wording was cut down to fit: the first draft wrapped to two
+lines at 390, and this one is **15px at 390 and 1200** and two lines only at 320,
+which is the width this page already pays a line for everything at.
+
+**Re-checked after both marks**, with a real dispatched mouse click rather than a
+synthetic one: the press opens `Runs — week 19` with its chart drawn, does **not**
+fall through to the matchup page, leaves one `inert` while open, and one Escape
+closes it with **0** left inert and the URL untouched. Page-body overflow is 0 at
+320, 390 and 1200.
+
 ### The chart itself
 
 `components/MatchupSeriesChart.tsx`, in the app's shared `Modal` — so it
