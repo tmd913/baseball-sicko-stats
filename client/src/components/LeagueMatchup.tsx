@@ -15,10 +15,12 @@ import { ScheduleSpanTabs, ScheduleToggle } from './ScheduleControl';
 import { buildScheduleIndex, defaultScheduleSpan } from './schedule';
 import type { ScheduleSpan } from './schedule';
 import {
+  asProjected,
   catScore,
   categoryGroups,
   fmtValue,
   prettyDate,
+  ProjectedTools,
   record,
   teamAbbrev,
   TeamLogo,
@@ -29,6 +31,7 @@ import type {
   EspnCategory,
   EspnMatchupSeries,
   EspnMatchupSide,
+  EspnProjection,
   EspnScoreboard,
   EspnStandingsTeam,
   EspnTransactionPlayer,
@@ -347,6 +350,9 @@ export default function LeagueMatchupView({
   onSideTeam,
   onClose,
   onOpenDetails,
+  projection,
+  projected,
+  onProjected,
   transactions,
   onOpenPlayer,
   presets,
@@ -376,6 +382,19 @@ export default function LeagueMatchupView({
   onSideTeam?: (teamId: number | null) => void;
   onClose: () => void;
   onOpenDetails: (key: string) => void;
+  /**
+   * **Where this week is heading**, and the reader's own lens on it — the
+   * Scoreboard's `Projected` toggle, drawn here too.
+   *
+   * The state and the read both live in App, which is where they were: the
+   * toggle is in the URL as `proj=1`, and one read serves both surfaces, so a
+   * reader who projects the board and then opens a card gets the projected
+   * figures with nothing fetched a second time. Null until it lands, and
+   * `ok: false` on a period there is nothing left to project.
+   */
+  projection: EspnProjection | null;
+  projected: boolean;
+  onProjected: (on: boolean) => void;
   /** The League view's own transactions feed, read on entry to that view and
    *  kept — this page is opened from it, so the Moves section costs no read of
    *  its own. Null until it lands, and while it is null the section is the
@@ -529,6 +548,31 @@ export default function LeagueMatchupView({
   const matchup = board.matchups.find((m) => m.id === matchupId) ?? null;
 
   /**
+   * **This matchup's own projection**, or null where there is nothing to draw.
+   *
+   * Read by id rather than by position — the projection comes back in ESPN's
+   * order and this page was opened on one row of it — and gated on the same two
+   * things the Scoreboard's toggle is: a **categories** league, whose card is a
+   * grid of categories where a points league's is one number a side that the
+   * projection does not fill, and a **live** period, a settled week having
+   * nothing left to happen (which the server says in as many words, `ok: false`
+   * with `note: 'settled'`).
+   *
+   * `projectable` and `showingProj` are two different questions and both are
+   * needed: the first decides whether the control is drawn at all, and the
+   * second whether the figures on screen *are* the projection — false while the
+   * read is still out, so the page shows the live figures under an unlit button
+   * rather than blanking, which is the app's own rule that nothing goes empty
+   * over data it already has.
+   */
+  const projectable = board.format === 'h2h-categories' && board.live;
+  const projMatchup =
+    projectable && projected && projection?.ok
+      ? projection.matchups.find((m) => m.id === matchupId) ?? null
+      : null;
+  const showingProj = matchup !== null && projMatchup !== null;
+
+  /**
    * Which page is on screen, and whose it is.
    *
    * Hoisted above the `!matchup` return because the effect that reports it up
@@ -597,18 +641,52 @@ export default function LeagueMatchupView({
     viewRef.current?.scrollTo({ top: 0 });
   }, [sideTab, reading]);
 
+  /**
+   * **The toggle and the tag are the Summary page's**, and both turn on the
+   * same flag.
+   *
+   * A team page is that manager's roster and feed over a span the reader picks
+   * — nothing on it is a category total — so a control there would be a setting
+   * lying about its reach, which is the test this app applies to every control
+   * it declines to draw on a page it cannot act on. And the head is shared by
+   * all three pages, so the `Projected` tag has to be gated with it or it would
+   * sit over a roster table calling its figures a projection.
+   */
+  const onSummary = matchup !== null && active === 'summary';
+  const offerProjected = onSummary && projectable;
+  const headProj = onSummary && showingProj;
+
+  /**
+   * **The days the figures cover, and while projected that is the whole
+   * period** rather than the part of it that has been played.
+   *
+   * `board.end` is the *observed* span and truncates at today for a live week,
+   * which is exactly right for figures that are what has happened and a lie
+   * over figures that reach the end of it. The projection carries the period's
+   * own last day for this — the Scoreboard's head does the same thing with the
+   * same two fields, so the two pages cannot print different weeks over the
+   * same numbers.
+   */
+  const headEnd = (headProj ? projection?.end : null) ?? board.end;
   const period = (
     <span className="mup-week">
       <span className="mup-week-n">Week {board.matchupPeriod}</span>
-      {board.start && board.end && (
+      {board.start && headEnd && (
         <span className="mup-week-dates">
-          {board.start === board.end
+          {board.start === headEnd
             ? prettyDate(board.start)
-            : `${prettyDate(board.start)} – ${prettyDate(board.end)}`}
+            : `${prettyDate(board.start)} – ${prettyDate(headEnd)}`}
         </span>
       )}
-      <span className={`lg-state${board.live ? ' lg-state-live' : ''}`}>
-        {board.live ? 'Live' : 'Final'}
+      {/* **`Projected` replaces `Live` rather than joining it**, which is the
+          Scoreboard's own rule: the tag says what the figures on the page *are*,
+          and two of them would be the page claiming to be both. */}
+      <span
+        className={`lg-state${
+          headProj ? ' lg-state-proj' : board.live ? ' lg-state-live' : ''
+        }`}
+      >
+        {headProj ? 'Projected' : board.live ? 'Live' : 'Final'}
       </span>
     </span>
   );
@@ -629,6 +707,15 @@ export default function LeagueMatchupView({
             days played so far, which is why the dates and the state are
             together. */}
         {period}
+        {offerProjected && (
+          <ProjectedTools
+            projection={projection}
+            categories={board.categories.length}
+            showing={showingProj}
+            projected={projected}
+            onProjected={onProjected}
+          />
+        )}
       </div>
       {/* **The strip is part of the head rather than of the page.** It is this
           page's own navigation — which of the three readings of the matchup is
@@ -700,7 +787,25 @@ export default function LeagueMatchupView({
     );
   }
 
-  const { home, away } = matchup;
+  /**
+   * **The two sides the Summary is drawn from**, which is the projection where
+   * one is in force.
+   *
+   * The comparison's whole job is to set two sides against each other across
+   * the league's categories and mark the winner, and that arithmetic is
+   * identical whether the figures are what has happened or what is going to —
+   * so the *data* is swapped and every line below it is the code that was
+   * already checked. `asProjected` is the Scoreboard's own function rather than
+   * a second one here, and it keeps the team ids and the acquisitions off the
+   * live side: a manager's moves are a fact about the period so far and are not
+   * projected either way, which is why the Moves section reads the same under
+   * both lenses.
+   *
+   * The strip, `active` and `sideTeamId` above are unaffected by construction —
+   * they read team ids, which the swap preserves.
+   */
+  const shown = showingProj && projMatchup ? asProjected(matchup, projMatchup) : matchup;
+  const { home, away } = shown;
   const openCat =
     openStat === null ? null : board.categories.find((c) => c.statId === openStat) ?? null;
   /**
@@ -1084,7 +1189,14 @@ export default function LeagueMatchupView({
           // quietly if that rule ever changed.
           null
         ) : (
-          <div className="mup-card">
+          /* **A projected card is drawn as a projection**, which is this app's
+             standing rule that an estimate never wears the same clothes as a
+             measurement — the percentile card's dotted bubble, the Splits
+             card's hatched fill, the Schedule grid's dashed chip, and the
+             scoreboard card's own dashed border. At the size of the whole card
+             rather than per cell, because every figure on it is projected and
+             marking each one would be the same claim made twenty times. */
+          <div className={`mup-card${showingProj ? ' mup-proj' : ''}`}>
             <div className="mup-heads">
               <SideHead
                 side={away}
@@ -1232,7 +1344,14 @@ export default function LeagueMatchupView({
                           key={c.statId}
                           aria-haspopup="dialog"
                           aria-label={`${c.name} — chart of how it moved through this matchup`}
-                          title={`${rowTitle(c, l, r, w)} — press for the day-by-day chart`}
+                          /* **The chart is of the days played, whichever lens
+                             the figures are under** — it is a running total and
+                             a projection is not one — so while projected the
+                             title says so rather than leaving a reader to press
+                             `63` and find a line ending at 35. */
+                          title={`${rowTitle(c, l, r, w)}${
+                            showingProj ? ' by the end of the week' : ''
+                          } — press for the day-by-day chart of the days played`}
                           onClick={() => openCategory(c.statId)}
                         >
                           <span className={`mup-val mup-val-left${state('left')}`}>

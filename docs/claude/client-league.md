@@ -443,19 +443,52 @@ drawing last week's over this one being the one thing it must not do. A **failed
 read is logged and costs the toggle its figures alone: the cards fall back to the
 live ones rather than the page becoming a message.
 
-### The matchup page deliberately does not follow
+### The matchup page follows now, and this reverses the passage that said it would not
 
-A reader who projects the board and then opens a card gets the **live** figures on
-the matchup page, and that is a decision rather than an omission.
+**What stood here was that a reader who projected the board and then opened a
+card got the *live* figures, and that this was a decision rather than an
+omission.** Three reasons were given and each is answered rather than waved away
+— which is worth reading, because two of them were facts about that page that
+have since been paid, and the third was never true of the categories at all.
 
-The toggle is the Scoreboard tab's own — the same argument that keeps the period
-arrows there. And the matchup page's Summary is a comparison of *what has
-happened*, with the acquisitions and the week's moves under it, which are facts
-about the period so far and are not projected: carrying the lens in would leave a
-page speaking in two tenses. Most of all, **a projected figure with nothing saying
-so is the one thing this must not draw**, and that page has no state tag for one
-to live in. Adding it properly means its own tag in its own head, which is a
-second surface rather than a prop threaded through.
+- *"The toggle is the Scoreboard tab's own — the same argument that keeps the
+  period arrows there."* That argument is about **which week**, which the matchup
+  page genuinely does not ask: it is opened on one, prints it, and offers no
+  arrows. **Which lens** is a different question, and the matchup page asks it of
+  the same twenty figures the card does.
+- *"A projected figure with nothing saying so is the one thing this must not
+  draw, and that page has no state tag for one to live in."* It has one: the head
+  prints the week, its dates and `Live`/`Final`, and `Projected` replaces that
+  word there exactly as it does on the Scoreboard — over dates that run to the
+  end of the period rather than to today, off the projection's own `end`. The
+  card takes the **dashed border** the scoreboard card already takes, which is
+  the same claim at the same size.
+- *"Carrying the lens in would leave a page speaking in two tenses."* The
+  acquisitions and the moves under the categories really are facts about the
+  period so far — and they are **not projected either way**: `asProjected` keeps
+  both off the live side, which is why that section reads identically under both
+  lenses and is the one part of the page the toggle does not touch.
+
+**One control rather than a second one.** `LeagueView.tsx::ProjectedTools` is the
+button and its key as one exported component, drawn by the Scoreboard's head and
+by the matchup's; `asProjected` is exported beside it, so the swap is the
+function that was already checked rather than a second one that agrees today.
+The **state and the read stay in App** — `proj=1` is one param and the projection
+is one read per period — so projecting the board and then opening a card fetches
+nothing, and the two surfaces cannot come to disagree about the lens.
+
+**`proj=1` is therefore scoped to two places rather than one**: the Scoreboard
+tab, and a matchup open over any tab. That is `needsScoreboard`'s own pair one
+question later — the two places that need the board are the two that can project
+it — and Rankings and Transactions drop the param exactly as they did, a lens
+naming figures that are not on screen being the thing that rule forbids.
+
+**On the Summary page alone.** A team page is that manager's roster and feed over
+a span the reader picks, and nothing on it is a category total — so the toggle is
+not drawn there, and the `Projected` tag is gated with it rather than sitting in
+a shared head calling a roster table a projection. Crossing to a team page and
+back leaves the lens where the reader put it. See **Client — a league matchup**,
+*The Projected toggle*, for what it draws and what it measured.
 
 ### Measured
 

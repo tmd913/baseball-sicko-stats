@@ -7,16 +7,16 @@
  * actually happened today* — the home runs, the steals, the plays there is film
  * of — without the reader scrolling past every strikeout in between.
  *
- * **Six kinds, and they union.** That is the research board's include-button
+ * **Seven kinds, and they union.** That is the research board's include-button
  * model rather than a segmented control, and for its reason: the sets genuinely
- * overlap (a home run is a hit and an extra-base hit), so "pick one" would be a
- * lie about the vocabulary, where three independent switches say all eight of
- * their states. Nothing selected is the whole stream — a filter set that
- * defaults to *everything* rather than to nothing, so the feed opens as it
- * always did.
+ * overlap (a home run is a hit, an extra-base hit and — nearly always — an RBI),
+ * so "pick one" would be a lie about the vocabulary, where independent switches
+ * say every one of their states. Nothing selected is the whole stream — a filter
+ * set that defaults to *everything* rather than to nothing, so the feed opens as
+ * it always did.
  *
  * **`New` is not one of them and is deliberately kept out of this list.** It
- * asks *when* rather than *what kind*, so it narrows whatever the six selected
+ * asks *when* rather than *what kind*, so it narrows whatever the seven selected
  * instead of adding to it — which is exactly the split `inc=` and `watch=1`
  * already make on the research board, where the ownership sets union and the
  * watchlist is a separate axis. Read `HR + New` as "the new home runs", never as
@@ -27,14 +27,22 @@
  * select on, and the control is not drawn.
  */
 
-/** The six kinds a play can be asked for, in the order the chips read. */
-export type PlayFilterKey = 'hr' | 'hit' | 'xbh' | 'sb' | 'run' | 'video';
+/** The seven kinds a play can be asked for, in the order the chips read. */
+export type PlayFilterKey = 'hr' | 'hit' | 'xbh' | 'sb' | 'run' | 'rbi' | 'video';
 
-export const PLAY_FILTER_KEYS: PlayFilterKey[] = ['hr', 'hit', 'xbh', 'sb', 'run', 'video'];
+export const PLAY_FILTER_KEYS: PlayFilterKey[] = [
+  'hr',
+  'hit',
+  'xbh',
+  'sb',
+  'run',
+  'rbi',
+  'video',
+];
 
 export interface PlayFilterDef {
   key: PlayFilterKey;
-  /** Short enough for six of them to share a phone's width. */
+  /** Short enough for seven of them to share a phone's width. */
   label: string;
   /** What the chip is actually selecting, in words — the label cannot say it. */
   title: string;
@@ -43,11 +51,11 @@ export interface PlayFilterDef {
 /**
  * The chips' own vocabulary.
  *
- * The labels are abbreviations because six of these share one row on a 390px
+ * The labels are abbreviations because seven of these share one row on a 390px
  * phone, and every one of them is a form a box score already uses. What an
  * abbreviation cannot say is which plays it takes — that a home run is inside
- * `Hits` and inside `XBH`, that `Runs` is him crossing the plate rather than
- * driving one in — so each carries the sentence.
+ * `Hits` and inside `XBH` and inside `RBI`, that `Runs` is him crossing the
+ * plate where `RBI` is him driving somebody in — so each carries the sentence.
  */
 export const PLAY_FILTERS: PlayFilterDef[] = [
   { key: 'hr', label: 'HR', title: 'Home runs' },
@@ -66,6 +74,11 @@ export const PLAY_FILTERS: PlayFilterDef[] = [
     key: 'run',
     label: 'Runs',
     title: 'Runs he scored — crossing the plate, not driving one in',
+  },
+  {
+    key: 'rbi',
+    label: 'RBI',
+    title: 'Plate appearances he drove a run in on — the other half of Runs',
   },
   {
     key: 'video',
@@ -117,16 +130,19 @@ export function playFiltersParam(keys: Set<PlayFilterKey>): string | null {
  * the board's own rule that a collapsed control must never be the only place a
  * filter lives.
  *
- * **`New` reads last and is set apart by a wider gap**, because it is the one
- * chip that composes differently: the six before it union with each other and
- * this one narrows what they selected.
+ * **`New` reads last and is spaced like every chip before it**, which is a
+ * reversal of the two devices that came before it. It was a **hairline**, which
+ * could not survive the wrap — the panel breaks where the window says, so at
+ * 390px `New` drops to a second line and the rule was left at the end of the
+ * first with nothing after it, a mark separating a group from nothing. It was
+ * then a wider gap, which cannot dangle and so was the right shape for the
+ * wrong claim: a chip set an inch apart from its neighbours reads as a second
+ * *group*, and at seven chips the row breaks often enough that the daylight
+ * lands wherever the window puts it rather than where the argument wanted it.
  *
- * It was a **hairline** between the two, and that could not survive the wrap: the
- * panel is a wrapping row, so at 390px `New` drops to a second line and the rule
- * was left at the end of the first with nothing after it — a mark separating a
- * group from nothing. A gap cannot dangle, which is what makes it the right
- * device for a row whose break point is the window's business. The chip's own red
- * count and its word carry the rest of the distinction.
+ * What actually carries the distinction is what it always did: the **word**,
+ * which is not a stat, and the chip's own **red count**, which is the only
+ * colour in the row. Neither depends on where the line happens to break.
  */
 export function PlaysButton({
   keys,

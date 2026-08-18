@@ -323,7 +323,7 @@ function outcome(
  * is: that is what lights the leading side's name, and a projection whose whole
  * point is to say where the week is going has no business declining to.
  */
-function asProjected(m: EspnMatchup, p: EspnProjectedMatchup): EspnMatchup {
+export function asProjected(m: EspnMatchup, p: EspnProjectedMatchup): EspnMatchup {
   const side = (orig: EspnMatchupSide, pr: EspnProjectedSide): EspnMatchupSide => ({
     ...orig,
     scores: pr.scores,
@@ -612,6 +612,80 @@ function ProjectionKey({
   );
 }
 
+/**
+ * **The `Projected` toggle and its key**, as one control — because it is drawn
+ * in two places now and two copies of it would be two controls that will one
+ * day differ.
+ *
+ * It was the Scoreboard's alone, on the stated reasoning that the matchup page
+ * "has no state tag for a projected figure to live in" and that carrying the
+ * lens into a page whose Summary is a comparison of *what has happened* would
+ * leave it speaking in two tenses. The first half was a fact about that page
+ * and has been paid — it prints the week, its dates and `Live`/`Final` in its
+ * own head, so `Projected` replaces that word there exactly as it does here —
+ * and the second was never true of the categories, which are the same twenty
+ * figures the card holds. What stays behind is the *acquisitions* and the
+ * moves, which are facts about the period so far and are not projected either
+ * way.
+ *
+ * The caller supplies the row it sits in (`.lg-proj-tools` carries the
+ * `margin-left: auto` that puts it at the far end of one) and the anchor the
+ * key opens from — `position: relative` on the head row rather than on this
+ * button, which is `.roll-key`'s measured trick: a 320px panel hanging off a
+ * 30px box at the right edge of a phone runs off the screen.
+ */
+export function ProjectedTools({
+  projection,
+  categories,
+  showing,
+  projected,
+  onProjected,
+}: {
+  projection: EspnProjection | null;
+  categories: number;
+  /** Whether the figures on screen *are* the projection — which is not the same
+   *  as whether the reader has asked for it: a period with none, or one still
+   *  being read, shows the live figures under an unlit button. */
+  showing: boolean;
+  projected: boolean;
+  onProjected: (on: boolean) => void;
+}) {
+  return (
+    <div className="lg-proj-tools">
+      <button
+        type="button"
+        className={`research-toggle lg-proj-btn${showing ? ' on' : ''}`}
+        aria-pressed={showing}
+        onClick={() => onProjected(!projected)}
+        title={
+          showing
+            ? 'Back to what has actually happened so far'
+            : 'Show where each matchup is heading by the end of the week'
+        }
+      >
+        {/* A rising line, which is what a projection is. `flex: none` for the
+            reason every glyph on a control in this app carries it. */}
+        <svg
+          viewBox="0 0 24 24"
+          width="17"
+          height="17"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M3 17l6-6 4 4 8-8" />
+          <path d="M15 7h6v6" />
+        </svg>
+        <span className="lg-proj-label">Projected</span>
+      </button>
+      <ProjectionKey projection={projection} categories={categories} />
+    </div>
+  );
+}
+
 function fmtPoints(p: number | null): string {
   return typeof p === 'number' && Number.isFinite(p) ? String(Math.round(p * 100) / 100) : '—';
 }
@@ -766,38 +840,13 @@ function Scoreboard({
           {showing ? 'Projected' : board.live ? 'Live' : 'Final'}
         </span>
         {offered && (
-          <div className="lg-proj-tools">
-            <button
-              type="button"
-              className={`research-toggle lg-proj-btn${showing ? ' on' : ''}`}
-              aria-pressed={showing}
-              onClick={() => onProjected(!projected)}
-              title={
-                showing
-                  ? 'Back to what has actually happened so far'
-                  : 'Show where each matchup is heading by the end of the week'
-              }
-            >
-              {/* A rising line, which is what a projection is. `flex: none` for
-                  the reason every glyph on a control in this app carries it. */}
-              <svg
-                viewBox="0 0 24 24"
-                width="17"
-                height="17"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M3 17l6-6 4 4 8-8" />
-                <path d="M15 7h6v6" />
-              </svg>
-              <span className="lg-proj-label">Projected</span>
-            </button>
-            <ProjectionKey projection={projection} categories={board.categories.length} />
-          </div>
+          <ProjectedTools
+            projection={projection}
+            categories={board.categories.length}
+            showing={showing}
+            projected={projected}
+            onProjected={onProjected}
+          />
         )}
       </div>
 
