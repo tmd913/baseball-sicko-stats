@@ -722,26 +722,36 @@ export function PlayerDetails({
     const req = `${kind}-${playerId}`;
     if (tab !== 'percentiles' || pctReq.current === req) return;
     pctReq.current = req;
-    let live = true;
     setLoading(true);
     setError(null);
-    api
-      .percentiles(playerId, kind)
-      .then((d) => {
-        if (live) setData(d);
-      })
-      .catch((e: unknown) => {
-        if (live) {
-          setError(e instanceof Error ? e.message : 'Failed to load');
-          pctReq.current = null; // allow a retry on re-open
-        }
-      })
-      .finally(() => {
-        if (live) setLoading(false);
-      });
-    return () => {
-      live = false;
-    };
+    // Whether the answer lands is decided by the ref, not by a `live` flag the
+    // effect cleanup clears — and that is the whole of the fix for a tab that
+    // hung. Switching away mid-read runs the cleanup, so a `live` gate threw the
+    // answer away while the mark stood; coming back found the mark, returned
+    // early, and left `loading` true with no second request coming — the wait up
+    // for ever. Reproduced by leaving the tab while this read was in flight; the
+    // scrape behind it is the slowest on the page, which is why it is the tab the
+    // hang was reported against.
+    //
+    // The ref is the honest test of "is this still the read on screen": it is
+    // nulled and re-marked only when the player or the kind changes, which is
+    // exactly when a landing answer is stale. `.then(ok, err)` rather than
+    // `.catch().finally()` so the error path can null the ref *after* clearing
+    // the wait, a `finally` reading a ref its own `catch` had just nulled being
+    // the way this fix goes wrong.
+    api.percentiles(playerId, kind).then(
+      (d) => {
+        if (pctReq.current !== req) return;
+        setData(d);
+        setLoading(false);
+      },
+      (e: unknown) => {
+        if (pctReq.current !== req) return;
+        setError(e instanceof Error ? e.message : 'Failed to load');
+        setLoading(false);
+        pctReq.current = null; // allow a retry on re-open
+      },
+    );
   }, [tab, playerId, kind]);
 
   useEffect(() => {
@@ -821,26 +831,23 @@ export function PlayerDetails({
     const req = `${kind}-${playerId}`;
     if (tab !== 'overview' || dayReq.current === req) return;
     dayReq.current = req;
-    let live = true;
     setDayLoading(true);
     setDayError(null);
-    api
-      .playerDay(playerId, kind)
-      .then((d) => {
-        if (live) setDay(d.player);
-      })
-      .catch((e: unknown) => {
-        if (live) {
-          setDayError(e instanceof Error ? e.message : 'Failed to load');
-          dayReq.current = null; // allow a retry on re-open
-        }
-      })
-      .finally(() => {
-        if (live) setDayLoading(false);
-      });
-    return () => {
-      live = false;
-    };
+    // The ref decides whether the answer lands, never a cleanup flag — see the
+    // percentile read above, where the hang that rule is written for is set out.
+    api.playerDay(playerId, kind).then(
+      (d) => {
+        if (dayReq.current !== req) return;
+        setDay(d.player);
+        setDayLoading(false);
+      },
+      (e: unknown) => {
+        if (dayReq.current !== req) return;
+        setDayError(e instanceof Error ? e.message : 'Failed to load');
+        setDayLoading(false);
+        dayReq.current = null; // allow a retry on re-open
+      },
+    );
   }, [tab, playerId, kind]);
 
   // The Stats tab's five window rows, lazily on first open.
@@ -848,26 +855,23 @@ export function PlayerDetails({
     const req = `${kind}-${playerId}`;
     if (tab !== 'stats' || windowsReq.current === req) return;
     windowsReq.current = req;
-    let live = true;
     setWindowsLoading(true);
     setWindowsError(null);
-    api
-      .playerWindows(playerId, kind)
-      .then((d) => {
-        if (live) setWindows(d);
-      })
-      .catch((e: unknown) => {
-        if (live) {
-          setWindowsError(e instanceof Error ? e.message : 'Failed to load');
-          windowsReq.current = null; // allow a retry on re-open
-        }
-      })
-      .finally(() => {
-        if (live) setWindowsLoading(false);
-      });
-    return () => {
-      live = false;
-    };
+    // The ref decides whether the answer lands, never a cleanup flag — see the
+    // percentile read above, where the hang that rule is written for is set out.
+    api.playerWindows(playerId, kind).then(
+      (d) => {
+        if (windowsReq.current !== req) return;
+        setWindows(d);
+        setWindowsLoading(false);
+      },
+      (e: unknown) => {
+        if (windowsReq.current !== req) return;
+        setWindowsError(e instanceof Error ? e.message : 'Failed to load');
+        setWindowsLoading(false);
+        windowsReq.current = null; // allow a retry on re-open
+      },
+    );
   }, [tab, playerId, kind]);
 
   // Same lazy load for the Game Log tab — and for the **Overview**, which draws
@@ -878,25 +882,23 @@ export function PlayerDetails({
     const req = `${kind}-${playerId}`;
     if ((tab !== 'gamelog' && tab !== 'overview') || gameLogReq.current === req) return;
     gameLogReq.current = req;
-    let live = true;
     setGameLogLoading(true);
     setGameLogError(null);
-    (isPitcher ? api.pitcherGameLog(playerId) : api.gameLog(playerId))
-      .then((d) => {
-        if (live) setGameLog(d);
-      })
-      .catch((e: unknown) => {
-        if (live) {
-          setGameLogError(e instanceof Error ? e.message : 'Failed to load');
-          gameLogReq.current = null; // allow a retry on re-open
-        }
-      })
-      .finally(() => {
-        if (live) setGameLogLoading(false);
-      });
-    return () => {
-      live = false;
-    };
+    // The ref decides whether the answer lands, never a cleanup flag — see the
+    // percentile read above, where the hang that rule is written for is set out.
+    (isPitcher ? api.pitcherGameLog(playerId) : api.gameLog(playerId)).then(
+      (d) => {
+        if (gameLogReq.current !== req) return;
+        setGameLog(d);
+        setGameLogLoading(false);
+      },
+      (e: unknown) => {
+        if (gameLogReq.current !== req) return;
+        setGameLogError(e instanceof Error ? e.message : 'Failed to load');
+        setGameLogLoading(false);
+        gameLogReq.current = null; // allow a retry on re-open
+      },
+    );
   }, [tab, playerId, isPitcher, kind]);
 
   // The News tab's items, and the Overview's preview of them. One read for
@@ -905,79 +907,74 @@ export function PlayerDetails({
   useEffect(() => {
     if ((tab !== 'news' && tab !== 'overview') || newsReq.current === playerId) return;
     newsReq.current = playerId;
-    let live = true;
     setNewsLoading(true);
     setNewsError(null);
-    api
-      .playerNews(playerId)
-      .then((d) => {
-        if (live) setNews(d);
-      })
-      .catch((e: unknown) => {
-        if (live) {
-          setNewsError(e instanceof Error ? e.message : 'Failed to load');
-          newsReq.current = null; // allow a retry on re-open
-        }
-      })
-      .finally(() => {
-        if (live) setNewsLoading(false);
-      });
-    return () => {
-      live = false;
-    };
-  }, [tab]);
+    // The ref decides whether the answer lands, never a cleanup flag — see the
+    // percentile read above, where the hang that rule is written for is set out.
+    api.playerNews(playerId).then(
+      (d) => {
+        if (newsReq.current !== playerId) return;
+        setNews(d);
+        setNewsLoading(false);
+      },
+      (e: unknown) => {
+        if (newsReq.current !== playerId) return;
+        setNewsError(e instanceof Error ? e.message : 'Failed to load');
+        setNewsLoading(false);
+        newsReq.current = null; // allow a retry on re-open
+      },
+    );
+    // `playerId` as well as the tab, the way the four reads above it are keyed:
+    // the reset effect nulls the ref when the player changes, and on deps of
+    // `[tab]` alone nothing would then re-run it — a page opened on a new player
+    // from the Overview would keep an empty News tab until some tab was pressed.
+  }, [tab, playerId]);
 
   // Same lazy load for the Arsenal tab.
   useEffect(() => {
     if (tab !== 'arsenal' || arsenalReq.current === playerId) return;
     arsenalReq.current = playerId;
-    let live = true;
     setArsenalLoading(true);
     setArsenalError(null);
-    api
-      .arsenal(playerId)
-      .then((d) => {
-        if (live) setArsenal(d);
-      })
-      .catch((e: unknown) => {
-        if (live) {
-          setArsenalError(e instanceof Error ? e.message : 'Failed to load');
-          arsenalReq.current = null; // allow a retry on re-open
-        }
-      })
-      .finally(() => {
-        if (live) setArsenalLoading(false);
-      });
-    return () => {
-      live = false;
-    };
-  }, [tab]);
+    // The ref decides whether the answer lands, never a cleanup flag — see the
+    // percentile read above, where the hang that rule is written for is set out.
+    api.arsenal(playerId).then(
+      (d) => {
+        if (arsenalReq.current !== playerId) return;
+        setArsenal(d);
+        setArsenalLoading(false);
+      },
+      (e: unknown) => {
+        if (arsenalReq.current !== playerId) return;
+        setArsenalError(e instanceof Error ? e.message : 'Failed to load');
+        setArsenalLoading(false);
+        arsenalReq.current = null; // allow a retry on re-open
+      },
+    );
+  }, [tab, playerId]); // as above: the ref is nulled on a player change, so the deps must see one
 
   // Fetch the season xwOBA series the first time the Charts tab is opened for
   // this player (xwobaReq tracks which player we've already requested).
   useEffect(() => {
     if (tab !== 'charts' || xwobaReq.current === playerId) return;
     xwobaReq.current = playerId;
-    let live = true;
     setXwobaLoading(true);
     setXwobaError(null);
-    api
-      .xwoba(playerId, kind)
-      .then((d) => {
-        if (live) setXwoba(d);
-      })
-      .catch((e: unknown) => {
-        if (live) {
-          setXwobaError(e instanceof Error ? e.message : 'Failed to load');
-          xwobaReq.current = null; // allow a retry on re-open
-        }
-      })
-      .finally(() => {
-        if (live) setXwobaLoading(false);
-      });
-    return () => {
-      live = false;
-    };
+    // The ref decides whether the answer lands, never a cleanup flag — see the
+    // percentile read above, where the hang that rule is written for is set out.
+    api.xwoba(playerId, kind).then(
+      (d) => {
+        if (xwobaReq.current !== playerId) return;
+        setXwoba(d);
+        setXwobaLoading(false);
+      },
+      (e: unknown) => {
+        if (xwobaReq.current !== playerId) return;
+        setXwobaError(e instanceof Error ? e.message : 'Failed to load');
+        setXwobaLoading(false);
+        xwobaReq.current = null; // allow a retry on re-open
+      },
+    );
   }, [tab, playerId, kind]);
 
   return (
