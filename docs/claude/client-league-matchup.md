@@ -167,9 +167,12 @@ clipped number.
 hold the grid's shape: nobody is winning acquisitions, and a rail says a
 comparison is being drawn.
 
-**One ⓘ covers both bars**, at the right of the meter — the app's own `InfoKey`,
-for that component's stated reason (a `title` is invisible on a phone, a `Modal`
-is ceremony two sentences cannot pay for, an inline reveal fails on distance).
+**One ⓘ covers both bars — and the gesture**, at the right of the meter — the
+app's own `InfoKey`, for that component's stated reason (a `title` is invisible
+on a phone, a `Modal` is ceremony two sentences cannot pay for, an inline reveal
+fails on distance). Three paragraphs: the meter, a category's own bar, and the
+press that opens that category's chart — see *The gesture is named in the ⓘ*
+below, which is where the third one came from and what moving it cost.
 The panel is anchored to the **meter row** rather than to its own 30px button,
 which is the trick `.roll-key .info-key-panel` records: a shrink-to-fit resolved
 against 30px, and at 390 a panel hanging off that button is the only edge a
@@ -412,13 +415,41 @@ and the card is 1038.47 / 1038.47 / 1061.50 — every figure byte-identical.
 has no pointer to move away, so an unscoped tint stays on the last row a finger
 crossed and reads as a selection the page then declines to act on.
 
-**And one line names the gesture, once for the page.** *Press any category for a
-day-by-day chart of the week.* — centered over the comparison the way the group
-heads are, on the **categories** format alone, since a points league has one
-number a side and no row to press. It is there because the hover is not enough
-on touch, and because this feature has already been invisible once. It costs the
-card **25px** (15px of line and its 10px margin) at 390 and 1200, and 40 at 320
-where it takes two lines.
+**The gesture is named in the ⓘ, where a line of its own over the comparison
+used to say it.** *Press any category for a day-by-day chart of the week.* was a
+12px `--muted` caption centered over the group heads; it is the **third
+paragraph of the key** now, after the two that say what the bars are.
+
+**It belongs there because the key is already the answer to the question it
+completes.** That panel says what the whole-matchup meter is and what a category
+row's own bar measures; what you can *do* to one is the last sentence of that
+rather than a separate caption, and moving it gives the page back a row of prose
+on a card read as a list of ten. Measured, that is **25px**: the card goes
+**1111 → 1086px at 1200** and **1086 → 1061 at 390**, and the panel takes it —
+**173 → 216px** tall, at the same 320px width and still inside the viewport at
+both.
+
+**What it costs is real and is why the passage this replaces existed.** A reader
+now has to open the key to be told, and this feature has already shipped
+invisible once — on the scoreboard, where it had to be reported before anyone
+found it. What is different here is the **target**: a category row is the full
+width of the card with a hover tint on it, where the scoreboard's was four
+characters inside a card that was itself a press, so the affordance is doing most
+of the work and the sentence is the backstop rather than the whole of it.
+
+**It keeps its own gate rather than inheriting the panel's**, so a categories
+league with nothing to press is not told to press it: the paragraph is drawn on
+`groups.length > 0`, which is exactly the condition the caption carried. The
+points-league case needs no test of its own — the meter, and so the ⓘ with it, is
+null there, which is the same reason the caption named the format.
+
+**Measured after the move, at 320 / 390 / 1200**: **0** `.mup-cat-hint` on the
+page, the key three paragraphs, and the panel **276 × 233 at 320** and 320 × 216
+above it — inside the viewport at every one, including the narrowest, where it
+is the width the button could never have anchored. Enter opens it with focus
+staying on the button (`aria-label` `How to read these bars`, `aria-expanded`
+following), and **Escape closes the key and leaves the matchup page standing**.
+Page and card overflow **0** at all three.
 
 **Measured end to end on the live league**, with a real dispatched mouse click
 rather than a synthetic one: 10 rows, each a `BUTTON` with `cursor: pointer` and

@@ -130,11 +130,11 @@ letting it grow past it.
 
 @docs/claude/client-league-transactions.md
 
-**Themes** — the palette as a set of tokens, the six color schemes (Midnight, the navy original; Lavender, dark gray and violet; Maroon and Powder Blue, the dark and light halves of a 1980 road uniform; and the plain Dark and Light pair off VS Code's own `2026 Dark`/`2026 Light` defaults), the picker in the settings menu, and why the choice is the one thing in this app mirrored into localStorage.
+**Themes** — the palette as a set of tokens, the six color schemes (the plain Dark and Light pair off VS Code's own `2026 Dark`/`2026 Light` defaults, of which **Dark is the app's default** and which lead the picker; Midnight, the navy original and still what `:root` declares; Lavender, dark gray and violet; and Maroon and Powder Blue, the dark and light halves of a 1980 road uniform), the picker in the settings menu, why every theme is stamped on `<html>` now that the default and `:root` are two different things, and why the choice is the one thing in this app mirrored into localStorage.
 
 @docs/claude/theming.md
 
-**Client — popups** — the app-wide dialog rules: why details are popups rather than accordions, the layer ladder, what a popup has to cover, and why one press of Escape undoes exactly one thing.
+**Client — popups** — the app-wide dialog rules: why details are popups rather than accordions, the layer ladder, what a popup has to cover (including the one element an opaque box does not cover — a `<video>`, whose compositing layer paints over it), and why one press of Escape undoes exactly one thing.
 
 @docs/claude/client-dialogs.md
 

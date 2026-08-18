@@ -1152,24 +1152,32 @@ export default function LeagueMatchupView({
                     its length is the gap as a share of the two figures together. A long bar is a
                     category one side is running away with; a sliver is a coin flip.
                   </p>
+                  {/* **The gesture, third — where a line of its own over the
+                      comparison used to say it.** It reads here because this
+                      panel is already the answer to *what are these bars*, and
+                      what you can do to one is the last sentence of that rather
+                      than a separate caption; the page gets the row of prose
+                      back, on a card that is read as a list of ten.
+
+                      What it costs is that a reader has to open the key to be
+                      told — which is a real cost, this feature having shipped
+                      invisible once already (on the scoreboard, where it had to
+                      be reported). What is different here is the target: a
+                      category row is the full width of the card with a hover
+                      tint on it, where that one was four characters inside a
+                      card that was itself a press, so the affordance is doing
+                      most of the work and the sentence is the backstop.
+
+                      Kept on `groups.length` — its own gate before the move —
+                      so a categories league with nothing to press is not told
+                      to press it. */}
+                  {groups.length > 0 && (
+                    <p>
+                      <strong>Press any category</strong> for a day-by-day chart of the week.
+                    </p>
+                  )}
                 </InfoKey>
               </div>
-            )}
-
-            {/* **One line naming the gesture, once for the page.** The row is
-                a large target with a hover tint, which is most of the job with
-                a pointer — and on touch there is no hover at all, so without a
-                sentence the chart is a feature nobody finds. That is not
-                hypothetical: it is exactly how this shipped the first time, on
-                the scoreboard, and had to be reported before anyone saw it.
-
-                Categories only, for the reason the note below it exists: a
-                points league has one number a side and no row to press, so the
-                hint would name a gesture that isn't there. */}
-            {board.format !== 'h2h-points' && groups.length > 0 && (
-              <p className="mup-cat-hint">
-                Press any category for a day-by-day chart of the week.
-              </p>
             )}
 
             {board.format === 'h2h-points' ? (

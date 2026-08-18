@@ -1,9 +1,13 @@
 /* ---------------------------------------------------------------------------
    The palette is a theme, and there are six of them.
 
-   Everything below `:root` is **Midnight**, the app's original dark palette and
-   still its default — every value here is the one it has always had. The other
-   five are blocks near the foot of this file that redeclare the same names
+   Everything below `:root` is **Midnight**, the app's original dark palette —
+   every value here is the one it has always had. It is no longer the app's
+   *default*, which is `Dark`: `client/src/theme.ts` stamps `data-theme` on
+   every theme now, the default included, precisely because a bare `:root` and
+   the default stopped being the same thing. What `:root` still is, is the block
+   every theme redeclares against, which is why the palette stayed put. The
+   other five are blocks near the foot of this file that redeclare the same names
    against `html[data-theme='…']` — **Lavender**, **Maroon**, **Powder Blue**,
    and the plain **Dark** and **Light** pair off VS Code's own defaults; nothing
    else in 14,000 lines of stylesheet knows there is more than one.
@@ -370,6 +374,49 @@ html {
      boot script appends its style while parsing `<head>`, and Vite's stylesheet
      link is the last thing in it. */
   background: none;
+}
+
+/* ---------------------------------------------------------------------------
+   A video behind an overlay does not paint.
+
+   Every full-screen box in this app — the player page, the matchup page, the
+   how-to and league pages, a `Modal`, the full-page table mode — covers the
+   thing it was opened from with an opaque `position: fixed` box, and marks
+   everything outside itself `inert` (`hooks.ts::useInertBackground`). That is
+   enough for every element in the app except one: a `<video>` is promoted to a
+   compositing layer of its own, and on a real GPU that layer can be painted
+   **over** the box that covers it. Reported as the feed's clips showing through
+   the player page — "the video is still visible in many of the tabs", which is
+   exactly the shape of it: the clips sit at whatever y the feed left them at, so
+   which tab they surface on is a fact about the page underneath rather than
+   about the tab.
+
+   Measured on the live app at 1200x900: opening a batter's page from the feed
+   leaves **three** `<video>`s mounted behind it, and all three are still there
+   on every one of the seven tabs. In headless Chrome with the GPU off they are
+   correctly occluded, which is why the DOM says nothing is wrong — the element
+   really is covered, and `elementFromPoint` at each of their centers returns the
+   overlay's own content.
+
+   `visibility: hidden` is the fix rather than `opacity: 0` — a transparent
+   element is still painted, and painting is the whole of the problem — and it
+   costs nothing here that it costs elsewhere in the app: hiding a box takes it
+   out of the accessibility tree, and an `inert` subtree is already out of it.
+   Keying it on `[inert]` rather than on a class of the overlay's is what makes
+   it one rule for all six box shapes and every depth of the ladder: a dialog
+   opened over a dialog marks the one below it inert too, so a clip in the lower
+   box stops painting for exactly as long as something covers it, and comes back
+   when the hold is released.
+
+   What this deliberately does not do is **pause** the clip. The audio of a
+   playing clip carries on behind the overlay, which is the honest reading of
+   the reader's own press — they started it — and clips run six to twelve
+   seconds and are muted by default (see `MutedContext`). Pausing would mean
+   `ClipVideo` watching an ancestor's attribute, which is real machinery for a
+   state that lasts a few seconds.
+   --------------------------------------------------------------------------- */
+[inert] video {
+  visibility: hidden;
 }
 
 /* ---------------------------------------------------------------------------
@@ -1092,10 +1139,23 @@ body {
    rather than by a `width`/`height` attribute so a slot that has its own idea
    of the size — the fantasy popover's 15px glyph column — can say so in one
    place, the way it already did for the ring this replaces. */
+/* One loading color in the app and it is the accent — with a hook for the one
+   place that cannot take it. A ball inside a *filled* control is drawn on the
+   accent, so `color: var(--accent)` there is accent on accent at 1.00:1: the
+   mark that says the press landed, invisible. `--ball-ink` is the container's
+   say in it, the way `--cell-bg` and `--sort-gutter` are; the two filled
+   controls that hold a ball (`.espn-submit`, `.auth-btn-primary`) set it to
+   their own ink, and everything else falls through to the accent untouched.
+
+   Restored: the variable and its two container declarations were deleted
+   wholesale by the commit that added the Dark and Light palettes (58cdcf0),
+   which is the `styles.css` merge hazard this repo already warns about. The
+   measurements behind it stand — 1.00:1 to 7.39–9.40 across the schemes — and
+   are in **Client**, under Loading. */
 .ball-spin {
   display: block;
   flex: none;
-  color: var(--accent);
+  color: var(--ball-ink, var(--accent));
 }
 .ball-spin-sm {
   width: 14px;
@@ -4010,22 +4070,26 @@ body {
    1,174.92px inside it — a table scrolling sideways past K, RBI and the rest
    with 368px of nothing to its right.
 
-   So the cap goes to `.player-day` below, where it was always about, and the
+   So the cap goes to the **reading blocks** — the day, Projected Starts and
+   News, which are cards and prose (it sat on `.player-day` alone at first, one
+   box inside the day's section, which centred the day's items and left that
+   section's heading at the tab's left edge; see the shared rule below) — and the
    tables span the tab and bleed back out through the overlay's own 16px the way
-   the three wide tables bleed through `.app`'s 22 — `--table-bleed` is
-   inherited from `.details-view` now rather than being zeroed here, which is
-   the token doing what it was written to do rather than being opted out of. */
+   the three wide tables bleed through `.app`'s 22. `--table-bleed` is inherited
+   from `.details-view` now rather than being zeroed here, which is the token
+   doing what it was written to do rather than being opted out of. */
 .details-overview {
   margin: 18px 0 0;
 }
-/* The day keeps the feed's reading column, and carries the container with it.
-   The cards inside size themselves off their container (`.player-card` and
-   `.faced-batter` both do), so containment belongs on the box that *is* the
-   card column rather than on a tab that is now as wide as the window — read off
-   the tab they would take the phone layout at one width and the wide one at the
-   next for reasons nothing on screen could explain. */
+/* The day carries the container, and no longer the cap — that has moved up to
+   its section (below), so the block's heading is the width of the block. What
+   stays here is the containment: the cards inside size themselves off their
+   container (`.player-card` and `.faced-batter` both do), so it belongs on the
+   box that *is* the card column rather than on a tab as wide as the window —
+   read off the tab they would take the phone layout at one width and the wide
+   one at the next for reasons nothing on screen could explain. The section's
+   cap makes this box 800 anyway, so the container is the same size it was. */
 .details-overview .player-day {
-  max-width: var(--card-column);
   container-type: inline-size;
 }
 /* The Overview's three blocks — Season, Today, Last 5 games — each a heading
@@ -4036,6 +4100,41 @@ body {
 }
 .ovw-block:last-child {
   margin-bottom: 0;
+}
+/* **The three reading columns, centered on the tab's own axis.**
+
+   This tab holds two kinds of block and they want two widths. The Season and
+   Last-5 blocks are **stat tables**, which are scanned rather than read, so they
+   take the window and bleed to the overlay's edges — the argument that dropped
+   `.details-overview`'s own cap, and which is why the Game Log tab beside them
+   has none either. `Today`, `Projected Starts` and `News` are the other kind:
+   the day's items are the feed's cards and were sized against `--card-column` in
+   the first place, and a headline over a standfirst is read across a line rather
+   than scanned down a column. Neither width is negotiable.
+
+   **What was negotiable is the axis they share, and it was the left edge.** At
+   1920 that put the three at 800 of an 1888px tab with 1088px of nothing beside
+   them, above two tables running the full width — measured, every block's
+   heading at x=16 with the top half of the page occupying its left 42%. Sharing
+   a **center** instead is the honest reading of a column that genuinely has two
+   widths in it: the whole tab is then symmetric about one vertical axis, where
+   before it was flush left and half of it was under half as wide as the rest.
+
+   The head row travels with its block, which is the rule those three already
+   had and is what keeps it coherent — `News →` still sits over the right edge of
+   the rows it opens, and `Stats →` over its own table's. So the two left edges
+   differ by design and every block on the tab is centred on the same line.
+
+   It is a **no-op below `--card-column`**: a block narrower than its cap has no
+   free space for an auto margin to split, so a phone is unmoved to the pixel.
+   The Today block needs a class of its own to be reached — its section carried
+   no modifier, the cap having sat on `.player-day` inside it, which centred the
+   content and left the heading behind. */
+.ovw-day,
+.ovw-starts,
+.ovw-news {
+  max-width: var(--card-column);
+  margin-inline: auto;
 }
 .ovw-head-row {
   display: flex;
@@ -4150,12 +4249,10 @@ body {
    A rotation starter's next five turns, on the Overview tab directly under the
    day. **A reading column, not a table**: five short lines, each a when, a
    matchup, sometimes an opposing starter and a tag — the same content the
-   `.ovw-next-line` above it holds, five times over, so it caps at
-   `--card-column` the way the News block beside it does rather than taking the
-   window the two stat tables do. */
-.ovw-starts {
-  max-width: var(--card-column);
-}
+   `.ovw-next-line` above it holds, five times over, so it takes the reading
+   column the News block beside it does rather than the window the two stat
+   tables do. The cap itself is `.ovw-day, .ovw-starts, .ovw-news` above, which
+   is also what centers all three. */
 /* The block's note reads **beside** its heading rather than out at the right
    edge, which is what `.ovw-head-row`'s `space-between` would give it — that
    justification is for the three blocks whose second item is a `News →` /
@@ -4332,10 +4429,9 @@ button.start-line:focus-visible {
    `News →` door sits over the right edge of the rows it opens rather than out
    at the far side of a tab the two stat tables below have widened to the
    window. The Season and Last-5 blocks' own links line up with *their* tables
-   for the same reason; this one's table is a column of prose. */
-.ovw-news {
-  max-width: var(--card-column);
-}
+   for the same reason; this one's table is a column of prose. The cap itself is
+   `.ovw-day, .ovw-starts, .ovw-news` further up, which is also what centers it
+   and the two blocks above it on the tab's own axis. */
 .news-tab {
   max-width: 860px;
   margin: 18px auto 0;
@@ -9991,6 +10087,9 @@ button.start-line:focus-visible {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--on-accent);
+  /* Filled, so the ball takes the button's ink rather than the accent it is
+     drawn on — see `.ball-spin`. */
+  --ball-ink: var(--on-accent);
 }
 .auth-btn-primary:hover {
   background: var(--accent-2);
@@ -10798,6 +10897,9 @@ button.start-line:focus-visible {
   border: 1px solid var(--accent);
   border-radius: var(--control-radius);
   color: var(--on-accent);
+  /* The ball on this ground is the button's own ink, not the accent — see
+     `.ball-spin`. */
+  --ball-ink: var(--on-accent);
   font-size: 14px;
   font-weight: 800;
   padding: 9px 18px;
@@ -10808,6 +10910,26 @@ button.start-line:focus-visible {
 .espn-submit:disabled {
   opacity: 0.45;
   cursor: default;
+}
+/* Disabled *because it is working* is not the same as unavailable, which is the
+   rule the app already keeps for the ball's color ("inside a control that is
+   `:disabled` while it works and otherwise muted, since it is disabled because
+   it is working"). At 0.45 the whole button — ball included — read as a control
+   you may not press, on the one frame that is saying the opposite.
+
+   **`:has(.ball-spin)` is what it is scoped on, and the ball is the point.**
+   This class is worn by three buttons and only two of them show one: the ESPN
+   page's `Connect league` and the auth form's submit both hold a reader on the
+   page afterwards through a round trip with no fast answer, which is what a
+   spinner is for. The invite page's `Start using the app` deliberately has
+   none — it is pressed once, its errand is to leave, and the ask there was that
+   it *just be disabled* — so for that one the dimming is the whole of the
+   state, and un-dimming it would leave a press with no visible answer at all.
+   Keying on the ball rather than on a class says exactly that: a busy control
+   keeps its full weight while something in it is saying so. `aria-busy` stays
+   on all three, being what a screen reader is told either way. */
+.espn-submit[aria-busy='true']:disabled:has(.ball-spin) {
+  opacity: 1;
 }
 .espn-submit:focus-visible {
   outline: 2px solid var(--accent);
@@ -11998,15 +12120,6 @@ button.start-line:focus-visible {
 
    `minmax(0, 1fr)` on the tracks rather than `1fr`, so a figure that overflows
    its column cannot push the grid wider than the card. */
-/* One line naming the press, once per page — see `LeagueMatchup.tsx`. The
-   app's own caption: 12px `--muted`, centered over the comparison it describes
-   the way the group heads are, and clear of the first group below it. */
-.mup-cat-hint {
-  margin: 0 0 10px;
-  font-size: 12px;
-  color: var(--muted);
-  text-align: center;
-}
 /* **The row is the press, and it opens that category's day-by-day chart.**
    A real `<button>` rather than a `role="button"` div, because a div *can* be
    one here — nothing inside it is interactive, so Enter and Space come from

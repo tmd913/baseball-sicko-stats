@@ -13,8 +13,23 @@
 
 export type ThemeId = 'midnight' | 'lavender' | 'maroon' | 'powder' | 'dark' | 'light';
 
-/** The one a reader who has never chosen gets, and the one `:root` declares. */
-export const DEFAULT_THEME: ThemeId = 'midnight';
+/**
+ * The one a reader who has never chosen gets.
+ *
+ * It is **`dark`**, and it is deliberately *not* the palette `:root` declares —
+ * which is Midnight, and stays Midnight, that block being the app's original
+ * and the base every other theme redeclares tokens against. The two used to be
+ * the same thing, and `applyTheme` leaned on it: the default carried no
+ * attribute at all, since a bare `:root` already *was* the default. It cannot
+ * any more, so the attribute is stamped unconditionally — see there.
+ *
+ * Moving the default rather than moving the palette is what keeps this a
+ * two-line change: `html[data-theme='dark']` redeclares all 30 color tokens
+ * `:root` declares and leaves the derived ones (`--row-alt`, the four role
+ * grounds, the geometry and the shadows) to resolve against it, which is what
+ * every theme block does and what has been measured for this one already.
+ */
+export const DEFAULT_THEME: ThemeId = 'dark';
 
 export type Theme = {
   id: ThemeId;
@@ -48,11 +63,12 @@ export type Theme = {
 };
 
 /**
- * The order is the order the picker draws them in: the four *named* palettes
- * first, then the plain pair.
+ * The order is the order the picker draws them in: **the plain pair first, then
+ * the four named palettes** — which is a reversal, and the reason is the one
+ * that also moved `DEFAULT_THEME`.
  *
  * **`Dark` and `Light` are named for what they are rather than for a color**,
- * and that is the whole distinction between them and the four above. Midnight,
+ * and that is the whole distinction between them and the four below. Midnight,
  * Lavender, Maroon and Powder Blue each have a character to name — a navy, a
  * graphite-and-violet, and the two halves of one uniform. These are VS Code's
  * own defaults (`2026 Dark` and `2026 Light`), which are deliberately plain:
@@ -60,11 +76,42 @@ export type Theme = {
  * the polarity itself, and a reader who wants exactly that is looking for
  * exactly those two words.
  *
- * They are **not** `DEFAULT_THEME`, which is still Midnight and still what a
- * reader who has never chosen gets — the names describe the palette, not this
- * app's default. What they came from is in `styles.css` beside each block.
+ * That plainness is what earns them the top of the list rather than the bottom
+ * of it. A reader opening the picker is answering *light or dark* before they
+ * are answering *which navy*, and the two entries that say only that should be
+ * the two they meet first; the four with a character to them read as the
+ * choices you make once you have one. `Dark` is `DEFAULT_THEME` besides, and a
+ * picker whose default is sixth in its own list is a picker that opens on
+ * somebody else's answer.
+ *
+ * The array's order is the picker's alone — nothing reads `THEMES[0]`, which is
+ * what `themeById` was changed to stop doing — so this stays free to move.
+ * What each palette came from is in `styles.css` beside its block.
  */
 export const THEMES: Theme[] = [
+  /* The plain pair, off VS Code's own `2026 Dark` and `2026 Light`. Each takes
+     that theme's surfaces unaltered and its marks' hues at this app's own
+     saturation and lightness — the trade `Maroon` makes with its jersey, and
+     the reason is measured in `styles.css` beside each block: VS Code tunes for
+     syntax on a large surface, so its `disabledForeground` is 2.5:1 on its own
+     page against the 3.7–5.3 the four named themes below run. `Dark` leads the
+     list because it is `DEFAULT_THEME`. */
+  {
+    id: 'dark',
+    label: 'Dark',
+    hint: 'Plain near-black and steel blue.',
+    scheme: 'dark',
+    bg: '#121314',
+    swatch: ['#121314', '#3a3d3f', '#63b4d8'],
+  },
+  {
+    id: 'light',
+    label: 'Light',
+    hint: 'Plain white and blue.',
+    scheme: 'light',
+    bg: '#ffffff',
+    swatch: ['#ffffff', '#d4d4da', '#004a8b'],
+  },
   {
     id: 'midnight',
     label: 'Midnight',
@@ -89,11 +136,11 @@ export const THEMES: Theme[] = [
     bg: '#1d1319',
     swatch: ['#1d1319', '#56303f', '#8fc0ea'],
   },
-  /* The same uniform the other way up, and the one light scheme: a white page
-     with the powder carried by the borders, the table headers and the zebra
-     stripe, and the maroon written on it. It is `scheme: 'light'`, which is what
+  /* The same uniform the other way up: a white page with the powder carried by
+     the borders, the table headers and the zebra stripe, and the maroon written
+     on it. It is `scheme: 'light'` — as `Light` above it is — which is what
      hands the browser's own form controls, scrollbars and address bar the right
-     polarity — the one line in this file that is not a color. */
+     polarity, and is the one line in this file that is not a color. */
   {
     id: 'powder',
     label: 'Powder Blue',
@@ -102,34 +149,16 @@ export const THEMES: Theme[] = [
     bg: '#ffffff',
     swatch: ['#ffffff', '#b4cfe6', '#8c2545'],
   },
-  /* The plain pair, off VS Code's own `2026 Dark` and `2026 Light`. Each takes
-     that theme's surfaces unaltered and its marks' hues at this app's own
-     saturation and lightness — the trade `Maroon` makes with its jersey, and
-     the reason is measured in `styles.css` beside each block: VS Code tunes for
-     syntax on a large surface, so its `disabledForeground` is 2.5:1 on its own
-     page against the 3.7–5.3 the four themes above run. */
-  {
-    id: 'dark',
-    label: 'Dark',
-    hint: 'Plain near-black and steel blue.',
-    scheme: 'dark',
-    bg: '#121314',
-    swatch: ['#121314', '#3a3d3f', '#63b4d8'],
-  },
-  {
-    id: 'light',
-    label: 'Light',
-    hint: 'Plain white and blue.',
-    scheme: 'light',
-    bg: '#ffffff',
-    swatch: ['#ffffff', '#d4d4da', '#004a8b'],
-  },
 ];
 
 export const STORAGE_KEY = 'sicko:theme';
 
 export function themeById(id: string | null | undefined): Theme {
-  return THEMES.find((t) => t.id === id) ?? THEMES[0];
+  // Falling back to `DEFAULT_THEME` rather than to `THEMES[0]`, which is what
+  // this said while the two were the same entry: the array's order is the
+  // *picker's* and is free to change, where the fallback is a statement about
+  // which palette an unknown id resolves to.
+  return THEMES.find((t) => t.id === id) ?? THEMES.find((t) => t.id === DEFAULT_THEME)!;
 }
 
 /** Narrow anything — a URL, a saved preference, a storage entry — to a theme we
@@ -145,14 +174,19 @@ export function toThemeId(v: unknown): ThemeId {
  * The attribute goes on `<html>` rather than on the app's own root because two
  * things outside React read it: the boot script in `index.html`, which runs
  * before this module is fetched, and `body`, whose background *is* the page.
- * The default theme carries no attribute at all — `:root` is already Midnight —
- * so a reader who has never chosen has nothing stamped on their document.
+ *
+ * **Every theme is stamped, the default included**, which is a reversal: the
+ * default used to carry no attribute at all, on the sound reasoning that a bare
+ * `:root` already *was* it. `:root` is still Midnight and the default is now
+ * Dark, so an unstamped document would be a reader who has never chosen looking
+ * at the wrong palette. Nothing keys on the attribute's absence — checked, the
+ * stylesheet has no `:not([data-theme])` in it — so stamping unconditionally
+ * costs one attribute and removes the coupling that made this go wrong.
  */
 export function applyTheme(id: ThemeId): void {
   const theme = themeById(id);
   const root = document.documentElement;
-  if (theme.id === DEFAULT_THEME) root.removeAttribute('data-theme');
-  else root.setAttribute('data-theme', theme.id);
+  root.setAttribute('data-theme', theme.id);
   root.style.colorScheme = theme.scheme;
   const meta = document.querySelector('meta[name="color-scheme"]');
   if (meta) meta.setAttribute('content', theme.scheme);

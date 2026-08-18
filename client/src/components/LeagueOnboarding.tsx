@@ -3,7 +3,7 @@ import { answersEscape, useDelayedFlag, useLockBodyScroll, useOverlayFocus } fro
 import { api } from '../api';
 import type { EspnStatus, EspnTeam } from '../types';
 import type { ThemeId } from '../theme';
-import { LoadingBlock, SpinningBaseball } from './Loading';
+import { LoadingBlock } from './Loading';
 import { ThemeSwatches } from './ThemePicker';
 
 /**
@@ -238,27 +238,29 @@ export function LeagueOnboarding({
             {phase === 'ready' ? (
               <button
                 type="button"
-                className="espn-submit onboard-start"
-                /* The one control on the page, so it says what pressing it
-                   does rather than `OK`: it names the team *and* leaves — and
-                   it goes on saying so while it works, the ball being drawn
-                   over the label rather than in place of it. */
+                className="espn-submit"
+                /* The one control on the page, so it says what pressing it does
+                   rather than `OK`: it names the team *and* leaves.
+
+                   **Pressing it disables it and changes nothing else.** It drew
+                   a spinning baseball beside the label while the save was in
+                   flight, and that is a loading indicator on a control whose
+                   whole job is to be pressed once — it widened the button by the
+                   ball and its gap under the finger that had just pressed it,
+                   and dragged `Not now` along with it. `:disabled` is the state,
+                   and `.espn-submit:disabled` already draws it (0.45, and no
+                   pointer); the press is over in a round trip, and the page
+                   itself going away is the confirmation.
+
+                   `aria-busy` stays. It draws nothing — no rule in the
+                   stylesheet reads it — and it is the honest thing to tell a
+                   screen reader about a control that is disabled *because* it
+                   is working rather than because it is unavailable. */
                 disabled={picked === '' || saving}
                 aria-busy={saving}
                 onClick={confirm}
               >
-                {/* The label stays laid out while the save is in flight and
-                    is drawn as nothing, with the ball over it in the same grid
-                    cell — so the button is the same box before and after the
-                    press. Swapping the words for a shorter `Setting up` took
-                    it 164.8 → 128.44px wide and 36 → 38 tall, and dragged
-                    `Not now` 36px left: a press that moves the thing it was
-                    aimed at, and the control beside it. Same one-cell-grid
-                    reservation the Columns dialog's hint line makes, and the
-                    reason it is `opacity` rather than `visibility` is in
-                    `.onboard-start`. */}
-                <span className="onboard-start-label">Start using the app</span>
-                {saving && <SpinningBaseball />}
+                Start using the app
               </button>
             ) : (
               <button
