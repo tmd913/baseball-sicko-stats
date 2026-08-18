@@ -1488,6 +1488,57 @@ export interface ScheduleGame {
 }
 
 /**
+ * **Where a live matchup is heading** — one side's projected final total in every
+ * category, and the tally that falls out of comparing two of them.
+ *
+ * Mirrors `server/src/projection.ts` by hand, like every other pair here. What
+ * the whole thing is made of, and the four measured inputs behind it, is in that
+ * file; the numbers the client draws are these.
+ */
+export interface EspnProjectedSide {
+  teamId: number;
+  /** Projected final total per stat id — **the league's own categories only**,
+   *  the components the rates were derived from being numbers the server
+   *  computed and nothing reads. A count is rounded; a rate is not. */
+  scores: Record<number, number>;
+  wins: number;
+  losses: number;
+  ties: number;
+  /** What the projection is made of, which is what the key says on screen:
+   *  expected batting games, projected starts, projected relief appearances, and
+   *  how many men it could not place at all. */
+  hitterGames: number;
+  starts: number;
+  reliefGames: number;
+  skipped: number;
+}
+
+export interface EspnProjectedMatchup {
+  id: number;
+  home: EspnProjectedSide;
+  /** Null is a bye — a real shape, and one with no result to project though the
+   *  side's own total is projected all the same. */
+  away: EspnProjectedSide | null;
+  /** Never null, unlike the live scoreboard's: this is a claim about the end of
+   *  the week and making one is the point of it. */
+  winner: 'home' | 'away' | 'tie';
+}
+
+export interface EspnProjection {
+  matchupPeriod: number;
+  /** False where there was nothing to project — a settled week above all, which
+   *  is not an error and says so in `note`. */
+  ok: boolean;
+  note: string | null;
+  /** The period's own last ET day, and how many days of it are still to be
+   *  played (today included where its games have not started). */
+  end: string | null;
+  daysLeft: number;
+  matchups: EspnProjectedMatchup[];
+  fetchedAt: number;
+}
+
+/**
  * **The days this fantasy matchup period covers, and the days the next one
  * covers** — the Schedule view's two named spans, and the whole of what a
  * connected league adds to that control.

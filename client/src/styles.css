@@ -11665,6 +11665,55 @@ button.start-line:focus-visible {
   border-color: color-mix(in srgb, var(--hit) 55%, transparent);
   color: var(--hit);
 }
+/* **Projected replaces Live rather than joining it**, so the tag always says
+   what the figures on the cards *are* — the accent, which is what this app spends
+   on "a reading of the data" against the green it spends on "a game is on". */
+.lg-state-proj {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  color: var(--accent);
+}
+
+/* The toggle and its key, at the right of the period head — a control over this
+   tab, which is where the period arrows already are and for the same stated
+   reason: it governs exactly one third of the page. `margin-left: auto` puts the
+   pair at the far end of the row so the head reads week, dates, state, control. */
+.lg-proj-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+/* `.research-toggle` outright — folded onto in the JSX rather than restyled here
+   — so it is the app's plain toggle with `.on` for "this is in force". `flex:
+   none` and `nowrap` for its place in a wrapping row, the two declarations
+   `.starters-toggle` and `.date-toggle` carry for the same reason. */
+.lg-proj-btn {
+  flex: none;
+  white-space: nowrap;
+}
+.lg-proj-btn svg {
+  flex: none;
+}
+/* Anchored to the **head row** rather than to its own 30px button, which is
+   `.roll-key`'s trick and is here for its measured reason: a shrink-to-fit
+   against a 30px box resolves to the shared `min-width`, and a 320px panel
+   opening from a button at the right edge of the row runs off the screen. It
+   opens leftward from the row's own right edge instead, which is inside the
+   viewport at every width. */
+.lg-proj-key {
+  position: static;
+}
+.lg-head {
+  position: relative;
+}
+.lg-proj-key .info-key-panel {
+  right: 0;
+  left: auto;
+  top: calc(100% + 8px);
+  bottom: auto;
+  width: min(340px, calc(100vw - 44px));
+}
+
 
 /* ---- One matchup -------------------------------------------------------- */
 .lg-board {
@@ -11685,6 +11734,18 @@ button.start-line:focus-visible {
    one it is once several are in view. */
 .lg-matchup.lg-mine {
   border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+}
+/* **A projected card is drawn as a projection**, which is this app's standing
+   rule that an estimate never wears the same clothes as a measurement — the
+   percentile card's dotted bubble, the Splits card's hatched fill, the Schedule
+   grid's dashed chip. A **dashed border** is that rule at the size of a whole
+   card, since every figure on it is projected rather than one of them: marking
+   each cell would be the same claim made twenty times.
+
+   It sits after `.lg-mine` so the reader's own projected matchup keeps its accent
+   *and* takes the dash — the two say different things and both are true. */
+.lg-matchup.lg-proj {
+  border-style: dashed;
 }
 .lg-mine-tag {
   font-size: 10px;

@@ -42,6 +42,10 @@ import type {
   EspnCategory,
   EspnCategorySide,
   EspnMatchup,
+  EspnMatchupSide,
+  EspnProjectedMatchup,
+  EspnProjectedSide,
+  EspnProjection,
   EspnRankSpan,
   EspnRankings,
   EspnScoreboard,
@@ -49,6 +53,7 @@ import type {
   EspnTransactions,
   SeasonPlayer,
 } from '../types';
+import { InfoKey } from './InfoKey';
 import { LoadingBlock } from './Loading';
 import LeagueRankings from './LeagueRankings';
 import LeagueTransactions, { type TrendDeltas } from './LeagueTransactions';
@@ -300,6 +305,40 @@ function outcome(
   return (cat.lowerBetter ? mine < theirs : mine > theirs) ? 'win' : 'loss';
 }
 
+/**
+ * **A projected matchup wearing the live one's shape**, so the card draws it
+ * with no knowledge of projections at all.
+ *
+ * The card's whole job is to compare two sides across the league's categories and
+ * colour the winner, and that arithmetic is identical whether the figures are
+ * what has happened or what is going to. So rather than teaching it a second mode
+ * — a second set of cells, a second tally, a second `leading` test — the *data*
+ * is swapped and everything downstream is the code that was already checked.
+ *
+ * Three things are kept from the live side because the projection does not touch
+ * them: `points` (a points league is not projected at all — see the toggle's own
+ * gate), `acquisitions` (a fact about the period so far), and the team ids.
+ *
+ * **`winner` is the projection's own and is never null**, where a live matchup's
+ * is: that is what lights the leading side's name, and a projection whose whole
+ * point is to say where the week is going has no business declining to.
+ */
+function asProjected(m: EspnMatchup, p: EspnProjectedMatchup): EspnMatchup {
+  const side = (orig: EspnMatchupSide, pr: EspnProjectedSide): EspnMatchupSide => ({
+    ...orig,
+    scores: pr.scores,
+    wins: pr.wins,
+    losses: pr.losses,
+    ties: pr.ties,
+  });
+  return {
+    id: m.id,
+    home: side(m.home, p.home),
+    away: m.away && p.away ? side(m.away, p.away) : null,
+    winner: p.winner,
+  };
+}
+
 function MatchupCard({
   matchup,
   categories,
@@ -307,6 +346,7 @@ function MatchupCard({
   myTeamId,
   format,
   live,
+  projected = false,
   onOpen,
 }: {
   matchup: EspnMatchup;
@@ -315,6 +355,11 @@ function MatchupCard({
   myTeamId: number | null;
   format: EspnScoreboard['format'];
   live: boolean;
+  /** These figures are where the week is *heading* rather than where it has got
+   *  to. It changes nothing about the drawing — see `asProjected` — and only what
+   *  a cell's own tooltip claims, which must not say "so far" about a total that
+   *  reaches the end of the week. */
+  projected?: boolean;
   onOpen: (id: number) => void;
 }) {
   const { home, away } = matchup;
@@ -378,7 +423,9 @@ function MatchupCard({
 
   return (
     <div
-      className={`lg-matchup${away ? '' : ' lg-bye'}${mine ? ' lg-mine' : ''}`}
+      className={`lg-matchup${away ? '' : ' lg-bye'}${mine ? ' lg-mine' : ''}${
+        projected ? ' lg-proj' : ''
+      }`}
       role="button"
       tabIndex={0}
       aria-label={label}
@@ -468,7 +515,7 @@ function MatchupCard({
                             : state === 'tie'
                               ? ' — tied'
                               : ''
-                      }${live ? ' so far' : ''}`;
+                      }${projected ? ' — projected for the whole week' : live ? ' so far' : ''}`;
                       // **A category with no figure is not a press**, there
                       // being nothing to chart: a side ESPN reports as
                       // ineligible has no score, and the cell says so by being
@@ -510,6 +557,61 @@ function MatchupCard({
   );
 }
 
+/**
+ * **What the projection is, in words a manager would use.**
+ *
+ * The app's own `InfoKey` — a popover rather than a `title` (invisible on a
+ * phone), a `Modal` (ceremony a few sentences cannot pay for) or an inline reveal
+ * (it would appear below the fold on the very card it explains). The whole of
+ * that argument is `PlatoonSplits.tsx`'s.
+ *
+ * **Written for the reader rather than for the code.** Every figure it names is a
+ * measured one — the 40% cap on the recent month, the league's own 5.5% platoon
+ * edge, the 20% ceiling on any one adjustment — but not one of them is named as a
+ * constant, and the three paragraphs are the three questions somebody actually
+ * asks of a projection: what is it made of, what does it take account of, and
+ * what does it not know. The last of those is the one a projection most owes its
+ * reader, so it is a paragraph rather than a footnote.
+ *
+ * **It says how much is left**, off the projection itself rather than from a
+ * count of its own, so the sentence cannot come to disagree with the cards.
+ */
+function ProjectionKey({
+  projection,
+  categories,
+}: {
+  projection: EspnProjection | null;
+  categories: number;
+}) {
+  const days = projection?.daysLeft ?? 0;
+  return (
+    <InfoKey label="How the projection is worked out" className="lg-proj-key">
+      <p>
+        Each total is <b>what has already been scored</b> plus what the{' '}
+        {days > 0 ? `${days} ${days === 1 ? 'day' : 'days'} left are` : 'rest of the week is'}{' '}
+        worth. All {categories} categories are projected separately, and the win–loss–tie is those{' '}
+        {categories} compared.
+      </p>
+      <p>
+        Every player in a <b>lineup slot</b> keeps his season rate, weighted with{' '}
+        <b>the last month</b> — up to 40%, less if he has hardly played. Times the chances he has
+        left: a hitter's club games and how often he is in them, a starter's remaining turns, a
+        reliever's usual workload.
+      </p>
+      <p>
+        Then <b>who he is up against</b>: a hitter moves with the opposing starter and the
+        left/right matchup (worth about 5½% league-wide), a pitcher with how that club has been
+        hitting against his hand. Nothing shifts a figure by more than a fifth.
+      </p>
+      <p>
+        <b>It doesn't know</b> today's game in progress (counted as it stands), or tomorrow's
+        lineup changes. And it is one likely outcome, not a probability — a category won by a run
+        here is not one to count on.
+      </p>
+    </InfoKey>
+  );
+}
+
 function fmtPoints(p: number | null): string {
   return typeof p === 'number' && Number.isFinite(p) ? String(Math.round(p * 100) / 100) : '—';
 }
@@ -535,14 +637,58 @@ export function prettyDate(iso: string | null): string {
  */
 function Scoreboard({
   board,
+  projection,
+  projected,
+  onProjected,
   onPeriod,
   onOpenMatchup,
 }: {
   board: EspnScoreboard;
+  /** Where the week is heading, once it has been read — null until then, and
+   *  `ok: false` on a period there is nothing to project. */
+  projection: EspnProjection | null;
+  /** Whether the reader has asked for it. Held above this component because it
+   *  is in the URL and because it is what decides the read. */
+  projected: boolean;
+  onProjected: (on: boolean) => void;
   onPeriod: (period: number) => void;
   onOpenMatchup: (id: number) => void;
 }) {
   const teamMap = useMemo(() => new Map(board.teams.map((t) => [t.id, t])), [board.teams]);
+
+  /**
+   * **The projection swaps the figures and nothing else**, which is what
+   * `asProjected` is for: the cards, the colours, the tally and the leading name
+   * are the code that was already checked, drawn over different numbers.
+   *
+   * Keyed by matchup id rather than by position, because the board is **sorted**
+   * below (the reader's own matchup leads) and the projection is in ESPN's own
+   * order.
+   */
+  const byId = useMemo(() => {
+    const out = new Map<number, EspnProjectedMatchup>();
+    for (const m of projection?.matchups ?? []) out.set(m.id, m);
+    return out;
+  }, [projection]);
+
+  /** On only where there is something to draw — a period with no projection, or
+   *  one still being read, shows the live figures rather than a blank card. */
+  const showing = projected && projection?.ok === true && byId.size > 0;
+
+  /**
+   * **A points league is not offered the toggle at all.** Its card's headline is
+   * one number a side (`totalPoints`) and its category grid is not drawn, and the
+   * projection produces neither — it fills the league's own scoring *categories*,
+   * which a points league does not have in that sense. Offering a control that
+   * could only ever leave the card unchanged is the thing this app's own rule
+   * about a setting lying about its reach forbids.
+   *
+   * And only on a **live** period: a week that is over has nothing left to
+   * happen, which the server says in as many words (`ok: false`, `note:
+   * 'settled'`) and which is why the button is absent rather than disabled — a
+   * disabled control invites the reader to work out why.
+   */
+  const offered = board.format === 'h2h-categories' && board.live;
 
 
   // The reader's own matchup leads. That is what this page is opened for, and
@@ -560,11 +706,22 @@ function Scoreboard({
     });
   }, [board]);
 
+  /**
+   * The days the figures cover — and **while projected that is the whole period
+   * rather than the part of it that has been played.**
+   *
+   * `board.end` is the *observed* span and truncates at today for a live period,
+   * which is exactly right for figures that are what has happened and a lie over
+   * figures that reach the end of the week. The projection carries the period's
+   * own last day for this, so the header reads `Aug 10 – Aug 23` beside
+   * `Projected` where it reads `Aug 10 – Aug 18` beside `Live`.
+   */
+  const endDay = showing ? projection?.end ?? board.end : board.end;
   const span =
-    board.start && board.end
-      ? board.start === board.end
+    board.start && endDay
+      ? board.start === endDay
         ? prettyDate(board.start)
-        : `${prettyDate(board.start)} – ${prettyDate(board.end)}`
+        : `${prettyDate(board.start)} – ${prettyDate(endDay)}`
       : null;
 
   return (
@@ -596,12 +753,52 @@ function Scoreboard({
             ›
           </button>
         </div>
-        {/* Live or Final, and the distinction is the whole reason the dates are
-            printed: a live period's totals cover the days played *so far*, so
-            the two have to be read together. */}
-        <span className={`lg-state${board.live ? ' lg-state-live' : ''}`}>
-          {board.live ? 'Live' : 'Final'}
+        {/* Live or Final — or **Projected**, which replaces rather than joins
+            them: the tag says what the figures on the cards *are*, and two of
+            them would be the card claiming to be both. The distinction is the
+            whole reason the dates are printed beside it, a live period's totals
+            covering the days played so far and a projected one the whole week. */}
+        <span
+          className={`lg-state${
+            showing ? ' lg-state-proj' : board.live ? ' lg-state-live' : ''
+          }`}
+        >
+          {showing ? 'Projected' : board.live ? 'Live' : 'Final'}
         </span>
+        {offered && (
+          <div className="lg-proj-tools">
+            <button
+              type="button"
+              className={`research-toggle lg-proj-btn${showing ? ' on' : ''}`}
+              aria-pressed={showing}
+              onClick={() => onProjected(!projected)}
+              title={
+                showing
+                  ? 'Back to what has actually happened so far'
+                  : 'Show where each matchup is heading by the end of the week'
+              }
+            >
+              {/* A rising line, which is what a projection is. `flex: none` for
+                  the reason every glyph on a control in this app carries it. */}
+              <svg
+                viewBox="0 0 24 24"
+                width="17"
+                height="17"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M3 17l6-6 4 4 8-8" />
+                <path d="M15 7h6v6" />
+              </svg>
+              <span className="lg-proj-label">Projected</span>
+            </button>
+            <ProjectionKey projection={projection} categories={board.categories.length} />
+          </div>
+        )}
       </div>
 
       {board.format === 'unknown' ? (
@@ -628,19 +825,26 @@ function Scoreboard({
           <p>ESPN has no schedule for this period yet.</p>
         </div>
       ) : (
-        <div className="lg-board">
-          {matchups.map((m) => (
-            <MatchupCard
-              key={m.id}
-              matchup={m}
-              categories={board.categories}
-              teams={teamMap}
-              myTeamId={board.myTeamId}
-              format={board.format}
-              live={board.live}
-              onOpen={onOpenMatchup}
-            />
-          ))}
+        <div className={`lg-board${showing ? ' lg-board-proj' : ''}`}>
+          {matchups.map((m) => {
+            const p = showing ? byId.get(m.id) : undefined;
+            return (
+              <MatchupCard
+                key={m.id}
+                matchup={p ? asProjected(m, p) : m}
+                categories={board.categories}
+                teams={teamMap}
+                myTeamId={board.myTeamId}
+                format={board.format}
+                /* `live` is what puts "so far" on a cell's own tooltip, and a
+                   projected figure is not a figure so far — it is the whole
+                   week's, which is what `projected` says instead. */
+                live={board.live && !p}
+                projected={p != null}
+                onOpen={onOpenMatchup}
+              />
+            );
+          })}
         </div>
       )}
 
@@ -683,6 +887,9 @@ export default function LeagueView({
   loading,
   error,
   onPeriod,
+  projection,
+  projected,
+  onProjected,
   rankings,
   rankSpan,
   rankingsLoading,
@@ -715,6 +922,11 @@ export default function LeagueView({
   loading: boolean;
   error: string | null;
   onPeriod: (period: number) => void;
+  /** Where this period's matchups are heading, once read — null until then. See
+   *  `Scoreboard`'s own props for why the *state* lives above this view. */
+  projection: EspnProjection | null;
+  projected: boolean;
+  onProjected: (on: boolean) => void;
   rankings: EspnRankings | null;
   rankSpan: EspnRankSpan;
   rankingsLoading: boolean;
@@ -788,7 +1000,14 @@ export default function LeagueView({
           <LoadingBlock>Reading your league's scoreboard</LoadingBlock>
         ) : null
       ) : (
-        <Scoreboard board={board} onPeriod={onPeriod} onOpenMatchup={onOpenMatchup} />
+        <Scoreboard
+          board={board}
+          projection={projection}
+          projected={projected}
+          onProjected={onProjected}
+          onPeriod={onPeriod}
+          onOpenMatchup={onOpenMatchup}
+        />
       )}
     </div>
   );

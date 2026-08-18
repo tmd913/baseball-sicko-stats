@@ -82,6 +82,7 @@ import {
   rostersToWatchlist,
 } from './espn.js';
 import type { EspnRosterPlayer } from './espn.js';
+import { getProjection } from './projection.js';
 import type { WatchPlayer } from './types.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -1302,6 +1303,46 @@ app.get(
         return;
       }
       res.json(await getMatchupSeries(creds, period, req.query.refresh === '1'));
+    } catch (err) {
+      if (!espnError(err, res)) throw err;
+    }
+  }),
+);
+
+/**
+ * **Where a live matchup is heading** — every side's projected final total in
+ * every category the league scores, which is what the Scoreboard's `Projected`
+ * toggle swaps its figures for.
+ *
+ * A route of its own rather than a field on `/api/espn/scoreboard`, and it is the
+ * split `/api/espn/matchup-window` and `/api/espn/matchup-series` already make
+ * for the same page: that board is read by **everybody** who opens the League
+ * page, and this is four league-wide boards joined against every roster in the
+ * league. Folding it in would make every reader pay for a projection nobody may
+ * ask for.
+ *
+ * `?period=` and `?refresh=1` mean what they mean on the scoreboard beside it,
+ * and the refresh reaches only the projection's own minute — the boards under it
+ * are cached on their own terms and warmed nightly.
+ *
+ * **A settled period answers `ok: false` with a `note` rather than an error.**
+ * Nothing is wrong with a week that is over; there is simply nothing left to
+ * project, and the client says so. 409 `espn-auth` on a rejected cookie like
+ * every route in the family.
+ */
+app.get(
+  '/api/espn/projection',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const raw = req.query.period;
+    const period = typeof raw === 'string' && /^\d{1,3}$/.test(raw) ? Number(raw) : null;
+    try {
+      const creds = await getEspnCreds(userId(req));
+      if (!creds) {
+        res.status(409).json({ error: 'No ESPN league connected', code: 'espn-missing' });
+        return;
+      }
+      res.json(await getProjection(creds, period, req.query.refresh === '1'));
     } catch (err) {
       if (!espnError(err, res)) throw err;
     }

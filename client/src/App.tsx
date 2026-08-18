@@ -8,6 +8,7 @@ import type {
   EspnRankSpan,
   EspnTransactions,
   EspnRoster,
+  EspnProjection,
   EspnScoreboard,
   EspnStatus,
   PlayerKind,
@@ -1172,6 +1173,29 @@ export default function App() {
   const [scoreboard, setScoreboard] = useState<EspnScoreboard | null>(null);
   const [scoreboardLoading, setScoreboardLoading] = useState(false);
   const [scoreboardError, setScoreboardError] = useState<string | null>(null);
+  /**
+   * **Where this period's matchups are heading** — the Scoreboard's `Projected`
+   * toggle, and the projection it swaps its figures for.
+   *
+   * **In the URL as `proj=1`**, by the rule `hideil=1`, `starters=1`, `sched=`
+   * and `plays=` follow: it changes *what the numbers are*, so a link that
+   * carries it describes a different board — and "here is where this week is
+   * going" is a thing a leaguemate is worth sending.
+   *
+   * **Not a saved preference.** Which figures you want in front of you is a lens
+   * for an afternoon, exactly as `starters=1` is, and a saved copy would mean a
+   * board silently showing projections a fortnight later. So there is no
+   * `UserPrefs` key and none of the already-touched ref dance the saved toggles
+   * need.
+   *
+   * The **read** is lazy on the toggle rather than on the view (see its effect):
+   * it joins four league-wide boards against every roster in the league, and
+   * nobody who never presses it should pay for it.
+   */
+  const [projected, setProjected] = useState<boolean>(
+    () => initialParams.get('proj') === '1',
+  );
+  const [projection, setProjection] = useState<EspnProjection | null>(null);
   const [matchupPeriod, setMatchupPeriod] = useState<number | null>(() => {
     const raw = initialParams.get('mp');
     return raw && /^\d{1,3}$/.test(raw) ? Number(raw) : null;
@@ -1513,6 +1537,47 @@ export default function App() {
     // already needed the board re-runs nothing — where `matchupId` in the list
     // would spend a request per press to be handed the board it already has.
   }, [needsScoreboard, matchupPeriod, espnLeagueId]);
+
+  /**
+   * The projection, read on the first press of `Projected` and kept.
+   *
+   * **Lazy on the toggle**, which is where this parts from the board above it:
+   * that one is 10KB and read by everybody who opens the page, and this joins
+   * four league-wide boards against every roster in the league. Measured through
+   * the route on the live league: **386–715ms** with those boards warm (which
+   * they are — three of the four are pulled nightly by the warmer) and **35ms**
+   * off its own minute, for **1,032 bytes** over the wire.
+   *
+   * **Never over data**, the app's own rule: `setProjection` is called on success
+   * alone, so a re-read at a new period leaves the last one standing rather than
+   * flipping the cards back to the live figures mid-look. And it is **cleared on
+   * a period change** first, because a projection is a fact about *one* week and
+   * drawing last week's over this one is the one thing it must not do.
+   */
+  useEffect(() => {
+    if (!projected || view !== 'league' || !espnConnected) return;
+    let canceled = false;
+    api
+      .espnProjection(matchupPeriod)
+      .then((p) => {
+        if (!canceled) setProjection(p);
+      })
+      .catch((e: Error) => {
+        // A failed projection costs the toggle its figures and nothing else —
+        // the board it was drawn over is untouched, so the cards fall back to
+        // the live ones rather than the page becoming a message.
+        if (!canceled) console.error('reading the projection failed:', e.message);
+      });
+    return () => {
+      canceled = true;
+    };
+  }, [projected, view, espnConnected, matchupPeriod]);
+
+  /** A projection belongs to one matchup period, so stepping the arrows drops
+   *  it rather than letting last week's figures be drawn over this one. */
+  useEffect(() => {
+    setProjection(null);
+  }, [matchupPeriod, espnLeagueId]);
 
   /**
    * The Rankings tab, read on its first open and whenever the span changes.
@@ -2416,6 +2481,12 @@ export default function App() {
     // only on that view and only off their defaults, the rule every other
     // param here follows.
     if (view === 'league' && leagueTab !== 'scoreboard') p.set('lt', leagueTab);
+    // Where the week is heading rather than where it has got to. Scoped to the
+    // Scoreboard tab, which is the one page that draws it — Rankings has its own
+    // spans and Transactions has no figures to project, so carrying it there
+    // would be a param naming a lens that is not in force, which is the test
+    // `starters=1` already applies to itself.
+    if (view === 'league' && leagueTab === 'scoreboard' && projected) p.set('proj', '1');
     // Which matchup is open **over** the view, which is a page rather than a
     // tab — so it is written whatever tab is behind it, and a link carrying it
     // opens that page the way `player=` opens a player's.
@@ -2488,6 +2559,7 @@ export default function App() {
     helpOpen,
     playFilters,
     feedNewOnly,
+    projected,
   ]);
 
   // Fetch the research board for the kind on screen, once per kind. Lazy —
@@ -4789,6 +4861,9 @@ export default function App() {
             setMatchupTeam(null);
             setMatchupPeriod(period);
           }}
+          projection={projection}
+          projected={projected}
+          onProjected={setProjected}
           rankings={rankings}
           rankSpan={rankSpan}
           rankingsLoading={showRankingsWait}

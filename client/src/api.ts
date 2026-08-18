@@ -6,6 +6,7 @@ import type {
   EspnRankings,
   EspnRankSpan,
   EspnMatchupSeries,
+  EspnProjection,
   EspnScoreboard,
   EspnTransactions,
   EspnStatus,
@@ -447,6 +448,24 @@ export const api = {
     if (refresh) q.set('refresh', '1');
     const qs = q.toString();
     return request(`/api/espn/matchup-series${qs ? `?${qs}` : ''}`);
+  },
+
+  /** **Where a live matchup is heading** — each side's projected final total in
+   *  every category, which is what the Scoreboard's `Projected` toggle swaps its
+   *  figures for.
+   *
+   *  A route of its own for the same reason `matchup-series` is one: it joins
+   *  four league-wide boards against every roster in the league, and folding it
+   *  into the scoreboard would make everybody who opens the League page pay for
+   *  a projection nobody may ask for. A **settled** period answers `ok: false`
+   *  with a `note` rather than an error — nothing is wrong, there is simply
+   *  nothing left to project. */
+  async espnProjection(period?: number | null, refresh = false): Promise<EspnProjection> {
+    const q = new URLSearchParams();
+    if (period != null) q.set('period', String(period));
+    if (refresh) q.set('refresh', '1');
+    const qs = q.toString();
+    return request(`/api/espn/projection${qs ? `?${qs}` : ''}`);
   },
 
   /** The League page's Rankings tab: every team's figure in each of the

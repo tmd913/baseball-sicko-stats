@@ -766,6 +766,185 @@ week either way.
 **10.8KB in 449ms** cold and **5ms** warm, `matchup` **178ms**, `first`
 **258ms**, `second` **195ms**.
 
+### Where a live matchup is heading
+
+**A live scoreboard says who is ahead now, which on the Tuesday of a seven-day
+week is a question nobody is really asking.** `R 12–9` with five days left says
+almost nothing, and what a manager actually wants to know is whether the two
+saves he is behind by are two he is going to get. `server/src/projection.ts`
+answers for the end of the week: every side's **projected final total** in every
+category the league scores, and the tally that falls out of comparing them.
+
+**Project the components, derive the rates.** A counting stat adds and a rate
+does not, so nothing here ever projects an ERA — it projects earned runs and outs
+and lets `espn.ts::withAddedComponents` rebuild the ERA from them. That is the
+same function, and so the same `DERIVED` table, that adds today's day to ESPN's
+through-yesterday score; it was `withScoringPeriod` while that was its only job
+and is named for what both callers mean now. Every rule in it holds for a week's
+worth of production unchanged, and the two that matter most are what stop a
+projection **inventing** a category the side is ineligible for (which in a
+`lowerBetter` category would read as the best score in the league) or rebuilding
+a rate out of half its parts.
+
+**`tallyCategories` is exported for the same reason.** The projection compares two
+*projected* sides and must reach the same verdict from the same numbers as the
+card it replaces — one function rather than two that agree today. That one has
+been checked against ESPN's own answer on **1,080 of 1,080** category comparisons
+over eighteen settled periods, so the projection's tally inherits the check.
+
+### The four inputs, and that not one of them is a new upstream
+
+Nothing in this file fetches anything the app was not already fetching. Each of
+these is a read that is already cached and — for three of the four — already
+pulled warm nightly by `warmer.ts`:
+
+- **How many chances are left** — `schedule.ts`'s league-wide 28-day window,
+  which carries every club's fixtures *and* `rotations`, the projected turn for
+  every pitcher with a rotation slot. That map is what makes "his remaining
+  starts" answerable past the three days MLB names probables for, and it is the
+  same map the Schedule view's grid draws — so the projection and that grid cannot
+  disagree about whether he pitches on Saturday.
+- **How he has been going** — `research.ts`'s season board and its **30-day**
+  board, blended (below). Thirty rather than seven: seven is a handful of starts
+  and a bad week, and a projection that swung on it would report noise as news.
+- **How strong the opposition is** — for a **pitcher**, `teamHitting.ts`'s nine
+  cuts of how every club has hit, taken at 30 days and **against his own hand**;
+  for a **batter**, the opposing club's announced or projected *starter* and how
+  that man has actually pitched. A named pitcher is a far sharper answer than a
+  club average and it is the one a reader would give.
+- **Which way each of them swings** — `bats`/`throws` off `getSeasonPlayers`, for
+  the platoon.
+
+### The platoon edge is measured off the day exports, not taken from a book
+
+Every wOBA event of the season is in the per-date Savant exports `savant.ts`
+downloads and keeps forever, and each row carries the batter's `stand` and the
+pitcher's `p_throws` — so the league's own same-hand and opposite-hand wOBA is a
+sum over files already on disk. Over **140,889 plate appearances across 143
+days**:
+
+| | wOBA | PA |
+| --- | --- | --- |
+| same hand | **.3138** | 59,008 |
+| opposite hands | **.3311** | 81,881 |
+| league | .3238 | 140,889 |
+
+a **5.5%** advantage to the batter with the better of it, which is
+`PLATOON_SAME = 0.969` and `PLATOON_OPP = 1.022` as multipliers on the league.
+Broken out: `L vs LHP .3057`, `L vs RHP .3325`, `R vs LHP .3281`, `R vs RHP
+.3163`. A **switch hitter** always has the better of it, which is what switch
+hitting is for.
+
+**It is a league figure rather than the player's own, and that is a real
+limitation stated plainly**: a genuine platoon monster loses more than 3% against
+a same-handed pitcher and a reverse-split hitter loses nothing. Doing better needs
+each player's own vs-L/vs-R split, which is one MLB request *per player*
+(`getPlayerStats`) and so ~28 a team a matchup — the thing this whole file is
+written to avoid. It is `FIP_CONSTANT`'s own bargain: a measured league constant,
+named, with the method beside it.
+
+### The blend, the share, and the three caps
+
+**Season is always the larger half.** `RECENT_MAX` is 40%, and that weight is
+**earned in proportion to how much he actually played**: a full month reaches it
+and twenty plate appearances gets a fifth of it. Without the second cap a man just
+off the IL would have his whole projection set by one good series, which is exactly
+the noise the 30-day window was chosen to avoid.
+
+**And a hitter does not play every game his club has left**, which is the one
+thing the first version got wrong and the measurement that found it. Projecting
+every hitter into every remaining club game put the twelve teams at **0.58 runs
+per player-game against the 0.41 the same period had actually produced** — a
+40% over-count. `playShareOf` is very nearly all of it: how often he is in his
+club's game, read over the **last thirty days** where it can be, because a season
+ratio is wrong in the one direction that matters most — a **call-up** has thirty
+games of a club's hundred and twenty and would be projected to play a quarter of
+the week when he is the everyday shortstop now. `getTeamHitting(30)` already
+carries each club's games over the same span, so the numerator and the denominator
+are the same month. The same figure is a reliever's appearance rate.
+
+**No single adjustment may move a figure by more than a fifth** (`ADJ_CLAMP`),
+and every one of them is clamped before use and their product clamped again. Each
+is a ratio of two measured figures and a ratio has no upper bound: a pitcher with
+six innings and a .190 xwOBA-against would otherwise halve a hitter's week on the
+strength of one start. It keeps the projection's shape decided by **how much a
+player plays** — the thing this can actually know — rather than by whom he plays.
+A batter's adjustment is damped again through `STARTER_SHARE` (0.6), a starter
+facing the top of the order three times and the bullpen covering the rest.
+
+### What it deliberately does not do
+
+- **It does not project today's games that are already under way.** A `live` or
+  `final` game is counted as it stands, because the current total already holds it
+  — `withAddedComponents` put today there — so only a game still `scheduled` is
+  projected. A matchup read at nine in the morning therefore projects the whole
+  day and one read at nine at night projects almost none of it, which is the
+  honest reading either way. A **postponement is not a game he gets**, which is
+  `schedule.ts`'s own rule.
+- **It does not guess at lineup changes.** It projects the players a manager has
+  in a lineup slot *right now* — the same assumption `scoringPeriodTotals` already
+  makes for today, and the same `NON_ACCRUING_SLOTS` rule. A bench player he
+  starts tomorrow is not in it and neither is anybody on his IL.
+- **It does not adjust a pitcher's outs.** A tough lineup shortens an outing, and
+  putting that in would move the *denominator* of every rate as well as its
+  numerator — a projection that got worse in a way nobody could see. He pitches as
+  long as he has been pitching. **Wins take the inverse multiplier**, being the one
+  thing on a pitcher's line that moves the other way from runs.
+- **It is not a probability.** One expected value per category, no distribution and
+  no interval, which the key on screen says in as many words.
+
+### Only the categories go out, and a count is rounded
+
+`categoryScores` is the whole of the wire. **The rates are derived before the
+rounding and the tally computed after it**, and both halves are deliberate:
+before, because a rate should be the best estimate rather than one that inherits
+the rounding of up to four components — measured, deriving OPS from the *rounded*
+home-run count moves it by up to **3.1 thousandths** and changes the printed
+figure on 11 of 36 cells; after, because a reader can add up a **tally** and
+cannot derive an OPS, so the headline `8-2-0` is computed from exactly the figures
+the cells show. ERA and WHIP are **exact** either way, their components not being
+categories this league scores and so never rounded.
+
+**The components do not ride along.** `scoreByStat` carries all 23 stats ESPN
+tracks and the scoreboard ships them because they arrive free in ESPN's own
+payload; every component here is a number this file *computed*, and nothing reads
+them — the rule `teamProbablePitcher`'s removal sets. Measured: **6,948 bytes to
+3,370, and 2,868 gzipped to 1,032.**
+
+### Caching, and a settled week
+
+Memory per league and period on the scoreboard's own minute, with an `inFlight`
+guard, because that is what it is built on: a projection whose already-happened
+half was a minute stale would be a minute stale itself. `?refresh=1` reaches it
+and `dropProjections` clears a league, which is the same statement about a league
+rather than about a week that `getOwnership` makes.
+
+**A settled period answers `ok: false` with `note: 'settled'`** rather than an
+error. Nothing is wrong with a week that is over; there is simply nothing left to
+project, and the client draws no toggle at all.
+
+### Measured, and calibrated against the period's own rate
+
+**Through the route on the live league**: **580–858ms** with the boards warm
+(which they are — three of the four are pulled nightly) and **34–35ms** off its
+own minute, for **3,370 bytes / 1,032 gzipped**.
+
+**Calibration.** Normalising both halves of the period by *expected hitter-games*
+— each club's games in each half times each man's own play share — the league
+comes to **0.515 runs per expected hitter-game over the eight days played and
+0.531 projected over the six left: a 3.1% difference.** Per team the two agree to
+within a few per cent on nine of the twelve; the outliers are exactly the ones a
+projection should move, and in the right direction — **Sho me the Parlay +37%**
+and **Didl +14%**, both teams whose observed week (0.375 and 0.395) is well under
+the league, regressed up toward their players' own form, and **Swaggy −6%**, a hot
+week (0.613) regressed down.
+
+**Identity checks over every side of the live board**: **0** counting categories
+projected *below* their current figure, **0** categories invented where the side
+has none, **0** lost, **0** tallies that disagree with the cells beside them, and
+**0** matchups whose winner disagrees with its own tally. ERA and WHIP recompute
+from the projected components exactly (0.00e+0).
+
 ### The Transactions tab: who moved whom
 
 **Which ESPN endpoint answers this, and the ones that look as though they should

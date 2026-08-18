@@ -2740,8 +2740,15 @@ async function dayTotals(
  * zero-based total that in a `lowerBetter` category reads as the best score in
  * the league. A rate whose components are incomplete keeps yesterday's figure
  * rather than being rebuilt out of half of them.
+ *
+ * **It has a second caller and is named for what both of them mean.** It was
+ * `withScoringPeriod` while adding today was the only thing it did;
+ * `projection.ts` adds a *week's* worth of expected production the same way, and
+ * every rule above holds for that bundle unchanged — most importantly the last
+ * two, which are what stop a projection inventing a category the side cannot
+ * score in or rebuilding a rate out of half its parts.
  */
-function withScoringPeriod(
+export function withAddedComponents(
   scores: Record<number, number>,
   today: Record<number, number> | undefined,
   categories: EspnCategory[],
@@ -2781,9 +2788,47 @@ function sideFrom(
   const points = live ? raw.totalPointsLive ?? raw.totalPoints : raw.totalPoints;
   return {
     teamId: raw.teamId,
-    scores: withScoringPeriod(scores, today?.[raw.teamId], categories),
+    scores: withAddedComponents(scores, today?.[raw.teamId], categories),
     points: typeof points === 'number' ? points : null,
   };
+}
+
+/**
+ * **How many categories one side is winning, losing and tying** — the whole of
+ * what a categories matchup's headline is.
+ *
+ * ESPN fills its own `result` and its wins/losses/ties tally only once a matchup
+ * is **over**, so a live one comes back `UNDECIDED` with zeroes and a page that
+ * reported only ESPN's answer would say nothing about the week anybody is
+ * looking at. This is therefore computed here for live and final alike, and the
+ * computed answer was checked against ESPN's on **1,080 of 1,080** category
+ * comparisons over the live league's eighteen settled periods.
+ *
+ * **Exported so the projection's tally is this one.** `projection.ts` compares
+ * two *projected* sides, and it must reach the same verdict from the same
+ * numbers as the card it replaces — one function rather than two that agree
+ * today. `lowerBetter` is honored here, so ERA and WHIP need no case anywhere
+ * else; a category either side is missing a figure for is **skipped** rather
+ * than counted, which is what keeps a side ineligible for one from being
+ * recorded as losing it.
+ */
+export function tallyCategories(
+  mine: Record<number, number>,
+  theirs: Record<number, number>,
+  categories: EspnCategory[],
+): { wins: number; losses: number; ties: number } {
+  let wins = 0;
+  let losses = 0;
+  let ties = 0;
+  for (const cat of categories) {
+    const h = mine[cat.statId];
+    const a = theirs[cat.statId];
+    if (typeof h !== 'number' || typeof a !== 'number') continue;
+    if (h === a) ties++;
+    else if (cat.lowerBetter ? h < a : h > a) wins++;
+    else losses++;
+  }
+  return { wins, losses, ties };
 }
 
 async function fetchMatchups(
@@ -2829,19 +2874,9 @@ async function fetchMatchups(
     if (!home) continue;
     const away = sideFrom(m.away, live, today, categories);
 
-    let hw = 0;
-    let aw = 0;
-    let tie = 0;
-    if (away) {
-      for (const cat of categories) {
-        const h = home.scores[cat.statId];
-        const a = away.scores[cat.statId];
-        if (typeof h !== 'number' || typeof a !== 'number') continue;
-        if (h === a) tie++;
-        else if (cat.lowerBetter ? h < a : h > a) hw++;
-        else aw++;
-      }
-    }
+    const { wins: hw, losses: aw, ties: tie } = away
+      ? tallyCategories(home.scores, away.scores, categories)
+      : { wins: 0, losses: 0, ties: 0 };
 
     // ESPN's own word where it has one; ours where it doesn't, so a live
     // matchup reads the same way a final one does. Both are the same

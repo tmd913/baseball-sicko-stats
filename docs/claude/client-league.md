@@ -327,6 +327,175 @@ The badge lands at the same x as the matchup row's own (35 at 390, 213 at
 a line that was already 19px of text and padding — and the block itself is
 **84 → 69px**, taking a matchup card from **281.97 → 251.97**.
 
+### The Projected toggle, and what it swaps
+
+**A live card says who is ahead now; the toggle says where the week is going.**
+`Projected` sits at the right of the period head and replaces every figure on
+every card with its projected final total — the categories, the win–loss–tie
+headline, and the winner's own accent. Where the numbers come from is
+**ESPN fantasy league**, *Where a live matchup is heading*; what belongs here is
+what the page does with them.
+
+**The data is swapped and nothing else is** (`asProjected`). The card's whole job
+is to compare two sides across the league's categories and colour the winner, and
+that arithmetic is identical whether the figures are what has happened or what is
+going to — so rather than teaching it a second mode (a second set of cells, a
+second tally, a second `leading` test) it is handed a projected `EspnMatchup` and
+every line downstream is the code that was already checked. Three things are kept
+from the live side because the projection does not touch them: `points`,
+`acquisitions` (a fact about the period so far) and the team ids. **`winner` is
+the projection's own and is never null**, where a live matchup's is — that is what
+lights the leading name, and a projection whose whole point is to say where the
+week is going has no business declining to.
+
+**Keyed by matchup id rather than by position**, because this board is *sorted*
+(the reader's own matchup leads) and the projection is in ESPN's own order.
+
+### It is drawn as a projection, three ways at once
+
+**A dashed card border**, which is this app's standing rule that an estimate never
+wears the same clothes as a measurement — the percentile card's dotted bubble, the
+Splits card's hatched fill, the Schedule grid's dashed chip. At the size of a
+*whole card* rather than per cell, because every figure on it is projected and
+marking each one would be the same claim made twenty times. It sits after
+`.lg-mine`, so the reader's own projected matchup keeps its accent **and** takes
+the dash — two different things, both true.
+
+**The state tag reads `Projected` in place of `Live`** rather than beside it: that
+tag says what the figures *are*, and two of them would be the card claiming to be
+both. In the accent, which is what this app spends on a *reading* of the data,
+against the green it spends on a game being on.
+
+**And the dates change to the whole period.** `board.end` is the *observed* span
+and truncates at today for a live period — exactly right for figures that are what
+has happened and a lie over figures that reach the end of the week — so while
+projected the header reads the projection's own `end`: `Aug 10 – Aug 23 ·
+Projected` where it read `Aug 10 – Aug 18 · Live`.
+
+**A cell's tooltip stops saying "so far"**, which is why `live` is passed as
+`board.live && !projected`: a projected total is not a figure so far, it is the
+whole week's, and the cell says that instead.
+
+### Where the toggle sits, and when it is not offered
+
+**In the period head rather than the pinned tab row**, which is the same decision
+the period arrows record: a control above the strip is a control over the *page*,
+and this one governs exactly one third of it — Rankings has its own spans and
+Transactions has no figures to project. `margin-left: auto` puts it and its key at
+the far end, so the head reads week, dates, state, control.
+
+**Absent rather than disabled in the two cases it cannot serve.** A **points**
+league's card headline is one number a side and its category grid is not drawn,
+and the projection produces neither — offering a control that could only ever
+leave the card unchanged is what this app's rule about a setting lying about its
+reach forbids. And a **settled** period has nothing left to happen, which the
+server says in as many words (`ok: false`, `note: 'settled'`); a disabled button
+would invite the reader to work out why.
+
+**On only where there is something to draw.** `showing` requires the read to have
+landed and to have matchups in it, so a period with no projection — or one still
+being read — shows the live figures rather than a blank card. That is rule 1 of
+the app's loading discipline: never blank over data.
+
+### The key says the method in a manager's words
+
+The app's own `InfoKey` — a popover rather than a `title` (invisible on a phone),
+a `Modal` (ceremony a few sentences cannot pay for) or an inline reveal (it would
+appear below the fold on the very card it explains). Four short paragraphs, and
+they are the four questions somebody actually asks of a projection: what is it
+made of, what does it take account of, what adjusts it, and **what does it not
+know**. The last is the one a projection most owes its reader, so it is a
+paragraph rather than a footnote.
+
+**Every figure it names is a measured one** — the 40% cap on the recent month, the
+league's own 5½% platoon edge, the fifth that no adjustment may exceed — and not
+one is named as a constant. **How many days are left comes off the projection
+itself** rather than from a count of its own, so the sentence cannot come to
+disagree with the cards.
+
+**Anchored to the head row, not to its own button**, which is `.roll-key`'s
+measured trick: a shrink-to-fit against a 30px box resolves to the shared
+`min-width`, and a 320px panel opening from a button at the right edge of the row
+runs off the screen. It opens leftward from the row's own right edge instead.
+
+### `proj=1`, and why it is not saved
+
+In the URL by the rule `hideil=1`, `starters=1`, `sched=` and `plays=` follow: it
+changes *what the numbers are*, so a link carrying it describes a different board
+— and "here is where this week is going" is a thing a leaguemate is worth sending.
+**Scoped to the Scoreboard tab**, which is the one page that draws it, so crossing
+to Rankings drops it rather than carrying a lens that is not in force. It is
+**kept** on a settled period, which is where it parts from `starters=1`: there the
+param would be a claim about data it cannot narrow, and here it is not — the cards
+say `Final`, the toggle is not offered, and nothing on screen claims to be
+projected — so the state survives the excursion and stepping back to the live week
+restores it.
+
+**Not a saved preference**, and the line is `starters=1`'s: which figures you want
+in front of you is a lens for an afternoon, and a saved copy would mean a board
+silently showing projections a fortnight later.
+
+**The read is lazy on the toggle**, where the board it is drawn over is read by
+everybody who opens the page. It joins four league-wide boards against every
+roster in the league, so nobody who never presses it should pay for it — and it is
+**cleared on a period change**, a projection being a fact about one week and
+drawing last week's over this one being the one thing it must not do. A **failed**
+read is logged and costs the toggle its figures alone: the cards fall back to the
+live ones rather than the page becoming a message.
+
+### The matchup page deliberately does not follow
+
+A reader who projects the board and then opens a card gets the **live** figures on
+the matchup page, and that is a decision rather than an omission.
+
+The toggle is the Scoreboard tab's own — the same argument that keeps the period
+arrows there. And the matchup page's Summary is a comparison of *what has
+happened*, with the acquisitions and the week's moves under it, which are facts
+about the period so far and are not projected: carrying the lens in would leave a
+page speaking in two tenses. Most of all, **a projected figure with nothing saying
+so is the one thing this must not draw**, and that page has no state tag for one
+to live in. Adding it properly means its own tag in its own head, which is a
+second surface rather than a prop threaded through.
+
+### Measured
+
+**Driven against the live 12-team league at 1200×900**, pressing the toggle and
+pressing it back:
+
+| | live | projected |
+| --- | --- | --- |
+| state tag | `Live` (`lg-state-live`) | **`Projected`** (`lg-state-proj`) |
+| dates | Aug 10 – Aug 18 | **Aug 10 – Aug 23** |
+| cards dashed | 0 of 10 | **10 of 10** |
+| a card's headline | `9-1-0 / 1-9-0` | **`8-2-0 / 2-8-0`** |
+| its batting cells | `35 13 32 5 .754` | **`63 24 58 9 .768`** |
+| URL | `?…&view=league` | **`?…&view=league&proj=1`** |
+
+and pressing it back gives the live column byte for byte.
+
+**The two states it is not offered in**, driven: a **settled** period (`mp=18`)
+draws **no toggle and no key**, tag `Final`, `0` dashed cards, with `proj=1` still
+in the URL; the **Rankings** tab draws neither and **drops** `proj=1`.
+
+**The key**, at 320 / 390 / 640 / 1200 / 1920: opens and closes on a press,
+`aria-expanded` following, four paragraphs, **320px wide** (276 at a 320px
+viewport, the `min()` clamp), fully inside the viewport at every one, and **Escape
+closes it** leaving the board standing and **0** `inert` marks.
+
+**Widths**, projected and live, at 320 / 375 / 390 / 640 / 900 / 1200 / 1920:
+**page-body overflow 0** at every one, **0** category blocks scrolling sideways,
+**0** clipped cells, and the cards the same width in both states (276 / 331 / 346
+/ 596 / 800 / 800 / 800). What the control costs the head is **a wrapped line at
+320, 375 and 390** (36 → 84px) and nothing from 480 up — A/B'd by hiding the pair
+on the same page. Dropping the label to the glyph would not win that line back
+(the head's content comes to 363px against the 346 a phone leaves), so the label
+stays.
+
+**Bundle: 565.05 → 568.44 KB of JS** (168.01 → 169.15 gzipped) and **153.08 →
+153.52 KB of CSS** (27.39 → 27.48) — 3.4KB and 0.4KB raw, 1.1KB and 0.09KB over
+the wire, for a toggle, a key, a swap and the paragraphs above restated where the
+rules are.
+
 ### A category's chart is on the matchup page, not here
 
 **This section used to describe a press on a scoreboard cell, and the press has
@@ -548,7 +717,7 @@ two things in two views is exactly the trap `cols=` avoids by being scoped to th
 board `pos=` names. Neither name can collide, nor does `mt=`: the app's other
 params are `preset`, `start`, `end`, `player`, `view`, `kind`, `sim`, `hideil`,
 `starters`, `sched`, `plays`, `newplays`, `roster`, `pos`, `cols`, `inc`, `scope`,
-`watch`, `win`, `help`, `mp`, `mup` and `league`.
+`watch`, `win`, `help`, `mp`, `proj`, `mup` and `league`.
 
 **Each tab's data is read on its first open and kept**, the way the player page's
 tabs are — the rankings read is gated on `leagueTab === 'rankings'`, and each of
