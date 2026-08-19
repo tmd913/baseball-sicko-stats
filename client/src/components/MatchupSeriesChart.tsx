@@ -382,8 +382,15 @@ export function MatchupSeriesChart({
       {/* A legend under the chart, never a label inside the plot — the one
           place a label is guaranteed to sit over the other line. */}
       <div className="mser-legend">
-        {lines.map((l) => {
-          const last = [...l.values].reverse().find((v) => typeof v === 'number');
+        {lines.map((l, k) => {
+          // **The last figure the *plot* stands behind**, which is the same
+          // `reach` the path and the readout are drawn from rather than the
+          // last number anywhere in the array. On the real shape of a gap the
+          // two agree — ESPN's unreadable day carries no value either — but
+          // reading the array directly is a way for the legend to print a total
+          // the lines have already stopped short of, and now that `reach` is
+          // computed once there is no reason to leave it open.
+          const last = reach[k] > 0 ? (l.values[reach[k] - 1] as number) : undefined;
           return (
             <span className="mser-legend-item" key={l.teamId}>
               <svg
