@@ -77,7 +77,9 @@ import { getTeamHitting } from './teamHitting.js';
 import {
   getMatchupWindow,
   getOwnership,
+  getPlayerPool,
   getScoreboard,
+  lineupSlotsFor,
   tallyCategories,
   withAddedComponents,
   type EspnCategory,
@@ -990,11 +992,16 @@ function projectOneBatter(
   ctx: ProjectionContext,
   id: number,
   into: Bucket,
+  /** The days he is in a lineup on — `null` for every day his club plays, which
+   *  is the roster page's question and was this file's only one. See
+   *  `planLineups`. */
+  allow: ReadonlySet<string> | null = null,
 ): { games: number; placed: boolean } {
   const { pools } = ctx;
   const row = pools.batSeason.get(id);
   if (!row || row.teamId === null) return { games: 0, placed: false };
-  const games = ctx.remaining.get(row.teamId) ?? [];
+  const all = ctx.remaining.get(row.teamId) ?? [];
+  const games = allow ? all.filter((g) => allow.has(g.date)) : all;
   const mults = games.map((g) => {
     const oppSide = g.homeId === row.teamId ? g.awayId : g.homeId;
     const named = [...(ctx.starters.get(g.gamePk) ?? [])].find((sid) => {
@@ -1018,11 +1025,15 @@ function projectOnePitcher(
   ctx: ProjectionContext,
   id: number,
   into: Bucket,
+  /** As `projectOneBatter`'s — the days he has a lineup slot, or `null` for all
+   *  of them. A start he is not started for is not a start he gets. */
+  allow: ReadonlySet<string> | null = null,
 ): { starts: number; reliefGames: number; placed: boolean } {
   const { pools } = ctx;
   const row = pools.pitSeason.get(id);
   if (!row || row.teamId === null) return { starts: 0, reliefGames: 0, placed: false };
-  const games = ctx.remaining.get(row.teamId) ?? [];
+  const all = ctx.remaining.get(row.teamId) ?? [];
+  const games = allow ? all.filter((g) => allow.has(g.date)) : all;
   const oppOf = (g: ScheduleGame): number => (g.homeId === row.teamId ? g.awayId : g.homeId);
   // His own turns: every remaining game he is named for or projected into.
   const his = games.filter((g) => ctx.starters.get(g.gamePk)?.has(id) === true);
@@ -1046,10 +1057,303 @@ function projectOnePitcher(
   return { starts: 0, reliefGames: mults.length, placed: true };
 }
 
+
+// ---- The lineup, filled a day at a time --------------------------------------
+
+/** ESPN's bench and injured-reserve slots — the two that are not a lineup. */
+const BENCH_SLOT = 16;
+const IL_SLOT = 17;
+
+/** ESPN's three pitching slots: `P`, `SP`, `RP`. Everything else a league
+ *  starts is a batting slot, which is the same fail-safe direction
+ *  `NON_ACCRUING_SLOTS` takes — an undocumented slot reads as a place a hitter
+ *  can stand rather than as nothing. */
+const PITCHING_SLOTS = new Set([13, 14, 15]);
+
+/**
+ * One rostered player as the lineup planner sees him: which seats he may sit
+ * in, what he brings on each day, and what one day of him is worth.
+ */
+interface Candidate {
+  key: string;
+  mlbId: number;
+  kind: PlayerKind;
+  /** The lineup slots ESPN has him eligible for, filtered to the side of the
+   *  ball this candidate is — a two-way player is two candidates and each
+   *  competes only for its own seats. */
+  slots: number[];
+  /** Day to the units he brings that day: a batter's or a reliever's play
+   *  share, and **1** on the day a starter's turn falls. A day he brings
+   *  nothing is not in the map, so he never takes a seat he cannot use. */
+  day: Map<string, number>;
+  units: number;
+  /** What one of those units is worth, which is how a scarce seat is settled. */
+  value: number;
+}
+
+/**
+ * **What one day of a player is worth**, for the one question the planner has
+ * to answer that "fill as many spots as possible" does not: when more players
+ * are available than there are seats, who sits.
+ *
+ * **The league's own counting categories, each normalized by what the rest of
+ * this roster does per day.** A home run is worth a home run against the other
+ * bats being considered, so the sum is dimensionless and a 5×5 league and a
+ * 12-category one both come out on the same scale, with no constant here to
+ * drift from the league's actual settings.
+ *
+ * **Rate categories are deliberately not in it**, and that is a limitation
+ * worth stating rather than hiding: a rate is not additive, so a player's
+ * effect on a team ERA depends on the innings underneath it, and ranking on his
+ * own ERA would seat a one-inning specialist above a workhorse who is worth far
+ * more of the same category. They are still *projected* — every category the
+ * league scores is in the answer — it is only the seating order that ignores
+ * them. A league that scores nothing but rates falls back to `units`, which is
+ * the request read literally: fill the seats with whoever plays most.
+ */
+function seatValues(cands: Candidate[], categories: EspnCategory[], buckets: Map<string, Bucket>): void {
+  const counting = categories.filter((c) => c.format === 'count');
+  if (counting.length === 0) {
+    for (const c of cands) c.value = 1;
+    return;
+  }
+  // The scale each category is read against: what this roster averages per day
+  // of it. Taken over the candidates who actually have days, so a man with none
+  // cannot drag a denominator toward zero.
+  const mean = new Map<number, number>();
+  for (const cat of counting) {
+    let sum = 0;
+    let n = 0;
+    for (const c of cands) {
+      if (c.units <= 0) continue;
+      const b = buckets.get(c.key);
+      if (!b) continue;
+      sum += num(b[cat.statId]) / c.units;
+      n += 1;
+    }
+    mean.set(cat.statId, n > 0 && sum > 0 ? sum / n : 0);
+  }
+  for (const c of cands) {
+    const b = buckets.get(c.key);
+    if (!b || c.units <= 0) {
+      c.value = 0;
+      continue;
+    }
+    let v = 0;
+    for (const cat of counting) {
+      const scale = mean.get(cat.statId) ?? 0;
+      if (scale <= 0) continue;
+      // Wins move a pitcher's way and losses do not; `lowerBetter` is the
+      // league's own word for which, and it is the same flag `rankBy` reads.
+      v += (num(b[cat.statId]) / c.units / scale) * (cat.lowerBetter ? -1 : 1);
+    }
+    c.value = v;
+  }
+}
+
+/**
+ * **Fill every seat, every day, with the best available player** — the
+ * assignment, for one day and one side of the ball.
+ *
+ * A player may sit in any of several slots and is worth the same in all of
+ * them, which is what makes this simpler than it looks: with the weight on the
+ * *player* rather than on the pairing, taking them in descending order and
+ * keeping each one that still fits is **optimal**, not a heuristic. (It is the
+ * greedy algorithm on a transversal matroid; the seats are the ground set the
+ * matching is over.) "Still fits" is the ordinary augmenting search — a player
+ * whose slots are all taken may still get in if one of the sitting players can
+ * shuffle to another seat he is eligible for.
+ *
+ * Returns the indices of `order` that got a seat.
+ */
+function seatDay(order: Candidate[], seats: number[]): Set<number> {
+  const owner = new Array<number>(seats.length).fill(-1);
+  const fits = (ci: number, si: number): boolean => order[ci].slots.includes(seats[si]);
+  const place = (ci: number, seen: boolean[]): boolean => {
+    for (let si = 0; si < seats.length; si += 1) {
+      if (seen[si] || !fits(ci, si)) continue;
+      seen[si] = true;
+      if (owner[si] === -1 || place(owner[si], seen)) {
+        owner[si] = ci;
+        return true;
+      }
+    }
+    return false;
+  };
+  const seated = new Set<number>();
+  for (let ci = 0; ci < order.length; ci += 1) {
+    if (place(ci, new Array<boolean>(seats.length).fill(false))) seated.add(ci);
+  }
+  for (const o of owner) if (o !== -1) seated.add(o);
+  return seated;
+}
+
+/**
+ * **Which days each rostered player is in a lineup on.**
+ *
+ * This replaces the assumption the whole file used to rest on — *the lineup a
+ * manager has set today stands for the rest of the week* — with the one a
+ * manager actually plays by: **the lineup is set again every morning**, and it
+ * is set to whoever is playing. ESPN says as much in the league's own settings
+ * (`lineupLocktimeType: INDIVIDUAL_GAME` on the live league: a slot locks when
+ * that player's game starts, not when the day does), so a manager who looks
+ * once a day has every one of these choices in front of him.
+ *
+ * Three rules, which are the three the reader asked for and fall out of one
+ * mechanism rather than being three cases:
+ *
+ * - **A starting pitcher is in the lineup on the day he starts.** His turn is
+ *   the rotation map's, the same one the Schedule view's grid draws — so he
+ *   brings 1 unit on that day and nothing on the six around it, and a seat on a
+ *   day he does not pitch is a seat someone else gets.
+ * - **A reliever is in the lineup when he pitches**, benched today or not. He
+ *   cannot be known to pitch on a given day, so he brings his appearance rate,
+ *   which is exactly what that seat is worth in expectation.
+ * - **The batting order fills as far as it will go.** Every seat is open every
+ *   day; a man on the bench today because eleven better bats are playing is in
+ *   on Thursday when four of them are idle.
+ *
+ * **Who is a regular is measured rather than assumed**, and it is measured off
+ * *MLB* lineups, not fantasy ones: `playShareOf` is how often he is in his
+ * club's game over the last thirty days **of the games he was available for**,
+ * which is the availability-corrected share this file already back-tests at
+ * 0.1245 mean error over 40,013 cases. So an everyday shortstop brings ~1 unit
+ * a day, a strong-side platoon bat brings ~0.6, and a backup catcher brings
+ * ~0.25 — and the seats go to the everyday players without anybody having to
+ * write down who they are.
+ *
+ * **The fantasy IL is the one slot that does not compete.** A player parked
+ * there cannot be moved into a lineup without a roster move, which is a
+ * transaction rather than a lineup decision — the same line the rest of this
+ * file draws at *it does not guess at a return date*. The bench is another
+ * matter and is the whole point of this function.
+ *
+ * Null when the league published no slot counts, which is the honest failure:
+ * with no idea what a lineup holds there is nothing to fill, and the caller
+ * falls back to the rule this file always had.
+ */
+function planLineups(
+  roster: EspnRosterPlayer[],
+  ctx: ProjectionContext,
+  slotCounts: Record<number, number> | null,
+  eligible: Record<number, number[]>,
+  categories: EspnCategory[],
+): Map<string, Set<string>> | null {
+  if (!slotCounts) return null;
+  // The seats, expanded one per body, split by side of the ball: a hitter and a
+  // pitcher never compete for the same chair, so this is two small assignments
+  // rather than one twice the size.
+  const batSeats: number[] = [];
+  const pitSeats: number[] = [];
+  for (const [id, n] of Object.entries(slotCounts)) {
+    const slot = Number(id);
+    if (slot === BENCH_SLOT || slot === IL_SLOT) continue;
+    for (let i = 0; i < n; i += 1) (PITCHING_SLOTS.has(slot) ? pitSeats : batSeats).push(slot);
+  }
+  if (batSeats.length === 0 && pitSeats.length === 0) return null;
+
+  const cands: Candidate[] = [];
+  const buckets = new Map<string, Bucket>();
+
+  for (const p of roster) {
+    if (p.mlbId === null || p.slotId === IL_SLOT) continue;
+    const id = p.mlbId;
+    // ESPN's own eligibility, falling back to the slot he is standing in today
+    // — which can only ever be a slot he is eligible for, so a player the pool
+    // has no row for is never worse off than the old rule left him.
+    const slots = eligible[id] ?? (p.slotId === BENCH_SLOT ? [] : [p.slotId]);
+    const isPitcher = p.kinds.includes('pitcher') && !p.kinds.includes('batter');
+    const twoWay = p.kinds.includes('pitcher') && p.kinds.includes('batter');
+
+    if (!isPitcher) {
+      const c = batterCandidate(ctx, id, slots.filter((s) => !PITCHING_SLOTS.has(s)));
+      if (c) {
+        cands.push(c);
+        const b: Bucket = {};
+        projectOneBatter(ctx, id, b);
+        buckets.set(c.key, b);
+      }
+    }
+    if (isPitcher || twoWay) {
+      const c = pitcherCandidate(ctx, id, slots.filter((s) => PITCHING_SLOTS.has(s)));
+      if (c) {
+        cands.push(c);
+        const b: Bucket = {};
+        projectOnePitcher(ctx, id, b);
+        buckets.set(c.key, b);
+      }
+    }
+  }
+
+  seatValues(cands, categories, buckets);
+
+  const days = new Set<string>();
+  for (const c of cands) for (const d of c.day.keys()) days.add(d);
+
+  const out = new Map<string, Set<string>>();
+  for (const day of [...days].sort()) {
+    for (const [side, seats] of [
+      ['batter', batSeats],
+      ['pitcher', pitSeats],
+    ] as const) {
+      if (seats.length === 0) continue;
+      const order = cands
+        .filter((c) => c.kind === side && (c.day.get(day) ?? 0) > 0 && c.slots.length > 0)
+        .sort((a, b) => b.value - a.value || b.units - a.units);
+      for (const ci of seatDay(order, seats)) {
+        const c = order[ci];
+        const got = out.get(c.key);
+        if (got) got.add(day);
+        else out.set(c.key, new Set([day]));
+      }
+    }
+  }
+  return out;
+}
+
+/** A batter's day-by-day demand: every remaining game his club plays, at the
+ *  share of them he is expected to be in. */
+function batterCandidate(ctx: ProjectionContext, id: number, slots: number[]): Candidate | null {
+  const row = ctx.pools.batSeason.get(id);
+  if (!row || row.teamId === null || slots.length === 0) return null;
+  const share = playShareOf(ctx, 'batter', id, row.teamId, row, ctx.pools.batRecent.get(id) ?? null);
+  const day = new Map<string, number>();
+  for (const g of ctx.remaining.get(row.teamId) ?? []) if (share > 0) day.set(g.date, share);
+  let units = 0;
+  for (const v of day.values()) units += v;
+  return { key: `batter-${id}`, mlbId: id, kind: 'batter', slots, day, units, value: 0 };
+}
+
+/** A pitcher's, which is the one place the two shapes genuinely differ: a
+ *  starter's days are his **turns** and a reliever's are all of them at his
+ *  appearance rate. */
+function pitcherCandidate(ctx: ProjectionContext, id: number, slots: number[]): Candidate | null {
+  const row = ctx.pools.pitSeason.get(id);
+  if (!row || row.teamId === null || slots.length === 0) return null;
+  const games = ctx.remaining.get(row.teamId) ?? [];
+  const day = new Map<string, number>();
+  const isStarter = num(row.gamesStarted) * 2 > num(row.games);
+  if (isStarter) {
+    for (const g of games) if (ctx.starters.get(g.gamePk)?.has(id) === true) day.set(g.date, 1);
+  } else {
+    const rate = playShareOf(ctx, 'pitcher', id, row.teamId, row, ctx.pools.pitRecent.get(id) ?? null);
+    for (const g of games) if (rate > 0) day.set(g.date, rate);
+  }
+  let units = 0;
+  for (const v of day.values()) units += v;
+  return { key: `pitcher-${id}`, mlbId: id, kind: 'pitcher', slots, day, units, value: 0 };
+}
+
 /** One team's expected remaining production, and what it was made of. */
 function projectTeam(
   roster: EspnRosterPlayer[],
   ctx: ProjectionContext,
+  /** The days each man has a lineup slot on, from `planLineups` — or **null**,
+   *  which is this file's own older rule: whoever is in a lineup slot today is
+   *  in one all week and nobody else is in one at all. Null is what a league
+   *  that published no slot counts gets, and it is what every measurement
+   *  before this change was taken under. */
+  plan: Map<string, Set<string>> | null,
 ): { bucket: Bucket; hitterGames: number; starts: number; reliefGames: number; skipped: number } {
   const bucket: Bucket = {};
   let hitterGames = 0;
@@ -1058,22 +1362,26 @@ function projectTeam(
   let skipped = 0;
 
   for (const p of roster) {
-    // A bench or IL slot accrues nothing, which is `NON_ACCRUING_SLOTS`' own
-    // rule one level up — and the assumption this whole file rests on: the
-    // lineup a manager has set today stands for the rest of the week.
-    if (!p.starting || p.mlbId === null) continue;
+    if (p.mlbId === null) continue;
+    // **With a plan, the bench is in play and the fantasy IL is not** — a
+    // benched man is one lineup decision away and an IL'd one is a roster move
+    // away, which is the line this file already draws. Without a plan it is the
+    // old rule, `NON_ACCRUING_SLOTS`' own: today's lineup, all week.
+    if (plan ? p.slotId === IL_SLOT : !p.starting) continue;
     const id = p.mlbId;
     const isPitcher = p.kinds.includes('pitcher') && !p.kinds.includes('batter');
     const twoWay = p.kinds.includes('pitcher') && p.kinds.includes('batter');
 
     if (!isPitcher) {
-      const made = projectOneBatter(ctx, id, bucket);
+      const allow = plan ? (plan.get(`batter-${id}`) ?? EMPTY_DAYS) : null;
+      const made = projectOneBatter(ctx, id, bucket, allow);
       hitterGames += made.games;
       if (!made.placed) skipped += 1;
     }
 
     if (isPitcher || twoWay) {
-      const made = projectOnePitcher(ctx, id, bucket);
+      const allow = plan ? (plan.get(`pitcher-${id}`) ?? EMPTY_DAYS) : null;
+      const made = projectOnePitcher(ctx, id, bucket, allow);
       starts += made.starts;
       reliefGames += made.reliefGames;
       if (!made.placed && !twoWay) skipped += 1;
@@ -1081,6 +1389,10 @@ function projectTeam(
   }
   return { bucket, hitterGames, starts, reliefGames, skipped };
 }
+
+/** A man the plan seated nowhere plays nowhere — which has to be an empty set
+ *  rather than `null`, `null` meaning "every day" one function down. */
+const EMPTY_DAYS: ReadonlySet<string> = new Set<string>();
 
 /**
  * **The league's own categories, rounded where a count is one** — the whole of
@@ -1291,11 +1603,25 @@ async function build(
   const ownership = await getOwnership(creds);
   const ctx = await buildContext(today, window.end);
 
+  // The league's lineup shape and ESPN's own eligibility, both off reads that
+  // have already landed: the counts were stashed by the `mSettings` half of the
+  // roster read above, and the slot ids ride on the cookie-free player pool the
+  // same read already asked for. Neither is a new upstream and neither is on
+  // the wire. A pool that failed leaves eligibility empty, which costs the plan
+  // its shuffling and not the projection — every man then competes for the slot
+  // he is standing in.
+  const slotCounts = lineupSlotsFor(creds.leagueId);
+  const eligibleSlots = await getPlayerPool()
+    .then((pool) => pool.slots)
+    .catch(() => ({}) as Record<number, number[]>);
+
   const perTeam = new Map<number, ReturnType<typeof projectTeam>>();
   const project = (teamId: number): ReturnType<typeof projectTeam> => {
     const hit = perTeam.get(teamId);
     if (hit) return hit;
-    const made = projectTeam(ownership.rosters[teamId] ?? [], ctx);
+    const roster = ownership.rosters[teamId] ?? [];
+    const plan = planLineups(roster, ctx, slotCounts, eligibleSlots, board.categories);
+    const made = projectTeam(roster, ctx, plan);
     perTeam.set(teamId, made);
     return made;
   };
