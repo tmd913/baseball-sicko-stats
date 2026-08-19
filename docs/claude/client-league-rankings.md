@@ -884,7 +884,7 @@ Against `.view-bar`, which is the full content width at every size, `right: 0`
 is the app's own gutter. **Nothing else in that bar changes hands**, checked
 rather than assumed: the two absolutely positioned things under there are the
 transactions dot and the calendar's date bubble, anchored to `.lg-tab` and
-`.date-toggle`, both of which declare `position: relative` for exactly that
+`.date-toggle` (which has since become a bar and dropped both the bubble and the `position: relative` that anchored it), both of which declare `position: relative` for exactly that
 purpose, and the date picker's popover hangs off `.drp`.
 
 **The label goes at 640 for the same reason it went before, in a new place.**

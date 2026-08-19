@@ -1379,7 +1379,7 @@ other matchup is a fresh mount and a fresh default.
 **This is the team pages' control and reaches nothing else.** The whole `tools`
 row is drawn only where a side is selected, so the Summary page has no date
 control to default — checked at both widths on both kinds of matchup: **0**
-`.date-toggle` on it.
+`.date-toggle` on it. *(That square has since left the row for a bar of its own below it — see `client-dates.md`. The grouping stays, Schedule / Projected / Starters coming and going with the reading.)*
 
 **Measured on the live 12-team league at 1200×900 and 390×844, before → after.**
 The **live** matchup (week 19, `Live`, Aug 10 – Aug 16) is unchanged: the date
@@ -1553,12 +1553,15 @@ against the 358 the box has, so the row wraps, and left loose it wrapped the
 *date* button by itself: a lone 36px square under two full-width switches with
 its range bubble hanging over nothing.
 
-**One trap worth recording**: `.date-control` is `display: none` by default and
-undone only by `.app.date-open`, which is a class on the app's own shell and
-reaches nothing inside this overlay. Measured before the rule that fixes it, the
+**One trap worth recording, and since designed out**: `.date-control` *was*
+`display: none` by default and undone only by `.app.date-open`, a class on the
+app's own shell that reaches nothing inside this overlay. Measured before the rule that fixes it, the
 row rendered at **0 × 0** with `flex: 1 1 100%` computing correctly and nothing
 on screen — a control that is laid out and invisible, which no amount of reading
-the flex rules would have found.
+the flex rules would have found. The date bar renders its panel only while it
+is open, so `.date-control` is a plain flex row again and neither the class nor
+this overlay's answering copy of the rule exists — see `client-dates.md`, *The
+disclosure, and what stopped being needed*.
 
 **And the row's gap is 12px, which is the app's own view bar's** — the same
 wrapping row of the same controls one page down. The number matters for one of

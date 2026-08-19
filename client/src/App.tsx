@@ -59,10 +59,18 @@ import type { ResearchInclude, ResearchPos, ResearchUi } from './components/Rese
 import { simulateLiveDay } from './simulate';
 import { PlayerDetails } from './components/PlayerDetails';
 import { toStatsColumnKeys } from './components/PlayerWindowTable';
-import { DateToggle, DateRow } from './components/DateControls';
-import type { DatePreset } from './components/DateControls';
+import { DateBar, DateRow, stepRange, stepTitle } from './components/DateControls';
+import type { DateBarReading, DatePreset } from './components/DateControls';
 import { ScheduleSpanTabs, ScheduleToggle } from './components/ScheduleControl';
-import { buildScheduleIndex, defaultScheduleSpan, toScheduleSpan } from './components/schedule';
+import {
+  buildScheduleIndex,
+  defaultScheduleSpan,
+  effectiveSpan,
+  spanDates,
+  spanLabel,
+  stepSpan,
+  toScheduleSpan,
+} from './components/schedule';
 import type { ScheduleSpan } from './components/schedule';
 import {
   EligibilityContext,
@@ -4424,8 +4432,16 @@ export default function App() {
      meant, and the two labels were 174px of a line a phone hasn't got. */
 
   /**
-   * The Schedule toggle and, once it is on, how far ahead — the roster row's
-   * copy of the control the research board draws in its own bar.
+   * The Schedule toggle — the roster row's copy of the control the research
+   * board draws in its own bar.
+   *
+   * **How far ahead is no longer beside it.** `ScheduleSpanTabs` was the second
+   * half of this group; it is in the date bar's disclosure now, under a label
+   * that reads `Schedule · This Matchup` and between two arrows that step the
+   * run. The span *is* the days on screen in this mode, and the days are what
+   * that bar is for — leaving the strip up here would have been the one state
+   * this app forbids, two controls an inch apart holding one piece of state.
+   * The board keeps its own copy in its own bar, having no dates and so no bar.
    *
    * **It leads the group**, ahead of `Starters` and the calendar, which is this
    * row's own documented order rather than an exception to it: the questions
@@ -4444,7 +4460,6 @@ export default function App() {
    * screen even when nothing on screen is drawn from those days.
    */
   const scheduleControl = (
-    <>
       <ScheduleToggle
         on={scheduleSpan !== null}
         loading={scheduleLoading}
@@ -4465,14 +4480,6 @@ export default function App() {
           setScheduleSpan(defaultScheduleSpan(matchupWindow));
         }}
       />
-      {scheduleSpan !== null && (
-        <ScheduleSpanTabs
-          span={scheduleSpan}
-          matchup={matchupWindow}
-          onChange={setScheduleSpan}
-        />
-      )}
-    </>
   );
 
   /**
@@ -4557,64 +4564,119 @@ export default function App() {
       />
     ) : null;
 
-  /* The calendar, which is both the disclosure for the date controls and the
-     one thing on the page saying which days every number on it is drawn from.
-     Those were two controls until now — a square icon up in the header and a
-     round `dateBadge` down in the view bar — which is the page telling you the
-     span in one place and letting you change it in another, and a chip that
-     could only be read sitting an inch from a button that only opened. One
-     control says both: the label *is* the state, and pressing the thing that
-     states the range is how you change it.
+  /* ---------------------------------------------------------------------
+     The date bar — the full-width strip under the tabs.
+     ---------------------------------------------------------------------
 
-     It lives on the roster row rather than in the header for the same reason
-     the roster tabs do: the dates qualify exactly these views and nothing on
-     the research board, so a header slot made it chrome belonging to the whole
-     app when it belongs to one page of it. Last in the row, after the tab
-     groups — it is the answer to "which days", which is the question you ask
-     after "which players" and "which reading of them". */
-  const dateToggle = (
-    <DateToggle
+     It was a calendar *button*, last in the wrapping row of tab groups, and
+     before that a square icon in the header beside a round chip that stated
+     the range and could not change it. The bar is the third and, this time,
+     the whole of the control: the days in the middle, a step either side, and
+     the presets and the picker behind a press of the middle. `DateControls.tsx`
+     carries the argument for the shape; what lives here is the *state* — which
+     days, which reading of them, and what a step does.
+
+     **Below the tab row rather than inside it.** The dates are what every
+     number on the page *is*, and inside a row that wraps they were competing
+     for line budget with three groups of tabs — which is how the label came to
+     be `8/1 – 8/9` and, on a phone, a 10px bubble. A row of its own costs the
+     chrome one line and buys the label the width of the window. It stays inside
+     `.app-chrome` so the pinned height that clears it (`--chrome-h`) is still
+     one measurement of one box, and it is still drawn on the two roster views
+     alone: the dates qualify exactly those and nothing on the research board.
+
+     **Three readings, and the bar says which it is on** — see
+     `DateBarReading`. The Schedule view draws days *ahead* in place of the stat
+     columns, so there the bar prints the span and its own days and the arrows
+     step the spans this reader is offered; the projected lens keeps the range
+     but fills it with estimates, so it prints `Projected` over the same dates;
+     otherwise it prints the preset's word, or `Custom range`, over the range.
+     Schedule and Projected are Summary's alone — a feed is a record of things
+     that happened — so the Feed's bar is always the plain reading. */
+  const scheduleReading = view === 'summary' && scheduleSpan !== null;
+  const barSpan = scheduleReading
+    ? spanDates(scheduleIndex, scheduleSpan!, matchupWindow, baseballToday())
+    : { start, end };
+  const barReading: DateBarReading = scheduleReading
+    ? {
+        kind: 'schedule',
+        span: spanLabel(effectiveSpan(scheduleSpan!, matchupWindow), matchupWindow).label,
+      }
+    : view === 'summary' && rosterProjected
+      ? { kind: 'projected' }
+      : { kind: 'dates', preset: activePreset };
+  /* The step, in whichever vocabulary the reading is in. A null is what
+     disables the arrow, and both cases produce one: the calendar runs out at
+     the picker's own ceiling, and the span run has two or three members. */
+  const stepTo = (delta: -1 | 1) => {
+    if (scheduleReading) {
+      const to = stepSpan(scheduleSpan!, matchupWindow, delta);
+      return to === null
+        ? /* Off, and saying what it would have done — a disabled arrow's
+             tooltip has to be in the vocabulary of the reading it is in, or the
+             Schedule view's first span offers `Previous day` for a press that
+             would not move a day. */
+          { run: null, title: delta < 0 ? 'The first span offered' : 'The last span offered' }
+        : {
+            run: () => setScheduleSpan(to),
+            title: `Show ${spanLabel(to, matchupWindow).label}`,
+          };
+    }
+    const to = stepRange(start, end, delta, rosterPresets, maxDate);
+    return {
+      run: to === null ? null : () => setRange(to),
+      title: stepTitle(start, end, delta),
+    };
+  };
+  const prevStep = stepTo(-1);
+  const nextStep = stepTo(1);
+  const dateBar = (
+    <DateBar
+      reading={barReading}
+      start={barSpan.start}
+      end={barSpan.end}
       open={dateOpen}
       onToggle={() => {
         setSearchOpen(false);
         setDateOpen((v) => !v);
       }}
-      start={start}
-      end={end}
-      activePreset={activePreset}
-    />
-  );
-
-  /* The presets and the range picker themselves. They open as a full-width row
-     of the view bar, directly under the button that opened them — they used to
-     hang off the header, which is where the calendar used to be; a disclosure
-     and the thing it discloses have to stay together, and following the button
-     down is the whole of that. Rendered once either way rather than duplicated
-     into a second location: `.view-bar` already wraps, so `flex: 1 1 100%` on
-     `.app.date-open .date-control` is all "its own row" takes.
-
-     The pieces are `components/DateControls.tsx`, shared with the matchup
-     overlay's team pages — see the note there for why they were extracted
-     rather than copied. What stays here is the state and what a pick does to
-     it: picking a preset closes the row behind you, that being the errand it
-     was opened for, where the range picker's own popover needs it to stay. */
-  const dateControl = (
-    <DateRow
-      /* The five plus the fantasy week where there is a league to name one.
-         `LeagueMatchupView` below is still handed the bare five, that page
-         adding a `Matchup` of its own for the period being *read* — see
-         `MATCHUP_PRESET`. */
-      presets={rosterPresets}
-      activePreset={activePreset}
-      start={start}
-      end={end}
-      max={maxDate}
-      onPick={(p) => {
-        setRange({ start: p.start, end: p.end, preset: p.label });
-        setDateOpen(false);
-      }}
-      onRange={(s, e) => setRange({ start: s, end: e, preset: null })}
-    />
+      onPrev={prevStep.run}
+      onNext={nextStep.run}
+      /* A disabled arrow keeps a title, rather than going silent: the reason it
+         is off is that there is nowhere to go, and the tooltip is where a
+         reader finds that out. */
+      prevTitle={prevStep.title}
+      nextTitle={nextStep.title}
+    >
+      {/* The span strip, where the Schedule view is the reading. It was a group
+          in the tab row beside the toggle that turns the mode on, and it came
+          here with the days: the bar's arrows step it, so the strip that names
+          the whole run belongs under the label they move. The board keeps its
+          own copy in its own bar — it has no dates and so no bar. */}
+      {scheduleReading && (
+        <ScheduleSpanTabs
+          span={scheduleSpan!}
+          matchup={matchupWindow}
+          onChange={setScheduleSpan}
+        />
+      )}
+      <DateRow
+        /* The five plus the fantasy week where there is a league to name one.
+           `LeagueMatchupView` below is still handed the bare five, that page
+           adding a `Matchup` of its own for the period being *read* — see
+           `MATCHUP_PRESET`. */
+        presets={rosterPresets}
+        activePreset={activePreset}
+        start={start}
+        end={end}
+        max={maxDate}
+        onPick={(p) => {
+          setRange({ start: p.start, end: p.end, preset: p.label });
+          setDateOpen(false);
+        }}
+        onRange={(s, e) => setRange({ start: s, end: e, preset: null })}
+      />
+    </DateBar>
   );
 
   // The search bar the header icon opens: a full-width row directly under the
@@ -4775,7 +4837,12 @@ export default function App() {
            scrollport rather than to a page that grows. The other two League
            tabs are card lists and stay ordinary scrolling pages. */
         view === 'league' && leagueTab === 'rankings' ? ' league-rank-mode' : ''
-      }${editMode ? ' edit-mode' : ''}${dateOpen ? ' date-open' : ''}`}
+      /* `date-open` used to ride here too: `.date-control` was `display: none`
+         and only a class on this shell undid it, which is what made a date row
+         rendered anywhere else lay out correctly at 0 × 0. The bar renders its
+         own disclosure only while it is open, so the row is a plain flex row
+         again and the shell has nothing to say about it. */
+      }${editMode ? ' edit-mode' : ''}`}
     >
       {/* Everything above the page's content, in one box so it can be pinned to
           the top of the window as one thing (`position: sticky`). They were
@@ -5316,8 +5383,12 @@ export default function App() {
               {startersToggle}
               {/* Which kinds of play the feed draws is no longer here: the
                   `Plays` disclosure and its panel became a row of pills at the
-                  head of the stream itself — see `feedFilterPills`. */}
-              {dateToggle}
+                  head of the stream itself — see `feedFilterPills`. Nor are the
+                  dates: the calendar that ended this row is a bar of its own
+                  below it now — see `dateBar` — which gives this row back the
+                  89px it spent at a desktop (36 on a phone) and buys the label
+                  the width of the window. Measured, that is what takes the row
+                  from three wrapped lines to two at 390. */}
               </>
             )}
             {/* The research board's own controls, in the tab row itself. They
@@ -5346,13 +5417,26 @@ export default function App() {
                 other page carries an empty row of chrome. */}
             {view === 'research' && <div className="research-chrome" ref={setResearchChrome} />}
           </div>
-          {/* The two disclosures' own rows, under the tabs — see `dateControl`.
-              Each takes a full line of its own, which is the research board's
-              rule for its panels: a set of chips has no business sharing a line
-              with the button that opened it. */}
-          {isRosterView(view) && dateControl}
         </div>
       )}
+      {/* The dates, as a bar of their own under the tabs — see `dateBar`.
+
+          **Inside `.app-chrome` and outside `.view-bar`.** Inside, because
+          `--chrome-h` is one measurement of one pinned box and everything that
+          clears the chrome (the scroll offset, the sticky table headers, the
+          per-page scroll memory) reads it; a bar pinned separately would be a
+          second height for the same bargain. Outside `.view-bar`, because that
+          row's whole rule is that its groups are atomic and wrap as the width
+          allows, and this one is not a group — it is a line, always, and it
+          spans the window rather than sitting in the slack of a row.
+
+          Drawn on the two roster views alone and only once there is something
+          to read, which is the guard the calendar carried in the row: the
+          research board has nothing dated to act on, and the League page's
+          dates are its own. It goes with the rest of the chrome on the edit
+          screen through `.app.edit-mode`, which now names it — it used to
+          inherit that by being inside `.view-bar`. */}
+      {isRosterView(view) && showRosterViews && dateBar}
       </div>
 
       {/* Outside the pinned box on purpose: a failed report is news about the
@@ -5682,8 +5766,13 @@ export default function App() {
                     live control rather than a badge, it is also the way back
                     out without leaving the page. */}
                 {startersToggle}
-                {dateToggle}
-                {dateControl}
+                {/* The bar comes with them, and takes a line of its own here
+                    the way it does in the chrome (`flex: 1 1 100%`). Its bleed
+                    is this box's rather than the app's: it reads
+                    `--table-bleed`, which the expanded box declares as its own
+                    12px padding — the same token and the same rule the table
+                    below it uses to give the gutters back. */}
+                {dateBar}
               </>
             }
           />

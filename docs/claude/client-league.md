@@ -500,7 +500,7 @@ League view is the second — so the nine render sites now read
 that carried the same string were left naming the board**, which is what they
 always meant: the ownership read the board depends on, the statuses map it
 draws, and the board's own fetch. Measured: on the League view `kind-switch`,
-`date-toggle` and `starters-toggle` are each **0**, and on Roster and Feed each
+`date-toggle` (`date-bar` since) and `starters-toggle` are each **0**, and on Roster and Feed each
 is **1**, unchanged.
 
 **The scroll offset keys on the view alone** (`'league'`), exactly as the
