@@ -90,9 +90,13 @@ letting it grow past it.
 
 @docs/claude/server.md
 
-**Client** — the shell every view sits in: the roster and the watchlist, player keys, the pinned chrome and the app's scroll behavior, the loading system, the kind tabs, the header and its search, the date controls and the hide-injured filter. It was one 443KB file and is now six, split by the surface being described rather than by size; this one closes with a map of the other five.
+**Client** — the shell every view sits in: the roster and the watchlist, player keys, the pinned chrome and the app's scroll behavior, the loading system, the kind tabs, the header and its search, and the hide-injured filter. It was one 443KB file and is now six, split by the surface being described rather than by size; this one closes with a map of the others.
 
 @docs/claude/client.md
+
+**Client — the date controls** — the calendar button and the row of presets and the picker behind it, the component a matchup's team pages share with it, and the range the Roster and the Feed each keep of their own.
+
+@docs/claude/client-dates.md
 
 **Client — the Roster view** — the summary table, its identity block and color legend, the `Starters` filter, and the full-page mode all three wide tables share.
 
