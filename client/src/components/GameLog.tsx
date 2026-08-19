@@ -43,31 +43,78 @@ function pressProps(onOpen: () => void, label: string) {
 const PAGE_SIZE = 25;
 
 /**
+ * What the chip calls a game that is not over, and null for one that is.
+ *
+ * **`Live` rather than MLB's own `In Progress`**, which is the word the roster's
+ * opponent cell, the feed and the schedule grid already use for the same state,
+ * and two characters where the other is eleven in a cell that also holds the
+ * opponent and the score. The two states that are neither live nor final are
+ * spelled the way the board's own opponent column spells them — the app has a
+ * `PPD` already, and `Susp` is that register.
+ *
+ * **`Susp`, not `PPD`, is what a game-log row can actually carry.** A row exists
+ * only where the player has a line, and a postponed game is one nobody played;
+ * what lands here is a **suspended** game, which the app's `stateOf` files under
+ * the same `postponed` state (deliberately — neither is a game whose result can
+ * be read) and which MLB labels `Suspended: Rain`. The label is checked against
+ * that wire spelling and the full one rides the chip's `title`.
+ */
+function stateLabel(g: BatterGameLog | PitcherGameLog): string | null {
+  if (g.state === 'live') {
+    // MLB's `detailedState` here is "In Progress", "Warmup", "Delayed: Rain",
+    // "Manager challenge" and the rest. Only a delay is worth its own word: it
+    // is the one that says nobody is playing right now.
+    return g.detailedState.startsWith('Delayed') ? 'Delayed' : 'Live';
+  }
+  if (g.state === 'postponed') return g.detailedState.startsWith('Suspended') ? 'Susp' : 'PPD';
+  return null;
+}
+
+/**
  * Which team he played, from his side of it — "@ MIL" on the road — and how it
  * came out: "W 5-3", his team's runs first, so the score reads the same way the
  * result letter does and needs nothing said about who was home. The two are one
  * chip rather than a column of their own; this table is already wider than a
- * phone. A game with no result yet (in progress, suspended) still shows the
- * score it's reached, uncolored — there's no W or L to claim.
+ * phone.
+ *
+ * **A game that is not over says so, and shows the score it has reached.** The
+ * chip took `W`/`L` straight off the row's `win` and that field was a lie for
+ * exactly one row of the log — MLB fills the split's `isWin` *while the game is
+ * being played*, meaning "his side is ahead right now", so a man batting in the
+ * second inning of a 1-0 game read a green `W 1-0` and his night looked over.
+ * The server now gates the result on the game's state (see `gameLog.ts`), which
+ * is what makes the `glog-res-none` branch below reachable at all; it was
+ * written for this case and had never once been drawn.
+ *
+ * **Live is the green the rest of the app gives a live game** — the summary
+ * table's opponent cell, the schedule grid's cell — and a suspension the amber
+ * those two give a postponement. The word is what keeps that green apart from
+ * the `W`'s: both are `--hit`, and a chip reading `Live 5-5` can be mistaken for
+ * nothing, where a bare green `5-5` beside a column of `W 5-3`s could be.
  */
 function Opponent({ g }: { g: BatterGameLog | PitcherGameLog }) {
   const score =
     g.teamScore !== null && g.opponentScore !== null ? `${g.teamScore}-${g.opponentScore}` : null;
   const decided = g.win !== null;
+  const label = decided ? null : stateLabel(g);
+  const tone = decided ? (g.win ? 'w' : 'l') : g.state === 'live' ? 'live' : label ? 'held' : 'none';
   return (
     <td className="glog-opp">
       <span className="glog-at">{g.home ? 'vs' : '@'}</span> {g.opponent}
-      {(decided || score) && (
+      {(decided || score || label) && (
         <span
-          className={`glog-res glog-res-${decided ? (g.win ? 'w' : 'l') : 'none'}`}
+          className={`glog-res glog-res-${tone}`}
           title={
             decided
               ? `His team ${g.win ? 'won' : 'lost'}${score ? ` ${score}` : ''}`
-              : `${score} — no result yet`
+              : label
+                ? `${g.detailedState || label}${score ? ` — ${score} so far` : ''}`
+                : `${score} — no result yet`
           }
         >
           {decided && (g.win ? 'W' : 'L')}
-          {decided && score ? ` ${score}` : score}
+          {label}
+          {(decided || label) && score ? ` ${score}` : score}
         </span>
       )}
     </td>

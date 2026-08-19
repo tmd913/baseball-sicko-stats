@@ -91,7 +91,9 @@ interface Entry {
 let cached: Entry | null = null;
 let inFlight: Promise<Entry> | null = null;
 
-interface StatusFields {
+/** The three status keys `stateOf` classifies, as MLB's schedule sends them.
+ *  Exported with it — `gameLog.ts` parses its own schedule payload. */
+export interface StatusFields {
   abstractGameState?: string;
   codedGameState?: string;
   detailedState?: string;
@@ -121,8 +123,16 @@ interface ScheduleResponse {
  * against a payload this file parses itself; getting it wrong would file a
  * postponement as a game played, which is the one error that would make the
  * per-row game count lie.
+ *
+ * **Exported, because the game log now asks the same question.** That was very
+ * nearly a third copy of these four lines, and a third copy is where the two
+ * that already exist start to disagree — `gameLog.ts` reads the season
+ * schedule's status through this function rather than restating it. The
+ * argument above still holds for `isPostponedStatus`, which answers a narrower
+ * question against a *feed* payload; this one classifies a schedule status and
+ * has two callers.
  */
-function stateOf(s: StatusFields | undefined): ScheduleGame['state'] {
+export function stateOf(s: StatusFields | undefined): ScheduleGame['state'] {
   const d = s?.detailedState ?? '';
   if (s?.codedGameState === 'D' || d.startsWith('Postponed')) return 'postponed';
   // `Cancelled` is **MLB's own spelling** and is a value off the wire rather

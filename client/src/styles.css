@@ -4885,10 +4885,16 @@ button.start-line:focus-visible {
   letter-spacing: 0.03em;
   color: var(--faint);
 }
-/* His team's result, not his own — a label, so it keeps the pill shape. */
+/* His team's result, not his own — a label, so it keeps the pill shape.
+
+   The border is declared transparent here rather than only on the one variant
+   that colors it: a live chip is the app's ringed live chip (below) and the
+   four beside it are flat, so without this the column's chips would be two
+   pixels apart in both directions depending on which state a game was in. */
 .glog-res {
   margin-left: 6px;
   padding: 1px 5px;
+  border: 1px solid transparent;
   border-radius: 999px;
   font-size: 10px;
   font-weight: 800;
@@ -4901,9 +4907,37 @@ button.start-line:focus-visible {
   color: var(--strikeout);
   background: color-mix(in srgb, var(--strikeout) 16%, transparent);
 }
-/* A game the log has a score for but no result — still being played, or
-   suspended. It carries the same chip so the column doesn't shift, without the
-   color, which here means won or lost. */
+/* A game still being played, reading `Live 5-5`.
+
+   **The green is the app's live green** — the same `--hit` the summary table's
+   opponent cell gives a live inning and the schedule grid gives a live game —
+   and it is also, in this one chip, the color of a win. That is why the three
+   declarations are `.game-status.live`'s and not `.glog-res-w`'s: a ten percent
+   ground inside a fifty percent ring, against the flat sixteen percent tint and
+   no ring above. Between the ring and the word `Live` the two cannot be read
+   for one another, which a bare green `5-5` in a column of `W 5-3`s could be.
+
+   Not folded onto `.game-status.live` for the usual reason: that is a 12px
+   standalone chip with its own padding, gap and border token, this is a 10px
+   label inside a table cell, and they are two objects that agree about a color
+   rather than one object. */
+.glog-res-live {
+  color: var(--hit);
+  border-color: color-mix(in srgb, var(--hit) 50%, transparent);
+  background: color-mix(in srgb, var(--hit) 10%, transparent);
+}
+/* A game that stopped and is not over — `Susp 3-2`, and `PPD` for the
+   postponement a log row cannot actually hold. The amber is the one the summary
+   table's postponed cell and the board's own `PPD` take, for the same state. */
+.glog-res-held {
+  color: var(--hr);
+  border-color: color-mix(in srgb, var(--hr) 40%, transparent);
+  background: color-mix(in srgb, var(--hr) 10%, transparent);
+}
+/* A game the log has a score for and can say nothing else about — the season
+   schedule missed it, so there is no result and no state to name. It carries
+   the same chip so the column doesn't shift, without the color, which here
+   means won or lost. */
 .glog-res-none {
   color: var(--muted);
   background: var(--panel-2);

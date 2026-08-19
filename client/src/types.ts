@@ -791,10 +791,20 @@ export interface GameLogEntry {
   home: boolean;
   opponent: string; // "MIL" — the abbreviation, the full name being column-wide
   opponentId: number;
-  win: boolean | null; // his team's result; null until the game is decided
-  // The final score from his side of it, so the row reads "W 5-3" rather than
-  // needing the reader to know which team was home. Both null when the score
-  // lookup failed or the game hasn't started.
+  // His team's result, **null until the game is actually final**. The server
+  // gates it on `state` rather than passing MLB's `isWin` through, that field
+  // being filled while a game is still being played; see the server's copy.
+  win: boolean | null;
+  // Where the game itself is, and MLB's own label for it ("In Progress",
+  // "Suspended: Rain"). `state` is null and the label empty when the season
+  // schedule had no entry for the game — the same miss that nulls the scores.
+  // The label is a wire value: its spelling is MLB's, not ours.
+  state: GameStatus['state'] | null;
+  detailedState: string;
+  // The score from his side of it, so the row reads "W 5-3" rather than needing
+  // the reader to know which team was home — the score *so far* on a game still
+  // being played. Both null when the score lookup failed or the game hasn't
+  // started.
   teamScore: number | null;
   opponentScore: number | null;
   summary: string; // MLB's own one-liner, e.g. "1-4 | 2B, 2 K, RBI"
