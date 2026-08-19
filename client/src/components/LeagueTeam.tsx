@@ -71,6 +71,8 @@ export default function LeagueTeam({
   starters,
   lens,
   onLens,
+  oldestFirst,
+  onToggleOrder,
   schedule,
   projection,
   onOpenDetails,
@@ -97,6 +99,10 @@ export default function LeagueTeam({
    *  the same guard as it. */
   lens: FeedLens;
   onLens: (lens: FeedLens) => void;
+  /** Which way the stream runs, and the press that turns it — the overlay's,
+   *  beside the lens, so crossing to the other manager keeps both. */
+  oldestFirst: boolean;
+  onToggleOrder: () => void;
   /** The Schedule view's index, or null for the ordinary stat columns — the
    *  same "the mode is the presence of an index" rule App applies, so a table
    *  can never be in schedule mode with no schedule in it. */
@@ -333,7 +339,18 @@ export default function LeagueTeam({
               one and passing the lens through would empty the pitcher feed on
               behalf of a control that tab does not offer. The *state* is the
               overlay's and survives the excursion, exactly as `starters` does. */}
-          {kind === 'batter' && <FeedFilterPills lens={lens} onSelect={onLens} />}
+          {/* **The kind group is the batter tab's; the toggle beside it is both
+              tabs'** — an outing has a clock too, so the row is drawn either way
+              and `kinds` is what varies. That is the app's own Feed row exactly
+              (see `App`), which is the point: one control, drawn the same on
+              both pages. */}
+          <FeedFilterPills
+            lens={lens}
+            onSelect={onLens}
+            kinds={kind === 'batter'}
+            oldestFirst={oldestFirst}
+            onToggleOrder={onToggleOrder}
+          />
           <LiveFeed
             /* Keyed on the kind and the days, so the stream starts at its first
                page when the list becomes a different list — the app's own
@@ -355,6 +372,7 @@ export default function LeagueTeam({
                day against it and `Clear` would mark the reader's own feed read
                from a page that is not it. See `LeagueMatchup`'s `feedLens`. */
             playFilter={kind === 'batter' && lens !== 'all' ? lens : undefined}
+            oldestFirst={oldestFirst}
           />
         </>
       )}

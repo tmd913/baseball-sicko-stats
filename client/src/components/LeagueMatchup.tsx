@@ -502,6 +502,20 @@ export default function LeagueMatchupView({
    * never meaning two things.
    */
   const [feedLens, setFeedLens] = useState<FeedLens>('all');
+  /**
+   * **And which way that stream runs**, held beside the lens and for its
+   * reasons: it is chrome above *both* team pages, so it must survive crossing
+   * managers, and it stays out of the URL because `mup` and `mt` are the whole
+   * of what a matchup link carries.
+   *
+   * It arrived by collision rather than by design — the matchup feed gained the
+   * pill row and the app's feed gained an order toggle in two branches written
+   * against the same base, so the parity one drew a control the other had just
+   * given a required prop. Resolved by giving this page the toggle too, which
+   * is what parity meant: the row is one control and shipping half of it here
+   * would be the two pages disagreeing about what the pills *are*.
+   */
+  const [feedOldest, setFeedOldest] = useState(false);
   const [dateOpen, setDateOpen] = useState(false);
   const [scheduleSpan, setScheduleSpan] = useState<ScheduleSpan | null>(null);
   /**
@@ -1427,6 +1441,8 @@ export default function LeagueMatchupView({
                  states in there already name their own cause. */
               lens={feedLens}
               onLens={setFeedLens}
+              oldestFirst={feedOldest}
+              onToggleOrder={() => setFeedOldest((v) => !v)}
               schedule={reading === 'roster' ? scheduleIndex : null}
               /* Held with the team it was read for, so crossing to the other
                  manager draws the plain table until his own answer lands rather
