@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { LiveRole } from '../lib';
 import { playerKey } from '../types';
+import { api } from '../api';
 import {
+  baseballDay,
   baseEventLabel,
   baseEventTone,
   decisionColor,
@@ -23,6 +25,8 @@ import type {
   PlayerKind,
   PlayerReport,
 } from '../types';
+import { useDelayedFlag } from '../hooks';
+import { LoadingLine } from './Loading';
 import { Modal } from './Modal';
 import { BaseDiamond, PlaySituation } from './BaseDiamond';
 import { InlineVideoClip, PlateAppearanceCard } from './PlateAppearanceCard';
@@ -34,9 +38,6 @@ import type { PlayFilterKey } from './FeedFilters';
 /** How many stream items the Recent section shows at a time — a day of at-bats
  * across a roster runs to hundreds, and every one of them mounts a card. */
 export const FEED_PAGE_SIZE = 20;
-
-/** Module-level so the default never changes identity between renders. */
-const EMPTY_FILTERS: Set<PlayFilterKey> = new Set();
 
 /** Priority order for the Live section: at bat, then on deck, then on base. */
 const ROLE_ORDER: Record<LiveRole, number> = {
@@ -123,20 +124,22 @@ function playOrder(e: FeedEntry): number {
 }
 
 /**
- * Which of the filter chips a stream item answers to.
+ * Which of the filter pills a stream item answers to.
  *
- * A **set** rather than one kind, because the six overlap by construction: a
- * home run is a hit, an RBI and — nearly always — a play with film. That overlap
- * is the whole reason the chips union rather than partition
- * (see `FeedFilters.tsx`), and it is why the test is "does this item answer any
- * of the chips that are on" rather than "is its kind among them".
+ * A **set** rather than one kind, and that stays true now that the row is
+ * single-select: the six overlap by construction — a home run is a hit, an RBI
+ * and, nearly always, a play with film — so an item belongs to several of them
+ * at once and the test is "is the lit pill among the ones this item answers to".
+ * What single-select decides is how many of these sets a *reader* can ask for,
+ * not how many an item is in.
  *
- * `video` is **`playId != null`** — the id MLB filed a clip under — rather than
- * a clip that has been *resolved*. Resolution is one request per play and the
- * feed does it lazily per item as each scrolls into view, so a filter that
- * waited for it would send hundreds of requests to draw one screen. The cost is
- * that a play whose clip does not come back is still selected, which is the same
- * thing the item itself already does — it draws the play and no frame.
+ * **`video` is not one of these** and is answered by `hasFilm` below instead.
+ * It used to be `playId != null` here, on the reasoning that resolving a clip is
+ * one request per play and a filter that waited for it would send hundreds to
+ * draw one screen. That reasoning is sound and the proxy it bought is not: MLB
+ * files a play id for very nearly every play, so the pill selected almost the
+ * whole stream — measured on 2026-08-18, **42 of 43 items**, of which **13**
+ * actually had film.
  */
 function playKinds(e: FeedEntry): Set<PlayFilterKey> {
   const out = new Set<PlayFilterKey>();
@@ -150,14 +153,12 @@ function playKinds(e: FeedEntry): Set<PlayFilterKey> {
     // not hits at all — a sacrifice fly, a groundout, a bases-loaded walk — and
     // an event list would have to enumerate them and would miss the next one.
     if (e.pa.rbi > 0) out.add('rbi');
-    if (e.pa.playId) out.add('video');
     return out;
   }
   if (e.type === 'base') {
     for (const ev of e.evs) {
       if (ev.kind === 'sb') out.add('sb');
       if (ev.kind === 'run') out.add('run');
-      if (ev.playId) out.add('video');
     }
     return out;
   }
@@ -165,25 +166,72 @@ function playKinds(e: FeedEntry): Set<PlayFilterKey> {
 }
 
 /**
- * **Whether an item survives the filters** — the six union, `New` narrows.
+ * The Statcast play ids an item could have film of — one for a plate
+ * appearance, and one per event in a grouped base-running item.
+ */
+function clipIdsOf(e: FeedEntry): string[] {
+  if (e.type === 'pa') return e.pa.playId ? [e.pa.playId] : [];
+  if (e.type === 'base') return e.evs.map((ev) => ev.playId).filter((id): id is string => !!id);
+  return [];
+}
+
+/**
+ * **Whether an item survives the lens** — one kind of play, or the plays newer
+ * than the marker, or the whole stream.
  *
- * Two axes rather than one, which is `inc=`/`watch=1`'s own split on the
- * research board: the chips ask *what kind of play* and `New` asks *when*, so
- * `HR + New` reads as "the new home runs" and never as "the home runs and also
- * everything new". An empty chip set is the whole stream rather than none of it,
- * so the feed opens as it always did and `New` on its own still means something.
+ * The row above is single-select, so at most one of the two tests can be in
+ * force at a time (see `FeedFilters.tsx`); they are still two parameters here
+ * because App holds them as two — `New` is in the URL under its own name and
+ * turning it off is what marks the stream read. A null key is the whole stream
+ * rather than none of it, so the feed opens as it always did.
  */
 function passesFilters(
   e: FeedEntry,
-  keys: Set<PlayFilterKey>,
+  key: PlayFilterKey | null,
   newOnly: boolean,
   seenPlays: number,
+  hasFilm: (e: FeedEntry) => boolean,
 ): boolean {
   if (newOnly && entryTime(e) <= seenPlays) return false;
-  if (keys.size === 0) return true;
-  const kinds = playKinds(e);
-  for (const k of kinds) if (keys.has(k)) return true;
-  return false;
+  if (!key) return true;
+  if (key === 'video') return hasFilm(e);
+  return playKinds(e).has(key);
+}
+
+/**
+ * **Which plays have film, cheaply enough to filter a whole day's stream on.**
+ *
+ * Two sources publish clips and they fail on opposite axes (see
+ * `mlbStats.ts::resolveVideoUrl`): **Savant** covers essentially every play and
+ * is a day behind, and **MLB's own reel** lands during the game and is curated.
+ * So the answer splits on the game's date and neither half costs a request per
+ * play:
+ *
+ * - **A game before today has film for every play.** Measured over three settled
+ *   days (2026-08-15/16/17), **90 of 90** sampled plays resolved — so the test is
+ *   a date comparison and nothing else.
+ * - **A game from today has film for whatever is in its reel**, which is **one
+ *   request per game** (`api.gameClips`) against the very cache `/api/video`
+ *   already fills. Measured on 2026-08-18: 13 of 42 plays, across 8 games.
+ *
+ * Resolving per play instead is what this exists to avoid: **~350ms a play** on
+ * a settled day (40 plays took 14.1s), which over a range is minutes of upstream
+ * to draw one screen.
+ *
+ * **A today-game whose reel has not landed reads as *no film yet***, so the lens
+ * fills in rather than showing plays it cannot vouch for; `pendingFilm` below is
+ * what puts a line on screen while that is true. And a reel that could not be
+ * read at all leaves its game showing nothing under this lens, which is the
+ * direction every join in this app fails in.
+ */
+function filmTest(today: string, reels: Map<number, Set<string>>) {
+  return (e: FeedEntry): boolean => {
+    const ids = clipIdsOf(e);
+    if (ids.length === 0) return false;
+    if (e.game.date < today) return true;
+    const reel = reels.get(e.game.gamePk);
+    return reel ? ids.some((id) => reel.has(id)) : false;
+  };
 }
 
 /**
@@ -1187,7 +1235,7 @@ export function LiveFeed({
   onOpenDetails,
   shown: shownFromParent,
   onShowMore,
-  playFilters = EMPTY_FILTERS,
+  playFilter = null,
   newOnly = false,
   seenPlays = 0,
   newCount = 0,
@@ -1205,8 +1253,8 @@ export function LiveFeed({
   shown: number;
   onShowMore: (shown: number) => void;
   /**
-   * Which kinds of play the stream is narrowed to — empty is all of them. See
-   * `FeedFilters.tsx` for why they union and why `New` is not among them.
+   * Which kind of play the stream is narrowed to — null is all of them. See
+   * `FeedFilters.tsx`, which owns the row of pills that sets it.
    *
    * **All five of these are optional, and the second caller passes none of
    * them.** A matchup team page draws this same component for a leaguemate's
@@ -1215,8 +1263,8 @@ export function LiveFeed({
    * and that page's own control row already carries four groups. Absent, the
    * component is exactly the stream it was — no filter, no button, no marker.
    */
-  playFilters?: Set<PlayFilterKey>;
-  /** The `New` filter — a different axis, so it narrows rather than adding. */
+  playFilter?: PlayFilterKey | null;
+  /** The `New` lens — the row's own last pill, held here as its own flag. */
   newOnly?: boolean;
   /** How far down the stream this reader has marked read (epoch ms) — what
    *  `New` narrows to. */
@@ -1266,7 +1314,69 @@ export function LiveFeed({
   // event yet) lives in the Live section above, and a pitcher pinned there has
   // already been kept out of this list by `playerDayEntries`.
   const allRecent = perPlayer.flatMap((p) => p.entries).sort(byRecency);
-  const recent = allRecent.filter((e) => passesFilters(e, playFilters, newOnly, seenPlays));
+
+  /**
+   * **The `Video` lens needs today's highlight reels**, and only today's — see
+   * `filmTest`. One request for the whole slate, fired when the lens goes on and
+   * again whenever a game arrives in the stream that has not been asked about.
+   *
+   * `askedReels` is a ref rather than state so a landing answer does not re-run
+   * the effect that asked for it, and it is **cleared whenever the lens is
+   * selected** — so pressing `Video` again is the retry, which is the rule the
+   * player page's tabs already follow for a failed read. It costs nothing: the
+   * reel is a cached map server-side, and re-reading it is the *right* thing on
+   * a game still being played, whose reel grows as the cuts land.
+   *
+   * **A failed read marks its games answered-with-nothing** rather than being
+   * left pending. Their plays then drop out of the lens — the direction every
+   * join in this app fails in, and the one that cannot show a play with no film
+   * — where leaving them pending would hold `Finding the clips` on screen for
+   * ever, which reads as working when nothing is.
+   */
+  const today = baseballDay(Date.now());
+  const [reels, setReels] = useState<Map<number, Set<string>>>(() => new Map());
+  const askedReels = useRef<Set<number>>(new Set());
+  const liveGames = useMemo(() => {
+    if (playFilter !== 'video') return [];
+    const out = new Set<number>();
+    for (const e of allRecent) {
+      if (e.game.date >= today && clipIdsOf(e).length > 0) out.add(e.game.gamePk);
+    }
+    return [...out].sort((a, b) => a - b);
+    // `allRecent` is rebuilt on every poll, so the key is its games rather than
+    // the array: an unchanged slate must not re-fire the read every 20 seconds.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playFilter, today, allRecent.map((e) => e.game.gamePk).join(',')]);
+
+  // Declared before the read below so it runs first: effects fire in order, and
+  // this one is what makes the read a retry.
+  useEffect(() => {
+    if (playFilter === 'video') askedReels.current = new Set();
+  }, [playFilter]);
+
+  useEffect(() => {
+    const need = liveGames.filter((pk) => !askedReels.current.has(pk));
+    if (need.length === 0) return;
+    for (const pk of need) askedReels.current.add(pk);
+    const settle = (of: (pk: number) => string[]) =>
+      setReels((prev) => {
+        const next = new Map(prev);
+        for (const pk of need) next.set(pk, new Set(of(pk)));
+        return next;
+      });
+    api.gameClips(need).then(
+      (games) => settle((pk) => games[pk] ?? []),
+      () => settle(() => []),
+    );
+  }, [liveGames, playFilter]);
+
+  const hasFilm = filmTest(today, reels);
+  /** A today-game the reel has not answered for yet — what the line under the
+   *  heading says, so an under-filled `Video` lens reads as *still looking*
+   *  rather than as *there is no film*. */
+  const pendingFilm = playFilter === 'video' && liveGames.some((pk) => !reels.has(pk));
+  const showFilmWait = useDelayedFlag(pendingFilm);
+  const recent = allRecent.filter((e) => passesFilters(e, playFilter, newOnly, seenPlays, hasFilm));
 
   /**
    * **The red button, and why it is not drawn while `New` is on.** It is the
@@ -1351,6 +1461,12 @@ export function LiveFeed({
               {newCount} new {newCount === 1 ? 'play' : 'plays'}
             </button>
           )}
+          {/* The reels for today's games, still out — see `filmTest`. A line
+              rather than a block wait: the days already settled are on screen
+              and answered, so this says the list is still filling rather than
+              standing in front of one. It takes the app's own 250ms floor, so a
+              warm reel (a cached map) draws nothing at all. */}
+          {showFilmWait && <LoadingLine className="feed-film-wait">Finding the clips</LoadingLine>}
           {recent.length > 0 ? (
             <>
               <div className="feed-items">
@@ -1370,13 +1486,17 @@ export function LiveFeed({
                app's standing rule for a view a filter has cleared, and the one
                state this section could not previously be in. */
             <div className="feed-empty">
-              {newOnly && playFilters.size > 0
-                ? 'No new plays of those kinds.'
-                : newOnly
-                  ? 'Nothing new since you last marked the feed read.'
-                  : 'No plays of those kinds today.'}{' '}
+              {newOnly
+                ? 'Nothing new since you last marked the feed read.'
+                : playFilter === 'video'
+                  ? // Its own sentence, because "of that kind" is not what this
+                    // lens selects and because the honest reason is a timing
+                    // one: MLB cuts a day's highlights as it goes, and Savant
+                    // has the rest of the plays a day later.
+                    'No plays with video yet — clips land through the day, and the rest arrive a day later.'
+                  : 'No plays of that kind today.'}{' '}
               <span className="feed-empty-how">
-                Change it with <b>Plays</b> in the row above.
+                Change it with the pills above — <b>All</b> is every play of the day.
               </span>
             </div>
           )}

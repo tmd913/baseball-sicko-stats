@@ -1,5 +1,5 @@
 /**
- * **The batter feed's play filters** — which kinds of play the stream draws.
+ * **The batter feed's play filters** — which kind of play the stream draws.
  *
  * The Feed view is the roster's day read by clock, and on a full slate it is
  * hundreds of items: every plate appearance of every batter on the roster, plus
@@ -7,64 +7,82 @@
  * actually happened today* — the home runs, the steals, the plays there is film
  * of — without the reader scrolling past every strikeout in between.
  *
- * **Six kinds, and they union.** That is the research board's include-button
- * model rather than a segmented control, and for its reason: the sets genuinely
- * overlap (a home run is a hit and — nearly always — an RBI and a play with
- * film), so "pick one" would be a lie about the vocabulary, where independent
- * switches say every one of their states. Nothing selected is the whole stream —
- * a filter set that defaults to *everything* rather than to nothing, so the feed
- * opens as it always did.
+ * **One lens at a time**, drawn as a row of pills at the head of the stream they
+ * narrow. It was six independent chips that unioned, plus `New` beside them on
+ * an axis of its own, behind a `Plays` disclosure up in the pinned tab row; what
+ * that bought is stated below, and it lost to the plainer control. A reader
+ * arrives at this stream asking one question — *what did they hit today*, *what
+ * is new since I looked* — and a set of switches makes them assemble the answer
+ * out of parts and then take it apart again.
  *
- * **`XBH` was a seventh and is gone**, and the two reasons are the ones that
- * decide any chip here. It answered a question nobody asks of a *stream*: a
+ * **`All` is a pill rather than the absence of one**, which is what a
+ * single-select control owes its reader: with switches, turning the last one off
+ * is how you get the whole stream back, and with one active at a time there has
+ * to be something to press that means *no lens*. It leads the row, being the
+ * state the feed opens in.
+ *
+ * **What the union bought and what it costs to lose.** The six sets genuinely
+ * overlap — a home run is a hit and, nearly always, an RBI and a play with film
+ * — so `HR + SB` ("the things worth watching") and `HR + New` ("the new home
+ * runs") were both sayable and are not any more. `New` in particular used to
+ * *narrow* whatever the chips had selected rather than replace it. The trade is
+ * a row a reader can work without a key: pressing a pill is the whole gesture,
+ * and what is on screen is what the lit pill says.
+ *
+ * **`XBH` was a seventh chip and is gone**, and the two reasons are the ones
+ * that decide any pill here. It answered a question nobody asks of a *stream*: a
  * double and a home run are two plays a reader recognizes on sight, and the
- * chip's job is to cut hundreds of items down rather than to name a category of
+ * pill's job is to cut hundreds of items down rather than to name a category of
  * hit. And it barely cut — on a checked day it was 11 of 51 items against
- * `Hits`' 18, so it selected two thirds of a set already one chip away, on a row
- * where every chip costs the next one its place on the line. An old
- * `plays=xbh` link is read as the wider stream it no longer names, which is the
- * direction `toPlayFilters` fails in for every key it does not know.
- *
- * **`New` is not one of them and is deliberately kept out of this list.** It
- * asks *when* rather than *what kind*, so it narrows whatever the six selected
- * instead of adding to it — which is exactly the split `inc=` and `watch=1`
- * already make on the research board, where the ownership sets union and the
- * watchlist is a separate axis. Read `HR + New` as "the new home runs", never as
- * "the home runs and also everything new".
+ * `Hits`' 18, so it selected two thirds of a set already one pill away. An old
+ * `plays=xbh` link is read as the whole stream, which is the direction
+ * `toPlayFilter` fails in for every key it does not know.
  *
  * **Batter tab only.** A pitcher's stream item is his whole *outing* rather than
  * a play — the same fact the kind tabs exist for — so there is nothing here to
- * select on, and the control is not drawn.
+ * select on, and the row is not drawn.
  */
 
+import type { ReactNode } from 'react';
+
 /**
- * The six kinds a play can be asked for, **in the order the chips read** — which
+ * The six kinds a play can be asked for, **in the order the pills read** — which
  * is a box score's own order and not the vocabulary's history: the two ways of
  * reaching a base by hitting it (`HR`, `Hits`), then the two halves of a run
  * (`Runs` he scored, `RBI` he drove in), then the base he took without a hit at
- * all (`SB`), and last the one chip that is not a kind of play but a fact about
+ * all (`SB`), and last the one pill that is not a kind of play but a fact about
  * whether there is film of it.
  */
 export type PlayFilterKey = 'hr' | 'hit' | 'run' | 'rbi' | 'sb' | 'video';
 
-export const PLAY_FILTER_KEYS: PlayFilterKey[] = ['hr', 'hit', 'run', 'rbi', 'sb', 'video'];
+/**
+ * What the row is selecting, all of it: the whole stream, one kind of play, or
+ * the plays since the reader last marked it read.
+ *
+ * `new` is a member of this union rather than a switch beside it, because the
+ * row is single-select and a second lit pill would be exactly the multi-select
+ * this replaced. App still holds it as its own piece of state — it is in the URL
+ * under its own name and turning it *off* is what marks the stream read — so
+ * this type is how the row states the pair rather than how App stores it.
+ */
+export type FeedLens = 'all' | PlayFilterKey | 'new';
 
 export interface PlayFilterDef {
   key: PlayFilterKey;
-  /** Short enough for six of them to share a phone's width. */
+  /** Short enough for the row to read without scrolling on a laptop. */
   label: string;
-  /** What the chip is actually selecting, in words — the label cannot say it. */
+  /** What the pill is actually selecting, in words — the label cannot say it. */
   title: string;
 }
 
 /**
- * The chips' own vocabulary.
+ * The pills' own vocabulary.
  *
- * The labels are abbreviations because six of these share one row on a 390px
- * phone, and every one of them is a form a box score already uses. What an
- * abbreviation cannot say is which plays it takes — that a home run is inside
- * `Hits` and inside `RBI`, that `Runs` is him crossing the plate where `RBI` is
- * him driving somebody in — so each carries the sentence.
+ * The labels are abbreviations because the row is read across, and every one of
+ * them is a form a box score already uses. What an abbreviation cannot say is
+ * which plays it takes — that a home run is inside `Hits`, that `Runs` is him
+ * crossing the plate where `RBI` is him driving somebody in — so each carries
+ * the sentence.
  */
 export const PLAY_FILTERS: PlayFilterDef[] = [
   { key: 'hr', label: 'HR', title: 'Home runs' },
@@ -86,160 +104,110 @@ export const PLAY_FILTERS: PlayFilterDef[] = [
   { key: 'sb', label: 'SB', title: 'Stolen bases' },
   {
     key: 'video',
+    // Plays there is film *of*, rather than plays MLB filed a play id for —
+    // which is very nearly all of them, and is what made this pill a no-op
+    // until `LiveFeed`'s `filmTest` answered the question properly.
     label: 'Video',
-    title: 'Plays MLB filed a clip for',
+    title: 'Plays there is video of — highlights land through the day, and the rest arrive a day later',
   },
 ];
 
+/* Keyed for `toPlayFilter`, which is the one thing that has to ask whether a
+   string off the URL is a pill this build draws. `PLAY_FILTER_KEYS` and
+   `playFilterLabel` stood beside it and are gone with their readers — the row
+   below maps `PLAY_FILTERS` itself, and the empty state names `All` rather
+   than the lens it is empty of. */
 const BY_KEY = new Map(PLAY_FILTERS.map((f) => [f.key, f]));
 
-/** A chip's own label, for the empty state's wording and the button's title. */
-export function playFilterLabel(key: PlayFilterKey): string {
-  return BY_KEY.get(key)?.label ?? key;
-}
-
 /**
- * Read the URL's `plays=` into a set, dropping anything this build has no chip
- * for. An older link naming a kind that has since gone is a link that shows a
- * *wider* stream than it promised rather than an empty one, which is the
- * direction every parameter in this app fails in.
+ * Read the URL's `plays=` into one key, dropping anything this build has no pill
+ * for. It takes the **first** key it recognizes, which is what makes a link
+ * written when these unioned (`plays=hr,sb`) open on a lens this row can draw
+ * rather than on nothing; a link naming a kind that has since gone opens on the
+ * whole stream, which is the direction every parameter in this app fails in.
  */
-export function toPlayFilters(raw: string | null): Set<PlayFilterKey> {
-  if (!raw) return new Set();
-  const out = new Set<PlayFilterKey>();
+export function toPlayFilter(raw: string | null): PlayFilterKey | null {
+  if (!raw) return null;
   for (const part of raw.split(',')) {
     const k = part.trim() as PlayFilterKey;
-    if (BY_KEY.has(k)) out.add(k);
+    if (BY_KEY.has(k)) return k;
   }
-  return out;
+  return null;
 }
 
-/** The `plays=` value for a set, or null where it says nothing (the default). */
-export function playFiltersParam(keys: Set<PlayFilterKey>): string | null {
-  if (keys.size === 0) return null;
-  // In the vocabulary's own order rather than insertion order, so two readers
-  // who tick the same three chips share one link.
-  return PLAY_FILTER_KEYS.filter((k) => keys.has(k)).join(',');
+/** The `plays=` value for a lens, or null where it says nothing (the default). */
+export function playFilterParam(key: PlayFilterKey | null): string | null {
+  return key;
 }
 
 /**
- * **The `Plays` disclosure and its panel** — the app's own toggle-and-panel
- * shape rather than a second one that resembles it.
+ * **The row of pills**, at the head of the stream it narrows.
  *
- * `.research-toggle` and `.research-panel` are the research board's classes,
- * folded onto by every disclosure in this app, so the button carries `.active`
- * while its panel is open and `.on` while the filter *holds* something — and
- * that second class is what makes a collapsed panel safe: the count badge and
- * the lit border say the stream is narrowed while the reader scrolls, which is
- * the board's own rule that a collapsed control must never be the only place a
- * filter lives.
+ * **In the page rather than in the pinned tab row**, which is a reversal of this
+ * app's standing rule that a control deciding *which rows a view shows* lives
+ * with the tabs that select the view (`Starters`, the research board's whole
+ * control set, the include buttons). What that rule is really protecting is a
+ * control a reader has to be able to reach *while scrolling* — the board's
+ * filters qualify a table six hundred rows long. This one qualifies a stream
+ * read from the top and worked once on arrival, and it is the answer to the
+ * question the reader opened the page with, so it belongs where the answer is:
+ * directly above the plays, beside the red `N new plays` button that is already
+ * in the page for the same reason.
  *
- * **`New` reads last and is spaced like every chip before it**, which is a
- * reversal of the two devices that came before it. It was a **hairline**, which
- * could not survive the wrap — the panel breaks where the window says, so at
- * 390px `New` drops to a second line and the rule was left at the end of the
- * first with nothing after it, a mark separating a group from nothing. It was
- * then a wider gap, which cannot dangle and so was the right shape for the
- * wrong claim: a chip set an inch apart from its neighbours reads as a second
- * *group*, and the row breaks wherever the window says, so the daylight lands
- * where the break puts it rather than where the argument wanted it.
+ * **It scrolls sideways rather than wrapping**, which is the answer every other
+ * strip of pills in this app gives when it outgrows its width — the research
+ * board's position row and window tabs, the player page's tab strip, the
+ * tutorial's jump strip. A wrapping row would change the height of the thing
+ * sitting above a stream on every width, and this row is read across.
  *
- * What actually carries the distinction is what it always did: the **word**,
- * which is not a stat, and the chip's own **red count**, which is the only
- * colour in the row. Neither depends on where the line happens to break.
+ * The pills are `.research-toggle`, folded onto rather than restyled, so `.on`
+ * is the app's own lit state and a pill here is the same object as a pill
+ * anywhere else.
  */
-export function PlaysButton({
-  keys,
-  newOnly,
-  open,
-  onToggle,
+export function FeedFilterPills({
+  lens,
+  newCount,
+  onSelect,
 }: {
-  keys: Set<PlayFilterKey>;
-  newOnly: boolean;
-  open: boolean;
-  onToggle: () => void;
+  /** Which pill is lit. Exactly one always is. */
+  lens: FeedLens;
+  /** How many plays are unseen — the same figure the red button in the stream
+   *  carries, shown on the `New` pill so the two cannot disagree about it. */
+  newCount: number;
+  onSelect: (lens: FeedLens) => void;
 }) {
-  const held = keys.size + (newOnly ? 1 : 0);
-  return (
+  const pill = (key: FeedLens, label: string, title: string, extra?: ReactNode) => (
     <button
+      key={key}
       type="button"
-      className={`research-toggle plays-toggle${open ? ' active' : ''}${held > 0 ? ' on' : ''}`}
-      aria-expanded={open}
-      onClick={onToggle}
-      title={
-        held === 0
-          ? 'Narrow the stream to certain kinds of play'
-          : `Showing ${[...PLAY_FILTER_KEYS.filter((k) => keys.has(k)).map(playFilterLabel), ...(newOnly ? ['New'] : [])].join(' · ')}`
-      }
+      className={`research-toggle feed-filter-pill${lens === key ? ' on' : ''}`}
+      aria-pressed={lens === key}
+      onClick={() => onSelect(key)}
+      title={title}
     >
-      {/* A funnel, which is what the panel behind it is. It carries `flex: none`
-          in the stylesheet for the reason every glyph on this row does: an
-          `<svg>` in a flex row is a flex item and its `width` is a basis it will
-          shrink below the moment the line is tight, which on a phone — where the
-          label is visually hidden and the glyph is the whole button — is the
-          whole button. */}
-      <svg
-        viewBox="0 0 24 24"
-        width="18"
-        height="18"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
-        <path d="M3 4h18l-7 8.5V20l-4-2v-5.5L3 4z" />
-      </svg>
-      <span className="research-toggle-label">Plays</span>
-      {held > 0 && <span className="research-toggle-count">{held}</span>}
+      {label}
+      {extra}
     </button>
   );
-}
 
-export function PlaysPanel({
-  keys,
-  newOnly,
-  newCount,
-  onToggleKey,
-  onToggleNew,
-}: {
-  keys: Set<PlayFilterKey>;
-  newOnly: boolean;
-  /** How many plays are unseen — the same figure the red button carries, shown
-   *  on the chip so the two cannot disagree about it. */
-  newCount: number;
-  onToggleKey: (key: PlayFilterKey) => void;
-  onToggleNew: () => void;
-}) {
   return (
-    <div className="research-panel plays-panel">
-      {PLAY_FILTERS.map((f) => (
-        <button
-          key={f.key}
-          type="button"
-          className={`research-toggle plays-chip${keys.has(f.key) ? ' on' : ''}`}
-          aria-pressed={keys.has(f.key)}
-          onClick={() => onToggleKey(f.key)}
-          title={f.title}
-        >
-          {f.label}
-        </button>
-      ))}
-      <button
-        type="button"
-        className={`research-toggle plays-chip plays-chip-new${newOnly ? ' on' : ''}`}
-        aria-pressed={newOnly}
-        onClick={onToggleNew}
-        title={
-          newOnly
-            ? 'Showing only the plays you have not marked read — turning this off marks them read'
-            : 'Only the plays since you last marked the feed read. It narrows whatever the chips beside it selected rather than adding to them.'
-        }
-      >
-        New
-        {newCount > 0 && !newOnly && <span className="plays-chip-count">{newCount}</span>}
-      </button>
+    <div
+      className="feed-filters"
+      role="group"
+      aria-label="Which plays the feed shows"
+    >
+      {pill('all', 'All', 'Every play of the day — the stream as it opens')}
+      {PLAY_FILTERS.map((f) => pill(f.key, f.label, f.title))}
+      {pill(
+        'new',
+        'New',
+        lens === 'new'
+          ? 'Showing only the plays you have not marked read — pressing another pill marks them read'
+          : 'Only the plays since you last marked the feed read',
+        newCount > 0 && lens !== 'new' ? (
+          <span className="feed-filter-count">{newCount}</span>
+        ) : null,
+      )}
     </div>
   );
 }
