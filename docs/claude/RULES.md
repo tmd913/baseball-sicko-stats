@@ -46,6 +46,23 @@ worktree on a `worktree-<slug>` branch; the `merge` skill covers landing them an
 names this repo's conflict hotspots (`CLAUDE.md`, `styles.css`, `App.tsx`, the
 paired `types.ts`).
 
+**Never `git stash` in a worktree.** The stash is a **single stack on the shared
+repository**, not a per-worktree one, so an agent's `git stash pop` takes
+whatever entry is on top — which, with several agents working at once, is
+routinely somebody else's uncommitted work landing in your tree while theirs
+disappears. Observed: an agent stashed, and its `pop` pulled in another
+worktree's `chartScrub.tsx` and `styles.css`; it was recovered with `git stash
+store` at the original stack position, but only because the collision was
+noticed.
+
+Reproduced deliberately afterwards, which takes four commands: two detached
+worktrees A and B, each staging one file of its own and running `git stash
+push`; `git stash list` **read from A shows both entries**, B's on top because
+it stashed last; `git stash pop` in A drops `probe-b.txt` into A's tree and A's
+own work stays on the stack. Commit to your own branch instead — a throwaway
+commit you amend or reset is private to your worktree, where the stash never
+is.
+
 **Deploy only when asked.** Merging is not a licence to ship. Offer the deploy;
 don't start it.
 

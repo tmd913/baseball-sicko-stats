@@ -370,6 +370,19 @@ the `deploy` skill is the next step, and it starts from the working tree.
   sitting on. Merge `main` in instead.
 - **Touching a dirty worktree.** Uncommitted changes there are unbacked-up work, and
   `git worktree remove` will refuse or destroy depending on flags. Ask first.
+- **`git stash` is repo-global, not per-worktree.** One stack shared by every
+  worktree, so a `pop` in one takes whatever entry is on top — including another
+  agent's. Seen once: a `pop` pulled a second worktree's `chartScrub.tsx` and
+  `styles.css` into the popping agent's tree. If it happens, nothing is lost yet
+  — put the entry back at its original stack position rather than re-stashing,
+  which would reorder the stack under whoever owns it:
+
+  ```bash
+  git stash store -m "<original message>" <sha of the popped entry>   # from the pop's output or `git fsck`
+  git stash list                                                     # verify position and count
+  ```
+
+  The rule that avoids it is in `RULES.md`: commit to your own branch instead.
 - **`DAY_SNAPSHOT_VERSION`, `FEED_CACHE_VERSION`, and the `-v3`/`-v4` storage keys.**
   If two branches each bumped the same version constant, the merged result must be a
   *single* bump past the higher of the two, not both edits kept and not the lower one
