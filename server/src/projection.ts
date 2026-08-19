@@ -67,13 +67,13 @@
  *   going to be won by a run is a category nobody should be sure of.
  */
 
-import { addDays, baseballToday } from './etDate';
-import { mapLimit } from './limit';
-import { getAllRosterMembers, getSeasonPlayers } from './mlbStats';
-import { getResearch } from './research';
-import { getScheduleWindow, getSeasonRead } from './schedule';
-import { dayCounts, windowDates } from './statcastWindow';
-import { getTeamHitting } from './teamHitting';
+import { addDays, baseballToday } from './etDate.js';
+import { mapLimit } from './limit.js';
+import { getAllRosterMembers, getSeasonPlayers } from './mlbStats.js';
+import { getResearch } from './research.js';
+import { getScheduleWindow, getSeasonRead } from './schedule.js';
+import { dayCounts, windowDates } from './statcastWindow.js';
+import { getTeamHitting } from './teamHitting.js';
 import {
   getMatchupWindow,
   getOwnership,
@@ -83,7 +83,7 @@ import {
   type EspnCategory,
   type EspnCreds,
   type EspnRosterPlayer,
-} from './espn';
+} from './espn.js';
 import type {
   BattingLine,
   PitchingLine,
@@ -93,7 +93,7 @@ import type {
   ScheduleGame,
   TeamHittingSplit,
   WatchPlayer,
-} from './types';
+} from './types.js';
 
 // ---- The measured constants -------------------------------------------------
 
