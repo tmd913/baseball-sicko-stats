@@ -697,4 +697,16 @@ export const api = {
     const r = await request<{ url: string }>(`/api/video/${playId}?gamePk=${gamePk}`);
     return r.url;
   },
+  /**
+   * **Which plays in these games MLB cut a highlight for**, a game at a time —
+   * what the feed's `Video` lens is filtered on for the day being played. One
+   * request for a whole slate rather than one per game; see the route, and see
+   * `LiveFeed`'s `hasFilm` for why only *today's* games are ever asked about.
+   */
+  async gameClips(gamePks: number[]): Promise<Record<number, string[]>> {
+    const r = await request<{ games: Record<number, string[]> }>(
+      `/api/video/clips?games=${gamePks.join(',')}`,
+    );
+    return r.games;
+  },
 };

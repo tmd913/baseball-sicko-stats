@@ -10,93 +10,190 @@ the league it doesn't. Its items open into dialogs whose rules are in
 **On a full slate the stream is hundreds of items** — every plate appearance of
 every batter on the roster, plus every bag any of them took — and the one thing
 it could not do was answer *what actually happened today* without the reader
-scrolling past every strikeout in between. It has a filter set now, and a red
-button that says how many plays have arrived since they last looked.
+scrolling past every strikeout in between. It has a lens now, and a red button
+that says how many plays have arrived since they last looked.
 
-**Six kinds, and they union**: `HR · Hits · Runs · RBI · SB · Video`. That is
-the research board's include-button model rather than a segmented control, and
-for its reason: the sets genuinely **overlap** — a home run is a hit *and* an RBI
-*and* nearly always a play with film — so "pick one" would be a lie about the
-vocabulary where independent switches say all of their states. Nothing selected
-is the **whole stream**, so the feed opens exactly as it always did and the
-default is a lens rather than a wall.
+**Eight pills and one of them lit**: `All · HR · Hits · Runs · RBI · SB · Video ·
+New`, in a row at the head of the stream. That reverses two decisions taken when
+this shipped — that the kinds should be **independent switches** and that they
+should live behind a disclosure **in the pinned tab row** — and both of the old
+arguments are kept below, with what the reversal costs stated rather than
+glossed.
+
+**`All` is a pill rather than the absence of one.** With switches, turning the
+last one off is how the whole stream comes back; with one active at a time there
+has to be something to press that means *no lens*. It leads the row and is the
+state the feed opens in.
 
 **The order is a box score's rather than the vocabulary's history**: the two ways
 of reaching a base by hitting it, then the two halves of a run — `Runs` he
 scored, `RBI` he drove in — then the base he took with no hit at all, and last
-the one chip that is not a kind of play but a fact about whether there is film of
-it. `SB` reads after `RBI` for that reason rather than beside the hits, where it
-sat only because it was added with them.
+the one kind-pill that is not a kind of play but a fact about whether there is
+film of it. `SB` reads after `RBI` for that reason rather than beside the hits,
+where it sat only because it was added with them.
 
 **`XBH` was a seventh chip and is gone**, and the two reasons are the ones that
-decide any chip on this row. It answered a question nobody asks of a *stream*: a
-double and a home run are two plays a reader recognizes on sight, and a chip's
+decide any pill on this row. It answered a question nobody asks of a *stream*: a
+double and a home run are two plays a reader recognizes on sight, and a pill's
 job here is to cut hundreds of items down rather than to name a class of hit. And
 it barely cut — on the checked day it was **11 of 51 items against `Hits`' 18**,
-two thirds of a set already one chip away, on a row where every chip costs the
+two thirds of a set already one pill away, on a row where every pill costs the
 next one its place on the line. An old `plays=xbh` link is read as the wider
-stream it no longer names, which is the direction `toPlayFilters` fails in for
+stream it no longer names, which is the direction `toPlayFilter` fails in for
 every key it does not know.
 
-**The labels are abbreviations because six of them share a 390px phone**, and
-each is a form a box score already uses. What an abbreviation cannot say is which
-plays it takes — that a home run is inside `Hits` and inside `RBI`, that `Runs`
-is him crossing the plate where `RBI` is him driving somebody in — so every chip
-carries the sentence as its `title`.
+**The labels are abbreviations because the row is read across**, and each is a
+form a box score already uses. What an abbreviation cannot say is which plays it
+takes — that a home run is inside `Hits` and inside `RBI`, that `Runs` is him
+crossing the plate where `RBI` is him driving somebody in — so every pill carries
+the sentence as its `title`.
 
 **`Hits` reads `outcomeKind` rather than a list of its own**, which is the same
-function the at-bat card's rail is colored by, so a chip and the card it selects
-cannot come to disagree about what a hit is. `XBH` was the one chip that needed a
+function the at-bat card's rail is colored by, so a pill and the card it selects
+cannot come to disagree about what a hit is. `XBH` was the one pill that needed a
 set of its own (`XBH_EVENTS`), that function filing the three non-homer hits
-under one `hit`; the set went with the chip, on this repo's own rule that a
+under one `hit`; the set went with the pill, on this repo's own rule that a
 definition nobody reads is a definition nobody misses.
 
 **`RBI` reads the plate appearance's own `rbi` rather than its event**, and that
-is the difference between a chip that is right and one that enumerates. A run
+is the difference between a pill that is right and one that enumerates. A run
 bats in on plays that are not hits at all — a sacrifice fly, a groundout, a
 bases-loaded walk — so an event list would have to name them and would miss the
 next one. It sits beside `Runs` because the two are the halves of one thing: that
 one is him crossing the plate and this is him sending somebody else over it.
 Measured against the day's own report, counted independently: **9 plate
 appearances with an RBI and 6 home runs** on a checked roster, which is exactly
-what the chips draw — and `HR + RBI` is **9** rather than 15, every home run
-being an RBI.
+what the pills draw. That the two sets *overlap* — every home run is an RBI, so
+the union of the pair is 9 rather than 15 — is what an item's own `playKinds`
+still records as a **set**; what single-select decides is how many of those sets
+a reader may ask for, not how many an item is in.
 
-**`Video` is `playId != null`** — the id MLB filed a clip under — rather than a
-clip that has been *resolved*. Resolution is one request per play and the feed
-does it lazily as each item scrolls into view, so a filter that waited for it
-would send hundreds of requests to draw one screen. The cost is that a play whose
-clip does not come back is still selected, which is exactly what the item itself
-already does: it draws the play and no frame.
+### `Video` was selecting the whole stream, and now selects the plays with film
 
-**`New` is not one of the six and is deliberately kept out of that list.** It asks
-*when* rather than *what kind*, so it **narrows** whatever the chips selected
-instead of adding to it — which is the split `inc=` and `watch=1` already make on
-the research board, where the ownership sets union and the watchlist is a separate
-axis. `HR + New` reads as "the new home runs" and never as "the home runs and
-also everything new". Measured on a real day: `HR` 6 items, `New` 48, and
-`HR + New` **6** rather than 54.
+**The paragraph this replaces is the bug, argued.** It read: *`Video` is
+`playId != null` — the id MLB filed a clip under — rather than a clip that has
+been resolved. Resolution is one request per play and the feed does it lazily as
+each item scrolls into view, so a filter that waited for it would send hundreds
+of requests to draw one screen. The cost is that a play whose clip does not come
+back is still selected, which is exactly what the item itself already does: it
+draws the play and no frame.*
 
-**`New` is spaced like every chip before it, and two devices came before that.**
-It was a **hairline**, which the wrap retired: the panel breaks where the window
-says, so at 390px `New` drops to a second line and the rule was left at the end
-of the first with nothing after it, a mark separating a group from nothing. It
-was then a **wider gap**, which cannot dangle and so was the right shape for the
-wrong claim — a chip set apart from its neighbours reads as a second *group*, and
-the row breaks wherever the window says, so the daylight lands where the break
-puts it rather than where the argument wanted it. What carries the
-distinction is what always did: the **word**, which is not a stat, and the chip's
-own **red count**, which is the only color in the row. Neither depends on where
-the line happens to break.
+**The cost is not what that says it is.** MLB files a play id for very nearly
+every play, so the pill was not selecting a subset at all: measured on
+2026-08-18, **42 of 43 items** carried one, and pressing `Video` drew the same 20
+items `All` did — of which **5** rendered a frame. A filter that selects
+everything and promises film is worse than no filter.
 
-Measured on the panel at 320 / 375 / 390 / 480 / 640 / 900 / 1200 / 1920, and
-A/B'd against the gap: it costs **no height at any width** — **68px on two rows
-at 320–390 and 30px on one row from 480 up**, either way — with 0 horizontal
-overflow of the page body and none of the panel itself. The chips sit at a
-**uniform 8px** apart, `New` included, where the gap made that one 18.
+**The two publishers fail on opposite axes, and that is what makes it cheap.**
+From `mlbStats.ts::resolveVideoUrl`: **Savant** covers essentially every play and
+is a day behind, and **MLB's own reel** lands during the game and is curated. So
+the question splits on the game's date and neither half costs a request per play:
+
+- **A game before today has film for every play.** Measured over three settled
+  days — 2026-08-15, 08-16 and 08-17 — **90 of 90 sampled plays resolved**, and
+  08-16 was checked whole at **40 of 40**. So that half is a date comparison and
+  nothing else.
+- **A game from today has film for whatever is in its reel**, which is **one read
+  per game** rather than one per play, against the very cache `/api/video`
+  already fills. Measured on 2026-08-18 across 8 games: **13 of 42** plays.
+
+**Resolving per play is what this exists to avoid**, and the figure is the whole
+argument: **~350ms a play** on a settled day (40 plays took **14.1s**), against
+**200ms for the eight reels** that answer the same day today. Over a range the
+first is minutes of upstream to draw one screen.
+
+**`GET /api/video/clips?games=…` is the read** — a set of games in one request
+rather than a route per game, since the caller is a stream that draws a day's
+worth of them; capped at `MAX_CLIP_GAMES` (40), with a game that throws answering
+**an empty list rather than failing the request**, which is the direction every
+join in this app fails in. It is registered **before** `/api/video/:playId`,
+which would otherwise match `clips` and reject it as a malformed play id.
+
+**Only today's games are ever asked about** (`LiveFeed`'s `liveGames`), so the
+request count is a slate rather than a range: a fortnight of feed asks about the
+same handful of games the day being played has.
+
+**A today-game whose reel has not landed reads as *no film yet*** — the lens
+shows what it can vouch for and fills in, with `Finding the clips` under the
+heading while any reel is out (the app's own `LoadingLine` behind `WAIT_DELAY`,
+so a cached reel draws nothing at all). Measured on a range spanning 08-16 to
+08-18 with the read held 4s: **20 items on screen throughout**, the settled days
+answered immediately and the wait line up until today's reels landed.
+
+**A failed read marks its games answered-with-nothing rather than leaving them
+pending**, and both halves of that matter. Their plays drop out of the lens,
+which is the only direction it can fail in without showing a play with no film;
+and the wait line resolves, where leaving them pending held `Finding the clips`
+on screen for ever, which reads as working when nothing is. **The retry is
+pressing `Video` again** — `askedReels` is cleared whenever the lens is selected,
+which is the rule the player page's tabs already follow for a failed read, and
+which is also the *right* thing on a game still being played, whose reel grows as
+the cuts land. Measured with the route blocked: 0 items, no wait line, no error
+banner, the empty state naming the pills; unblock and press `All` then `Video`
+and the 15 items come back.
+
+**Measured, before → after**, on the live roster at 1200×900:
+
+| | items | of which drew a frame |
+| --- | --- | --- |
+| `All`, today | 20 | 7 |
+| `Video`, today — **before** | **20** | **7** |
+| `Video`, today — after | **15** | **15** |
+| `Video`, a settled day (08-16) | 20 | 20 |
+| `Video`, 08-16…08-18 | 20 | **20** (was 7) |
+
+Every item the lens shows has film, at 320 / 390 / 640 / 1200 / 1920, with the
+row 34px and page-body overflow 0 at each.
+
+**`playKinds` lost its `video` member with it.** That function is the five real
+kinds now and `hasFilm` is its own test in `passesFilters` — which is the honest
+shape: the other five are facts about the play, and this one is a fact about
+whether anybody has published a clip of it.
+
+### `New` is the last pill now, and what the union bought is gone with it
+
+**The paragraph this replaces is worth reading rather than deleting**, because
+its argument was right and it is the thing being traded away. It read: *`New` is
+not one of the six and is deliberately kept out of that list — it asks* when
+*rather than* what kind*, so it **narrows** whatever the chips selected instead of
+adding to it, which is the split `inc=` and `watch=1` already make on the research
+board. `HR + New` reads as "the new home runs" and never as "the home runs and
+also everything new."* Measured then: `HR` 6 items, `New` 48, `HR + New` **6**
+rather than 54.
+
+**Single-select cannot say that sentence, and the row is single-select.** So
+`New` is the eighth pill: pressing it drops whatever kind was lit, and pressing a
+kind drops `New`. What goes with it is `HR + New` and every other pair — `HR + SB`
+("the things worth watching") most of all, the six sets genuinely overlapping.
+What is bought is a row a reader works without a key: pressing a pill is the whole
+gesture, and what is on screen is what the lit pill says.
+
+**It is still two pieces of state and it has to be.** `New` is in the URL under
+its own name (`newplays=1`), it is what the red button in the stream turns on, and
+turning it *off* is what marks the stream read — none of which a seventh member of
+the key union could express. `App.tsx::feedLens` derives which pill is lit from
+the pair and `selectFeedLens` sets both, so the two can never both be in force.
+
+**Turning `New` off only counts when it was on**, which is a guard rather than a
+tidiness: it is what marks the stream read, and under single-select *every* press
+would otherwise pass through it. Measured before the guard — pressing `HR` from
+`All` marked the whole day read, so the `New` pill went to nought for a reader who
+had never touched it. Measured after: the count holds at **40** across
+`All → HR → All`.
+
+**Two spacing devices came before all of this and are gone with the panel.** `New`
+was set off from the chips by a **hairline**, which the wrap retired (the panel
+broke where the window said, so at 390px the rule was left at the end of a line
+with nothing after it), and then by a **wider gap**, which cannot dangle and was
+the right shape for the wrong claim — a chip set apart reads as a second *group*,
+and the break lands where the window puts it rather than where the argument
+wanted it. On a row that scrolls rather than wraps neither question arises: the
+gap is a uniform **8px** and what carries the distinction is what always did, the
+**word** and the **red count**, which is still the only color in the row.
 
 **Batter tab only.** A pitcher's stream item is his whole *outing* rather than a
-play — the same fact the kind tabs exist for — so none of the six can match one.
+play — the same fact the kind tabs exist for — so none of the six kinds can match
+one.
 **That is gated on the same flag that draws the control**, and it had to be: a
 `plays=hr` link opened on `kind=pitcher` drew **0 outings** before the gate, the
 filters having been passed through unconditionally. The *state* survives the
@@ -108,36 +205,56 @@ matchup team page draws this same component for a leaguemate's week
 (`LeagueTeam.tsx`), and neither half of the feature belongs to it: the marker is a
 fact about how far down *the reader's own* stream they have got, and that page's
 control row already carries four groups. Checked: `?mup=…&mt=…&plays=hr&newplays=1`
-draws that page's feed with **0** filter buttons and no red button.
+draws that page's feed with **0** pills and no red button.
 
-### Where the controls sit, and where the news does
+### Where the controls sit: both of them in the page now
 
-**The `Plays` disclosure is in the pinned tab row and the red button is in the
-page**, and the split is not arbitrary.
+**This section used to argue for the split and the split is gone.** What it said:
+*the `Plays` disclosure is in the pinned tab row and the red button is in the
+page, and that is not arbitrary — a control that decides which rows a view shows
+lives with the tabs that select the view (`Starters`, the research board's whole
+control set, the include buttons), so the filters do, behind one disclosure with a
+count badge; the red button is* not *a filter, it is news, and it belongs where
+the news landed and where pressing it can also take the reader to it.*
 
-A control that decides *which rows a view shows* lives with the tabs that select
-the view — `Starters`, the research board's whole control set, the include
-buttons. So the filters do, behind one disclosure with a **count badge**, which is
-that board's own rule that a collapsed panel must never be the only place a filter
-lives: the badge and the lit border say the stream is narrowed while the reader
-scrolls. It reads **after `Starters` and before the calendar**, which is this
-row's documented order — which page, which kind, which reading of it, which
-*plays*, which days.
+**The second half stands and the first half is overturned by its own test.** What
+the tab-row rule protects is a control a reader has to reach **while scrolling** —
+the board's filters qualify a table six hundred rows long, and losing them off the
+top of the page would be losing them. This one qualifies a stream that is read
+from the top and worked once on arrival, and it *is* the answer to the question
+the page was opened with. So it goes where the answer is: directly above the
+plays, beside the red button that has been in the page for that same reason all
+along. What was a disclosure, a panel and a count badge is one row of pills.
 
-The red button is **not a filter**; it is news, and it belongs where the news
-landed and where pressing it can also take the reader to it. The League page's
-Transactions dot is the same statement made on a tab and can only ever be a
-*mark*, because it says a feed has moved on a page the reader is **not** looking
-at. Here they are looking at it, so the mark carries its own count and is the door
-to the plays it counts.
+**And the disclosure was costing the tab row a line at two widths**, which is the
+measurable half. A/B'd on the same page by hiding the button, the docs recorded
+**320 (207 → 255px of chrome)** and **640 (111 → 159)**; removing it gives both
+back — measured after, chrome is **207px at 320 and 111 at 640**, with 375, 390,
+480, 900, 1200 and 1920 unchanged at 159 / 159 / 159 / 115 / 115 / 115.
 
-**The panel is named through `.view-bar`, and the first version's selector matched
-nothing.** It was written `.view-bar-tabs > .plays-panel`, which is the trap the
-board's own panels record from the other side — measured at 1920, a **426px block
-of chips at x=1472**, on the same line as the tabs and jammed against the right
-edge of the page, because an unmatched `flex: 1 1 100%` left it an ordinary item
-of a `space-between` row. `.app.date-open .date-control` is the right precedent,
-that being the other disclosure row on this line.
+**The row scrolls sideways rather than wrapping** (`.feed-filters`), which is the
+answer every other strip of pills in this app gives when it outgrows its width —
+the research board's position row and its window tabs, the player page's tab
+strip, the tutorial's jump strip. A wrapping row would change the height of the
+thing sitting above a stream at every width, and this row is read across. Hence
+`flex-wrap: nowrap` and `flex: none` on the pills: an unconstrained flex item
+shrinks below its content before a scrollport ever appears, which on a row of
+two-character labels is a row of clipped words rather than a row that scrolls.
+`overscroll-behavior-x` alone and never the block axis, the rule `.details-tabs`
+and `.research-positions` already follow — a scroll container blocks chaining on
+an axis it cannot itself scroll, so naming the block axis here would swallow a
+vertical swipe belonging to the stream under it.
+
+**It shares the feed's own column** (`--card-column` and its auto margins), so the
+row's left edge is the left edge of the items below it, and its **zero bottom
+margin collapses with `.live-feed`'s own 16px top one** — so the gap under it is
+the gap the stream has always had rather than a second one. Measured at 1200: the
+row at x=200 and 800 wide, 34px tall, with the feed's top at 181 against the row's
+bottom at 165.
+
+**It is inside the same guard as the feed** (`filteredCards.length > 0`) rather
+than beside it: a row of pills over a page with no players on it would be a
+control over nothing, and the empty state there names its own cause already.
 
 ### The marker, and the cycle the two controls make together
 
@@ -148,8 +265,9 @@ cycle.
 
 - **New** is `entryTime(entry) > seenPlays`, over the **unfiltered** stream: the
   count is news about the day rather than about the lens, and a count that shrank
-  when the reader ticked `HR` would be saying the other plays had stopped being
-  new.
+  when the reader pressed `HR` would be saying the other plays had stopped being
+  new. It is drawn twice, on the `New` pill and on the red button, off the one
+  figure so the two cannot disagree.
 - **The red button** appears when that count is over nought *and* `New` is off.
   Pressing it turns `New` on and puts the top of the stream back under the reader
   — they are at the head of the list, which is not where somebody who has been
@@ -160,14 +278,18 @@ cycle.
   reader already looking at the new plays it would be a control offering what is
   on screen, and pressing it would clear the very list it opened.
 - **Turning `New` off is what says "done with those"**, so that is what marks the
-  stream read. A reader who never engages accumulates a count, which is what the
-  transactions dot does too.
+  stream read — and under a single-select row that means pressing any *other*
+  pill while `New` is lit. Pressing one while it is **not** lit marks nothing; see
+  the guard above. A reader who never engages accumulates a count, which is what
+  the transactions dot does too.
 
 **The count is computed in App rather than here**, off `newPlays` — exported from
 this file so the clock that orders the stream has one definition, the rule
 `playerDayEntries` already sets for the stream and the player page. App owns both
 halves of the feature: it holds the marker, persists it, merges the saved one on
 arrival, and is what turns `New` off, which is the act that needs the timestamp.
+It also holds the pill row's own lens, for the same reason: the row is a function
+of two things App owns and would otherwise have to be told.
 
 **The button appearing does not move the reader**, and that is the browser's own
 scroll anchoring rather than a reservation — the same mechanism this file already
@@ -182,47 +304,58 @@ appearances and 8 base events across 14 batters — 6 home runs, 5 doubles, 7
 singles, 1 steal, 5 runs, 9 plate appearances with an RBI, every play with a
 `playId`), 51 items in the stream:
 
-| chip | drawn | raw |
+| pill | drawn | raw |
 | --- | --- | --- |
 | `HR` | **6** | 6 home runs |
 | `Hits` | **18** | 6 HR + 5 2B + 7 1B |
 | `Runs` | **5** | 5 runs scored |
 | `RBI` | **9** | 9 plate appearances with an RBI |
 | `SB` | **1** | 1 steal |
-| `Video` | **51** | every item |
-| `HR + SB` | **7** | the union, 6 + 1 |
-| `HR + RBI` | **9** | the union — every home run is an RBI |
+| `Video` | **51** | every item — which is the measurement that retired the
+proxy it was drawn from; see *`Video` was selecting the whole stream* above |
 
-(`XBH` drew **11** — 5 doubles and 6 home runs — on that same day, which is the
-figure its own removal is argued from above.)
+Those were taken when the chips unioned, and the union's own two rows (`HR + SB`
+7, `HR + RBI` 9) are what the row can no longer be asked for. (`XBH` drew **11** —
+5 doubles and 6 home runs — on that same day, which is the figure its own removal
+is argued from above.)
 
-**The whole cycle, driven end to end** with a marker planted at 2026-08-17 20:00Z:
-the button reads `48 new plays` and the chip `New 48`; scrolled to 600, pressing
-it gives `scrollY 0`, `newplays=1` in the URL, the chip lit, the badge at 1 and
-the button gone; `New + HR` gives **6**; turning `New` off restores all 51 and
-clears the badge; turning it back on gives **0** and the honest empty state,
-`Nothing new since you last marked the feed read.` The advanced marker is on disk
-at 2026-08-18T03:26:41.744Z — the newest play in that stream.
+**Single-select, driven end to end at 390×844 on the live roster.** Exactly one
+pill is lit at every step, and the URL follows it: `All` 20 items and no `plays=`,
+`HR` **4** and `plays=hr`, `SB` **1** and `plays=sb`, `New` and `newplays=1`,
+`All` back to 20 with the param gone. The `Plays` toggle and its panel are **0**
+on the page at every one.
 
-**Both filtered empty states name the control that emptied the view**, which is
-the app's standing rule and a state this section could not previously be in:
-`No plays of those kinds today.` and `No new plays of those kinds.`, each over
-`Change it with **Plays** in the row above.` The **day-level** message is held
-back while a filter is what emptied it (`filtered`), `No games for these players.`
-being a claim about the day and a lie over a stream narrowed to home runs on an
-afternoon of singles.
+**The whole `New` cycle**, with a marker planted at 2026-08-18T00:00Z: the red
+button reads `40 new plays` and the pill carries a `40` badge; pressing the button
+lights `New`, writes `newplays=1`, and takes the red button away (with the reader
+already looking at the new plays it would be a control offering what is on
+screen); pressing `All` turns it off, advances the marker to the newest play in
+the stream and clears the badge. And the guard: `All → HR → All` leaves the badge
+at **40** and the marker where it was.
+
+**Deep links.** `?plays=hr,sb` — a link written when these unioned — opens on
+**HR** and rewrites itself to `plays=hr`; `?plays=xbh` opens on **All** and drops
+the param. Neither is an empty stream, which is the direction every parameter in
+this app fails in.
+
+**The empty state names the row that emptied it.** `No plays of that kind today.`
+and, on the `New` lens, `Nothing new since you last marked the feed read.`, each
+over `Change it with the pills above — **All** is every play of the day.` The
+**day-level** message is still held back while a filter is what emptied it
+(`filtered`), `No games for these players.` being a claim about the day and a lie
+over a stream narrowed to home runs on an afternoon of singles.
 
 **Widths, at 320 / 375 / 390 / 480 / 640 / 900 / 1200 / 1920**: page-body overflow
-**0** at every one, and the panel never scrolls sideways. The label goes visually
-hidden at ≤640 and the button is the glyph and its badge (**67px** against 108
-labeled), with the accessible name intact at every width — a button whose only
-content is an `aria-hidden` glyph has none at all. The chips take one row from 640
-up and two below it.
+**0** at every one, and the row is **34px tall at every one** — the property a
+wrapping row could not have. It scrolls sideways below 640 (scrollport 276 / 331 /
+346 / 436 against a 450–480px row) and fits from 640 up (596 / 800 / 800 / 800,
+scrolling nowhere). The pinned chrome is **207 / 159 / 159 / 159 / 111 / 115 / 115
+/ 115**, which is the two lines the `Plays` button used to cost given back at 320
+and 640.
 
-**What the button costs the tab row is a wrapped line at exactly two widths**,
-A/B'd by hiding it on the same page: **320** (207 → 255px of chrome) and **640**
-(111 → 159). 375, 390, 480, 900, 1200 and 1920 are byte-identical. The panel adds
-one row of its own (**40px**) while it is open.
+**And it is drawn only where it can act**: **0** pills on the pitcher tab, **0**
+on the Roster view, and **0** on a matchup team page's feed, which passes none of
+the five props.
 
 **Contrast, composited over the real ground in all six schemes.** The `New` count
 badge — `--strikeout` on an 18% wash of itself — reads **4.45 (Midnight) to 5.64
@@ -230,23 +363,30 @@ badge — `--strikeout` on an 18% wash of itself — reads **4.45 (Midnight) to 
 occupies (**4.54 to 6.12**), so it ships at the standard already set rather than
 under it. The red **button** is the same ink on a *12%* wash, so it is higher than
 the badge in every scheme by construction, and was measured at **5.97 / 7.80 /
-6.31** on Light, Lavender and Powder Blue. The `Plays` button is ordinary chrome
-at 12.09–17.75.
+6.31** on Light, Lavender and Powder Blue. The pills are ordinary chrome
+(`.research-toggle`) at 12.09–17.75.
 
 **Red rather than the accent, and it is the one control in this app that is.**
 `--strikeout` is otherwise spent on a delta going the wrong way and on the news
 mark's *filed today* — and this is that second sense, something has happened since
-you looked. The accent means "this control is doing something", which is what the
-`Plays` button beside it says and what this one must not, since it does nothing
-until it is pressed. Its dot is the Live heading's own mark in the same red at the
-same size, and deliberately **does not pulse**: that animation says a game is in
+you looked. The accent means "this control is doing something", which is what a
+lit pill beside it says and what the count must not, since it does nothing until
+it is pressed. Its dot is the Live heading's own mark in the same red at the same
+size, and deliberately **does not pulse**: that animation says a game is in
 progress where this says a count is waiting, and two things pulsing in one column
 read as one thing.
 
-**Bundle: 560.15 → 565.05 KB of JS** (166.36 → 168.01 gzipped) and **151.76 →
-153.08 KB of CSS** (27.21 → 27.39) — 4.9KB and 1.3KB raw, 1.7KB and 0.18KB over
-the wire, for a filter set, a marker, a route, a red button and the paragraphs
-above restated where the rules are.
+**Bundle, for the feature as it shipped: 560.15 → 565.05 KB of JS** (166.36 →
+168.01 gzipped) and **151.76 → 153.08 KB of CSS** (27.21 → 27.39). **And for the
+row that replaced it: 574.13 → 572.97 KB of JS** (170.70 → 170.37 gzipped) and
+**154.82 → 154.88 KB of CSS** (27.71 → 27.72) — the JS **falls** by 1.2KB (0.33
+over the wire), a disclosure, a panel, a set and a membership toggle being more
+code than a row and a lens; the CSS grows by 60 bytes, nearly all of it the
+comments arguing the sideways scroll. **And for the `Video` lens learning what
+film is: 572.97 → 574.17 KB of JS** (170.37 → 170.82 gzipped) and **154.88 →
+154.95 KB of CSS** (27.72 → 27.73) — 1.2KB and 70 bytes raw, for a bulk read, a
+per-game reel cache, a wait line and the paragraphs above restated where the
+rules are.
 
 - **feed** (`LiveFeed.tsx`) — the roster's day as **one chronological stream**. It had a second reading for a while, the same days grouped one card per player, and that reading is the player page's **Overview** tab now (below), which is where a card per player belonged: this page is the roster read by clock, and one player is not a roster. What is left is a chronological stream across the watched players of the active kind, in three sections (Live / **Recent plays** — "Recent outings" on the pitcher tab, since a pitcher's items are outings, not plays / Upcoming). What one stream item *is* depends on the kind: for a **batter** a single completed plate appearance; for a **pitcher** his whole outing (`FeedPitcherGame`), which is why the pitcher stream is sorted on his *last* batter faced (`lastFacedTime`). A **batter's** stream is interleaved with the base events off `PlayerGame.baseEvents` — his own baserunning, one item per play (see **the base-event vocabulary** below).
 

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { requireUser, userId } from './auth.js';
 import { addDays, baseballToday } from './etDate.js';
+import { mapLimit } from './limit.js';
 import { getPlayerDay, getPlayerStatuses, getReport, withEstimators } from './savant.js';
 import type { HeldDays } from './savant.js';
 import { getPercentiles } from './percentiles.js';
@@ -29,7 +30,13 @@ import type {
   SeasonArsenalPitch,
   TeamHittingWindow,
 } from './types.js';
-import { getPitcherStats, getPlayerStats, getSeasonPlayers, resolveVideoUrl } from './mlbStats.js';
+import {
+  getGameClipPlayIds,
+  getPitcherStats,
+  getPlayerStats,
+  getSeasonPlayers,
+  resolveVideoUrl,
+} from './mlbStats.js';
 import {
   addRosterPlayer,
   attachEspnLeague,
@@ -1952,6 +1959,52 @@ app.get(
 );
 
 // Resolve the direct .mp4 URL for a play's Statcast video (lazy, on demand).
+/**
+ * **Which plays in these games have a highlight** — the feed's `Video` lens,
+ * answered a game at a time rather than a play at a time.
+ *
+ * Registered **before** `/api/video/:playId`, which would otherwise match
+ * `clips` and reject it as a malformed playId: Express tries routes in order.
+ *
+ * A **set of games in one request** rather than a route per game, because the
+ * caller is a stream that draws a day's worth of them and would otherwise open
+ * fifteen connections to ask one question. Capped at `MAX_CLIP_GAMES`, which is
+ * comfortably a full slate; anything past it is dropped rather than the request
+ * refused, the lens degrading to "no film known for that game" exactly as a
+ * failed read does.
+ *
+ * A game that throws answers with an **empty list rather than failing the
+ * request**, which is the direction every join in this app fails in: the lens
+ * then shows fewer plays than it might, where a 502 would take the whole feed
+ * down for a filter.
+ */
+const MAX_CLIP_GAMES = 40;
+app.get(
+  '/api/video/clips',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const raw = String(req.query.games ?? '');
+    const gamePks = [
+      ...new Set(
+        raw
+          .split(',')
+          .map((p) => Number(p.trim()))
+          .filter((n) => Number.isInteger(n) && n > 0),
+      ),
+    ].slice(0, MAX_CLIP_GAMES);
+    const games: Record<number, string[]> = {};
+    await mapLimit(gamePks, 6, async (gamePk) => {
+      try {
+        games[gamePk] = await getGameClipPlayIds(gamePk);
+      } catch (err) {
+        console.error(`highlight reel failed for game ${gamePk}:`, err);
+        games[gamePk] = [];
+      }
+    });
+    res.json({ games });
+  }),
+);
+
 app.get(
   '/api/video/:playId',
   requireUser,

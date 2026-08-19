@@ -2368,6 +2368,30 @@ async function scrapeSavantVideoUrl(playId: string): Promise<string | null> {
 }
 
 /**
+ * **Which plays in a game MLB cut a highlight for** — the reel's guids, and
+ * nothing else.
+ *
+ * It exists for the feed's `Video` lens, which has to answer *does this play
+ * have film* for a whole day's stream at once. Asking `resolveVideoUrl` per play
+ * cannot do that: it falls through to a Savant scrape, measured at **~350ms a
+ * play** (40 plays of one settled day took 14.1s), so a filter over a range
+ * would be minutes of upstream. The reel is **one read per game** and is the
+ * cache `resolveVideoUrl` already fills — so a game whose clip anybody has
+ * opened is free here, and vice versa.
+ *
+ * It answers for **today's** games alone, which is what the client asks it for:
+ * Savant lags the live feed by a day and then covers essentially every play
+ * (measured over three settled days, **90 of 90** sampled plays resolved), so a
+ * game from a previous day needs no lookup at all. The reel is the whole of the
+ * answer for the day being played, which is exactly the case the lens was
+ * useless in — measured on 2026-08-18, **13 of 42** plays had film where the
+ * pill was selecting all 42.
+ */
+export async function getGameClipPlayIds(gamePk: number): Promise<string[]> {
+  return [...(await getHighlightVideosByPlayId(gamePk)).keys()];
+}
+
+/**
  * Resolve the direct video URL for a Statcast playId within a given game.
  * Tries the official MLB game-content highlights first, falling back to
  * scraping Baseball Savant for plays that weren't cut into a highlight.

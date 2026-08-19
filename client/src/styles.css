@@ -10031,6 +10031,16 @@ button.start-line:focus-visible {
   outline-offset: 2px;
   border-radius: 4px;
 }
+/* **Still looking for today's highlight reels** — the `Video` lens's own wait,
+   under the section heading and above whatever it has already confirmed. A line
+   rather than a block: the settled days on screen are answered, so this says the
+   list is filling in rather than standing in front of one. Centered because that
+   is where the red button and the empty state below it sit. */
+.feed-film-wait {
+  align-self: center;
+  color: var(--muted);
+  font-size: 13px;
+}
 .feed-empty {
   padding: 20px;
   text-align: center;
@@ -10110,55 +10120,61 @@ button.start-line:focus-visible {
   color: var(--muted);
 }
 
-/* **The `Plays` disclosure and its panel.** The button is `.research-toggle`
-   outright — folded onto in the JSX rather than restyled here — and takes that
-   family's `flex: none` and `white-space: nowrap` for its place in the wrapping
-   tab row, the two declarations `.starters-toggle` and `.date-toggle` carry for
-   the same reason: every group in that row is atomic and breaks to the next line
-   whole rather than folding in half. */
-.plays-toggle {
+/* **The feed's filter pills** — one row at the head of the stream they narrow,
+   in the page rather than in the pinned tab row. The `Plays` disclosure that
+   used to live up there, its panel of chips and their two rules are gone with
+   it; what is here is one row and its count badge.
+
+   **It scrolls sideways rather than wrapping**, which is the answer every other
+   strip of pills in this app gives when it outgrows its width — the research
+   board's position row and its window tabs, the player page's tab strip, the
+   tutorial's jump strip. A wrapping row would change the height of the thing
+   sitting above a stream at every width, and this row is read across. Hence
+   `flex-wrap: nowrap` and `flex: none` on the pills: an unconstrained flex item
+   shrinks below its content before a scrollport ever appears, which on a row of
+   two-character labels is a row of clipped words rather than a row that scrolls.
+
+   `overscroll-behavior-x` alone, never the block axis: a scroll container blocks
+   chaining on an axis it cannot itself scroll, so naming the block axis on a row
+   of pills would swallow a vertical swipe that belongs to the stream under it —
+   the rule `.details-tabs` and `.research-positions` already follow.
+
+   It shares the feed's own column (`--card-column`) and its `auto` margins, so
+   the row's left edge is the left edge of the items below it. */
+.feed-filters {
+  max-width: var(--card-column);
+  width: 100%;
+  /* The feed's own 16px top margin collapses with this row's zero bottom one,
+     so the gap below is the gap the stream has always had. */
+  margin: 16px auto 0;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  overflow-x: auto;
+  overscroll-behavior-x: none;
+  scrollbar-width: none;
+  /* The pills carry a focus ring and a lit border; a scrollport clips them at
+     its own edges, so it gets the padding back as its own breathing room. */
+  padding: 2px 0;
+}
+.feed-filters::-webkit-scrollbar {
+  display: none;
+}
+/* Tighter than a control on the tab row: eight of these share the row, and each
+   is two to five characters where a labeled toggle is a word. */
+.feed-filter-pill {
   flex: none;
+  height: 30px;
+  padding: 0 12px;
+  font-size: 12px;
   white-space: nowrap;
 }
-.plays-toggle svg {
-  flex: none;
-}
-/* Its own line under the tabs, which is the research board's rule for a panel:
-   a row of chips has no business sharing a line with the button that opened it.
-
-   **Named through `.view-bar`, which is the parent it really has** —
-   `.app.date-open .date-control`'s own rule, that being the other disclosure row
-   on this line. It was written `.view-bar-tabs > .plays-panel` first, and that is
-   the trap the board's panels already record from the other side: the selector
-   matched nothing, so the panel took its content width as an ordinary item of a
-   `space-between` row. Measured at 1920: a 426px block of chips at **x=1472**,
-   on the same line as the tabs and jammed against the right edge of the page. */
-.view-bar > .plays-panel {
-  flex: 1 1 100%;
-}
-/* Tighter than a control on the tab row: seven of these plus `New` share the
-   row, and each is two to five characters where a labeled toggle is a word. */
-.plays-chip {
-  height: 30px;
-  padding: 0 10px;
-  font-size: 12px;
-}
-/* `New` composes differently from the seven before it — they union with each
-   other and it narrows what they selected — and it says so with its **word** and
-   its red count rather than with any spacing of its own.
-
-   Two devices came before that and each failed on the wrap. A 1px hairline was
-   left dangling at the end of a line with nothing after it once the panel broke;
-   a wider gap cannot dangle, and at seven chips it read as a second *group*
-   whose daylight landed wherever the window put the break rather than where the
-   argument wanted it. So the chip is spaced like every one beside it and only
-   `.plays-chip-new.on` still has a rule, for the count's own colour. */
-/* The unseen count, on the chip as well as on the red button — one figure read
-   in two places, so the panel says how much `New` would show before it is
-   pressed. Red for the reason the button is, and dropped once the filter is on:
-   with the stream already narrowed to them the count is the length of what is on
-   screen. */
-.plays-chip-count {
+/* The unseen count, on the `New` pill as well as on the red button in the
+   stream — one figure read in two places, so the row says how much `New` would
+   show before it is pressed. Red for the reason the button is, and dropped once
+   the lens is on: with the stream already narrowed to them, the count is the
+   length of what is on screen. */
+.feed-filter-count {
   margin-left: 6px;
   padding: 1px 5px;
   color: var(--strikeout);
@@ -10167,10 +10183,6 @@ button.start-line:focus-visible {
   font-size: 11px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
-}
-.plays-chip-new.on .plays-chip-count {
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
 /* Feed headshot — a compact variant of the player card's headshot button. */
@@ -14996,7 +15008,8 @@ html[data-theme='light'] .league-table thead th {
   .player-list {
     gap: var(--stack-gap);
   }
-  .live-feed {
+  .live-feed,
+  .feed-filters {
     margin-top: var(--stack-gap);
   }
 
