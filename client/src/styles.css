@@ -10104,9 +10104,10 @@ button.start-line:focus-visible {
    something", which is what the `Plays` button beside it says and what this one
    must not, since it is doing nothing until it is pressed.
 
-   `align-self: center` and the ground of `.feed-more` under it: the two are the
-   same object at the two ends of the same list — a full-width band would read
-   as a section of the stream rather than as a note above it. */
+   Centered rather than full width — a band across the column would read as a
+   section of the stream rather than as a note above it. The `align-self` that
+   did that now sits on `.feed-new-row` below, which is the flex item this
+   section centers since `Clear` came to stand beside it. */
 /* **The way out of new-plays mode**, at the head of the list and again at its
    foot. It is `.feed-more`'s pill — ordinary chrome on the page's own ground —
    because `--strikeout` in this app means *something has happened since you
@@ -10124,15 +10125,34 @@ button.start-line:focus-visible {
   margin-top: 10px;
 }
 
-.feed-new {
+/* **The two presses the news admits**, in one centered row: the red count, and
+   `Clear` beside it for the reader who can see from the count that they do not
+   need to look. `align-self: center` moves off the button and onto the row, so
+   the row is the flex item the section centers and the pair is centered as one
+   object rather than each on its own.
+
+   The row is the *only* place either button is drawn, and both are inside one
+   gate, so the slot is a pair or it is nothing — there is no state in which a
+   `Clear` stands next to no count. */
+.feed-new-row {
   align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* One pill geometry for the pair, because they sit shoulder to shoulder and two
+   boxes that differed by the 1px of a padding would read as a mistake rather
+   than as two controls. `.feed-more`'s shape was the other candidate for
+   `Clear` — it is the shape this list already uses for ordinary chrome — but
+   its `--control-radius` corner beside a 999px pill is the same mistake made in
+   the other direction. So the shape is shared and only the *ground* differs,
+   which is the whole of what the two have to say apart. */
+.feed-new,
+.feed-clear-new {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   padding: 7px 14px;
-  color: var(--strikeout);
-  background: color-mix(in srgb, var(--strikeout) 12%, transparent);
-  border: 1px solid color-mix(in srgb, var(--strikeout) 50%, transparent);
   border-radius: 999px;
   font: inherit;
   font-size: 13px;
@@ -10140,17 +10160,42 @@ button.start-line:focus-visible {
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
 }
+.feed-new {
+  color: var(--strikeout);
+  background: color-mix(in srgb, var(--strikeout) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--strikeout) 50%, transparent);
+}
+/* **Not a second alarm.** `--strikeout` beside `--strikeout` would be two
+   things claiming *something has happened since you looked* where only one of
+   them is news and the other is the reader answering it. So `Clear` takes
+   `.feed-more`'s ordinary chrome — the page's own ground and the plain border —
+   which is what `Show all plays` takes at the other end of this list and for
+   the same reason. */
+.feed-clear-new {
+  color: var(--text);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+}
 /* Scoped for the app-wide reason (**Client**, *A card doesn't highlight when you
    scroll past it*): this sits at the top of a list that scrolls, and on touch
-   there is no pointer to move away. */
+   there is no pointer to move away. Both halves take the scope, or a finger
+   crossing the row on its way down the page would leave one of the two lit. */
 @media (hover: hover) {
   .feed-new:hover {
     border-color: var(--strikeout);
     background: color-mix(in srgb, var(--strikeout) 20%, transparent);
   }
+  .feed-clear-new:hover {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 10%, var(--bg-2));
+  }
 }
 .feed-new:focus-visible {
   outline: 2px solid var(--strikeout);
+  outline-offset: 2px;
+}
+.feed-clear-new:focus-visible {
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 /* The same dot the Live heading wears, in the same red and at the same size —
