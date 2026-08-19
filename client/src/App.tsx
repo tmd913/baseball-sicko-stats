@@ -637,6 +637,30 @@ export default function App() {
     () => initialParams.get('newplays') === '1',
   );
   /**
+   * **Which way the feed's stream runs** — false is newest-first, which is what
+   * makes a stream a stream and what this page has always opened on; true is the
+   * day read forwards from its first pitch.
+   *
+   * **In the URL under `oldest=1`**, by the same rule as `newplays=1` and
+   * `hideil=1` beside it: it changes *which* items are at the top of the view,
+   * so a link that carries it describes a different page. Absent is the default,
+   * which is how every binary lens in this app spells "off" — and it means the
+   * order can be redefined later without anyone's link needing revisiting. An
+   * `oldest=` of anything else reads as the default, which is the direction
+   * every parameter here fails in.
+   *
+   * **Gated on the view rather than on the kind tab**, unlike the pills beside
+   * it and for the opposite reason: a pitcher's stream has a clock too, so this
+   * one is in force on both tabs and the toggle is drawn on both.
+   *
+   * **Not a saved preference**, on `playFilter`'s own line: which way you want
+   * to read this afternoon is not a fact about you, and a saved copy would mean
+   * a feed silently running backwards a week later.
+   */
+  const [feedOldestFirst, setFeedOldestFirst] = useState<boolean>(
+    () => initialParams.get('oldest') === '1',
+  );
+  /**
    * **How far down the feed's stream of plays this reader has got** — epoch ms
    * of the newest play they marked read, which is what draws the red
    * `N new plays` button and what the `New` filter narrows to.
@@ -2909,6 +2933,10 @@ export default function App() {
       const plays = playFilterParam(playFilter);
       if (plays) p.set('plays', plays);
       if (feedNewOnly) p.set('newplays', '1');
+      // The stream's direction — see `feedOldestFirst`. Inside the same view
+      // gate and outside the batter one, the pitcher tab's outings reversing on
+      // the same press.
+      if (feedOldestFirst) p.set('oldest', '1');
     }
     // The mode and its span as one param, so it can never say a span with no
     // mode — see `scheduleSpan`. Absent is off, which is the only thing the
@@ -2948,6 +2976,7 @@ export default function App() {
     helpOpen,
     playFilter,
     feedNewOnly,
+    feedOldestFirst,
     projected,
   ]);
 
@@ -4465,12 +4494,25 @@ export default function App() {
      already in the page for that same reason. The `Plays` disclosure it replaces
      is gone from the row above with it.
 
-     **Batter tab only** (`feedIsBatters`): a pitcher's stream item is his whole
-     outing rather than a play, which is the same fact the kind tabs exist for,
-     so there is nothing here for the pills to select on. */
-  const feedFilterPills = feedIsBatters ? (
-    <FeedFilterPills lens={feedLens} onSelect={selectFeedLens} />
-  ) : null;
+     **Batter tab only** (`feedIsBatters`) — *the pills*: a pitcher's stream item
+     is his whole outing rather than a play, which is the same fact the kind tabs
+     exist for, so there is nothing here for the pills to select on. The row is
+     drawn on both tabs now, carrying the one control that is not about kinds:
+     `Oldest first`, which turns the stream round. */
+  const feedFilterPills =
+    view === 'feed' ? (
+      <FeedFilterPills
+        lens={feedLens}
+        onSelect={selectFeedLens}
+        /* The kind group is the batter tab's; the order toggle beside it is
+           both tabs'. See the row's own file — an outing has a clock, so a
+           pitcher's day reads forwards on the same press, and the toggle keeps
+           its place at the row's right end whichever tab is up. */
+        kinds={feedIsBatters}
+        oldestFirst={feedOldestFirst}
+        onToggleOrder={() => setFeedOldestFirst((v) => !v)}
+      />
+    ) : null;
 
   /* The calendar, which is both the disclosure for the date controls and the
      one thing on the page saying which days every number on it is drawn from.
@@ -5640,6 +5682,11 @@ export default function App() {
             onShowNew={feedIsBatters ? showNewPlays : undefined}
             onShowAll={feedIsBatters ? showAllPlays : undefined}
             onClearNew={feedIsBatters ? clearNewPlays : undefined}
+            /* Not gated on the batter tab, where the six above are: this one is
+               not a lens over kinds of play but the direction the clock runs,
+               and a pitcher's outings are stamped with one exactly as a plate
+               appearance is. */
+            oldestFirst={feedOldestFirst}
           />
           </>
         )

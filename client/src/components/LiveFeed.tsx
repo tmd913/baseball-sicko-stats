@@ -1179,6 +1179,11 @@ function byRecency(a: FeedEntry, b: FeedEntry): number {
  * two can never disagree about ties — which matters most exactly where the
  * timestamps are equal, a play's own grouped events being the case that has
  * needed the tiebreak from the beginning.
+ *
+ * **The stream borrows it too, now that it can be read forwards** (`oldestFirst`
+ * below). That the reversal is one negation rather than a second sort is the
+ * whole reason a control could be put on it: there is no order this file can be
+ * asked for that these two functions do not already agree about.
  */
 export function byPlayOrder(a: FeedEntry, b: FeedEntry): number {
   return -byRecency(a, b);
@@ -1215,7 +1220,9 @@ export function playerDayEntries(report: PlayerReport): PlayerDayEntries {
 /**
  * The roster as a flat, most-recent-first stream. A "Live" section pins whoever
  * is at bat, on deck, on base or on the mound to the top; below it, everything
- * that has happened reads newest-first. `reports` is one kind at a time (App's
+ * that has happened reads newest-first — or forwards, if the reader has pressed
+ * `Oldest first` (see `oldestFirst`, which reverses that section and only that
+ * section). `reports` is one kind at a time (App's
  * kind tabs sit above this view), so a batter's at-bats and a pitcher's outings
  * never mix: for a batter an item is a single plate appearance or base-running
  * event, for a pitcher it's a whole outing grouped by inning.
@@ -1242,6 +1249,7 @@ export function LiveFeed({
   onShowNew,
   onShowAll,
   onClearNew,
+  oldestFirst = false,
 }: {
   reports: PlayerReport[];
   // Which kind the tabs above are showing — the stream is one kind at a time,
@@ -1311,6 +1319,34 @@ export function LiveFeed({
    * `newplays=1` is a fact about which stream the view is showing.
    */
   onClearNew?: () => void;
+  /**
+   * **Read the day forwards** — the stream reversed, first play of the day at
+   * the top. Default false, which is the stream as it has always been and what
+   * the second caller (`LeagueTeam.tsx`) gets by passing nothing.
+   *
+   * **It reverses one of the three sections**, and that is the whole of what it
+   * means:
+   *
+   * - **Recent** is the section with a clock the reader reads *along*, so it is
+   *   the one that turns round — `byPlayOrder` rather than `byRecency`, which
+   *   is that comparator negated and therefore cannot disagree with it about a
+   *   play's own grouped events (cause then effect, either way round). The page
+   *   size turns round with it: `Load more` walks *forward* in time from the
+   *   first pitch of the day instead of back from the last.
+   * - **Live** does not. It is not ordered by a clock at all — `ROLE_ORDER`
+   *   puts the man at bat above the man on deck above the man on base, which is
+   *   a priority and reads the same in any direction. Reversing it would say
+   *   nothing except that on-base now outranks at-bat. It also stays *pinned to
+   *   the top*: what is happening now is why this page is open, and a control
+   *   that reorders plays is not a control that rebuilds the page.
+   * - **Upcoming** does not either, and the reason is that it already agrees
+   *   with both readings. It is sorted by first pitch, earliest first — which
+   *   is *next up first* under newest-first and *forwards in time* under
+   *   oldest-first. The two orders it could be asked for are the same order, so
+   *   there is nothing to flip; a reversed Upcoming would only bury the game
+   *   that starts soonest under the one that starts at ten.
+   */
+  oldestFirst?: boolean;
 }) {
   // How much of the Recent section is on screen, grown a page at a time by the
   // "Load more" button. Deliberately not in the URL — it's a reading position,
@@ -1341,12 +1377,18 @@ export function LiveFeed({
     .map((p) => ({ report: p.report, role: p.live!.role, game: p.live!.game }))
     .sort((a, b) => ROLE_ORDER[a.role] - ROLE_ORDER[b.role]);
 
-  // Everything that has happened, interleaved newest-first: for a batter every
+  // Everything that has happened, interleaved by clock — newest-first unless the
+  // reader has turned the stream round (`oldestFirst`): for a batter every
   // completed plate appearance and every base-running event of his own, and for
   // a pitcher his whole outing as a single item. The in-progress at-bat (no
   // event yet) lives in the Live section above, and a pitcher pinned there has
   // already been kept out of this list by `playerDayEntries`.
-  const allRecent = perPlayer.flatMap((p) => p.entries).sort(byRecency);
+  // Sorted here rather than taking `playerDayEntries`' own order, which is one
+  // man's day and already `byRecency`: the merge across players is what decides
+  // the stream, and re-sorting the merged list is what makes the flip one line.
+  const allRecent = perPlayer
+    .flatMap((p) => p.entries)
+    .sort(oldestFirst ? byPlayOrder : byRecency);
 
   /**
    * **The `Video` lens needs today's highlight reels**, and only today's — see
@@ -1458,6 +1500,11 @@ export function LiveFeed({
   // something to show before the day's first at-bat (and lists later games while
   // earlier ones are underway). Only the ones the player is actually in: see
   // `isUpcomingFor`.
+  //
+  // **`oldestFirst` does not reach this one**, and the reason is that it would
+  // change nothing worth having: earliest-first is *next up first* reading the
+  // day backwards and *forwards in time* reading it forwards, so both orders
+  // this list could be asked for are this order. See the prop's own note.
   const upcoming = perPlayer.flatMap((p) => p.upcoming).sort(byStartTime);
 
   /**
