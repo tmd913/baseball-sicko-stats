@@ -1108,11 +1108,25 @@ function projectOnePitcher(
   const oppOf = (g: ScheduleGame): number => (g.homeId === row.teamId ? g.awayId : g.homeId);
   // His own turns: every remaining game he is named for or projected into.
   const his = games.filter((g) => ctx.starters.get(g.gamePk)?.has(id) === true);
-  // Which of the two shapes he is projected in — his job *now* rather than his
-  // season's majority, which is `currentRole`'s whole argument.
+  // **The role says when he pitches; his own record says how much.** Two
+  // questions that look like one, and conflating them is a measured disaster
+  // rather than a tidiness point: `projectPitcher`'s starter view divides his
+  // season *outs* by his season *starts*, which is only a per-start rate when
+  // the starts are where the outs came from. Bryan King is 50 appearances, one
+  // start and 155 outs — read as a starter he projects **155 outs in a single
+  // outing**, and an opener named as tomorrow's probable is exactly the man
+  // `currentRole` newly gets right about the day and would have got absurdly
+  // wrong about the workload.
+  //
+  // So the shape stays on the old majority test, which is the one thing that
+  // test is genuinely good for: it is the condition under which `outs / gs` is
+  // a number about starts at all. A mixed-role pitcher is projected per
+  // appearance on the day he starts — under his real workload, and by a long
+  // way the safer of the two directions to be wrong in.
   if (currentRole(ctx, id, row, pools.pitRecent.get(id) ?? null, row.teamId) === 'starter') {
     const mults = his.map((g) => pitcherGameMult(pools, id, oppOf(g)));
-    projectPitcher(row, pools.pitRecent.get(id) ?? null, mults, true, into);
+    const startsAreHisRecord = num(row.gamesStarted) * 2 > num(row.games);
+    projectPitcher(row, pools.pitRecent.get(id) ?? null, mults, startsAreHisRecord, into);
     return { starts: mults.length, reliefGames: 0, placed: true };
   }
   // A reliever's chances are his club's games times how often he has actually

@@ -1078,7 +1078,9 @@ Three rules, and they fall out of one mechanism rather than being three cases:
 - **A starting pitcher is in the lineup on the day he starts.** His turn comes
   off the rotation map the Schedule view's grid already draws, so he brings one
   unit on that day and nothing on the six around it — and the seat he is *not*
-  using on the other six is a seat somebody else gets.
+  using on the other six is a seat somebody else gets. Who counts as a starter
+  at all, and what happens when more of them are going than there are seats, is
+  **The pitching seats: role, then rank** below.
 - **A reliever is in the lineup when he pitches**, benched today or not. Nobody
   can know which day that is, so he competes every day at his appearance rate,
   which is exactly what the seat is worth in expectation.
@@ -1188,6 +1190,120 @@ enough to disappear into it. Driven in a browser at 1200: the Rankings lens
 draws its 12 rows under `Week 19 · projected to Aug 23 · 5 days still to play`
 and a matchup page opens its 20 category rows, both lit, **0** error banners and
 **0** page overflow.
+
+### The pitching seats: role, then rank
+
+The first cut of the fill treated the pitching side as one list ordered by value,
+which got two things wrong that the batting side has no equivalent of.
+
+**A manager does not weigh a start against a relief appearance.** He starts the
+man who is starting and fills what is left — so the seats now go by **tier and
+then by rank**: every starter with a turn that day is asked before any reliever
+is considered at all, and inside each tier the order is value. `seatDay` already
+fills in whatever order it is handed and the greedy pass is optimal for that
+order, so this is a comparator rather than a new algorithm.
+
+Both halves of that matter, and each answers something the reader named:
+
+- **Seven seats and eight starters going means the best seven start**, and the
+  eighth genuinely misses out rather than being quietly assumed in. A rotation
+  slot is not a lineup slot, and on a Sunday when everybody's turn lands the
+  difference is real.
+- **The relievers who fill what is left are the best of them**, rather than
+  whoever the iteration reached first.
+
+**And role is read from what he is doing now**, which is where the SP/RP
+eligibility the reader flagged comes in. `isRotationStarter` — a majority of his
+appearances are starts, over the whole season — is the app's definition of who
+*works out of a rotation*, and it is right for labelling a player and wrong for
+projecting one: the men it is most wrong about are exactly the ones a manager is
+deciding over. The starter moved to the bullpen in July still reads starter; the
+long man given a rotation spot a fortnight ago still reads reliever; and the
+**swingman ESPN lists as both SP and RP** has a real role this week and two
+eligibilities that cannot say which. `currentRole` answers in four rules, the
+first two being facts rather than inferences: he has a turn in this window; he
+holds a rotation slot whose turn falls outside it; the last thirty days where
+there are `ROLE_MIN_GAMES` (3) of them to read; then the season, which is the
+old behavior.
+
+**Eligibility is not role, and keeping them apart is the point.**
+`eligibleSlots` says which chairs he may sit in and nothing whatever about what
+he will do; `currentRole` says what he will do and leaves the chair to the
+assignment. A swingman is therefore free to take an `SP` seat on a day no
+starter wants it, and is still projected in the shape he is actually being used
+in.
+
+**`rotationIds` is the second rule and it earns its place on its own.**
+`starters` answers *who has this game* and goes quiet for a man whose next turn
+falls the day after the span ends — which a six-man rotation over a five-day
+week has several of. Without it, half such a rotation reads as relievers and gets
+projected for relief appearances nobody is going to ask them for.
+
+### The trap this walked into, which is why the shape is still the old test
+
+**The role says *when* he pitches. His own record says *how much*.** They look
+like one question and conflating them is a measured disaster rather than a
+tidiness point.
+
+`projectPitcher`'s starter view divides his season **outs** by his season
+**starts**, which is a per-start rate only when the starts are where the outs
+came from. **Bryan King is 50 appearances, 1 start and 155 outs** — an opener,
+and exactly the man `currentRole` newly gets *right* about the day. Read as a
+starter he projects `155 / 1` outs in a single outing, blended with his thirty
+days to **≈143 outs — 47.7 innings, in one appearance.** That shipped into a
+commit on this branch and was caught by measuring the branch rather than by
+building it.
+
+So `starterView` stays on the old majority test, which is the one thing that
+test is genuinely good for: it is precisely the condition under which `outs / gs`
+is a number about starts at all. A mixed-role pitcher is seated on the day he
+starts and projected **per appearance** — under his real workload, and by a long
+way the safer of the two directions to be wrong in.
+
+### Measured
+
+**The role rule moves two of the 124 rostered pitchers**, and both the way it
+was built to: Bryan King and Ian Seymour, `reliever → starter`, each because he
+has a **turn in the window** that the season's majority could not see. Recomputed
+independently from `/api/schedule`'s rotation map, the 30-day board and the
+season board, with no part of `projection.ts` involved.
+
+**The tier rule is currently inert on this league and was driven anyway**, which
+is the only honest way to test it: the live league starts nine pitchers and fills
+a mean of **4.33** of them, full on **0 of 60** day-teams, so nothing contends.
+Squeezing the pitching seats to three and re-running the whole board:
+
+| squeezed to | contended day/team cases | reliever seated over a skipped starter | lower-ranked man preferred inside a tier |
+| --- | --- | --- | --- |
+| 3 seats | **33** of 60 | **0** | **0** |
+| 1 seat | **16** of 60 had *more starters than seats* | **0** | **0** |
+
+At three seats a starter valued **5.89** is seated ahead of two relievers valued
+**7.64** and **7.55**, which is the tier rule doing the one thing value ordering
+alone would never do. At one seat, three starters compete and the best (**8.03**)
+takes it while the other two genuinely do not start.
+
+**The board, against the rule this file had before any of this:**
+
+| | before | after |
+| --- | --- | --- |
+| hitter-games | 554 | **575** |
+| starts | 48 | **63** |
+| relief appearances | 83 | **81** |
+| sides raised / lowered | | **12 / 0** |
+
+Relief falls by two where starts rise by two, which is the reclassification
+showing up in both columns at once rather than anything being lost.
+
+**Identity checks over every side**: **0** categories invented, **0** lost, **0**
+non-category stats shipped, **0** counting categories below the figure already
+banked, **0** tallies disagreeing with their own cells. Through the route:
+**310–332ms** cold, **3,368 bytes**.
+
+**The role rule reaches the Roster view too**, `projectOnePitcher` being one
+function with two callers, and that is intended — *what is he doing now* is the
+better answer to a roster row as much as to a matchup. Measured on the live
+watchlist it changes nothing there, none of its four players having moved role.
 
 ### The engine has a second caller, and so it has a context
 
