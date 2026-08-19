@@ -972,6 +972,17 @@ export interface ProjectionContext {
   pools: Pools;
   remaining: Map<number, ScheduleGame[]>;
   starters: Map<number, Set<number>>;
+  /**
+   * **Everybody holding a rotation slot**, turn inside this window or not.
+   *
+   * `starters` above answers *who has this game*, which goes quiet for a man
+   * whose next turn falls the day after the span ends — and a six-man rotation
+   * over a five-day week has several of those. This is the other question, and
+   * it is what stops such a pitcher being read as a reliever and projected for
+   * relief he is never going to make. It is `buildRotations`' own key set, so
+   * it is already gated on MLB's active roster.
+   */
+  rotationIds: Set<number>;
   clubGames: Map<number, number>;
   clubGamesRecent: Map<number, number>;
   /** Who was in his club's lineup day by day, and who is off the roster now —
@@ -984,6 +995,66 @@ export interface ProjectionContext {
   from: string;
   to: string;
   daysLeft: number;
+}
+
+/**
+ * **How few recent appearances is too few to read a role off.** Three: a
+ * starter makes one turn a week, so three is about a fortnight of him and two
+ * would let a single spot start outvote a month in the bullpen. Below it the
+ * window says nothing and the rules underneath answer instead.
+ */
+const ROLE_MIN_GAMES = 3;
+
+/**
+ * **Which job a pitcher is doing *now*** — which is a different question from
+ * the one `isRotationStarter` answers, and the difference is the whole reason
+ * this exists.
+ *
+ * That helper is the app's one definition of who *works out of a rotation*, and
+ * it reads a whole season: a majority of his appearances are starts. It is right
+ * for labelling a player, and it is wrong for projecting one, because the men it
+ * is most wrong about are exactly the ones a manager is making decisions over —
+ * the starter moved to the bullpen in July, whose season still says starter; the
+ * long man given a rotation spot a fortnight ago, whose season still says
+ * reliever; and the swingman ESPN lists as **both SP and RP**, who has a real
+ * role this week and two eligibilities that cannot say which.
+ *
+ * **Eligibility is not role, and this is the file that has to keep them apart.**
+ * `eligibleSlots` says which chairs he may sit in — a swingman may sit in either
+ * — and says nothing whatever about what he is going to do. This decides what he
+ * is going to do; the chair is the assignment's business.
+ *
+ * Four rules, in order, and the first two are facts about now rather than
+ * inferences:
+ *
+ * 1. **He has a turn in this window** — announced or projected, off the same
+ *    rotation map the Schedule view's grid draws. A man starting on Thursday is
+ *    a starter, whatever his season line says.
+ * 2. **He holds a rotation slot** whose turn happens to fall outside the window.
+ *    Without this a six-man rotation over a five-day week reads half its members
+ *    as relievers and projects them for relief appearances nobody is going to
+ *    ask them for.
+ * 3. **The last thirty days**, where there are `ROLE_MIN_GAMES` of them to read
+ *    — the same window and the same reasoning as `RECENT_WINDOW` everywhere
+ *    else here: what he has been doing lately is what he is doing.
+ * 4. **The season**, which is `isRotationStarter`'s own test and this file's
+ *    behavior for its whole life before now.
+ */
+function currentRole(
+  ctx: ProjectionContext,
+  id: number,
+  season: ResearchRow | null,
+  recent: ResearchRow | null,
+  teamId: number,
+): 'starter' | 'reliever' {
+  for (const g of ctx.remaining.get(teamId) ?? []) {
+    if (ctx.starters.get(g.gamePk)?.has(id) === true) return 'starter';
+  }
+  if (ctx.rotationIds.has(id)) return 'starter';
+  if (recent && num(recent.games) >= ROLE_MIN_GAMES) {
+    return num(recent.gamesStarted) * 2 > num(recent.games) ? 'starter' : 'reliever';
+  }
+  return season && num(season.gamesStarted) * 2 > num(season.games) ? 'starter' : 'reliever';
 }
 
 /** One batter's expected line over the context's remaining games, and how many
@@ -1037,11 +1108,9 @@ function projectOnePitcher(
   const oppOf = (g: ScheduleGame): number => (g.homeId === row.teamId ? g.awayId : g.homeId);
   // His own turns: every remaining game he is named for or projected into.
   const his = games.filter((g) => ctx.starters.get(g.gamePk)?.has(id) === true);
-  // A **majority of his appearances are starts** is the app's one definition
-  // of a rotation starter (`isRotationStarter`), and it is what decides which
-  // of the two shapes he is projected in.
-  const isStarter = num(row.gamesStarted) * 2 > num(row.games);
-  if (isStarter) {
+  // Which of the two shapes he is projected in — his job *now* rather than his
+  // season's majority, which is `currentRole`'s whole argument.
+  if (currentRole(ctx, id, row, pools.pitRecent.get(id) ?? null, row.teamId) === 'starter') {
     const mults = his.map((g) => pitcherGameMult(pools, id, oppOf(g)));
     projectPitcher(row, pools.pitRecent.get(id) ?? null, mults, true, into);
     return { starts: mults.length, reliefGames: 0, placed: true };
@@ -1089,6 +1158,22 @@ interface Candidate {
   units: number;
   /** What one of those units is worth, which is how a scarce seat is settled. */
   value: number;
+  /**
+   * **Who gets asked first**, ahead of `value` entirely — 0 for a starting
+   * pitcher on the day his turn falls, 1 for everybody else.
+   *
+   * A manager does not weigh a start against a relief appearance; he starts the
+   * man who is starting and fills what is left. So the seats go to **every
+   * starter going that day** before a reliever is considered at all, and the
+   * ordering inside each tier is what settles the rest: seven pitching seats
+   * and eight starters going means the **best seven** start and the eighth
+   * genuinely misses out, which is the case the reader asked to have accounted
+   * for rather than assumed away.
+   *
+   * Batters are all one tier — a hitter's day has no equivalent of this, every
+   * one of them being the same kind of chance.
+   */
+  tier: number;
 }
 
 /**
@@ -1299,7 +1384,10 @@ function planLineups(
       if (seats.length === 0) continue;
       const order = cands
         .filter((c) => c.kind === side && (c.day.get(day) ?? 0) > 0 && c.slots.length > 0)
-        .sort((a, b) => b.value - a.value || b.units - a.units);
+        // Tier first and value inside it — which is exactly the lexicographic
+        // priority the greedy pass then honors, `seatDay` filling in the order
+        // it is handed. See `Candidate.tier`.
+        .sort((a, b) => a.tier - b.tier || b.value - a.value || b.units - a.units);
       for (const ci of seatDay(order, seats)) {
         const c = order[ci];
         const got = out.get(c.key);
@@ -1321,7 +1409,7 @@ function batterCandidate(ctx: ProjectionContext, id: number, slots: number[]): C
   for (const g of ctx.remaining.get(row.teamId) ?? []) if (share > 0) day.set(g.date, share);
   let units = 0;
   for (const v of day.values()) units += v;
-  return { key: `batter-${id}`, mlbId: id, kind: 'batter', slots, day, units, value: 0 };
+  return { key: `batter-${id}`, mlbId: id, kind: 'batter', slots, day, units, value: 0, tier: 0 };
 }
 
 /** A pitcher's, which is the one place the two shapes genuinely differ: a
@@ -1331,17 +1419,31 @@ function pitcherCandidate(ctx: ProjectionContext, id: number, slots: number[]): 
   const row = ctx.pools.pitSeason.get(id);
   if (!row || row.teamId === null || slots.length === 0) return null;
   const games = ctx.remaining.get(row.teamId) ?? [];
+  const recent = ctx.pools.pitRecent.get(id) ?? null;
   const day = new Map<string, number>();
-  const isStarter = num(row.gamesStarted) * 2 > num(row.games);
-  if (isStarter) {
+  // **The role decides the shape and the tier alike**, which is what keeps the
+  // two answers from ever disagreeing: a starter's days are his turns and he is
+  // asked first on them; a reliever's are all of them, at his appearance rate,
+  // and he is asked after every starter going that day.
+  const starter = currentRole(ctx, id, row, recent, row.teamId) === 'starter';
+  if (starter) {
     for (const g of games) if (ctx.starters.get(g.gamePk)?.has(id) === true) day.set(g.date, 1);
   } else {
-    const rate = playShareOf(ctx, 'pitcher', id, row.teamId, row, ctx.pools.pitRecent.get(id) ?? null);
+    const rate = playShareOf(ctx, 'pitcher', id, row.teamId, row, recent);
     for (const g of games) if (rate > 0) day.set(g.date, rate);
   }
   let units = 0;
   for (const v of day.values()) units += v;
-  return { key: `pitcher-${id}`, mlbId: id, kind: 'pitcher', slots, day, units, value: 0 };
+  return {
+    key: `pitcher-${id}`,
+    mlbId: id,
+    kind: 'pitcher',
+    slots,
+    day,
+    units,
+    value: 0,
+    tier: starter ? 0 : 1,
+  };
 }
 
 /** One team's expected remaining production, and what it was made of. */
@@ -1568,6 +1670,11 @@ async function buildContext(from: string, to: string): Promise<ProjectionContext
     pools,
     remaining,
     starters: startersByGame(schedule.games, schedule.rotations),
+    rotationIds: new Set(
+      Object.keys(schedule.rotations)
+        .map(Number)
+        .filter((n) => Number.isFinite(n)),
+    ),
     clubGames,
     clubGamesRecent,
     lineup,
