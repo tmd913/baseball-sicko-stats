@@ -192,9 +192,17 @@ uncommitted work, commit or `git stash` it first so it still exists afterwards.
 - **CDK bundling needs `bundleAwsSDK: true`** — `@aws-sdk/lib-dynamodb` is not in the
   Lambda runtime SDK, and leaving it external is `MODULE_NOT_FOUND` on the first
   watchlist read.
-- **The season is hardcoded in seven places** (`savant.ts`, `percentiles.ts`,
-  `xwoba.ts`, `pitcherArsenal.ts`, `teamStats.ts`, `expectedStats.ts`, `research.ts`).
-  If a deploy is meant to roll the season over, confirm all seven changed before
-  shipping. This list said six and omitted `research.ts` until 2026-08-10; verify
-  against the code rather than trusting the count:
-  `grep -rln "hfSea\|CURRENT_SEASON = \|const SEASON = " server/src/`
+- **The season is hardcoded in nine places.** `CLAUDE.md` carries the list and the
+  grep it is derived from; read it there rather than from a copy, which is how this
+  bullet came to say *seven* and to name `teamStats.ts`, a file that no longer
+  exists. If a deploy is meant to roll the season over, confirm all nine changed
+  before shipping:
+  `grep -rln "hfSea\|CURRENT_SEASON = \|SEASON = " server/src/`
+
+## The infrastructure itself
+
+**Read `docs/claude/deployment.md`** before changing anything in `infra/` — the CDK
+app, S3 + CloudFront, the Lambda, the custom domain and its two-pass bootstrap, the
+`www` → apex redirect, the SES identity and the Cognito custom auth domain with the
+two flags that gate it. This procedure covers *running* a deploy; that document
+covers what is being deployed and why each piece is shaped as it is.
