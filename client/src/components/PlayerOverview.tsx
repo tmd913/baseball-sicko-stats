@@ -83,6 +83,9 @@ export function OverviewTab({
   gameLogLoading,
   news,
   newsLoading,
+  starts,
+  startsLoading,
+  startsFailed,
   onTab,
   onOpenDetails,
 }: {
@@ -106,6 +109,13 @@ export function OverviewTab({
    *  never show different items. */
   news: PlayerNews | null;
   newsLoading: boolean;
+  /** His rotation, handed down for the reason the news and the game log are:
+   *  `PlayerDetails` reads it once for this block and for the Schedule tab,
+   *  which draws the very same block, so the two cannot show different turns
+   *  and re-entering either tab costs no request. */
+  starts: ProjectedStarts | null;
+  startsLoading: boolean;
+  startsFailed: boolean;
   /** Switch the page to another tab — what each block's own link does. */
   onTab: (tab: 'news' | 'stats' | 'gamelog') => void;
   onOpenDetails?: (key: string) => void;
@@ -164,7 +174,14 @@ export function OverviewTab({
       {/* Second, because "when does he pitch next" is the forward half of the
           question the block above answers — see this file's own head. */}
       {wantStart && (
-        <ProjectedStartsBlock playerId={playerId} name={name} throws={report.throws} />
+        <ProjectedStartsBlock
+          playerId={playerId}
+          name={name}
+          throws={report.throws}
+          info={starts}
+          loading={startsLoading}
+          failed={startsFailed}
+        />
       )}
 
       <NewsPreview
@@ -527,50 +544,62 @@ function NextGameBlock({ playerId, name }: { playerId: number; name: string }) {
  */
 type OppRead = { board?: TeamHitting | null; loading?: boolean; error?: boolean };
 
-function ProjectedStartsBlock({
+/**
+ * **Exported, because the Schedule tab is this block and nothing else for a
+ * rotation starter** (`PlayerSchedule.tsx`). That is the arrangement News and
+ * the Game Log already have — the Overview previews and a tab holds the whole
+ * thing — with one difference worth naming: those two are one *read* shared by
+ * two drawings, and this is one *component* drawn on two tabs. Only one of them
+ * is ever mounted (the strip draws one tab), so it is one read either way; and
+ * a second implementation of the same five rows is the thing that could not be
+ * kept honest.
+ */
+export function ProjectedStartsBlock({
   playerId,
   name,
   throws,
+  info,
+  loading,
+  failed,
 }: {
   playerId: number;
   name: string;
   /** His own throwing hand, which decides which row of the opponent table is
    *  accented. A start nobody has played has no `game.stand` to read it off. */
   throws: string | null;
+  /**
+   * **The rotation, read by `PlayerDetails` rather than here.**
+   *
+   * It used to be this block's own effect, and the block is now drawn on two
+   * tabs — the Overview and the Schedule tab — so mounting it fetched. Which is
+   * a re-read on every tab switch either way, and was **two** in development,
+   * StrictMode double-invoking an effect whose only guard was a `live` flag it
+   * cleared on the way out. Every other lazy read on this page is held by a ref
+   * one level up for exactly that reason (see `PlayerDetails`' own
+   * `startsReq`), and now so is this one: pressing a tab twice fetches once,
+   * and leaving it and coming back draws what it has.
+   *
+   * **`loading` covers the beat before the request goes out** as well as the
+   * request itself (`PlayerDetails`' `startsPending`): the effect that fires it
+   * runs after the paint that mounts this, and `info === null` with neither
+   * flag set is precisely the state the refusal branch below draws
+   * `Couldn’t read his club’s schedule.` for. So this block can no longer see
+   * that state at all.
+   */
+  info: ProjectedStarts | null;
+  loading: boolean;
+  failed: boolean;
 }) {
-  const [info, setInfo] = useState<ProjectedStarts | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
   const wait = useDelayedFlag(loading);
   // One opposing club's season line per team id, read on the press that opens a
   // row and then held for the life of the block — see `loadOpponent`.
   const [opps, setOpps] = useState<Record<number, OppRead>>({});
   const asked = useRef<Set<number>>(new Set());
+  // A different pitcher is a different list of clubs; the ids would collide
+  // harmlessly (a team's line is a team's line) but the block is about him.
   useEffect(() => {
-    let live = true;
-    setLoading(true);
-    setInfo(null);
-    setFailed(false);
-    // A different pitcher is a different list of clubs; the ids would collide
-    // harmlessly (a team's line is a team's line) but the block is about him.
     asked.current = new Set();
     setOpps({});
-    api
-      .projectedStarts(playerId)
-      .then((d) => {
-        if (live) setInfo(d);
-      })
-      .catch(() => {
-        // A failed read costs this block and nothing else — every other block on
-        // the tab is already drawn.
-        if (live) setFailed(true);
-      })
-      .finally(() => {
-        if (live) setLoading(false);
-      });
-    return () => {
-      live = false;
-    };
   }, [playerId]);
 
   /**

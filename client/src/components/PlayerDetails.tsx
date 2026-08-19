@@ -18,12 +18,14 @@ import type {
   PlayerNews,
   PlayerReport,
   PlayerWindows,
+  ProjectedStarts,
   ResearchRow,
+  ScheduleWindow,
   SeasonArsenal,
   SeasonStats,
   XwobaSeries,
 } from '../types';
-import { handCell, headshotUrl, savantPlayerUrl, statusCorner } from '../lib';
+import { handCell, headshotUrl, isRotationStarter, savantPlayerUrl, statusCorner } from '../lib';
 import { MovementChart, PitchUsageChart } from './ArsenalCharts';
 import { RemoveButton } from './RemoveButton';
 import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
@@ -46,6 +48,8 @@ import {
   useHandedness,
 } from '../hooks';
 import { OverviewTab } from './PlayerOverview';
+import { PlayerScheduleTab } from './PlayerSchedule';
+import type { PitcherLookup } from './schedule';
 import { DialogLayerContext, OVERLAY_LAYER } from './Modal';
 import { BackButton } from './BackButton';
 
@@ -282,6 +286,7 @@ function renderMetricRows(metrics: PercentileMetric[], overlapPct: number): Reac
  */
 type DetailsTab =
   | 'overview'
+  | 'schedule'
   | 'percentiles'
   | 'splits'
   | 'news'
@@ -515,6 +520,10 @@ export function PlayerDetails({
   onNeedRankPopulations,
   onOpenDetails,
   onClose,
+  scheduleWindow,
+  scheduleError,
+  onNeedSchedule,
+  pitcherLookup,
 }: {
   playerId: number;
   name: string;
@@ -594,6 +603,24 @@ export function PlayerDetails({
    */
   onOpenDetails: (key: string) => void;
   onClose: () => void;
+  /**
+   * The league-wide schedule window the **Schedule** tab draws a batter's or a
+   * reliever's fixtures from, handed down rather than fetched here.
+   *
+   * It takes no parameters — one window for every club and every player — so it
+   * is read once per session and shared, and this page is the third surface to
+   * ask for it after the two wide tables' Schedule view and the matchup page's
+   * team pages. `onNeedSchedule` is how a surface that does not own the span
+   * asks; the tab calls it on first open and only where it is going to draw
+   * something with it (a rotation starter's rows come off his own route).
+   */
+  scheduleWindow: ScheduleWindow | null;
+  scheduleError: string | null;
+  onNeedSchedule: () => void;
+  /** Pitcher id → name and throwing hand, off the season roster the client
+   *  holds from boot — what lets a fixture row name the man the other club is
+   *  throwing. Free: it is a `Map` over a list already in hand. */
+  pitcherLookup: PitcherLookup;
 }) {
   // This view covers the page but scrolls in its own box, so the list behind it
   // has to be frozen — otherwise the scroll chains straight through and closing
@@ -769,6 +796,19 @@ export function PlayerDetails({
   const [newsError, setNewsError] = useState<string | null>(null);
   const [newsLoading, setNewsLoading] = useState(false);
   const newsReq = useRef<number | null>(null);
+  /**
+   * His rotation — the **Projected Starts** block, which the Overview and the
+   * Schedule tab now draw as one component, so the read is held here rather
+   * than inside it. That is the shape the news and the game log already have
+   * and it buys the same two things: the two tabs cannot show different turns,
+   * and re-entering either costs no request. Keyed by **player alone**, the way
+   * news is: a rotation slot is a fact about a person, and only one of his two
+   * kinds could ever have one.
+   */
+  const [starts, setStarts] = useState<ProjectedStarts | null>(null);
+  const [startsLoading, setStartsLoading] = useState(false);
+  const [startsFailed, setStartsFailed] = useState(false);
+  const startsReq = useRef<number | null>(null);
   // The season xwOBA series backs the Charts tab's one chart. It's a heavier Savant
   // fetch, so it's loaded lazily — only once that tab is first opened.
   const [xwoba, setXwoba] = useState<XwobaSeries | null>(null);
@@ -955,6 +995,9 @@ export function PlayerDetails({
     newsReq.current = null;
     setNews(null);
     setNewsError(null);
+    startsReq.current = null;
+    setStarts(null);
+    setStartsFailed(false);
   }, [playerId]);
 
   // The Overview tab's day, lazily on first open (which for this tab is the
@@ -963,7 +1006,15 @@ export function PlayerDetails({
   // rollover would otherwise keep asking for yesterday.
   useEffect(() => {
     const req = `${kind}-${playerId}`;
-    if (tab !== 'overview' || dayReq.current === req) return;
+    // **Two tabs want it and it is one read.** The Schedule tab turns on two
+    // facts the day report carries and nothing else on this page does — his
+    // club, and whether `isRotationStarter` places him in a rotation — so it
+    // asks for the same report under the same key rather than fetching a second
+    // copy free to disagree. In practice the Overview has already had it (this
+    // is the tab the page opens on); what the second test buys is the case that
+    // matters, a **failed** day read, where the error path nulls the ref and
+    // pressing Schedule is then a retry.
+    if ((tab !== 'overview' && tab !== 'schedule') || dayReq.current === req) return;
     dayReq.current = req;
     setDayLoading(true);
     setDayError(null);
@@ -983,6 +1034,63 @@ export function PlayerDetails({
       },
     );
   }, [tab, playerId, kind]);
+
+  /**
+   * Whether he works out of the rotation — `lib.ts::isRotationStarter`, the
+   * app's one definition of it, read off the day report. It decides two things
+   * on this page: that the Overview draws Projected Starts, and that the
+   * Schedule tab draws his turns rather than his club's fixtures. Read here as
+   * well as in the two components so the *read* below can be gated on it: a
+   * batter has no rotation to ask about.
+   */
+  const wantStarts = day !== null && isPitcher && isRotationStarter(day);
+  /**
+   * **"Nobody has asked yet" is a wait, not an answer**, and this is the one
+   * thing the hoist above had to add. `startsLoading` is set in an effect, which
+   * runs *after* the paint that first mounts the block — so for one frame the
+   * block held no rotation, no failure and no read in flight, which is exactly
+   * the state its own refusal branch draws `Couldn’t read his club’s schedule.`
+   * for. Rolling it into the flag the block is given means the beat before the
+   * request goes out is drawn as the beat before the request goes out: nothing
+   * at all, `WAIT_DELAY` not having elapsed.
+   */
+  const startsPending = startsLoading || (starts === null && !startsFailed);
+  /**
+   * His rotation, lazily and once — on either of the two tabs that draw it.
+   *
+   * It was `ProjectedStartsBlock`'s own effect until that block became the
+   * whole of the Schedule tab as well as a section of the Overview, at which
+   * point mounting it fetched: a tab switch away and back was a fresh read, and
+   * two of them in development, StrictMode double-invoking an effect guarded
+   * only by a `live` flag its cleanup cleared. Measured before the move,
+   * pressing Schedule three times fired **6** requests.
+   *
+   * The ref is the test and there is no cleanup flag, which is this page's
+   * standing rule and the hang it is written for — see the percentile read
+   * above. The error path nulls the ref, so re-opening either tab retries.
+   */
+  useEffect(() => {
+    if (!wantStarts || (tab !== 'overview' && tab !== 'schedule')) return;
+    if (startsReq.current === playerId) return;
+    startsReq.current = playerId;
+    setStartsLoading(true);
+    setStartsFailed(false);
+    api.projectedStarts(playerId).then(
+      (d) => {
+        if (startsReq.current !== playerId) return;
+        setStarts(d);
+        setStartsLoading(false);
+      },
+      () => {
+        if (startsReq.current !== playerId) return;
+        // A failed read costs this block and nothing else — every other block
+        // on the Overview is already drawn, and the Schedule tab says so.
+        setStartsFailed(true);
+        setStartsLoading(false);
+        startsReq.current = null; // allow a retry on re-open
+      },
+    );
+  }, [wantStarts, tab, playerId]);
 
   // The Stats tab's five window rows, lazily on first open.
   useEffect(() => {
@@ -1360,6 +1468,25 @@ export function PlayerDetails({
           >
             Overview
           </button>
+          {/* **Second, directly after Overview, and that is the strip's own
+              ordering argument rather than an exception to it.** Every tab from
+              the percentile card rightward is a reading of a season already
+              played; Overview is what he is doing *now*, and this is what he has
+              coming. Now → next → the record behind him is one direction of
+              travel, and it is the same argument the Overview makes for putting
+              its own Projected Starts block directly under the day: the two
+              halves of "what is he doing" must not end up at two ends of a
+              strip. Last would have put six tabs of season history between
+              them. */}
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'schedule'}
+            className={`details-tab${tab === 'schedule' ? ' is-active' : ''}`}
+            onClick={() => setTab('schedule')}
+          >
+            Schedule
+          </button>
           <button
             type="button"
             role="tab"
@@ -1481,8 +1608,34 @@ export function PlayerDetails({
           gameLogLoading={gameLogLoading}
           news={news}
           newsLoading={newsLoading}
+          starts={starts}
+          startsLoading={startsPending}
+          startsFailed={startsFailed}
           onTab={setTab}
           onOpenDetails={onOpenDetails}
+        />
+      )}
+
+      {/* The Schedule tab draws its own waits and its own empty states — a
+          rotation starter's rows are the Overview's Projected Starts block and
+          everybody else's are his club's fixtures off the shared window — so
+          there is nothing to gate here the way the tabs below are gated. The
+          day it reads is the same `day` the Overview draws, which is why it is
+          handed down rather than fetched again. */}
+      {tab === 'schedule' && (
+        <PlayerScheduleTab
+          report={day}
+          reportLoading={dayLoading}
+          playerId={playerId}
+          name={name}
+          isPitcher={isPitcher}
+          starts={starts}
+          startsLoading={startsPending}
+          startsFailed={startsFailed}
+          scheduleWindow={scheduleWindow}
+          scheduleError={scheduleError}
+          onNeedSchedule={onNeedSchedule}
+          pitcherLookup={pitcherLookup}
         />
       )}
 

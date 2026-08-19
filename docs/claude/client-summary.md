@@ -358,7 +358,11 @@ opponent cell are one string built by one function.
 
 **Announced where his club has named him, projected where a rotation slot puts
 him there** — the same three tiers the `SP` chip beside it carries, because it is
-the same question asked about the other side. What that buys is the whole of the
+the same question asked about the other side. **The player page's Schedule tab
+draws the same line off the same resolution**, in a row rather than a cell and
+so with the tier's underline and none of the 10px caption this column's width
+argues for — see **Client — the player page**, *The Schedule tab: what he has
+coming*, which sets out what it folds onto and what it deliberately does not. What that buys is the whole of the
 argument for reading the projection here at all: measured on the live 28-day
 window, of **750 game-sides** an announcement can name **75** — clubs name a
 probable about three days out — where announcement-plus-projection names **610

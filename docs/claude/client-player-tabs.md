@@ -8,7 +8,10 @@ card's own table is server-side, in `data-sources.md`.
 
 **It is the eighth tab and it reads before Stats and the Game Log** — the strip
 is `Overview · Percentile Rankings · [Arsenal] · Splits · News · Stats ·
-Game Log · Charts` — which is the Overview's own block order one tier up and
+Game Log · Charts` *(the **Schedule** tab has since gone in second, so News is
+the ninth and the run reads `Overview · Schedule · Percentile Rankings ·
+[Arsenal] · Splits · News · Stats · Game Log · Charts`; its own reasoning is in
+`client-player-page.md`, **The Schedule tab: what he has coming**)* — which is the Overview's own block order one tier up and
 for the same reason. What has *happened* to a player this week is a different
 kind of fact from what he has *done* this season, and it is the one that changes
 a decision fastest: a reader deciding about a stranger wants to know he went on

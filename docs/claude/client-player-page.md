@@ -536,7 +536,7 @@ exactly the reader with an empty block in front of them.
 
 **It is the default tab as well as the first**, which is the same argument as the ordering: the tabs beside it are readings of his *season*, and on a game day the question a player page is opened with is what he is doing. It costs one request on open — `api.playerDay`, lazy in the same `dayReq` shape the Game Log, Arsenal and Charts tabs use, which for the default tab means it loads with the page — and that request is the cheap half of the two the page already made, being one player over one date against a percentile scrape (see **Date handling and server routing** for why it adds no cache of its own and why the date is the server's rather than the client's).
 
-**The strip is seven tabs now, and eight on a pitcher** — five and six when Overview joined it, six and seven when Splits did, and seven and eight since **News** (below). It has needed nothing structural on any of the three occasions: `.details-tabs` already scrolls sideways and already scrolls the active tab into view with a 24px peek. Re-measured after News at **1200×900 and 390×844, on a batter and a pitcher, clicking every tab in turn**: all 7 and all 8 land **fully inside the strip** when selected, the tab's own column is `--card-column` less the overlay's gutters (358px), and the page body and the overlay each overflow by **0** at both widths.
+**The strip is seven tabs now, and eight on a pitcher** — five and six when Overview joined it, six and seven when Splits did, and seven and eight since **News** (below). *(Eight and nine since the **Schedule** tab, which is second in the strip — see **The Schedule tab: what he has coming** below, where the same measurement is re-run on all nine. The sentence is left as it was written, this file's rule for its own superseded arithmetic.)* It has needed nothing structural on any of the three occasions: `.details-tabs` already scrolls sideways and already scrolls the active tab into view with a 24px peek. Re-measured after News at **1200×900 and 390×844, on a batter and a pitcher, clicking every tab in turn**: all 7 and all 8 land **fully inside the strip** when selected, the tab's own column is `--card-column` less the overlay's gutters (358px), and the page body and the overlay each overflow by **0** at both widths.
 
 **The day takes `--card-column` rather than the 860px the tabs beside it use**, because what is in it is exactly what the feed holds — an at-bat card, a clip, an outing's innings — and those were sized against that number in the first place. A day read here and the same day read on the stream is then the same reading at the same width (measured: 800px at 1440, 358 at 390). The cap sits on `.details-overview .player-day` rather than on the tab, which spans the tab so its two tables can (see **the player page's Overview tab** above), and the `container-type` sits on the same box for the reason `.details-arsenal` carries one: the cards inside size themselves off their container, and read off a full-width tab they would answer a container query the card itself never satisfies.
 
@@ -1102,13 +1102,246 @@ above restated where the rules are.
 
 **Bundle: 466.02 → 466.09 KB of JS** (138.59 → 138.60 gzipped), CSS unchanged at 106.85 (19.09).
 
+### The Schedule tab: what he has coming
+
+**Every other tab on this page reads backwards.** Seven of them are a season
+already played and the eighth is his day, and the question a fantasy manager
+opens a player page with on a Sunday night is the other one — *how many games
+does he get this week, against whom, and does my starter get two turns.* The app
+could already answer it on a **grid of everybody** (the roster and the board's
+Schedule view, `client-summary.md`) and one row at a time on the Overview; it
+could not answer it about **one man**, which is the page a reader is on when he
+asks.
+
+**It is second in the strip, directly after Overview**, and that is the strip's
+own ordering argument rather than an exception to it. Everything from the
+percentile card rightward is a reading of a season behind him; Overview is what
+he is doing now; this is what he has coming. *Now → next → the record* is one
+direction of travel, and it is the same argument the Overview makes for putting
+Projected Starts directly under the day — the two halves of "what is he doing"
+must not end up in two places. Last in the strip would have put six tabs of
+season history between them.
+
+**The strip is eight tabs now, and nine on a pitcher** — it was seven and eight.
+It has needed nothing structural, as it did not for News: `.details-tabs`
+already scrolls sideways and scrolls the active tab into view. Re-measured at
+**390×844 and 1200×900, on a batter and a pitcher, pressing every tab in turn**:
+all 8 and all 9 land **fully inside the strip** when selected (`Schedule` at 90px
+sits 96 from the strip's left edge with 171 to spare), the strip is **34px** tall
+at both widths, and the page body and the overlay each overflow by **0**.
+
+#### Two kinds of row, because it is two questions
+
+**A batter is in every game his club plays and a reliever could be in any of
+them**, so what either has coming *is* his club's fixture list. **A starting
+pitcher is in one in five**, and his club's next game is somebody else's start —
+so his rows are his **turns**. The test is `lib.ts::isRotationStarter`, the app's
+one definition of who works out of the rotation, read off the day report exactly
+as `NextGameBlock` and `ProjectedStartsBlock` read it; ESPN's `SP` eligibility is
+deliberately not it, for the reason both of those already record — it is a cover
+rather than a partition, so it says where a league will let you start a man and
+not whether he takes the ball every fifth day.
+
+**The starter's half is not a second implementation of anything.** It is
+`ProjectedStartsBlock` itself, exported from `PlayerOverview.tsx` and drawn here
+over `/api/players/:id/projected-starts` — the same route, the same five rows,
+the same three tiers, the same cadence note and the same opponent dialog. That is
+the arrangement News and the Game Log already have on this page (the Overview
+previews, a tab holds the whole thing), with one difference worth naming: those
+two are one *read* shared by two drawings and this is one *component* drawn on
+two tabs, only ever one of them mounted. The alternative — a Schedule-tab list of
+starts written here — is the thing that could not have been kept honest, five
+rows of tiered projection being the fiddliest reading on the page.
+
+**So a rotation starter's Schedule tab never asks for the league-wide window at
+all**, which is the same economy the roster's own toggle follows: measured with
+the page's requests logged, opening Merrill Kelly and pressing Schedule three
+times fires **`/api/schedule` zero times**.
+
+#### The fixture list, and what it is folded onto
+
+**A row here is a when, a matchup and the man the other club is throwing** —
+which is exactly what a `.start-row` is, minus the tag that says whose guess it
+is. So it takes `.start-list` / `.start-row` / `.start-line` and `.ovw-next-when`
+/ `.ovw-next-opp` / `.ovw-next-vs` unchanged, and the section takes `.ovw-starts`
+for the `--card-column` cap, the tab's shared center and the head-row rule that
+lets a note read *beside* a heading. **The whole tab adds no CSS rule at all**:
+`.details-schedule` is folded onto `.details-overview`'s 18px step off the strip,
+and the only other stylesheet change is a paragraph naming the second reader of
+`.sched-vs-projected` / `.sched-vs-estimated`.
+
+**The data is folded too.** `buildScheduleIndex` is the roster and the board's
+own index, called here **unchanged** — so a day read on this tab and the same day
+read on the grid come off one function over one payload, including the opposing
+starter, whose resolution (`buildStarters`, and the four ways it declines to name
+anybody) is the last thing in this app that should exist twice.
+
+**What is deliberately *not* folded is the grid itself, and that is the judgment
+this tab turns on.** `ScheduleCell` is a cell two characters wide in a table
+fourteen columns across and hundreds of rows down, and the entire span control
+exists because *width* is that view's binding constraint. This is one man in a
+scrolling overlay, where a row has room for a date, a time, a matchup and a named
+pitcher — measured, the section is **800px at 1200 and 358 at 390**, against a
+grid column the two-line day header sets at ~59. The two draw the same facts at
+two widths, which is the case the stylesheet's rule calls two things that merely
+*resemble* each other; so what is shared is the index, the vocabulary and the
+row, and what is not is the geometry.
+
+**Fourteen days, which is the app's own planning horizon** rather than a number
+picked here: `nextGame.ts` argues it (a rotation turn is five days, and an off
+day either side of the All-Star break is the widest gap a club's schedule has)
+and the Schedule view's `Next 14` is the same number on the same question.
+Measured league-wide on the live window, fourteen days is **10 to 14 scheduled
+games a club, median 12**, where the whole 28-day window the server answers with
+is **22 to 26, median 24**. **The window was the alternative and it was rejected
+twice over**: it would have meant either a fifth `ScheduleSpan` that no URL can
+carry and no control offers — a concept in `schedule.tsx` existing for one caller
+— or a private copy of that file's `byTeam`, which is the drift this arrangement
+exists to prevent; and what it buys is days 15 to 28, which is past where anybody
+sets a lineup. The two kinds of row are then bounded in their own units, a
+fortnight of fixtures against five turns, which is right rather than untidy: at a
+cadence of five club games those five turns *are* about four weeks, and a turn is
+the unit a rotation is planned in where a day is the unit a lineup is.
+
+**`state === 'scheduled'` is the filter, and it says three things at once.** A
+game already **live or final** is not something anybody plans around — the
+Overview's day block is what says what today's game is doing — and a
+**postponement is not a game he gets**, which is the rule the grid's own `G`
+count states and the one error that would make this list lie.
+
+**A doubleheader is sorted by first pitch here, and the grid's order is not wrong
+so much as answering a different question.** `schedule.ts` keeps a day's games in
+MLB's own game order, which the grid stacks in one cell where two lines under one
+date read as "twice that day" whichever way up they are. A list is read *down*,
+so an out-of-order pair reads as a bug — and it happened: on the live window the
+Yankees' Aug 29 doubleheader against Boston arrives `gamePk` **823501 (7:15 PM)
+ahead of 823539 (1:05 PM)**, and the tab drew the nightcap first until it sorted.
+A game with no posted time sorts last, which is the only place it can go.
+
+#### The one guess on a fixture row wears the ladder
+
+**No tag, and that is the rule rather than an omission.** Every row is a game his
+club is scheduled to play, so a mark saying so would be on every row — and a mark
+that would be on every row marks nothing.
+
+**Which leaves exactly one guess a row can hold, and it is the opposing
+starter.** It is `opposingStarter`'s answer, which is the grid's resolution
+rather than a second one: announced where his club has named him, projected where
+his own rotation slot puts him there, estimated where his club's rotation does,
+and **absent** where the answer is not one man. It wears the grid's own underline
+ladder — nothing on the announced tier, a solid underline for our reading of his
+slot, a dashed one for his club's — which is `an estimate never wears the same
+clothes as a measurement` said on a row rather than in a cell, and the same
+three-weight progression the percentile card's dotted bar and the Splits card's
+hatched fill already draw. **Measured on Aaron Judge's own thirteen rows: 9 of
+13 name somebody — 2 announced, 6 projected, 1 estimated — and 4 name nobody.**
+An announcement alone would have named two of the thirteen, which is the whole
+argument for reading the projection here and is the same argument the grid
+records league-wide (75 of 750 game-sides announced against 610 named).
+
+#### The empty state names which of four things happened
+
+A single "nothing scheduled" would be a claim about his club's schedule made in
+three cases where we never got as far as looking at one, so there are four
+sentences (`emptyText`), each driven and read off the page:
+
+| | |
+| --- | --- |
+| the window read failed | `Couldn’t read the league schedule.` |
+| his day read failed, so we have no club | `Couldn’t read which club Aaron Judge is on, so there is no schedule to draw.` |
+| he is on no club | `Aaron Judge isn’t on a club right now, so there are no games to list.` |
+| his club really has nothing left | `Nothing left on his club’s schedule in the next 14 days.` |
+
+A **rotation starter** with nothing to show gets `ProjectedStartsBlock`'s own
+five refusal sentences instead, which is the point of drawing that block rather
+than a list — checked on the live season, Mick Abel's tab reads *"Mick Abel isn’t
+on the active roster, so he isn’t making a start his rotation slot falls on —
+nothing past what his club has named."*
+
+#### The read, and the two rules it had to obey
+
+**The window takes no parameters** — one object for every club and every player —
+so it is read once per session and shared, and this page is the **third** surface
+to ask for it after the two wide tables' Schedule view and the matchup page's
+team pages. It asks the way they do, through App's `onNeedSchedule`, and only
+where it is going to draw something with it. **Nothing here can be superseded**,
+which is why there is no sequence number: the window is the same answer whoever
+asked, and a player change unmounts the tab.
+
+**Driven at 1200×900 with `/api/schedule` held 2.5s in the page**, the app's
+loading discipline reads off the rendered page exactly:
+
+| | |
+| --- | --- |
+| t≈100ms (under `WAIT_DELAY`) | nothing at all — no wait, no empty box |
+| t≈300ms | `Reading his upcoming games` |
+| t≈3500ms | **13 rows**, wait gone |
+| the read **fails** instead | `Couldn’t read the league schedule.` at t≈100ms, and no wait at any point |
+
+And the requests, logged in the page: pressing Schedule fires `/api/schedule`
+**once**, and pressing away and back twice more fires it **zero** further times.
+Pressing the tab, leaving it 400ms into a held read and coming back draws **13
+rows and no wait**; three more away-and-backs over one read, the same.
+
+#### `ProjectedStartsBlock`'s read moved up a level, and the measurement is why
+
+**The block used to fetch its own rotation**, which was right while it was a
+section of one tab and wrong the moment it became the whole of another: mounting
+it fetched, so every tab switch away and back was a fresh read — and **two** of
+them in development, StrictMode double-invoking an effect whose only guard was a
+`live` flag its own cleanup cleared. **Measured before the move: opening a
+pitcher and pressing Schedule three times fired `/api/players/:id/projected-starts`
+six times.**
+
+So the read is `PlayerDetails`' now, in the shape every other lazy read on this
+page already has — a `startsReq` ref keyed by **player alone** (a rotation slot is
+a fact about a person, and only one of a two-way player's kinds could have one),
+gated on `tab === 'overview' || tab === 'schedule'` and on `wantStarts`, with
+**the ref as the test and no cleanup flag**, which is the hang this file records
+four sections up. The error path nulls the ref, so re-opening either tab retries
+— driven, with the first read forced to reject: the tab draws the block, the
+retry fires on the next tab press and **5 rows land**. **After the move: one
+request on opening the pitcher's page, and zero for three presses of Schedule.**
+
+**And "nobody has asked yet" is drawn as a wait rather than as an answer**,
+which is the one thing the hoist had to add. `startsLoading` is set in an effect,
+which runs *after* the paint that first mounts the block — so for one frame the
+block held no rotation, no failure and no read in flight, which is precisely the
+state its own refusal branch draws `Couldn’t read his club’s schedule.` for.
+`startsPending` folds that beat into the flag the block is given. **Sampled every
+animation frame across a `/day` read held 5s**, with Schedule pressed while it
+was still out: `nothing` at t+1507 (under `WAIT_DELAY`), `Reading his upcoming
+games` at t+1767, and `Projected Starts` with **5 rows** at t+5066 — three
+states, and not one frame of a sentence that isn't true.
+
+**The wait says `Reading his upcoming games` in that middle state even though
+what is out is the day**, and that is deliberate rather than sloppy: the tab
+cannot know which of its two lists it is drawing until that report lands, so the
+only honest name for what it is doing is the question the reader pressed.
+
+**The day report is read for the Schedule tab as well as the Overview**, under
+the same `dayReq` key, because it carries the two facts this tab turns on and
+nothing else on the page does — his club, and whether `isRotationStarter` places
+him in a rotation. In practice the Overview has always already had it, that being
+the tab the page opens on; what the second test buys is the case that matters, a
+**failed** day read, where the error path nulls the ref and pressing Schedule is
+then the retry.
+
+**Bundle: 583.27 → 586.95 KB of JS** (173.94 → 174.85 gzipped) and **156.57 →
+156.59 KB of CSS** (28.03 → 28.04) — 3.7KB and 20 bytes raw, 0.9KB and 10 bytes
+over the wire, for a tab, a list, four sentences and a read hoisted a level. The
+CSS is one extra selector and two comments because the tab is a fold rather than
+a surface.
+
 ### Where the rest of the player page's documentation lives
 
 This file was 215KB across eight tabs and is now three, on `CLAUDE.md`'s own
 150k-per-file rule and by the division `client.md` already made one level up:
 **by the surface being described, not by size**. What is above is the page — the
-overlay, its pinned head and tab strip, the reorder screen — and the **Overview**
-tab, which is what he is doing *now*.
+overlay, its pinned head and tab strip, the reorder screen — the **Overview**
+tab, which is what he is doing *now*, and the **Schedule** tab beside it, which
+is what he has coming: the two are one question in two directions and the second
+draws the first's own Projected Starts block, so they belong in one file.
 
 - **`client-player-tabs.md`** — the four tabs that read his season and his
   record, in the strip's own order: **News** (and the eleven dead ends behind
