@@ -454,6 +454,23 @@ export interface EspnPlayerPool {
    * distinct ESPN player ids named in it are on this list.
    */
   byEspnId: Record<number, { name: string; mlbId: number | null; teamId: number | null }>;
+  /**
+   * ESPN's `eligibleSlots` **raw**, by MLB player id — the slot *ids* rather
+   * than the names `eligible` above carries.
+   *
+   * Two readings of one field, and both are wanted. `eligible` is written for
+   * the board's position pills, so it is de-duplicated and spelled the way a
+   * reader says it (`LF`/`CF`/`RF` all read `OF`); a **lineup** is filled
+   * against ESPN's own numbering, where `5` is the OF slot, `12` is UTIL and
+   * `19` is the middle-infield one, and the de-duplication that makes the
+   * first readable is exactly what makes it unable to answer the second.
+   *
+   * **It never leaves the server.** `getOwnership` copies `pct` and `eligible`
+   * onto the object the client reads and this is not among them, being of use
+   * only to `projection.ts` — which is the same rule that keeps the projection's
+   * own components off the wire.
+   */
+  slots: Record<number, number[]>;
 }
 
 const ROSTER_PCT_TTL_MS = 6 * 60 * 60 * 1000;
@@ -482,6 +499,7 @@ export async function getPlayerPool(): Promise<EspnPlayerPool> {
     const index = await getMlbIndex();
     const pct: Record<number, number> = {};
     const eligible: Record<number, string[]> = {};
+    const slots: Record<number, number[]> = {};
     const byEspnId: Record<number, { name: string; mlbId: number | null; teamId: number | null }> =
       {};
     for (const row of rows) {
@@ -505,8 +523,11 @@ export async function getPlayerPool(): Promise<EspnPlayerPool> {
       if (typeof owned === 'number') pct[found.id] = owned;
       const positions = eligiblePositions(row.eligibleSlots);
       if (positions.length > 0) eligible[found.id] = positions;
+      if (Array.isArray(row.eligibleSlots) && row.eligibleSlots.length > 0) {
+        slots[found.id] = row.eligibleSlots;
+      }
     }
-    const pool = { pct, eligible, byEspnId };
+    const pool = { pct, eligible, slots, byEspnId };
     poolCache = { pool, fetchedAt: Date.now() };
     return pool;
   })().finally(() => {
@@ -732,7 +753,15 @@ interface EspnRosterResponse {
   id?: number;
   seasonId?: number;
   scoringPeriodId?: number;
-  settings?: { name?: string; size?: number };
+  settings?: {
+    name?: string;
+    size?: number;
+    /** How many of each lineup slot this league starts — ESPN's slot id to a
+     *  count, `{"0":1,"4":1,"5":4,"13":5,"16":3,"17":5,…}`. It arrives with
+     *  `mSettings`, which the roster read already asks for, so reading it costs
+     *  nothing; see `lineupSlotsFor`. */
+    rosterSettings?: { lineupSlotCounts?: Record<string, number> };
+  };
   teams?: {
     id: number;
     name?: string;
@@ -1395,6 +1424,33 @@ export interface EspnOwnership extends EspnLeagueInfo {
 const cacheKey = (leagueId: number, period: number | null) =>
   period === null ? `${leagueId}` : `${leagueId}:${period}`;
 
+/**
+ * **How many of each lineup slot a league starts**, by league id — `{0: 1, 4: 1,
+ * 5: 4, 12: 1, 13: 5, 14: 2, 15: 2, 16: 3, 17: 5, 19: 1}` on the live one, which
+ * is eleven batting slots, nine pitching, three bench and five IL.
+ *
+ * **Filled as a side effect of the roster read rather than fetched**, which is
+ * the whole reason it is a module cache and not a field on `EspnOwnership`.
+ * `mSettings` is already one of the three views that read asks for, so the
+ * counts are sitting in a payload the app has in hand; giving them a read of
+ * their own would be a second request for a fact already downloaded, and
+ * putting them on the ownership object would put them on the **wire**, where
+ * the only caller is `projection.ts` and nothing on the client has ever asked.
+ *
+ * Null until a league's rosters have been read once, which on every path that
+ * wants it has already happened — `getProjection` awaits `getOwnership` before
+ * it projects anything.
+ */
+const lineupSlotCache = new Map<number, Record<number, number>>();
+
+/** The lineup shape for a league, or null where no roster read has landed yet
+ *  or the league published none. **Null is a real answer** and the projection
+ *  treats it as one: with no slot counts it cannot know what a lineup holds, so
+ *  it falls back to the rule it always had. */
+export function lineupSlotsFor(leagueId: number): Record<number, number> | null {
+  return lineupSlotCache.get(leagueId) ?? null;
+}
+
 const ownershipCache = new Map<string, EspnOwnership>();
 /** A cold Lambda serving three tabs at once should send one upstream request,
  *  not three — the same rule the research board's own fetches follow. */
@@ -1449,13 +1505,25 @@ export async function getOwnership(
       // free-agent filter and the fantasy roster don't depend on either.
       getPlayerPool().catch((err: Error) => {
         console.error('ESPN player pool unavailable:', err.message);
-        return { pct: {}, eligible: {} } as EspnPlayerPool;
+        return { pct: {}, eligible: {}, slots: {} } as EspnPlayerPool;
       }),
       getRosterTrend().catch((err: Error) => {
         console.error('ESPN roster trend unavailable:', err.message);
         return null;
       }),
     ]);
+    // The league's lineup shape, off the `mSettings` half of the read that has
+    // just landed — see `lineupSlotsFor` for why it is stashed here rather than
+    // returned.
+    const counts = data.settings?.rosterSettings?.lineupSlotCounts;
+    if (counts && typeof counts === 'object') {
+      const parsed: Record<number, number> = {};
+      for (const [id, n] of Object.entries(counts)) {
+        const slot = Number(id);
+        if (Number.isFinite(slot) && typeof n === 'number' && n > 0) parsed[slot] = n;
+      }
+      if (Object.keys(parsed).length > 0) lineupSlotCache.set(creds.leagueId, parsed);
+    }
     const info = leagueInfoFrom(creds, data);
     const owned: Record<number, number> = {};
     const rosters: Record<number, EspnRosterPlayer[]> = {};
@@ -3587,7 +3655,14 @@ export interface EspnRankings {
  * arithmetic written from the same definitions and are **unverified**, for the
  * reason `STAT_META`'s own tail is: there was one league to read.
  */
-const DERIVED: Record<number, { needs: number[]; of: (v: Record<number, number>) => number | null }> =
+/**
+ * **Exported for the projection's seat ordering**, which has to know what a
+ * rate category is *made of* to say what one more outing would do to it — see
+ * **The pitching seats** in *ESPN scoreboard*. Exported rather than copied: a
+ * second table of the same nine formulas is a second table to keep in step, and
+ * this one is already the definition every score on the board is rebuilt from.
+ */
+export const DERIVED: Record<number, { needs: number[]; of: (v: Record<number, number>) => number | null }> =
   {
     // AVG = H / AB.
     2: { needs: [1, 0], of: (v) => (v[0] ? v[1] / v[0] : null) },
