@@ -318,10 +318,43 @@ cycle.
   screen, and pressing it would clear the very list it opened. What stands in its
   slot instead is the way *out*.
 - **Leaving the mode is what says "done with those"**, so that is what marks the
-  stream read, and it is now the *only* thing that does: `Show all plays`, at
-  either end of the list. Pressing a kind pill marks nothing — not by a guard but
-  because `selectFeedLens` has no path to the marker at all. A reader who never
-  engages accumulates a count, which is what the transactions dot does too.
+  stream read: `Show all plays`, at either end of the list. Pressing a kind pill
+  marks nothing — not by a guard but because `selectFeedLens` has no path to the
+  marker at all. A reader who never engages accumulates a count, which is what
+  the transactions dot does too.
+- **And `Clear`, beside the red button, says it without going and looking.** For
+  a while leaving the mode was the *only* thing that moved the marker, which
+  made the count answerable in exactly one way: a reader who could see from
+  `3 new plays` that it was three groundouts still had to open them to make them
+  stop being new. `Clear` is the other answer, and it is the same act rather
+  than a second one — App points both presses at `markPlaysSeen(newestPlayTs)`,
+  so there is one definition of *seen* and one route to the record. It is wired
+  to `markPlaysSeen` rather than to `showAllPlays`, which would work today, the
+  mode being off wherever the button is drawn: that handler is *leaving a mode*,
+  and a scroll or a URL edit added to it later is a thing a caller that was
+  never in the mode would silently inherit.
+- **`Clear` touches neither the mode nor the URL**, and the second half is the
+  one worth writing down. `newplays=1` says *which stream this view is showing*
+  and belongs to the link; "I have seen these" is a fact about the **person** and
+  belongs to their record. So the press writes `UserPrefs.seenPlays` and leaves
+  the query string byte for byte as it found it — measured below, and it means a
+  reader who clears and then shares the page shares the page they are looking at.
+- **The two go together and neither is ever disabled.** They sit inside one gate
+  (`showNewButton && onShowNew`), so the instant the count is nought the pair is
+  *absent*: a `Clear` with nothing to clear is a mark that would be on every row.
+  That vanishing is also the press's own trace, which is why it carries no
+  `MIN_SPIN` mark — the state it changes is local and immediate and the write
+  behind it is queued and swallowed, so there is no wait to stand in front of.
+- **Ordinary chrome beside the red, and the pill's own geometry.** `--strikeout`
+  in this app means *something has happened since you looked*; `Clear` is the
+  reader answering that, so two reds in one row would be two things claiming to
+  be the news. It takes `.feed-more`'s ground — the page's own, the plain border
+  — which is what `Show all plays` takes at the other end of this list and for
+  the same reason. What it does **not** take is `.feed-more`'s box:
+  `--control-radius` shoulder to shoulder with a 999px pill is that mistake made
+  in the other direction, so the shape is shared with `.feed-new` and only the
+  ground differs. The `align-self: center` moved off the button and onto
+  `.feed-new-row`, so the section centers the pair as one object.
 - **Coming out does not scroll**, where going in does. Going in the reader is
   handed a different and much shorter list and belongs at the head of it; coming
   out they are somewhere in a list that is about to get *longer around them*, and
@@ -388,6 +421,51 @@ press, the two params are both in the URL at once, and the marker does not move.
 The fourth is the other half — leaving is what marks it read, and the kind
 survives *that*, which is right: the reader narrowed to home runs and did not ask
 to stop.
+
+**`Clear`, beside the count.** Driven on the live roster over `Today`
+(2026-08-18, 20 items on screen of **56** new), against a server of the
+worktree's own for the reason the table above gives — the marker is a
+forward-only *write*, so it can be wound back in a `server/data` of one's own
+and nowhere else. Planted at 24 hours back; the press advanced it to
+**1787109926488**, which is 23:25:26 ET, the newest play in view.
+
+| | red button | `Clear` | back buttons | heading | URL | marker |
+| --- | --- | --- | --- | --- | --- | --- |
+| open | `56 new plays` | drawn | 0 | `Recent plays` | — | 1787026821356 |
+| press the red one | — | — | **2** | **`New plays`** | `newplays=1` | unchanged |
+| open again, press `Clear` | **absent** | **absent** | 0 | `Recent plays` | **unchanged** | **1787109926488** |
+| reload | absent | absent | 0 | `Recent plays` | unchanged | 1787109926488 |
+
+The third row is the whole of it: the count goes, both buttons go with it, and
+the query string is the one the reader arrived on — `?preset=Today&view=feed&roster=fantasy`
+before the press and after it. The fourth is the half a session-held marker
+could not do.
+
+**The pair is one row's worth of box, and the box does not move.** Measured at
+1200, 390 and 320 with the count at 56, before → after:
+
+| | 1200 | 390 | 320 |
+| --- | --- | --- | --- |
+| red pill | 133×32 → 133×32 | same | same |
+| `Clear` | — → 65×32 | — → 65×32 | — → 65×32 |
+| the row | — → 206×32 | — → 206×32 | — → 206×32 |
+| gap between them | — → 8px | 8px | 8px |
+| **first feed item's top** | **253 → 253** | **291 → 291** | **339 → 339** |
+| horizontal overflow | 0 → 0 | 0 → 0 | 0 → 0 |
+
+Both pills are 32px and share a top, so the row needs no vertical correction;
+206px of pair inside 276px of content at 320 leaves it centered with 35px either
+side and nothing wrapping. And the list starts at the same y it always did,
+which is the point of the pair being one flex item rather than two.
+
+**What the press reclaims is exactly its own box.** The first item goes 291 → 247
+at 390 on the press — the row's 32px and the section's 12px `gap` — and nothing
+else on the page moves. That is a dismissal rather than a resize: the control
+being pressed is the control being put away, and reserving a slot for something
+that will not come back this session would be a gap where the news used to be.
+
+**Bundle**: JS 578.64 → 579.02kB raw, 172.36 → 172.45kB gzipped; CSS 155.43 →
+155.79kB raw, 27.82 → 27.85kB gzipped.
 
 **Deep links.** `?plays=hr,sb` — a link written when these unioned — opens on
 **HR** and rewrites itself to `plays=hr`; `?plays=xbh` opens on **All** and drops
