@@ -1006,6 +1006,11 @@ the way out would have to answer why it does not reset them on the way between �
 which is the same trap `starters=1` avoids by staying in force across the kind
 tabs.
 
+**That paragraph is superseded and is left standing as the reasoning it was.**
+The two League lenses now go away with their own pages — see *A page opens
+measured, unless a link says otherwise* at the end of this section, which
+answers its three reasons rather than stepping around them.
+
 **Bundle**: JS 581.59 → 581.72 kB raw, 173.33 → 173.37 kB gzipped; CSS
 unchanged at 156.33 / 27.98.
 
@@ -1082,3 +1087,76 @@ all, which is the measurement worth keeping: the `G` header and its cells are
 Expanded, the pane is **only as tall as its rows**: `flex: 0 1 auto` takes the content's height and `min-height: 0` lets it shrink back to the box when there is more content than screen, which is the one case where full height is right. **The ordinary layout now says the same thing**, which for a while only the expanded one did. `.research-scroll` and the game log's `.glog-scroll` carried `flex: 1` for their place in that layout and so filled their column whatever was in it — a dozen rows above a bordered expanse of nothing reaching the bottom of the window, with the game log's Load more button pinned to the far edge of it, which reads as a table that has stopped scrolling rather than one that has ended. The summary view arrived at the same place by another route and keeps it: `.summary-view` is a *row* flex with `align-items: flex-start`, so nothing stretches its pane on the block axis. All three now behave the same in both modes — a short table is a short box, a long one takes the height available and scrolls.
 
 **The button is in the table's own top-left header cell** — the one over the headshots, which carries no text. Two things follow and both are the point: it costs the page no vertical space, where a row above the table cost a row of stats; and that cell is the one pinned on *both* axes (the header row sticks to the top, the headshot column to the left), so the way back out is on screen wherever you have scrolled to. The game log's corner cell is the one that carries a word, so the button sits inline before it — **not** by making the `<th>` a flex box, which takes the cell out of table layout altogether and had the header at 22px against its own 76px column, its text overflowing into the next header's space. Headshot and name are separate columns so only the narrow headshot column sticks on horizontal scroll (the name scrolls away, freeing room for stats on a phone); the header/total rows stick on vertical scroll (pure CSS `position: sticky`). Column gutters are `clamp()`ed against the viewport (as are the `.sum-num` floor and the name column's min-width), because the table always overflows on a phone and every pixel of padding is a stat pushed off screen — that alone takes the pitcher table from 1015px to 726px at 390px wide. **The wide end of that clamp is the opposite problem and took the opposite answer**: a monitor has room the table has no use for, and the stat columns used to hug their own digits (`width: 1%`) so every pixel of it went to the single auto column — the name — leaving a 600px hole in the middle of every row with the nine stats crushed together past it. A table can span the window and still read as a table's worth of numbers pinned to the right-hand edge of one. So the numeric columns are `width: auto` and **take a share of the surplus** in proportion to what they hold, and the gutters open up at the wide end rather than staying at 13 — 22px when that was written and **28px** since the tables were given room to breathe (`clamp(5px, 1.9vw, 28px)`, the floor unmoved). Nothing of this reaches a phone: an overflowing table is laid out on its content's own widths whatever `width` says, so the clamp floors still decide it there. **The research board is exempt from the gutter half** and keeps 13px, for the reason that widened the others: it carries 23 to 44 columns and overflows a 1920px screen with every one of them at its own width, so there is no surplus to spend and each pixel added to a gutter is a column pushed off the right edge. The exemption was tested again when the two other tables' gutters grew and it held — a pixel a side is 54px of scroll on a 27-column board, and the 1.9vw/28px they took would have been 320 of them. The `auto` needs no exemption — it does nothing until there is slack, and on a board narrowed to a handful of columns it is just as welcome. In the table, **the headshot and the name both open `PlayerDetails`** — see **the player page's Overview tab** below for why the two led to different places and no longer do. The **stat columns are monochrome** — OPS and ERA used to be `--accent`, which just made the eye jump between columns. Color is reserved for *state*, and there it stays: a live game's inning (`--hit`) and a postponed one (`--hr`) in the opponent cell, the headshot's lineup-spot / pitching-role pip, and the row tint for at bat / on deck / on base.
+
+#### A page opens measured, unless a link says otherwise
+
+**The rule the paragraph above stopped short of.** A lens is a press, and a
+press is about the page it was made on; a lens still in force on a page the
+reader has just opened is a table of guesses nobody asked for. All four of this
+app's projected lenses now have that shape:
+
+| the lens | its page | what puts it away |
+| --- | --- | --- |
+| `rproj=1`, the Roster's | the Roster view | a crossing of the view tabs |
+| `proj=1`, a matchup's | the matchup page | that page closing, or the view leaving |
+| `rankproj=1`, the Rankings' | the Rankings tab | leaving that tab, or the view |
+| `teamProjected`, a team page's | the matchup overlay | the overlay unmounting, which it already did |
+
+The fourth is the one that needed no code: it is state inside `LeagueMatchup`,
+which App renders only while `mup=` names a matchup, so closing the page has
+always taken it with it. Measured on the live 12-team league on 8/19: press
+`Projected` on the `BETS` page of matchup 110 (`projected-toggle on`), press
+`Back`, reopen the card and the same page, and the toggle is unlit. It is in the
+table because the rule is now the same for all four, not because it moved.
+
+**The three reasons, answered.** *Only the roster's lens moves the days in
+view* and *the Roster is a destination* are both arguments that the roster's
+case is the **worst** — not that the other two are harmless. A manager reading
+dashed cards as scores is the same fault whether or not the calendar moved with
+it, and the League's own tab is a destination too, because `lt=` is remembered:
+measured before this, `Rankings` projected → `Roster` → `League` came back lit
+with `rankproj=1` returned, and a matchup card closed with the lens on reopened
+**any** card dashed with nothing pressed. The third reason is the real one —
+*the two are read against each other, so a rule that reset them on the way out
+would have to answer why it does not reset them on the way between*. This
+answers it by resetting on the way between as well: on the way between, the
+reader is **opening a page**, and one press is what a page they chose to open
+costs.
+
+**A page over a page is not a leaving**, which is the `player=` precedent
+carried across rather than a second rule. Measured: a matchup page opened from a
+projected Rankings row (`?…&lt=rankings&mup=112&mt=9&rankproj=1`) leaves the
+caption `Week 19 · projected to Aug 23 · 5 days still to play` and the lit
+button behind it, and `Back` returns to both; a player page opened from a
+projected matchup (`?…&player=pitcher-700712&…&proj=1&mup=110`) leaves
+`mup-card mup-proj` and the `Projected` tag standing, and Escape returns to
+`?…&proj=1&mup=110` with the card still dashed.
+
+**A sub-selection inside a page is not a leaving either.** The Rankings span
+strip is the case: `rankproj=1` is written only on the span it can act on, so
+`Season` and back is a round trip the URL already describes — measured,
+`lspan=season` drops the param and `Current matchup` writes it again with the
+lens still lit. The alternative considered was mirroring the URL gate exactly,
+so state and query string could never disagree; it was rejected for that, and
+because that gate has a `rankings.projectable` in it which arrives **after** the
+link does — a reset watching fetched data would put out a lens an inbound link
+had just lit.
+
+**The inbound links still open lit**, which is the whole point of the three
+params and the one thing this could have broken. Every test either effect makes
+is state seeded synchronously from the query string (`view`, `mup=`, `lt=`), so
+a link is already on its own surface on the first render and nothing fires.
+Measured: `?view=league&lt=rankings&rankproj=1` opens on `Week 19 · projected to
+Aug 23 · 5 days still to play` under a lit `lg-proj-btn on`, and
+`?view=league&mup=110&proj=1` opens on a `mup-card mup-proj` under the
+`Projected` tag with `R` at `67 – 52`.
+
+**What it costs on the way out**: nothing on the wire. The Rankings read is
+gated on the tab, so putting that lens away off the tab sends no request — the
+live table is read on the next entry, which is the read that entry was going to
+make anyway; and the matchup projection's effect already clears its own loading
+flag when the lens goes off, which is the shape it was given for the toggle's
+own second press.
+
+**Bundle**: JS 583.27 → 583.41 kB raw, 173.94 → 173.99 kB gzipped; CSS unchanged
+at 156.57 / 28.03 — two effects of four lines each, and their prose.

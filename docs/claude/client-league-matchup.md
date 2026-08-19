@@ -606,6 +606,11 @@ open, the first press closes the key and leaves the page (`[inert]` still
 `.app-chrome`, `.league-view`, `.float-btn`), and the second closes the page,
 clearing `mup=`, keeping `proj=1` on the board behind it and leaving **0** inert.
 
+**The last clause of that no longer holds, and the ladder still does.** The
+second press closes the page and the lens closes with it — see *The lens closes
+with the page*, below. Escape still undoes exactly one thing; what changed is
+what closing this page means, not how many presses it takes.
+
 **It costs the head nothing**, which is what moving it into the card bought:
 `.mup-chrome` measures **114px at 375 through 1920 and 145 at 320**, where with
 the toggle in the Back row it was 160 and 191 — and the bars key beside the tabs
@@ -658,6 +663,39 @@ the same place.
 **t=300ms**, against a projection request of **286ms** — and the same on the
 Rankings tab's own toggle (283ms). The button keeps one `<svg>` throughout, so
 nothing about its box moves while it works.
+
+
+#### The lens closes with the page
+
+**`proj=1` is a press made on this page, and it does not outlive it.** The param
+was already scoped to `view === 'league' && matchupId != null`, so it never rode
+on a URL that could not draw it; the state behind it did, and that is the half a
+reader can feel. Measured before this on the live league: open matchup 110,
+press `Projected`, press `Back`, then open **any** card — it came up
+`mup-card mup-proj` under the `Projected` tag with nothing pressed, which is a
+page of estimates a manager did not ask that card for.
+
+So the state now follows the param: one effect on `[view, matchupId, projected]`
+puts the lens away the moment the pair that draws it stops being true. Measured
+after: `?view=league&mup=110&proj=1` still opens dashed under `Projected` with
+`R` at `67 – 52` — an inbound link is seeded on its own surface before any
+effect runs, which is what keeps a shared link working — `Back` gives
+`?preset=Today&view=league`, and reopening the same card gives `?…&mup=110` with
+`mup-card`, `Live` and **0** lit toggles.
+
+**A page over this page is not a leaving.** A player page opened from a Moves
+row leaves `view` and `mup=` where they are, so the lens underneath survives it:
+measured, `?…&player=pitcher-700712&…&proj=1&mup=110` keeps the dashed card and
+the `Projected` tag, and Escape returns to `?…&proj=1&mup=110` with both still
+standing. The whole of the rule, and the three reasons it overturns, are in
+**Client — the Roster view**, *A page opens measured, unless a link says
+otherwise*.
+
+**The team pages' own lens needed nothing.** `teamProjected` is state inside
+this component and the close unmounts the component, so it has always gone with
+the page — measured all the same, because "it should already" is not a result:
+press `Projected` on the `BETS` page, `Back`, reopen the card and the page, and
+the toggle is unlit.
 
 
 ### A category row opens its chart

@@ -964,6 +964,36 @@ that table has no answer for. **Not a saved preference**, for `starters=1`'s
 reason: which figures a reader wants in front of them is a lens for an
 afternoon, and a saved copy would be a table of guesses drawn a fortnight later.
 
+**And it does not outlive the tab.** Leaving the Rankings tab — for the
+Scoreboard, for Transactions, or off the League view altogether — puts the lens
+away, so the tab opens on the figures so far unless a link said otherwise. It
+had to: `lt=` is remembered, so `Rankings` projected → `Roster` → `League` came
+back lit, measured, and a reader who had forgotten the press was reading guesses
+under a caption they had stopped seeing. One effect on
+`[view, leagueTab, rankProjected]`, and it costs nothing on the wire — the read
+below is gated on the tab, so putting the lens away off the tab sends no
+request; the live table is read on the next entry, which is the read that entry
+was going to make anyway.
+
+**The span strip is not a leaving**, which is the other half of the same rule: a
+span is a sub-selection inside this tab, not another page, so `Season` and back
+is the round trip described above — measured, `lspan=season` drops the param and
+`Current matchup` writes it again with the button still lit. Mirroring the URL
+gate exactly was the alternative, and it was rejected for that and because the
+gate has a `projectable` in it that arrives *after* an inbound link does.
+
+**A matchup page opened over this tab is not a leaving either.** It is a page
+over the view and leaves `view` and `lt=` where they are: measured, a press on a
+Rankings row with the lens on gives `?…&lt=rankings&mup=112&mt=9&rankproj=1`
+with the caption and the lit button still behind it, and `Back` returns to both.
+The rule and the three reasons it overturns are in **Client — the Roster view**,
+*A page opens measured, unless a link says otherwise*.
+
+**An inbound link is untouched**: `view`, `lt=` and `lspan=` are all seeded
+synchronously from the query string, so `?view=league&lt=rankings&rankproj=1` is
+already on its own surface at the first render — measured, it opens on `Week 19
+· projected to Aug 23 · 5 days still to play` under `lg-proj-btn on`.
+
 ### Never over data, and the mark goes inside the button
 
 The live table stands while the projected one is in flight — `setRankings` is
