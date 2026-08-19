@@ -1067,6 +1067,24 @@ a fault of 5.4, and every pixel of that is the readout walking away from the
 point it names. The whole of that argument, and the matchup chart's own figures,
 are in **Client — the League matchup page**.
 
+**That window rule was measured here, is exactly right here, and was not
+general** — a later pass replaced it, and nothing on this page moved. What cuts
+a floating box is the first ancestor that clips, not the glass; this page has
+none nearer, `.details-view` being a full-screen scroller whose padding box *is*
+the window, so the two answers coincide and the narrower rule looked like the
+broad one. The matchup's copy of this readout is drawn in a dialog whose body
+scrolls, and the window clamp left **13.0px** of it painted nowhere at 390.
+`ScrubTip` now clamps into the window **narrowed by every ancestor whose
+overflow is not `visible`** (`visibleBand`), and clamps the box's *top* into the
+same band by flipping it under the point where above will not fit
+(`--chart-tip-lift`). **Neither changes anything on this page**: the same nine
+positions at 1200, 390 and 320, before and after, read identical in all 27
+rows — the same readouts, the same box edges, the same nudges (`0.00px`
+everywhere but the last point, **−9.43px** there, ending at **386.0** and
+**316.0**) — because the band computed here *is* the window, and no readout in
+those 27 came within reach of the top of it. The argument and the matchup's own
+figures are in **Client — the League matchup page**.
+
 **Nothing else on this chart moved, which is the failure the clamp could
 cause.** The same script before and after, same player, reads identical at all
 three widths: the readouts `.425 / PA 100 · 4/21`, `.449 / PA 176 · 5/10`,

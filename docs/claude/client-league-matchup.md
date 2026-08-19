@@ -1029,6 +1029,83 @@ is how the before run was confirmed to be the before run.
 over the wire, for a shared scrub module, a readout on a second chart and the
 paragraphs above.
 
+### The window was the wrong edge: it is the dialog that cuts this box
+
+**The clamp above is true of the screen and was not enough.** A box floating
+over the page is cut by the first ancestor that clips, and this chart has one
+13px nearer than the glass: `.app-dialog-body` scrolls (`overflow-y: auto`, and
+a box that scrolls in one axis cannot keep the other `visible` — it computes to
+`auto` with it) inside an `.app-dialog-box` that is `overflow: hidden`. So the
+band a readout may occupy is the dialog body's own padding box — **[17..373] at
+390**, **[17..303] at 320**, **[241..959] at 1200** — and the window clamp put
+the `OPS` box's right edge on exactly the gutter it was aiming at, **386.0 /
+316.0 / 973.1**, with **13.0, 13.0 and 14.1px of it painted nowhere**: the
+second team's last digit and the whole right border. The rule above is not wrong
+so much as narrow, and *where it was measured* is why — the rolling chart sits
+in `.details-view`, a full-screen scroller whose padding box **is** the window,
+so there the two answers coincide and the window looked like the general
+constraint.
+
+**The band is the window narrowed by every ancestor whose overflow is not
+`visible`** (`visibleBand` in `chartScrub.tsx`), each ancestor asked about the
+two axes separately because `overflow-x` and `overflow-y` are two declarations
+and a box that scrolls in one and clips in the other is the common case rather
+than the odd one. After, the same `OPS` last day ends at **369.0 / 299.0 /
+955.0**, each 4px inside the edge that cuts, on nudges of **−27.29 / −27.29 /
+−18.08px**. It is still not clamped to the *chart*: the wrap is another 29px in
+either side at 390, and the day's crosshair is still under the box there (20px
+in from its right edge), which is the property clamping into the plot would have
+spent. The walk costs **0.0055ms** over the **5** ancestors between this readout
+and the root, measured 1000 times in the page it runs in.
+
+**The top edge was never clamped at all, which is the fault the right one hid.**
+The box sits `-140%` above its anchor, so a series high in the plot pushes it
+through the *ceiling* of the same scroller: `.831–.577 · Aug 11` lost **16.1px
+at 390 and 21.7px at 320** off its top, which at 320 is the whole of the figure
+line. `Runs` — the readout the pass above measured as unmoved at all three
+widths and left alone, rightly by its own lights — is the worst of it, its lines
+climbing to the top right of the plot by the end of the week: at the last day it
+was losing **9.8px on the right and 25.4px off the top at 390**, **9.8 and 28.8
+at 320**, and 0.6 and 8.1 at 1200. Above the point is where the readout belongs,
+so where above will not fit it goes **under** the point rather than sliding down
+over it — `--chart-tip-lift`, the flipped position being the mirror of the same
+40%-of-its-height gap — and it clamps into the band only in the corner where
+neither side fits. `Runs` after: **369.0 / 299.0 / 955.0** at the last day on
+nudges of **−13.80 / −13.80 / −4.60px**, nothing hidden on any edge.
+
+**Swept rather than sampled: 126 readouts, 0 hidden pixels.** 21 pointer
+positions across the plot × three widths (1200 / 390 / 320) × two categories
+(`OPS`, whose readout is 94.6px wide, and `Runs`, whose is 67.6) — worst hidden
+edge **14.1 / 16.1 / 21.7px** on `OPS` and **8.1 / 25.4 / 28.8px** on `Runs`
+before, **0 everywhere** after. Both offsets are computed from the anchor and
+the box's own width and height rather than from its measured `left`/`top`, so
+neither reads back a position it itself moved: scrubbed to a day, away, and back
+to it, the nudge and the lift come out the same numbers (`0.00px` / `16.00px` at
+Aug 11, `−27.29px` / `−56.00px` at Aug 19 — and that `−56.00` is `-140%` of a
+40px box arrived at independently, which is the default agreeing with the
+measurement where nothing needs to move). The left-wins branch is exercised by
+probe, no real readout reaching it: forced to **500px**, wider than the 356px
+band at 390, the box sits flush on the left gutter at **21** at every point in
+the series rather than being pushed off the right.
+
+**Under a finger, unchanged.** A real `Input.dispatchTouchEvent` drag across the
+plot at 390×844 reads `.721–.803 · Aug 10` through `.739–.485 · Aug 19` with
+nothing hidden on any edge, **0** readouts survive the `touchEnd`, the wrap
+stays **138.33** tall with the tip up and after it clears, and page overflow is
+**0**.
+
+**The xwOBA chart is unregressed, and the check is sharper than usual here**
+because that chart is where the rule being replaced was measured. Nine positions
+at each of 1200, 390 and 320, before and after: **all 27 rows identical** —
+readouts, box edges and nudges alike (`0.00px` everywhere but the last point,
+**−9.43px** there, ending at 386.0 and 316.0). The band the new code computes on
+that page *is* the window, which is why. Its figures are in **Client — the
+player page's tabs**, *Charts*.
+
+**Bundle: 583.27 → 583.99 KB of JS** (173.94 → 174.22 gzipped) and **156.57 →
+156.59 KB of CSS** (28.03 → 28.04) — 0.72KB and 0.02KB raw, 0.28KB and 0.01KB
+over the wire, for the band, the flip and the paragraphs arguing them.
+
 ### The Summary page ends on the acquisitions
 
 **It is the one thing a category matchup turns on that is not a category.** A

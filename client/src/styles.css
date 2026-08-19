@@ -5301,16 +5301,20 @@ button.start-line:focus-visible {
   stroke: var(--panel);
   stroke-width: 2;
 }
-/* **The box centers on its point, and `--chart-tip-nudge` is what buys it back
-   onto the screen.** `chartScrub.tsx` publishes the var on the element from a
-   layout effect and carries the whole argument: half a 92.9px readout is wider
-   than the last point of either plot is from the right edge of a phone's window,
-   so centered it ran 5.4px off the glass at 390 and at 320. The nudge is
-   measured rather than declared because the width it corrects is the width of
-   its own text. Zero by default, which is the box unmoved. */
+/* **The box centers on its point and sits above it, and the two vars are what
+   buy it back inside whatever cuts it.** `chartScrub.tsx` publishes both on the
+   element from a layout effect and carries the whole argument: half a readout is
+   wider than the last point of either plot is from the right edge it has, and
+   `-140%` puts a readout for a high point above the top edge of the box the
+   chart is drawn in. Measured on the matchup's `OPS` chart, the last day lost
+   13.0px of its right side at 390 and 14.1px at 1200 to the scrolling dialog
+   body, and `Aug 11` lost 16.1px of its top at 390 and 21.7px at 320 to the same
+   box. Both are measured rather than declared because what they correct is the
+   size of the box's own text. The defaults are the unmoved box — centered, and
+   `-140%` up — which is what the first paint of an unmeasured box gets. */
 .chart-tip {
   position: absolute;
-  transform: translate(calc(-50% + var(--chart-tip-nudge, 0px)), -140%);
+  transform: translate(calc(-50% + var(--chart-tip-nudge, 0px)), var(--chart-tip-lift, -140%));
   pointer-events: none;
   display: flex;
   flex-direction: column;
