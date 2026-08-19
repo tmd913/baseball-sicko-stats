@@ -440,7 +440,7 @@ happened or what is going to, so the **data** is swapped and every line below it
 is code that was already checked: the rows, the bars, the group tallies, the
 meter and the leading name are untouched.
 
-**Four things say it is a projection**, which is this app's standing rule that an
+**Three things say it is a projection**, which is this app's standing rule that an
 estimate never wears the same clothes as a measurement. The head's tag reads
 **`Projected`** in the accent where it read `Live` — *replacing* it rather than
 joining it, since the tag says what the figures **are** and two of them would be
@@ -451,26 +451,37 @@ the week. The card takes a **dashed border** (`.mup-proj`), at the size of the
 whole card rather than per cell: every figure on it is projected, so marking each
 one would be the same claim made twenty times.
 
-**And every bar on it is hatched**, which is the fourth and is the one a reader
-actually meets. The border marks the *card*; the bars are what the card is **read
-with** — the whole-matchup meter at the top and the ten category fills under it
-are the picture a manager takes the week from, and a solid one says *this is the
-measurement* in exactly the register a projection must not use. So the same
-class carries both marks, and the hatch is `.spl-fill--thin`'s own 115° at 3px
-on and 4px off, which is this app's mark for an estimate everywhere it appears
-(the percentile card's dotted bubble, the Splits card's hatched fill, the
-Schedule grid's dashed chip) — a broken mark means one thing across the app.
+**And the bars stay solid, which reverses a round and is worth reading rather
+than deleting.** They were hatched — the whole-matchup meter and the ten category
+fills, in `.spl-fill--thin`'s own 115° at 3px on and 4px off — on the argument
+that the border marks the *card* where the bars are what the card is **read
+with**, so a solid one says *this is the measurement* in exactly the register a
+projection must not use.
 
-**The color of each stripe is the color the bar already had**, so nothing about
-*which side is ahead* changes: green marks the winner, the trailing run of the
-meter stays `--faint` and its ties dimmer again. Only the texture says these are
-figures nobody has played yet. Two ordering notes are in the stylesheet beside
-the rules and are load-bearing — the three meter selectors are two classes deep
-and so beat `.mup-meter-lead`'s own one-class `background`, which is why the
-`--seg` rule is written *before* the `--lead` one (a leader that lost the tie
-would be painted `--faint`); and the fill's `min-width: 2px` sliver stays solid
-whatever the stripe does, the gradient starting on its 3px of ink, so a
-near-dead-level category is still a mark rather than a gap.
+**The rule is right and this is the wrong place to spend it.** Every other broken
+mark in the app — the percentile card's dotted bubble, the Splits card's hatched
+fill, the Schedule grid's dashed chip — marks **one row among solid ones**, so the
+texture is a distinction the reader can act on. Here *every* figure on the card is
+projected at once, so the hatch distinguished nothing and only made the picture
+harder to read: a 9px rail striped 3-on-4-off is more gap than ink, on the one
+element the whole page exists to be read from. What is left is what a broken mark
+would have been *adding* to — a dashed card, the head's `Projected` tag and dates
+running to the end of the period, all of it in the chrome rather than in the data.
+
+**Nothing about which side is ahead ever depended on it**: green marks the winner,
+the trailing run of the meter stays `--faint` and its ties dimmer again, exactly
+as they do on a live card. The two ordering notes the hatch rules carried go with
+them — they were about three striped selectors beating `.mup-meter-lead`'s own
+`background`, which nothing now overrides.
+
+**Measured on the live 12-team league at 1200×900**, reading the computed styles
+back rather than the stylesheet: on the projected card the ten category fills and
+both meter runs compute `background-image: none` — **0 of 12 striped, where all
+12 were** — with the card still `border-style: dashed`, the head still reading
+`Projected` and its dates still running to Aug 23; the live card is unchanged at
+`solid` with the same `none` on every bar. **Bundle: CSS 155.30 → 154.82 KB**
+(27.76 → 27.71 gzipped) and **JS unchanged at 572.58** (170.34) — four rules
+removed and nothing in a component but a comment.
 
 **Above `Moves`, at the foot of the categories — not in the head.** It sat at the
 far end of the Back row, beside the `Projected` tag it lights, which is the
