@@ -871,6 +871,117 @@ gzipped) and **147.02 → 148.08 KB of CSS** (26.21 → 26.42) — 7.3KB and 1.1
 raw, 2.4KB and 0.21KB over the wire, for a chart, a route, a shared toggle, a
 shared projection and the paragraphs above restated where the rules are.
 
+### The chart is scrubbed, and the scrub is the rolling chart's
+
+**The axis names about seven days and the plot draws nine** — or fourteen on a
+fortnight — so most of what this chart is read for was in the days it drew and
+never labeled. The reading a manager opens it for is *when* ("the lead went on
+the Friday"), and the axis could only answer it to the nearest two days.
+Dragging a finger or a pointer across the plot now names every one: a crosshair
+snapped to the nearest day, **both sides' running totals in the colors their own
+lines carry**, and the date under them.
+
+**The readout is the scoreboard cell for one day.** `31 – 23` over `Aug 16` is
+the same notation and the same order as the `R 31–23` on the card this chart was
+opened from, so there is no second form to learn — the chart is that cell walked
+back through the week. A side the series cannot answer for draws the app's own
+`—`, and the separator is `--faint` so it belongs to neither side.
+
+**The mechanic is `components/chartScrub.tsx`, extracted from `RollingXwoba`
+rather than copied out of it.** The hit test, the crosshair (`ScrubCross`) and
+the readout box (`ScrubTip`) are one object both charts use; what each keeps is
+what is genuinely its own — the rolling chart's single accent dot and its `PA
+144 · 5/24`, this one's two team-colored dots and its `31 – 23`. That is the
+rule this repo already applies (`Modal` came out of the Columns dialog the
+moment a second dialog wanted it, `.kind-switch` is folded onto `.view-switch`),
+and the half that would have drifted silently is the arithmetic: a snap to the
+nearest point is right about which day is under the finger or it is off by one,
+and nothing on the screen says which. **It is arithmetically identical on the
+rolling side rather than merely similar** — that chart's `Math.round(paGuess -
+xMin)` over a series whose PA numbers step by one *is* the rounded fraction of
+the way across the plot the shared test computes. `.roll-cross`/`.roll-tip*`
+are `.chart-cross`/`.chart-tip*` with the move, one rule for one component.
+
+**Measured on the live league**, week 19's `Runs` chart for Baldy's Bozos /
+Sho me the Parlay (`mup=110`), with the readout checked at six x positions
+against `/api/espn/matchup-series` itself — **18 of 18 right, 0 mismatches**
+across 1200×900, 390×844 and 320×700:
+
+| | 1200 | 390 | 320 |
+| --- | --- | --- | --- |
+| svg | 694 × 289.16 | 332 × 138.33 | 262 × 109.16 |
+| the six readouts | `4–3 Aug 10` · `4–3 Aug 10` · `13–15 Aug 12` · `19–17 Aug 14` · `31–23 Aug 16` · `40–30 Aug 18` | `4–3` · `4–3` · `8–7 Aug 11` · `19–17 Aug 14` · `31–23` · `40–30` | `4–3` · `4–3` · `8–7` · `16–17 Aug 13` · `31–23` · `40–30` |
+| crosshair, user units | 47.3 · 210.0 · 372.7 · 535.3 · 698.0 | 88.1 · 163.8 · 391.0 · 542.5 · 694.0 | 108.9 · 181.2 · 325.7 · 542.5 · 687.0 |
+
+The three widths land on **different days at the same fraction of the box**, and
+that is the geometry rather than a wobble: the plot's left pad is `3em` of a
+label whose *rendered* size is fixed, so in viewBox units it is 47.3 at 1200 and
+108.9 at 320 — a fifth of the plot at the narrow end. The crosshair sits on a
+plotted day at every one of the eighteen, and each series' own point is picked
+out by its own dot a size up (`r` 3 → 5) ringed in `--panel`, which is
+`.roll-dot`'s shape against its one accent line.
+
+**The readout takes no layout.** `.mser-chart-wrap` is the `position: relative`
+box the tip is absolute inside, so the chart's height is **289.16 / 138.33 /
+109.16 with the tip up, and the same three after the pointer leaves** — a box
+appearing under a finger must not shove the page it is being read on. Page and
+dialog overflow are **0** at all three widths and at every sampled position,
+including the last day, where the box hangs 12.6px past the right edge of the
+plot at 1200 and still clears the viewport by **7.2px at 390 and at 320**.
+
+**Under a finger it is a real touch drag, and the page still scrolls.**
+Dispatched as `Input.dispatchTouchEvent` at 390×844 with touch emulation on, a
+drag across the plot reads the same six days and the readout clears on
+`touchEnd` (**0** tips left). `touch-action` computes `pan-y`, which is what
+arbitrates the two gestures — they differ in *axis*, so the browser keeps the
+vertical pan and the chart keeps the horizontal drag. Measured at 390×260, where
+the dialog body has **48px of range**: a 110px upward drag starting at the
+center of the plot moves it **48px**, which is exactly what the same drag
+starting 8px above the plot moves it. Nothing listens on `pointerdown`,
+deliberately — a scroll begins with one on whatever is under the finger, so
+reading it would flash a readout on every flick that starts on the chart.
+
+**The two figures are the two lines by construction, in every theme.** Checked
+in Dark, Light, Midnight and Maroon: the readout's two spans resolve to exactly
+the two `path.mser-line` strokes and the two marker fills — Dark
+`rgb(99, 180, 216)` / `rgb(158, 161, 162)`, Light `rgb(0, 74, 139)` /
+`rgb(84, 87, 89)`, Midnight `rgb(56, 189, 248)` / `rgb(142, 160, 196)`, Maroon
+`rgb(143, 192, 234)` / `rgb(189, 163, 174)`. The crosshair is `--muted` at **1
+unit dashed 3 3** against series lines that are 2 units and solid, which is what
+keeps it from reading as a third line on a chart where `--muted` *is* one of the
+two teams.
+
+**A day the plot will not draw is a day the readout will not print.** Both read
+one `reach` — the leading run of days ESPN answered for — because a running
+total past a hole is not a missing point but a wrong one. Measured with the last
+three days of the week marked unreadable on the way in: **12 dots** for six
+days, the gap note drawn, and the readout past the gap reads `— – —` with **0**
+markers and the box pinned to the top of the plot. The legend follows the same
+`reach` now and reads `26 · 20` where it read `40 · 30` — the same pair the
+readout gives for Aug 15, which is where the lines stop.
+
+**Nothing here is ever a projection.** The chart is fed by `series` off
+`/api/espn/matchup-series` and the page passes it nothing else, so `proj=1`
+cannot reach it: every figure a scrub prints is measured, and the app's
+solid-means-measured rule needs nothing spent on this box.
+
+**The xwOBA chart is unregressed, which is the failure this change could
+cause.** The same script run against the commit before and after, on the same
+player at 1200×900 and 390×844, reads **byte-identical**: `.375 / PA 144 · 5/24`,
+`.404 / PA 202 · 6/7`, `.300 / PA 259 · 7/8` at 1200 with the crosshair at
+**178.9 · 360.3 · 538.5** (the 179 and 539 that file already records), and
+`.370 / PA 137 · 5/22`, `.412 / PA 198 · 6/6`, `.307 / PA 258 · 7/8` at 390 with
+the crosshair at **179.8 · 361.1 · 539.4**; the dot stays `r=4` on the same x,
+the crosshair's dash stays `3px, 3px`, `--roll-font` stays 13.63px and 26.02px,
+the wrap stays 264.16 and 138.33 tall, and the tip still clears on leave. The
+only thing that moved is the class on the box — `roll-tip` → `chart-tip`, which
+is how the before run was confirmed to be the before run.
+
+**Bundle: 578.64 → 579.84 KB of JS** (172.36 → 172.77 gzipped) and **155.43 →
+155.61 KB of CSS** (27.82 → 27.86) — 1.2KB and 0.18KB raw, 0.41KB and 0.04KB
+over the wire, for a shared scrub module, a readout on a second chart and the
+paragraphs above.
+
 ### The Summary page ends on the acquisitions
 
 **It is the one thing a category matchup turns on that is not a category.** A
