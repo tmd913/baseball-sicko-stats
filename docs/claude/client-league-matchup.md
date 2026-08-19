@@ -1404,6 +1404,105 @@ change what is drawn without remounting it — only crossing to the other manage
 is a fresh page rather than one team's rows under the other's name while the
 read is out.
 
+### A team page carries the projected lens too
+
+**The team page is the app's Roster view read for somebody else, and it was one
+reading short of it.** The Schedule view had already come across — the days
+ahead in place of the stat columns — and the third reading of the same cells had
+not: *what is this manager going to get out of these players over the days still
+to be played*, which on a matchup page is the question directly under every
+category on the Summary next door. So the `mup-tools` row carries
+**`ProjectedToggle`**, the same shared control the roster row draws, and
+`LeagueTeam` takes a `projection` and hands it to the same `SummaryTable`.
+
+**It is not the Summary page's `Projected`**, and the two are a lens each on a
+different object rather than one control drawn twice. That one projects the
+**matchup** — every side's final total in each of the league's own categories —
+and lives inside the card it acts on, gated on a live categories week
+(`projectable`). This projects **a line per player**, off
+`/api/projection/roster`, which is the same engine asked the same question the
+main roster view asks it: a row here and a row there are one arithmetic, and
+`asProjected` and `ProjectedPlayerLine` never meet. They can be in force at
+once and say nothing about each other; only one of them is ever on screen,
+`.mup-tools` and the card being two different pages of the strip.
+
+**On the roster reading alone**, for the reason the Schedule view is: a feed is a
+record of things that happened and there is no honest projected version of one.
+**And whatever week the matchup is** — unlike the Summary's, which is refused on
+a settled period. A settled *matchup* has nothing left to happen; a settled
+matchup's *manager* still has a roster and next week's games, and the caption
+over the table says which days the figures cover while the head above goes on
+saying `Week 18 · Aug 3 – Aug 9 · Final`, which is a fact about the matchup and
+stays true.
+
+**Pressing it moves the reader to the days it is about**, the main roster view's
+own rule and for its reason: a team page opens on `Matchup` for a settled week
+and on `Today` for a live one, and a projection over days that have been played
+is a projection of nothing. The end is **`matchupWindow`'s rather than
+`board.end`**, which is the trap this file's own head already documents — the
+board's dates are the *observed* span and truncate at today for the week being
+played, so projecting to them would be projecting to yesterday; with no window
+at all it is the week ahead, which is what a reader with no league gets on the
+roster view. The date control is untouched, so the reader is free to move off
+it, and turning the lens off puts the span back **preset and all**, so `Matchup`
+goes back to *being* Matchup rather than to the two dates it happened to mean.
+
+**Exclusive with the Schedule view, stated from both sides.** That mode replaces
+the stat *columns* with days and this replaces the *figures* in them, so they
+are two readings of one set of cells; each toggle turns the other off, and the
+range the lens moved the reader to stays when Schedule takes over, the days
+ahead being exactly what a schedule is for.
+
+**The overlay owns the flag and the read**, for the reason it owns the reading,
+the kind, the dates and `starters`: they are chrome above *both* team pages and
+must not reset when the reader crosses from one manager to the other. And it is
+**state rather than anything in the URL** — `mup` and `mt` are the whole of what
+a matchup link carries.
+
+**The projection is held with the team it was read for.** Crossing to the other
+manager must not draw one team's lines over the other's roster in the beat
+before the new read lands: the keys would mostly miss and every row would
+quietly fall back to its real figures under a `Projected` caption, which is the
+one failure this app's own loading rules forbid outright. So the state is
+`{ teamId, p }` and the prop is `teamProjection?.teamId === sideTeamId ?
+teamProjection.p : null` — exact, and it needs no clearing effect.
+
+**`addDays` moved to `lib.ts` for it**, which is the third surface to want it:
+the app's own date presets, the roster view's projected lens, and this. It was
+`App.tsx`-local, and a copy here would have been a second definition of a
+UTC-safe date step — the same economy that moved `baseballDay`, `startedOn` and
+`projectStarters` there when these pages needed them.
+
+**Measured, driven against the live 12-team league.** On matchup 110's team
+page: the toggle lights, the date button goes `Today 8/16` → **`8/18 – 8/23`**,
+the caption reads `Projected · Aug 18 – Aug 23 · 5 days still to play`, the
+header goes `Opponent` → **`G`**, and the first row goes `0/1` → `3.9/17.1` with
+a `G` of 5; the `Total` reads `60.3 · 50.4/204.5 · 26.3 R`. Pressing it back
+restores `Today` and the Opponent column. **Crossing managers with the lens on**
+keeps it lit and draws the other team's own figures (`5.6 · 4.8/19.5` for his
+catcher). The pitcher tab draws its own `G` with **dashes** for a starter whose
+turn falls outside the span. A **settled** matchup (week 18) opens on `Matchup
+8/3–8/9`, projects to `8/18 – 8/23`, and comes back to `Matchup`. A **bye** page
+carries it too, going straight to that manager's roster. The **Feed** tab draws
+**0** projected toggles and **0** schedule toggles. And the Summary page is
+untouched: no `mup-tools` at all, its own `lg-proj-btn` still writing `proj=1`
+and dashing the card.
+
+**Exclusivity both ways, on both pages**: with `Projected` on, pressing
+`Schedule` leaves it unlit with the day columns drawn and the span strip up;
+pressing `Projected` with `Schedule` on does the reverse. Checked on the matchup
+team page and on the main roster page alike.
+
+**What it costs the tools row is one wrapped line at 480 and nothing anywhere
+else**, A/B'd by hiding the button on the same page at 320 / 360 / 375 / 390 /
+480 / 640 / 900 / 1400: `.mup-tools` is **132 / 84 / 84 / 84 / 36→84 / 36 / 36 /
+36px** with the button against 132 / 84 / 84 / 84 / **36** / 36 / 36 / 36
+without, and the icon group **168px against 124** below 640 (three 36px squares
+against two) and **443 against 321** above it, where all three carry their
+labels. **Page-body overflow and view overflow are 0 at every one of those
+widths**, in both states, and the table keeps its 58.00px row and its 51.00px
+header row.
+
 ### The server change is one optional parameter
 
 `/api/report?source=fantasy` takes a **`teamId`**, absent meaning the reader's

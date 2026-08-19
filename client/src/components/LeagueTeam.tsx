@@ -12,6 +12,7 @@ import type {
   EspnStandingsTeam,
   PlayerKind,
   PlayerReport,
+  RosterProjection,
 } from '../types';
 
 /**
@@ -60,6 +61,7 @@ export default function LeagueTeam({
   reading,
   starters,
   schedule,
+  projection,
   onOpenDetails,
 }: {
   teamId: number;
@@ -81,6 +83,12 @@ export default function LeagueTeam({
    *  same "the mode is the presence of an index" rule App applies, so a table
    *  can never be in schedule mode with no schedule in it. */
   schedule: ScheduleIndex | null;
+  /** The projected reading, or null for the ordinary figures — the same "the
+   *  mode is the presence of the answer" rule `schedule` follows one line up,
+   *  so a table can never be projected with no projection in it. The overlay
+   *  owns the flag and the read for the reason it owns the dates, and hands
+   *  this down only once the answer has landed. */
+  projection: RosterProjection | null;
   /** Open a player's page — the same `${kind}-${id}` key every other route into
    *  it uses, so a name pressed here opens what a name pressed on the roster
    *  table opens. */
@@ -278,7 +286,12 @@ export default function LeagueTeam({
   return (
     <FantasyRosterContext.Provider value={slots}>
       {reading === 'roster' ? (
-        <SummaryTable reports={cards} onOpenDetails={onOpenDetails} schedule={schedule} />
+        <SummaryTable
+          reports={cards}
+          onOpenDetails={onOpenDetails}
+          schedule={schedule}
+          projection={projection}
+        />
       ) : (
         <LiveFeed
           /* Keyed on the kind so the stream starts at its first page when the

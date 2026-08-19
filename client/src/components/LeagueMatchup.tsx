@@ -11,6 +11,7 @@ import { DateRow, DateToggle } from './DateControls';
 import type { DatePreset } from './DateControls';
 import LeagueTeam from './LeagueTeam';
 import { StartersToggle } from './StartersToggle';
+import { ProjectedToggle } from './Projection';
 import { ScheduleSpanTabs, ScheduleToggle } from './ScheduleControl';
 import { buildScheduleIndex, defaultScheduleSpan } from './schedule';
 import type { ScheduleSpan } from './schedule';
@@ -26,7 +27,7 @@ import {
   TeamLogo,
 } from './LeagueView';
 import { moveLabel } from './LeagueTransactions';
-import { easternDate } from '../lib';
+import { addDays, easternDate } from '../lib';
 import type {
   EspnCategory,
   EspnMatchupSeries,
@@ -38,6 +39,7 @@ import type {
   EspnTransactions,
   MatchupWindow,
   PlayerKind,
+  RosterProjection,
   ScheduleWindow,
 } from '../types';
 
@@ -469,6 +471,42 @@ export default function LeagueMatchupView({
   const [dateOpen, setDateOpen] = useState(false);
   const [scheduleSpan, setScheduleSpan] = useState<ScheduleSpan | null>(null);
   /**
+   * **The projected reading of a team page** — the app's own Roster-view lens,
+   * on somebody else's roster, and the third of this row's readings of one set
+   * of cells beside the plain table and the Schedule view.
+   *
+   * The overlay owns it for the reason it owns the reading, the kind, the dates
+   * and `starters`: it is chrome above *both* team pages and must not reset
+   * when the reader crosses from one manager to the other. And it is state
+   * rather than anything in the URL, which is where every control on this page
+   * sits — `mup` and `mt` are the whole of what a matchup link carries.
+   *
+   * **Not the Summary page's `Projected`**, which is a different lens on a
+   * different object: that one projects the *matchup*'s categories and lives
+   * inside the card it acts on. This projects a line per player, off
+   * `/api/projection/roster` — the same engine asked the same question the main
+   * roster view asks it, so a row here and a row there are one arithmetic.
+   *
+   * The projection is held **with the team it was read for**, so crossing to
+   * the other manager cannot draw one team's lines over the other's roster in
+   * the beat before the new read lands: the keys would mostly miss, and every
+   * row would quietly fall back to its real figures under a `Projected`
+   * caption.
+   */
+  const [teamProjected, setTeamProjected] = useState(false);
+  const [teamProjection, setTeamProjection] = useState<{
+    teamId: number;
+    p: RosterProjection;
+  } | null>(null);
+  const [teamProjLoading, setTeamProjLoading] = useState(false);
+  /** The span the reader was on when they turned the lens on, so turning it off
+   *  puts them back rather than stranding them in a week with no stats in it —
+   *  the preset with it, so `Matchup` goes back to *being* Matchup rather than
+   *  to the two dates it happened to mean. */
+  const beforeProjection = useRef<{ start: string; end: string; preset: string | null } | null>(
+    null,
+  );
+  /**
    * **The matchup's own days**, or null where the period has no dates to name —
    * an anchor the schedule could not be read for, where a span with no days in
    * it would be worse than none.
@@ -599,6 +637,78 @@ export default function LeagueMatchupView({
   useEffect(() => {
     onSideTeam?.(sideTeamId);
   }, [sideTeamId, onSideTeam]);
+
+  /**
+   * **This team's projection**, read on the first press and whenever the team,
+   * the days or the lens itself change.
+   *
+   * Every parameter is one `/api/report` takes above it and the server resolves
+   * the roster the same way, so the lines this describes are the rows that
+   * report describes — which two answers to "which players" a moment apart
+   * could not promise.
+   *
+   * **Never over data**: the last answer stands while the next is in flight, so
+   * changing the range does not blank a table somebody is reading, and the only
+   * mark a press leaves is the ball inside the control that started it. A
+   * **failed** read costs the lens its figures and nothing else — the table
+   * falls back to the report's own numbers rather than the page becoming a
+   * message, which is the direction the schedule window already fails in.
+   */
+  useEffect(() => {
+    if (!teamProjected || sideTeamId === null) return;
+    let canceled = false;
+    setTeamProjLoading(true);
+    api
+      .rosterProjection(span.start, span.end, 'fantasy', sideTeamId)
+      .then((p) => {
+        if (!canceled) setTeamProjection({ teamId: sideTeamId, p });
+      })
+      .catch((e: Error) => {
+        if (!canceled) console.error('reading the team projection failed:', e.message);
+      })
+      .finally(() => {
+        if (!canceled) setTeamProjLoading(false);
+      });
+    return () => {
+      canceled = true;
+    };
+  }, [teamProjected, sideTeamId, span.start, span.end]);
+
+  /**
+   * **Turning the lens on moves the reader to the days it is about**, which is
+   * the main roster view's own rule and is what makes the toggle answer a
+   * question rather than draw a table of dashes: a projection over days that
+   * have been played is a projection of nothing, and a team page opens on
+   * `Matchup` for a settled week and on `Today` for a live one — neither of
+   * which is the days ahead.
+   *
+   * The end is `matchupWindow`'s rather than `board.end`, and that is the same
+   * trap the head above already documents: the board's dates are the *observed*
+   * span and truncate at today for the week being played, so projecting to them
+   * would be projecting to yesterday. With no window at all it is the week
+   * ahead, which is what a reader with no league gets on the roster view.
+   *
+   * The date control is untouched, so the reader is free to move off it, and
+   * turning the lens **off** puts the span back where it was. **The Schedule
+   * view goes off with it** — that mode replaces the stat *columns* with days
+   * and this replaces the *figures* in them, so they are two readings of one
+   * set of cells and cannot both be in force.
+   */
+  const toggleTeamProjected = useCallback(() => {
+    setTeamProjected((on) => {
+      if (on) {
+        const back = beforeProjection.current;
+        beforeProjection.current = null;
+        if (back) setSpan(back);
+        return false;
+      }
+      beforeProjection.current = span;
+      const to = matchupWindow?.end ?? addDays(today, 6);
+      setSpan({ start: today, end: to < today ? today : to, preset: null });
+      setScheduleSpan(null);
+      return true;
+    });
+  }, [span, matchupWindow, today]);
 
   // The Schedule view's index, or null while the mode is off or its one read is
   // still out — "the mode is the presence of an index rather than a flag beside
@@ -1152,7 +1262,35 @@ export default function LeagueMatchupView({
             on={scheduleSpan !== null}
             loading={scheduleLoading}
             onToggle={() =>
-              setScheduleSpan((s) => (s === null ? defaultScheduleSpan(matchupWindow) : null))
+              setScheduleSpan((s) => {
+                if (s !== null) return null;
+                // **The projected lens goes off with it**, which is the same
+                // exclusivity `toggleTeamProjected` states from the other side.
+                // Left on, its button would sit lit over a table it was not
+                // reading. The range it moved the reader to stays, the days
+                // ahead being exactly what a schedule is for.
+                setTeamProjected(false);
+                return defaultScheduleSpan(matchupWindow);
+              })
+            }
+          />
+        )}
+        {/* **The projected reading, after the Schedule view and before
+            `Starters`** — the roster row's own order, where these two are the
+            third of *which page, which kind, which reading of it, which
+            players, which days*: the stats behind you, the fixtures ahead, and
+            what the fixtures are worth. On the roster table alone, for the
+            reason the Schedule view is: a feed is a record of things that
+            happened and there is no honest projected version of one. */}
+        {reading === 'roster' && (
+          <ProjectedToggle
+            on={teamProjected}
+            loading={teamProjLoading}
+            onToggle={toggleTeamProjected}
+            title={
+              teamProjected
+                ? 'Back to what has actually happened'
+                : `Add what ${sideName} should get from these players over the days still to be played — and open on the days there are games in`
             }
           />
         )}
@@ -1243,6 +1381,14 @@ export default function LeagueMatchupView({
               reading={reading}
               starters={starters}
               schedule={reading === 'roster' ? scheduleIndex : null}
+              /* Held with the team it was read for, so crossing to the other
+                 manager draws the plain table until his own answer lands rather
+                 than the last man's lines over this one's roster. */
+              projection={
+                reading === 'roster' && teamProjected && teamProjection?.teamId === sideTeamId
+                  ? teamProjection.p
+                  : null
+              }
               onOpenDetails={onOpenDetails}
             />
           </>

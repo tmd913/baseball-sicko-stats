@@ -6,7 +6,7 @@ hide-injured filter). The three wide tables' shared behavior — the full-page
 mode, the bleed, the sticky columns — is described here and referred to from the
 other two.
 
-- **summary** (`SummaryTable.tsx`, the default, listed first) — a full-page stat table over the range (one row per player: opponent/score, H/AB, R, HR, RBI, SB, OPS, BB, K; aggregate `Total` row pinned at the bottom). The opponent column shows the matchup pre-game, the live score + inning while a game is on, and the final score once it's over — for a representative game picked live-first, then scheduled, then most recent — and, **before first pitch only**, the other side's announced starter on a second line (`game.probablePitcher`, **surname only**: this is the column whose width costs a stat column off the right of a phone, so the name takes a line rather than widening the cell). Pre-game the start time moves up beside the matchup, so the cell is two lines in every state instead of three in one of them; once the game is under way the starter drops off, the score and inning being what matters by then (and the batter as likely to be facing a reliever). On the pitcher tab that starter is his counterpart, not someone he faces. Hides the overall-stats chips, and the search bar too — *except* when the roster is empty, since the view tabs are also hidden until something is on it, so a new user would otherwise have no way to add a first player (`showAdder` in `App.tsx`). The `.app.summary-mode` class turns the app into a fixed-height flex column so only the table scrolls.
+- **summary** (`SummaryTable.tsx`, the default, listed first) — a full-page stat table over the range (one row per player: opponent/score, H/AB, R, HR, RBI, SB, OPS, BB, K; aggregate `Total` row pinned at the bottom). The opponent column shows the matchup pre-game, the live score + inning while a game is on, and the final score once it's over — for a representative game picked live-first, then scheduled, then most recent — and, **before first pitch only**, the other side's announced starter on a second line (`game.probablePitcher`, **surname only**: this is the column whose width costs a stat column off the right of a phone, so the name takes a line rather than widening the cell). Pre-game the start time moves up beside the matchup, so the cell is two lines in every state instead of three in one of them; once the game is under way the starter drops off, the score and inning being what matters by then (and the batter as likely to be facing a reliever). On the pitcher tab that starter is his counterpart, not someone he faces. **In neither of the table's other two readings is that column drawn at all** — the Schedule view and the projected lens each replace it with `G`, for the same reason stated twice: one representative game says nothing about a span of days ahead (see *What the mode swaps* and *The Opponent column becomes `G`* below). Hides the overall-stats chips, and the search bar too — *except* when the roster is empty, since the view tabs are also hidden until something is on it, so a new user would otherwise have no way to add a first player (`showAdder` in `App.tsx`). The `.app.summary-mode` class turns the app into a fixed-height flex column so only the table scrolls.
 
 **And on this view the column gives its vertical margins back too**, the way the three wide tables give back the side gutters (`--table-bleed`, above): the table meets the bar above it and the bottom of the window below. There were two of them and they were both 14px, one from each box — `.app`'s own `padding-bottom` and the chrome's `margin-bottom` — and neither was doing any work here. The pane *is* the page on this view: there is nothing under it to be held off and nothing above it but the bar, so both were a strip of background showing through where a reader expects rows. **The 80px `.app` carries at the bottom is not the culprit it looks like** and never reached this view: the `.app.summary-mode, .app.research-mode` rule has overridden it to 14 since summary mode was written, which is why the fix is a *pair* of 14s and why removing only one of them would have taken the table to one edge and not the other. `padding-bottom` alone rather than the whole padding — the top 14px is already spoken for by the chrome's negative top margin, and the sides are what `--table-bleed` reads to know how far the table may bleed back out through them. Measured before and after at 320, 390, 640, 1200 and 1920 wide and on a 500px-tall window, on both the batter and the pitcher tab: 14px above the header row and 14px below the pinned total row at every one of them, **0 and 0** after, with the total row landing on the window's own bottom edge less the 1px the bottom border takes — the same pixel the sticky-column note above measures.
 
@@ -469,6 +469,52 @@ which is the opposite of the truth — the same distinction the research board
 makes when it sends a window a player does not appear on back as `null` rather
 than as a zeroed row.
 
+#### The Opponent column becomes `G`
+
+**The one column on the row that a future span makes useless is the one naming a
+game.** `OpponentCell` draws a single *representative* game — live first, then
+the next scheduled, then the most recent — which is a fair summary of a range
+that has been played and says almost nothing about one the lens has just moved
+the reader into the future of: it names one fixture out of a week of them, none
+of which anybody has played. So under the lens that column is **`G`**, exactly
+as the Schedule view puts its own `G` there and for the same reason — what a
+row is read against once its figures are estimates is how many games it is made
+of.
+
+**It counts the whole row rather than the projection's half of it.** Every
+figure beside it is `what he has already done + what he should still add`, so a
+count naming only the second half would be the one cell on the row keeping a
+different arithmetic. That is not a corner case: the ordinary press straddles
+today, a game already under way this afternoon being in the report's own line
+and out of the projection by `remainingGames`' rule. So `projectedGames` is
+**games played over the days in view + `ProjectedPlayerLine.chances`**, and the
+`Total` row is that summed down the column, which is what the Schedule view's
+own `G` total already is.
+
+**"Played" is each kind's own test, and both are tests the app already had**: a
+batter's game he came to the plate in (`PlayerCard`'s own `played`) and a
+pitcher's game he threw in (`aggregatePitching`'s filter). Neither is
+`r.games.length`, which counts the placeholder games a report carries for the
+days his club played without him — over a future range that is *every* game on
+it, so the count would read as a full week for a man who has played none of it.
+
+**A tenth, like every other projected count**, since an expected game is a share
+of one (`chances` is play-share weighted for a batter and starts-plus-relief for
+a pitcher), and a **dash at nothing** — a club with no game left and no day
+played is the same absence that already dashes the rest of his row rather than
+drawing it as noughts. Over a range wholly in the past the column is therefore
+whole numbers and the caption says `nothing to project`, which is the honest
+reading of a `G` that is only games played (measured on a real 15-batter roster
+over 08-10…08-12: `3 · 3 · 3 … Total 31`).
+
+**It costs the table nothing and the stylesheet nothing.** The header and the
+cells are `sum-num`, the class every stat column already uses, so there is no
+rule to add; measured on the live fantasy roster, the batting table goes
+**709 → 720px at 390** — the eleven pixels are the projected figures themselves
+(`3.9/17.1` against `0/1`), the G column being *narrower* than the Opponent one
+— and **1400 → 1400 at 1400**, with the row 58.00px, the header row 51.00, the
+headshot column pinned at 0 and page-body overflow 0 either way.
+
 #### The caption, and the key behind it
 
 `Projected · Aug 18 – Aug 23 · 6 days still to play`, directly above the pane —
@@ -569,6 +615,14 @@ context, a toggle, a caption, a shared key and glyph, four hatch rules and the
 paragraphs above restated where the rules are. The JS figure is net of what the
 Scoreboard gave back: a component's worth of projection plumbing left that file
 and one copy of the key went with it.
+
+**And for the `G` column and the matchup team page's copy of the toggle**
+(measured together, both being one round): **572.58 → 574.13 KB of JS** (170.34
+→ 170.70 gzipped) and **CSS unchanged at 154.82** (27.71) — 1.55KB of JS raw and
+0.36KB over the wire, for a column, a second toggle with its own read, and the
+paragraphs above restated where the rules are. The stylesheet does not move at
+all, which is the measurement worth keeping: the `G` header and its cells are
+`sum-num`, the class every stat column on this table already uses.
 
 **Every one of the three wide tables offers itself the whole page** (`ExpandButton.tsx`, `hooks.ts::useFullPage`) — the summary table, the research board and the game log. They are the app's widest things by some way and they read out of a box a few hundred pixels tall under a header, a tab row and a control bar; the button is "just show me the table", and what it buys is the app's own chrome.
 
