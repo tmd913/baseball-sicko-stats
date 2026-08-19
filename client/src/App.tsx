@@ -218,6 +218,60 @@ function mondayOnOrBefore(date: string): string {
 }
 
 
+/**
+ * The label the current fantasy matchup period goes under, which is a constant
+ * because three places have to agree about it: the preset the row offers, the
+ * URL param a link carries, and the boot path that resolves one of those back
+ * into a pair of dates once the league has answered.
+ *
+ * **The same word the matchup page's own team pages use, and deliberately not
+ * the same preset.** That one names *the matchup being read* — a week the
+ * reader navigated to, which is often a past one — where this names *the week
+ * the league is on*. They are the same question asked of two different periods,
+ * so `LeagueMatchupView` goes on being handed the app's five and adding its own
+ * on top (see its `spanPresets`); handing it a list that already carried one
+ * would put two pills reading `Matchup` in one row, meaning two spans.
+ */
+const MATCHUP_PRESET = 'Matchup';
+
+/**
+ * **The days the fantasy week the league is on covers**, clamped to today — or
+ * null with no window to read them off, and null where the period's first day
+ * is still ahead, which has no played days at all and so no span to name.
+ *
+ * **The end is clamped, and the whole period is not what this names**, which is
+ * the one decision in it. `MatchupWindow` publishes the period entire (Aug 10 –
+ * Aug 23 on a fortnight's playoff round) because it was derived for the
+ * **Schedule** view, which is a grid of fixtures and wants every day of it. The
+ * two roster views are cut by what has been *played*: a range running to the
+ * 23rd on the 18th is five days of empty columns on every row of the summary
+ * table and five days of nothing on the Feed, under a pill whose whole claim is
+ * that it names the week's numbers. Clamped, `Matchup` is the days the week has
+ * actually had — which is also the span the League page's own category totals
+ * are summed over, so the two agree rather than the table quietly including
+ * days the score does not.
+ *
+ * **The days ahead are not lost, they are two other controls**: the Schedule
+ * view replaces the stat columns with the fixtures (and offers `This Matchup`
+ * and `Next Matchup` as its own spans), and the projected lens already runs
+ * from today to `matchupWindow.end`, which is the rest of this very period. So
+ * the split is that this preset answers *what has this week come to* and those
+ * two answer *what is left of it*.
+ *
+ * **Not the scoreboard's own `start`/`end`, which truncate at today already and
+ * would need no clamp.** That payload is `/api/espn/scoreboard`, read only while
+ * the League view is open or a matchup is; making a roster page depend on it
+ * would put a league-wide read on every load of the two views most people never
+ * leave. This window is 103 bytes, read once per session on a connected league,
+ * and the app is already fetching it for the Schedule control.
+ */
+function matchupDays(w: MatchupWindow | null): { start: string; end: string } | null {
+  if (!w) return null;
+  const today = baseballToday();
+  const end = w.end < today ? w.end : today;
+  return w.start > end ? null : { start: w.start, end };
+}
+
 function datePresets(): DatePreset[] {
   const today = baseballToday();
   const tomorrow = nextDay();
@@ -303,6 +357,11 @@ export default function App() {
   const initialPreset = useMemo(() => {
     if (initialParams.has('preset')) {
       const label = initialParams.get('preset');
+      /* `Matchup` is known here and is not in `presets`, which is the whole of
+         what makes it a rule rather than a range: its days come off the
+         connected league and the league has not answered yet. It is accepted on
+         trust and resolved — or given up — once it has; see `matchupSpan`. */
+      if (label === MATCHUP_PRESET) return label;
       return presets.some((p) => p.label === label) ? label : null;
     }
     // No preset param: fresh visit defaults to Today; an explicit range means
@@ -673,12 +732,96 @@ export default function App() {
    */
   const beforeProjection = useRef<DateRange | null>(null);
   const [matchupWindow, setMatchupWindow] = useState<MatchupWindow | null>(null);
+  /** Has the question *which days is this matchup* been answered, one way or
+   *  the other — the window landed, the read failed, or there is no league to
+   *  ask. Read by the boot gate on the report and by the resolution effect
+   *  below, both of which need "we know" rather than "we know and it's a yes". */
+  const [matchupWindowSettled, setMatchupWindowSettled] = useState(false);
   /* Asked-once rather than a terminal-state guard, and safe because there is no
      cleanup: StrictMode's second pass finds the flag and returns while the
      first pass's answer still lands. The trap this codebase records (*the
      roster read hung under StrictMode*) is marking a request answered **and**
      canceling its result with a `live` flag the teardown flips. */
   const matchupWindowAsked = useRef(false);
+  /** The current period's played days — see `matchupDays`. */
+  const matchupSpan = useMemo(() => matchupDays(matchupWindow), [matchupWindow]);
+  /**
+   * The five presets plus this one, for the two roster views alone.
+   *
+   * **It reads last**, where the matchup page's own copy leads: there `Matchup`
+   * is the reason the reader opened the page, and here `Today` is the reading a
+   * manager arrives with and the app's own default. It is also the widest of
+   * the named spans, so last is where the row's existing narrow-to-wide order
+   * puts it — and adding at the end moves no pill anyone has already learned
+   * the position of.
+   *
+   * **There is no `Next matchup` pill and that is a decision.** The window
+   * carries one (`matchupWindow.next`) and both these tables are cut by what has
+   * happened, so a span wholly in the future is a summary table of em-dashes and
+   * a Feed reading `No games for these players` — a control that empties the
+   * page with nothing on screen to say why, which is the one thing this app's
+   * own rules forbid a filter to do. `Tomorrow` is not the counter-example it
+   * looks like: it is one day, and what it is for is the Upcoming section's
+   * scheduled games, where a fortnight of those is not a reading anybody wants.
+   * Next week is the Schedule view's question, and that view already offers it.
+   */
+  const rosterPresets = useMemo<DatePreset[]>(
+    () => (matchupSpan ? [...presets, { label: MATCHUP_PRESET, ...matchupSpan }] : presets),
+    [presets, matchupSpan],
+  );
+  /**
+   * **The window's answer applied**: the flag the boot gate waits on, and the
+   * resolution of a `?preset=Matchup` link, in **one** state update.
+   *
+   * The two have to land together and that is the whole reason this is a
+   * callback rather than an effect beside the fetch. Measured with them apart —
+   * the flag set in the fetch and the range resolved in an effect keyed on it —
+   * the gate opened on one commit and the range moved on the next, so the report
+   * effect fired **twice**, once for the placeholder day and once for the week:
+   * `?start=2026-08-18&end=2026-08-18` at 26ms and `?start=2026-08-10&…` at
+   * 27ms. Batched into one callback there is one read, which is what the gate
+   * was for.
+   *
+   * **Both entries, because a link seeds both** — the Roster and the Feed take
+   * the same range off a shared link and part from there, so a `Matchup` link
+   * has to mean the matchup on whichever of the two it is read from.
+   *
+   * **With no span it falls back to `Today` rather than keeping the label.**
+   * The two are one thing here, unlike the Schedule view's own spans, where the
+   * control can mark the span it is *actually* drawing while the URL keeps what
+   * it was handed: a preset's label **is** its state and is what the calendar
+   * button prints, so a reader with no league would otherwise be left on a
+   * button reading `Matchup` over a row with no such pill and no way back to
+   * it. The URL then self-corrects to `preset=Today` on the next sync, which is
+   * the honest reading of a link this reader cannot honor.
+   *
+   * **It only ever touches an entry still sitting on the label**, so a reader
+   * who moved the dates in the second before the league answered keeps their
+   * own range; and it is called once per session, the window being read once.
+   */
+  const settleMatchup = useCallback(
+    (w: MatchupWindow | null) => {
+      const span = matchupDays(w);
+      const today = presets.find((p) => p.label === 'Today');
+      setMatchupWindowSettled(true);
+      setRanges((prev) => {
+        let next: Record<DateScope, DateRange> | null = null;
+        for (const scope of ['summary', 'feed'] as DateScope[]) {
+          const r = prev[scope];
+          if (r.preset !== MATCHUP_PRESET) continue;
+          const to: DateRange | null = span
+            ? { ...span, preset: MATCHUP_PRESET }
+            : today
+              ? { start: today.start, end: today.end, preset: today.label }
+              : null;
+          if (!to || (to.start === r.start && to.end === r.end && to.preset === r.preset)) continue;
+          next = { ...(next ?? prev), [scope]: to };
+        }
+        return next ?? prev;
+      });
+    },
+    [presets],
+  );
 
   /**
    * The window itself — every club's next four weeks, read **once per session
@@ -882,6 +1025,10 @@ export default function App() {
     initialParams.get('roster') === 'fantasy' ? 'fantasy' : 'saved',
   );
   const rosterSourceFromUrl = initialParams.get('roster') === 'fantasy';
+  /** Did this load arrive asking for the fantasy week? The one thing that has
+   *  to wait for the league before the report is read — see the gate on
+   *  `loadReport` and the effect that resolves it. */
+  const matchupFromUrl = initialParams.get('preset') === MATCHUP_PRESET;
   /**
    * Has this user **stated** which list they want — either by working the
    * toggle in this session, or by having an answer in their record?
@@ -2212,13 +2359,34 @@ export default function App() {
   }, [espnConnected, ownership, espnLoading, espnError, loadOwnership]);
 
   useEffect(() => {
-    if (!espnConnected || matchupWindowAsked.current) return;
+    if (matchupWindowAsked.current) return;
+    if (!espnConnected) {
+      /* No league to ask is an answer, and the one the boot gate below is
+         waiting for: a `?preset=Matchup` link opened by somebody with no
+         connection has to fall back to `Today` and read the report once,
+         rather than hold it against a window nobody is going to fetch. Held
+         until the *status* has settled, since "not connected" is what every
+         session says for its first round trip. */
+      if (espnStatusSettled) settleMatchup(null);
+      return;
+    }
     matchupWindowAsked.current = true;
     api
       .espnMatchupWindow()
-      .then(setMatchupWindow)
-      .catch((e: Error) => console.warn('matchup window read failed:', e.message));
-  }, [espnConnected]);
+      .then((w) => {
+        setMatchupWindow(w);
+        settleMatchup(w);
+      })
+      /* Settled either way, a failed read being an answer: without it a
+         `?preset=Matchup` link opened against a dead upstream would hold the
+         report for ever, which is the rule `setReportSettled` already follows
+         one effect over. */
+      .catch((e: Error) => {
+        console.warn('matchup window read failed:', e.message);
+        settleMatchup(null);
+      });
+  }, [espnConnected, espnStatusSettled, settleMatchup]);
+
 
 
   /**
@@ -2911,6 +3079,14 @@ export default function App() {
      */
     if (!prefsSettled && !rosterSourceFromUrl) return;
     if (rosterSource === 'fantasy' && !espnStatusSettled) return;
+    /* And a session that opens on `?preset=Matchup` waits for the league to say
+       which days those are. It is the same argument as the two lines above it
+       — a read fired now would be about a range nobody is going to be shown,
+       and would be replaced a moment later by the one they asked for — with the
+       difference that here the *dates* rather than the roster are the thing not
+       yet known. It costs nothing to anybody else: `matchupFromUrl` is false on
+       every load that did not name the preset. */
+    if (matchupFromUrl && !matchupWindowSettled) return;
     loadReport();
     // `fantasyTeamId` because the report is *about* that team's players: pick a
     // different one on the Fantasy league page and this is what re-reads it.
@@ -2921,6 +3097,8 @@ export default function App() {
     prefsSettled,
     rosterSourceFromUrl,
     espnStatusSettled,
+    matchupFromUrl,
+    matchupWindowSettled,
     fantasyTeamId,
   ]);
 
@@ -4124,7 +4302,11 @@ export default function App() {
      was opened for, where the range picker's own popover needs it to stay. */
   const dateControl = (
     <DateRow
-      presets={presets}
+      /* The five plus the fantasy week where there is a league to name one.
+         `LeagueMatchupView` below is still handed the bare five, that page
+         adding a `Matchup` of its own for the period being *read* — see
+         `MATCHUP_PRESET`. */
+      presets={rosterPresets}
       activePreset={activePreset}
       start={start}
       end={end}
