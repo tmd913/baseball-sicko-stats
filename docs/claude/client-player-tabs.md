@@ -1012,6 +1012,37 @@ back. And the crosshair still tracks a horizontal drag: a pointer at a quarter
 and at three quarters of the chart's width reads `PA 165` and `PA 379` with the
 crosshair at 179 and 539 user units, and the tip clears when the pointer leaves.
 
+**That scrub is no longer this file's, and the two paragraphs above are why it
+was worth moving.** The League matchup page's day-by-day category chart wanted
+the same gesture — a crosshair snapped to the nearest point, a marker on it and
+a readout naming the value and the point in time it belongs to — so the mechanic
+is `components/chartScrub.tsx` now, and both charts use it: the hit test,
+`ScrubCross` and `ScrubTip`. What stayed here is what is this chart's own, the
+accent dot on the line and the words `PA 144 · 5/24`; what the matchup chart
+keeps is its two team-colored dots and its `31 – 23`. Extraction rather than a
+second copy, on the rule that took `Modal` out of the Columns dialog — and the
+half that drifts silently is the arithmetic, since a snap to the nearest point
+is right about which point is under the pointer or it is off by one. **It is the
+same arithmetic, not a similar one**: the old `Math.round(paGuess - xMin)` over
+a series whose PA numbers step by one *is* the rounded fraction of the way
+across the plot the shared hit test computes.
+
+`.roll-cross` and `.roll-tip`/`.roll-tip-val`/`.roll-tip-sub` are
+`.chart-cross` and `.chart-tip*` with it — one rule for one component rather
+than an `.mser-` copy free to drift. `.roll-dot` stays `.roll-dot`, being this
+chart's own mark. **Measured before → after, same player, same script:** at 1200
+the three sampled positions read `.375 / PA 144 · 5/24`, `.404 / PA 202 · 6/7`,
+`.300 / PA 259 · 7/8` with the crosshair at **178.9 · 360.3 · 538.5** — the 179
+and 539 above, at a third position between them — and at 390 `.370 / PA 137 ·
+5/22`, `.412 / PA 198 · 6/6`, `.307 / PA 258 · 7/8` at **179.8 · 361.1 · 539.4**;
+the dot stays `r=4` on the crosshair's own x, its dash stays `3px, 3px`,
+`--roll-font` stays **13.63px and 26.02px**, the wrap stays **264.16 and 138.33**
+tall with the tip up and after it clears, and page overflow is **0**. Every
+figure identical on both sides of the change; the one thing that moved is the
+class on the box, which is how the before run was confirmed to be the before
+run. The whole of the matchup chart's own account is in **Client — the League
+matchup page**, *The chart is scrubbed, and the scrub is the rolling chart's*.
+
 **Everything else the page is measured against is unchanged**, at 1200×900 and
 390×844 on a batter and a pitcher: the SVG is **634 × 264.16** and **332 ×
 138.33** (the viewBox never moved), the pinned chrome is **193px** at 390 either
