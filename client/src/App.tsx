@@ -3337,6 +3337,49 @@ export default function App() {
   }, [start, end, activePreset, matchupWindow, setRange]);
 
   /**
+   * **Leaving the Roster puts the lens away**, exactly as pressing the toggle a
+   * second time would: off, and the range it was turned on over back where it
+   * was, preset and all.
+   *
+   * This is the lens-for-an-afternoon rule the state itself already states,
+   * carried one step further than "not a saved preference". Not saving it keeps
+   * next week's estimates out of tomorrow's session; it does nothing about the
+   * one this app is most exposed to, because **the Roster is where every other
+   * page comes back to**. Measured before this: press `Projected` on `Today`,
+   * cross to the Feed and come back, and the table is still six days of tenths
+   * over `8/19 – 8/23` — and the same after Research and after League. The date
+   * range is the reason it matters more here than on either League lens: this
+   * toggle is the only one of the three that *moves* the days in view, so a
+   * lens left on is also a roster stranded in a week with no stats in it.
+   *
+   * **A navigation, not a load.** The param is untouched on the way in —
+   * `?rproj=1` is in the URL precisely so a link describes the table it opens,
+   * and the seed above still reads it. What this ends is the lens *outliving a
+   * crossing of the view tabs*. It also takes `rproj=1` out of the URL of every
+   * page that is not the roster, which it had no business being in: the Feed
+   * has no such reading, and a link copied off it claimed one.
+   *
+   * **The range is written to `summary` by name** rather than through
+   * `setRange`, which writes whichever scope is on screen — by the time this
+   * runs the view has already changed, and on the way to the Feed that scope is
+   * the Feed's. Putting the roster's range back into the Feed's entry would
+   * move a second page nobody touched.
+   *
+   * **The player page is not a leaving.** It is an overlay over this view, the
+   * URL still names the roster, and closing it returns to the same table at the
+   * same scroll — so tapping a name to read a projection and coming back must
+   * not cost the lens and jump the range back a week. `view` is what this
+   * watches, and a `player=` opens without changing it.
+   */
+  useEffect(() => {
+    if (view === 'summary' || !rosterProjected) return;
+    const back = beforeProjection.current;
+    beforeProjection.current = null;
+    setRosterProjected(false);
+    if (back) setRanges((prev) => ({ ...prev, summary: back }));
+  }, [view, rosterProjected]);
+
+  /**
    * Re-read everything that comes from ESPN, past the server's ten-minute
    * cache — the ownership map, the fantasy roster's slots, and the report the
    * roster decides the players of. For the person who has just moved someone
