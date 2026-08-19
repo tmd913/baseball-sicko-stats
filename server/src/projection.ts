@@ -76,6 +76,7 @@ import { dayCounts, windowDates } from './statcastWindow.js';
 import { getTeamHitting } from './teamHitting.js';
 import {
   DERIVED,
+  LINEUP_SLOTS as LINEUP_SLOT_NAMES,
   getMatchupWindow,
   getOwnership,
   getPlayerPool,
@@ -1372,9 +1373,11 @@ function seatValues(
  * whose slots are all taken may still get in if one of the sitting players can
  * shuffle to another seat he is eligible for.
  *
- * Returns the indices of `order` that got a seat.
+ * Returns, for each index of `order` that got a seat, **which slot** he is
+ * sitting in — the roster table's projected chip names it, so the assignment
+ * has to hand it back rather than merely saying yes.
  */
-function seatDay(order: Candidate[], seats: number[]): Set<number> {
+function seatDay(order: Candidate[], seats: number[]): Map<number, number> {
   const owner = new Array<number>(seats.length).fill(-1);
   const fits = (ci: number, si: number): boolean => order[ci].slots.includes(seats[si]);
   const place = (ci: number, seen: boolean[]): boolean => {
@@ -1388,11 +1391,16 @@ function seatDay(order: Candidate[], seats: number[]): Set<number> {
     }
     return false;
   };
-  const seated = new Set<number>();
   for (let ci = 0; ci < order.length; ci += 1) {
-    if (place(ci, new Array<boolean>(seats.length).fill(false))) seated.add(ci);
+    place(ci, new Array<boolean>(seats.length).fill(false));
   }
-  for (const o of owner) if (o !== -1) seated.add(o);
+  // Read off the seats rather than off the attempts: the augmenting search
+  // shuffles men between chairs as it goes, so who ended up where is only true
+  // at the end.
+  const seated = new Map<number, number>();
+  for (let si = 0; si < seats.length; si += 1) {
+    if (owner[si] !== -1) seated.set(owner[si], seats[si]);
+  }
   return seated;
 }
 
@@ -1440,13 +1448,33 @@ function seatDay(order: Candidate[], seats: number[]): Set<number> {
  * with no idea what a lineup holds there is nothing to fill, and the caller
  * falls back to the rule this file always had.
  */
+/**
+ * One man's week as the plan settled it: **which day he is in the lineup and at
+ * what slot**, and how many days he could have been.
+ *
+ * The seats are what the projection is cut by. `openDays` is what the roster
+ * table's chip reads against — *4 of 5* means four of the five days his club
+ * plays, not four of the span's days, since a day his club is idle is not a day
+ * anybody benched him.
+ */
+export interface PlanEntry {
+  /** Day → the ESPN lineup slot id he holds that day. Empty for a man the plan
+   *  seats nowhere, which is a real answer and the one the chip draws as
+   *  `benched`. */
+  seats: Map<string, number>;
+  /** Every day he could have been started on — his club's games, or a starter's
+   *  turns. Carried as the days rather than as a count so the chip's tooltip can
+   *  name the ones he sits out; *4 of 5* is `seats.size` of this. */
+  open: string[];
+}
+
 function planLineups(
   roster: EspnRosterPlayer[],
   ctx: ProjectionContext,
   slotCounts: Record<number, number> | null,
   eligible: Record<number, number[]>,
   categories: EspnCategory[],
-): Map<string, Set<string>> | null {
+): Map<string, PlanEntry> | null {
   if (!slotCounts) return null;
   // The seats, expanded one per body, split by side of the ball: a hitter and a
   // pitcher never compete for the same chair, so this is two small assignments
@@ -1498,7 +1526,11 @@ function planLineups(
   const days = new Set<string>();
   for (const c of cands) for (const d of c.day.keys()) days.add(d);
 
-  const out = new Map<string, Set<string>>();
+  // Every candidate gets an entry, seated or not: a man the plan benches all
+  // week is exactly the row the chip has something to say about, and an absent
+  // key would be indistinguishable from a man it never considered.
+  const out = new Map<string, PlanEntry>();
+  for (const c of cands) out.set(c.key, { seats: new Map(), open: [...c.day.keys()].sort() });
   for (const day of [...days].sort()) {
     for (const [side, seats] of [
       ['batter', batSeats],
@@ -1515,11 +1547,8 @@ function planLineups(
       const order = cands
         .filter((c) => c.kind === side && (c.day.get(day) ?? 0) > 0 && c.slots.length > 0)
         .sort((a, b) => worth(b) - worth(a) || b.units - a.units);
-      for (const ci of seatDay(order, seats)) {
-        const c = order[ci];
-        const got = out.get(c.key);
-        if (got) got.add(day);
-        else out.set(c.key, new Set([day]));
+      for (const [ci, slot] of seatDay(order, seats)) {
+        out.get(order[ci].key)?.seats.set(day, slot);
       }
     }
   }
@@ -1582,7 +1611,7 @@ function projectTeam(
    *  in one all week and nobody else is in one at all. Null is what a league
    *  that published no slot counts gets, and it is what every measurement
    *  before this change was taken under. */
-  plan: Map<string, Set<string>> | null,
+  plan: Map<string, PlanEntry> | null,
 ): { bucket: Bucket; hitterGames: number; starts: number; reliefGames: number; skipped: number } {
   const bucket: Bucket = {};
   let hitterGames = 0;
@@ -1602,14 +1631,14 @@ function projectTeam(
     const twoWay = p.kinds.includes('pitcher') && p.kinds.includes('batter');
 
     if (!isPitcher) {
-      const allow = plan ? (plan.get(`batter-${id}`) ?? EMPTY_DAYS) : null;
+      const allow = plan ? daysOf(plan.get(`batter-${id}`)) : null;
       const made = projectOneBatter(ctx, id, bucket, allow);
       hitterGames += made.games;
       if (!made.placed) skipped += 1;
     }
 
     if (isPitcher || twoWay) {
-      const allow = plan ? (plan.get(`pitcher-${id}`) ?? EMPTY_DAYS) : null;
+      const allow = plan ? daysOf(plan.get(`pitcher-${id}`)) : null;
       const made = projectOnePitcher(ctx, id, bucket, allow);
       starts += made.starts;
       reliefGames += made.reliefGames;
@@ -1619,8 +1648,11 @@ function projectTeam(
   return { bucket, hitterGames, starts, reliefGames, skipped };
 }
 
-/** A man the plan seated nowhere plays nowhere — which has to be an empty set
- *  rather than `null`, `null` meaning "every day" one function down. */
+/** The days a plan entry seats him on — and a man it seated nowhere, or never
+ *  considered, plays nowhere. That has to be an **empty set** rather than
+ *  `null`, `null` meaning "every day" one function down. */
+const daysOf = (e: PlanEntry | undefined): ReadonlySet<string> =>
+  e ? new Set(e.seats.keys()) : EMPTY_DAYS;
 const EMPTY_DAYS: ReadonlySet<string> = new Set<string>();
 
 /**
@@ -1949,6 +1981,31 @@ export interface ProjectedPlayerLine {
   chances: number;
   batting: BattingLine | null;
   pitching: PitchingLine | null;
+  /**
+   * **What the projection would actually start him for**, or null where there
+   * is no lineup to fill — a watchlist rather than a fantasy team, a league
+   * that published no slot counts, or a read that failed.
+   *
+   * **The line above is what he would do if he plays and this is what he is
+   * projected to be given**, and the table draws both: the row keeps the first,
+   * because *what would this man give me* is the question a roster is read to
+   * answer and cutting it by a seat allocation would make the row about the
+   * allocation instead; the `Total` sums the second, because a column that adds
+   * up twenty players who cannot all be in the lineup at once is a team figure
+   * nobody can act on. Two arithmetics on one table, and the caption says so.
+   */
+  lineup: {
+    /** Day, and the slot he holds that day — `[{ day: '2026-08-21', slot: 'SS' }]`,
+     *  in date order. Empty is a real answer: the plan benches him all span. */
+    days: { day: string; slot: string }[];
+    /** Every day he could have been started on — his club's games, or a
+     *  starter's turns — so an idle club never reads as a benching, and the
+     *  chip's tooltip can name the days he sits out. */
+    openDays: string[];
+    chances: number;
+    batting: BattingLine | null;
+    pitching: PitchingLine | null;
+  } | null;
 }
 
 export interface RosterProjection {
@@ -2073,6 +2130,10 @@ export async function getRosterProjection(
   players: WatchPlayer[],
   start: string,
   end: string,
+  /** The reader's own fantasy team, where the views are reading one — what the
+   *  lineup is filled from. Null for a saved watchlist, which has no lineup and
+   *  so gets no `lineup` on any row. */
+  fantasy: { roster: EspnRosterPlayer[]; leagueId: number; categories: EspnCategory[] } | null = null,
 ): Promise<RosterProjection> {
   const today = baseballToday();
   // A day that has been played is not a day anybody projects — and the client
@@ -2094,29 +2155,73 @@ export async function getRosterProjection(
   const ctx = await contextFor(from, end);
   if (ctx.daysLeft === 0) return { ...empty, fetchedAt: Date.now() };
 
+  // The same fill the matchup runs, over the reader's own team — so the two
+  // cannot disagree about who starts on Saturday. Absent for a watchlist, and
+  // absent rather than guessed at where the league published no slot counts.
+  const plan = fantasy
+    ? planLineups(
+        fantasy.roster,
+        ctx,
+        lineupSlotsFor(fantasy.leagueId),
+        await getPlayerPool()
+          .then((pool) => pool.slots)
+          .catch(() => ({}) as Record<number, number[]>),
+        fantasy.categories,
+      )
+    : null;
+
   const out: ProjectedPlayerLine[] = [];
   for (const p of players) {
+    const key = `${p.kind}-${p.id}`;
+    const entry = plan?.get(key) ?? null;
+    /** The seated half, projected a second time over the days he holds a seat
+     *  — a second pass rather than the first one scaled, because the days are
+     *  not interchangeable: each carries its own opponent-quality multiplier,
+     *  and a factor would quietly average them. */
+    const seatedOf = (): ProjectedPlayerLine['lineup'] => {
+      if (!plan) return null;
+      const allow = daysOf(entry ?? undefined);
+      const b: Bucket = {};
+      let chances = 0;
+      if (p.kind === 'pitcher') {
+        const m = projectOnePitcher(ctx, p.id, b, allow);
+        chances = m.starts + m.reliefGames;
+      } else {
+        chances = projectOneBatter(ctx, p.id, b, allow).games;
+      }
+      return {
+        days: [...(entry?.seats ?? new Map<string, number>())]
+          .sort(([a], [c]) => (a < c ? -1 : a > c ? 1 : 0))
+          .map(([day, slot]) => ({ day, slot: LINEUP_SLOT_NAMES[slot] ?? String(slot) })),
+        openDays: entry?.open ?? [],
+        chances: round1(chances),
+        batting: p.kind === 'pitcher' || chances <= 0 ? null : battingOf(b),
+        pitching: p.kind === 'pitcher' && chances > 0 ? pitchingOf(b) : null,
+      };
+    };
     const bucket: Bucket = {};
     if (p.kind === 'pitcher') {
       const made = projectOnePitcher(ctx, p.id, bucket);
       const chances = made.starts + made.reliefGames;
       out.push({
-        key: `${p.kind}-${p.id}`,
+        key,
         id: p.id,
         kind: p.kind,
         chances: round1(chances),
         batting: null,
         pitching: chances > 0 ? pitchingOf(bucket) : null,
+        lineup: seatedOf(),
       });
     } else {
       const made = projectOneBatter(ctx, p.id, bucket);
       out.push({
-        key: `${p.kind}-${p.id}`,
+        key,
         id: p.id,
         kind: p.kind,
         chances: round1(made.games),
         batting: made.games > 0 ? battingOf(bucket) : null,
         pitching: null,
+        lineup: seatedOf(),
       });
     }
   }

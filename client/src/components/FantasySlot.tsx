@@ -1,6 +1,7 @@
 import { useFantasySlot } from '../hooks';
 import type { FantasySlot } from '../hooks';
 import { prettyGameDate } from '../lib';
+import type { ProjectedPlayerLine } from '../types';
 
 /**
  * Where this player sits in the user's fantasy lineup on the last day of the
@@ -63,6 +64,50 @@ export function FantasySlotTag({ playerKey }: { playerKey: string }) {
       title={dayTitle(spot) + rangeTitle(spot)}
     >
       {spot.slot}
+    </span>
+  );
+}
+
+/**
+ * **The same chip under the `Projected` lens, saying what the projection would
+ * do rather than what ESPN's lineup says today.**
+ *
+ * The ordinary chip names one day's slot, which is the right answer for a table
+ * of days already played and the wrong one for a span of days nobody has
+ * played: over five days ahead there is no single slot he is *in*, there is a
+ * set of decisions. So it counts them — **`4 of 5`**, four of the five days his
+ * club plays — and takes the lit state on the same rule the day chip does,
+ * `starting` meaning the lineup has him at all.
+ *
+ * **`benched` rather than `0 of 5`**, because the one row a reader is looking
+ * for here is the man the projection never starts, and a nought among counts is
+ * not what the eye catches. It is the same muted, outlined shape the `BE` chip
+ * has always had, so the column still reads *lit is playing, quiet is not* at a
+ * glance.
+ *
+ * **Nothing at all where his club has no game left**, which is the honest
+ * absence: there is no lineup decision to show, the row's own figures are
+ * dashes beside it for the same reason, and a chip would invent a benching out
+ * of an off day.
+ *
+ * The days themselves are the tooltip, benched ones named — which is where a
+ * count has to be able to defer to, since *4 of 5* cannot say which four.
+ */
+export function ProjectedSlotTag({ lineup }: { lineup: ProjectedPlayerLine['lineup'] }) {
+  if (!lineup || lineup.openDays.length === 0) return null;
+  const seated = lineup.days.length;
+  const sat = new Set(lineup.days.map((d) => d.day));
+  const off = lineup.openDays.filter((d) => !sat.has(d));
+  const startedPart = lineup.days
+    .map((d) => `${prettyGameDate(d.day)} at ${d.slot}`)
+    .join(', ');
+  const benchedPart = off.map((d) => prettyGameDate(d)).join(', ');
+  const title = seated
+    ? `Projected in the lineup ${startedPart}` + (off.length ? ` — benched ${benchedPart}` : '')
+    : `Projected on the bench every day his club plays — ${benchedPart}`;
+  return (
+    <span className={`fantasy-slot${seated ? ' starting' : ''}`} title={title}>
+      {seated ? `${seated} of ${lineup.openDays.length}` : 'benched'}
     </span>
   );
 }

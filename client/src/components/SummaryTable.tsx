@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { FantasySlotTag } from './FantasySlot';
+import { FantasySlotTag, ProjectedSlotTag } from './FantasySlot';
 import { ExpandButton } from './ExpandButton';
 import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
 import { PlayerIdentity } from './PlayerIdentity';
@@ -232,15 +232,42 @@ function projIp(outs: number): string {
   return (outs / 3).toFixed(1);
 }
 
-function projectedBatting(r: PlayerReport, proj: ProjectedPlayerLine | undefined): BattingLine {
+/**
+ * **A row is what he would do if he plays; the `Total` is what the lineup gets.**
+ *
+ * Two arithmetics on one table, and each is the only honest answer to its own
+ * question. A **row** is read to decide *should I start this man*, and cutting
+ * it by the seat the projection happened to give him would make the row a
+ * statement about the allocation rather than about the player — the bench bat
+ * you are weighing would read as dashes precisely because you have not started
+ * him yet. A **column total** is read as *what is my week worth*, and adding up
+ * twenty players who cannot all be in the lineup at once is a figure nobody can
+ * act on; that one takes the seated half, so it agrees with the League page's
+ * matchup projection over the same days.
+ *
+ * `seated` picks which. Where there is no lineup at all — a saved watchlist,
+ * a league with no slot counts — `lineup` is null and both fall back to the
+ * full line, which is exactly what this table did before.
+ */
+function projectedBatting(
+  r: PlayerReport,
+  proj: ProjectedPlayerLine | undefined,
+  seated = false,
+): BattingLine {
   const lines = r.games.map((g) => g.line);
-  if (proj?.batting) lines.push(proj.batting);
+  const half = seated ? (proj?.lineup?.batting ?? proj?.batting) : proj?.batting;
+  if (half) lines.push(half);
   return combineLines(lines);
 }
 
-function projectedPitching(r: PlayerReport, proj: ProjectedPlayerLine | undefined): PitchingLine {
+function projectedPitching(
+  r: PlayerReport,
+  proj: ProjectedPlayerLine | undefined,
+  seated = false,
+): PitchingLine {
   const lines = r.games.filter((g) => g.pitching).map((g) => g.pitching!.line);
-  if (proj?.pitching) lines.push(proj.pitching);
+  const half = seated ? (proj?.lineup?.pitching ?? proj?.pitching) : proj?.pitching;
+  if (half) lines.push(half);
   return combinePitchingLines(lines);
 }
 
@@ -288,12 +315,19 @@ function ProjectablePitchCells({ line, projected }: { line: PitchingLine; projec
  * which over a future range is *every* game on it, and is why `r.games.length`
  * cannot be the answer.
  */
-function projectedGames(r: PlayerReport, proj: ProjectedPlayerLine | undefined): number {
+function projectedGames(
+  r: PlayerReport,
+  proj: ProjectedPlayerLine | undefined,
+  seated = false,
+): number {
   const played =
     r.kind === 'pitcher'
       ? r.games.filter((g) => g.pitching).length
       : r.games.filter((g) => g.plateAppearances.length > 0).length;
-  return played + (proj?.chances ?? 0);
+  // The same split the lines take: a row counts the chances he has, the `Total`
+  // counts the ones the lineup gives him.
+  const ahead = seated ? (proj?.lineup?.chances ?? proj?.chances) : proj?.chances;
+  return played + (ahead ?? 0);
 }
 
 /**
@@ -622,6 +656,7 @@ function LeadCells({
   role,
   corner,
   showOpponent,
+  lineup,
   onOpenDetails,
 }: {
   r: PlayerReport;
@@ -629,6 +664,10 @@ function LeadCells({
   role: LiveRole | null;
   corner: Corner;
   showOpponent: boolean;
+  /** The projection's own lineup decisions for this man, where the lens is on
+   *  and there is a lineup to fill — what the slot chip says instead of today's
+   *  ESPN slot. `undefined` off the lens, `null` where there is no lineup. */
+  lineup?: ProjectedPlayerLine['lineup'];
 } & RowHandlers) {
   return (
     <>
@@ -652,7 +691,20 @@ function LeadCells({
             chip is one fact about the row, not a second line of who he is, and
             a 42px floor plus `align-items: center` is what keeps every name in
             the column starting at one x against a two-line block. */}
-        <FantasySlotTag playerKey={playerKey(r)} />
+        {/* **Under the lens the chip answers for the days ahead**, which is a
+            different question from the one it answers the rest of the time: the
+            ordinary chip names the slot ESPN has him in on the last day of the
+            range, and over a span nobody has played there is no such slot —
+            there is a set of lineup decisions, which is what the projection has
+            just made. So the lens swaps it for the count of them. Where there
+            is no lineup to fill (a saved watchlist, a league with no slot
+            counts) `lineup` is null and the day chip stands, which is also what
+            every non-fantasy reader sees. */}
+        {lineup ? (
+          <ProjectedSlotTag lineup={lineup} />
+        ) : (
+          <FantasySlotTag playerKey={playerKey(r)} />
+        )}
         {/* **His club and his positions, under the name** — the research
             board's identity block, drawn by the same component (see
             `PlayerIdentity`). This table said neither: which club a man plays
@@ -698,6 +750,40 @@ function LeadCells({
  *  button sits in. */
 type Expand = { isFull: boolean; toggle: () => void };
 
+/**
+ * **What the foot row is a total *of*, said in the label** — because under the
+ * lens it stops being the sum of the column above it.
+ *
+ * This table's standing rule is that a reader can add a column up and get the
+ * figure at the foot: the server rounds each projected component to a tenth
+ * precisely so what is totalled is what was printed. The lineup reading breaks
+ * that on purpose — the rows say what each man would do **if you started him**
+ * and the foot adds only the days the lineup has room for him, so on a roster
+ * with more bats than seats the two genuinely differ (measured on the live
+ * league: rows 59.5 games against a lineup of 48.5).
+ *
+ * A departure that large has to be **named where it is read**, not explained in
+ * a tooltip: half this app's traffic has no hover, and a foot reading `Total`
+ * that disagrees with its own column is the kind of quiet wrongness the rest of
+ * this file is written to avoid. So the word changes with the arithmetic —
+ * `Total` when it is the column's, **`Lineup`** when it is the plan's — and the
+ * tooltip carries the sentence.
+ */
+function TotalLabel({ n, lineup }: { n: number; lineup: boolean }) {
+  return (
+    <span
+      className="sum-total-label"
+      title={
+        lineup
+          ? 'What your projected lineup gets — only the days each man holds a lineup spot. The rows above say what each would do if you started him, so this is deliberately less than their sum.'
+          : undefined
+      }
+    >
+      {lineup ? 'Lineup' : 'Total'} · {n}
+    </span>
+  );
+}
+
 function BatterTable({
   batters,
   handlers,
@@ -717,8 +803,12 @@ function BatterTable({
 }) {
   const lineOf = (r: PlayerReport): BattingLine =>
     projection ? projectedBatting(r, projection.get(playerKey(r))) : combineLines(r.games.map((g) => g.line));
+  // The foot's two arithmetics are one arithmetic wherever no lineup was
+  // filled — a saved watchlist, a league with no slot counts — and the label
+  // says `Total` there, which is what it has always said.
+  const hasPlan = batters.some((r) => projection?.get(playerKey(r))?.lineup != null);
   const total = projection
-    ? combineLines(batters.map(lineOf))
+    ? combineLines(batters.map((r) => projectedBatting(r, projection.get(playerKey(r)), true)))
     : combineLines(batters.flatMap((r) => r.games.map((g) => g.line)));
   const cols = ['H/AB', 'R', 'HR', 'RBI', 'SB', 'OPS', 'BB', 'K'];
   return (
@@ -764,6 +854,7 @@ function BatterTable({
                 role={role}
                 corner={game ? lineupCorner(game) : null}
                 showOpponent={!schedule && !projection}
+                lineup={projection?.get(playerKey(r))?.lineup}
                 {...handlers}
               />
               {schedule ? (
@@ -784,7 +875,7 @@ function BatterTable({
         <tr>
           <td className="sum-img-col" aria-hidden="true" />
           <th className="sum-name-col" scope="row">
-            <span className="sum-total-label">Total · {batters.length}</span>
+            <TotalLabel n={batters.length} lineup={hasPlan} />
           </th>
           {schedule ? (
             <ScheduleTotalCells index={schedule} players={batters} kind="batter" />
@@ -795,7 +886,10 @@ function BatterTable({
                    row's count added up, so a reader can add the column and get
                    the figure at the foot of it. */
                 <ProjectedGamesCell
-                  n={batters.reduce((n, r) => n + projectedGames(r, projection.get(playerKey(r))), 0)}
+                  n={batters.reduce(
+                    (n, r) => n + projectedGames(r, projection.get(playerKey(r)), true),
+                    0,
+                  )}
                 />
               ) : (
                 <td className="sum-opp" aria-hidden="true" />
@@ -826,8 +920,12 @@ function PitcherTable({
 }) {
   const lineOf = (r: PlayerReport): PitchingLine =>
     projection ? projectedPitching(r, projection.get(playerKey(r))) : aggregatePitching(r);
+  /** See `BatterTable`'s own. */
+  const hasPlan = pitchers.some((r) => projection?.get(playerKey(r))?.lineup != null);
   const totalLine = projection
-    ? combinePitchingLines(pitchers.map(lineOf))
+    ? combinePitchingLines(
+        pitchers.map((r) => projectedPitching(r, projection.get(playerKey(r)), true)),
+      )
     : combinePitchingLines(
         pitchers.flatMap((r) => r.games.filter((g) => g.pitching).map((g) => g.pitching!.line)),
       );
@@ -875,6 +973,7 @@ function PitcherTable({
                 role={role}
                 corner={game ? pitchingCorner(game) : null}
                 showOpponent={!schedule && !projection}
+                lineup={projection?.get(playerKey(r))?.lineup}
                 {...handlers}
               />
               {schedule ? (
@@ -895,7 +994,7 @@ function PitcherTable({
         <tr>
           <td className="sum-img-col" aria-hidden="true" />
           <th className="sum-name-col" scope="row">
-            <span className="sum-total-label">Total · {pitchers.length}</span>
+            <TotalLabel n={pitchers.length} lineup={hasPlan} />
           </th>
           {schedule ? (
             <ScheduleTotalCells index={schedule} players={pitchers} kind="pitcher" />
@@ -904,7 +1003,7 @@ function PitcherTable({
               {projection ? (
                 <ProjectedGamesCell
                   n={pitchers.reduce(
-                    (n, r) => n + projectedGames(r, projection.get(playerKey(r))),
+                    (n, r) => n + projectedGames(r, projection.get(playerKey(r)), true),
                     0,
                   )}
                 />

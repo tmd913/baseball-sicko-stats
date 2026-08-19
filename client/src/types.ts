@@ -1568,6 +1568,27 @@ export interface ProjectedPlayerLine {
   chances: number;
   batting: BattingLine | null;
   pitching: PitchingLine | null;
+  /**
+   * **What the projection would actually start him for**, or null where there
+   * is no lineup to fill — a saved watchlist rather than a fantasy team, a
+   * league that published no slot counts, or a read that failed.
+   *
+   * The line above is *what he would do if he plays* and this is *what he is
+   * projected to be given*. The row draws the first and the `Total` sums the
+   * second; the server's copy of this interface has the argument.
+   */
+  lineup: {
+    /** Day, and the slot he holds it at, in date order. Empty means the plan
+     *  benches him every day of the span. */
+    days: { day: string; slot: string }[];
+    /** Every day he could have been started on — his club's games, or a
+     *  starter's turns — so an idle club never reads as a benching, and the
+     *  chip's tooltip can name the days he sits out. */
+    openDays: string[];
+    chances: number;
+    batting: BattingLine | null;
+    pitching: PitchingLine | null;
+  } | null;
 }
 
 export interface RosterProjection {
