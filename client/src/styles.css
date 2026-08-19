@@ -14020,12 +14020,20 @@ span.mup-move-name:hover {
   align-items: flex-end;
   gap: 1px;
 }
-/* ESPN's global rostered percentage — how big a deal the move is. */
+/* ESPN's global rostered percentage — how big a deal the move is — under the
+   word that says what it is a percentage of. The word is `--faint` and two
+   weights lighter than the figure, which is the same division of labor the
+   player page's own `Rostered 63.4%` line makes: the label is the same on every
+   row and so must not compete with the part that differs. */
 .lg-tx-pct {
   font-size: 12px;
   font-weight: 700;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+}
+.lg-tx-pct-word {
+  font-weight: 500;
+  color: var(--faint);
 }
 /* One span per window the read found a baseline for, in the order the server
    sends them (ascending), so the newest movement is nearest the figure it
