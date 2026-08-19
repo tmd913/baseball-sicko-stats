@@ -163,6 +163,19 @@ function isRosterView(v: View): boolean {
   return v === 'summary' || v === 'feed';
 }
 
+/** Which of the two roster views a date range belongs to — see `dateScope`. */
+type DateScope = 'summary' | 'feed';
+
+/** A range as this app holds one: the two days, and the preset label they were
+ *  derived from — null for a range picked by hand, which has none. A preset is
+ *  a rule rather than a pair of dates, which is why the label rides along: it
+ *  is what the URL carries and what the calendar's own button prints. */
+interface DateRange {
+  start: string;
+  end: string;
+  preset: string | null;
+}
+
 // Whether the settings menu offers the "Simulate live" toggle. Off: the overlay
 // is a developer/demo tool, not something a user of the site should be handed a
 // switch for. The mode itself is untouched — `?sim=1` in the URL still turns it
@@ -310,9 +323,46 @@ export default function App() {
       end: e && ISO_DATE.test(e) ? e : baseballToday(),
     };
   }, [initialParams, presets, initialPreset]);
-  const [start, setStart] = useState(initialRange.start);
-  const [end, setEnd] = useState(initialRange.end);
-  const [activePreset, setActivePreset] = useState<string | null>(initialPreset);
+  /**
+   * The date range, **one per roster view**.
+   *
+   * It was one range shared by both, and the two pages ask different questions
+   * of it: the Roster is a table read for what a line comes to, and the Feed is
+   * a stream scrolled back through — so a reader who went to the Feed for last
+   * week's plays came back to a summary table of last week, put the calendar
+   * back to Today to fix it, and found the Feed on Today the next time they
+   * crossed. One control was answering two questions and losing one of them
+   * each way. Nothing else about the control moves: it is the same button, the
+   * same presets and the same picker, drawn on whichever page is on screen and
+   * writing to that page's own entry.
+   *
+   * **Both entries are seeded from the same link**, which is the honest reading
+   * of one — `?preset=Yesterday` means yesterday, whichever page it opens on —
+   * and they part from there as the reader moves each. The URL then carries the
+   * range of the page in view, that being the one it describes.
+   *
+   * Which of the two is live is `dateScope`, resolved below `view`: the entry
+   * is a fact about which page is on screen, so it cannot be picked until that
+   * is known.
+   */
+  const [ranges, setRanges] = useState<Record<DateScope, DateRange>>(() => ({
+    summary: { ...initialRange, preset: initialPreset },
+    feed: { ...initialRange, preset: initialPreset },
+  }));
+  /**
+   * Which entry that is, held as a ref and written during render because it has
+   * to be **sticky**: Research and League draw no dates at all, so crossing one
+   * of them must not swap the range out from under the report. Mapping them to
+   * `summary` would spend a full `/api/report` read on the way out of the Feed
+   * and another on the way back in — the app's most expensive request, twice,
+   * for a range nobody is looking at in between — and would flicker the roster
+   * pills and the live poll along with it.
+   *
+   * Derived purely from `view` and idempotent, so any re-render (StrictMode's
+   * double pass included) recomputes the same answer. It is the rule the file's
+   * own `reportsRef` write already follows.
+   */
+  const dateScopeRef = useRef<DateScope>('summary');
   // The picker allows selecting through the end of the current year so the full
   // published schedule (scheduled games, probable pitchers) can be viewed ahead.
   const maxDate = useMemo(() => `${baseballToday().slice(0, 4)}-12-31`, []);
@@ -393,6 +443,20 @@ export default function App() {
     // Summary is the default; the rest are opted into explicitly.
     return 'summary';
   });
+  /* Which page's date range is on screen, and the range itself. The write is
+     guarded on `isRosterView` so Research and League leave the last roster
+     view's range standing rather than swapping it — see `dateScopeRef`. */
+  if (isRosterView(view)) dateScopeRef.current = view === 'feed' ? 'feed' : 'summary';
+  const { start, end, preset: activePreset } = ranges[dateScopeRef.current];
+  /** Move the range **of the page on screen**, which is the only one a control
+   *  in the chrome can have been pressed from. The scope is read off the ref at
+   *  call time rather than closed over, so this is stable and every caller —
+   *  the presets, the range picker, the projected lens's excursion into the
+   *  days ahead and the way back from it — writes the entry the reader is
+   *  looking at. */
+  const setRange = useCallback((r: DateRange) => {
+    setRanges((prev) => ({ ...prev, [dateScopeRef.current]: r }));
+  }, []);
   // Which half of the watchlist the players view is showing. Its own tab row,
   // since a batter card and a pitcher card have nothing in common to scan down.
   // Only surfaced when both kinds are watched; batters are the default.
@@ -607,9 +671,7 @@ export default function App() {
    * and the preset is restored alongside so `Today` goes back to *being* Today
    * rather than to the two dates it happened to mean.
    */
-  const beforeProjection = useRef<{ start: string; end: string; preset: string | null } | null>(
-    null,
-  );
+  const beforeProjection = useRef<DateRange | null>(null);
   const [matchupWindow, setMatchupWindow] = useState<MatchupWindow | null>(null);
   /* Asked-once rather than a terminal-state guard, and safe because there is no
      cleanup: StrictMode's second pass finds the flag and returns while the
@@ -2923,11 +2985,7 @@ export default function App() {
       if (on) {
         const back = beforeProjection.current;
         beforeProjection.current = null;
-        if (back) {
-          setStart(back.start);
-          setEnd(back.end);
-          setActivePreset(back.preset);
-        }
+        if (back) setRange(back);
         return false;
       }
       beforeProjection.current = { start, end, preset: activePreset };
@@ -2937,13 +2995,11 @@ export default function App() {
       // `end` is clamped forward of today either way, a period whose last day
       // has passed being nothing to project.
       const to = matchupWindow?.end ?? addDays(today, 6);
-      setStart(today);
-      setEnd(to < today ? today : to);
-      setActivePreset(null);
+      setRange({ start: today, end: to < today ? today : to, preset: null });
       setScheduleSpan(null);
       return true;
     });
-  }, [start, end, activePreset, matchupWindow]);
+  }, [start, end, activePreset, matchupWindow, setRange]);
 
   /**
    * Re-read everything that comes from ESPN, past the server's ten-minute
@@ -4074,16 +4130,10 @@ export default function App() {
       end={end}
       max={maxDate}
       onPick={(p) => {
-        setStart(p.start);
-        setEnd(p.end);
-        setActivePreset(p.label);
+        setRange({ start: p.start, end: p.end, preset: p.label });
         setDateOpen(false);
       }}
-      onRange={(s, e) => {
-        setStart(s);
-        setEnd(e);
-        setActivePreset(null);
-      }}
+      onRange={(s, e) => setRange({ start: s, end: e, preset: null })}
     />
   );
 

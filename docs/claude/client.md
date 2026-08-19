@@ -329,14 +329,6 @@ answer for that account); and a `/api/prefs` held for 1.2s delays the report to
 
 **Measured.** Bundle: **433.24 KB → 434.56 KB** of JS (128.02 → 128.37 gzipped) and **95.02 → 96.08 KB** of CSS (16.91 → 17.17 gzipped) — 1.3KB and 1.1KB raw, 0.35KB and 0.26KB over the wire, for a component that replaced ten call sites and a dead rule. Driven in a browser against a real roster at **1200×900 and 390×844**, dark theme, with the relevant request held open by CDP: the boot splash (44px ball, `rgb(56,189,248)`, four seams), the report's block wait, the research board's count line, the player page's percentile tab, the `Updating` badge over an untouched feed, the fantasy popover's entry (15px ball in the glyph slot, the page behind it unmoved) and the ESPN league page's Refresh. Sampled through a revolution, the four seams' computed transforms follow `sin`/`cos` at quarter-turn phase offsets with opacity gating the back half, and at least one seam is fully drawn in every frame.
 
-**The date controls are behind `.date-toggle` at every width** — not just on a phone. They are 576px of pills and picker — measured against the 1136px content width the app used to cap itself at, where they were easily the widest thing in the chrome — and they are set once and then read for the rest of a session, which is the shape of a thing that belongs behind a button. On a phone the button that opens them is the same calendar reduced to its icon, with the range on a bubble — see the starters toggle's note below, which the two share. They are **rendered once** rather than duplicated into a second location: `.view-bar` already wraps, so `.app.date-open .date-control { flex: 1 1 100% }` is the whole of "open as its own row", and it opens directly under the row whose last item is the button that opened it. **Picking a preset closes the row**, from the pills and the phone dropdown alike: it is the errand the row was opened for. The range picker deliberately doesn't, its own popover needing the row to stay put. Both are hidden on the research board, which has nothing dated to act on, and with the rest of the chrome on the edit screen — by being inside `.view-bar`, which that mode hides, rather than by being named in its list.
-
-**The two pieces are `components/DateControls.tsx` now** — `DateToggle` and `DateRow` — extracted when a second surface needed them: a matchup's team pages are these same roster views read for a leaguemate's team over a span the reader picks, and a second implementation of "Today / Yesterday / a range" beside this one is two controls that will one day disagree about what a preset means. The markup and the classes are unchanged, so every rule above applies to both callers by construction; what each caller keeps is the **state** — which days, which preset, whether the row is open, and what a pick does — that being the only half the two genuinely answer differently. One trap the second caller found and this one never could: `.date-control` is `display: none` by default and undone only by `.app.date-open`, which is a class on the app's own shell, so a row rendered outside it lays out correctly at **0 × 0** and shows nothing. See **Client — the League view**, *A team page is the app's own Roster and Feed views*.
-
-**The button is on the roster row, not in the header, and it says which days it holds.** Those were two controls until now: a square calendar icon up in the header and a round `dateBadge` chip down in the view bar — the page stating the span in one place and letting you change it in another, and a chip that could only be read sitting an inch from a button that only opened. One control does both, and the label *is* the state: **`activePreset ?? numericRange(start, end)`**, so it reads `Today` while a preset is active — that is what was picked, and it survives the date rolling over — and `8/1 – 8/9` once a range is picked by hand. **Numeric on purpose**: it sits in a wrapping row of tab groups, so every character it spends is one that can push the group after it onto the next line, and the month name buys nothing the number doesn't (the year buys less still — the app shows one season and says so nowhere else on the page). It keeps its label at every width, alone among the chrome's buttons in doing so: the label is the only thing on the page saying which days every number on it is drawn from, and the icon alone would leave that unsaid.
-
-It is on the roster row for the reason the roster tabs are: the dates qualify exactly those three views and nothing on the research board, so a header slot made it chrome belonging to the whole app when it belongs to one page of it. **Last in the row**, after the tab groups — it answers "which days", the question that comes after "which page", "which kind" and "which reading of them".
-
 The empty-roster state gained a **`.empty-search`** button beside its `.empty-help` one (`.empty-actions` is the row, `.empty-state` being centered block flow where two inline buttons would be separated by one collapsed space). The search being an icon is a small target to hand someone with nothing on screen, so the one page a new user is guaranteed to land on opens it for them.
 
 **The edit screen takes the page.** With it up, `.app.edit-mode` hides the gear, the fantasy button, the date control and its toggle, the view bar and the whole header cluster — everything the app draws above the page. Hidden in CSS rather than dropped from the JSX because it is one statement of one idea where the equivalent is five conditionals scattered through the render; it has to sit **after `.view-bar`** in the file to win, which is why it's down beside `.header-tools` rather than up with the header rules. The **error banner is deliberately not in that list** — a mode is no reason to stop saying the report failed. The rule used to name the magnifier *inside* the cluster rather than the cluster itself, and had to: the cluster held the Edit button, which had to survive as Done. With Edit in the gear's menu, `.header-tools` goes wholesale — and so does `.fantasy-menu`, the one control that was still standing here, on a screen where all it could do is swap the very list being edited.
@@ -434,9 +426,12 @@ because every one of them is loaded into every session, so the cost of the whole
 was paid on every task whatever it touched. **The division is by the thing being
 described, not by size**: what is above is the shell every view sits in (the two
 lists, player keys, the app's own chrome and scroll behavior, the loading system,
-the kind tabs, the header, the date controls and the injured filter), and each
-file below is one surface of the app.
+the kind tabs, the header and the injured filter), and each file below is one
+surface of the app.
 
+- **`client-dates.md`** — the date controls: the calendar button and the row it
+  opens, the component the matchup page shares with it, and the range the Roster
+  and the Feed each keep of their own.
 - **`client-summary.md`** — the Roster view: the summary table, its identity block
   and color legend, the `Starters` filter, and the full-page mode all three wide
   tables share.
@@ -487,6 +482,15 @@ sat** — the League view's own tab strip was documented twice in the middle of
 matchup material, and the Transactions dot between two matchup measurements — so
 the split filed them under the surface they are about; their wording is
 untouched.
+
+**And this file itself has now been split once more, for the third time on the
+same rule**: it sat at 149,837 characters — 163 short of the limit — when the
+Roster and the Feed were given a range each, so the date controls went to
+`client-dates.md` with the new passage rather than the file being let past it.
+Four paragraphs moved, **verbatim and in order**, and nothing else was touched;
+the phone bubble on the calendar's corner stays in `client-summary.md`, that
+being a fact about the roster row's own narrow layout rather than about the
+control. 149,837 → 145,994.
 
 **The other files' references to "see **Client**" were left alone, and they still
 resolve** — all of them are imported by `CLAUDE.md` and so are in context together,

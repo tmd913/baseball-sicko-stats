@@ -5,6 +5,13 @@ summary table reads it as a roster; it sits between the roster it reports on and
 the league it doesn't. Its items open into dialogs whose rules are in
 `client-dialogs.md`.
 
+**It keeps its own date range**, which is `client-dates.md`'s — the calendar is
+the same control drawn on both pages and each writes its own entry, so coming
+here for last week's plays no longer costs the Roster its today. What belongs
+here is only the consequence: the range this page is on is not the one the
+summary table is on, so the report behind the two of them can differ and a
+crossing between them costs the read that difference implies.
+
 ### The batter feed narrows to kinds of play, and says when something is new
 
 **On a full slate the stream is hundreds of items** — every plate appearance of
