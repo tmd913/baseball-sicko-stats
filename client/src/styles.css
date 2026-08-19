@@ -5820,6 +5820,18 @@ button.start-line:focus-visible {
   gap: 10px 12px;
   flex-wrap: wrap;
   margin-bottom: 14px;
+  /* The anchor the Rankings tab's `Projected` key opens from — `.lg-head`'s job
+     on the Scoreboard and `.mup-bar`'s on a matchup, and here for the identical
+     reason: that key is `position: static` so its 340px panel hangs off a *row*
+     rather than off a 30px button part-way along one, which at a phone's width
+     would put half of it off the screen. This row is the full content width at
+     every size, so `right: 0` is the app's own gutter.
+     Nothing else in the bar changes hands: the two absolutely positioned things
+     under here — the transactions dot and the calendar's date bubble — are
+     anchored to `.lg-tab` and `.date-toggle`, both of which declare
+     `position: relative` for exactly that purpose, and the date picker's own
+     popover hangs off `.drp`. */
+  position: relative;
 }
 /* The two tiers of tabs — Summary/Players/Feed and Batters/Pitchers — as one
    group, so the view bar's space-between doesn't push them apart. They share a
@@ -8329,16 +8341,22 @@ button.start-line:focus-visible {
   .research-toggle-label,
   .schedule-toggle-label,
   .projected-toggle-label,
-  /* **The Rankings caption's copy of the League page's own toggle**, and only
-     that copy — scoped to the row rather than to `.lg-proj-label`, because the
-     matchup card's is centered on a row of its own with the width for a word
-     where this shares a line with a caption of dates. Measured at 390: with the
-     label the pair wraps and the caption row is 70px, which is two thirds of a
-     table row taken off the one tab that *is* a table; without it the row is
-     36 and the button sits on the caption's own line. Visually hidden rather
-     than removed, the rule the three above it follow: the button still names
-     itself rather than being a lone glyph. */
-  .lg-span-detail .lg-proj-label {
+  /* **The Rankings copy of the League page's own toggle**, and only that copy —
+     scoped to the row it is in rather than to `.lg-proj-label`, because the
+     matchup card's is centered on a row of its own with the width for a word.
+     It named `.lg-span-detail` while this button stood in the table's caption;
+     the button is in the tab row now and the scope followed it, which puts it
+     beside `.projected-toggle-label` above — the Roster view's own copy of this
+     control, in this same row, losing its word at this same width.
+
+     Measured on the Rankings tab at 320 and 640, which is where it pays: with
+     the label the group is 145px and the tab row takes a **third** line at both
+     (132 → 180 and 84 → 132, i.e. 48px of *pinned* chrome off the one tab that
+     is a table); at 77px it packs onto the line the span dropdown is on and the
+     row is 132 and 84, which is exactly what it was before this control joined
+     it. Visually hidden rather than removed, the rule the three above it
+     follow: the button still names itself rather than being a lone glyph. */
+  .view-bar-tabs .lg-proj-label {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -11884,6 +11902,28 @@ button.start-line:focus-visible {
   top: calc(100% + 8px);
   bottom: auto;
   width: min(340px, calc(100vw - 44px));
+}
+/* **The Rankings copy of the pair, up in the app's tab row.** Two declarations,
+   both undoing something written for the row it left.
+
+   `margin-left: auto` was for the far end of the Scoreboard's head, where the
+   pair is the last thing on a row that has slack to give it. Here the row wraps
+   and each line has its own slack, so an auto margin would strand the toggle at
+   the right edge of whichever line it landed on — a control that moves away from
+   the group it belongs to as the window narrows. At 0 it sits at the row's
+   ordinary 12px gap after the span strip, which is where the other filters in
+   this row sit.
+
+   The key's anchor is `.view-bar` rather than this group, and that is
+   `.lg-head`'s own measured rule arriving here: `.lg-proj-key` is
+   `position: static` precisely so a 340px panel hangs off a **row** rather than
+   off a 30px button. This group sits part-way along the tab row — after two tab
+   strips — so `right: 0` against the group would open the panel leftward from
+   x≈250 on a phone and put its left half off the screen. Against `.view-bar`,
+   which is the full content width at every size, `right: 0` is the app's own
+   right gutter and the panel is on screen at 320 as at 1920. */
+.view-bar-tabs .lg-proj-tools {
+  margin-left: 0;
 }
 
 

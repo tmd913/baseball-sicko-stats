@@ -811,6 +811,12 @@ keeps the vocabulary (`LEAGUE_TABS`, exported) and has no `onTab` prop any more.
 The strip is still folded onto `.view-switch` / `.view-tab`, so it is the same
 object as the pills above it by construction.
 
+**The Rankings span strip followed it there, and the `Projected` toggle after
+that** — so on that tab the row reads *which page · which tab · which span ·
+which figures*, which is the order the questions come in. The toggle's own
+argument, and what a line of pinned chrome at 1200 costs, is in **Rankings**,
+*The toggle is in the tab row, and the caption stayed behind*.
+
 **The span strip lost its reading column with it.** It carried
 `max-width: var(--card-column); margin: 0 auto` from when the page under it was
 a list of cards; the table under it now spans the window, so a strip centered in
