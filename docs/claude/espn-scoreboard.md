@@ -1034,13 +1034,18 @@ which is `clubFor`'s own answer to the same question one file over.
   day and one read at nine at night projects almost none of it, which is the
   honest reading either way. A **postponement is not a game he gets**, which is
   `schedule.ts`'s own rule.
-- **It does not guess at lineup changes.** It projects the players a manager has
-  in a lineup slot *right now* — the same assumption `scoringPeriodTotals` already
-  makes for today, and the same `NON_ACCRUING_SLOTS` rule. A bench player he
-  starts tomorrow is not in it and neither is anybody on his IL. What it *does*
-  read is **MLB's** own roster status, which is a different question and a fact
-  rather than a guess: a man on the injured list plays none of the week whatever
-  slot his manager has left him in.
+- **It does not guess at lineup changes** — *superseded; it now fills the lineup
+  a day at a time, and the argument and the numbers are in* **The lineup is
+  filled a day at a time** *below.* The reasoning it replaced is left standing
+  because it is the reasoning every measurement above was taken under: *it
+  projects the players a manager has in a lineup slot right now — the same
+  assumption `scoringPeriodTotals` already makes for today, and the same
+  `NON_ACCRUING_SLOTS` rule. A bench player he starts tomorrow is not in it and
+  neither is anybody on his IL.* Half of it still holds exactly: **anybody on
+  his fantasy IL is still not in it**, that being a roster move rather than a
+  lineup decision. And what it *does* read is **MLB's** own roster status, which
+  is a different question and a fact rather than a guess: a man on the injured
+  list plays none of the week whatever slot his manager has left him in.
 - **It does not guess at a return date.** A player on the IL is projected at
   nothing for the whole span, even where he is due back on Thursday — MLB
   publishes no such date and the app holds none, so the honest answer is the one
@@ -1052,6 +1057,137 @@ which is `clubFor`'s own answer to the same question one file over.
   thing on a pitcher's line that moves the other way from runs.
 - **It is not a probability.** One expected value per category, no distribution and
   no interval, which the key on screen says in as many words.
+
+### The lineup is filled a day at a time
+
+**The engine rested on one assumption — *the lineup a manager has set today
+stands for the rest of the week* — and it is the assumption that made the
+projection wrong in the one direction nobody wanted.** A starting pitcher
+benched on his off day was projected for **no start at all**; a reliever left on
+the bench for nothing; a bench bat for nothing on the Thursday four of the men
+ahead of him are idle. Every one of those is a figure the reader can see is too
+low, and the fault was never in the arithmetic — it was in projecting a lineup
+nobody was going to leave alone.
+
+**So the lineup is set again every morning, which is how ESPN itself models
+it.** `lineupLocktimeType` is `INDIVIDUAL_GAME` on the live league — a slot
+locks when *that player's* game starts rather than when the day does — so every
+one of these choices is genuinely in front of a manager who looks once a day.
+Three rules, and they fall out of one mechanism rather than being three cases:
+
+- **A starting pitcher is in the lineup on the day he starts.** His turn comes
+  off the rotation map the Schedule view's grid already draws, so he brings one
+  unit on that day and nothing on the six around it — and the seat he is *not*
+  using on the other six is a seat somebody else gets.
+- **A reliever is in the lineup when he pitches**, benched today or not. Nobody
+  can know which day that is, so he competes every day at his appearance rate,
+  which is exactly what the seat is worth in expectation.
+- **The batting order fills as far as it will go**, every day.
+
+**Who deserves a seat is measured, and measured off *MLB* lineups rather than
+fantasy ones.** `playShareOf` is already how often a man is in his club's game
+over the games he was **available** for — the availability-corrected share this
+file back-tests at 0.1245 mean absolute error over 40,013 batter cases — so an
+everyday shortstop brings ~1 unit a day, a strong-side platoon bat ~0.6 and a
+backup catcher ~0.25. The regulars take the seats without anybody having to
+write down who the regulars are, and the alternative (reading how often the
+*manager* starts him, which the per-day roster history would answer) was
+rejected for a reason worth stating: it bakes in exactly the bench decisions
+this change exists to look past.
+
+**When more men are available than there are seats**, the seat goes to the best
+projected value in the league's own **counting** categories, each normalized by
+what the rest of that roster does per day — so a 5×5 league and a twelve-category
+one come out on the same scale with no constant here to drift from the league's
+actual settings. **Rate categories are deliberately not in the ordering**, and
+that is a limitation rather than an oversight: a rate is not additive, a
+player's effect on a team ERA depends on the innings underneath it, and ranking
+on his own ERA would seat a one-inning specialist above a workhorse worth far
+more of the same category. They are still *projected* — every category the
+league scores is in the answer — it is only the seating order that ignores them.
+A league scoring nothing but rates falls back to units, which is the request
+read literally: fill the seats with whoever plays most.
+
+**The assignment is optimal rather than a heuristic, and that is worth one
+sentence because it looks like it should be hard.** A player is worth the same
+in every slot he is eligible for, so the weight is on the *player* and not on
+the pairing — which makes taking them in descending order and keeping each one
+that still fits provably optimal (it is the greedy algorithm on a transversal
+matroid). "Still fits" is the ordinary augmenting search, so a man whose slots
+are all taken still gets in when one of the sitting players can shuffle to
+another seat he is eligible for. Hitters and pitchers never compete for the same
+chair, so it is two small assignments rather than one twice the size.
+
+**Not one input is a new upstream and not one byte of it is on the wire**, which
+is the rule the rest of this file is built on. The slot counts are stashed out of
+the `mSettings` half of the roster read that already happens (`lineupSlotsFor` —
+a module cache rather than a field on `EspnOwnership`, precisely so they do not
+travel); the raw `eligibleSlots` ride on the cookie-free player pool that read
+already asks for, as a third map beside `pct` and `eligible` that `getOwnership`
+does not copy onto the object the client reads. Measured through the route: the
+response is **3,367 bytes / 1,018 gzipped**, against 3,370 / 1,032 before.
+
+**Two things still do not compete.** The **fantasy IL** is a roster move rather
+than a lineup decision, which is the line this file already draws at *it does
+not guess at a return date*; and a man **off MLB's active roster** brings zero
+units, so he never takes a seat — that falls out of the play share rather than
+being a case here. A league that published no slot counts gets `plan: null`,
+which is exactly the rule this file had before, and so does **the Roster view's
+own projection**, which has no lineup to fill.
+
+### Measured, on the live 12-team league
+
+Week 19, five days left, both engines run against the same board minutes apart:
+
+| | before | after |
+| --- | --- | --- |
+| hitter-games | 554 | **575** |
+| starts | 48 | **61** |
+| relief appearances | 83 | **84** |
+| sides raised / lowered | | **12 / 0** |
+
+**The starts are the headline and they were checked against an independent
+recompute** — every rostered rotation starter's projected turns inside the
+window, taken straight from `/api/schedule`'s rotation map and probables and
+joined to the rosters, with no part of `projection.ts` involved: **61 against
+61, 0 of 12 teams disagreeing.** The thirteen it recovers are named, which is
+the sharpest way to say what the old rule cost: Yamamoto, deGrom, Sale,
+Imanaga, Alcantara, Misiorowski, May, Abbott, Boyd, Woo, Henderson, Burke and
+Bennett were all on a bench with a turn this week, and all thirteen were
+projected for nothing.
+
+**The other two numbers reconcile exactly.** League-wide there are **17 bench
+starting pitchers** (13 with a turn — the +13), **1 bench reliever** (Seymour —
+the +1) and **17 bench batters**, whose seats plus the ones freed by idle
+starters are the +21 hitter-games.
+
+**The seat capacity is never exceeded**, instrumented over every assignment the
+run makes: **0 of 120 day/side assignments** seat more men than the league has
+chairs. The live league starts **11 batting** and **9 pitching**; batting is
+full on **46 of 60** day-teams (mean 10.13 seated of 11 — the shortfall is a
+roster that genuinely cannot fill it, not a bug in the matching), and pitching
+is full on **0 of 60** at a mean of 4.33, which is why "a reliever is in the
+lineup when he pitches" is a pure gain in this league: its pitching seats were
+never contended.
+
+**Identity checks over every side of the live board**: **0** categories
+invented, **0** lost, **0** non-category stats shipped, **0** counting
+categories projected below the figure already banked, **0** tallies that
+disagree with the cells beside them, and **0** counting cells anywhere that
+came out *below* the old rule — which is the shape the change guarantees, it
+being able only to use seats that were going empty.
+
+**The Roster view's projection is byte-identical**, checked rather than
+asserted: the same request against both engines returns the same 1,351 bytes
+and the same `players` array, differing in `fetchedAt` alone.
+
+**It costs nothing to read.** Through the route: **315–451ms** cold with the
+boards warm, **0.9–1.2ms** off its own minute — against the 580–858ms and
+34–35ms recorded above, which is the same read plus a matching problem small
+enough to disappear into it. Driven in a browser at 1200: the Rankings lens
+draws its 12 rows under `Week 19 · projected to Aug 23 · 5 days still to play`
+and a matchup page opens its 20 category rows, both lit, **0** error banners and
+**0** page overflow.
 
 ### The engine has a second caller, and so it has a context
 
