@@ -1,5 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { InfoKey } from './InfoKey';
+import { ScrubCross, ScrubTip, useChartScrub } from './chartScrub';
 import { formatRate } from '../lib';
 import type { XwobaSeries } from '../types';
 
@@ -155,8 +156,6 @@ function md(date: string): string {
  */
 export function RollingXwoba({ series, name }: { series: XwobaSeries; name: string }) {
   const [win, setWin] = useState<Win>(() => openingWin(series.pas.length));
-  const [hover, setHover] = useState<number | null>(null);
-  const svgRef = useRef<SVGSVGElement | null>(null);
 
   // How many CSS pixels one viewBox unit is drawn at — see `LABEL_PX`. Measured
   // in a *layout* effect so the first paint already has it, and kept true by a
@@ -233,17 +232,19 @@ export function RollingXwoba({ series, name }: { series: XwobaSeries; name: stri
     for (let v = Math.ceil(xMin / tStep) * tStep; v <= xMax; v += tStep) xTicks.push(v);
   }
 
+  // **The scrub is `chartScrub`'s, not this file's, since the matchup chart
+  // wanted the same one** — the hit test, the crosshair and the readout box are
+  // shared and what stays here is what is this chart's own: an accent dot on
+  // the line, and a readout naming a rolling figure and the plate appearance it
+  // ends on. The arithmetic is unchanged — the old `Math.round(paGuess - xMin)`
+  // over a series whose PA numbers step by one *is* the rounded fraction of the
+  // way across the plot.
+  const { svgRef, idx: hover, clear: clearScrub, scrubProps } = useChartScrub(points.length, {
+    left: PAD.left,
+    plotW: PLOT_W,
+    vbw: VBW,
+  });
   const cur = hover !== null ? points[hover] : null;
-
-  const onMove = (e: React.PointerEvent) => {
-    if (!points.length) return;
-    const rect = svgRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const svgX = ((e.clientX - rect.left) / rect.width) * VBW;
-    const paGuess = xMin + ((svgX - PAD.left) / PLOT_W) * (xMax - xMin);
-    const idx = Math.max(0, Math.min(points.length - 1, Math.round(paGuess - xMin)));
-    setHover(idx);
-  };
 
   return (
     <div className="pct-card">
@@ -289,7 +290,7 @@ export function RollingXwoba({ series, name }: { series: XwobaSeries; name: stri
               aria-pressed={win === w}
               onClick={() => {
                 setWin(w);
-                setHover(null);
+                clearScrub();
               }}
             >
               {w} PA
@@ -313,8 +314,7 @@ export function RollingXwoba({ series, name }: { series: XwobaSeries; name: stri
               viewBox={`0 0 ${VBW} ${VBH}`}
               role="img"
               aria-label={`Rolling ${win}-plate-appearance xwOBA over the ${series.season} season`}
-              onPointerMove={onMove}
-              onPointerLeave={() => setHover(null)}
+              {...scrubProps}
             >
               {/* horizontal gridlines + y labels */}
               {yLines.map((v) => (
@@ -377,30 +377,18 @@ export function RollingXwoba({ series, name }: { series: XwobaSeries; name: stri
               {/* hover crosshair + dot */}
               {cur && (
                 <>
-                  <line
-                    className="roll-cross"
-                    x1={sx(cur.pa)}
-                    x2={sx(cur.pa)}
-                    y1={PAD.top}
-                    y2={PAD.top + PLOT_H}
-                  />
+                  <ScrubCross x={sx(cur.pa)} top={PAD.top} bottom={PAD.top + PLOT_H} />
                   <circle className="roll-dot" cx={sx(cur.pa)} cy={sy(cur.y)} r={4} />
                 </>
               )}
             </svg>
             {cur && (
-              <div
-                className="roll-tip"
-                style={{
-                  left: `${(sx(cur.pa) / VBW) * 100}%`,
-                  top: `${(sy(cur.y) / VBH) * 100}%`,
-                }}
-              >
-                <span className="roll-tip-val">{formatRate(cur.y)}</span>
-                <span className="roll-tip-sub">
+              <ScrubTip x={sx(cur.pa)} y={sy(cur.y)} vbw={VBW} vbh={VBH}>
+                <span className="chart-tip-val">{formatRate(cur.y)}</span>
+                <span className="chart-tip-sub">
                   PA {cur.pa} · {md(cur.date)}
                 </span>
-              </div>
+              </ScrubTip>
             )}
           </div>
           {/* **The legend, which is where the league average is named.** It was a

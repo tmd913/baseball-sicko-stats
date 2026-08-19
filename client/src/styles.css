@@ -5230,7 +5230,21 @@ button.start-line:focus-visible {
   stroke-linejoin: round;
   stroke-linecap: round;
 }
-.roll-cross {
+/* **The scrub's own marks, named for the mechanic rather than for the chart
+   that had it first.** These were `.roll-*` while the rolling chart was the
+   only thing that could be dragged across; the matchup's day-by-day chart has
+   the same crosshair and the same readout now, drawn by the same component
+   (`chartScrub.tsx`), so there is one rule rather than a `.mser-` copy of it
+   free to drift — the fold-don't-restyle rule `.roll-ref` and `.mser-legend`
+   already follow.
+
+   The crosshair is `--muted` at **1 unit and dashed** against series lines that
+   are 2 units and solid, which is what keeps it from reading as a third line on
+   the matchup chart, where `--muted` *is* one of the two teams. What is not
+   folded is the marker: the rolling chart's dot is its one accent line's
+   (`.roll-dot`, below) and the matchup's is whichever team's point it picks out
+   (`.mser-mark`), and those are two different facts about two different plots. */
+.chart-cross {
   stroke: var(--muted);
   stroke-width: 1;
   stroke-dasharray: 3 3;
@@ -5240,7 +5254,7 @@ button.start-line:focus-visible {
   stroke: var(--panel);
   stroke-width: 2;
 }
-.roll-tip {
+.chart-tip {
   position: absolute;
   transform: translate(-50%, -140%);
   pointer-events: none;
@@ -5255,13 +5269,13 @@ button.start-line:focus-visible {
   white-space: nowrap;
   box-shadow: var(--shadow);
 }
-.roll-tip-val {
+.chart-tip-val {
   font-size: 13px;
   font-weight: 800;
   color: var(--accent);
   font-variant-numeric: tabular-nums;
 }
-.roll-tip-sub {
+.chart-tip-sub {
   font-size: 11px;
   font-weight: 600;
   color: var(--muted);
@@ -15888,12 +15902,18 @@ html[data-theme='light'] .league-table thead th {
   width: 100%;
   height: auto;
   overflow: visible;
-  /* **`pan-y`, not `none`.** This chart consumes no gesture at all — it has no
-     crosshair — so the browser keeps both axes anyway; the declaration is here
-     to say so rather than to claim anything, and `none` is the mistake
+  /* **`pan-y`, not `none`.** This chart has a crosshair now — `chartScrub`'s,
+     the rolling chart's own — and it reads `e.clientX` and nothing else, so the
+     horizontal drag is the only gesture it wants. `none` is the mistake
      `.roll-chart` already records: on a phone the plot is a band across the
      middle of the dialog, and claiming the vertical axis would stop a thumb
-     landing on it from scrolling the dialog at all. */
+     landing on it from scrolling the dialog at all. `pan-y` hands the vertical
+     pan back to the browser and keeps the horizontal one here, which is the
+     arbitration the two gestures differing in *axis* makes possible.
+
+     *(This declaration predates the scrub and read "this chart consumes no
+     gesture at all", claiming nothing and only recording the mistake it was
+     avoiding. It is load-bearing now.)* */
   touch-action: pan-y;
 }
 .mser-grid {
@@ -15935,6 +15955,31 @@ html[data-theme='light'] .league-table thead th {
 }
 .mser-dot.mser-win {
   fill: var(--win);
+}
+/* **The scrub's marker is the day's own dot picked out**, not a new mark: the
+   same class a size up with the panel's ground ringed round it, so a reader
+   sees *that team's* point selected rather than a third thing appearing on the
+   plot. Exactly `.roll-dot`'s shape against its one accent line — and the
+   reason this is a rule of its own rather than a fold is that the fill differs
+   per team here and cannot come from a shared declaration.
+
+   The readout above it is `.chart-tip`, shared with the rolling chart; the two
+   figures inside take the plot's own colors, so the number and the line it came
+   off are the same color by construction. `--faint` on the separator keeps the
+   dash from reading as either side's. */
+.mser-dot.mser-mark {
+  stroke: var(--panel);
+  stroke-width: 2;
+}
+.mser-tip-side {
+  color: var(--muted);
+}
+.mser-tip-side.mser-win {
+  color: var(--win);
+}
+.mser-tip-sep {
+  color: var(--faint);
+  padding: 0 3px;
 }
 /* The swatch is 24 x 2 over a matching viewBox, so a unit is a pixel and the
    2px stroke paints at the size the words beside it are read at — rather than

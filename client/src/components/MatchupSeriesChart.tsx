@@ -1,4 +1,5 @@
 import { useLayoutEffect, useMemo, useState } from 'react';
+import { ScrubCross, ScrubTip, useChartScrub } from './chartScrub';
 import type { EspnCategory, EspnMatchupSeries, EspnStandingsTeam } from '../types';
 
 /**
@@ -25,7 +26,14 @@ import type { EspnCategory, EspnMatchupSeries, EspnStandingsTeam } from '../type
  *
  * **`touch-action: pan-y` on the plot** (in the stylesheet), so a thumb landing
  * on the chart still scrolls the dialog under it. That was a real reported bug
- * on the rolling chart and is not repeated here.
+ * on the rolling chart and is not repeated here — and it is what lets a finger
+ * *scrub* the chart at all, the drag and the scroll differing in axis.
+ *
+ * **The scrub itself is `chartScrub`'s**, shared with the rolling chart rather
+ * than written twice: the hit test, the crosshair and the readout box are one
+ * object now and what is this chart's own is what a matchup day *says* — both
+ * sides' running totals at that day, in the two colors the lines already carry,
+ * over the date they belong to.
  *
  * **A legend under the chart rather than labels inside the plot**, for the
  * reason that one records: a label painted at the end of a line sits exactly
@@ -197,12 +205,21 @@ export function MatchupSeriesChart({
   // Only the leading run of known points is drawn: a running total past a hole
   // is not a missing point but a wrong one, so the line stops where the series
   // stops knowing rather than jumping the gap.
-  const pathOf = (l: Line) => {
+  //
+  // **How far each line reaches is computed once rather than walked twice**,
+  // because the scrub has to answer the same question the path does: a day past
+  // the hole holds a number the chart has already decided not to stand behind,
+  // and a readout printing it would say in words what the plot refuses to draw.
+  const reachOf = (l: Line) => {
+    let n = 0;
+    while (n < days.length && days[n].ok && typeof l.values[n] === 'number') n++;
+    return n;
+  };
+  const reach = lines.map(reachOf);
+  const pathOf = (l: Line, upto: number) => {
     const pts: string[] = [];
-    for (let i = 0; i < days.length; i++) {
-      const v = l.values[i];
-      if (!days[i].ok || typeof v !== 'number') break;
-      pts.push(`${pts.length === 0 ? 'M' : 'L'}${sx(i).toFixed(2)} ${sy(v).toFixed(2)}`);
+    for (let i = 0; i < upto; i++) {
+      pts.push(`${i === 0 ? 'M' : 'L'}${sx(i).toFixed(2)} ${sy(l.values[i] as number).toFixed(2)}`);
     }
     return pts.join(' ');
   };
@@ -224,6 +241,30 @@ export function MatchupSeriesChart({
   const tickIdx: number[] = [];
   for (let i = days.length - 1; i >= 0; i -= dayStep) tickIdx.unshift(i);
 
+  /**
+   * **The day under the pointer, and what both sides had after it.**
+   *
+   * The x axis is about seven labels wide on a fortnight, so most of the days
+   * on this plot are drawn and never named — which is the whole of the reading
+   * a manager comes here for ("when did that lead go?"). The scrub names every
+   * one of them.
+   *
+   * The readout anchors on the **higher** of the two points, so the box sits
+   * above both lines rather than over the one it is describing; where neither
+   * side is known for that day it anchors at the top of the plot, which is
+   * where a box saying `—` belongs.
+   */
+  const { svgRef, idx: at, scrubProps } = useChartScrub(days.length, {
+    left: PAD.left,
+    plotW: PLOT_W,
+    vbw: VBW,
+  });
+  const marks =
+    at === null
+      ? []
+      : lines.map((l, k) => (at < reach[k] ? (l.values[at] as number) : null));
+  const markYs = marks.filter((v): v is number => v !== null).map(sy);
+
   if (days.length === 0) {
     return (
       <p className="mser-none">
@@ -237,11 +278,13 @@ export function MatchupSeriesChart({
     <>
       <div className="mser-chart-wrap" ref={setWrapEl}>
         <svg
+          ref={svgRef}
           className="mser-chart"
           style={{ '--mser-font': `${fontU.toFixed(2)}px` } as React.CSSProperties}
           viewBox={`0 0 ${VBW} ${VBH}`}
           role="img"
           aria-label={`${category.name} through the matchup, day by day`}
+          {...scrubProps}
         >
           {ticks.map((t, k) => (
             <g key={k}>
@@ -274,25 +317,67 @@ export function MatchupSeriesChart({
               {shortDate(days[i].date, `Day ${i + 1}`)}
             </text>
           ))}
-          {lines.map((l) => (
+          {lines.map((l, k) => (
             <g key={l.teamId}>
-              <path className={`mser-line${l.leading ? ' mser-win' : ''}`} d={pathOf(l)} />
-              {days.map((d, i) => {
-                const v = l.values[i];
-                if (!d.ok || typeof v !== 'number') return null;
-                return (
-                  <circle
-                    key={d.scoringPeriod}
-                    className={`mser-dot${l.leading ? ' mser-win' : ''}`}
-                    cx={sx(i)}
-                    cy={sy(v)}
-                    r={3}
-                  />
-                );
-              })}
+              <path className={`mser-line${l.leading ? ' mser-win' : ''}`} d={pathOf(l, reach[k])} />
+              {days.slice(0, reach[k]).map((d, i) => (
+                <circle
+                  key={d.scoringPeriod}
+                  className={`mser-dot${l.leading ? ' mser-win' : ''}`}
+                  cx={sx(i)}
+                  cy={sy(l.values[i] as number)}
+                  r={3}
+                />
+              ))}
             </g>
           ))}
+          {at !== null && (
+            <>
+              <ScrubCross x={sx(at)} top={PAD.top} bottom={PAD.top + PLOT_H} />
+              {/* The marker is each line's own dot a size up and ringed in the
+                  panel's ground, so it reads as *that* team's point picked out
+                  rather than as a third mark — the rolling chart's `.roll-dot`
+                  does the same against its one accent line. */}
+              {marks.map((v, k) =>
+                v === null ? null : (
+                  <circle
+                    key={lines[k].teamId}
+                    className={`mser-dot mser-mark${lines[k].leading ? ' mser-win' : ''}`}
+                    cx={sx(at)}
+                    cy={sy(v)}
+                    r={5}
+                  />
+                ),
+              )}
+            </>
+          )}
         </svg>
+        {at !== null && (
+          <ScrubTip
+            x={sx(at)}
+            y={markYs.length ? Math.min(...markYs) : PAD.top}
+            vbw={VBW}
+            vbh={VBH}
+          >
+            {/* **Both sides on one line, in the order the card draws them and in
+                the colors the plot already gave them** — the same shape the
+                scoreboard cell this chart opened from has (`R 31–23`), so the
+                readout is that cell for one day rather than a second notation
+                to learn. A side the series cannot answer for draws the dash it
+                draws everywhere else. */}
+            <span className="chart-tip-val">
+              {lines.map((l, k) => (
+                <span key={l.teamId}>
+                  {k > 0 && <span className="mser-tip-sep">–</span>}
+                  <span className={`mser-tip-side${l.leading ? ' mser-win' : ''}`}>
+                    {marks[k] === null ? '—' : fmtAxis(marks[k] as number, category)}
+                  </span>
+                </span>
+              ))}
+            </span>
+            <span className="chart-tip-sub">{shortDate(days[at].date, `Day ${at + 1}`)}</span>
+          </ScrubTip>
+        )}
       </div>
       {/* A legend under the chart, never a label inside the plot — the one
           place a label is guaranteed to sit over the other line. */}
