@@ -2860,9 +2860,19 @@ body {
    feed item has (`FeedAtBat`: the card, then `InlineVideoClip`). The card's own
    left accent runs past it, which is the rail the feed draws around the two of
    them; the inset is the row's own horizontal padding, so the video lines up
-   with the badge above it. */
+   with the badge above it.
+
+   The three margins are set one at a time so the **top** is left to `.pa-video`
+   itself, which gives every clip in the app 10px above it. Written as the
+   shorthand `margin: 0 12px 12px` it was zeroed here, and the only air above a
+   clip was the row's own 11px of padding — measured at 1200px in the 9th-inning
+   popup, 11px above the video against 12px below it and 34px above the batter
+   feed's clip in the same shape. A clip is the heaviest thing in the card and
+   it was landing on the badge that names the play. */
 .faced-card .pa-video {
-  margin: 0 12px 12px;
+  margin-left: 12px;
+  margin-right: 12px;
+  margin-bottom: 12px;
 }
 /* Same tint the batter at-bat rows use, on every expandable a pitcher card owns
    — and scoped with them: an inning bar and a faced-batter card are full-width
