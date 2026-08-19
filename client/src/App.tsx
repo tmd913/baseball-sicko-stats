@@ -5850,6 +5850,15 @@ export default function App() {
              same `setDetailsKey` every other route in uses, so one man's page
              is reached the one way however it was arrived at. */
           onOpenDetails={setDetailsKey}
+          /* The Schedule tab's fixture list. The same window, the same
+             `needSchedule` and the same pitcher names the matchup page's team
+             pages take — one read for every surface that draws days ahead, and
+             the page asks only when the tab is opened on somebody whose rows
+             come off it. */
+          scheduleWindow={scheduleWindow}
+          scheduleError={scheduleError}
+          onNeedSchedule={needSchedule}
+          pitcherLookup={pitcherLookup}
           onClose={() => setDetailsKey(null)}
         />
       )}

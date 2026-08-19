@@ -523,8 +523,12 @@ export function opposingStarter(
 
 /** What each tier of an *opposing* starter says on hover. The player's own
  *  chip has `TIER_TITLE`, which is written about him ("his club has announced
- *  him"); this is the same three facts about the man on the other side. */
-const VS_TITLE: Record<StartTier, string> = {
+ *  him"); this is the same three facts about the man on the other side.
+ *
+ *  **Exported because the player page's Schedule tab draws the same line** in a
+ *  row rather than a cell (`PlayerSchedule.tsx`) — the same three facts about
+ *  the same man, so the sentence is written once. */
+export const VS_TITLE: Record<StartTier, string> = {
   announced: 'announced by his club',
   projected: 'projected from his own rotation slot — nobody has announced this one yet',
   estimated: "estimated from his club's rotation, his own record being too thin to read one off",

@@ -4125,7 +4125,15 @@ body {
    the three wide tables bleed through `.app`'s 22. `--table-bleed` is inherited
    from `.details-view` now rather than being zeroed here, which is the token
    doing what it was written to do rather than being opted out of. */
-.details-overview {
+/* **`.details-schedule` is folded onto this rather than given a margin that
+   agrees with it today.** The Schedule tab holds one `.ovw-*` block and nothing
+   else — the Projected Starts block itself on a rotation starter, the same
+   block's shape over his club's fixtures for everybody else — so it is the same
+   object as this tab's own reading column and takes the same step off the
+   strip. The blocks inside carry `.ovw-starts`, which is where the
+   `--card-column` cap and the shared center actually live. */
+.details-overview,
+.details-schedule {
   margin: 18px 0 0;
 }
 /* The day carries the container, and no longer the cap — that has moved up to
@@ -11726,7 +11734,14 @@ button.start-line:focus-visible {
    it costs every one of these lines a pixel on a grid that is 14 columns wide
    and stacks two of them on a doubleheader. An underline is painted rather than
    laid out: it costs nothing, on any tier, and the three cannot differ in
-   height by construction. */
+   height by construction.
+
+   **Two surfaces wear these now**, and the second takes them rather than
+   restating them: the player page's Schedule tab draws the opposing starter on
+   a `.ovw-next-vs` line instead of a `.sched-vs` cell, and it is the same
+   ladder about the same fact — announced, our reading of his slot, his club's
+   rotation standing in. Only the two *modifiers* travel; `.sched-vs` itself
+   stays with the grid, being the 10px caption that cell's width argues for. */
 .sched-vs-projected {
   text-decoration: underline solid color-mix(in srgb, var(--muted) 55%, transparent);
   text-underline-offset: 2px;
