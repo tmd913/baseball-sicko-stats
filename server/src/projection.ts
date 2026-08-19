@@ -75,6 +75,7 @@ import { getScheduleWindow, getSeasonRead } from './schedule.js';
 import { dayCounts, windowDates } from './statcastWindow.js';
 import { getTeamHitting } from './teamHitting.js';
 import {
+  DERIVED,
   getMatchupWindow,
   getOwnership,
   getPlayerPool,
@@ -470,6 +471,30 @@ function projectPitcher(
   mults: number[],
   starterView: boolean,
   into: Bucket,
+  /**
+   * **He is the one starting the game**, which is a fact about the outing
+   * rather than about the player and settles three of the four decision
+   * categories by rule rather than by his record.
+   *
+   * - **A save and a hold are relief statistics.** Neither can be earned by the
+   *   pitcher who starts the game, at all, ever — so both are zero here whoever
+   *   he is. For a genuine starter his record's figures are near zero anyway
+   *   and this changes nothing; for the swingman it is the difference between a
+   *   real projection and one crediting him with the holds he gets on his
+   *   *other* days.
+   * - **A starter must complete five innings to be credited with the win**, so
+   *   an **opener** — a reliever's workload, on the day he happens to start —
+   *   cannot qualify for one, and the wins on his record were earned in relief
+   *   where no such rule applies. Zeroed only in that case (`!starterView`),
+   *   because a genuine starter's win rate is `wins / starts` off his own
+   *   record and already carries how often he goes the five: docking him again
+   *   would be charging him twice for the same fact.
+   *
+   * This is why an opener is worth so much less than either a starter or a
+   * reliever, and the seat ordering sees it through the value it computes off
+   * this projection rather than through a rule of its own.
+   */
+  startsGame = false,
 ): void {
   const outs = num(row.outs);
   const games = num(row.games);
@@ -497,10 +522,11 @@ function projectPitcher(
   const tbfRate = per(row.battersFaced, recent?.battersFaced);
   // Per appearance rather than per out — a decision and a save are things that
   // happen to an outing, not to an inning.
-  const wPer = num(row.wins) / denom;
+  // A loss is the one decision an opener can still take, so it keeps his rate.
+  const wPer = startsGame && !starterView ? 0 : num(row.wins) / denom;
   const lPer = num(row.losses) / denom;
-  const svPer = num(row.saves) / denom;
-  const hdPer = num(row.holds) / denom;
+  const svPer = startsGame ? 0 : num(row.saves) / denom;
+  const hdPer = startsGame ? 0 : num(row.holds) / denom;
 
   for (const m of mults) {
     const km = inverse(m);
@@ -1126,7 +1152,7 @@ function projectOnePitcher(
   if (currentRole(ctx, id, row, pools.pitRecent.get(id) ?? null, row.teamId) === 'starter') {
     const mults = his.map((g) => pitcherGameMult(pools, id, oppOf(g)));
     const startsAreHisRecord = num(row.gamesStarted) * 2 > num(row.games);
-    projectPitcher(row, pools.pitRecent.get(id) ?? null, mults, startsAreHisRecord, into);
+    projectPitcher(row, pools.pitRecent.get(id) ?? null, mults, startsAreHisRecord, into, true);
     return { starts: mults.length, reliefGames: 0, placed: true };
   }
   // A reliever's chances are his club's games times how often he has actually
@@ -1173,19 +1199,23 @@ interface Candidate {
   /** What one of those units is worth, which is how a scarce seat is settled. */
   value: number;
   /**
-   * **Who gets asked first**, ahead of `value` entirely — 0 for a starting
-   * pitcher on the day his turn falls, 1 for everybody else.
+   * **Superseded, and kept only because the reasoning is worth reading against
+   * what replaced it.** It was 0 for a starting pitcher on the day his turn
+   * fell and 1 for everybody else, on the argument that a manager does not
+   * weigh a start against a relief appearance — he starts the man who is
+   * starting and fills what is left.
    *
-   * A manager does not weigh a start against a relief appearance; he starts the
-   * man who is starting and fills what is left. So the seats go to **every
-   * starter going that day** before a reliever is considered at all, and the
-   * ordering inside each tier is what settles the rest: seven pitching seats
-   * and eight starters going means the **best seven** start and the eighth
-   * genuinely misses out, which is the case the reader asked to have accounted
-   * for rather than assumed away.
+   * That is *usually* true and it is not a rule, which is the correction:
+   * an **opener** cannot win, save or hold, and a bad start is a real cost to
+   * ERA and WHIP that a good reliever's inning is not. A hard tier made those
+   * cases impossible to express. What replaced it is the ordering doing the job
+   * honestly — **expected value that day** (`units × value`, where the value now
+   * carries the rate categories as a marginal), under which a start outranks a
+   * relief appearance in the ordinary case *because it is worth more*, and does
+   * not when it genuinely is not.
    *
-   * Batters are all one tier — a hitter's day has no equivalent of this, every
-   * one of them being the same kind of chance.
+   * Left on the interface at 0 for everybody. It costs nothing and the next
+   * person to reach for a hard priority should read the paragraph above first.
    */
   tier: number;
 }
@@ -1210,41 +1240,120 @@ interface Candidate {
  * them. A league that scores nothing but rates falls back to `units`, which is
  * the request read literally: fill the seats with whoever plays most.
  */
-function seatValues(cands: Candidate[], categories: EspnCategory[], buckets: Map<string, Bucket>): void {
+function seatValues(
+  cands: Candidate[],
+  categories: EspnCategory[],
+  buckets: Map<string, Bucket>,
+): void {
   const counting = categories.filter((c) => c.format === 'count');
-  if (counting.length === 0) {
+  const rates = categories.filter((c) => c.format !== 'count' && DERIVED[c.statId]);
+  if (counting.length === 0 && rates.length === 0) {
     for (const c of cands) c.value = 1;
     return;
   }
-  // The scale each category is read against: what this roster averages per day
-  // of it. Taken over the candidates who actually have days, so a man with none
-  // cannot drag a denominator toward zero.
+
+  /** One unit of him — his whole projected line over the units it was drawn
+   *  over, which is what a single seat-day of him is worth. */
+  const per = (c: Candidate): Bucket | null => {
+    const b = buckets.get(c.key);
+    if (!b || c.units <= 0) return null;
+    const out: Bucket = {};
+    for (const [k, v] of Object.entries(b)) out[Number(k)] = v / c.units;
+    return out;
+  };
+  const units = new Map<string, Bucket>();
+  for (const c of cands) {
+    const u = per(c);
+    if (u) units.set(c.key, u);
+  }
+
+  // The counting half, unchanged: what he does per day against what the rest of
+  // this roster does per day, so the sum is dimensionless.
   const mean = new Map<number, number>();
   for (const cat of counting) {
     let sum = 0;
     let n = 0;
     for (const c of cands) {
-      if (c.units <= 0) continue;
-      const b = buckets.get(c.key);
-      if (!b) continue;
-      sum += num(b[cat.statId]) / c.units;
+      const u = units.get(c.key);
+      if (!u) continue;
+      sum += num(u[cat.statId]);
       n += 1;
     }
     mean.set(cat.statId, n > 0 && sum > 0 ? sum / n : 0);
   }
+
+  /**
+   * **The rate half, as a marginal rather than as his own figure** — which is
+   * the whole of what makes a rate rankable at all.
+   *
+   * A rate is not additive, so "his ERA" says nothing about what he is worth to
+   * a team: a one-inning specialist at 1.50 and a workhorse at 3.10 are not
+   * comparable figures, and ranking on them seats the specialist. What *is*
+   * comparable is what one more outing of him would do to the side's own rate —
+   * so this adds one unit of him to the roster's whole projected line and asks
+   * `DERIVED` what the category becomes. A man better than the side he is on
+   * improves it in proportion to the innings he throws, which is exactly the
+   * quantity a manager is trading against a start's strikeouts and win.
+   *
+   * `DERIVED` is `espn.ts`' own table, the one every score on the board is
+   * rebuilt from, rather than a second copy of the same nine formulas.
+   */
+  const base: Bucket = {};
   for (const c of cands) {
     const b = buckets.get(c.key);
-    if (!b || c.units <= 0) {
+    if (!b) continue;
+    for (const [k, v] of Object.entries(b)) add(base, Number(k), v);
+  }
+  const credit = new Map<string, Map<number, number>>();
+  for (const c of cands) {
+    const u = units.get(c.key);
+    if (!u) continue;
+    const mine = new Map<number, number>();
+    for (const cat of rates) {
+      const rule = DERIVED[cat.statId];
+      const before = rule.of(base as Record<number, number>);
+      if (before === null) continue;
+      const withOne: Record<number, number> = { ...(base as Record<number, number>) };
+      for (const n of rule.needs) withOne[n] = num(withOne[n]) + num(u[n]);
+      const after = rule.of(withOne);
+      if (after === null) continue;
+      // Better is up unless the league says down, which is `lowerBetter` — the
+      // same flag `rankBy` reads, so ERA and WHIP need no case of their own.
+      mine.set(cat.statId, cat.lowerBetter ? before - after : after - before);
+    }
+    credit.set(c.key, mine);
+  }
+  // Each rate category on the same scale as a counting one: a typical swing is
+  // worth about a typical day's production of a category, which is the only
+  // claim being made and the only one that has to hold for the ordering.
+  const rateScale = new Map<number, number>();
+  for (const cat of rates) {
+    let sum = 0;
+    let n = 0;
+    for (const c of cands) {
+      const v = credit.get(c.key)?.get(cat.statId);
+      if (v === undefined) continue;
+      sum += Math.abs(v);
+      n += 1;
+    }
+    rateScale.set(cat.statId, n > 0 && sum > 0 ? sum / n : 0);
+  }
+
+  for (const c of cands) {
+    const u = units.get(c.key);
+    if (!u) {
       c.value = 0;
       continue;
     }
     let v = 0;
     for (const cat of counting) {
       const scale = mean.get(cat.statId) ?? 0;
-      if (scale <= 0) continue;
-      // Wins move a pitcher's way and losses do not; `lowerBetter` is the
-      // league's own word for which, and it is the same flag `rankBy` reads.
-      v += (num(b[cat.statId]) / c.units / scale) * (cat.lowerBetter ? -1 : 1);
+      if (scale > 0) v += (num(u[cat.statId]) / scale) * (cat.lowerBetter ? -1 : 1);
+    }
+    for (const cat of rates) {
+      const scale = rateScale.get(cat.statId) ?? 0;
+      const got = credit.get(c.key)?.get(cat.statId);
+      if (scale > 0 && got !== undefined) v += got / scale;
     }
     c.value = v;
   }
@@ -1396,12 +1505,16 @@ function planLineups(
       ['pitcher', pitSeats],
     ] as const) {
       if (seats.length === 0) continue;
+      // **Expected value *that day*, which is the units times the worth of one
+      // of them** — and the units are the half that was missing. A starter
+      // brings a whole outing and a reliever brings his appearance rate, so
+      // comparing per-outing worth alone let a 0.4-of-an-appearance reliever be
+      // ranked as though he were certain to pitch. See `Candidate.tier`, which
+      // this replaced.
+      const worth = (c: Candidate): number => (c.day.get(day) ?? 0) * c.value;
       const order = cands
         .filter((c) => c.kind === side && (c.day.get(day) ?? 0) > 0 && c.slots.length > 0)
-        // Tier first and value inside it — which is exactly the lexicographic
-        // priority the greedy pass then honors, `seatDay` filling in the order
-        // it is handed. See `Candidate.tier`.
-        .sort((a, b) => a.tier - b.tier || b.value - a.value || b.units - a.units);
+        .sort((a, b) => worth(b) - worth(a) || b.units - a.units);
       for (const ci of seatDay(order, seats)) {
         const c = order[ci];
         const got = out.get(c.key);
@@ -1456,7 +1569,7 @@ function pitcherCandidate(ctx: ProjectionContext, id: number, slots: number[]): 
     day,
     units,
     value: 0,
-    tier: starter ? 0 : 1,
+    tier: 0,
   };
 }
 

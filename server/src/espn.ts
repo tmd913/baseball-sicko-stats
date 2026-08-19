@@ -3655,7 +3655,14 @@ export interface EspnRankings {
  * arithmetic written from the same definitions and are **unverified**, for the
  * reason `STAT_META`'s own tail is: there was one league to read.
  */
-const DERIVED: Record<number, { needs: number[]; of: (v: Record<number, number>) => number | null }> =
+/**
+ * **Exported for the projection's seat ordering**, which has to know what a
+ * rate category is *made of* to say what one more outing would do to it — see
+ * **The pitching seats** in *ESPN scoreboard*. Exported rather than copied: a
+ * second table of the same nine formulas is a second table to keep in step, and
+ * this one is already the definition every score on the board is rebuilt from.
+ */
+export const DERIVED: Record<number, { needs: number[]; of: (v: Record<number, number>) => number | null }> =
   {
     // AVG = H / AB.
     2: { needs: [1, 0], of: (v) => (v[0] ? v[1] / v[0] : null) },
