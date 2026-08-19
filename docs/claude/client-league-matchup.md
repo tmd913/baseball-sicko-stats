@@ -929,6 +929,53 @@ dialog overflow are **0** at all three widths and at every sampled position,
 including the last day, where the box hangs 12.6px past the right edge of the
 plot at 1200 and still clears the viewport by **7.2px at 390 and at 320**.
 
+**That 7.2px is the `Runs` readout's, and a category of rates does not have
+it** — which is how the box came to be clamped. `43–40 · Aug 19` is **67.6px**
+wide; `OPS`'s last day reads `.705–.668 · Aug 19` and is **94.6px**, and half of
+the difference is more than the clearance: measured on the same matchup, the box
+ran to `x = 396.3` in a **390** window and **326.3** in a **320** one — **6.3px
+off the screen in both**, the second side's figure and the date past the edge.
+After: **386.0** and **316.0**, each **4px inside**, on a nudge of
+**−10.29px**. At **1200** it ends at 973.1 in a 1200 window and does not move,
+which is the clamp declining to fix what is not broken — it hangs 26.1px past
+the svg's right edge there and every pixel of that is inside the dialog. The
+`Runs` box is unmoved at all three widths (**959.6 / 382.8 / 312.8**, nudge
+`0.00px`), and so is the first day at the left end (**251.3 / 22.3 / 21.3**),
+the plot's left pad being wider than half a readout at every width.
+
+**The clamp is one nudge in `ScrubTip`, and it is a measurement.** The width
+being corrected is the width of the box's own text — a font this app does not
+choose, and one that changes with the category — so it is read off the rendered
+box in a layout effect on every move and published as `--chart-tip-nudge`, which
+the stylesheet adds inside the existing `translate(-50%, -140%)`. That is the
+rule `--roll-font` and `--clip-w` already follow, and it is one fix for both
+charts rather than two that agree today, which is what the extraction was for.
+**It clamps to the window and not to the wrap**, deliberately: clamping into the
+chart would have moved that same box **35.3px**, the wrap having 29px of card
+either side of the plot at 390, for a fault of 6.3 — and every pixel of that is
+the readout walking away from the day it names. A box floating over the page is
+bounded by the edge of the screen; the plot's edge is not an edge at all.
+
+**Under a real finger, both gestures still answer.** At **390×260**, where the
+dialog has **69px** of range, an upward `Input.dispatchTouchEvent` drag starting
+a quarter of the way down the plot moves it **69px** — the whole range, and
+exactly what the same drag starting 8px above the plot moves — with
+`touch-action` computing `pan-y`. The horizontal drag across the same plot reads
+`.677–.669 · Aug 10`, `.679–.776 · Aug 14` and `.705–.668 · Aug 19`, the last of
+them clamped to a right edge of **386.0**, and **0** readouts survive the
+`touchEnd`. The chart's own height is **138.33** with the tip up and after it
+clears, and page overflow stays **0**.
+
+**The xwOBA chart is unregressed** — the other caller of the thing that
+changed. Its readouts, crosshair positions, dot, dash, `--roll-font` and wrap
+heights are identical before and after at 1200, 390 and 320; the only rows that
+differ are the two the clamp exists for. Its figures are in **Client — the
+player page's tabs**, *Charts*.
+
+**Bundle: 568.00 → 568.33 KB of JS** (167.58 → 167.73 gzipped) and **152.67 →
+152.70 KB of CSS** (27.30 → 27.31) — 0.36KB and 0.04KB raw, 0.15KB and 0.02KB
+over the wire, for the clamp and the paragraphs arguing it.
+
 **Under a finger it is a real touch drag, and the page still scrolls.**
 Dispatched as `Input.dispatchTouchEvent` at 390×844 with touch emulation on, a
 drag across the plot reads the same six days and the readout clears on

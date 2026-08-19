@@ -1043,6 +1043,67 @@ class on the box, which is how the before run was confirmed to be the before
 run. The whole of the matchup chart's own account is in **Client — the League
 matchup page**, *The chart is scrubbed, and the scrub is the rolling chart's*.
 
+**The readout ran off the right of the screen at the end of the series, and it
+is clamped there now.** The box centers on the point it names, and half of it is
+wider than the last plate appearance is from the right edge of a phone's window:
+measured at the last point, `.364 / PA 256 · 5/31` — a box **92.9px** wide —
+reached `x = 395.4` in a **390** window and **325.4** in a **320** one, **5.4px
+past the glass in both**, taking the whole of the date with it. At **1200** the
+same box ends at 944.1 inside a 1200 window and was never the fault. After:
+**386.0** and **316.0**, each **4px inside** the edge on a nudge of
+**−9.43px**, and 1200 unmoved at 944.1. The left end never needed it — the first
+point's box starts at **13.8** at 320 and **14.8** at 390, the plot's own left
+pad being wider than half a readout.
+
+**The nudge lives in `ScrubTip` and is measured, not declared**, which is the
+same rule `--roll-font` two paragraphs up follows: the width being corrected is
+the width of the box's own text in a font this app does not choose, so it is
+read off the rendered box in a layout effect on every move and published as
+`--chart-tip-nudge` for the stylesheet's `translate(calc(-50% + …), -140%)` to
+add. **It clamps to the window rather than to the chart**: clamping into the
+wrap would have moved that same box **34.4px** — it hangs that far past the
+svg's right edge at 390, where the wrap has 29px of card either side of it — for
+a fault of 5.4, and every pixel of that is the readout walking away from the
+point it names. The whole of that argument, and the matchup chart's own figures,
+are in **Client — the League matchup page**.
+
+**Nothing else on this chart moved, which is the failure the clamp could
+cause.** The same script before and after, same player, reads identical at all
+three widths: the readouts `.425 / PA 100 · 4/21`, `.449 / PA 176 · 5/10`,
+`.364 / PA 256 · 5/31` at 1200 with the crosshair at **41.3 · 361.3 · 698**,
+`.469 / PA 173 · 5/10` in the middle at 390 with **69.9 · 361.9 · 694**, and
+`.446 / PA 171 · 5/9` at 320 with **85.8 · 359.5 · 687**; the dot stays `r=4` on
+the crosshair's own x, its dash stays `3px, 3px`, `--roll-font` stays **13.63 /
+26.02 / 32.98px**, the wrap stays **264.16 / 138.33 / 109.16** tall with the tip
+up and after it clears, the tip still clears on leave, and page overflow is
+**0** at every width and position. Only the two clamped rows differ.
+
+**The gesture is unchanged, and the check has a trap in it.** `touch-action`
+computes `pan-y`, and at **390×390**, where the overlay has **196px** of range,
+a real `Input.dispatchTouchEvent` drag upward starting **a quarter of the way
+down the plot** moves the overlay **100px** — 99 before the change — against
+**95px** for the same drag starting 8px above it. The trap: at that window the
+*center* of the plot is below the fold, and a drag started there moves **0**
+before the change as well as after, which reads as the swallowed-scroll
+regression this file was written for and is nothing but a touch dispatched off
+the screen. `document.elementFromPoint` at the start point answers `null` when
+that is what has happened; check it before believing a zero.
+
+**Both halves of the clamp are exercised, the left one by probe.** No real
+readout reaches the left edge, so it was checked by widening the box with an
+injected `min-width` at 320: at **200px** the first point's box would start at
+**−39.8** and is clamped to **4** (nudge **+43.76px**), and at the last point to
+a right edge of **316**. At **400px** — wider than the window — it sits flush at
+the left gutter at both ends rather than being pushed off the right, page
+overflow **0** throughout. `TIP_GUTTER` is the 4px that keeps the border and its
+shadow off the glass. One gotcha for anyone re-running that probe: the effect
+re-measures on a **render**, so scrubbing to a point the pointer is already on
+re-measures nothing — move off the point and back.
+
+**Bundle: 568.00 → 568.33 KB of JS** (167.58 → 167.73 gzipped) and **152.67 →
+152.70 KB of CSS** (27.30 → 27.31) — 0.36KB and 0.04KB raw, 0.15KB and 0.02KB
+over the wire, for the clamp and the paragraphs arguing it.
+
 **Everything else the page is measured against is unchanged**, at 1200×900 and
 390×844 on a batter and a pitcher: the SVG is **634 × 264.16** and **332 ×
 138.33** (the viewBox never moved), the pinned chrome is **193px** at 390 either
