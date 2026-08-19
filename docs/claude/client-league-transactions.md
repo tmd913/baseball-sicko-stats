@@ -96,7 +96,8 @@ player being dropped is news where a 2% one is noise — and it is four characte
 right-aligned to the same edge the transaction's own date sits on, so it reads as
 a column rather than as something in the way of scanning the names (it has since
 gained its own three deltas under it — see *And how that percentage has moved*
-below). The **headshot** is recognition, and the app's own way of naming a player
+below — and the word `Rostered` in front of it, see *The figure says what it is
+a percentage of*). The **headshot** is recognition, and the app's own way of naming a player
 everywhere else. And the **club** is the cap logo with the abbreviation on its
 tooltip: on a *fantasy* feed it is the least decision-relevant of the four, and
 drawn as `MIL` it would have been a third string on a line already carrying two.
@@ -390,6 +391,48 @@ up down the list.
 what must not wrap is the *identity block*, which still ellipsizes, so a
 nine-player trade is nine rows of two lines rather than nine paragraphs.
 
+### The figure says what it is a percentage of
+
+**`78.4%` at the end of a row is a percentage of nothing in particular.** The
+paragraph above argues the figure as four right-aligned characters that read as
+a column — but a column is only legible under a *header*, and this page has
+none: the research board's same figure sits under `Ros%` and the player page's
+under the word `Rostered`, and both of those are what let a bare number be read.
+Here the only thing that said so was a `title`, which a phone has no way to ask
+for at all. So the word is on the row: **`Rostered 78.4%`**.
+
+**The word goes in front of the figure, not behind it.** `78.4% rostered` was
+the alternative and reads as the tail of a sentence, where every other pairing
+on the row — `1d ▲1.9`, the move word before the name — is a label and then its
+value. It is also the order the **player page's own line** already puts them in
+(`Rostered 63.4%`), and this page is one press from that one: two orders for one
+fact would be two ways of saying it. The label is `--faint` at weight 500
+against the figure's `--muted` at 700 — the same division the player page makes
+between a caption and its number, and the reason is that the word is identical
+on every row while the number is the part that differs.
+
+**On desktop it is free.** The ownership column is a stack — the figure over its
+three deltas — and the deltas are the wider of the two: measured over the live
+league's 40 rows at 1200, the deltas run **117–157.8px** where the figure went
+from **32.7–40.8** to **87.8–95.9**, still inside them. So the column's own
+width is unchanged row for row (the same tally of `125 / 133.7 / 142.3 / 150.9 /
+165.8px` before and after), and **the list is 1505px both ways** — 40 rows at
+32/39/40px, unchanged. At 390, where the block already takes its own line, that
+line is 318px against 261.7 of content: **2185px both ways**, again row for row.
+
+**At 320 it costs five rows a line, and the fix is which thing breaks.** There
+the block's line is 248px and the widest figure and deltas come to 261.7, so
+something has to give. Left alone, the give was the space *inside* the phrase:
+`Rostered` stayed on the first line with the deltas beside it and `32.3%` went
+underneath, which is a label captioning the wrong thing — and it cost the same
+height anyway (five rows 56/57 → 71/72, the list 2185 → 2260). So the phrase is
+`white-space: nowrap` and the **block** wraps instead (`flex-wrap` on the phone
+rule), which puts `Rostered 32.3%` on one line and the three deltas whole on the
+next, both still right-aligned: **5 rows of 40 at 320, none at 390**, 57 → 71
+each and the list 2185 → 2255. Dropping the label under some width was the other
+alternative and is the wrong one — the reader with no room for a tooltip is
+exactly the reader who cannot ask what the number means.
+
 ### Measured
 
 **Driven against the built client and the live 12-team league**, at 320 / 390 /
@@ -420,3 +463,25 @@ nine-player trade is nine rows of two lines rather than nine paragraphs.
 146.00 KB of CSS** (25.93 → 26.02) — 0.8KB and 0.5KB raw, 0.2KB and 0.09KB over
 the wire, for a sort, a hairline, a stacked column, a phone rule and the
 paragraphs above restated where they apply.
+
+### Measured again, for the label
+
+**Driven against the dev client and the live 12-team league at 320 / 390 /
+1200**, the same 40 rows read before and after:
+
+- **Every one of the 40 rows reads `Rostered <n>%`** where it read `<n>%` — the
+  three rows the join could not place still draw no ownership block at all, so
+  the count of labels is the count of figures.
+- **Row heights unchanged at 1200** (`32×10, 39×15, 40×15`, list 1505px) **and
+  at 390** (`49×10, 56×15, 57×15`, list 2185px), before and after.
+- **At 320, 5 rows of 40 grow one line** — `49×10, 56×14, 57×11, 70×1, 71×4`,
+  list 2185 → 2255px. They are the five with the widest delta runs (157.8px);
+  the block wraps, the phrase does not.
+- **0 names ellipsized** at any of the three widths, **0 identity blocks
+  wrapped**, **0 delta runs clipped**, and **page-body horizontal overflow 0**
+  at all three — the figure's own width went 32.7–40.8 → 87.8–95.9px and took
+  none of it out of the name.
+
+**Bundle: 578,644 → 578,715 bytes of JS** (170,626 → 170,641 gzipped) and
+**155,432 → 155,502 of CSS** (27,795 → 27,813) — 71 and 70 bytes raw, 15 and 18
+over the wire, for a span, a word and two wrapping rules.
