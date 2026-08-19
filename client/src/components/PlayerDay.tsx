@@ -110,6 +110,12 @@ export function PlayerDay({
   const inGame = (g: PlayerGame) => gamePk === undefined || g.gamePk === gamePk;
   const live = day.live && inGame(day.live.game) ? day.live : null;
   const entries = day.entries.filter((e) => inGame(e.game));
+  // What has happened on the play still being thrown — kept out of `entries`
+  // by `playerDayEntries`, so it has to be drawn here or it would vanish from
+  // the page between the steal and the end of the at-bat it went behind. It
+  // rides with the live block above the games for the same reason the live
+  // entry does: it is the "happening now" part of the day.
+  const liveEvents = day.liveEvents.filter((e) => inGame(e.game));
   const upcoming = day.upcoming.filter((u) => inGame(u.game));
   const games = report.games.filter(inGame);
 
@@ -137,7 +143,8 @@ export function PlayerDay({
     // to the plays inside one.
     .map((game) => ({ game, items: [...entries.filter((e) => e.game.gamePk === game.gamePk)].sort(byPlayOrder) }));
 
-  const nothing = !live && sections.length === 0 && upcoming.length === 0;
+  const nothing =
+    !live && liveEvents.length === 0 && sections.length === 0 && upcoming.length === 0;
   if (nothing) {
     return <div className="feed-empty">No game for {report.name} on this day.</div>;
   }
@@ -162,6 +169,12 @@ export function PlayerDay({
             grouped
           />
         ))}
+      {/* Under it, and above the games, whatever he has done on the play still
+          being thrown — the same `FeedItem` his game card would draw once the
+          at-bat resolves, so the item does not change shape when it moves. */}
+      {liveEvents.map((entry) => (
+        <FeedItem key={entryKey(entry)} entry={entry} onOpenDetails={open} grouped />
+      ))}
       {sections.map(({ game, items }) =>
         oneGame ? (
           <PlayerDayGameFeed key={game.gamePk} game={game} items={items} onOpenDetails={open} />

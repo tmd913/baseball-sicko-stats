@@ -356,6 +356,15 @@ export interface BaseEvent {
   half: string; // "Top" | "Bot"
   timestamp: string | null;
   atBatNumber: number; // the at-bat it happened during, for the inning merge
+  // Whether that at-bat was **still being played** when the day was read — the
+  // steal that went behind the batter the Live section is showing, and not yet
+  // history. `playerDayEntries` keeps these out of the Recent stream and pins
+  // them to the Live section until the play resolves.
+  //
+  // Absent from a day snapshot written before the field existed, and that reads
+  // right: a snapshot holds only finished games, so nothing in one was ever mid
+  // at-bat. See the server's copy of this comment.
+  midAtBat: boolean;
   base: string | null; // the bag taken/lost, or the one he ended up on
   playId: string | null; // the clip, resolved through /api/video like any play
   description: string; // MLB's own line for the event ('' when it has none)

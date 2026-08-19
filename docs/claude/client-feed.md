@@ -1042,3 +1042,100 @@ App holds **no expansion state at all** now. It held `feedOpenKeys` (string keys
 **Live polling:** while any *real* game is in progress (`status.state === 'live'`), `App.tsx` re-polls `/api/report` every 20s to track scores, bases, and the at-bat/on-deck/on-base highlights on the cards, summary table, and feed.
 
 **Simulate mode** (`simulate.ts`, the `sim=1` URL param — its settings-menu toggle is hidden behind `App.tsx::SHOW_SIMULATE_TOGGLE`, currently `false`, since a demo overlay isn't something to hand a user a switch for; the app has no notion of an admin yet, so the flag is the placeholder for one) overlays a synthetic live day onto the fetched reports so the live-only UI can be demoed when nothing is on. It derives values from player ids (never `Math.random`) so the picture is stable across re-renders, never mutates the source reports, and does **not** drive polling. Everything rendered reads `displayReports`; raw `reports` still back polling and reordering. It covers **both kinds**: up to six batters take the live roles (one at bat — his last plate appearance rewound to in-progress — one on deck, the rest on base) and up to three pitchers take the mound, one per game, their live inning being the last one they actually worked so the card's `.inning-block.active` accent lands on a half that exists (a pitcher's half is the one the *opponent* bats in, the mirror of the batter case). Crucially it also simulates off **scheduled** games, not just games with at-bats or an outing already in them — `targetGame` prefers a game with material and falls back to any game not called off, since the day you reach for this toggle is the day nothing has started. Players who *have* played sort first, so the treatments that need material land on someone who has it; a pitcher taking the mound with no outing yet is a header-only Live row, which is what an announced reliever looks like anyway.
+
+
+### What happens *during* the live at-bat stays in the Live section
+
+The in-progress plate appearance has been kept out of the Recent stream since
+`playerDayEntries` was written — `filter((pa) => pa.event)`, one line, and the
+Live section shows it instead. **Its base events had no such test at all.** A
+steal taken behind the batter who is still up, the wild pitch that moved the man
+on second, the run that wild pitch scored: each one was read off the same
+unfinished play and each one went straight into `entries`, which is Recent. So
+the two halves of one play sat in two different sections — the at-bat under
+`Live`, the steal a few hundred pixels below it under `Recent plays`, a heading
+claiming a completeness the play did not have — and the item that was the most
+current thing on the page was filed as the oldest kind of thing on it.
+
+**MLB does not emit these as plays of their own, which is the first thing to get
+right about them.** Every record in `liveData.plays.allPlays` is a plate
+appearance: measured over the 26 finals of 2026-08-17 and 2026-08-18, **1,995
+plays, every one of them `result.type === 'atBat'`**, with `result.eventType`
+set and `about.isComplete` true on all 1,995 — the two agreeing on every single
+play, which is why `result.eventType` alone is a sound test for "still being
+played" and no second flag is needed. A pitching change, a mound visit, a
+pickoff throw and a steal are **`playEvents` of the at-bat they interrupted**,
+and MLB files them there whether they happened between two batters or in the
+middle of one. Of the non-pitch events that landed after at least one pitch of
+their own play in that sample — genuinely mid-at-bat, not merely at the top of
+the next at-bat — there were **438 batter timeouts, 19 wild pitches, 18 steals,
+12 game advisories, 11 mound visits, 6 caught stealing or pickoffs, 3 defensive
+indifferences and one offensive substitution**, and **no pitching change at
+all**: the three-batter minimum means a change between batters is where MLB
+files it, at `afterPitch: 0` of the at-bat that follows, which is the case that
+already worked and is not touched here.
+
+So the fix is the same test in the same place, carried on one field.
+`BaseEvent.midAtBat` is `!play.result?.eventType` read off the play the event
+came from, set in `mlbStats.ts` beside the line that fills `actions` — literally
+the same expression, so the live at-bat and the events that interrupted it
+cannot come to disagree about which play is the live one.
+`playerDayEntries` then splits on it: `entries` is everything else, and
+`liveEvents` is a second list the Live section draws.
+
+**It is its own item there, not a line folded into the live card**, and the
+reason is ownership rather than taste. `PlateAppearance.actions` can be a line
+under the card because those actions are the *batter's* play — MLB hands them
+over inside his record. A base event is filed under the **runner**, and on a
+roster those are two different people of whom usually only one is watched: fold
+it into the card and it appears when the steal and the at-bat happen to belong
+to two men you both roster, and vanishes otherwise. Worse, the runner can have
+no live entry to fold into at all — caught stealing behind a live batter he is
+out, and scoring on a wild pitch he is in the dugout, yet both things happened
+ten seconds ago on the play being watched. Those sort last in the section
+(`NO_ROLE`, below all four roles) on their own. And the shape `FeedBaseEvent`
+already has is the shape the moment needs: the badge, the situation glyph, MLB's
+own line and **the clip**, which an action line would have to give up — the clip
+being, as the base-event section above says, the interesting part.
+
+**It is drawn ungrouped**, keeping its identity row, even directly under that
+player's own `On base` row. `grouped` is for a container that carries the name
+itself — the player page's day, where it *is* passed, and where the row reads
+`On base` then `Stole 3rd` with one headshot. The Live section is a flat list of
+items with no such container, and the Recent stream below it already repeats the
+name on every consecutive item by one player; a grouping device invented for
+this one adjacency would be a sixth shape for a two-item run.
+
+**Nothing needs a version bump, and the reason is the one `actions` gives.**
+`FEED_CACHE_VERSION` stays at 8: `result.eventType` has been in `FEED_FIELDS`
+from the start, leaf-matched, so every cached feed already carries what this is
+computed from. `DAY_SNAPSHOT_VERSION` stays at 6: a snapshot is written only
+once every game of the day is final, so no play in one can be in progress, every
+event in one is `false`, and a blob written before the field existed reads back
+`undefined` — which is that same `false`. The *meaning* of what is stored is
+unchanged too, which is the other half of the bump test: a finished day
+classified either way is the same finished day.
+
+**Measured, on a real play rewound.** Game 824723 (2026-08-18), bottom of the
+3rd, `atBatIndex` 30: Andruw Monasterio batting against Merrill Kelly, Caleb
+Durbin steals 3rd after pitch 2 and scores on a wild pitch after pitch 5, and
+the at-bat then ends in a field out on pitch 7. Planting that game's feed in the
+server's cache with the play rewound to each of those three moments — the cache
+is only ever *written* for a final, so a doctored one with `In Progress` on it is
+read verbatim and never overwritten — drives all three states on demand:
+
+- **Rewound to the steal.** Before: `Live` = Monasterio *At bat*, Durbin *On
+  base*; `Recent plays` led with `Stole 3rd`. After: `Live` = Monasterio *At
+  bat*, Durbin *On base*, Durbin *Stole 3rd*; `Recent plays` holds his completed
+  single and nothing else.
+- **Rewound past the wild pitch**, where Durbin has scored and so has no live
+  role left. `Live` = Monasterio *At bat* (his card carrying both MLB lines as
+  actions), Durbin *Stole 3rd*, Durbin *Wild Pitch · Run Scored* — the two-tone
+  rail, in play order, cause before effect. `Recent plays` unchanged.
+- **The real, finished play** as the control: no `Live` section at all, and all
+  twelve items in `Recent plays` including the steal and the run in their right
+  places — the fix costs the stream nothing once a play is over.
+
+Bundle: JS 583.27 → 583.66 kB raw, 173.94 → 174.05 gzipped. CSS unchanged —
+`.live-rows` is a flex column with a 16px gap and the item is the one the stream
+already draws, so the section needed no rule of its own.
