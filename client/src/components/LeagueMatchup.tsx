@@ -10,6 +10,7 @@ import { InfoKey } from './InfoKey';
 import { DateRow, DateToggle } from './DateControls';
 import type { DatePreset } from './DateControls';
 import LeagueTeam from './LeagueTeam';
+import type { FeedLens } from './FeedFilters';
 import { StartersToggle } from './StartersToggle';
 import { ProjectedToggle } from './Projection';
 import { ScheduleSpanTabs, ScheduleToggle } from './ScheduleControl';
@@ -473,6 +474,34 @@ export default function LeagueMatchupView({
    * where the per-day map is missing the end-of-range roster answers for it.
    */
   const [starters, setStarters] = useState(false);
+  /**
+   * **Which kind of play the feed reading is narrowed to** — the app's own row
+   * of pills (`FeedFilterPills`), on somebody else's stream.
+   *
+   * It was the one half of the Feed view this page did not have, and the reason
+   * recorded for its absence was that this page's control row already carried
+   * four groups. That is an argument about `mup-tools`, and the pills are not in
+   * it: they sit **in the page, at the head of the stream they narrow**, which
+   * is where the Feed view puts them and for a reason that holds here word for
+   * word — a reader arrives at a leaguemate's week asking *what did his batters
+   * actually do*, and without a lens the answer is three hundred items of which
+   * a dozen are the question.
+   *
+   * **The `New` watermark did not come with them**, and that half of the old
+   * reasoning stands: the marker is a fact about how far down *the reader's
+   * own* stream they have got, saved on their own record (`UserPrefs.seenPlays`
+   * — one watermark, not one per team), so a red count over a leaguemate's
+   * plays would be counting somebody else's day against the reader's marker and
+   * `Clear` would mark the reader's own feed read from a page that is not it.
+   *
+   * The overlay owns it for the reason it owns the reading, the kind, the dates
+   * and `starters`: it is chrome above *both* team pages and must not reset when
+   * the reader crosses from one manager to the other. And it is **state rather
+   * than anything in the URL** — `mup` and `mt` are the whole of what a matchup
+   * link carries, and `plays=` stays the app's own Feed view's alone, two params
+   * never meaning two things.
+   */
+  const [feedLens, setFeedLens] = useState<FeedLens>('all');
   const [dateOpen, setDateOpen] = useState(false);
   const [scheduleSpan, setScheduleSpan] = useState<ScheduleSpan | null>(null);
   /**
@@ -1392,6 +1421,12 @@ export default function LeagueMatchupView({
               kind={kind}
               reading={reading}
               starters={starters}
+              /* The pills are drawn *inside* that page rather than beside it
+                 here, which is the Feed view's own rule: a row of pills over an
+                 empty page would be a control over nothing, and the two empty
+                 states in there already name their own cause. */
+              lens={feedLens}
+              onLens={setFeedLens}
               schedule={reading === 'roster' ? scheduleIndex : null}
               /* Held with the team it was read for, so crossing to the other
                  manager draws the plain table until his own answer lands rather
