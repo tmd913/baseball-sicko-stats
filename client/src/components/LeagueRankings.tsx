@@ -32,7 +32,7 @@ import { useFullPage } from '../hooks';
 import { ExpandButton } from './ExpandButton';
 import { InfoKey } from './InfoKey';
 import { LoadingBlock } from './Loading';
-import { TeamLogo, categoryGroups, fmtValue, prettyDate, record } from './LeagueView';
+import { ProjectedTools, TeamLogo, categoryGroups, fmtValue, prettyDate, record } from './LeagueView';
 
 /**
  * What the overall column is called in a header of two- and three-letter
@@ -152,6 +152,35 @@ export function spanDetail(info: EspnRankSpanInfo | undefined): string {
   if (info.span === 'season' && parts.length === 0) parts.push("ESPN's own season line");
   if (info.live) parts.push('so far');
   return parts.join(' · ');
+}
+
+/**
+ * The same line, of a table whose figures are the projection.
+ *
+ * **The week keeps its name and `so far` gives way to what replaced it.** A
+ * projected table under `Week 19 · Aug 10 – Aug 16 · so far` would be a plain
+ * lie — those are the days ESPN's own figures cover, and the ones on screen
+ * reach the end of the period — so the caption says which week, which day it
+ * runs to, and how much of it is still a guess. That last figure is the one a
+ * reader needs most: a table projected over five days is a different thing from
+ * one projected over one, and nothing else on the page says so.
+ *
+ * The days come off the response rather than being counted here, exactly as the
+ * key's own first paragraph takes its figure from the projection: one number,
+ * so the sentence and the table cannot come to disagree about how far ahead
+ * they are looking.
+ */
+export function projectedDetail(info: EspnRankSpanInfo | undefined, rankings: EspnRankings): string {
+  const weeks =
+    info?.periods == null
+      ? null
+      : info.periods[0] === info.periods[1]
+        ? `Week ${info.periods[0]}`
+        : `Weeks ${info.periods[0]}–${info.periods[1]}`;
+  const to = rankings.projectedEnd ? `projected to ${prettyDate(rankings.projectedEnd)}` : 'projected';
+  const d = rankings.projectedDaysLeft;
+  const left = d > 0 ? `${d} ${d === 1 ? 'day' : 'days'} still to play` : null;
+  return [weeks, to, left].filter(Boolean).join(' · ');
 }
 
 type SortKey =
@@ -609,18 +638,41 @@ export default function LeagueRankings({
   rankings,
   span,
   loading,
+  busy,
   error,
   matchupTeams,
   onOpenTeamMatchup,
+  projected,
+  onProjected,
 }: {
   rankings: EspnRankings | null;
   span: EspnRankSpan;
   loading: boolean;
+  /**
+   * The table is being read *right now* — where `loading` is the delayed flag
+   * the block wait is gated on. The two are different questions and this is the
+   * one a press asks: `useDelayedFlag`'s 250ms floor is for a wait nobody asked
+   * for, and a mark inside a control somebody has just pressed owes them no
+   * delay at all.
+   */
+  busy: boolean;
   error: string | null;
   /** Threaded from App, which holds the board this tab does not read. Null
    *  until it lands, which is what gates the press on a row. */
   matchupTeams: Map<number, number> | null;
   onOpenTeamMatchup: (teamId: number, matchupId: number) => void;
+  /**
+   * **Where the table is heading**, rather than where it has got to.
+   *
+   * The lens the reader has asked for, and the setter — both App's, because the
+   * figures are read on the server and arrive on `rankings` itself, so what is
+   * held here is nothing but the request. Whether the figures on screen *are*
+   * projected is `rankings.projected`, which is a different question: a period
+   * the engine declines answers live under an unlit button, exactly as the
+   * matchup card's own toggle does.
+   */
+  projected: boolean;
+  onProjected: (on: boolean) => void;
 }) {
   /**
    * **The page, for the widest table on this view.** It is fifteen columns on
@@ -661,7 +713,7 @@ export default function LeagueRankings({
           reason — the sentence describes what is under it, so it belongs
           against it rather than an inch away among the buttons. */}
       <div className="lg-span-detail">
-        {spanDetail(info)}
+        {rankings.projected ? projectedDetail(info, rankings) : spanDetail(info)}
         {/* **The one thing on this table a reader cannot work out by looking.**
             Every other column is a figure and its standing, which explain
             themselves; `BAT` and `PIT` are a figure this app *made up* out of
@@ -670,6 +722,36 @@ export default function LeagueRankings({
             paragraph under the strip, for `InfoKey`'s stated reason: a key is
             read once and then in the way. */}
         <RankKey rankings={rankings} />
+        {/* **The lens, in the table's own caption row.**
+            It goes here rather than in the app's tab row for the reason the
+            caption itself does: the strip up there picks *which span*, and this
+            says what the figures on the table under it **are** — so it belongs
+            against them, and it travels into the full-page box with the caption
+            it sits in, which is where a reader most needs to be told that a
+            table of ranks is a guess.
+
+            **Drawn only where it can act** (`projectable`, which is the current
+            matchup of a week still being played) — absent rather than disabled,
+            the rule this app applies to every control that has nothing to do:
+            there is no such thing as a projected season line, and a settled
+            week has nothing left to happen.
+
+            It is `ProjectedTools` rather than a lookalike, so the mark, the
+            lit state and the four-paragraph key are the ones the matchup page
+            and the Roster view already use — one account of one method. `days`
+            comes off this response rather than off an `EspnProjection` this tab
+            does not hold, which is the whole reason that prop exists. */}
+        {rankings.projectable && (
+          <ProjectedTools
+            projection={null}
+            days={rankings.projectedDaysLeft}
+            categories={rankings.categories.length}
+            showing={rankings.projected}
+            projected={projected}
+            loading={busy}
+            onProjected={onProjected}
+          />
+        )}
       </div>
 
       {rankings.categories.length === 0 ? (

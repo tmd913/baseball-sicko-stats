@@ -3527,6 +3527,38 @@ export interface EspnRankRow {
 
 export interface EspnRankings {
   span: EspnRankSpan;
+  /**
+   * **Whether this span could carry a projection at all** — which is the
+   * `matchup` span of a week still being played, and nothing else.
+   *
+   * It is on the response rather than being a rule the client keeps, for the
+   * reason `spans` itself is: it is a fact about the league's own week rather
+   * than about the request, and the client drawing a toggle from a rule of its
+   * own would be a second opinion about whether a week is over. The test is
+   * `liveDay != null`, which is the same one `getSpanTotals` already uses to
+   * decide whether ESPN's `cumulativeScore` is missing today — a settled week
+   * has ESPN's pointer on a day belonging to the *next* period, so it answers
+   * false there with no extra read at all.
+   *
+   * **Absent rather than disabled** is the client's half of it: a toggle that
+   * cannot act is not drawn, so a settled week's caption is the caption it has
+   * always been.
+   */
+  projectable: boolean;
+  /**
+   * **Whether the figures on this response are the projection.** Not the same
+   * question as whether the reader asked for one: a period the engine declines
+   * (`ok: false`, which is a settled week) comes back with the live figures and
+   * this false, so the toggle un-lights itself over the table it is actually
+   * describing rather than claiming a lens that is not in force.
+   */
+  projected: boolean;
+  /** The period's own last ET day, and how many of its days are still to be
+   *  played — the projection's own two figures, carried so the caption can say
+   *  what it is projecting *to* rather than counting the days a second time.
+   *  Null and 0 where the figures are not projected. */
+  projectedEnd: string | null;
+  projectedDaysLeft: number;
   /** Every span this league can actually be asked for, in reading order. A
    *  half with no matchup period in it — the second half in April, either of
    *  them in a league that publishes no matchup count — is **absent from this
@@ -3801,11 +3833,36 @@ function rankBy(
  * labeled `Current matchup` that silently followed somebody else's arrows
  * would be a label that is false as often as it is true. Which week it is, is
  * printed under the tabs.
+ *
+ * **`projected` swaps the figures for where the week is heading, and the
+ * ranking arithmetic underneath is not told.** That is the whole of the design
+ * and the reason it is done here rather than in the client: everything that
+ * turns a figure into a standing — `rankBy`'s competition ranking with
+ * `lowerBetter` baked in, the per-category population a roto point is worth,
+ * `totalOver`, and the identity that makes `OVR` equal `BAT` + `PIT` by
+ * construction — is *this* function, and a projected table ranked anywhere
+ * else would be a second definition of every one of them, free to drift the
+ * next time either moved. So the projection replaces `values` and the rest
+ * falls out unchanged: the same competition ranks, the same points, the same
+ * `OVR` identity, over different numbers.
+ *
+ * **It applies to the current matchup and nothing else** (`projectable`), which
+ * is not a limitation so much as the only span the question has an answer for:
+ * a projection is what a *week still being played* finishes on, and there is no
+ * such thing as a projected season line or a projected first half.
+ *
+ * **A period the engine declines comes back live rather than empty.** `ok:
+ * false` is a settled week — nothing is wrong, there is simply nothing left to
+ * project — so the response carries the figures it has with `projected: false`,
+ * and the client's toggle un-lights itself over a table it is describing
+ * truthfully. That is `getOwnership`'s own direction: a lens that cannot be
+ * applied costs its figures, never the table.
  */
 export async function getRankings(
   creds: EspnCreds,
   span?: EspnRankSpan | null,
   force = false,
+  projected = false,
 ): Promise<EspnRankings> {
   if (force) {
     const prefix = `${creds.leagueId}:`;
@@ -3975,6 +4032,52 @@ export async function getRankings(
     }
   }
 
+  /**
+   * **Where the table is heading**, in place of where it has got to.
+   *
+   * `liveDay` is the whole of the `projectable` test and costs nothing: it is
+   * already computed above, and it says exactly what this needs to know — that
+   * ESPN's own latest scoring period falls inside the current matchup period,
+   * which is what "this week is still being played" means everywhere else in
+   * this file.
+   *
+   * The read is `getProjection` for the **current** period, which is the same
+   * one the matchup page's own lens reads and is cached per league on its own
+   * minute — so a reader who has already opened a matchup pays nothing for
+   * this, and one who has not pays for it once. A **bye** side is a real shape
+   * and its own total is projected all the same (`away` null, `home` there), so
+   * both sides of every matchup are walked rather than the pairs.
+   *
+   * A team the projection has no side for keeps no figures rather than its live
+   * ones — the rule every absent figure on this table follows, and the honest
+   * one: a row half projected and half not would be a row nobody could read.
+   */
+  const projectable = asked === 'matchup' && current != null && liveDay != null;
+  let projectedNow = false;
+  let projectedEnd: string | null = null;
+  let projectedDaysLeft = 0;
+  if (projected && projectable) {
+    // Imported here rather than at the top of the file because `projection.ts`
+    // imports *this* module — it is built on `getScoreboard` and `getOwnership`
+    // — so a static import would be a cycle. Nothing is evaluated at module
+    // scope on either side, but a dynamic import says so rather than relying on
+    // it, and it is only reached when a reader has actually pressed the toggle.
+    const { getProjection } = await import('./projection.js');
+    const proj = await getProjection(creds, current, force).catch(() => null);
+    if (proj?.ok) {
+      const next: Record<number, Record<number, number>> = {};
+      for (const m of proj.matchups) {
+        for (const side of [m.home, m.away]) {
+          if (side) next[side.teamId] = onlyCategories(side.scores);
+        }
+      }
+      values = next;
+      projectedNow = true;
+      projectedEnd = proj.end;
+      projectedDaysLeft = proj.daysLeft;
+    }
+  }
+
   const rows: EspnRankRow[] = meta.teams.map((t) => ({
     teamId: t.id,
     values: values[t.id] ?? {},
@@ -4059,6 +4162,10 @@ export async function getRankings(
 
   return {
     span: asked,
+    projectable,
+    projected: projectedNow,
+    projectedEnd,
+    projectedDaysLeft,
     spans,
     format: meta.format,
     scoringType: meta.scoringType,

@@ -1492,6 +1492,19 @@ app.get(
 // comes back rather than from a list the client holds. `?refresh=1` as
 // everywhere else, reaching the span that includes the week being played and
 // leaving the settled ones on their blobs — see `espn.ts`, **The Rankings tab**.
+//
+// **`?projected=1` swaps the figures for where the week is heading** and lets
+// the ranking arithmetic fall out over them — so what comes back is the same
+// table read against the end of the matchup rather than against today. It is a
+// parameter on this route rather than a route of its own, which is where it
+// parts from `/api/espn/projection` beside it: that one answers a *different
+// question* (each side's totals, for the matchup card), where this is the same
+// question this route already answers with one input swapped, and every rank,
+// point and `OVR` on it has to be computed by the same code that computes the
+// live one or the two would be two arithmetics. It reaches only the `matchup`
+// span of a week still being played (`projectable` on the response); anywhere
+// else it is ignored and the figures come back live with `projected: false`,
+// which is what lets the client draw no toggle rather than a dead one.
 app.get(
   '/api/espn/rankings',
   requireUser,
@@ -1514,7 +1527,9 @@ app.get(
         res.status(409).json({ error: 'No ESPN league connected', code: 'espn-missing' });
         return;
       }
-      res.json(await getRankings(creds, span, req.query.refresh === '1'));
+      res.json(
+        await getRankings(creds, span, req.query.refresh === '1', req.query.projected === '1'),
+      );
     } catch (err) {
       if (!espnError(err, res)) throw err;
     }

@@ -53,7 +53,7 @@ import type {
   EspnTransactions,
   SeasonPlayer,
 } from '../types';
-import { LoadingBlock } from './Loading';
+import { LoadingBlock, SpinningBaseball } from './Loading';
 import { prettyDate } from '../lib';
 
 /** Re-exported: this view's own two neighbors import it from here, and the
@@ -581,8 +581,10 @@ export function ProjectedTools({
   categories,
   showing,
   projected,
+  loading,
   onProjected,
   drop,
+  days,
 }: {
   projection: EspnProjection | null;
   categories: number;
@@ -594,7 +596,26 @@ export function ProjectedTools({
    *  being read, shows the live figures under an unlit button. */
   showing: boolean;
   projected: boolean;
+  /**
+   * **The projection is being read**, and the mark for it goes inside the
+   * control that started it — which is the only place a press-triggered mark
+   * may go under rule 1: the board behind this button goes on drawing the
+   * figures it has until the answer lands, so without this a press left no
+   * trace at all for the 386–715ms the read takes warm ("it looks like nothing
+   * happens for a second", reported).
+   *
+   * It swaps the glyph rather than sitting beside it, so the button does not
+   * change width under the finger that pressed it — the same rule the Roster
+   * view's own `ProjectedToggle` follows, and the reason both draw the ball at
+   * the size the mark it replaces was drawn at.
+   */
+  loading?: boolean;
   onProjected: (on: boolean) => void;
+  /** How many days the key's first paragraph is about. The projection's own
+   *  figure where there is one — and a caller that has the number without
+   *  holding an `EspnProjection` (the Rankings tab reads it off its own
+   *  response) passes it here, so the two cannot come to disagree. */
+  days?: number;
 }) {
   return (
     <div className="lg-proj-tools">
@@ -602,14 +623,15 @@ export function ProjectedTools({
         type="button"
         className={`research-toggle lg-proj-btn${showing ? ' on' : ''}`}
         aria-pressed={showing}
+        aria-busy={loading || undefined}
         onClick={() => onProjected(!projected)}
         title={showing ? 'Back to the figures so far' : 'Project every total to the end of the week'}
       >
-        <ProjectedGlyph />
+        {loading ? <SpinningBaseball size="sm" /> : <ProjectedGlyph />}
         <span className="lg-proj-label">Projected</span>
       </button>
       <ProjectionKey
-        days={projection?.daysLeft ?? 0}
+        days={days ?? projection?.daysLeft ?? 0}
         categories={categories}
         className="lg-proj-key"
         drop={drop}
@@ -809,7 +831,10 @@ export default function LeagueView({
   rankings,
   rankSpan,
   rankingsLoading,
+  rankingsBusy,
   rankingsError,
+  rankProjected,
+  onRankProjected,
   transactions,
   transactionsLoading,
   transactionsError,
@@ -841,7 +866,16 @@ export default function LeagueView({
   rankings: EspnRankings | null;
   rankSpan: EspnRankSpan;
   rankingsLoading: boolean;
+  /** The rankings read is in flight — the undelayed flag, which is what the
+   *  `Projected` toggle's own mark is drawn from. `rankingsLoading` beside it is
+   *  the delayed one the block wait is gated on; the two answer different
+   *  questions and a press is owed no delay. */
+  rankingsBusy: boolean;
   rankingsError: string | null;
+  /** The Rankings tab's own lens and its setter — see `LeagueRankings`, which
+   *  is where the argument for it living in the caption row is. */
+  rankProjected: boolean;
+  onRankProjected: (on: boolean) => void;
   transactions: EspnTransactions | null;
   transactionsLoading: boolean;
   transactionsError: string | null;
@@ -884,7 +918,10 @@ export default function LeagueView({
           rankings={rankings}
           span={rankSpan}
           loading={rankingsLoading}
+          busy={rankingsBusy}
           error={rankingsError}
+          projected={rankProjected}
+          onProjected={onRankProjected}
           matchupTeams={matchupTeams}
           onOpenTeamMatchup={onOpenTeamMatchup}
         />

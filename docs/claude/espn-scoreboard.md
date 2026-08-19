@@ -597,6 +597,47 @@ rather than to a named constant, so the order and the default cannot come to
 disagree. `season` is the floor under that, being the one span every league has
 — it is ESPN's own line and needs no matchup period at all.
 
+### And the same table read against the end of the week
+
+**`getRankings` takes a `projected` flag, and it changes one input rather than
+any of the arithmetic.** Where it is set and the span is `matchup` on a week
+still being played, the per-team `values` are replaced with `getProjection`'s own
+projected `scores` — categories only, which is what `onlyCategories` already
+cuts — and every rank, side total and `OVR` below falls out over them unchanged.
+
+**That is the whole reason it is a flag here rather than a route of its own.**
+The ranking rule is `rankBy` and `totalOver` in this file: competition ranking
+with the direction baked in, ties sharing a rank, `n + 1 − rank` summed per side,
+and `OVR` = `BAT` + `PIT` *by construction* because one function computes both. A
+projected table computed anywhere else would be a second implementation of all of
+that, free to drift; asked here it is the same table with the figures swapped.
+Validated against the projection through both routes on the live league: **120 of
+120 values match `EspnProjectedSide.scores`, 120 of 120 ranks reproduce an
+independent competition ranking with `lowerBetter` honored, and `OVR == BAT +
+PIT` on 12 of 12 rows** — with 119 of the 120 cells genuinely differing from the
+live table, which is what says the swap happened.
+
+**A bye's side is projected like any other**, `away` being null on the matchup
+and the side's own totals being projected all the same; dropping it would leave a
+team out of a league table it is in.
+
+**`projectable` and `projected` are two different questions and both ride on the
+response.** The first is whether this span *could* be projected — the current
+matchup, on a live week — and is what lets the client draw no toggle at all
+rather than a dead one; the second is whether the figures on screen **are** the
+projection, which is false where the flag was set and the projection came back
+`ok: false` (a settled week) or could not be read. `projectedEnd` and
+`projectedDaysLeft` ride along so the caption can say what it is looking at.
+Anywhere else the flag is ignored and the live figures come back with `projected:
+false` — checked: `?span=season&projected=1` answers `projected: false,
+projectable: false`.
+
+**`getProjection` is imported dynamically**, and that is a cycle rather than a
+preference: `projection.ts` is built on `getScoreboard` and `getOwnership` and so
+imports *this* module. Nothing is evaluated at module scope on either side, so a
+static import would work today and be one refactor away from not; the dynamic one
+says so, and is only reached once a reader has pressed the toggle.
+
 ### Three summary columns: overall, batting, and pitching
 
 **A column of ten ranks cannot say how a team is doing overall**, and that is
