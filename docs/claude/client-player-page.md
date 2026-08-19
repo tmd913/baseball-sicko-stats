@@ -71,6 +71,67 @@ batter page reading `LHB` and his pitcher page `RHP`**, which is the rule stated
 as a measurement. With `/api/players` blocked the chip is simply absent and the
 heading is 28px, which is the honest answer for a fact the app has not been told.
 
+**Both tokens have since come off the heading and onto their own line under the
+name** — `.details-sub`, between the `<h1>` and the Rostered caption. Everything
+above is the record of *why* the hand belongs beside the position and what it is
+allowed to look like, and none of it moves: same `posChip`, same `handChip`, same
+vocabulary, same order, still built once and still drawn a second time in the
+game log's own head. What changed is the line they sit on. Inside the `<h1>` they
+were read as part of his name at a glance — the heading is 24px/800 and they are
+12px, but they are *in* it — and that heading was also carrying the padlock and
+the newspaper, marks a reader can **press**, where these two are only
+description. Split, the heading is his name and the things you can do on it, and
+the line under it is the standing description of the man, immediately above the
+Rostered line, which is the same kind of thing and was already argued into that
+position for the same reason. It is `PlayerIdentity`'s `.row-id-sub` one page
+along — club → position → hand, minus the club, which the head's own portrait has
+already said at a size the row's 14px mark exists to stand in for — so the page
+and the row a reader arrived through state one fact in one order.
+
+**What it costs the pinned head, measured at 320 / 390 / 1200 on a batter (Aaron
+Judge) and a pitcher (Logan Gilbert), reading `.details-chrome` off the rendered
+page and rebuilding the previous DOM in the same tab at the same instant.** The
+head is **139 → 165px at 1200** and **193 → 219 at 390** on the pitcher — **+26**,
+the 21px line plus its 5px margin — and the before figures are the same 139 and
+193 this file already records for `--details-chrome-h`, which is the check that
+the reconstruction was honest. **Where the tokens had been making the heading
+wrap, it costs less than half that**: on Judge at 390 the `<h1>` is **43 → 28**
+and the head **208 → 219**, and at 320 both men go 43 → 28 and **223 → 234** —
+**+11**, because a wrapped 24px line came off the heading and a 21px line went
+under it. `--details-chrome-h` and `--scroll-offset` track it (the hook
+re-measures), so the pane below starts **157 → 183 at 1200**, **211 → 237** and
+**226 → 237 at 390**, **241 → 252 at 320**; against a 900px viewport the pane on
+screen goes 761 → 735, 707 → 681 / 692 → 681, and 677 → 666. Page overflow and
+the overlay's own are **0** at every width, before and after.
+
+**The line is always drawn and reserves its own box.** The handedness map is null
+until the boot request lands and a position can be missing outright, and this
+head is pinned chrome over a scroller: a line that appeared a beat after the page
+did would push everything under the reader's finger. So with neither token to
+draw, a hidden `.player-pos` holds the height instead — the box is **laid out
+rather than declared**, which is the app's standing rule for a height that is a
+function of a font this app does not choose. Measured with both tokens stripped
+from the rendered page: the line is **21px** and the head **234 / 219 / 165** at
+320 / 390 / 1200 — identical to the three figures above in every cell. And
+sampled every 100ms through the boot, 91 samples over 9 seconds on both men at
+both widths, the line is 21px and the head its final height from the **first
+sample at ~160ms** and neither moves again.
+
+**Bundle**: JS 578,644 → 578,803 raw and 170,626 → 170,661 gzipped; CSS 155,432 →
+155,621 and 27,795 → 27,841. +159/+189 raw for a line of markup and a rule, most
+of it the comments.
+
+**Three forms were rejected before this one.** A **sentence** — `SS · B: R / T:
+R`, or `Bats right-handed` spelled out — because the extra room a new line buys
+is *width*, not a reason to say a three-character fact in three words, and
+because it would hand the reader a second wording for something they already
+recognize from every row they arrived through; the sentence is still the `title`,
+where it costs nothing. A **second bordered chip** for the hand, which the
+section above already refuses and the move does not make any safer — a grounded
+pill beside a grounded pill still reads as two positions. And **completing
+`.row-id-sub`'s trio with the club mark**, which would put the team twice on a
+head whose portrait is a capped headshot.
+
 **The chip beside a card's name is his ESPN eligibility**, whenever a league is connected — the same swap the research board's pills and Pos cell made, arriving on the cards for the same reason. MLB's one word is the wrong answer to the question a card in this app is read with: it is single-valued where a fantasy position is not, it is sometimes flatly different (Curtis Mead is listed at 2B and is eligible at 1B and 3B), and on a **pitcher's card it was `P`** — one letter, true of everybody on the tab, where `SP` and `RP` are the distinction a reader actually wants. Without a league, or for a player ESPN can't be joined to, it is MLB's listed position exactly as before, so nothing changes for a user without one. It costs no fetch: the map rides on the `/api/espn/ownership` response the board and the player page already read (see **ESPN fantasy league**, where the read losing its laziness is set out).
 
 **Narrowed to the card's own kind** (`lib.ts::eligibleForKind`), exactly as each board is: a two-way player's bat reads `DH` where his arm reads `SP`, and the mis-joined Fernando Cruz reads his fallback rather than `2B/SS` on a pitcher's card. **And capped at two codes and a count** (`positionCodes`, which is now the *card's* rule alone — the board's cell prints the list whole and takes only the shared hoist, `positionOrder`, from it), because a card's header is a name and this chip on one line: measured on a real roster at 390px, the uncapped list wraps **8 of 14 names** and at 360 **13 of 14**, against the 1 and 3 that wrap today; capped, the worst the league can produce (`1B/2B+3`) wraps 3 and 6, and the roster as it actually stands wraps 2 and 3. The whole list is on the chip's `title` and printed whole on the player page, which is the one place with room for it.
