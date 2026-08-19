@@ -1361,12 +1361,32 @@ app.get(
       teamId = n;
     }
     let watched: WatchPlayer[];
+    // The lineup the projection fills, where there is one to fill. Only a
+    // fantasy team has a lineup — a saved watchlist is a list of players and
+    // nobody benches anyone on it — so this stays null for the other branch and
+    // every row comes back with `lineup: null`.
+    let fantasy: Parameters<typeof getRosterProjection>[3] = null;
     if (req.query.source === 'fantasy') {
       try {
         // The **end** of the range names which day's lineup the roster is read
         // at, exactly as `/api/report` reads it — so the players projected are
         // the players that report is about.
-        watched = (await fantasyWatchlist(userId(req), false, end, { start, end }, teamId)).players;
+        const read = await fantasyWatchlist(userId(req), false, end, { start, end }, teamId);
+        watched = read.players;
+        // **No read of its own.** The roster is the one just returned, the slot
+        // counts were stashed by the `mSettings` half of it, and the categories
+        // come off the scoreboard's own cached minute — a projection that could
+        // not read them falls back to seating by playing time, which is what
+        // `seatValues` does with an empty list.
+        const creds = await getEspnCreds(userId(req));
+        if (creds) {
+          const board = await getScoreboard(creds).catch(() => null);
+          fantasy = {
+            roster: read.endRoster ?? read.roster,
+            leagueId: creds.leagueId,
+            categories: board?.categories ?? [],
+          };
+        }
       } catch (err) {
         if (espnError(err, res)) return;
         throw err;
@@ -1374,7 +1394,7 @@ app.get(
     } else {
       ({ players: watched } = await getRosterForRange(userId(req), start, end));
     }
-    res.json(await getRosterProjection(watched, start, end));
+    res.json(await getRosterProjection(watched, start, end, fantasy));
   }),
 );
 

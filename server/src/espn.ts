@@ -178,7 +178,7 @@ const ESPN_TO_MLB_TEAM: Record<number, number> = {
  * natural position), which is the trap in ESPN's payload: `1` here is first
  * base and there a starting pitcher.
  */
-const LINEUP_SLOTS: Record<number, string> = {
+export const LINEUP_SLOTS: Record<number, string> = {
   0: 'C',
   1: '1B',
   2: '2B',
