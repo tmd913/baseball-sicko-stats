@@ -1,16 +1,36 @@
-import type { BatterGameLog, GameLogEntry, PitcherGameLog, PitchingCredit } from './types.js';
+import type {
+  BatterGameLog,
+  GameLogEntry,
+  GameStatus,
+  PitcherGameLog,
+  PitchingCredit,
+} from './types.js';
 import { getSeasonArsenal, type Appearances } from './pitcherArsenal.js';
 import { fipLike } from './leagueRates.js';
+import { stateOf, type StatusFields } from './schedule.js';
 
 const UA = { 'User-Agent': 'statcast-sicko/1.0' };
 
-/** A game log only moves when a game ends, and the details view is opened over
- *  and over on the same handful of players — 30 min matches the season lines. */
+/** A finished game log only moves when a game ends, and the details view is
+ *  opened over and over on the same handful of players — 30 min matches the
+ *  season lines. */
 const GAME_LOG_TTL = 30 * 60 * 1000;
+/**
+ * What a log holding a game **still being played** is cached for instead.
+ *
+ * The 30 minutes above is right for a row that cannot change and wrong for the
+ * one row that can: a log now says which of its games is live, and at the long
+ * TTL a game that ended would keep saying so for half an hour — the same lie
+ * this file was fixed to stop telling, wearing the other face. A minute is the
+ * span `savant.ts` reaches for on a live day (15s there, over a *day's* games —
+ * this is the season schedule at ~900KB and one player's splits, so it is
+ * deliberately slower) and is well inside a half-inning.
+ */
+const LIVE_LOG_TTL = 60 * 1000;
 /** Team ids and their abbreviations change once a decade. */
 const TEAMS_TTL = 24 * 60 * 60 * 1000;
-/** Scores go stale only for a game still being played, and the log's newest row
- *  is the only one that can be — so it rides the same 30 min as the log. */
+/** Scores and states go stale only for a game still being played — so the
+ *  season schedule takes the same two spans the logs it feeds do. */
 const SCORES_TTL = GAME_LOG_TTL;
 
 interface TeamsResponse {
@@ -46,6 +66,7 @@ interface ScheduleResponse {
   dates?: {
     games?: {
       gamePk?: number;
+      status?: StatusFields;
       teams?: { away?: { score?: number }; home?: { score?: number } };
       lineups?: { homePlayers?: { id?: number }[]; awayPlayers?: { id?: number }[] };
     }[];
@@ -54,6 +75,12 @@ interface ScheduleResponse {
 
 /** What the schedule tells us about one game that its own log rows can't. */
 interface ScheduledGame {
+  // Where the game is, classified by `schedule.ts::stateOf` — the one place in
+  // the app that knows MLB files a postponement under `abstractGameState:
+  // "Final"`, and the reason this is not a fourth reading of those keys.
+  state: GameStatus['state'];
+  // MLB's label, kept as it comes off the wire.
+  detailedState: string;
   homeScore: number | null;
   awayScore: number | null;
   // The posted batting orders, in order — index + 1 is the slot. Empty for a
@@ -67,22 +94,40 @@ type Schedule = Map<number, ScheduledGame>;
 
 const scheduleCache = new Map<number, { games: Schedule; fetchedAt: number }>();
 
+/** Whether a set of games holds one still being played — what shortens both
+ *  this file's caches, since a live game is the only thing in either that can
+ *  change inside the half hour. */
+const anyLive = (games: Iterable<{ state: GameStatus['state'] | null }>): boolean => {
+  for (const g of games) if (g.state === 'live') return true;
+  return false;
+};
+
 /**
- * The season's schedule in one call, keyed by gamePk — the two things a
+ * The season's schedule in one call, keyed by gamePk — the three things a
  * `stats(gameLog)` split leaves out. It carries the opponent and `isWin` but
- * **no score at all**, and nothing about where a batter hit; asking per game
- * would be 150 requests to fill two columns. `hydrate=lineups` is what makes it
- * one: every *completed* game in the response carries both batting orders (only
- * scheduled and postponed ones don't, which have no log rows anyway). ~650KB
- * with the fields cut to scores and player ids, and one player's log warms it
- * for every other.
+ * **no score at all**, nothing about where a batter hit, and **nothing about
+ * whether the game is over**; asking per game would be 150 requests to fill two
+ * columns. `hydrate=lineups` is what makes it one: every *completed* game in the
+ * response carries both batting orders (only scheduled and postponed ones don't,
+ * which have no log rows anyway), and one player's log warms it for every other.
+ *
+ * **The status costs 205KB and buys the row's honesty.** With the fields cut to
+ * scores and player ids the season is 704KB raw / 61.8KB gzipped; opening
+ * `status` for its three keys takes it to **909KB / 66.1KB** (measured, 2026,
+ * `gameType=R`). That is the same kind of trade the `primaryPosition` hydrate
+ * lost — and it is a fifth of that one's cost (which went to 1,696KB) for the
+ * one fact without which the log calls a game in the second inning a win.
  */
 async function getSchedule(season: number): Promise<Schedule> {
   const hit = scheduleCache.get(season);
-  if (hit && Date.now() - hit.fetchedAt < SCORES_TTL) return hit.games;
+  if (hit) {
+    const ttl = anyLive(hit.games.values()) ? LIVE_LOG_TTL : SCORES_TTL;
+    if (Date.now() - hit.fetchedAt < ttl) return hit.games;
+  }
   const url =
     `https://statsapi.mlb.com/api/v1/schedule?sportId=1&season=${season}&gameType=R` +
-    `&hydrate=lineups&fields=dates,games,gamePk,teams,away,home,score,lineups,homePlayers,awayPlayers,id`;
+    `&hydrate=lineups&fields=dates,games,gamePk,status,abstractGameState,codedGameState,` +
+    `detailedState,teams,away,home,score,lineups,homePlayers,awayPlayers,id`;
   try {
     const res = await fetch(url, { headers: UA });
     if (!res.ok) throw new Error(`schedule returned ${res.status}`);
@@ -96,6 +141,8 @@ async function getSchedule(season: number): Promise<Schedule> {
         const home = g.teams?.home?.score;
         const away = g.teams?.away?.score;
         games.set(g.gamePk, {
+          state: stateOf(g.status),
+          detailedState: g.status?.detailedState ?? '',
           // Absent until first pitch — a scheduled game has the keys, no score.
           homeScore: typeof home === 'number' ? home : null,
           awayScore: typeof away === 'number' ? away : null,
@@ -108,7 +155,8 @@ async function getSchedule(season: number): Promise<Schedule> {
     return games;
   } catch (err) {
     console.error('schedule fetch failed:', err);
-    // A missing entry costs a row its score and lineup spot, not the log.
+    // A missing entry costs a row its score, its lineup spot and its result,
+    // not the log.
     return hit?.games ?? new Map();
   }
 }
@@ -151,8 +199,29 @@ function toEntry(sp: GameLogSplit, abbrevs: Map<number, string>, sched: Schedule
     home,
     opponentId: oppId,
     opponent: abbrevs.get(oppId) ?? sp.opponent?.name ?? '—',
-    // Absent on a game that hasn't been decided (suspended, in progress).
-    win: typeof sp.isWin === 'boolean' ? sp.isWin : null,
+    /**
+     * **`isWin` is not a result, and this is the gate that makes it one.**
+     *
+     * The field reads as one — it is a boolean called "is win" on a game-log
+     * split — and the comment that stood here said it was *absent* on a game
+     * that hadn't been decided. It is not. Measured against MLB on 2026-08-19:
+     * Kyle Schwarber's row for gamePk 823424 carried `isWin: true` while that
+     * game was `abstractGameState: "Live"`, `detailedState: "In Progress"`,
+     * Philadelphia 1-0 in the **second inning**; both starters in gamePk 824722
+     * carried `isWin: false` with the game tied 5-5 in the seventh. What MLB
+     * fills in live is *who is ahead right now*, and the log printed it as a
+     * green `W 1-0`.
+     *
+     * So the result is gated on the schedule's own state — a game that is not
+     * `final` has no result to report, whatever the split says. A game the
+     * schedule had no entry for (a failed or stale fetch) reports none either:
+     * this app's standing rule is that **a join fails to null, never to a
+     * guess**, and a row with no score to show is not the place to start
+     * claiming a win.
+     */
+    win: g?.state === 'final' && typeof sp.isWin === 'boolean' ? sp.isWin : null,
+    state: g?.state ?? null,
+    detailedState: g?.detailedState ?? '',
     teamScore: (home ? g?.homeScore : g?.awayScore) ?? null,
     opponentScore: (home ? g?.awayScore : g?.homeScore) ?? null,
     summary: typeof sp.stat?.summary === 'string' ? sp.stat.summary : '',
@@ -227,6 +296,14 @@ function toBatterGame(
  * His credit for this game. The game log counts each as a 0/1 tally rather than
  * naming one, so they're checked in scorebook order — a start that also earned
  * the win is a W, and a hold only surfaces when nothing above it did.
+ *
+ * **These four need no live gate, where `isWin` beside them does** — measured,
+ * and worth recording because the asymmetry looks like an oversight. All four
+ * tallies read 0 for every pitcher in a game still being played: both starters
+ * and both relievers used in gamePk 824722 on 2026-08-19 (tied 5-5, seventh
+ * inning) carried `wins`/`losses`/`saves`/`holds` of 0 while the same splits
+ * carried `isWin: false`. MLB awards a decision when the game ends; it fills
+ * `isWin` from the scoreboard as it stands.
  */
 function decisionOf(st: Record<string, unknown>): PitchingCredit | null {
   if (n(st.wins) > 0) return 'W';
@@ -295,6 +372,13 @@ function toPitcherGame(
 const batterCache = new Map<string, { games: BatterGameLog[]; fetchedAt: number }>();
 const pitcherCache = new Map<string, { games: PitcherGameLog[]; fetchedAt: number }>();
 
+/** Whether a cached log may still be served: the long span for a log whose
+ *  games are all over, `LIVE_LOG_TTL` for one holding a game in progress —
+ *  whose stats, score and state are all still moving. */
+const logIsFresh = (hit: { games: GameLogEntry[]; fetchedAt: number } | undefined): boolean =>
+  hit !== undefined &&
+  Date.now() - hit.fetchedAt < (anyLive(hit.games) ? LIVE_LOG_TTL : GAME_LOG_TTL);
+
 async function fetchSplits(
   playerId: number,
   season: number,
@@ -327,7 +411,7 @@ export async function getBatterGameLog(
 ): Promise<BatterGameLog[]> {
   const key = `${playerId}-${season}`;
   const hit = batterCache.get(key);
-  if (hit && Date.now() - hit.fetchedAt < GAME_LOG_TTL) return hit.games;
+  if (hit && logIsFresh(hit)) return hit.games;
   const [splits, abbrevs, sched] = await Promise.all([
     fetchSplits(playerId, season, 'hitting'),
     getTeamAbbrevs(),
@@ -344,7 +428,7 @@ export async function getPitcherGameLog(
 ): Promise<PitcherGameLog[]> {
   const key = `${playerId}-${season}`;
   const hit = pitcherCache.get(key);
-  if (hit && Date.now() - hit.fetchedAt < GAME_LOG_TTL) return hit.games;
+  if (hit && logIsFresh(hit)) return hit.games;
   const [splits, abbrevs, sched, appearances] = await Promise.all([
     fetchSplits(playerId, season, 'pitching'),
     getTeamAbbrevs(),

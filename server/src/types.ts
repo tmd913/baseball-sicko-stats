@@ -849,11 +849,25 @@ export interface GameLogEntry {
   home: boolean;
   opponent: string; // "MIL" — the abbreviation, the full name being column-wide
   opponentId: number;
-  win: boolean | null; // his team's result; null until the game is decided
-  // The final score from his side of it, so the row reads "W 5-3" rather than
-  // needing the reader to know which team was home. Both null when the score
-  // lookup failed or the game hasn't started — the game log itself carries no
-  // score, so this comes off the season schedule.
+  // His team's result — **null until the game is actually final**, which the
+  // gameLog split's own `isWin` does not say: MLB fills that field while the
+  // game is being played, where it means only "his side is ahead right now". So
+  // it is gated on `state` here rather than passed through; see
+  // `gameLog.ts::toEntry`.
+  win: boolean | null;
+  // Where the game itself is, off the season schedule's status — the gameLog
+  // split carries none. Null when the schedule lookup missed the game, which is
+  // the same miss that leaves the two scores below null.
+  state: GameStatus['state'] | null;
+  // MLB's own label for that state — "In Progress", "Suspended: Rain",
+  // "Final". A **wire value**: the spelling is MLB's and is not ours to
+  // Americanize. Empty string when the schedule lookup missed the game.
+  detailedState: string;
+  // The score from his side of it, so the row reads "W 5-3" rather than needing
+  // the reader to know which team was home. On a game still being played it is
+  // the score so far, which is what the state beside it says. Both null when
+  // the score lookup failed or the game hasn't started — the game log itself
+  // carries no score, so this comes off the season schedule.
   teamScore: number | null;
   opponentScore: number | null;
   summary: string; // MLB's own one-liner, e.g. "1-4 | 2B, 2 K, RBI"
