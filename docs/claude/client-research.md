@@ -203,6 +203,26 @@ A drag's order is held locally while it is live and **committed on release**, un
 
 **`GS` counted announcements alone when that passage was written and now counts the turns his rotation slot puts him in as well**, in three marked tiers — filled where his club has named him, outlined off his own measured pace, dashed off his club's rotation. That matters more here than on the roster table, and for the reason this board exists: it is the whole league rather than twelve men, so *which free-agent starter gets two turns next matchup* is a question only this table can ask, and with announcements alone it could not be asked at all — MLB names probables about three days out, so `GS ≥ 2` fired for nobody. Measured on the live SP board over 14 days: **37 announced, 57 projected and 5 estimated** chips over 279 rows, and sorting by `GS` puts the two-turn rows on top — every one of them an announced turn beside a projected one. The whole of the argument, and what the projection was measured against, is in **Client — the Roster view**.
 
+**And a cell names the man the other club is throwing**, announced where a club
+has named him and projected off a rotation slot where it has not — the same three
+tiers `GS` is drawn in, and the same shared `ScheduleCell`, so a day read here and
+the same day read on the roster table cannot say two things. The design is in
+**Client — the Roster view**, *And the cell names the man the other club is
+throwing*; what is the board's own is that **width is free here and height is
+not**. This board overflows a 1920px screen with a third of its columns showing —
+the reason its gutter keeps the 13px the other two tables gave up — so it scrolls
+sideways at every width and one more line in a day cell adds nothing a reader was
+not already swiping through: **page-body overflow 0 at every width**, and
+`board/batters · matchup` goes **586.19 → 797.92px with the row still 58px and the
+rows on screen unchanged**. What costs a row a screen is a **pitcher's own start
+day**, where his `SP` chip and the opposing starter make three lines rather than
+two.
+
+**And it is worth most here**, which is the argument the `GS` column above already
+makes: this is the whole league rather than twelve men, so *who is my free-agent
+pickup facing on Saturday* is a question only this table asks — and it could name
+the club and not the arm.
+
 **Why the board is what settled the mode-against-page argument.** This table's population is five controls deep — the three include buttons, the position pills, the window tabs, the search and the stat filters — and *a schedule of the shortstops nobody has rostered* is exactly the question a manager asks of it. A Schedule *page* would have to carry all five a second time or answer something narrower, so here it is a mode by force; and a feature drawn as a page on one table and a mode on the other is one thing wearing two shapes.
 
 **The swap is one line and nothing downstream had to be told.** `columns` becomes `scheduleColumns(schedule, kind)`, built at runtime from the index for exactly the reason `opponentColumn(statuses)` is built from the statuses map: the array is a *shape*, and the data that fills it arrives when it arrives. Everything else on this page then works untouched — the sort, the count line, the pinned headshot and name, the sorted-column double-edge pin, the include buttons, the position pills, the search, the row identity and its two marks all read `visible`, and the only thing that changed is what is in it.
