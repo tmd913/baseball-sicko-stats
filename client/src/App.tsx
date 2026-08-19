@@ -18,6 +18,7 @@ import type {
   ResearchRow,
   ResearchWindow,
   MatchupWindow,
+  RosterProjection,
   RosterSource,
   ScheduleWindow,
   SeasonPlayer,
@@ -77,6 +78,7 @@ import {
 import type { FantasySlot } from './hooks';
 import { LoadingBlock, LoadingLine, SpinningBaseball } from './components/Loading';
 import { StartersToggle } from './components/StartersToggle';
+import { ProjectedToggle } from './components/Projection';
 import {
   PlaysButton,
   PlaysPanel,
@@ -577,6 +579,43 @@ export default function App() {
    * league fact in this app fails in (`rosterPct` costs a column, eligibility
    * costs a chip).
    */
+  /**
+   * **The Roster view's projected reading** — what these players are expected to
+   * do over the days in view that have not been played, added to what they have
+   * already done.
+   *
+   * **`rproj=1` rather than `proj=1`**, which is the League page's own and means
+   * a *matchup*: one param meaning two things in two views is exactly the trap
+   * `lspan=` avoids by not being `win=`, and a link is read before anything on
+   * screen can say which view it was written on. Both are in the URL by the same
+   * rule (`hideil=1`, `starters=1`, `sched=`, `plays=`): each changes *what the
+   * numbers are*, so a link carrying one describes a different table.
+   *
+   * **Not a saved preference**, for `starters=1`'s reason: which figures a
+   * reader wants in front of them is a lens for an afternoon, and a saved copy
+   * would mean a table quietly showing next week's estimates a fortnight later.
+   *
+   * The **read is lazy on the toggle** — it joins four league-wide boards and
+   * the league's schedule against the roster, so nobody who never presses it
+   * pays for it — and it needs **no fantasy league at all**: every input is a
+   * board this app already holds. What a connected league adds is only the span
+   * the toggle opens on.
+   */
+  const [rosterProjected, setRosterProjected] = useState<boolean>(
+    () => initialParams.get('rproj') === '1',
+  );
+  const [rosterProjection, setRosterProjection] = useState<RosterProjection | null>(null);
+  const [rosterProjLoading, setRosterProjLoading] = useState(false);
+  /**
+   * The range the reader was on when they turned it on, so turning it off puts
+   * them back rather than stranding them in a future week with no stats in it.
+   * A pair rather than a preset label, since a hand-picked range has none —
+   * and the preset is restored alongside so `Today` goes back to *being* Today
+   * rather than to the two dates it happened to mean.
+   */
+  const beforeProjection = useRef<{ start: string; end: string; preset: string | null } | null>(
+    null,
+  );
   const [matchupWindow, setMatchupWindow] = useState<MatchupWindow | null>(null);
   /* Asked-once rather than a terminal-state guard, and safe because there is no
      cleanup: StrictMode's second pass finds the flag and returns while the
@@ -1555,7 +1594,9 @@ export default function App() {
    * drawing last week's over this one is the one thing it must not do.
    */
   useEffect(() => {
-    if (!projected || view !== 'league' || !espnConnected) return;
+    // **The matchup page is the only reader**, the Scoreboard's toggle having
+    // moved there — so a reader who never opens a card never pays for it.
+    if (!projected || view !== 'league' || matchupId == null || !espnConnected) return;
     let canceled = false;
     api
       .espnProjection(matchupPeriod)
@@ -1571,7 +1612,7 @@ export default function App() {
     return () => {
       canceled = true;
     };
-  }, [projected, view, espnConnected, matchupPeriod]);
+  }, [projected, view, matchupId, espnConnected, matchupPeriod]);
 
   /** A projection belongs to one matchup period, so stepping the arrows drops
    *  it rather than letting last week's figures be drawn over this one. */
@@ -2482,15 +2523,12 @@ export default function App() {
     // param here follows.
     if (view === 'league' && leagueTab !== 'scoreboard') p.set('lt', leagueTab);
     // Where the week is heading rather than where it has got to. Scoped to the
-    // two pages that draw it — the Scoreboard and a matchup opened over any tab
-    // — where Rankings has its own spans and Transactions has no figures to
-    // project, so carrying it there would be a param naming a lens that is not
-    // in force, which is the test `starters=1` already applies to itself. The
-    // pair is `needsScoreboard`'s own, one question later: the same two places
-    // that need the board are the two that can project it.
-    if (view === 'league' && (leagueTab === 'scoreboard' || matchupId != null) && projected) {
-      p.set('proj', '1');
-    }
+    // **matchup page**, which is the one place that draws it: the Scoreboard's
+    // own toggle is gone (see `LeagueView`), Rankings has its own spans and
+    // Transactions has no figures to project — so anywhere else this would be a
+    // param naming a lens that is not in force, which is the test `starters=1`
+    // already applies to itself.
+    if (view === 'league' && matchupId != null && projected) p.set('proj', '1');
     // Which matchup is open **over** the view, which is a page rather than a
     // tab — so it is written whatever tab is behind it, and a link carrying it
     // opens that page the way `player=` opens a player's.
@@ -2534,6 +2572,9 @@ export default function App() {
     // mode — see `scheduleSpan`. Absent is off, which is the only thing the
     // absence can mean.
     if (scheduleSpan !== null) p.set('sched', String(scheduleSpan));
+    // The roster's projected reading — `rproj` rather than `proj`, which is the
+    // League page's own and means a matchup. See `rosterProjected`.
+    if (rosterProjected) p.set('rproj', '1');
     if (rosterSource === 'fantasy') p.set('roster', 'fantasy');
     if (helpOpen) p.set('help', '1');
     window.history.replaceState(null, '', `?${p.toString()}`);
@@ -2559,6 +2600,7 @@ export default function App() {
     hideInjured,
     startersActive,
     scheduleSpan,
+    rosterProjected,
     rosterSource,
     helpOpen,
     playFilters,
@@ -2827,6 +2869,89 @@ export default function App() {
     espnStatusSettled,
     fantasyTeamId,
   ]);
+
+  /**
+   * **The roster's projection**, read on the first press of `Projected` and
+   * whenever the days, the roster or which list it is change.
+   *
+   * Every parameter it takes is one `/api/report` takes, and the server
+   * resolves the roster the same way — so the lines this describes are the rows
+   * that report describes, which two answers to "which players" a moment apart
+   * could not promise.
+   *
+   * **Never over data**, the app's own rule: the last answer is left standing
+   * while the next is in flight, so changing the range does not blank a table
+   * somebody is reading, and the only mark the press leaves is the ball inside
+   * the toggle that started it. A **failed** read costs the lens its figures
+   * and nothing else — the table falls back to the report's own numbers rather
+   * than the page becoming a message, which is the direction the schedule
+   * window already fails in.
+   */
+  useEffect(() => {
+    if (!rosterProjected) return;
+    let canceled = false;
+    setRosterProjLoading(true);
+    api
+      .rosterProjection(start, end, usingFantasy ? 'fantasy' : 'watchlist', fantasyTeamId)
+      .then((p) => {
+        if (!canceled) setRosterProjection(p);
+      })
+      .catch((e: Error) => {
+        if (!canceled) console.error('reading the roster projection failed:', e.message);
+      })
+      .finally(() => {
+        if (!canceled) setRosterProjLoading(false);
+      });
+    return () => {
+      canceled = true;
+    };
+  }, [rosterProjected, start, end, usingFantasy, fantasyTeamId, roster]);
+
+  /**
+   * **Turning the lens on moves the reader to the days it is about**, which is
+   * the whole of what the toggle does past swapping the figures: a projection
+   * over "Yesterday" is a projection of nothing, so pressing it opens on the
+   * days there are still games in — the rest of this matchup period where a
+   * league says what that is, and the week ahead where none does.
+   *
+   * The reader is free to move off it: the date control is untouched, so
+   * picking a single future day narrows the projection to that day's games and
+   * a past range projects nothing and reads as it always did. Turning the lens
+   * **off** puts the range back where it was, preset and all — otherwise a
+   * press and an unpress would strand somebody in a future week with no stats
+   * in it.
+   *
+   * **The Schedule view goes off with it**, and that is exclusivity rather than
+   * tidiness: that mode replaces the stat *columns* with days and this replaces
+   * the *figures* in them, so they are two readings of one set of cells and
+   * cannot both be in force.
+   */
+  const toggleRosterProjected = useCallback(() => {
+    setRosterProjected((on) => {
+      if (on) {
+        const back = beforeProjection.current;
+        beforeProjection.current = null;
+        if (back) {
+          setStart(back.start);
+          setEnd(back.end);
+          setActivePreset(back.preset);
+        }
+        return false;
+      }
+      beforeProjection.current = { start, end, preset: activePreset };
+      const today = baseballToday();
+      // The rest of this matchup period where the league publishes one — which
+      // is the span a manager plans in — and the week ahead where it does not.
+      // `end` is clamped forward of today either way, a period whose last day
+      // has passed being nothing to project.
+      const to = matchupWindow?.end ?? addDays(today, 6);
+      setStart(today);
+      setEnd(to < today ? today : to);
+      setActivePreset(null);
+      setScheduleSpan(null);
+      return true;
+    });
+  }, [start, end, activePreset, matchupWindow]);
 
   /**
    * Re-read everything that comes from ESPN, past the server's ten-minute
@@ -3796,9 +3921,22 @@ export default function App() {
       <ScheduleToggle
         on={scheduleSpan !== null}
         loading={scheduleLoading}
-        onToggle={() =>
-          setScheduleSpan((s) => (s === null ? defaultScheduleSpan(matchupWindow) : null))
-        }
+        onToggle={() => {
+          if (scheduleSpan !== null) {
+            setScheduleSpan(null);
+            return;
+          }
+          // **The projected lens goes off with it**, which is the same
+          // exclusivity `toggleRosterProjected` states from the other side:
+          // this replaces the stat *columns* with days and that replaces the
+          // *figures* in them, so they are two readings of one set of cells.
+          // Left on, its toggle would sit lit over a table it was not reading,
+          // which is what this app's rule about a control lying about its reach
+          // forbids. The range it moved the reader to stays, the days ahead
+          // being exactly what a schedule is for.
+          setRosterProjected(false);
+          setScheduleSpan(defaultScheduleSpan(matchupWindow));
+        }}
       />
       {scheduleSpan !== null && (
         <ScheduleSpanTabs
@@ -3808,6 +3946,37 @@ export default function App() {
         />
       )}
     </>
+  );
+
+  /**
+   * The projected reading of this table — what these players are expected to do
+   * over the days in view that have not been played.
+   *
+   * **Beside the Schedule toggle rather than anywhere else**, and it reads
+   * after it: the row's order is *which page, which kind, which reading of it,
+   * which players, which days*, and these two are the third of those — the
+   * stats behind you, the fixtures ahead, and what the fixtures are worth.
+   * They are mutually exclusive (see `toggleRosterProjected`), which is what
+   * makes a run of two rather than a segmented control of three: each is a
+   * departure from the plain table and pressing either from the other is one
+   * press, where three pills would spend a third of a phone's line on the
+   * option a reader is already on.
+   *
+   * **Summary only.** A feed is a record of things that happened, and there is
+   * no honest projected version of one; the toggle is not drawn there, exactly
+   * as the Schedule toggle is not.
+   */
+  const projectedToggle = (
+    <ProjectedToggle
+      on={rosterProjected}
+      loading={rosterProjLoading}
+      onToggle={toggleRosterProjected}
+      title={
+        rosterProjected
+          ? 'Back to what has actually happened'
+          : "Add what these players are expected to do over the days still to be played — and open on the days there are games in"
+      }
+    />
   );
 
   const startersToggle = startersOffered ? (
@@ -4613,6 +4782,8 @@ export default function App() {
               {/* Which reading of these players — the stats over the range, or
                   the days ahead. See `scheduleControl`. */}
               {view === 'summary' && scheduleControl}
+              {/* And what the days ahead are worth — see `projectedToggle`. */}
+              {view === 'summary' && projectedToggle}
               {/* Only over a range that contains today — see `startersToggle`. */}
               {startersToggle}
               {/* Which kinds of play the feed draws — the batter tab's own, and
@@ -4865,9 +5036,6 @@ export default function App() {
             setMatchupTeam(null);
             setMatchupPeriod(period);
           }}
-          projection={projection}
-          projected={projected}
-          onProjected={setProjected}
           rankings={rankings}
           rankSpan={rankSpan}
           rankingsLoading={showRankingsWait}
@@ -4959,6 +5127,10 @@ export default function App() {
             /* Null while the mode is off *and* while its one read is still out,
                so the stat columns stand until the days can replace them. */
             schedule={scheduleIndex}
+            /* Null while the lens is off *and* while its one read is still
+               out, so the report's own figures stand until the projection can
+               be added to them. */
+            projection={rosterProjected ? rosterProjection : null}
             /* Kept when the table takes the page. The same nodes render in the
                view bar as well, which is behind the expanded box and so never
                on screen at the same time — the alternative is lifting the
@@ -4975,6 +5147,7 @@ export default function App() {
                     be in, and this is also the way back to the stats without
                     leaving the page. */}
                 {scheduleControl}
+                {projectedToggle}
                 {/* Expanded, the research board reduces its control set to a
                     row of read-only badges; this view keeps its controls
                     instead, and the filter comes with them for the same reason

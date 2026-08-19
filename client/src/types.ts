@@ -1539,6 +1539,50 @@ export interface EspnProjection {
 }
 
 /**
+ * **What one player is expected to do over the days still to be played** — the
+ * Roster view's `Projected` toggle, one line per man.
+ *
+ * Mirrors `server/src/projection.ts` by hand, like every other pair here. It is
+ * the *same* engine the matchup card's figures come off, asked a different
+ * question: that one wants a team's total added to what ESPN has already
+ * scored, and this wants a line per player. Which is why these are the table's
+ * own `BattingLine` / `PitchingLine` rather than a shape of their own — a
+ * projected row is the summary table's row over different numbers, exactly as a
+ * projected matchup card is the scoreboard's card over different numbers.
+ *
+ * **Only the games still to be played are in it**, and the client adds the
+ * report's own lines for the days already played. That is what makes an
+ * arbitrary range need no case of its own: a past range projects nothing and
+ * reads as it always did, a future one is projection alone, and one straddling
+ * today is the two halves added.
+ */
+export interface ProjectedPlayerLine {
+  key: string;
+  id: number;
+  kind: PlayerKind;
+  /** What the line was drawn over — a batter's expected games, a pitcher's
+   *  starts plus relief appearances. **Zero is an honest absence** (a club with
+   *  no game left in the span, a starter whose turn does not fall in it, a man
+   *  neither board has a row for) and is drawn as dashes rather than as a line
+   *  of noughts, which would claim he plays and does nothing. */
+  chances: number;
+  batting: BattingLine | null;
+  pitching: PitchingLine | null;
+}
+
+export interface RosterProjection {
+  /** The span actually projected — `start` clamped forward to today, a day that
+   *  has been played being nobody's to project. */
+  start: string;
+  end: string;
+  /** Days of it that still have a game to be played. Zero means there was
+   *  nothing to project, which the view says in words. */
+  daysLeft: number;
+  players: ProjectedPlayerLine[];
+  fetchedAt: number;
+}
+
+/**
  * **The days this fantasy matchup period covers, and the days the next one
  * covers** — the Schedule view's two named spans, and the whole of what a
  * connected league adds to that control.

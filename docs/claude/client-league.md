@@ -327,230 +327,85 @@ The badge lands at the same x as the matchup row's own (35 at 390, 213 at
 a line that was already 19px of text and padding — and the block itself is
 **84 → 69px**, taking a matchup card from **281.97 → 251.97**.
 
-### The Projected toggle, and what it swaps
+### The Projected toggle is the matchup page's, not this board's
 
-**A live card says who is ahead now; the toggle says where the week is going.**
-`Projected` sits at the right of the period head and replaces every figure on
-every card with its projected final total — the categories, the win–loss–tie
-headline, and the winner's own accent. Where the numbers come from is
-**ESPN fantasy league**, *Where a live matchup is heading*; what belongs here is
-what the page does with them.
+**This replaces seven sections, and the reversal is worth reading rather than
+deleting.** The `Projected` toggle was built here — at the right of the period
+head, beside the `Live`/`Final` tag it lit — and it swapped every figure on every
+card for its projected final total: dashed borders on ten cards, `Projected` in
+place of `Live`, and the header's dates running to the end of the period rather
+than to today. Then it was given to the matchup page as well, on the argument
+that the three objections to putting it there had each been paid. It is now the
+matchup page's **alone**.
 
-**The data is swapped and nothing else is** (`asProjected`). The card's whole job
-is to compare two sides across the league's categories and colour the winner, and
-that arithmetic is identical whether the figures are what has happened or what is
-going to — so rather than teaching it a second mode (a second set of cells, a
-second tally, a second `leading` test) it is handed a projected `EspnMatchup` and
-every line downstream is the code that was already checked. Three things are kept
-from the live side because the projection does not touch them: `points`,
-`acquisitions` (a fact about the period so far) and the team ids. **`winner` is
-the projection's own and is never null**, where a live matchup's is — that is what
-lights the leading name, and a projection whose whole point is to say where the
-week is going has no business declining to.
+**What made keeping both untenable is one press.** With the button gone from
+this head — which is what was asked for — a lens turned on over there and
+carried back here would leave ten dashed cards under a tag reading `Projected`
+with **nothing on screen to turn it off**: a mode with no visible way out, which
+is the one thing this app's own rules name outright. The alternatives were to
+keep a control that had just been removed, or to have the board silently ignore
+a param the page beside it honors. So the lens is scoped to the page that owns
+the toggle, and this board says what has happened, full stop.
 
-**Keyed by matchup id rather than by position**, because this board is *sorted*
-(the reader's own matchup leads) and the projection is in ESPN's own order.
+**And that is the better division anyway, for the reason the category chart's
+own move records one section down.** A board is **ten summaries scanned at a
+glance** — it answers *is anybody winning* — where a projection is a thing to
+**study**, which is what the matchup page is for. Putting the study lens on the
+summary was the same mistake as hanging a day-by-day chart off a four-character
+cell: right in the sense that the data was there, wrong about which page the
+reader is on when they want it. The two questions now come in the order they are
+asked: this page says who is ahead, and the page it opens says where that is
+heading.
 
-### It is drawn as a projection, three ways at once
+**What went with it.** `Scoreboard` lost its `projection` / `projected` /
+`onProjected` props, `MatchupCard` lost its `projected` prop, `.lg-matchup.lg-proj`
+lost its rule (nothing sets the class), the header's state tag is two values
+again, and a cell's tooltip says `so far` or nothing rather than choosing between
+two tenses. **`asProjected` stays exported** — it is what the matchup page swaps
+its own figures with, and it is deliberately the *same* function rather than a
+second one that agrees today. `.lg-state-proj` stays too, being that page's tag.
 
-**A dashed card border**, which is this app's standing rule that an estimate never
-wears the same clothes as a measurement — the percentile card's dotted bubble, the
-Splits card's hatched fill, the Schedule grid's dashed chip. At the size of a
-*whole card* rather than per cell, because every figure on it is projected and
-marking each one would be the same claim made twenty times. It sits after
-`.lg-mine`, so the reader's own projected matchup keeps its accent **and** takes
-the dash — two different things, both true.
+**`proj=1` is scoped one question tighter**, and the projection read with it.
+The param is written only where a matchup is open (`view === 'league' && matchupId
+!= null`), and the read is gated on the same test — so a reader who never opens a
+card never pays for four league-wide boards joined against every roster in the
+league, where before entering the Scoreboard tab with the toggle on was enough.
+Rankings and Transactions drop it exactly as they did; a link carrying it opens
+the matchup it names with the lens in force.
 
-**The state tag reads `Projected` in place of `Live`** rather than beside it: that
-tag says what the figures *are*, and two of them would be the card claiming to be
-both. In the accent, which is what this app spends on a *reading* of the data,
-against the green it spends on a game being on.
+**Two things it did not touch.** The live poll still reads the board on the
+Scoreboard tab *or* with a matchup open (`scoreboardLive`), because the matchup
+page is drawn from that same board and would otherwise sit still while it was
+open. And the key that explains the method is unchanged and is now genuinely
+shared — see below.
 
-**And the dates change to the whole period.** `board.end` is the *observed* span
-and truncates at today for a live period — exactly right for figures that are what
-has happened and a lie over figures that reach the end of the week — so while
-projected the header reads the projection's own `end`: `Aug 10 – Aug 23 ·
-Projected` where it read `Aug 10 – Aug 18 · Live`.
+### The key and the glyph are one component, in `components/Projection.tsx`
 
-**A cell's tooltip stops saying "so far"**, which is why `live` is passed as
-`board.live && !projected`: a projected total is not a figure so far, it is the
-whole week's, and the cell says that instead.
+**There are two projections in the app now and neither owns the idea.** The
+League page projects a **matchup** — a team's total added to what ESPN has
+already scored — and the Roster view projects a **player** over a span of days
+(see **Client — the Roster view**, *The Projected reading*). Both are the same
+engine (`server/src/projection.ts`) asked a different question, so the mark on
+the toggle and the account of the method are shared rather than copied: two
+glyphs would be two marks for one concept, and two keys would be two accounts of
+one method, free to drift the next time the engine moves with nothing on screen
+to say which was stale.
 
-### Where the toggle sits, and when it is not offered
+`ProjectedGlyph` is the rising line; `ProjectionKey` is the four paragraphs, and
+it takes **`days`** rather than a whole `EspnProjection` — which is what let the
+second caller use it at all. Its `categories` prop is the League page's half and
+is **absent on the Roster view**: there the figures are a player's line rather
+than a side's score in the league's own categories, so a sentence about them
+would be a sentence about nothing, and the first paragraph says *what he has
+already done plus what he should add* instead. `ProjectedTools` — the button and
+the key as one row, with `.lg-proj-tools`' own layout — stays in `LeagueView`,
+being the matchup page's control rather than a shared one.
 
-**In the period head rather than the pinned tab row**, which is the same decision
-the period arrows record: a control above the strip is a control over the *page*,
-and this one governs exactly one third of it — Rankings has its own spans and
-Transactions has no figures to project. `margin-left: auto` puts it and its key at
-the far end, so the head reads week, dates, state, control.
-
-**Absent rather than disabled in the two cases it cannot serve.** A **points**
-league's card headline is one number a side and its category grid is not drawn,
-and the projection produces neither — offering a control that could only ever
-leave the card unchanged is what this app's rule about a setting lying about its
-reach forbids. And a **settled** period has nothing left to happen, which the
-server says in as many words (`ok: false`, `note: 'settled'`); a disabled button
-would invite the reader to work out why.
-
-**On only where there is something to draw.** `showing` requires the read to have
-landed and to have matchups in it, so a period with no projection — or one still
-being read — shows the live figures rather than a blank card. That is rule 1 of
-the app's loading discipline: never blank over data.
-
-### The key says the method in a manager's words
-
-The app's own `InfoKey` — a popover rather than a `title` (invisible on a phone),
-a `Modal` (ceremony a few sentences cannot pay for) or an inline reveal (it would
-appear below the fold on the very card it explains). Four short paragraphs, and
-they are the four questions somebody actually asks of a projection: what is it
-made of, what does it take account of, what adjusts it, and **what does it not
-know**. The last is the one a projection most owes its reader, so it is a
-paragraph rather than a footnote.
-
-**Every figure it names is a measured one** — the 40% cap on the recent month, the
-league's own 5½% platoon edge, the fifth that no adjustment may exceed — and not
-one is named as a constant. **How many days are left comes off the projection
-itself** rather than from a count of its own, so the sentence cannot come to
-disagree with the cards.
-
-**Anchored to the head row, not to its own button**, which is `.roll-key`'s
-measured trick: a shrink-to-fit against a 30px box resolves to the shared
-`min-width`, and a 320px panel opening from a button at the right edge of the row
-runs off the screen. It opens leftward from the row's own right edge instead.
-
-### `proj=1`, and why it is not saved
-
-In the URL by the rule `hideil=1`, `starters=1`, `sched=` and `plays=` follow: it
-changes *what the numbers are*, so a link carrying it describes a different board
-— and "here is where this week is going" is a thing a leaguemate is worth sending.
-**Scoped to the Scoreboard tab**, which is the one page that draws it, so crossing
-to Rankings drops it rather than carrying a lens that is not in force. It is
-**kept** on a settled period, which is where it parts from `starters=1`: there the
-param would be a claim about data it cannot narrow, and here it is not — the cards
-say `Final`, the toggle is not offered, and nothing on screen claims to be
-projected — so the state survives the excursion and stepping back to the live week
-restores it.
-
-**Not a saved preference**, and the line is `starters=1`'s: which figures you want
-in front of you is a lens for an afternoon, and a saved copy would mean a board
-silently showing projections a fortnight later.
-
-**The read is lazy on the toggle**, where the board it is drawn over is read by
-everybody who opens the page. It joins four league-wide boards against every
-roster in the league, so nobody who never presses it should pay for it — and it is
-**cleared on a period change**, a projection being a fact about one week and
-drawing last week's over this one being the one thing it must not do. A **failed**
-read is logged and costs the toggle its figures alone: the cards fall back to the
-live ones rather than the page becoming a message.
-
-### The matchup page follows now, and this reverses the passage that said it would not
-
-**What stood here was that a reader who projected the board and then opened a
-card got the *live* figures, and that this was a decision rather than an
-omission.** Three reasons were given and each is answered rather than waved away
-— which is worth reading, because two of them were facts about that page that
-have since been paid, and the third was never true of the categories at all.
-
-- *"The toggle is the Scoreboard tab's own — the same argument that keeps the
-  period arrows there."* That argument is about **which week**, which the matchup
-  page genuinely does not ask: it is opened on one, prints it, and offers no
-  arrows. **Which lens** is a different question, and the matchup page asks it of
-  the same twenty figures the card does.
-- *"A projected figure with nothing saying so is the one thing this must not
-  draw, and that page has no state tag for one to live in."* It has one: the head
-  prints the week, its dates and `Live`/`Final`, and `Projected` replaces that
-  word there exactly as it does on the Scoreboard — over dates that run to the
-  end of the period rather than to today, off the projection's own `end`. The
-  card takes the **dashed border** the scoreboard card already takes, which is
-  the same claim at the same size.
-- *"Carrying the lens in would leave a page speaking in two tenses."* The
-  acquisitions and the moves under the categories really are facts about the
-  period so far — and they are **not projected either way**: `asProjected` keeps
-  both off the live side, which is why that section reads identically under both
-  lenses and is the one part of the page the toggle does not touch.
-
-**One control rather than a second one.** `LeagueView.tsx::ProjectedTools` is the
-button and its key as one exported component, drawn by the Scoreboard's head and
-by the matchup's; `asProjected` is exported beside it, so the swap is the
-function that was already checked rather than a second one that agrees today.
-The **state and the read stay in App** — `proj=1` is one param and the projection
-is one read per period — so projecting the board and then opening a card fetches
-nothing, and the two surfaces cannot come to disagree about the lens.
-
-**`proj=1` is therefore scoped to two places rather than one**: the Scoreboard
-tab, and a matchup open over any tab. That is `needsScoreboard`'s own pair one
-question later — the two places that need the board are the two that can project
-it — and Rankings and Transactions drop the param exactly as they did, a lens
-naming figures that are not on screen being the thing that rule forbids.
-
-**On the Summary page alone, and centered inside the card rather than in the
-head.** The
-Scoreboard keeps its toggle beside the period it governs, which is that page's
-whole subject; the matchup page's head is shared by three pages and only one of
-them has a category total on it, so the control sits at the **foot of the
-comparison, above `Moves`** — inside the thing it swaps, which is a stronger gate
-than a condition (a control cannot be on a page it has nothing to act on if it
-lives in the thing it acts on) and gives the pinned band its wrapped line back on
-a phone. What keeps a gate there is the `Projected` **tag**, which would otherwise
-sit in that shared head calling a roster table a projection. Crossing to a team
-page and back leaves the lens where the reader put it. See **Client — a league
-matchup**, *The Projected toggle*, for what it draws and what it measured.
-
-**And the key is rewritten, which reaches both surfaces.** It was tightened
-first and then written plainly, and the second edit undid a little of the first:
-the tightening was right about the scaffolding and went one step too far into the
-subjects, leaving `up to 40%` with nothing saying 40% *of what* and `a fifth`
-where `20%` reads at a glance. Each paragraph now opens on a sentence naming what
-it is about, two facts it never carried are in it (only players in a **lineup
-slot** count, and whoever is in one **now** is counted all week), and `5½%` —
-a fraction glyph in a run of percentages — is `about 5% across the league`. The
-label goes `How the projection is worked out` → **`How the projection works`**
-and the button's tooltip `Show where each matchup is heading by the end of the
-week` → **`Project every total to the end of the week`**.
-
-**On the Scoreboard the panel still opens downward from the head**, where there
-is a page below it; on the matchup page it opens upward from a control at the
-foot of the card. That is the one thing the two surfaces do differently, and it
-is `InfoKey`'s `drop` flag rather than a second key.
-
-### Measured
-
-**Driven against the live 12-team league at 1200×900**, pressing the toggle and
-pressing it back:
-
-| | live | projected |
-| --- | --- | --- |
-| state tag | `Live` (`lg-state-live`) | **`Projected`** (`lg-state-proj`) |
-| dates | Aug 10 – Aug 18 | **Aug 10 – Aug 23** |
-| cards dashed | 0 of 10 | **10 of 10** |
-| a card's headline | `9-1-0 / 1-9-0` | **`8-2-0 / 2-8-0`** |
-| its batting cells | `35 13 32 5 .754` | **`63 24 58 9 .768`** |
-| URL | `?…&view=league` | **`?…&view=league&proj=1`** |
-
-and pressing it back gives the live column byte for byte.
-
-**The two states it is not offered in**, driven: a **settled** period (`mp=18`)
-draws **no toggle and no key**, tag `Final`, `0` dashed cards, with `proj=1` still
-in the URL; the **Rankings** tab draws neither and **drops** `proj=1`.
-
-**The key**, at 320 / 390 / 640 / 1200 / 1920: opens and closes on a press,
-`aria-expanded` following, four paragraphs, **320px wide** (276 at a 320px
-viewport, the `min()` clamp), fully inside the viewport at every one, and **Escape
-closes it** leaving the board standing and **0** `inert` marks.
-
-**Widths**, projected and live, at 320 / 375 / 390 / 640 / 900 / 1200 / 1920:
-**page-body overflow 0** at every one, **0** category blocks scrolling sideways,
-**0** clipped cells, and the cards the same width in both states (276 / 331 / 346
-/ 596 / 800 / 800 / 800). What the control costs the head is **a wrapped line at
-320, 375 and 390** (36 → 84px) and nothing from 480 up — A/B'd by hiding the pair
-on the same page. Dropping the label to the glyph would not win that line back
-(the head's content comes to 363px against the 346 a phone leaves), so the label
-stays.
-
-**Bundle: 565.05 → 568.44 KB of JS** (168.01 → 169.15 gzipped) and **153.08 →
-153.52 KB of CSS** (27.39 → 27.48) — 3.4KB and 0.4KB raw, 1.1KB and 0.09KB over
-the wire, for a toggle, a key, a swap and the paragraphs above restated where the
-rules are.
+**`prettyDate` moved to `lib.ts` in the same breath**, for the same reason one
+level down: four surfaces print a span of days now (this view's period header,
+the Rankings caption, a matchup's head and the Roster view's projection note),
+and the fourth is not a league page at all. `LeagueView` re-exports it so its two
+neighbors' import sites are untouched.
 
 ### A category's chart is on the matchup page, not here
 

@@ -371,6 +371,205 @@ What moves is three things. The **header row grows 51.00 → 51.30px** — the d
 
 **Bundle: 541.63 → 543.50 KB of JS** (160.49 → 161.17 gzipped) and **142.05 → 142.85 KB of CSS** (25.16 → 25.29) — 1.9KB and 0.8KB raw, 0.7KB and 0.1KB over the wire, for three tiers on two tables, a tally, and the paragraphs above restated where the rules are.
 
+### The Projected reading: what these players are going to do
+
+**Both wide readings of a roster are cut by what has already happened**, and the
+question a manager has on a Monday morning is not: *what are my players going to
+do this week, and is it enough*. The Schedule view answers half of it — who plays
+whom, and how often — and stops exactly where it gets interesting. So the summary
+table takes a third reading: **`Projected`**, which adds what each man is
+expected to do over the days in view that have not been played.
+
+**It is the same engine the League page's matchup projection runs**
+(`server/src/projection.ts`), asked a different question. That one wants a
+*team's* total added to what ESPN has already scored; this wants a **line per
+player**. Which is why they share a context and a per-player core rather than
+each having their own — two projections of one roster that disagreed about a
+Saturday would be worse than either.
+
+#### It is a mode of this table, not a fourth page
+
+The same argument the Schedule view records one section up, and it lands the same
+way: this is the **same players over the same days** with the numbers in the
+cells swapped, which is not a different page any more than a different sort order
+is. It is drawn on the **Roster view alone** — a feed is a record of things that
+happened and there is no honest projected version of one, so the toggle is not
+offered there, exactly as the Schedule toggle is not.
+
+**Mutually exclusive with the Schedule view**, and pressing either from the other
+is one press. That mode replaces the stat *columns* with days and this replaces
+the *figures* in them, so they are two readings of one set of cells and cannot
+both be in force; leaving one lit over a table it was not reading is the thing
+this app's rule about a control lying about its reach forbids. Each toggle turns
+the other off, and where the table is somehow handed both the **schedule wins**
+and the caption is not drawn — the columns being days, there is nothing for it to
+be a caption to.
+
+**A run of two rather than a segmented control of three**, and that is a phone's
+budget rather than a preference: each is a departure from the plain table and a
+third pill would spend a line saying which one the reader is already on.
+
+#### Pressing it moves the reader to the days it is about
+
+A projection over "Yesterday" is a projection of nothing, so the press opens on
+the days there are still games in: **the rest of this matchup period** where a
+connected league says what that is, and **the week ahead** (today + 6) where none
+does. `matchupWindow` is the same once-per-session read the Schedule view's two
+named spans come off, so the two controls cannot disagree about which days this
+matchup has left.
+
+**The date control is untouched**, which is what makes the rest of the feature
+fall out rather than needing rules: pick a single future day and the projection
+narrows to that day's games; pick a past range and it projects nothing and the
+table reads as it always did; pick a range straddling today and the two halves
+are added. Turning the lens **off puts the range back where it was, preset and
+all** — otherwise a press and an unpress would strand somebody in a future week
+with no stats in it. The Schedule toggle turning it off deliberately does *not*
+restore the range: the days ahead are exactly what a schedule is for.
+
+#### What a projected row is made of
+
+**What has already happened plus what is still to come**, which is the matchup
+card's own shape one level down. The server projects **only the games of the
+range that have not been played** (`start` clamped forward to today, and today's
+own games counted only where they have not started — `remainingGames`' rule,
+which is what stops a figure being counted twice), and the client adds the
+report's own lines for the days that have. That is the whole reason an arbitrary
+range needs no case of its own.
+
+**The lines are the table's own `BattingLine` / `PitchingLine`**, so a projected
+row is this table's row over different numbers and every cell, rate and total
+below it is the arithmetic that was already there — the same economy
+`asProjected` makes for a scoreboard card. Nothing about the leading cells
+changes: the headshot, its pip and status, the slot chip, the identity block, the
+row tints and the opponent cell are facts about the player and his next game
+rather than about the columns.
+
+**A count is printed to a tenth**, and rounded on the **server** rather than on
+screen: the client sums these for the `Total` row, so what a reader adds down a
+column is what was printed in it. A tenth rather than a whole number because a
+per-player 0.4 home runs over three days is a real answer where `0` is not — the
+matchup card can round to whole numbers because a side's week is twenty of these
+added together. A whole number stays whole, so a range wholly in the past reads
+identically to the ordinary table.
+
+**Innings are `5.8`, not `5.2`.** `formatIp`'s form is *thirds* — `6.2` is two
+thirds of an inning — and it takes a whole out count, which a projection has not
+got; a projected decimal read as one would be off by a factor of five. So the
+projected reading passes its own formatter and the two never meet.
+
+**Nothing to project is dashes, not noughts.** A club with no game left in the
+span, a starter whose turn does not fall in it, a man neither research board has
+a row for, **a man off the active roster** — on the injured list, in the minors,
+suspended: `chances` is 0, the line is null, and a row that has also played
+nothing draws em-dashes. That last one is the plainest reading this table has of
+an injury, and it is drawn beside the `IL10` on his own headshot rather than
+instead of it. A line of zeros would claim he plays and does nothing,
+which is the opposite of the truth — the same distinction the research board
+makes when it sends a window a player does not appear on back as `null` rather
+than as a zeroed row.
+
+#### The caption, and the key behind it
+
+`Projected · Aug 18 – Aug 23 · 6 days still to play`, directly above the pane —
+the table's **caption** rather than a control, which is why it is not up in the
+pinned row with the toggle: the research board's count line and the Rankings
+tab's span line are the same object in the same place. The **days** matter as
+much as the dates, because a span whose clubs are all idle projects nothing, and
+a table of dashes with nothing to explain it is the one state this must not be
+in. With nothing left to play the span is **not printed at all** and the line
+reads `nothing to project — every game in these days has been played`: naming a
+projected span there would be the lens taking credit for figures it did not
+touch.
+
+The ⓘ beside it is **`ProjectionKey`, shared with the League page** — see
+**Client — the League view**, *The key and the glyph are one component*. Its
+`categories` half is absent here, so the first paragraph says *what he has
+already done plus what he should add* rather than naming a league's scoring
+categories. It is anchored to the caption row rather than to its own 30px button,
+which is `.roll-key`'s measured trick.
+
+#### `rproj=1`, and why it is not `proj=1`
+
+In the URL by the rule `hideil=1`, `starters=1`, `sched=` and `plays=` follow: it
+changes *what the numbers are*, so a link carrying it describes a different
+table. **A different param from the League page's `proj=1`** because that one
+means a *matchup* — one param meaning two things in two views is exactly the trap
+`lspan=` avoids by not being `win=`, and a link is read before anything on screen
+can say which view it was written on.
+
+**Not a saved preference**, for `starters=1`'s reason: which figures a reader
+wants in front of them is a lens for an afternoon, and a saved copy would mean a
+table quietly showing next week's estimates a fortnight later.
+
+**The read is lazy on the toggle** — it joins four league-wide boards and the
+league's schedule against the roster — and it needs **no fantasy league at all**:
+every input is a board this app already holds, so a reader with a saved roster
+and no ESPN connection gets the same answer. What a connected league adds is the
+span the toggle opens on and the roster it is asked about. `/api/projection/roster`
+takes the same three parameters `/api/report` takes and resolves the roster the
+same way, so the lines it describes are the rows that report describes; the whole
+of that is in **Date handling and server routing**.
+
+**Never over data**: the last answer stands while the next is in flight, so
+changing the range does not blank a table somebody is reading, and the only mark
+a press leaves is the ball inside the toggle that started it. A **failed** read
+costs the lens its figures and nothing else — the table falls back to the
+report's own numbers rather than the page becoming a message, which is the
+direction the schedule window already fails in.
+
+#### Measured
+
+**Driven against the live 12-team league in a browser.** Pressing the toggle from
+`Today` takes the URL to `?start=2026-08-18&end=2026-08-23&rproj=1`, the date
+button to `8/18 – 8/23`, and the caption to `Projected · Aug 18 – Aug 23 · 6 days
+still to play`; the batting table draws 14 rows of tenths with a `Total` of
+`57.1/207.3 · 32 R · 10.8 HR · 33.7 RBI · 3.7 SB · .852 · 24.5 BB · 51.8 K`.
+Pressing it back returns `?preset=Yesterday` and the `Yesterday 8/17` button —
+the range **and** the preset, which is why the ref remembers both.
+
+**The three ranges, each with no case of its own.** A single future day
+(`8/21`) reads `Projected · Aug 21 · 1 day still to play` with a `Total` of
+`11.2/42.6 · 6.5 R · 1.9 HR`; a range wholly in the past (`8/14 – 8/16`) reads
+`nothing to project — every game in these days has been played` over the report's
+own integers; and the pitcher tab over `8/19 – 8/23` draws `6.4 IP · 5.6 H · 2.4
+R · 2.3 ER · 1.4 BB · 4.5 K · 3.25 ERA · 1.10 WHIP` for a starter with a turn in
+the span and **em-dashes across the row** for one whose next turn falls outside
+it — which is the honest answer and the one a manager is looking for.
+
+**Mutual exclusivity, driven both ways**: with `Projected` on, pressing
+`Schedule` leaves `projected-toggle` unlit, `schedule-toggle on`, `sched=matchup`
+in the URL, **no caption** and the day columns drawn; pressing `Projected` with
+`Schedule` on does the reverse.
+
+**Widths**, at 320 / 375 / 390 / 480 / 640 / 900 / 1200 / 1920: **page-body
+overflow 0** at every one, the button a **36px square** with its label visually
+hidden under 640, and the key's panel **320 × 467 at x=22** of a 390px screen —
+fully in view. What the control costs the pinned row is **a wrapped line at 375,
+390 and 900** (159 → 207px, 115 → 161) and **nothing at 320, 480, 640, 1200 or
+1920**, A/B'd by hiding the button on the same page.
+
+**Full-page mode** carries the caption and puts the toggle in
+`.expanded-chrome` beside the kind tabs, the Schedule control, `Starters` and the
+dates — a live control rather than a badge, for the reason that row's own note
+gives: it is what the figures *are*, and it is the way back to them without
+leaving the page.
+
+**Server-side**, through the route on the live league: the context is memoized on
+the matchup's own minute and every board under it is cached for hours and pulled
+warm nightly, so a range change is five map builds rather than a fetch. The
+response is one line per player and carries no components — the same rule
+`categoryScores` sets for the matchup's own wire.
+
+**Bundle, for this and the two changes it shipped with** (the Scoreboard's toggle
+leaving, and the matchup card's hatched bars): **569.58 → 572.31 KB of JS**
+(169.46 → 170.25 gzipped) and **154.21 → 155.30 KB of CSS** (27.62 → 27.76) —
+2.7KB and 1.1KB raw, 0.8KB and 0.14KB over the wire, for a route, a shared engine
+context, a toggle, a caption, a shared key and glyph, four hatch rules and the
+paragraphs above restated where the rules are. The JS figure is net of what the
+Scoreboard gave back: a component's worth of projection plumbing left that file
+and one copy of the key went with it.
+
 **Every one of the three wide tables offers itself the whole page** (`ExpandButton.tsx`, `hooks.ts::useFullPage`) — the summary table, the research board and the game log. They are the app's widest things by some way and they read out of a box a few hundred pixels tall under a header, a tab row and a control bar; the button is "just show me the table", and what it buys is the app's own chrome.
 
 **Deliberately not the Fullscreen API.** That takes the *browser's* chrome as well, which is a bigger thing than was asked for and a worse one to be in by accident: it swallows the tab strip and the address bar, needs a user gesture, is refused outright by iPhone Safari for elements, and leaves the page in a mode the browser rather than the app has to be asked to leave. A `position: fixed` box over everything the app draws behaves the same everywhere and is undone by the same button that made it (and by Escape).

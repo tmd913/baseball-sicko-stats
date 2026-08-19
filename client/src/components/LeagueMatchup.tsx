@@ -1257,10 +1257,12 @@ export default function LeagueMatchupView({
           /* **A projected card is drawn as a projection**, which is this app's
              standing rule that an estimate never wears the same clothes as a
              measurement — the percentile card's dotted bubble, the Splits
-             card's hatched fill, the Schedule grid's dashed chip, and the
-             scoreboard card's own dashed border. At the size of the whole card
-             rather than per cell, because every figure on it is projected and
-             marking each one would be the same claim made twenty times. */
+             card's hatched fill, the Schedule grid's dashed chip. One class on
+             the card carries both marks: a **dashed border**, at the size of
+             the whole card rather than per cell because every figure on it is
+             projected, and a **hatch on every bar** — the meter and the ten
+             category fills, which are what the card is actually read with. See
+             `.mup-card.mup-proj` in the stylesheet for both. */
           <div className={`mup-card${showingProj ? ' mup-proj' : ''}`}>
             <div className="mup-heads">
               <SideHead
