@@ -1676,6 +1676,90 @@ draw the same roster with nothing on screen to say why. Reproduced against a
 process that predated the parameter; the current build answers three teams with
 three rosters.
 
+### The Feed reading takes the play-filter pills
+
+**A team page's Feed drew `LiveFeed` with none of its seven optional props**, and
+two of those absences were one decision, recorded in `client-feed.md` as *the
+five props are optional and the second caller passes none of them* on two
+grounds: the `New` marker is a fact about the reader's own stream, and this
+page's control row already carries four groups. **The first ground stands and the
+second is about the wrong row.** The pills are not in `mup-tools` any more than
+they are in the view bar on the app's own Feed — that same document's *Where the
+controls sit* section moved them out of the pinned row on purpose, because a lens
+worked once on arrival is the answer to the question the page was opened with and
+belongs where the answer is: directly above the plays. That argument holds word
+for word for a leaguemate's week. Measured on the live league, team 4 over
+**Aug 18**: his batters' stream is **61 items**, of which **2** are the home runs
+a manager opened it to see and **0** are steals.
+
+**`FeedFilterPills`, drawn from the same component**, so a reader who knows the
+Feed view knows this row — and drawn **inside `LeagueTeam` rather than beside
+it**, which is that view's own rule: a row of pills over an empty page would be a
+control over nothing, and this page's two empty states already name the control
+that emptied them. It is the **batter tab alone** (`kind === 'batter'`), the same
+flag that gates the prop so the two cannot disagree — a pitcher's stream item is
+his whole outing, so no pill here could match one and the lens passed through
+would empty his feed on behalf of a control that tab does not offer. Driven:
+crossing to `Pitchers` with `HR` lit draws **0 pills** and the whole outing list,
+and crossing back re-lights `HR` over 2 items — `starters`' own rule for an
+excursion.
+
+**Measured, before → after, on both pages at once.** The row takes the stream's
+own column and its `auto` margins, so its left edge is the left edge of the items
+under it *on this page as on the app's own*, at both widths:
+
+| | app's Feed | team page, before | team page, after |
+| --- | --- | --- | --- |
+| pills at 1200 | 7 | **0** (no row) | **7** |
+| row box at 1200 | left 200, 800×34 | *(absent)* | left 200, 800×34 |
+| `.live-feed` at 1200 | left 200, w 800 | left 200, w 800 | left 200, w 800 |
+| pills at 390 | 7 | **0** (no row) | **7** |
+| row box at 390 | left 22, 346×34 | *(absent)* | left 16, 358×34 |
+| `.live-feed` at 390 | left 22, w 346 | left 16, w 358 | left 16, w 358 |
+
+The two left edges differ by the gutter each box has (22px in `.app`, 16 in the
+overlay) and the row takes whichever it is in, which is the whole point of it
+sharing `--card-column` rather than declaring a width. **It scrolls sideways
+rather than wrapping**, exactly as it does one page over: **34px tall at both
+widths on both pages**, overflowing its own scrollport by **32px at 390** here
+against the app's **44** — the same row of pills in a box 12px wider. And the
+rhythm under it is the stream's own: **16px** from the row's foot to the first
+section at 1200 and **12px** at 390 (the phone `--stack-gap`), identical on the
+two pages, the feed's top margin collapsing with the row's zero bottom one. The
+overlay and the page body each overflow horizontally by **0** at both widths, in
+every lens.
+
+**The empty state is `LiveFeed`'s own and names the control that is really
+there.** Driven with `SB` lit over that day: **0 items**, `No plays of that kind
+today. Change it with the pills above — All is every play of the day.` — which is
+true of this page because the pills *are* above it. That sentence would have been
+a lie had the row been left up in `mup-tools`, which is a second reason it is
+where it is.
+
+**The `New` watermark did not come with the pills**, and this is the half of the
+old reasoning that survives its own test. The marker is a fact about how far down
+*the reader's own* stream they have got, saved once on their own record
+(`UserPrefs.seenPlays` — one watermark, not one per team). A red count over a
+leaguemate's plays would be counting his day against the reader's marker, and
+`Clear` would mark the reader's own feed read from a page that is not it. So
+`newOnly`, `seenPlays`, `newCount`, `onShowNew`, `onShowAll` and `onClearNew` stay
+unpassed, and `.feed-new` is absent from this page in every state driven above.
+
+**The lens is the overlay's state**, for the reason it owns the reading, the kind,
+the dates and `starters`: it is chrome above *both* team pages and must not reset
+when the reader crosses from one manager to the other. And it is **state rather
+than anything in the URL** — `mup` and `mt` are the whole of what a matchup link
+carries, and `plays=` stays the app's own Feed view's alone, two params never
+meaning two things.
+
+**And the feed's paging position is keyed by the days as well as the kind**,
+which is App's own `feedKey` (`${kind}-${start}-${end}`) and was `kind` alone
+here. Driven at 1200 on team 4: open `Yesterday` (20 items, `Load more 41`),
+press `Load more` twice (60 items), then pick `This week` — **before: 60 items**
+under a 97-item stream, an offset the reader never asked for on a list they had
+never seen; **after: 20**, which is where a new list opens. The remount key moved
+with it, so the two cannot come apart.
+
 ### `Rosters` is gone, because the team tabs are it
 
 **It opened both teams' rosters side by side, slot by slot, behind a toggle in
