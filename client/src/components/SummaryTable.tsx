@@ -750,6 +750,40 @@ function LeadCells({
  *  button sits in. */
 type Expand = { isFull: boolean; toggle: () => void };
 
+/**
+ * **What the foot row is a total *of*, said in the label** — because under the
+ * lens it stops being the sum of the column above it.
+ *
+ * This table's standing rule is that a reader can add a column up and get the
+ * figure at the foot: the server rounds each projected component to a tenth
+ * precisely so what is totalled is what was printed. The lineup reading breaks
+ * that on purpose — the rows say what each man would do **if you started him**
+ * and the foot adds only the days the lineup has room for him, so on a roster
+ * with more bats than seats the two genuinely differ (measured on the live
+ * league: rows 59.5 games against a lineup of 48.5).
+ *
+ * A departure that large has to be **named where it is read**, not explained in
+ * a tooltip: half this app's traffic has no hover, and a foot reading `Total`
+ * that disagrees with its own column is the kind of quiet wrongness the rest of
+ * this file is written to avoid. So the word changes with the arithmetic —
+ * `Total` when it is the column's, **`Lineup`** when it is the plan's — and the
+ * tooltip carries the sentence.
+ */
+function TotalLabel({ n, lineup }: { n: number; lineup: boolean }) {
+  return (
+    <span
+      className="sum-total-label"
+      title={
+        lineup
+          ? 'What your projected lineup gets — only the days each man holds a lineup spot. The rows above say what each would do if you started him, so this is deliberately less than their sum.'
+          : undefined
+      }
+    >
+      {lineup ? 'Lineup' : 'Total'} · {n}
+    </span>
+  );
+}
+
 function BatterTable({
   batters,
   handlers,
@@ -769,6 +803,10 @@ function BatterTable({
 }) {
   const lineOf = (r: PlayerReport): BattingLine =>
     projection ? projectedBatting(r, projection.get(playerKey(r))) : combineLines(r.games.map((g) => g.line));
+  // The foot's two arithmetics are one arithmetic wherever no lineup was
+  // filled — a saved watchlist, a league with no slot counts — and the label
+  // says `Total` there, which is what it has always said.
+  const hasPlan = batters.some((r) => projection?.get(playerKey(r))?.lineup != null);
   const total = projection
     ? combineLines(batters.map((r) => projectedBatting(r, projection.get(playerKey(r)), true)))
     : combineLines(batters.flatMap((r) => r.games.map((g) => g.line)));
@@ -837,7 +875,7 @@ function BatterTable({
         <tr>
           <td className="sum-img-col" aria-hidden="true" />
           <th className="sum-name-col" scope="row">
-            <span className="sum-total-label">Total · {batters.length}</span>
+            <TotalLabel n={batters.length} lineup={hasPlan} />
           </th>
           {schedule ? (
             <ScheduleTotalCells index={schedule} players={batters} kind="batter" />
@@ -882,6 +920,8 @@ function PitcherTable({
 }) {
   const lineOf = (r: PlayerReport): PitchingLine =>
     projection ? projectedPitching(r, projection.get(playerKey(r))) : aggregatePitching(r);
+  /** See `BatterTable`'s own. */
+  const hasPlan = pitchers.some((r) => projection?.get(playerKey(r))?.lineup != null);
   const totalLine = projection
     ? combinePitchingLines(
         pitchers.map((r) => projectedPitching(r, projection.get(playerKey(r)), true)),
@@ -954,7 +994,7 @@ function PitcherTable({
         <tr>
           <td className="sum-img-col" aria-hidden="true" />
           <th className="sum-name-col" scope="row">
-            <span className="sum-total-label">Total · {pitchers.length}</span>
+            <TotalLabel n={pitchers.length} lineup={hasPlan} />
           </th>
           {schedule ? (
             <ScheduleTotalCells index={schedule} players={pitchers} kind="pitcher" />
