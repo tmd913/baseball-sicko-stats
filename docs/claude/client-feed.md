@@ -272,6 +272,20 @@ fact about how far down *the reader's own* stream they have got, and that page's
 control row already carries four groups. Checked: `?mup=…&mt=…&plays=hr&newplays=1`
 draws that page's feed with **0** pills and no red button.
 
+**Half of that paragraph has since been overturned, and it is the half about the
+pills.** The control row it names is `mup-tools`, and the pills are not in it any
+more than they are in the view bar here — they sit in the page, at the head of
+the stream, for the reason the section directly below sets out, and that reason
+holds for a leaguemate's week word for word. `LeagueTeam.tsx` draws
+`FeedFilterPills` on its batter tab now, from this same component, and passes
+`playFilter` through; the measurements are in **The Feed reading takes the
+play-filter pills** in `client-league-matchup.md`. **The `New` half stands as
+written**: `seenPlays` is one watermark on the reader's own record, so a red count
+over somebody else's plays would be counting his day against it, and none of the
+six new-plays props is passed. The checked link now draws that page's feed with
+**7** pills, `plays=hr` still being ignored there — the lens is that overlay's own
+state, `mup` and `mt` being the whole of what a matchup link carries.
+
 ### Where the controls sit: both of them in the page now
 
 **This section used to argue for the split and the split is gone.** What it said:

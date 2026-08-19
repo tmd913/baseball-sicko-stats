@@ -5,6 +5,8 @@ import { projectStarters, rangeDatesOf } from '../lib';
 import type { FantasySlot } from '../hooks';
 import { LoadingBlock } from './Loading';
 import { LiveFeed, FEED_PAGE_SIZE } from './LiveFeed';
+import { FeedFilterPills } from './FeedFilters';
+import type { FeedLens } from './FeedFilters';
 import { SummaryTable } from './SummaryTable';
 import type { ScheduleIndex } from './schedule';
 import type {
@@ -31,7 +33,8 @@ import type {
  * down rather than held here: they are chrome that sits above both team pages
  * and must not reset when the reader crosses from one manager to the other —
  * a date set on one side is a question about the matchup, not about a team. All
- * this component owns is its own two reads and its feed's paging position.
+ * this component owns is its own two reads, its feed's paging position and the
+ * row of pills at the head of it.
  */
 
 /**
@@ -46,11 +49,17 @@ function possessive(name: string | undefined): string | null {
   return /s$/i.test(name) ? `${name}’` : `${name}’s`;
 }
 
-/** How much of the feed to open on, per kind — the app's own `feedShown`, one
+/** How much of the feed to open on, per stream — the app's own `feedShown`, one
  *  page down. A reading position rather than a view, so it is state rather than
- *  anything in the URL, and it is per kind because the two streams are two
- *  lists. */
-type ShownByKind = Partial<Record<PlayerKind, number>>;
+ *  anything in the URL.
+ *
+ *  **Keyed by kind *and* by the days**, exactly as App keys its own
+ *  (`${shownKind}-${start}-${end}`): it was keyed by kind alone, so a reader who
+ *  had pressed `Load more` twice over the matchup week and then moved the date
+ *  control to today came back to a twenty-item stream carrying an offset of
+ *  sixty. Two kinds over two ranges are four lists, and a reading position
+ *  belongs to the list it was read in. */
+type ShownByStream = Record<string, number>;
 
 export default function LeagueTeam({
   teamId,
@@ -60,6 +69,8 @@ export default function LeagueTeam({
   kind,
   reading,
   starters,
+  lens,
+  onLens,
   schedule,
   projection,
   onOpenDetails,
@@ -79,6 +90,13 @@ export default function LeagueTeam({
    *  survives crossing from one manager to the other, exactly as the reading,
    *  the kind and the dates do. */
   starters: boolean;
+  /** **Which kind of play the feed reading draws** — the app's own single-select
+   *  lens, `all` being the whole stream. The overlay owns it for the reason it
+   *  owns the reading, the kind, the dates and `starters`; what this page owns
+   *  is *where the row is drawn*, which is at the head of the stream and inside
+   *  the same guard as it. */
+  lens: FeedLens;
+  onLens: (lens: FeedLens) => void;
   /** The Schedule view's index, or null for the ordinary stat columns — the
    *  same "the mode is the presence of an index" rule App applies, so a table
    *  can never be in schedule mode with no schedule in it. */
@@ -114,7 +132,7 @@ export default function LeagueTeam({
   const [roster, setRoster] = useState<EspnRosterPlayer[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const shown = useRef<ShownByKind>({});
+  const shown = useRef<ShownByStream>({});
   const waiting = useDelayedFlag(loading);
 
   /**
@@ -213,6 +231,9 @@ export default function LeagueTeam({
   }, [lineups]);
 
   const dates = useMemo(() => rangeDatesOf(start, end), [start, end]);
+  /** The stream's identity: which kind, over which days — App's own `feedKey`,
+   *  and what both the remount and the paging position are keyed by. */
+  const feedKey = `${kind}-${start}-${end}`;
   const perDay = byDate !== null && dates.length > 1;
 
   /**
@@ -293,18 +314,49 @@ export default function LeagueTeam({
           projection={projection}
         />
       ) : (
-        <LiveFeed
-          /* Keyed on the kind so the stream starts at its first page when the
-             list becomes a different list — the app's own rule for its feed. */
-          key={kind}
-          reports={cards}
-          kind={kind}
-          onOpenDetails={onOpenDetails}
-          shown={shown.current[kind] ?? FEED_PAGE_SIZE}
-          onShowMore={(n) => {
-            shown.current[kind] = n;
-          }}
-        />
+        <>
+          {/* **The lens, at the head of the stream it narrows** — the Feed
+              view's own row of pills, drawn from the same component so a reader
+              who knows that page knows this one, and drawn *here* rather than up
+              in `mup-tools` for the reason it is in the page there: it is the
+              answer to the question this page was opened with, and it belongs
+              where the answer is.
+
+              **Inside the same guard as the feed**, which is why it is in this
+              file rather than beside `<LeagueTeam>`: a row of pills over an
+              empty page would be a control over nothing, and the two empty
+              states above already name the control that emptied them.
+
+              **Batter tab only** (`kind === 'batter'`), the same flag that gates
+              the prop below so the two cannot disagree: a pitcher's stream item
+              is his whole outing rather than a play, so no pill here could match
+              one and passing the lens through would empty the pitcher feed on
+              behalf of a control that tab does not offer. The *state* is the
+              overlay's and survives the excursion, exactly as `starters` does. */}
+          {kind === 'batter' && <FeedFilterPills lens={lens} onSelect={onLens} />}
+          <LiveFeed
+            /* Keyed on the kind and the days, so the stream starts at its first
+               page when the list becomes a different list — the app's own
+               `feedKey`. **Not on the lens**: narrowing to home runs is the same
+               list read through a lens rather than another list, and App does
+               not key on it either. */
+            key={feedKey}
+            reports={cards}
+            kind={kind}
+            onOpenDetails={onOpenDetails}
+            shown={shown.current[feedKey] ?? FEED_PAGE_SIZE}
+            onShowMore={(n) => {
+              shown.current[feedKey] = n;
+            }}
+            /* **The play filter comes across and the `New` watermark does not.**
+               The marker is a fact about how far down the reader's *own* stream
+               they have got — one saved watermark on their record, not one per
+               team — so a red count over a leaguemate's plays would count his
+               day against it and `Clear` would mark the reader's own feed read
+               from a page that is not it. See `LeagueMatchup`'s `feedLens`. */
+            playFilter={kind === 'batter' && lens !== 'all' ? lens : undefined}
+          />
+        </>
       )}
     </FantasyRosterContext.Provider>
   );
