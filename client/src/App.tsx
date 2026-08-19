@@ -91,7 +91,7 @@ import { Tutorial } from './components/Tutorial';
 import { EspnSettings } from './components/EspnSettings';
 import { LeagueOnboarding } from './components/LeagueOnboarding';
 import { ThemeSwatches } from './components/ThemePicker';
-import LeagueView, { LEAGUE_TABS } from './components/LeagueView';
+import LeagueView, { LEAGUE_TABS, ProjectedTools } from './components/LeagueView';
 import LeagueMatchupView from './components/LeagueMatchup';
 import { spanDetail } from './components/LeagueRankings';
 import type { LeagueTab } from './components/LeagueView';
@@ -4186,6 +4186,49 @@ export default function App() {
         </select>
       </>
     ) : null;
+  /* **The Rankings lens, in the tab row with the span strip** — a reversal: it
+     stood in the table's own caption row, on the reasoning that a control
+     saying what the figures *are* belongs against the figures.
+
+     It moves for the reason every other filter in this app is up here: what
+     this button changes is **which numbers the table draws**, which is the same
+     kind of statement as `Starters`, the board's include buttons and the Roster
+     view's own `Projected` — and that last one is the argument in one line,
+     since the app already draws a projected toggle in this row and drawing the
+     League's copy two tiers lower made the same control look like two. The row
+     is also the app's answer to "more groups than fit on a line": each group is
+     `flex: none`, so this one travels whole and breaks between groups rather
+     than inside one, and the caption below it goes back to being nothing but a
+     caption.
+
+     **The sentence still says so, which is what makes the move safe.** The
+     caption reads `Week 19 · projected to Aug 23 · 5 days still to play`
+     whether or not the button is beside it, so a table of guesses is named
+     against the numbers even with its control a tier away — and that is also
+     what the full-page box keeps, where the tab row is covered: the research
+     board's own rule, that an expanded table states its settings and the way to
+     change one is the button that expanded it.
+
+     Drawn only on the Rankings tab and only where the projection can act
+     (`projectable`, the current matchup of a week still being played) — absent
+     rather than disabled, and independently of the span strip beside it, which
+     needs more than one span to be worth drawing where this needs none. */
+  const leagueRankProjected =
+    view === 'league' && leagueTab === 'rankings' && rankings?.projectable ? (
+      <ProjectedTools
+        projection={null}
+        days={rankings.projectedDaysLeft}
+        categories={rankings.categories.length}
+        showing={rankings.projected}
+        projected={rankProjected}
+        /* The **undelayed** flag, for the mark inside the control that started
+           the read: `showRankingsWait` beside it is the delayed one the block
+           wait in the pane is gated on, and `useDelayedFlag`'s 250ms floor is
+           for a wait nobody asked for — a press is owed no delay at all. */
+        loading={rankingsLoading}
+        onProjected={setRankProjected}
+      />
+    ) : null;
   // The header's cluster, at the top right: the roster search, and nothing
   // else. The calendar was once beside it and moved down to the roster row (see
   // `dateToggle`); Edit was the next and is now an entry in the settings menu;
@@ -5137,6 +5180,8 @@ export default function App() {
             {leagueTabs}
             {/* Which span the Rankings table is drawn from. */}
             {leagueSpanTabs}
+            {/* And whether it is drawn to the end of the week. */}
+            {leagueRankProjected}
             {/* The feed's grouping, the starters filter and the calendar that
                 says which days they cover. All of it in the one wrapping row:
                 each group is `flex: none`, so the row fits as many whole groups
@@ -5408,13 +5453,7 @@ export default function App() {
           rankings={rankings}
           rankSpan={rankSpan}
           rankingsLoading={showRankingsWait}
-          /* The undelayed flag, for the mark inside the toggle: the block wait
-             below is what `useDelayedFlag`'s 250ms floor is for, and a press is
-             owed no delay. */
-          rankingsBusy={rankingsLoading}
           rankingsError={rankingsError}
-          rankProjected={rankProjected}
-          onRankProjected={setRankProjected}
           transactions={transactions}
           transactionsLoading={showTransactionsWait}
           transactionsError={transactionsError}

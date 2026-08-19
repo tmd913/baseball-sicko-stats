@@ -831,10 +831,7 @@ export default function LeagueView({
   rankings,
   rankSpan,
   rankingsLoading,
-  rankingsBusy,
   rankingsError,
-  rankProjected,
-  onRankProjected,
   transactions,
   transactionsLoading,
   transactionsError,
@@ -866,16 +863,7 @@ export default function LeagueView({
   rankings: EspnRankings | null;
   rankSpan: EspnRankSpan;
   rankingsLoading: boolean;
-  /** The rankings read is in flight — the undelayed flag, which is what the
-   *  `Projected` toggle's own mark is drawn from. `rankingsLoading` beside it is
-   *  the delayed one the block wait is gated on; the two answer different
-   *  questions and a press is owed no delay. */
-  rankingsBusy: boolean;
   rankingsError: string | null;
-  /** The Rankings tab's own lens and its setter — see `LeagueRankings`, which
-   *  is where the argument for it living in the caption row is. */
-  rankProjected: boolean;
-  onRankProjected: (on: boolean) => void;
   transactions: EspnTransactions | null;
   transactionsLoading: boolean;
   transactionsError: string | null;
@@ -918,10 +906,7 @@ export default function LeagueView({
           rankings={rankings}
           span={rankSpan}
           loading={rankingsLoading}
-          busy={rankingsBusy}
           error={rankingsError}
-          projected={rankProjected}
-          onProjected={onRankProjected}
           matchupTeams={matchupTeams}
           onOpenTeamMatchup={onOpenTeamMatchup}
         />
