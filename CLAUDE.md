@@ -54,98 +54,55 @@ The current season is pinned in **nine places** that must stay in sync: `hfSea=2
 
 ### The rest of the architecture
 
-Split across `docs/claude/` and imported below — those files are part of this one and
-are loaded with it. Keep each under the 150k-char limit; split a file again rather than
-letting it grow past it.
+**The architecture is documented per surface, and those documents are loaded on
+demand rather than imported.** They come to 1.6MB — importing them cost ~415k
+tokens on every session and every subagent, which put a subagent over its own
+context limit before it had read a line of code.
 
-**Data sources, join keys and caching** — MLB Stats API primary, Savant enrichment, the research board, percentiles, and every cache layer.
+So each surface is a **skill**. The harness lists their descriptions; invoking
+one reads its document. **Invoke the skill for the surface you are touching
+before you edit it** — these documents are the record of *why* each rule is
+what it is, and most of them are not recoverable from the code.
 
-@docs/claude/data-sources.md
+| you are editing | invoke |
+| --- | --- |
+| `savant.ts` `mlbStats.ts` `research.ts` `statcastWindow.ts` `percentiles.ts` `teamHitting.ts` `leagueWoba.ts` `xwoba.ts` `expectedStats.ts` `armAngle.ts` `pitcherArsenal.ts` | `sicko-server` |
+| `index.ts` (routes) `etDate.ts` `schedule.ts` `rotations.ts` `gameLog.ts` `nextGame.ts` `news.ts` `recentNews.ts` `rotowire.ts` `projectedStarts.ts` `warmer.ts` | `sicko-server` |
+| `store.ts` `storage.ts` `auth.ts` `cognito.ts` `auth.tsx` `invite.ts` | `sicko-server` |
+| `espn.ts` `projection.ts` `EspnSettings.tsx` `LeagueOnboarding.tsx` | `sicko-espn` |
+| `App.tsx` `hooks.ts` `lib.ts` `api.ts` `PlayerAdder.tsx` `Loading.tsx` `DateControls.tsx` `DateRangePicker.tsx` `simulate.ts` | `sicko-client` |
+| `SummaryTable.tsx` `PlayerIdentity.tsx` `PhotoStatus.tsx` `schedule.tsx` `ScheduleControl.tsx` `StartersToggle.tsx` `ExpandButton.tsx` | `sicko-roster` |
+| `ResearchTable.tsx` `researchColumns.tsx` `ColumnPicker.tsx` `columnRanks.tsx` `WatchStar` `LockMark.tsx` `NewsMark.tsx` | `sicko-research` |
+| `LiveFeed.tsx` `PlayerDay.tsx` `PlateAppearanceCard.tsx` `FeedFilters.tsx` `BaseDiamond.tsx` `ClipVideo.tsx` | `sicko-feed` |
+| `PlayerDetails.tsx` `PlayerOverview.tsx` `GameLog.tsx` `PlatoonSplits.tsx` `RollingXwoba.tsx` `PlayerWindowTable.tsx` `PlayerNews.tsx` `PlayerOrderEditor.tsx` `Tutorial.tsx` | `sicko-player-page` |
+| `LeagueView.tsx` `LeagueMatchup.tsx` `LeagueRankings.tsx` `LeagueTransactions.tsx` `LeagueTeam.tsx` `MatchupSeriesChart.tsx` `Projection.tsx` | `sicko-league` |
+| `PitcherCard.tsx` `Arsenal.tsx` `ArsenalCharts.tsx` `Innings.tsx` `OutingPage.tsx` `OpponentTable.tsx` `PitchSequence.tsx` `StrikeZone.tsx` | `sicko-pitchers` |
+| `Modal.tsx` `InfoKey.tsx`, `useDismissable`, anything that opens a popup | `sicko-dialogs` |
+| `styles.css` tokens or colors, `theme.ts` `ThemePicker.tsx` | `sicko-theming` |
+| `infra/` | `deploy` |
+| landing branches, resolving conflicts | `merge` |
 
-**Roster, watchlist, users and auth** — the two per-user player lists (the roster the views report on, the watchlist the research board follows) and the saved prefs, DynamoDB/file backends, Cognito sign-in and session handling.
+A file in two rows wants both. A change that spans surfaces — a new column on a
+wide table, a field crossing the wire — wants the server one and the client one.
 
-@docs/claude/auth-and-storage.md
+**`docs/claude/*.md` is where the documents themselves live**, unmoved: they
+cross-reference each other by title constantly, `docs/` is already served by
+`npm run docs`, and they stay greppable. A skill is a router pointing at them,
+not a copy of them.
 
-**ESPN fantasy league** — reading a league with the user's cookies, the name+team join, free agents, which day's lineup, a range of rosters, the scoring-period anchor and the injury designation.
+**A few passages inside those documents say their cross-references resolve
+"because all of them are imported together."** The references still resolve — the
+sibling is one `Read` away and usually one skill away — but the reason given is
+now historical. Those sentences are left as written rather than edited, which is
+the same rule the documents apply to their own superseded reasoning.
 
-@docs/claude/espn.md
+**Where to write a new rule.** If it is true whatever file you are in, it
+belongs in `RULES.md` below. If it is about one surface, it belongs in that
+surface's document, in the voice the rest of that file uses — the measurement
+that establishes it, and the alternative that was rejected.
 
-**ESPN — connecting and sharing a league** — the `espn_s2` credential and how it is handled, the connect form, the nine routes, the invite link, and what naming a team for the first time does.
+**These files no longer need to stay under 150k chars.** That limit existed
+because everything was imported into every session; nothing is now. Split a file
+when it covers two surfaces, not when it passes a byte count.
 
-@docs/claude/espn-connection.md
-
-**ESPN — the per-player marks a league buys** — roster %, position eligibility, the padlock, and the five trend columns, all off one cookie-free player list.
-
-@docs/claude/espn-players.md
-
-**ESPN — the league's own numbers** — the scoreboard and the day `cumulativeScore` leaves off, acquisitions, the stat-id table, the matchup window, the Rankings spans and the transactions feed.
-
-@docs/claude/espn-scoreboard.md
-
-**Deployment** — the CDK app: S3 + CloudFront, Lambda, custom domain, warmers.
-
-@docs/claude/deployment.md
-
-**Date handling and server routing** — the 3am ET baseball day, every API route, video resolution.
-
-@docs/claude/server.md
-
-**Client** — the shell every view sits in: the roster and the watchlist, player keys, the pinned chrome and the app's scroll behavior, the loading system, the kind tabs, the header and its search, and the hide-injured filter. It was one 443KB file and is now six, split by the surface being described rather than by size; this one closes with a map of the others.
-
-@docs/claude/client.md
-
-**Client — the date controls** — the calendar button and the row of presets and the picker behind it, the component a matchup's team pages share with it, and the range the Roster and the Feed each keep of their own.
-
-@docs/claude/client-dates.md
-
-**Client — the Roster view** — the summary table, its identity block and color legend, the `Starters` filter, and the full-page mode all three wide tables share.
-
-@docs/claude/client-summary.md
-
-**Client — the research board** — its columns and their picker, the sort, the include buttons and the watchlist star, the position row and what a position means, the window tabs and the control bar.
-
-@docs/claude/client-research.md
-
-**Client — the player page** — `PlayerDetails`, the reorder screen, the how-to page, and the **Overview** tab: his day, his next game, his projected starts, his latest news and his last five games. It opens on **anybody**, which is the fact most of its design follows from.
-
-@docs/claude/client-player-page.md
-
-**Client — the player page's reading tabs** — **News** (and the eleven dead ends behind it), **Stats** (the research board transposed onto one man), **Game Log** (and the outing a pitcher's row opens) and **Charts**.
-
-@docs/claude/client-player-tabs.md
-
-**Client — the player page's Splits tab** — the platoon comparison, its diverging bar, and the five rounds of measured geometry that bar has taken.
-
-@docs/claude/client-player-splits.md
-
-**Client — the League view** — the fantasy league's own page: why it earns a pill, its three tabs and their strip, the poll, the four ESPN league formats and which two of them it refuses to guess at, and the **Scoreboard** tab.
-
-@docs/claude/client-league.md
-
-**Client — a league matchup** — the page opened from a scoreboard card: the Summary page's categories down the middle, its scale, the acquisitions and moves under it, and the two team pages.
-
-@docs/claude/client-league-matchup.md
-
-**Client — the League view's Rankings tab** — every team against every category over one of five spans, the three summary columns, and the rank badge that colors it.
-
-@docs/claude/client-league-rankings.md
-
-**Client — the League view's Transactions tab** — who added, dropped and traded whom, and the dot on the tab.
-
-@docs/claude/client-league-transactions.md
-
-**Themes** — the palette as a set of tokens, the six color schemes (the plain Dark and Light pair off VS Code's own `2026 Dark`/`2026 Light` defaults, of which **Dark is the app's default** and which lead the picker; Midnight, the navy original and still what `:root` declares; Lavender, dark gray and violet; and Maroon and Powder Blue, the dark and light halves of a 1980 road uniform), the picker in the settings menu, why every theme is stamped on `<html>` now that the default and `:root` are two different things, and why the choice is the one thing in this app mirrored into localStorage.
-
-@docs/claude/theming.md
-
-**Client — popups** — the app-wide dialog rules: why details are popups rather than accordions, the layer ladder, what a popup has to cover (including the one element an opaque box does not cover — a `<video>`, whose compositing layer paints over it), and why one press of Escape undoes exactly one thing.
-
-@docs/claude/client-dialogs.md
-
-**Client — the Feed view** — its three sections, the base-event vocabulary, and what the feed lost when its grouped reading became the player page's Overview tab.
-
-@docs/claude/client-feed.md
-
-**Pitchers on the roster** — the pitcher-side pipeline and cards.
-
-@docs/claude/pitchers.md
+@docs/claude/RULES.md
