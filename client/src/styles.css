@@ -12177,47 +12177,18 @@ button.start-line:focus-visible {
 .mup-card.mup-proj {
   border-style: dashed;
 }
-/* **And every bar on it is hatched**, which is the same claim the dashed border
-   makes, said where the reader is actually looking.
-
-   The border marks the *card*; the bars are what the card is read with — the
-   whole-matchup meter at the top and the ten category fills under it are the
-   picture a manager takes the week from, and a solid one says "this is the
-   measurement" in exactly the register a projection must not use. Hatching is
-   this app's standing mark for an estimate — the percentile card's dotted
-   bubble, the Splits card's hatched fill, the Schedule grid's dashed chip — and
-   the stripe here is `.spl-fill--thin`'s own 115° at 3px on, 4px off, so a
-   broken mark means one thing across the app.
-
-   **The color of each stripe is the color the bar already had**, so nothing
-   about *which side is ahead* changes: green marks the winner, the trailing run
-   stays `--faint` and the ties dimmer again. Only the texture says these are
-   figures nobody has played yet.
-
-   Two ordering notes, both load-bearing. The three meter rules are two classes
-   deep and so beat `.mup-meter-lead`'s own one-class `background` on
-   specificity, which is why **`--seg` is written first and `--lead` after it**:
-   between two selectors of equal weight the file's order decides, and a lead
-   that lost would be a leader painted `--faint`. And the fill's own `min-width:
-   2px` sliver stays solid whatever the stripe does, the gradient starting on
-   its 3px of ink — so a near-dead-level category is still visible as a mark
-   rather than as a gap. */
-.mup-proj .mup-fill {
-  background: repeating-linear-gradient(115deg, var(--win) 0 3px, transparent 3px 7px);
-}
-.mup-proj .mup-meter-seg {
-  background: repeating-linear-gradient(115deg, var(--faint) 0 3px, transparent 3px 7px);
-}
-.mup-proj .mup-meter-lead {
-  background: repeating-linear-gradient(115deg, var(--win) 0 3px, transparent 3px 7px);
-}
-.mup-proj .mup-meter-tied {
-  background: repeating-linear-gradient(
-    115deg,
-    color-mix(in srgb, var(--faint) 40%, transparent) 0 3px,
-    transparent 3px 7px
-  );
-}
+/* **The bars stay solid, and the dashed border is the whole of the mark.** They
+   were hatched for a round — `.spl-fill--thin`'s own 115° stripe on the meter
+   and the ten category fills — on the reasoning that a solid bar says "this is
+   the measurement" in a register a projection must not use. That is a good rule
+   and this is the wrong place to spend it: the percentile card's dotted bubble
+   and the Splits card's hatch mark *one row among solid ones*, where here every
+   figure on the card is projected at once, so the texture distinguished nothing
+   and only made the picture harder to read — a 9px rail striped at 3-on-4-off
+   is more gap than ink. What says it instead is the dashed border above, which
+   marks the card the reader is holding, plus the head's own `Projected` tag and
+   the dates running to the end of the period. One mark, said three ways in the
+   chrome rather than in the data.
 /* **The `Projected` toggle's own row, at the foot of the comparison** — see the
    component for why it left the head.
 
