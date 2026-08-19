@@ -485,3 +485,88 @@ paragraphs above restated where they apply.
 **Bundle: 578,644 → 578,715 bytes of JS** (170,626 → 170,641 gzipped) and
 **155,432 → 155,502 of CSS** (27,795 → 27,813) — 71 and 70 bytes raw, 15 and 18
 over the wire, for a span, a word and two wrapping rules.
+
+### The move is a mark, and the color is what it cost
+
+**The word was costing the row 44px it had nowhere to spend.** *The word for the
+move is the manager's* above argues four words — `Added`, `Claimed`, `Dropped`,
+`Traded` — in a fixed 58px slot, so that the names under one another start at
+one x. The slot is right and the vocabulary is right; the *width* was the
+problem, because it is the only fixed cost on the row that was paid in letters,
+and it is what pushed the ownership block onto its own line from 640px down (the
+section after this one).
+
+**So the row draws the direction and keeps the word for the two readers who can
+take it.** `+` for a man arriving and `−` for one leaving, in a 14px slot; the
+word is the slot's `title` and its `.sr-only` text, so a pointer and a screen
+reader both still get `Claimed` rather than a plus sign. `moveLabel` is
+**unchanged and still exported** — the matchup page's Moves section has room for
+the word and prints it, which is what keeps one vocabulary rather than two.
+
+**And the color says what the pickup cost, which is the half of the word a mark
+cannot carry.** The direction is now in the glyph, so repeating it in green and
+gray would be color spent on emphasis. What is left to say is the distinction
+*The waiver bid is a word, not a figure* already turned a `$12` chip into a
+word:
+
+- **`--hit`** — off the pool for nothing (`Added`).
+- **`--hr`** — cost a bid and his place in the waiver order (`Claimed`).
+- **`--muted`** — no color: a drop, or either side of a trade. Neither is a
+  pickup off the pool, and a trade is already named twice over — the card header
+  carries both team names with its swap glyph, and the row its own `to <Team>`.
+
+Measured over the 42 rows the first page draws, that is **18 `--hit`, 1 `--hr`
+and 23 `--muted`** — no tone on every row, which is the test a mark has to pass
+to mark anything. `--hr` is defined in the base block and in all five theme
+blocks, so the claim keeps its own color in every scheme rather than falling
+back to the add's.
+
+**`moveTone` is deliberately not exported** where `moveLabel` is. The word is a
+vocabulary two pages share; the tone is one page's reading of it, on the page
+that had to give up the letters.
+
+### The wrap begins where it genuinely stops fitting, which is 411
+
+**640 was never measured; it was the phone breakpoint nearest to hand.** Driven
+with the phone rule switched off, the single-line row carried every one of the
+42 names unellipsized down to **460** *with the 58px word*, and 6 of 42 went at
+440 — so the block was taking its own line for ~180px in which the row fitted
+perfectly well, and every width from 411 to 640 paid 17px a row for it.
+
+**With the mark it fits to 412**, which is where the rule now sits: 0 of 42
+ellipsized at 412 and 2 at 408, so `@media (max-width: 411px)`. The number is
+the league's widest name (127px) against the row's other fixed costs, not a
+device — and 412 being a Pixel's width is a coincidence worth having rather than
+the reason.
+
+**What did not change is what happens below it.** The block still takes the full
+line, still right-aligned; at 320 the deltas still drop under the figure whole
+on the rows whose delta run is widest. Dropping the deltas, or the label, at
+some width remains the wrong trade for the same reason as before.
+
+### Measured again, for the mark and the breakpoint
+
+**Driven against the dev client and the live 12-team league**, the same 42 rows
+read before and after at **320 / 375 / 390 / 411 / 412 / 440 / 640 / 1200**:
+
+- **The row holds one line from 412 up**, where it wrapped from 641: the list is
+  **3903 → 3189px at 640**, 42 rows going `49×9, 56×16, 57×16, 64×1` →
+  `32×9, 39×16, 40×16, 47×1` — 17px off each row, 714px off the page.
+- **At 412 the list is 3235px** and every row is one line (the 46px over 440 is a
+  trade card's *header* wrapping its two team names, which it did before).
+- **At 411 and below nothing moved**: 3949px at both 390 and 411, and **4451px at
+  320** — identical to before, with the same 3 rows of 42 dropping their deltas
+  under the figure.
+- **0 names ellipsized at any of the eight widths**, before or after, and
+  **page-body horizontal overflow 0** at all eight.
+- **The ownership block is 125–158.4px** wherever the row is one line (unchanged
+  row for row) and the full line — 248 / 303 / 318 / 339px — where it is not.
+- **The move slot is 14.0px on every row** where it was 58.0, and the `.sr-only`
+  word measures 1px, so it costs the slot nothing.
+- **Every mark carries its word**: `+Added ×18` in `rgb(134,207,134)`,
+  `+Claimed ×1` in `rgb(238,192,102)`, `−Dropped ×23` in `rgb(158,161,162)`,
+  each with the same word as its `title`.
+
+**Bundle: 581,598 → 581,833 bytes of JS** (171,038 → 171,094 gzipped) and
+**156,330 → 156,363 of CSS** (27,720 → 27,736) — 235 and 33 bytes raw, 56 and 16
+over the wire, for a tone function, two spans and a measured number.

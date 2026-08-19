@@ -14236,20 +14236,35 @@ span.mup-move-name:hover {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-/* The word for the move, in a fixed-width slot so the names under one another
+/* The move as a mark in a fixed-width slot, so the names under one another
    start at one x — the same arithmetic the summary table's fantasy slot chip
-   makes for its own column. `Claimed` is the widest the vocabulary holds. */
+   makes for its own column. It held the *word* (`Claimed`, the widest the
+   vocabulary holds) in 58px; `+` and `−` say the same direction in 14, and the
+   44px that buys is what lets the row stay one line down to 416 instead of
+   giving the ownership block its own line from 640 (see the phone rule below).
+   The word is not lost — it is the slot's `title` and its `.sr-only` text. */
 .lg-tx-move {
-  min-width: 58px;
-  font-size: 11px;
+  min-width: 14px;
+  flex: none;
+  text-align: center;
+  font-size: 15px;
   font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  line-height: 1;
 }
-.lg-tx-move-add {
+/* Color is spent on **what the pickup cost**, which is the distinction the word
+   was carrying (`Claimed` rather than `Added`) and the one a reader of a feed
+   acts on: `--hit` for a man taken off the pool for nothing, `--hr` for one
+   that cost a bid and a place in the waiver order. Neither is on every row —
+   between them they mark about half of one — and the third tone is no color at
+   all: a drop and either side of a trade are not pickups off the pool, and the
+   header's two team names and the row's `to <Team>` already say which. */
+.lg-tx-move-free {
   color: var(--hit);
 }
-.lg-tx-move-drop {
+.lg-tx-move-waiver {
+  color: var(--hr);
+}
+.lg-tx-move-plain {
   color: var(--muted);
 }
 .lg-tx-name {
@@ -14293,18 +14308,25 @@ span.mup-move-name:hover {
    distinction that changes a reading), and a dollar figure beside a name in a
    feed is a number nobody scans for. `EspnTransactionPlayer.bid` keeps a reader
    on the matchup page's Moves section, where it rides in the row's tooltip. */
-/* **On a phone the ownership column takes its own line.** The row's fixed costs
-   are a 58px move word, a 32px circle, three 8px gaps and — since the deltas
-   joined it — a 151px ownership block, which at 390 left the name **53px** and
-   ellipsized **all 42 of them**. Wrapping the block under the row rather than
-   dropping the deltas gives the name the whole first line (214px, 0 ellipsized)
-   and costs the row ~17px, which on a scrolling feed is the cheaper of the two.
-   It stays right-aligned there, so the percentages still line up down the list.
+/* **On a narrow phone the ownership column takes its own line.** The row's
+   fixed costs are the move slot, a 32px circle, three 8px gaps and — since the
+   deltas joined it — a ~158px ownership block, which with a 58px move *word* at
+   390 left the name **53px** and ellipsized **all 42 of them**. Wrapping the
+   block under the row rather than dropping the deltas gives the name the whole
+   first line and costs the row ~17px, which on a scrolling feed is the cheaper
+   of the two. It stays right-aligned there, so the percentages still line up
+   down the list.
+
+   **The width it starts at is measured, not chosen.** It was 640, which is
+   ~230px early: with the word cut to a 14px mark the single-line row carries
+   this league's widest name (127px) with nothing ellipsized down to **412**,
+   and 2 of 42 go at 408. So the wrap begins at 411 and every width above it
+   keeps the figure on the line above its deltas beside a full-width name.
 
    This is the one place the row wraps, and it does not undo the rule above it:
    what must not wrap is the *identity block*, which still ellipsizes, so a
    nine-player trade is nine rows of two lines rather than nine paragraphs. */
-@media (max-width: 640px) {
+@media (max-width: 411px) {
   .lg-tx-player {
     flex-wrap: wrap;
     row-gap: 2px;
