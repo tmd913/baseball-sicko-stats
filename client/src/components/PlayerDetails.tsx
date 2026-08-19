@@ -1135,17 +1135,6 @@ export function PlayerDetails({
             <div>
               <h1 className="details-name">
                 {name}
-                {/* ESPN's eligibility where there is a league to read it from,
-                    MLB's listed position otherwise — see `posChip`. */}
-                {posChip}
-                {/* And which way he does it, immediately after where he does
-                    it — the two are one kind of fact and the heading reads
-                    outward from the name through them. Text rather than a
-                    second bordered chip, and in the same `--faint` the tables
-                    give it: a grounded pill beside a grounded pill would put
-                    `LHB` in exactly the shape this page uses for a *position*
-                    and invite a reader to take it for one. */}
-                {handChip}
                 {/* The padlock: somebody else in the league already has him.
                     It sits on the **name line** rather than out in the control
                     cluster on the right, for the reason the Rostered line under
@@ -1172,6 +1161,50 @@ export function PlayerDetails({
                     than the 13 a table row gives them. */}
                 <PlayerNewsMark id={playerId} name={name} size={15} />
               </h1>
+              {/* **Where he plays and which way he does it, on their own line
+                  under the name** — the shape the roster's own identity block
+                  already uses (`PlayerIdentity`'s `.row-id-sub`, club → position
+                  → hand), so the page and the row a reader arrived through say
+                  one fact in one order. The two were inside the `<h1>` until
+                  this: correct as a run of facts *about him*, but they were
+                  reading as part of his name at a glance, and the heading had to
+                  hold them alongside the padlock and the newspaper — marks that
+                  are pressable where these two are not. Split, the `<h1>` is the
+                  name and the things you can press on it, and this line is the
+                  standing description of the man, directly above the Rostered
+                  line that is the same kind of thing.
+
+                  **The tokens themselves are unchanged** — the same `posChip`
+                  and `handChip` built once above and drawn again in the game
+                  log's head, in the same vocabulary and the same order. Only
+                  their line moved; nothing about what they say did.
+
+                  **The line is always drawn, and reserves its own box.** This
+                  head is pinned chrome over a scroller, so a line that appeared
+                  when the handedness map landed — it is null until the boot
+                  request does — would push the whole page down under the
+                  reader's finger. With neither token to draw, a hidden chip
+                  holds the height instead: the box is *laid out* rather than
+                  declared, so it is exactly as tall as a real chip in whatever
+                  font the platform gives us. */}
+              <p className="details-sub">
+                {/* ESPN's eligibility where there is a league to read it from,
+                    MLB's listed position otherwise — see `posChip`. */}
+                {posChip}
+                {/* And which way he does it, immediately after where he does
+                    it — the two are one kind of fact and the line reads outward
+                    from the name through them. Text rather than a second
+                    bordered chip, and in the same `--faint` the tables give it:
+                    a grounded pill beside a grounded pill would put `LHB` in
+                    exactly the shape this page uses for a *position* and invite
+                    a reader to take it for one. */}
+                {handChip}
+                {!posChip && !handChip && (
+                  <span className="player-pos details-sub-ghost" aria-hidden="true">
+                    &mdash;
+                  </span>
+                )}
+              </p>
               {/* Under the name rather than out beside the watchlist button: it
                   is a fact *about the player*, like the position chip above it,
                   where the buttons on the right are things you do to him. Absent
