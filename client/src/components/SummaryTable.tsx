@@ -269,6 +269,65 @@ function ProjectablePitchCells({ line, projected }: { line: PitchingLine; projec
 }
 
 /**
+ * **How many games a projected row's figures are drawn over** — the ones he has
+ * already played over the days in view, plus the ones he is expected still to
+ * get.
+ *
+ * It follows the *row* rather than the projection, and that is the whole of the
+ * decision: every figure beside it is `what he has already done + what he
+ * should still add`, so a count naming only the second half would be the one
+ * cell on the row keeping a different arithmetic. It is not a corner case
+ * either — the ordinary press straddles today, a game already under way this
+ * afternoon being in the report's own line and out of the projection by
+ * `remainingGames`' rule.
+ *
+ * **"Played" is each kind's own test, and both are the app's existing ones**: a
+ * batter's game he came to the plate in (`PlayerCard`'s own `played`) and a
+ * pitcher's game he threw in (`aggregatePitching`'s filter). Neither counts the
+ * placeholder games a report carries for days his club played without him —
+ * which over a future range is *every* game on it, and is why `r.games.length`
+ * cannot be the answer.
+ */
+function projectedGames(r: PlayerReport, proj: ProjectedPlayerLine | undefined): number {
+  const played =
+    r.kind === 'pitcher'
+      ? r.games.filter((g) => g.pitching).length
+      : r.games.filter((g) => g.plateAppearances.length > 0).length;
+  return played + (proj?.chances ?? 0);
+}
+
+/**
+ * **The `G` column, in the Opponent column's place** — drawn whenever the
+ * projected lens is on, exactly as the Schedule view puts its own `G` there.
+ *
+ * The opponent cell is one representative game's matchup, which is a fair
+ * summary of a range that has been played and says almost nothing about one the
+ * lens has just moved the reader into the future of: it names a single fixture
+ * out of a week of them, most of which nobody has played. What a projected row
+ * *is* read against is how many games it is made of, which is the same question
+ * the Schedule view's leading column answers — hence the same header.
+ */
+function ProjectedGamesHead() {
+  return (
+    <th
+      className="sum-num"
+      scope="col"
+      title="Games behind these figures — the ones he has played over the days in view plus the ones he is expected still to get"
+    >
+      G
+    </th>
+  );
+}
+
+/** A `G` cell. A tenth like every other projected count, since an expected game
+ *  count is a share of one; and a dash at nothing, which is the honest reading
+ *  of a man whose club has no game left and who played none of the days in view
+ *  — the same absence `chances: 0` already dashes the rest of his row for. */
+function ProjectedGamesCell({ n }: { n: number }) {
+  return <td className="sum-num">{n > 0 ? projCount(n) : '—'}</td>;
+}
+
+/**
  * The caption over a projected table: what the figures are, which days they
  * cover, and how much of that is still to be played.
  *
@@ -551,9 +610,12 @@ interface RowHandlers {
 
 /** The shared leading cells of a summary row: headshot, name (link), opponent.
  *
- *  The opponent cell is dropped in schedule mode, where it would be a
- *  thirteenth of the same fact: that column is one representative game's
- *  matchup and the whole table beside it is every game of the span. */
+ *  The opponent cell is dropped in **both** of the table's other readings, and
+ *  in each it is replaced by the `G` column. In schedule mode it would be a
+ *  thirteenth of the same fact — that column is one representative game's
+ *  matchup and the whole table beside it is every game of the span; under the
+ *  projected lens it would name one fixture of a week the reader has just been
+ *  moved into the future of. See `ProjectedGamesHead`. */
 function LeadCells({
   r,
   game,
@@ -674,9 +736,13 @@ function BatterTable({
             <ScheduleHeadCells index={schedule} kind="batter" />
           ) : (
             <>
-              <th className="sum-opp-col" scope="col">
-                Opponent
-              </th>
+              {projection ? (
+                <ProjectedGamesHead />
+              ) : (
+                <th className="sum-opp-col" scope="col">
+                  Opponent
+                </th>
+              )}
               {cols.map((c) => (
                 <th key={c} className="sum-num" scope="col">
                   {c}
@@ -697,13 +763,18 @@ function BatterTable({
                 game={game}
                 role={role}
                 corner={game ? lineupCorner(game) : null}
-                showOpponent={!schedule}
+                showOpponent={!schedule && !projection}
                 {...handlers}
               />
               {schedule ? (
                 <ScheduleCells index={schedule} r={r} />
               ) : (
-                <ProjectableStatCells line={lineOf(r)} projected={projection != null} />
+                <>
+                  {projection && (
+                    <ProjectedGamesCell n={projectedGames(r, projection.get(playerKey(r)))} />
+                  )}
+                  <ProjectableStatCells line={lineOf(r)} projected={projection != null} />
+                </>
               )}
             </tr>
           );
@@ -719,7 +790,16 @@ function BatterTable({
             <ScheduleTotalCells index={schedule} players={batters} kind="batter" />
           ) : (
             <>
-              <td className="sum-opp" aria-hidden="true" />
+              {projection ? (
+                /* The same sum the schedule mode's own `G` total is: every
+                   row's count added up, so a reader can add the column and get
+                   the figure at the foot of it. */
+                <ProjectedGamesCell
+                  n={batters.reduce((n, r) => n + projectedGames(r, projection.get(playerKey(r))), 0)}
+                />
+              ) : (
+                <td className="sum-opp" aria-hidden="true" />
+              )}
               <ProjectableStatCells line={total} projected={projection != null} />
             </>
           )}
@@ -767,9 +847,13 @@ function PitcherTable({
             <ScheduleHeadCells index={schedule} kind="pitcher" />
           ) : (
             <>
-              <th className="sum-opp-col" scope="col">
-                Opponent
-              </th>
+              {projection ? (
+                <ProjectedGamesHead />
+              ) : (
+                <th className="sum-opp-col" scope="col">
+                  Opponent
+                </th>
+              )}
               {cols.map((c) => (
                 <th key={c} className="sum-num" scope="col">
                   {c}
@@ -790,13 +874,18 @@ function PitcherTable({
                 game={game}
                 role={role}
                 corner={game ? pitchingCorner(game) : null}
-                showOpponent={!schedule}
+                showOpponent={!schedule && !projection}
                 {...handlers}
               />
               {schedule ? (
                 <ScheduleCells index={schedule} r={r} />
               ) : (
-                <ProjectablePitchCells line={lineOf(r)} projected={projection != null} />
+                <>
+                  {projection && (
+                    <ProjectedGamesCell n={projectedGames(r, projection.get(playerKey(r)))} />
+                  )}
+                  <ProjectablePitchCells line={lineOf(r)} projected={projection != null} />
+                </>
               )}
             </tr>
           );
@@ -812,7 +901,16 @@ function PitcherTable({
             <ScheduleTotalCells index={schedule} players={pitchers} kind="pitcher" />
           ) : (
             <>
-              <td className="sum-opp" aria-hidden="true" />
+              {projection ? (
+                <ProjectedGamesCell
+                  n={pitchers.reduce(
+                    (n, r) => n + projectedGames(r, projection.get(playerKey(r))),
+                    0,
+                  )}
+                />
+              ) : (
+                <td className="sum-opp" aria-hidden="true" />
+              )}
               <ProjectablePitchCells line={totalLine} projected={projection != null} />
             </>
           )}

@@ -26,6 +26,7 @@ import type {
   WatchPlayer,
 } from './types';
 import {
+  addDays,
   baseballDay,
   isInjured,
   isStartingOn,
@@ -172,14 +173,9 @@ const SHOW_SIMULATE_TOGGLE = false;
 // The Eastern zone and the 3am rollover that decide what "today" means are
 // `lib.ts::baseballDay`'s now — moved there when the matchup page needed the
 // baseball day of an ESPN transaction to say which week it belongs to, and one
-// copy of a rule that precise is the most there should be.
-
-function addDays(date: string, delta: number): string {
-  const [y, m, day] = date.split('-').map(Number);
-  const dt = new Date(Date.UTC(y, m - 1, day));
-  dt.setUTCDate(dt.getUTCDate() + delta);
-  return dt.toISOString().slice(0, 10);
-}
+// copy of a rule that precise is the most there should be. `addDays` went the
+// same way when a matchup team page grew a projected lens of its own and needed
+// to move a range forward exactly as this file's own does.
 
 /* `startedOn` and the projection below it are `lib.ts`'s now — a matchup's
    team pages ask the same question of a leaguemate's lineup, and one definition

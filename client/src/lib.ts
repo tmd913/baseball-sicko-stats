@@ -1566,11 +1566,16 @@ export function baseballDay(ms: number): string {
  *  walk, so it is written once rather than in each of them. */
 export function rangeDatesOf(start: string, end: string): string[] {
   const out: string[] = [];
-  for (let d = start; d <= end; d = addDay(d, 1)) out.push(d);
+  for (let d = start; d <= end; d = addDays(d, 1)) out.push(d);
   return out;
 }
 
-function addDay(date: string, delta: number): string {
+/** `YYYY-MM-DD` plus (or minus) whole days, in UTC so no DST boundary can round
+ *  a date the wrong way — the rule `etDate.ts::daysBetween` follows on the
+ *  server for the same reason. Exported because three surfaces now move a range
+ *  by a day: the app's own date presets, the roster view's projected lens, and a
+ *  matchup team page's copy of it. */
+export function addDays(date: string, delta: number): string {
   const [y, m, day] = date.split('-').map(Number);
   const dt = new Date(Date.UTC(y, m - 1, day));
   dt.setUTCDate(dt.getUTCDate() + delta);
