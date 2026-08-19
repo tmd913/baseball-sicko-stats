@@ -495,11 +495,24 @@ export const api = {
    *  A span this league cannot be asked for — a half with no matchup periods
    *  in it — is answered with the season rather than an empty table, and the
    *  response says which spans it *can* serve so the tab strip is drawn from
-   *  the league rather than from a list held here. */
-  async espnRankings(span?: EspnRankSpan | null, refresh = false): Promise<EspnRankings> {
+   *  the league rather than from a list held here.
+   *
+   *  **`projected` swaps the figures for where the week is heading**, and the
+   *  ranking arithmetic is done on the server over them — one definition of a
+   *  competition rank, of a roto point and of the `OVR = BAT + PIT` identity,
+   *  rather than a second one here. It reaches the `matchup` span of a live
+   *  week alone; anywhere else it is ignored and the answer comes back with
+   *  `projected: false`, which is what un-lights the toggle rather than
+   *  claiming a lens that is not in force. */
+  async espnRankings(
+    span?: EspnRankSpan | null,
+    refresh = false,
+    projected = false,
+  ): Promise<EspnRankings> {
     const q = new URLSearchParams();
     if (span) q.set('span', span);
     if (refresh) q.set('refresh', '1');
+    if (projected) q.set('projected', '1');
     const qs = q.toString();
     return request(`/api/espn/rankings${qs ? `?${qs}` : ''}`);
   },

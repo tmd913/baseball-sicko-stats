@@ -626,6 +626,40 @@ gzipped) and **153.52 → 154.21 KB of CSS** (27.39 → 27.62) — 1.1KB and 0.7
 grids, a popover that knows which way it opens and a key written to be read once
 and understood.
 
+**The press leaves a mark now, which it did not.** The read behind this button is
+386–715ms with the boards warm, and for the whole of it the page did nothing at
+all — no spinner, no state, the button simply sitting there until the figures
+changed under it. That reads as a control that has not worked, on the one press
+this page exists for.
+
+`ProjectedTools` takes a `loading` and swaps the glyph for the app's own
+`SpinningBaseball` at `sm`, which is exactly what `ProjectedToggle` — the Roster
+view's and the team page's plain switch — has always done; the two say the same
+thing with the same mark because they take it from the same place. `aria-busy`
+rides with it, so the button says it is working rather than only looking like it.
+
+**No `MIN_SPIN` floor**, which is a decision rather than an omission. That floor
+exists so a press whose answer comes back instantly still leaves a trace, and its
+one caller is `Refresh from ESPN`, where the answer often *is* instant off a warm
+cache. Here the read is a few hundred milliseconds at its fastest and the figures
+on screen change when it lands, so the press has a visible consequence either
+way; a floor would only hold a ball up after the thing it was about had finished.
+And it is **not** `useDelayedFlag`'s 250ms delay either — that is the rule for a
+wait nobody asked for, and this is a press.
+
+**The flag is cleared on the way out as well as on the way in.** Turning the lens
+off while a read is in flight cancels the run, so its `finally` never fires — and
+a flag left true is a ball spinning for ever on a button that is no longer doing
+anything. The same shape is why the roster and team-page reads clear theirs in
+the same place.
+
+**Measured by sampling the button through a press on a cold server**, at 1400×950:
+`aria-busy="true"` with one `.ball-spin` at **t=22ms**, back to absent at
+**t=300ms**, against a projection request of **286ms** — and the same on the
+Rankings tab's own toggle (283ms). The button keeps one `<svg>` throughout, so
+nothing about its box moves while it works.
+
+
 ### A category row opens its chart
 
 **A row of the comparison is a press, and it draws that category day by day for

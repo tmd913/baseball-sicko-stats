@@ -1291,6 +1291,28 @@ export default function App() {
     () => initialParams.get('proj') === '1',
   );
   const [projection, setProjection] = useState<EspnProjection | null>(null);
+  /**
+   * **The projection is being read**, which is what the mark inside the button
+   * that started it is drawn from.
+   *
+   * There was none, and the read is the slowest press on this page — 386–715ms
+   * with the four boards warm and seconds without them — so the toggle sat
+   * inert for the whole of it while the card behind went on drawing the live
+   * figures ("it looks like nothing happens for a second", reported). That the
+   * card holds still is rule 1 and is right; what was missing is the other half
+   * of it, which is that a press must leave a trace *somewhere*, and inside the
+   * control is the only place it may go.
+   *
+   * **No `MIN_SPIN` floor**, and that is a decision rather than an omission.
+   * That constant is a floor on how long a mark stays up once a press has put
+   * it there, and it earns its keep on `Refresh from ESPN`, whose result is a
+   * change in a page behind a popover that may look identical — so without a
+   * floor a warm press leaves no evidence at all. Here the result *is* the
+   * evidence: every figure on the card changes at once, which is the loudest
+   * confirmation this page can give, and a floor would only hold the answer
+   * back from a reader who already has it.
+   */
+  const [projLoading, setProjLoading] = useState(false);
   const [matchupPeriod, setMatchupPeriod] = useState<number | null>(() => {
     const raw = initialParams.get('mp');
     return raw && /^\d{1,3}$/.test(raw) ? Number(raw) : null;
@@ -1372,6 +1394,37 @@ export default function App() {
       : 'matchup';
   });
 
+  /**
+   * **The Rankings tab's own projected reading** — every team's figure and
+   * standing read against the end of the matchup rather than against today.
+   *
+   * It is the question the projection is most useful for on that table: not
+   * *am I winning this category*, which the scoreboard answers, but *where will
+   * I finish in it* — and a manager two points off third in saves with five
+   * days left is looking at a different week from one who is two points off
+   * with one.
+   *
+   * **In the URL as `rankproj=1`**, by the rule `proj=1` and `rproj=1` follow:
+   * it changes what the numbers are, so a link that carries it describes a
+   * different table. A **third** param rather than a reuse of either, because
+   * neither means this: `proj=1` is a *matchup*'s figures and `rproj=1` is a
+   * *player's*, and one param meaning three things in three views is exactly
+   * the trap `lspan=` avoids by not being `win=`. It is written only on the
+   * span it can act on (see the URL sync), so a link to a season table never
+   * carries a lens that table has no answer for.
+   *
+   * **Not a saved preference**, for `starters=1`'s reason: which figures a
+   * reader wants in front of them is a lens for an afternoon, and a saved copy
+   * would be a table of guesses drawn a fortnight later.
+   *
+   * The re-ranking is the **server's** — see `espn.ts::getRankings`. Everything
+   * that turns a figure into a standing lives there, so a projected table
+   * ranked here would be a second definition of the competition rank, of the
+   * roto point, and of the identity that makes `OVR` equal `BAT` + `PIT`.
+   */
+  const [rankProjected, setRankProjected] = useState<boolean>(
+    () => initialParams.get('rankproj') === '1',
+  );
   const [rankings, setRankings] = useState<EspnRankings | null>(null);
   const [rankingsLoading, setRankingsLoading] = useState(false);
   const [rankingsError, setRankingsError] = useState<string | null>(null);
@@ -1652,8 +1705,17 @@ export default function App() {
   useEffect(() => {
     // **The matchup page is the only reader**, the Scoreboard's toggle having
     // moved there — so a reader who never opens a card never pays for it.
-    if (!projected || view !== 'league' || matchupId == null || !espnConnected) return;
+    if (!projected || view !== 'league' || matchupId == null || !espnConnected) {
+      // **Cleared on the way out, not only on the way in.** Turning the lens off
+      // while a read is in flight cancels the run below, so its `finally` is
+      // skipped — and a flag left true is a ball spinning for ever on a button
+      // that is no longer doing anything. The same shape is why the roster and
+      // team-page reads clear theirs here too.
+      setProjLoading(false);
+      return;
+    }
     let canceled = false;
+    setProjLoading(true);
     api
       .espnProjection(matchupPeriod)
       .then((p) => {
@@ -1664,6 +1726,9 @@ export default function App() {
         // the board it was drawn over is untouched, so the cards fall back to
         // the live ones rather than the page becoming a message.
         if (!canceled) console.error('reading the projection failed:', e.message);
+      })
+      .finally(() => {
+        if (!canceled) setProjLoading(false);
       });
     return () => {
       canceled = true;
@@ -1691,7 +1756,11 @@ export default function App() {
     setRankingsLoading(true);
     setRankingsError(null);
     api
-      .espnRankings(rankSpan)
+      // **Never over data**: the table on screen stands while the next answer is
+      // in flight, whether the change is the span or the lens, so the only mark
+      // a press of `Projected` leaves is the ball inside the button that
+      // started it. A failed read leaves the last table standing too.
+      .espnRankings(rankSpan, false, rankProjected)
       .then((r) => {
         if (!canceled) setRankings(r);
       })
@@ -1704,7 +1773,7 @@ export default function App() {
     return () => {
       canceled = true;
     };
-  }, [view, leagueTab, espnConnected, rankSpan, espnLeagueId]);
+  }, [view, leagueTab, espnConnected, rankSpan, rankProjected, espnLeagueId]);
 
   /**
    * The Transactions feed, read on the **first entry to the League view** —
@@ -1825,10 +1894,12 @@ export default function App() {
       api.espnScoreboard(matchupPeriod).then(setScoreboard).catch(quiet('scoreboard'));
     }
     if (leagueTab === 'rankings' && rankSpanLive) {
-      api.espnRankings(rankSpan).then(setRankings).catch(quiet('rankings'));
+      // The lens rides along, or a tick would quietly swap a projected table
+      // back to the live one a minute after the reader asked for it.
+      api.espnRankings(rankSpan, false, rankProjected).then(setRankings).catch(quiet('rankings'));
     }
     api.espnTransactions().then(setTransactions).catch(quiet('transactions'));
-  }, [leagueTab, matchupId, scoreboardLive, rankSpanLive, matchupPeriod, rankSpan]);
+  }, [leagueTab, matchupId, scoreboardLive, rankSpanLive, matchupPeriod, rankSpan, rankProjected]);
 
   /** The latest tick, so the interval below can be set up once per visit to the
    *  page rather than torn down and rebuilt every time a poll lands — which is
@@ -2602,6 +2673,18 @@ export default function App() {
     if (view === 'league' && leagueTab === 'rankings' && rankSpan !== 'matchup') {
       p.set('lspan', rankSpan);
     }
+    // The Rankings tab's own lens, and **only on the span it can act on**: the
+    // current matchup is the one span a projection has an answer for (there is
+    // no projected season line), so anywhere else the param would name a lens
+    // the recipient's table could not apply.
+    if (
+      view === 'league' &&
+      leagueTab === 'rankings' &&
+      rankSpan === 'matchup' &&
+      rankProjected
+    ) {
+      p.set('rankproj', '1');
+    }
     if (simulate) p.set('sim', '1');
     if (hideInjured) p.set('hideil', '1');
     // Only while it is actually narrowing something — see `startersActive`.
@@ -2650,6 +2733,7 @@ export default function App() {
     matchupId,
     matchupTeam,
     rankSpan,
+    rankProjected,
     simulate,
     hideInjured,
     startersActive,
@@ -2942,7 +3026,14 @@ export default function App() {
    * window already fails in.
    */
   useEffect(() => {
-    if (!rosterProjected) return;
+    if (!rosterProjected) {
+      // Turning the lens off while a read is in flight cancels the run below,
+      // so its `finally` never fires — and a flag left true is a ball spinning
+      // for ever inside a toggle that is no longer doing anything. Clearing it
+      // here is what makes the mark say what it means.
+      setRosterProjLoading(false);
+      return;
+    }
     let canceled = false;
     setRosterProjLoading(true);
     api
@@ -5082,7 +5173,13 @@ export default function App() {
           rankings={rankings}
           rankSpan={rankSpan}
           rankingsLoading={showRankingsWait}
+          /* The undelayed flag, for the mark inside the toggle: the block wait
+             below is what `useDelayedFlag`'s 250ms floor is for, and a press is
+             owed no delay. */
+          rankingsBusy={rankingsLoading}
           rankingsError={rankingsError}
+          rankProjected={rankProjected}
+          onRankProjected={setRankProjected}
           transactions={transactions}
           transactionsLoading={showTransactionsWait}
           transactionsError={transactionsError}
@@ -5293,6 +5390,7 @@ export default function App() {
              projecting the board and then opening a card fetches nothing. */
           projection={projection}
           projected={projected}
+          projectionLoading={projLoading}
           onProjected={setProjected}
           /* The app's own named spans, so `Today` means one thing in the app —
              the matchup's own week is added to them in there, that being the

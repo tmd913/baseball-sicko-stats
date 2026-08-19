@@ -8314,7 +8314,17 @@ button.start-line:focus-visible {
 @media (max-width: 640px) {
   .research-toggle-label,
   .schedule-toggle-label,
-  .projected-toggle-label {
+  .projected-toggle-label,
+  /* **The Rankings caption's copy of the League page's own toggle**, and only
+     that copy — scoped to the row rather than to `.lg-proj-label`, because the
+     matchup card's is centered on a row of its own with the width for a word
+     where this shares a line with a caption of dates. Measured at 390: with the
+     label the pair wraps and the caption row is 70px, which is two thirds of a
+     table row taken off the one tab that *is* a table; without it the row is
+     36 and the button sits on the caption's own line. Visually hidden rather
+     than removed, the rule the three above it follow: the button still names
+     itself rather than being a lone glyph. */
+  .lg-span-detail .lg-proj-label {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -11771,6 +11781,26 @@ button.start-line:focus-visible {
 }
 .lg-proj-btn svg {
   flex: none;
+}
+/* **The ball is drawn at the size of the mark it replaces**, on both of the
+   app's projected toggles — because a button that changes width under the
+   finger that pressed it is the fault this file has already recorded twice (the
+   invite page's confirm, and the same shape on `Not now` beside it). Measured
+   before this: `SpinningBaseball`'s `sm` is 14px against a `ProjectedGlyph` of
+   17 here and 19 on the Roster view's, so pressing took the League button
+   **111.48 → 108.48px** and the Roster one five pixels more than that, mid-read,
+   with the label sliding along behind it.
+   Two numbers rather than one because the two glyphs are two sizes, and each is
+   stated once against the call site that draws it — the League page's
+   `<ProjectedGlyph />` at its 17px default, and `ProjectedToggle`'s explicit
+   `size={19}`. Change one and this is the rule to change with it. */
+.lg-proj-btn .ball-spin {
+  width: 17px;
+  height: 17px;
+}
+.projected-toggle .ball-spin {
+  width: 19px;
+  height: 19px;
 }
 /* Anchored to the **head row** rather than to its own 30px button, which is
    `.roll-key`'s trick and is here for its measured reason: a shrink-to-fit

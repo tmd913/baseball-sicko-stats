@@ -742,3 +742,197 @@ Driven rather than assumed: the desktop pill and the phone `<select>` each write
 `lspan=` and redraw the caption (`First half` → `Weeks 1–9 · Mar 25 – May 31`,
 `Second half` → `Weeks 10–18 · Jun 1 – Aug 9`), the select keeps its
 value across the reload, and sorting is untouched.
+
+### The Projected reading: where the table is heading
+
+**A rank is read to answer *where will I finish*, and the table could only say
+where everybody had got to.** The Scoreboard answers *am I winning this
+category* — that is what a matchup card is — and the question a manager brings
+to a league table is the other one: two roto points off third in saves with five
+days left is a week to do something about, and two off with one day left is not.
+So the caption row carries a **`Projected`** toggle, and pressing it draws every
+figure, every rank and all three summary columns against the **end of the
+matchup period** rather than against today.
+
+**Only on `Current matchup`, and that is not a limitation so much as the only
+span the question has an answer for.** There is no such thing as a projected
+season line or a projected first half — those are records of weeks that have
+been played — so the other four spans draw no toggle at all. **Absent rather
+than disabled**, the rule this app applies to every control with nothing to do:
+a disabled button invites the reader to work out why, where an absent one leaves
+the caption exactly as it has always been.
+
+**And a settled week draws none either**, which is the same rule read one step
+finer: the week being played is what a projection is *of*, so a period that is
+over has nothing left to happen. Which weeks those are is the **server's**
+answer (`projectable` on the response) rather than a rule kept here — see
+**ESPN fantasy league**, *The Rankings tab*, where the test is `liveDay != null`
+and costs no read at all.
+
+### The re-ranking is the server's, and that is the whole of the design
+
+**Everything that turns a figure into a standing lives in
+`espn.ts::getRankings`** — `rankBy`'s competition ranking with `lowerBetter`
+baked in (so 1 is the best ERA and the most home runs alike), the per-category
+population a roto point is worth, `totalOver`, and the identity that makes
+`OVR` equal `BAT` + `PIT` *by construction* rather than by two arithmetics that
+agree. A projected table ranked in the client would be a second definition of
+every one of those, free to drift from the live one the next time either moved,
+with nothing on screen to say which of the two a reader was looking at.
+
+So the projection replaces the **values** and nothing downstream is told: the
+same ranks come out, the same points, the same `OVR` identity, over different
+numbers. `?projected=1` on `/api/espn/rankings` is what asks for it, and the
+figures come off `getProjection` for the current period — **the same read the
+matchup page's own lens makes**, cached per league on its own minute, so a
+reader who has already opened a card pays nothing for this and one who has not
+pays for it once.
+
+**Where this parts from the two other projections in the app** is worth stating,
+because all three are the same engine: the matchup page projects **a side's
+totals** and the Roster view **a player's line**, and neither of them ranks
+anything. This is the only one where the projection is an *input* to an
+arithmetic rather than the answer itself, which is exactly why it could not be
+done anywhere but where that arithmetic is.
+
+**A bye is a real shape and its own totals are projected all the same** — the
+matchup has a `home` and no `away`, so both sides of every matchup are walked
+rather than the pairs. A team the projection has no side for keeps **no
+figures** rather than its live ones, which is the rule every absent figure on
+this table follows: a row half projected and half not would be a row nobody
+could read.
+
+### The caption says so, because a table of guesses under `so far` would be a lie
+
+`Week 19 · Aug 10 – Aug 18 · so far` becomes **`Week 19 · projected to Aug 23 ·
+5 days still to play`**. The week keeps its name — a reader still has to know
+which week — and the two halves that were true of ESPN's own figures give way to
+what replaced them: the day the projection runs to, and how much of it is still
+a guess. That last figure is the one that matters most and nothing else on the
+page carries it: a table projected over five days is a different thing from one
+projected over one.
+
+**The days come off the response** (`projectedDaysLeft`) rather than being
+counted here, and the ⓘ's own first paragraph reads the same number — so the
+caption, the key and the table cannot come to disagree about how far ahead they
+are looking.
+
+**Two ⓘs in one row, and only while the lens is on.** `RankKey` explains `OVR`,
+`BAT` and `PIT`, which is the one thing on this table a reader cannot work out
+by looking; the second is the projection's own key, and it arrives with the
+button because it is *part of* that button — `ProjectedTools` is the control and
+its key as one object, which is how the matchup page draws it. It is that
+component rather than a lookalike, so the mark, the lit state and the four
+paragraphs are the ones the rest of the app already uses: one account of one
+method. What it gained for this caller is a **`days`** prop, because this tab
+reads the figure off its own response and holds no `EspnProjection` at all.
+
+### `rankproj=1`, and why it is a third param rather than a reuse
+
+In the URL by the rule `hideil=1`, `starters=1` and `sched=` follow: it changes
+*what the numbers are*, so a link that carries it describes a different table.
+
+**A third param rather than either of the two the app already has**, because
+neither means this: `proj=1` is a **matchup's** figures and `rproj=1` is a
+**player's**, and one param meaning three things in three views is exactly the
+trap `lspan=` avoids by not being `win=` — a link is read before anything on
+screen can say which view it was written on. None of the app's other params can
+collide with it (`preset`, `start`, `end`, `player`, `view`, `kind`, `sim`,
+`hideil`, `starters`, `sched`, `plays`, `newplays`, `roster`, `pos`, `cols`,
+`inc`, `scope`, `watch`, `win`, `help`, `mp`, `mup`, `mt`, `lt`, `lspan`,
+`proj`, `rproj`, `league`).
+
+**Written only on the span it can act on.** Moving to `Season` drops it and
+coming back writes it again, so a link to a season table never carries a lens
+that table has no answer for. **Not a saved preference**, for `starters=1`'s
+reason: which figures a reader wants in front of them is a lens for an
+afternoon, and a saved copy would be a table of guesses drawn a fortnight later.
+
+### Never over data, and the mark goes inside the button
+
+The live table stands while the projected one is in flight — `setRankings` is
+called on success alone, which is rule 1 — so the only mark a press leaves is
+the spinning ball inside the control that started it. A **failed** read leaves
+the last table standing too, with no banner over it.
+
+The toggle's own flag is the **undelayed** one (`rankingsBusy`), where the block
+wait below it is gated on `useDelayedFlag`'s 250ms floor. The two answer
+different questions: that floor is for a wait nobody asked for, and a press is
+owed no delay at all.
+
+**No `MIN_SPIN` floor, and that is a decision rather than an omission.** That
+constant is a floor on how long a mark stays up once a press has put it there,
+and it earns its keep on `Refresh from ESPN`, whose result is a change in a page
+behind a popover that may look identical — without a floor a warm press leaves
+no evidence at all. Here the result **is** the evidence: every figure and every
+rank on the table changes at once, which is the loudest confirmation this page
+can give, and a floor would only hold an answer back from a reader who already
+has it. Measured, the warm press lands in **1.2ms** and the cold one in
+**1.69s**; the case a floor would buy is the first of those, and it is the case
+that needs it least.
+
+### Measured
+
+**The projected ranks were recomputed independently** from `/api/espn/projection`
+and compared with `/api/espn/rankings?span=matchup&projected=1`, cell by cell, on
+the live 12-team league: every team's projected value equals its own projected
+`scores` entry (**120 of 120 cells, 0 mismatches**, 12 rows, 12 projected
+sides); every rank is the competition rank of those values with `lowerBetter`
+honored, checked per category on the direction as well as the ordering (**120 of
+120, 0 mismatches, 10 categories**); and every points total is
+`sum(n + 1 − rank)` over its side with `OVR` equal to `BAT` + `PIT` (**24 side
+totals, 12 of 12 overall totals, 0 mismatches**).
+
+**The live table is byte-identical to `main`** on all five spans, bar the four
+new fields — checked by fetching both servers and diffing the responses.
+
+**Driven in a browser at 390×844 and 1200×900**, against the live league:
+
+| | live | projected |
+| --- | --- | --- |
+| caption | `Week 19 · Aug 10 – Aug 18 · so far` | **`Week 19 · projected to Aug 23 · 5 days still to play`** |
+| the button | `lg-proj-btn` | **`lg-proj-btn on`** |
+| URL | *(no `rankproj`)* | **`rankproj=1`** |
+| a row's first four cells | `100 1st · 54 1st · 47 1st · 19 1st` | **`100 1st · 52 1st · 73 2nd · 27 1st`** |
+| rows | 12 | 12 |
+
+**The caption row grows and the table does not**: `.lg-span-detail` goes
+**30 → 36px** at 390, 640, 1200 and 1920 and **30 → 70** at 320, where this bar
+already pays a line for everything; the table is **956.61 / 996.81 / 1142.06 /
+1463.45 / 1920px** and the row **61.55px** at 320 / 390 / 640 / 1200 / 1920 in
+both states, with the badge column pinned at **0** with the pane scrolled to its
+far right and **page-body overflow 0 at every width in both states**. The
+projected caption is the one thing that wraps at 390 (36 → 70), which is the
+sentence being longer rather than the control taking room.
+
+**The label goes on a phone**, folded onto the block that already hides
+`.research-toggle-label` and `.projected-toggle-label` and scoped to this
+caption row alone — with it, the pair wrapped and the row was **70px** at 390,
+which is two thirds of a table row taken off the one tab that *is* a table. The
+matchup card's copy of the same button keeps its word, being centered on a row
+of its own.
+
+**The spinner is genuinely on screen**, driven with the read held 2.5s: at
+t+300ms and t+1.5s the button carries `aria-busy` and one `ball-spin` and no
+glyph, the caption still reads the live one and the table still draws its
+**12 rows with the live figures**; at t+3.7s the caption, the lit state and the
+figures all swap together. The button is **111.48px wide throughout** — see
+*The ball is the size of the mark it replaces* in **Client — the Roster view**,
+which is the rule that had to be added to make that true.
+
+**Every other state was driven rather than reasoned about.** The four other
+spans draw **0 toggles** and their own live captions, with the `rankproj=1` link
+still in hand; a **settled week** (the response stubbed to `projectable: false`,
+which is what the server sends for one) draws **0 toggles** and the live caption
+under a request that is still standing; the **full-page** box carries the
+caption, the toggle and the lens, and Escape leaves full page with the lens
+still on; the projection key opens at **320 × 533 at x=48 of a 390px screen**,
+in view, reading `over the 5 days left`; and the Roster, Feed, Research,
+Scoreboard and Transactions views all render with **0 overflow** and no error
+banner.
+
+**Bundle: 574.32 → 575.40 KB of JS** (170.85 → 171.17 gzipped) and **154.95 →
+155.08 KB of CSS** (27.73 → 27.77) — 1.1KB and 0.13KB raw, 0.32KB and 0.04KB
+over the wire, and that figure carries the two spinner fixes below as well as
+this. Through the route, the response goes **12,206 → 12,240 bytes**, which is
+the four new fields.

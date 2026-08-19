@@ -1834,6 +1834,19 @@ export interface EspnMatchupSeries {
 
 export interface EspnRankings {
   span: EspnRankSpan;
+  /** Whether this span could carry a projection at all — the `matchup` span of
+   *  a week still being played, and nothing else. It is the server's answer
+   *  rather than a rule held here, so the toggle is drawn off the league's own
+   *  week; **absent rather than disabled** anywhere else. */
+  projectable: boolean;
+  /** Whether the figures on this response *are* the projection — not the same
+   *  question as whether the reader asked for one, which is why the toggle's
+   *  lit state reads this rather than the request. */
+  projected: boolean;
+  /** The day the projection runs to and how many of the period's days are still
+   *  to be played — the caption's own two figures, and the key's `days`. */
+  projectedEnd: string | null;
+  projectedDaysLeft: number;
   /** Only the spans this league can actually be asked for — a half with no
    *  matchup periods in it is absent rather than served empty, so the tab
    *  strip is drawn from what came back rather than from a list held here. */

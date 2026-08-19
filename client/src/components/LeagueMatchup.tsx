@@ -354,6 +354,7 @@ export default function LeagueMatchupView({
   onOpenDetails,
   projection,
   projected,
+  projectionLoading,
   onProjected,
   transactions,
   onOpenPlayer,
@@ -396,6 +397,10 @@ export default function LeagueMatchupView({
    */
   projection: EspnProjection | null;
   projected: boolean;
+  /** The projection is in flight — the mark for which goes inside the button
+   *  that started it, this card going on drawing the figures it has until the
+   *  answer lands. App owns it because App owns the read. */
+  projectionLoading?: boolean;
   onProjected: (on: boolean) => void;
   /** The League view's own transactions feed, read on entry to that view and
    *  kept — this page is opened from it, so the Moves section costs no read of
@@ -655,7 +660,14 @@ export default function LeagueMatchupView({
    * message, which is the direction the schedule window already fails in.
    */
   useEffect(() => {
-    if (!teamProjected || sideTeamId === null) return;
+    if (!teamProjected || sideTeamId === null) {
+      // Turning the lens off mid-read cancels the run below and skips its
+      // `finally`, so the flag has to be cleared on the way out as well as set
+      // on the way in — otherwise the ball goes on spinning inside a toggle
+      // that is doing nothing.
+      setTeamProjLoading(false);
+      return;
+    }
     let canceled = false;
     setTeamProjLoading(true);
     api
@@ -1601,6 +1613,7 @@ export default function LeagueMatchupView({
                   categories={board.categories.length}
                   showing={showingProj}
                   projected={projected}
+                  loading={projectionLoading}
                   onProjected={onProjected}
                   /* Upward, because this row is at the foot of a card that runs
                      past the bottom of the window: opening downward left the
