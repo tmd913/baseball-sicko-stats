@@ -1305,6 +1305,146 @@ function with two callers, and that is intended — *what is he doing now* is th
 better answer to a roster row as much as to a matchup. Measured on the live
 watchlist it changes nothing there, none of its four players having moved role.
 
+### An opener is neither a starter nor a reliever
+
+**Three of the four decision categories are settled by rule rather than by a
+pitcher's record, and the rule is about the outing rather than about the man.**
+
+- **A save and a hold are relief statistics.** Neither can be earned by the
+  pitcher who starts the game, ever. So both are zero for anybody projected on a
+  turn day, whoever he is: for a genuine starter his record's figures are near
+  zero anyway and nothing moves, and for the **swingman** it is the difference
+  between a real projection and one crediting him with the holds he collects on
+  his *other* days.
+- **A starter must complete five innings to be credited with the win.** An
+  opener — a reliever's workload on the day he happens to start — cannot
+  qualify, and the wins on his record were earned in relief where no such rule
+  applies. Zeroed in that case alone (`!starterView`), because a genuine
+  starter's rate is `wins / starts` off his own record and **already** carries
+  how often he goes the five; docking him again would charge him twice for one
+  fact.
+- **A loss is the one decision he can still take**, so it keeps its rate.
+
+This is why an opener is worth so much less than either of the things he
+resembles, and the seat ordering sees it *through the projection* rather than
+through a rule of its own — there is no "opener" branch anywhere, only a pitcher
+whose line comes out small because the rules of baseball make it small.
+
+**Measured directly** on the two men the role rule newly starts, comparing the
+same outing with the rule and without it:
+
+| | outings | outs | W | SVHD |
+| --- | --- | --- | --- | --- |
+| **Bryan King** (50 G, 1 GS) | 1 | **3.0** | 0.043 → **0** | 0.385 → **0** |
+| **Ian Seymour** (39 G, 10 GS) | 1 | **11.2** | 0.272 → **0** | 0.363 → **0** |
+
+King's three outs are the signature: exactly one inning, which is what the
+workload rule above already had right and what an opener is. Neither figure
+reaches the wire on its own — a count is rounded to a whole number there, and
+0.385 of a hold is not — which is precisely why it was checked at the bucket
+rather than at the response.
+
+### The seat goes by what the day is worth, not by what an outing is worth
+
+**Two corrections, and together they retire the hard tier.**
+
+**Expected value *that day* is `units × value`, and the units were missing.** A
+starter brings a whole outing and a reliever brings his appearance rate, so
+ranking on per-outing worth alone compared a 0.4-of-an-appearance reliever as
+though he were certain to pitch. This is most of why a start outranks a relief
+appearance in the ordinary case: it is one unit against four tenths of one.
+
+**And the value now carries the rate categories, as a marginal.** A rate is not
+additive, so *his* ERA says nothing about what he is worth to a side — a
+one-inning specialist at 1.50 and a workhorse at 3.10 are not comparable
+figures, and ranking on them seats the specialist. What **is** comparable is what
+one more outing of him would do to the side's own rate, so the value adds a unit
+of him to the roster's whole projected line and asks what the category becomes.
+The formulas are `espn.ts`' **`DERIVED`**, exported rather than copied: it is
+already the definition every score on the board is rebuilt from, and a second
+table of the same nine would be a second table to keep in step.
+
+**`Candidate.tier` is superseded and its reasoning left on the interface.** It
+was *every starter going that day before any reliever is considered*, which is
+usually true and is not a rule — and a hard tier made exactly the cases that
+prompted this impossible to express. Now a start outranks a relief appearance
+because it **is worth more**, and does not when it genuinely is not.
+
+**Driven under a squeeze, the live league's nine pitching seats never being
+contended** (a mean of 4.33 filled, full on 0 of 60 day-teams — so the ordering
+cannot be tested on it as it stands). Cutting the pitching seats to two and
+re-running the whole board: **46 of 60** day-teams contend, the ordering is
+monotone in worth on every one of them, and **a reliever is seated over a
+skipped starter in 17 of them**. One of those, in full:
+
+| | | worth | |
+| --- | --- | --- | --- |
+| a starter | SP | **14.59** | seated |
+| a reliever | RP | 4.24 | seated |
+| a reliever | RP | 3.96 | — |
+| a reliever | RP | 3.52 | — |
+| a reliever | RP | 2.36 | — |
+| a starter | SP | **−0.87** | — |
+| a starter | SP | **−1.94** | — |
+
+which is the reader's own case arriving as arithmetic rather than as a special
+rule: the good start leads everything by a distance, and the two starts whose
+damage to ERA and WHIP outruns their strikeouts and their share of a win come
+out **negative** and lose their seats to relievers worth a quarter as much as
+the ace.
+
+### P, SP and RP, and what is deliberately not modelled
+
+**The three pitching slots were always handled and are worth stating.** ESPN
+gives `13` to `P`, `14` to `SP` and `15` to `RP`, the seats are expanded one per
+body from the league's own `lineupSlotCounts` (five, two and two on the live
+league), and who may sit where is ESPN's `eligibleSlots` rather than anything
+inferred. Measured across all twelve rosters: **81** pitchers are `P`+`SP`,
+**49** are `P`+`RP`, and **17** are `P`+`SP`+`RP` — the swingmen, who can take
+any of the three chairs and whose *role* is `currentRole`'s business rather than
+their eligibility's.
+
+**What is not modelled, deliberately: the opponent.** A manager who is facing a
+side with far more starting pitchers than his own may punt the categories he
+cannot win and protect the ones he can, which is a real thing managers do and is
+a **strategy** model rather than a projection — it needs the opponent's roster,
+his own read of the matchup, and an intent this app cannot observe. What is here
+instead is the honest half of it: the value a start is worth *to his own side*
+now includes what it does to ERA and WHIP, so a start that genuinely costs more
+than it brings loses its seat to a reliever without anybody having to guess at
+why the manager wanted it that way.
+
+**And a seat is still filled where one is free.** Where the pitching slots are
+not contended — which is every day of the live league — a negative-worth starter
+is seated anyway, on the reading that a manager with an empty slot generally
+uses it. Benching him outright would be a stronger claim about behavior than the
+evidence supports, and it is the one lever to reach for if this is ever wanted:
+refuse a seat below a worth of zero.
+
+### Measured, end to end
+
+Against the rule this file had before any of the lineup work:
+
+| | before | after |
+| --- | --- | --- |
+| hitter-games | 554 | **577** |
+| starts | 48 | **63** |
+| relief appearances | 83 | **81** |
+| sides raised / lowered | | **12 / 0** |
+
+Relief falling by two where starts rise is the reclassification showing in both
+columns at once rather than anything being lost. **Identity checks over every
+side**: **0** categories invented, **0** lost, **0** non-category stats shipped,
+**0** counting categories below the figure already banked, **0** tallies
+disagreeing with their own cells. Through the route: **310–710ms** cold and
+**3,368 bytes**.
+
+**The Roster view is byte-identical**, and this time both halves were captured
+minutes apart rather than hours: **0 of 4** players differ. (An earlier
+comparison showed one, which was the boards refreshing under a stale baseline
+and not the code — worth recording, because it is the shape a false positive
+takes here.)
+
 ### The engine has a second caller, and so it has a context
 
 **`projection.ts` is written against a `ProjectionContext` rather than against a
