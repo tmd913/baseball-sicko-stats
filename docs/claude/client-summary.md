@@ -941,6 +941,74 @@ costs the lens its figures and nothing else — the table falls back to the
 report's own numbers rather than the page becoming a message, which is the
 direction the schedule window already fails in.
 
+#### Leaving the Roster puts it away
+
+**Not saving it was not enough.** "Not a saved preference" keeps next week's
+estimates out of tomorrow's session; it said nothing about *this* one, and the
+Roster is the page every other page comes back to. Measured before the rule
+existed, against the live 12-team league on 8/19: press `Projected` on `Today`
+and the URL goes `?preset=Today` → `?start=2026-08-19&end=2026-08-23&rproj=1`,
+the date button `Today` → `8/19 – 8/23`, the caption to `Projected · Aug 19 –
+Aug 23 · 5 days still to play`. Cross to the **Feed** and back and all three
+were still there; the same after **Research** and after **League**. Nothing
+reset it — the state is plain component state, and `rproj=1` was written to the
+URL on every view, so a link copied off the Feed claimed a reading the Feed has
+not got.
+
+So **crossing the view tabs does what pressing the toggle a second time does**:
+the lens off, and the range it was turned on over restored, preset and all. It
+is one effect on `view` beside `toggleRosterProjected`, and it reads the same
+`beforeProjection` ref the toggle's off branch reads. After: `Feed` → back is
+`?preset=Today`, the button `Today`, the toggle unlit, the caption gone and the
+table back to the report's own 14 rows and its `Total`; `Research` → back and
+`League` → back are the same. The away URLs lose `rproj=1` with it —
+`?preset=Today&view=feed`, not `?preset=Today&view=feed&rproj=1`.
+
+**The range is written to the `summary` entry by name**, not through `setRange`.
+`setRange` writes whichever scope is on screen (see **The client shell**, the
+two roster ranges), and by the time this effect runs the view has already
+changed — on the way to the Feed that scope *is* the Feed's, so restoring
+through it would move a second page nobody touched.
+
+**A navigation, not a load.** The seed is untouched, which is the whole point of
+the param: `?rproj=1&preset=Today` opens with the toggle lit and the button on
+`Today`, and `?start=2026-08-19&end=2026-08-23&rproj=1` opens lit over those
+days. On a link nothing was pressed, so `beforeProjection` is empty and there is
+nothing to restore — leaving takes the lens off and **leaves the dates the link
+named**, measured: the dated link crosses to the Feed and back as
+`?start=2026-08-19&end=2026-08-23` with the button unchanged, and pressing the
+toggle there and pressing it again round-trips to the same pair. Back and
+forward are full loads (this app only ever `replaceState`s), so they are that
+same case — and because the param no longer rides on a non-roster URL, stepping
+back through one cannot restore the lens either.
+
+**The player page is not a leaving.** It is an overlay over this view, the URL
+still names the roster, and closing it returns to the same table at the same
+scroll — so tapping a name to read a man's projection and coming back must not
+cost the lens and jump the range back a week. `view` is what the rule watches
+and a `player=` does not change it: measured, `?…&player=batter-668939&rproj=1`
+opens over a lit toggle and Escape returns to `?…&rproj=1`, still lit.
+
+**The two League lenses are deliberately left as they are**, and they persist
+the same way — measured: turn `Projected` on the Rankings tab, cross to the
+Roster (the URL correctly drops `rankproj=1`, which is view-gated), come back
+and the button is lit again with `rankproj=1` returned. Three reasons not to
+follow. **The roster's lens is the only one of the three that moves the days in
+view**, so it is the only one whose persistence strands a reader in a week with
+no stats in it — a League lens left on swaps figures on a board and nothing
+else. **The Roster is a destination and the other two are not**: it is the
+default view, what closing a matchup or a player page returns to, and where a
+reader who pressed nothing still ends up, where `lt=rankings` and `mup=` are
+each opened on purpose. And **the two of them are read against each other**: a
+manager comparing a projected matchup with his projected finish moves between
+the Scoreboard and the Rankings on the same week, and a rule that reset them on
+the way out would have to answer why it does not reset them on the way between —
+which is the same trap `starters=1` avoids by staying in force across the kind
+tabs.
+
+**Bundle**: JS 581.59 → 581.72 kB raw, 173.33 → 173.37 kB gzipped; CSS
+unchanged at 156.33 / 27.98.
+
 #### Measured
 
 **Driven against the live 12-team league in a browser.** Pressing the toggle from
