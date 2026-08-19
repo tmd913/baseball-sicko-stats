@@ -11528,6 +11528,54 @@ button.start-line:focus-visible {
 .sched-off {
   color: var(--faint);
 }
+/* Who the *other* club is throwing — `RHP Alcantara`, the vocabulary the summary
+   table's opponent cell and the feed's Upcoming bar already write a starter in,
+   and the one fact a manager decides a hitter's week on.
+
+   **Surname and hand, not the whole name**, which is `surname()`'s own argument
+   (`lib.ts`) and is measured here rather than inherited: over the 134 pitchers a
+   live 28-day window actually draws, the label runs 7 characters to 17 with a
+   median of 10, and the widest the whole 760-man pitcher list can produce is
+   `RHP McCullers Jr.` at the same 17. Full names would put `RHP Sandy Alcantara`
+   in a column the two-line header sets at ~59px.
+
+   **10px against the opponent's 12**, which is what keeps the line a caption on
+   the matchup above it rather than a second subject: the cell's subject is the
+   club, and this says who is on the mound for it. `--muted` rather than `--text`
+   for the same reason, and rather than `--faint` for the reason the `SP` chip
+   below records — a name a reader has to *read* is not the place to spend the
+   quietest ink in the palette. */
+.sched-vs {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+  line-height: 1.1;
+}
+/* The three weights are **the `GS` count's own** (`.sched-gs` below), which is
+   the point of taking them rather than inventing a fourth mark: nothing → solid
+   → dashed, so a reader who has learned the ladder on the count reads it here.
+   Nothing is added where his club has named him — an announcement is the fact
+   this grid is otherwise short of, and a fact needs no caveat — an underline
+   says the slot is our reading of *him*, and a dashed one that it is his club's
+   rotation standing in. The sentence is on the cell's own title.
+
+   **`text-decoration` rather than a `border-bottom`, and that is a height
+   decision rather than a stylistic one.** A border is part of the box, so it
+   would have to be reserved `transparent` on the announced tier or a cell would
+   change height as clubs name their probables through the week — and reserved,
+   it costs every one of these lines a pixel on a grid that is 14 columns wide
+   and stacks two of them on a doubleheader. An underline is painted rather than
+   laid out: it costs nothing, on any tier, and the three cannot differ in
+   height by construction. */
+.sched-vs-projected {
+  text-decoration: underline solid color-mix(in srgb, var(--muted) 55%, transparent);
+  text-underline-offset: 2px;
+}
+.sched-vs-estimated {
+  text-decoration: underline dashed color-mix(in srgb, var(--faint) 85%, transparent);
+  text-underline-offset: 2px;
+}
 /* He is starting this game. A chip rather than a color on the opponent, because
    the opponent's color is already spoken for by the game's own state above and a
    starter can be announced for a game that is live.

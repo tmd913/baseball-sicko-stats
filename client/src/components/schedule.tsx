@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { handThrows, surname } from '../lib';
 import type { Column } from './researchColumns';
 import type {
   MatchupWindow,
@@ -199,12 +200,178 @@ export interface ScheduleIndex {
    * thing that is free until it isn't.
    */
   rotations: Map<number, { starts: Set<number>; cadence: number; estimated: boolean }>;
+  /**
+   * `gamePk` → club id → **the man that club is starting**, announced or
+   * projected — which a cell reads for the *other* side, so a row says who its
+   * player is up against.
+   *
+   * Keyed by club rather than by side because that is the question a cell asks:
+   * a row knows its own club, so the opposing club is one subtraction and the
+   * lookup is then two `Map` reads on a grid drawn thousands of times.
+   *
+   * **A side nobody can be named for is absent rather than empty**, the rule
+   * every join in this app fails in — see `buildStarters` for the four ways
+   * that happens.
+   */
+  starters: Map<number, Map<number, OpposingStarter>>;
+}
+
+/** The opposing starter as a cell draws him — resolved once, at index time,
+ *  rather than per cell per row. */
+export interface OpposingStarter {
+  id: number;
+  /** `RHP Alcantara` — hand and surname, the vocabulary the summary table's
+   *  opponent cell and the feed's Upcoming bar already write him in. */
+  label: string;
+  /** `Sandy Alcantara (RHP)` — the whole of him, for the cell's own title. */
+  full: string;
+  tier: StartTier;
+}
+
+/** What the index needs of the season roster to name a pitcher: his name and
+ *  which arm he throws with. `App.tsx` holds that list from boot for the header
+ *  search, so this costs no request — see `docs/claude/client-summary.md`. */
+export type PitcherLookup = (id: number) => { name: string; throws: string | null } | undefined;
+
+/**
+ * Which club each pitcher in the window belongs to.
+ *
+ * **The wire says who is starting and never says for whom**, which is the one
+ * thing standing between `rotations` and this feature: a projection is a list
+ * of `gamePk`s hung off a player id, and a game names two clubs. So the club is
+ * derived, by two routes that check each other:
+ *
+ * - **An announced probable names his club outright** — he *is* `homeProbableId`
+ *   of a game whose home club is that club. No inference at all.
+ * - **A pitcher's projected turns are all his own club's games**, so the club
+ *   common to every one of them is his. Two games are enough to settle it and
+ *   most pitchers have five.
+ *
+ * **Measured on the live 28-day window rather than assumed**: all 163 pitchers
+ * with a projection resolve to exactly one club — 77 by announcement, 86 by
+ * intersection — and where both routes answer, they **agree on all 77 with 0
+ * disagreements**. Not one projected turn lands on a game its own pitcher's club
+ * is not a side of. A pitcher the intersection cannot narrow to one club (a
+ * single projected turn, no announcement anywhere in the window — which does not
+ * occur today) is left out, and the sides he would have filled draw nothing.
+ */
+function clubByPitcher(win: ScheduleWindow, byPk: Map<number, ScheduleGame>): Map<number, number> {
+  const club = new Map<number, number>();
+  for (const g of win.games) {
+    if (g.homeProbableId) club.set(g.homeProbableId, g.homeId);
+    if (g.awayProbableId) club.set(g.awayProbableId, g.awayId);
+  }
+  for (const [id, r] of Object.entries(win.rotations ?? {})) {
+    const pid = Number(id);
+    if (club.has(pid)) continue;
+    let cand: number[] | null = null;
+    for (const pk of (r as RotationProjection).starts) {
+      const g = byPk.get(pk);
+      if (!g) continue;
+      cand = cand === null ? [g.homeId, g.awayId] : cand.filter((c) => c === g.homeId || c === g.awayId);
+      if (cand.length === 0) break;
+    }
+    if (cand?.length === 1) club.set(pid, cand[0]);
+  }
+  return club;
+}
+
+/**
+ * Who each club is starting in each game of the window.
+ *
+ * **Announced beats projected and the two can never collide**, which is the
+ * server's own guarantee restated (a projected turn is never placed on a game
+ * somebody is named for) and was checked: of 750 game-sides on the live window,
+ * **0** carry both.
+ *
+ * **Nobody is named where the answer is not one man**, and there are four ways
+ * that happens — each a silence rather than a guess, which is the direction every
+ * join in this app fails in:
+ *
+ * - **The club could not be derived** (`clubByPitcher`, above). 0 on the live
+ *   window.
+ * - **Two of a club's starters project onto one game.** `rotations.ts` steps each
+ *   pitcher's slot forward independently, so slots collide — measured, **90 of
+ *   750 game-sides** have two candidates (84) or three (6), and there is nothing
+ *   in the payload to prefer one: cadence says how often he goes, not who is up.
+ *   Naming either would be naming the wrong man about half the time.
+ * - **The season roster has never heard of him** — 11 of 750, a pitcher off the
+ *   list the header search matches against, who therefore has no name to print.
+ * - **Nobody is starting at all**, announced or projected — 39 of 750, a club
+ *   whose rotation the server declines to project.
+ *
+ * What is left is **621 of 750 (82.8%)**: 75 announced, 499 projected off a
+ * pitcher's own pace, 36 estimated off his club's. Against the 75 an announcement
+ * could name on its own, which is the whole argument for reading the projection
+ * here at all.
+ */
+function buildStarters(
+  win: ScheduleWindow,
+  byPk: Map<number, ScheduleGame>,
+  pitchers: PitcherLookup | null,
+): Map<number, Map<number, OpposingStarter>> {
+  const out = new Map<number, Map<number, OpposingStarter>>();
+  if (!pitchers) return out;
+  const named = (id: number, tier: StartTier): OpposingStarter | null => {
+    const p = pitchers(id);
+    if (!p) return null;
+    const hand = handThrows(p.throws);
+    return { id, label: `${hand} ${surname(p.name)}`, full: `${p.name} (${hand})`, tier };
+  };
+  const put = (pk: number, teamId: number, s: OpposingStarter) => {
+    let m = out.get(pk);
+    if (!m) out.set(pk, (m = new Map()));
+    m.set(teamId, s);
+  };
+  // Announced first, so a collision can only ever cost a *projected* turn its
+  // place — and the ambiguity pass below then leaves the announced one standing.
+  for (const g of win.games) {
+    if (g.state === 'postponed') continue;
+    if (g.homeProbableId) {
+      const s = named(g.homeProbableId, 'announced');
+      if (s) put(g.gamePk, g.homeId, s);
+    }
+    if (g.awayProbableId) {
+      const s = named(g.awayProbableId, 'announced');
+      if (s) put(g.gamePk, g.awayId, s);
+    }
+  }
+  const club = clubByPitcher(win, byPk);
+  // A club that two slots land on is struck out rather than resolved: the second
+  // candidate replaces the first with a marker, and the marker is what the pass
+  // after this reads to delete the entry. A `Set` of struck keys rather than a
+  // sentinel in the map, so the type stays what it says it is.
+  const struck = new Set<string>();
+  for (const [id, r] of Object.entries(win.rotations ?? {})) {
+    const pid = Number(id);
+    const c = club.get(pid);
+    if (c === undefined) continue;
+    for (const pk of (r as RotationProjection).starts) {
+      const g = byPk.get(pk);
+      if (!g || g.state === 'postponed') continue;
+      if (c !== g.homeId && c !== g.awayId) continue;
+      const key = `${pk}:${c}`;
+      if (out.get(pk)?.has(c)) {
+        // Announced already, or a second projection — either way not one man.
+        if (out.get(pk)!.get(c)!.tier !== 'announced') struck.add(key);
+        continue;
+      }
+      const s = named(pid, (r as RotationProjection).estimated ? 'estimated' : 'projected');
+      if (s) put(pk, c, s);
+    }
+  }
+  for (const key of struck) {
+    const [pk, c] = key.split(':');
+    out.get(Number(pk))?.delete(Number(c));
+  }
+  return out;
 }
 
 export function buildScheduleIndex(
   win: ScheduleWindow,
   span: ScheduleSpan,
   matchup: MatchupWindow | null = null,
+  pitchers: PitcherLookup | null = null,
 ): ScheduleIndex {
   // The dates are taken from the games rather than generated from `start`, so
   // the columns are the days the server actually answered for — a short window
@@ -257,6 +424,12 @@ export function buildScheduleIndex(
       estimated: p.estimated,
     });
   }
+  // Both of these read the **whole window** rather than the span, and that is
+  // deliberate: a club is derived from every game a pitcher's slot touches, so
+  // narrowing the evidence to seven days would leave a man with one turn inside
+  // it unresolvable when the fortnight around it settles him. What is drawn is
+  // then cut by the columns, which is the span's own job.
+  const byPk = new Map(win.games.map((g) => [g.gamePk, g]));
   return {
     span: eff,
     dates,
@@ -264,6 +437,7 @@ export function buildScheduleIndex(
     short: wants !== null && wants > win.end,
     byTeam,
     rotations,
+    starters: buildStarters(win, byPk, pitchers),
   };
 }
 
@@ -325,6 +499,36 @@ export function startTierOn(
 export function rotationOf(index: ScheduleIndex, playerId: number) {
   return index.rotations.get(playerId) ?? null;
 }
+
+/**
+ * Who the *other* club is starting in this game — the fact a manager decides a
+ * hitter's week on, and the one thing a cell naming an opponent could never say.
+ *
+ * The row's own club is what makes the question answerable: the opposing club is
+ * the side of the game that is not his, and the index has already resolved one
+ * man per club per game (`buildStarters`). Null where that resolution came to
+ * anything but one man, which is a silence rather than a dash — a dash in this
+ * grid means *no game*, and a cell that said it about a starter would be saying
+ * the wrong thing in the vocabulary the column has already taught.
+ */
+export function opposingStarter(
+  index: ScheduleIndex,
+  g: ScheduleGame,
+  teamId: number | null,
+): OpposingStarter | null {
+  if (teamId === null || g.state === 'postponed') return null;
+  const other = g.homeId === teamId ? g.awayId : g.homeId;
+  return index.starters.get(g.gamePk)?.get(other) ?? null;
+}
+
+/** What each tier of an *opposing* starter says on hover. The player's own
+ *  chip has `TIER_TITLE`, which is written about him ("his club has announced
+ *  him"); this is the same three facts about the man on the other side. */
+const VS_TITLE: Record<StartTier, string> = {
+  announced: 'announced by his club',
+  projected: 'projected from his own rotation slot — nobody has announced this one yet',
+  estimated: "estimated from his club's rotation, his own record being too thin to read one off",
+};
 
 /**
  * Games in the span his club is actually going to play.
@@ -477,6 +681,16 @@ export function StartChip({ tier, cadence }: { tier: StartTier; cadence?: number
  * the app's own ladder for how sure a number is (the percentile card's dotted
  * bubble, the Splits card's hatched fill), applied to a grid cell where a word
  * would not fit; the sentence is on the chip's own title.
+ *
+ * **And every cell names the man the other club is throwing** — `RHP
+ * Alcantara`, hand and surname, which is the vocabulary the summary table's
+ * opponent cell and the feed's Upcoming bar already write a starter in and the
+ * one fact a manager decides a hitter's week on. It takes the same three
+ * weights as the count column beside it (`.sched-gs`): nothing added where his
+ * club has named him, an underline where it is our own reading of his slot, a
+ * dashed one where it is his club's. Where the answer is not one man — see
+ * `buildStarters`, which enumerates the four ways — the line is simply absent,
+ * because a dash in this grid already means *no game*.
  */
 export function ScheduleCell({
   index,
@@ -509,13 +723,20 @@ export function ScheduleCell({
         // and an announcement for it means nothing now.
         const tier = ppd || teamId === null ? null : startTierOn(index, g, teamId, playerId);
         const opp = opponentText(g, teamId as number);
+        const vs = opposingStarter(index, g, teamId);
+        const title = ppd
+          ? `${opp} — postponed`
+          : [opp, tier ? TIER_TITLE[tier] : null, vs ? `${vs.full} — ${VS_TITLE[vs.tier]}` : null]
+              .filter(Boolean)
+              .join(' — ');
         return (
           <span
             key={g.gamePk}
             className={`sched-cell sched-${g.state}${tier ? ` sched-start sched-start-${tier}` : ''}`}
-            title={ppd ? `${opp} — postponed` : tier ? `${opp} — ${TIER_TITLE[tier]}` : opp}
+            title={title}
           >
             <span className="sched-opp">{ppd ? 'PPD' : opp}</span>
+            {vs && <span className={`sched-vs sched-vs-${vs.tier}`}>{vs.label}</span>}
             {tier && <StartChip tier={tier} cadence={rotation?.cadence ?? null} />}
           </span>
         );

@@ -339,6 +339,226 @@ It is the app's own swap rather than a new one — the date presets, the researc
 
 **What it costs the wire is 2.6KB gzipped.** The projections ride on `/api/schedule` beside the games rather than taking a route of their own, keyed by player id and carrying only the *unannounced* turns — an announced one is already on the game as `homeProbableId`. Measured on the live board: **5,177 → 7,860 bytes gzipped** for 160 pitchers and 710 projected starts.
 
+#### And the cell names the man the other club is throwing
+
+**A cell said which club, and a manager does not set a lineup against a club.**
+`vs SEA` is half a sentence: whether you start a left-handed hitter on Saturday
+turns on who is on the mound for Seattle, and that was the one fact this grid —
+built out of a payload that names both sides' starters — declined to say. It says
+it now, on a second line: **`RHP Alcantara`**, hand and surname.
+
+**The vocabulary is the app's own rather than a new one.** `handThrows` and
+`surname` are `lib.ts`'s, and they are what the summary table's opponent cell and
+the feed's Upcoming bar already write a starter in (`vs LHP Gasser`); the `vs` is
+dropped here because the line above it has already spent that word on the club.
+So a starter named in the grid and the same starter named on the row's ordinary
+opponent cell are one string built by one function.
+
+**Announced where his club has named him, projected where a rotation slot puts
+him there** — the same three tiers the `SP` chip beside it carries, because it is
+the same question asked about the other side. What that buys is the whole of the
+argument for reading the projection here at all: measured on the live 28-day
+window, of **750 game-sides** an announcement can name **75** — clubs name a
+probable about three days out — where announcement-plus-projection names **610
+(81.3%)**. A grid that could speak for the front three days now speaks for four
+weeks.
+
+#### The wire says who is starting and never says for whom
+
+**That is the one thing standing between `rotations` and this feature**, and it
+is worth setting out because the fix is a derivation rather than a lookup. A
+projection is a list of `gamePk`s hung off a player id (`RotationProjection`),
+and a game names two clubs; nothing in the payload says which of them is his. So
+`buildStarters` resolves it, by two routes that check each other:
+
+- **An announced probable names his club outright** — he *is* the
+  `homeProbableId` of a game whose home club is that club. No inference at all.
+- **A pitcher's projected turns are all his own club's games**, so the club
+  common to every one of them is his. Two games settle it and most pitchers have
+  five.
+
+**Measured on the live window rather than assumed**, which is what makes the
+second route safe to lean on: all **163** pitchers with a projection resolve to
+exactly one club — **77 by announcement, 86 by intersection** — and where both
+routes answer they **agree on all 77, with 0 disagreements**. Not one projected
+turn lands on a game its own pitcher's club is not a side of. A `Map` from
+`gamePk` to club to one man falls out of it, built once at index time so a cell
+drawn thousands of times is two `Map` reads.
+
+**A pitcher's own row was the obvious third route and is the wrong one.** Every
+row of these tables carries a `teamId`, so the club of a pitcher who is *on the
+board* is free — and that is exactly the population it cannot answer for: an
+opposing starter is usually somebody nobody has rostered and no filter has put on
+screen. A resolution that works only for the men already in front of the reader
+is no resolution.
+
+**Both passes read the whole window rather than the span**, which is deliberate:
+a club is derived from every game a pitcher's slot touches, so narrowing the
+evidence to seven days would leave a man with one turn inside it unresolvable
+when the fortnight around him settles it. What is drawn is then cut by the
+columns, which is the span's own job.
+
+#### Nobody is named where the answer is not one man
+
+**Four ways that happens, each a silence rather than a guess** — the direction
+every join in this app fails in, and each counted over those 750 game-sides:
+
+- **Two of a club's starters project onto one game.** `rotations.ts` steps each
+  pitcher's slot forward independently, so slots collide: **90 sides** have two
+  candidates (84) or three (6). There is nothing in the payload to prefer one —
+  cadence says how often a man goes, not who is up — so naming either would be
+  naming the wrong man about half the time.
+- **The season roster has never heard of him** — **11 sides**, so there is no
+  name to print. Printing the id would be showing a reader a number.
+- **Nobody is starting at all**, announced or projected — **39 sides**.
+- **The club could not be derived** — **0** today, and the reason it is still a
+  branch is that a pitcher with a single projected turn and no announcement
+  anywhere in the window would be genuinely ambiguous.
+
+**And a postponed game names nobody**, which is the tier logic's own rule one
+step further on: an announcement for a game that is not being played means
+nothing now, and the projection never places a turn on one. The live window holds
+no postponement to observe, so it was forced — two games rewritten to
+`postponed` in the response drew **5 `PPD` cells and 0 starters**, their titles
+reading `vs WSH — postponed` with no starter clause.
+
+**Silence is *absence*, not a dash.** A dash in this grid already means *no
+game*, and a cell that spent it on a starter would be lying in a vocabulary the
+column has already taught.
+
+#### The tier is an underline, and the underline costs no height
+
+The three weights are **the `GS` count's own** (`.sched-gs`) rather than a fourth
+mark: nothing where his club has named him, a **solid** underline where the slot
+is our reading of *him*, a **dashed** one where it is his club's rotation
+standing in. An announcement is the fact this grid is otherwise short of, and a
+fact needs no caveat; the sentence is on the cell's own title (`vs DET — Chase
+Anderson (RHP) — projected from his own rotation slot`).
+
+**`text-decoration` rather than a `border-bottom`, and that is a height decision
+rather than a stylistic one.** A border is part of the box, so it would have to
+be reserved `transparent` on the announced tier or a cell would change height as
+clubs name their probables through the week — and reserved, it costs every one of
+these lines a pixel on a grid fourteen columns wide that stacks two of them on a
+doubleheader. An underline is painted rather than laid out. Measured across
+Midnight, Dark, Light and Powder Blue, all three tiers render at **11px** and
+resolve their own theme's `--muted`, so the ladder cannot change a row's height
+by construction.
+
+**`--muted` on all three**, for the reason the `SP` chip beside it already
+records: a third step down to `--faint` puts a label a reader has to *read* at
+3.18:1 on Midnight's zebra stripe, where `--muted` measures 6.08. The ladder is
+carried by the structure and every tier stays legible.
+
+#### What it costs is width, which is free here, and one row a screen, which is not
+
+**The label is surname and hand rather than the whole name**, and that is
+measured rather than inherited. Over the **134** pitchers a live 28-day window
+actually draws, the label runs 7 characters to 17 with a median of 10, and the
+widest the whole 760-man pitcher list can produce is `RHP McCullers Jr.` at the
+same 17; rendered, the widest drawn is **`RHP Smith-Shawver` at 101.3px**, against
+a column the two-line header sets at ~59. Full names would put `RHP Sandy
+Alcantara` in that column.
+
+**Dropping the hand was the obvious narrower option and buys nothing worth
+having.** It would take about 24px off every column — some 336px off a fourteen-
+day table — and width is the one thing this grid can afford: the tables scroll
+sideways and **page-body overflow is 0 at every width measured**. The hand is
+also the half a manager acts on first, and on a touch device a `title` is not an
+answer. So the width is spent, and the height is what gets defended.
+
+**Measured at 320 / 390 / 640 / 1200 / 1920**, on the Roster summary table and the
+research board, on the batter tab and the pitcher tab, over both spans this reader
+is offered — with the line stripped out of the same page at the same instant,
+which is this repo's own A/B. **Page-body and document overflow are 0 in all 40
+states**, before and after.
+
+| | table before → after | row (max) | rows on screen |
+| --- | --- | --- | --- |
+| roster/batter · matchup (6 days) | 656.8 → **822.53** … 1920 → 1920 | 58 → **58** | 8/10/11/11/12 → **unchanged** |
+| roster/batter · next (14 days) | 1105.69 → **1530.05** … 1920 → **2275.47** | 58 → **77.78** | 8/10/11/11/12 → 7/9/10/10/**10** |
+| roster/pitcher · matchup | 627.91 → **790.23** … 1920 → 1920 | 58 → **64.19** | 8/10/11/11/12 → 8/10/11/11/**11** |
+| roster/pitcher · next | 1081.27 → **1484.36** … 1920 → **2271.53** | 69.58 → **91.58** | 8/10/11/11/11 → 7/9/10/10/11 |
+| board/batters · matchup | 586.19 → **797.92** … 1920 → 1920 | 58 → **58** | 7/9/10/10/10 → **unchanged** |
+| board/batters · next | 1025.53 → **1542.5** … 1920 → 1920 | 58 → **77.78** | 7/9/10/10/10 → 6/8/9/9/9 |
+| board/SP · matchup | 612.92 → **841.66** … 1920 → 1920 | 58 → **64.19** | 7/9/10/10/10 → 7/**8**/10/**9**/10 |
+| board/SP · next | 1042.8 → **1521.95** … 1920 → 1920 | 69.58 → **91.58** | 7/9/10/10/10 → 7/**8**/10/**9**/10 |
+
+**The height is the honest cost and it has exactly two causes**, both arithmetic
+on a budget the row already had. A day cell is 24px of padding inside a 58px row
+set by the 42px headshot, so the content budget is **34px**. The opponent line
+measures 14.39 and the new one 11 — **25.39, which fits with 8.6 to spare**, and
+that is why the batter side over a matchup span costs *nothing at all*. Add the
+player's own `SP` chip (12.8 and a pixel of margin) and the budget is gone; stack
+two games on a **doubleheader** and it is gone twice over. So:
+
+- **A pitcher's start day is +6.19px** — the third line — which on the SP board is
+  26 of 50 rows and costs **one row a screen at 390 and 1200** and nothing at 640
+  or 1920.
+- **A doubleheader row is +19.78px**, and it is rare: **4 day-cells of 196** on
+  the roster and **9 of 700** on the board. It is also the case that most earns
+  its space, both games getting their own man — measured, `vs AZ / RHP Kelly`
+  over `vs AZ / RHP Pfaadt`.
+
+**Nineteen of the 40 states lose a row and eighteen of those lose exactly one.**
+The worst is the batter roster over 14 days at 1920, **12 → 10**, where three of
+its fourteen rows hold a doubleheader. That is the cost this repo has accepted
+before by name — *"the cost is one row a screen, counted rather than
+estimated"* — and it is spent here to fill four fifths of a grid that could
+previously speak for three days.
+
+**The sticky columns are untouched**, checked with the pane scrolled to its far
+right and 200 down in every state: the headshot column pins at **0** on both
+tables, the board's name column at **68** from 820px up (and correctly scrolls
+away below it, which is that breakpoint's own documented behavior), and the
+header row sits at **0** in the summary table's scrollport and **1px** — the
+border — in the board's.
+
+#### The grid waits for the season roster, because the name decides the height
+
+**The names come off `seasonPlayers`, which is a *different* read from the
+schedule**, and that is the one loading hazard here. `/api/players` is held from
+boot for the header search, so naming a pitcher costs no request — but a grid
+drawn before it lands and again after would **grow under the reader**: 6px a start
+day on a pitcher's row. Measured on a `?sched=` deep link, where both reads go out
+together, `/api/schedule` finished **3ms before** `/api/players`, so the two-paint
+window is real rather than theoretical, and on a cold 207KB list it is however
+long that takes.
+
+**So `scheduleIndex` waits on `playersLoading` as well as on the window**, and it
+is that flag *settled* rather than succeeded — it starts true and is cleared in
+the read's `finally`, so a list that **fails** settles it too. The rule
+`initialLoadSettled` already follows for the view tabs. It costs the ordinary path
+nothing, the toggle being pressed long after boot, and rule 1 is intact: with the
+index null both tables go on drawing their **stat columns** rather than blanking.
+
+Driven with `/api/players` held 6 seconds: at t+500ms the table is drawing its
+stat columns (`days=0, cells=0`), and at t+6000ms the whole grid appears **once,
+complete**, with 59 names — no intermediate grid. Driven with it **blocked
+outright**: the grid draws in full (6 days, 84 cells) with **0 names** and the row
+back at 58, which is the honest degraded state.
+
+#### Validated against the raw payload, cell by cell
+
+**Every drawn cell was checked against `/api/schedule` by a second
+implementation** sharing no code with the client: a cell's own opponent text names
+the opposing club, so the expected starter is that club's for that game, resolved
+independently from `homeProbableId`/`awayProbableId` and the `rotations` map (a
+doubleheader's Nth cell paired with its Nth game).
+
+- **`next` span, 14 days, 638 cells checked**: **502 named and 0 wrong**; 136
+  silent, and every one of the 136 correctly so.
+- **`matchup` span, 6 days, 277 cells checked**: **232 named and 0 wrong** — 132
+  announced, 92 projected, 8 estimated — with 45 correctly silent.
+
+That is **734 cells named across all three tiers and not one of them wrong**, and
+181 silences every one of which the payload agrees could not be filled.
+
+**Bundle: 574.32 → 576.42 KB of JS** (170.85 → 171.51 gzipped) and **154.95 →
+155.48 KB of CSS** (27.73 → 27.80) — 2.1KB and 0.5KB raw, 0.7KB and 0.07KB over
+the wire, for a club derivation, an inverted index, a line in every cell and the
+paragraphs above restated where the rules are.
+
 #### The `Total` row is the most useful row on the table
 
 In schedule mode each day's cell in the `<tfoot>` is **how many of these players have a game that day** — the "do I have enough bodies on Thursday" question, which no other view in the app can answer and which falls out of the same pass for nothing. Measured on a real 12-man fantasy roster: `Total · 12 | 75 | 12 12 12 9 12 12 5` — twelve on each of the first three days, nine on Monday and five on Thursday, over 75 games in the week. The two leading cells are the ordinary sums.

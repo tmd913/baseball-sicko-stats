@@ -734,12 +734,48 @@ export default function App() {
    * the only mark the press leaves is the ball inside the toggle it started
    * from.
    */
+  /**
+   * The season roster reduced to what naming a pitcher takes — his name and the
+   * arm he throws with — which is what lets a schedule cell say who the other
+   * club is starting.
+   *
+   * **It costs no request.** That list is held from boot for the header search
+   * (~1,400 rows), so this is a `Map` over something already in hand rather than
+   * a second source; a two-way player is two rows under one id carrying the same
+   * `throws`, so the first wins and the second is the same answer. A pitcher the
+   * list has never heard of resolves to `undefined` and the cell draws nothing,
+   * which is the direction every join in this app fails in.
+   */
+  const pitcherLookup = useMemo(() => {
+    const by = new Map<number, { name: string; throws: string | null }>();
+    for (const p of seasonPlayers) if (!by.has(p.id)) by.set(p.id, { name: p.name, throws: p.throws });
+    return (id: number) => by.get(id);
+  }, [seasonPlayers]);
+  /**
+   * **The grid waits for the season roster as well as for the window**, and
+   * `playersLoading` is that wait *settled* rather than succeeded — it starts
+   * true and is cleared in the read's `finally`, so a list that fails settles it
+   * too and the grid draws with no names rather than never drawing at all. The
+   * rule `initialLoadSettled` already follows for the view tabs.
+   *
+   * It is here because a cell's **height** depends on that list: a day naming
+   * the opposing starter is a line taller than one that cannot, so a grid drawn
+   * before the names land and again after would grow under the reader — which on
+   * a pitcher's row is 6px a start day. Measured on a `?sched=` deep link, where
+   * both reads go out together: `/api/schedule` finished **3ms before**
+   * `/api/players`, so the two-paint window is real rather than theoretical, and
+   * on a cold list it is however long 207KB takes.
+   *
+   * It costs the ordinary path nothing — the toggle is pressed long after boot,
+   * by which time this is already settled — and it keeps rule 1 intact: with the
+   * index null both tables go on drawing their stat columns rather than blanking.
+   */
   const scheduleIndex = useMemo(
     () =>
-      scheduleSpan !== null && scheduleWindow
-        ? buildScheduleIndex(scheduleWindow, scheduleSpan, matchupWindow)
+      scheduleSpan !== null && scheduleWindow && !playersLoading
+        ? buildScheduleIndex(scheduleWindow, scheduleSpan, matchupWindow, pitcherLookup)
         : null,
-    [scheduleSpan, scheduleWindow, matchupWindow],
+    [scheduleSpan, scheduleWindow, matchupWindow, pitcherLookup, playersLoading],
   );
   // The filter is about *today*, so it can only act on a range that contains
   // today. Over "Yesterday" or a custom week in July there is nobody it could
