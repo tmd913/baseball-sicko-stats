@@ -10300,16 +10300,44 @@ button.start-line:focus-visible {
   margin: 16px auto 0;
   display: flex;
   flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  /* The pills carry a focus ring and a lit border; the scrollport inside clips
+     them at its own edges, so the padding is the row's own breathing room. */
+  padding: 2px 0;
+}
+/* **The scrollport is the kind group, not the row.** It was the row until the
+   order toggle joined it, and that would have put the second axis at the far
+   end of a strip that overflows at 320 and 390 — a control most readers would
+   never scroll far enough to find. So the kinds scroll inside their own box and
+   the toggle sits outside it, in the same place at every width.
+
+   `min-width: 0` because a flex item's automatic minimum size is its content:
+   without it this box refuses to shrink below its seven pills and pushes the
+   toggle off the row instead of scrolling. */
+.feed-filter-kinds {
+  min-width: 0;
+  display: flex;
+  flex-wrap: nowrap;
   gap: 8px;
   overflow-x: auto;
   overscroll-behavior-x: none;
   scrollbar-width: none;
-  /* The pills carry a focus ring and a lit border; a scrollport clips them at
-     its own edges, so it gets the padding back as its own breathing room. */
-  padding: 2px 0;
 }
-.feed-filters::-webkit-scrollbar {
+.feed-filters::-webkit-scrollbar,
+.feed-filter-kinds::-webkit-scrollbar {
   display: none;
+}
+/* The stream's direction, at the right end of the row and never inside the
+   scrollport. `margin-left: auto` rather than a spacer, so on the pitcher tab —
+   where the kind group is not drawn at all — it is still in the same place
+   rather than sliding to the left edge. It carries `.feed-filter-pill` as well
+   as `.research-toggle`, which is what keeps the row 34px tall: a bare
+   `.research-toggle` is `--control-h` (36px) and would have grown the row by 4px
+   the first time a pitcher tab drew it. */
+.feed-order {
+  flex: none;
+  margin-left: auto;
 }
 /* Tighter than a control on the tab row: eight of these share the row, and each
    is two to five characters where a labeled toggle is a word. */

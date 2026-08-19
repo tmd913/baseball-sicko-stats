@@ -45,18 +45,22 @@
  * `plays=xbh` link is read as the whole stream, which is the direction
  * `toPlayFilter` fails in for every key it does not know.
  *
- * **Batter tab only.** A pitcher's stream item is his whole *outing* rather than
- * a play — the same fact the kind tabs exist for — so there is nothing here to
- * select on, and the row is not drawn.
+ * **Batter tab only — the pills.** A pitcher's stream item is his whole *outing*
+ * rather than a play — the same fact the kind tabs exist for — so there is
+ * nothing here to select on, and the kind group is not drawn.
+ *
+ * **The row itself is drawn on both tabs**, because it carries a second control
+ * that is not about kinds at all: `Oldest first`, which turns the stream round.
+ * An outing has a clock like a plate appearance does, so a pitcher's day reads
+ * forwards on the same press, and the toggle keeps its place at the row's right
+ * end whichever tab is up. See `FeedFilterPills` for the shape and why it is
+ * not an eighth pill.
  */
 
 /**
- * The six kinds a play can be asked for, **in the order the pills read** — which
- * is a box score's own order and not the vocabulary's history: the two ways of
- * reaching a base by hitting it (`HR`, `Hits`), then the two halves of a run
- * (`Runs` he scored, `RBI` he drove in), then the base he took without a hit at
- * all (`SB`), and last the one pill that is not a kind of play but a fact about
- * whether there is film of it.
+ * The six kinds a play can be asked for. **The union's order is not the row's** —
+ * the pills read `H · RBI · HR · SB · R · Video` and `PLAY_FILTERS` below is
+ * what fixes that, this being a set of keys and nothing that draws them.
  */
 export type PlayFilterKey = 'hr' | 'hit' | 'run' | 'rbi' | 'sb' | 'video';
 
@@ -80,32 +84,49 @@ export interface PlayFilterDef {
 }
 
 /**
- * The pills' own vocabulary.
+ * The pills' own vocabulary, **in the order the row reads**:
+ * `All · H · RBI · HR · SB · R · Video`.
  *
- * The labels are abbreviations because the row is read across, and every one of
- * them is a form a box score already uses. What an abbreviation cannot say is
- * which plays it takes — that a home run is inside `Hits`, that `Runs` is him
- * crossing the plate where `RBI` is him driving somebody in — so each carries
- * the sentence.
+ * **That order is the fantasy categories' rather than a box score's**, which is
+ * the reversal of what stood here. The box-score run led with the two ways of
+ * reaching a base by hitting it and kept the halves of a run together; it was
+ * right about a *line score* and wrong about this row, which is worked by a
+ * reader who scores in categories. So `H` leads — it is the widest cut of the
+ * day and the one press that turns hundreds of items into the ones that
+ * mattered — then the three that decide a week (`RBI`, `HR`, `SB`), then `R`,
+ * which is the one thing on the row that happens *to* him rather than by him
+ * and the one nobody opens this page to count. `Video` stays last: it is not a
+ * kind of play at all but a fact about whether there is film of one.
+ *
+ * **`Hits` and `Runs` are `H` and `R` now**, which the reordering forces rather
+ * than merely permits: a row of category abbreviations with two words in the
+ * middle of it reads as two kinds of thing, and both single letters are forms a
+ * box score already uses. It also buys the row 24px, which is 24px of a
+ * scrollport at 320. The keys are untouched (`hit`, `run`), so every `plays=`
+ * link ever written still opens on the pill it named.
+ *
+ * What an abbreviation cannot say is which plays it takes — that a home run is
+ * inside `H`, that `R` is him crossing the plate where `RBI` is him driving
+ * somebody in — so each carries the sentence as its `title`.
  */
 export const PLAY_FILTERS: PlayFilterDef[] = [
-  { key: 'hr', label: 'HR', title: 'Home runs' },
   {
     key: 'hit',
-    label: 'Hits',
+    label: 'H',
     title: 'Hits — singles, doubles, triples and home runs',
-  },
-  {
-    key: 'run',
-    label: 'Runs',
-    title: 'Runs he scored — crossing the plate, not driving one in',
   },
   {
     key: 'rbi',
     label: 'RBI',
     title: 'Plate appearances he drove a run in on — the other half of Runs',
   },
+  { key: 'hr', label: 'HR', title: 'Home runs' },
   { key: 'sb', label: 'SB', title: 'Stolen bases' },
+  {
+    key: 'run',
+    label: 'R',
+    title: 'Runs he scored — crossing the plate, not driving one in',
+  },
   {
     key: 'video',
     // Plays there is film *of*, rather than plays MLB filed a play id for —
@@ -167,14 +188,60 @@ export function playFilterParam(key: PlayFilterKey | null): string | null {
  * The pills are `.research-toggle`, folded onto rather than restyled, so `.on`
  * is the app's own lit state and a pill here is the same object as a pill
  * anywhere else.
+ *
+ * **And the row carries a second axis at its right end: `Oldest first`.**
+ *
+ * **Not an eighth pill**, which is the mistake `New` made and was reversed for:
+ * the pills are single-select over *kinds*, and an order is not a kind — a
+ * reader who wants the home runs read forwards has to be able to say both. So
+ * the kinds are a `role="group"` of their own (`.feed-filter-kinds`) and this
+ * stands outside it.
+ *
+ * **A lit toggle rather than a segmented `Newest | Oldest` run**, which is the
+ * other shape this app has for a two-valued control. A segmented run says its
+ * two values are *peers* — Roster/Feed/Research, Batters/Pitchers — and these
+ * are not: newest-first is what makes a stream a stream (see `byRecency`, and
+ * `byPlayOrder`'s own note that a *game* is the thing read forwards), and
+ * oldest-first is the departure from it. This app spells a departure as a lit
+ * toggle whose absence is the default — `Starters`, `Watchlist`, `Projected`,
+ * `hideil` — and carries only the departure in the URL (`oldest=1`). It also
+ * costs half the width of a segmented pair, on a row that is already a
+ * scrollport at 320.
+ *
+ * **The label does not change when it lights.** `Oldest first` is what pressing
+ * it does and what being lit means, in one word each way; a label that flipped
+ * to `Newest first` would change the button's width under the finger that
+ * pressed it, which is this app's *reserve the box* rule broken by a control
+ * that is nothing but a box. The `title` carries the state instead, that being
+ * the one thing on a button that can change size for free.
+ *
+ * **It sits outside the scrollport rather than at the end of it.** The kinds
+ * scroll — seven pills do not fit 320 and never did — and a control the reader
+ * has to discover by scrolling a row sideways is a control most of them will
+ * not find. This one is `flex: none` with `margin-left: auto` in a row that no
+ * longer scrolls as a whole, so it is in the same place at every width and on
+ * both kind tabs, and the pills go on scrolling underneath it.
  */
 export function FeedFilterPills({
   lens,
   onSelect,
+  kinds = true,
+  oldestFirst,
+  onToggleOrder,
 }: {
   /** Which pill is lit. Exactly one always is. */
   lens: FeedLens;
   onSelect: (lens: FeedLens) => void;
+  /**
+   * Whether the **kind** group is drawn at all — false on the pitcher tab,
+   * where a stream item is a whole outing rather than a play and there is
+   * nothing for these pills to select on. The order toggle beside it is drawn
+   * either way: outings have a clock too.
+   */
+  kinds?: boolean;
+  /** Whether the stream is running forwards — see `feed-order` below. */
+  oldestFirst: boolean;
+  onToggleOrder: () => void;
 }) {
   const pill = (key: FeedLens, label: string, title: string) => (
     <button
@@ -190,13 +257,30 @@ export function FeedFilterPills({
   );
 
   return (
-    <div
-      className="feed-filters"
-      role="group"
-      aria-label="Which plays the feed shows"
-    >
-      {pill('all', 'All', 'Every play of the day — the stream as it opens')}
-      {PLAY_FILTERS.map((f) => pill(f.key, f.label, f.title))}
+    <div className="feed-filters">
+      {kinds && (
+        <div
+          className="feed-filter-kinds"
+          role="group"
+          aria-label="Which plays the feed shows"
+        >
+          {pill('all', 'All', 'Every play of the day — the stream as it opens')}
+          {PLAY_FILTERS.map((f) => pill(f.key, f.label, f.title))}
+        </div>
+      )}
+      <button
+        type="button"
+        className={`research-toggle feed-filter-pill feed-order${oldestFirst ? ' on' : ''}`}
+        aria-pressed={oldestFirst}
+        onClick={onToggleOrder}
+        title={
+          oldestFirst
+            ? 'The day read forwards, first play first — press to put the newest back on top'
+            : 'Read the day forwards instead, from its first play'
+        }
+      >
+        Oldest first
+      </button>
     </div>
   );
 }
