@@ -235,6 +235,15 @@ paint over the box covering it.
 - **Two params must never mean two things.** `proj=1` is a matchup's and
   `rproj=1` is the roster's, deliberately, because a link is read before
   anything on screen can say which view wrote it.
+- **A lens is put away when its page leaves the screen.** A press is about the
+  page it was made on, so a projected reading (`rproj=1`, `proj=1`,
+  `rankproj=1`, a team page's own) goes off when the reader crosses the view
+  tabs, closes the matchup page or leaves the Rankings tab — **a page opens
+  measured unless a link says otherwise**. A page opened *over* another
+  (`player=`, a matchup over a tab) is not a leaving, and neither is a
+  sub-selection inside one (a span, a kind). The reset watches navigation state
+  seeded from the URL and never fetched data, so an inbound link is already on
+  its own surface before any effect runs.
 - An unrecognized value **falls back rather than emptying the view**, and the
   URL keeps what it was handed.
 

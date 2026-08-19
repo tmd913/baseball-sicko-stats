@@ -1502,6 +1502,11 @@ export default function App() {
    * The **read** is lazy on the toggle rather than on the view (see its effect):
    * it joins four league-wide boards against every roster in the league, and
    * nobody who never presses it should pay for it.
+   *
+   * **And it goes off with the page it was pressed on** — see the effect down
+   * beside the roster lens's, *The two League lenses go away with their pages*.
+   * A link carrying it still opens projected; what it may not do is outlive the
+   * matchup page and dash the next card the reader opens.
    */
   const [projected, setProjected] = useState<boolean>(
     () => initialParams.get('proj') === '1',
@@ -1637,6 +1642,10 @@ export default function App() {
    * that turns a figure into a standing lives there, so a projected table
    * ranked here would be a second definition of the competition rank, of the
    * roto point, and of the identity that makes `OVR` equal `BAT` + `PIT`.
+   *
+   * **And it goes off with the tab** — see the effect down beside the roster
+   * lens's, *The two League lenses go away with their pages*. The span strip is
+   * not a leaving and an inbound link is not one either.
    */
   const [rankProjected, setRankProjected] = useState<boolean>(
     () => initialParams.get('rankproj') === '1',
@@ -3386,6 +3395,76 @@ export default function App() {
     setRosterProjected(false);
     if (back) setRanges((prev) => ({ ...prev, summary: back }));
   }, [view, rosterProjected]);
+
+  /**
+   * **The two League lenses go away with their pages**, which is the rule above
+   * carried to the two it was written for and deliberately not applied to.
+   *
+   * The rule it settles on is one sentence: **a page opens measured unless a
+   * link says otherwise.** A lens is a press, and a press is about the page it
+   * was made on; a lens still in force on a page the reader has just opened is
+   * a table of guesses nobody asked for. That is the shape all **four** of this
+   * app's projected lenses now have — the Roster's on a crossing of the view
+   * tabs, the matchup's on the matchup page closing, the Rankings' on leaving
+   * the Rankings tab, and a matchup team page's (`teamProjected`, state inside
+   * `LeagueMatchup`) on the overlay unmounting, which it already did.
+   *
+   * **What this overturns, and why.** The Roster's rule was written with three
+   * reasons for stopping there, and they are recorded in *Client — the Roster
+   * view* as reasons rather than deleted: the roster's lens is the only one of
+   * the three that *moves the days in view*; the Roster is a destination where
+   * `lt=rankings` and `mup=` are each opened on purpose; and the two League
+   * lenses are read against each other, so a rule that reset them on the way
+   * out would have to answer why it does not reset them on the way between. The
+   * first two are arguments that the roster's case is the **worst**, not that
+   * the other two are harmless — a manager reading dashed cards as scores is
+   * the same fault whether or not the calendar moved with it. The third is the
+   * real one, and this answers it rather than dodging it: it **does** reset on
+   * the way between, because on the way between the reader is *opening a page*,
+   * and one press is what a page they chose to open costs. Left as it was, the
+   * cost ran the other way — the Rankings lens survived `League` → `Roster` →
+   * `League` (the tab is remembered), and the matchup lens survived a card
+   * closing, so the next card opened dashed with nothing pressed.
+   *
+   * **A page over a page is not a leaving**, the precedent the Roster's rule
+   * already sets for `player=`. A matchup page opened over the Rankings tab
+   * leaves `view` and `leagueTab` where they are, and a player page opened over
+   * a matchup leaves `matchupId` where it is — so neither costs the lens
+   * underneath it, and both come back to the table they covered.
+   *
+   * **A sub-selection inside a page is not a leaving either.** The Rankings
+   * span strip is the case: `rankproj=1` is written only on the span it can act
+   * on, so `Season` and back is a round trip the URL already describes (see
+   * *Client — the League rankings*), and resetting on it would be this rule
+   * reaching inside a page rather than around it — the same reason the Roster's
+   * lens survives a kind tab. The alternative considered was mirroring the URL
+   * gate exactly, so state and query string could never disagree; it was
+   * rejected for that, and because the gate has a `rankings.projectable` in it
+   * that arrives **after** the link does, and a reset watching fetched data
+   * would put out a lens an inbound link had just lit.
+   *
+   * **Navigation only, never a load.** Both tests are made of state seeded
+   * synchronously from the URL (`view`, `mup=`, `lt=`), so an inbound
+   * `?view=league&mup=12&proj=1` or `?view=league&lt=rankings&rankproj=1` is
+   * already on its own surface on the first render and nothing fires. What
+   * these end is a lens outliving the page it was pressed on.
+   */
+  useEffect(() => {
+    // The matchup page is where `proj=1` is drawn, written and read (see the
+    // URL sync and the projection's own effect, both gated on this same pair),
+    // so this is that page leaving the screen rather than being covered.
+    if (!projected || (view === 'league' && matchupId != null)) return;
+    setProjected(false);
+  }, [view, matchupId, projected]);
+
+  useEffect(() => {
+    // The tab, not the span: see above. The rankings read (up beside the
+    // scoreboard's) is gated on the tab too, so putting the lens away off it
+    // costs no request — the live table is read on the next entry, which is the
+    // read that entry was going to make anyway.
+    if (!rankProjected || (view === 'league' && leagueTab === 'rankings')) return;
+    setRankProjected(false);
+  }, [view, leagueTab, rankProjected]);
 
   /**
    * Re-read everything that comes from ESPN, past the server's ten-minute
