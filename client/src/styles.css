@@ -8327,16 +8327,22 @@ button.start-line:focus-visible {
   .research-toggle-label,
   .schedule-toggle-label,
   .projected-toggle-label,
-  /* **The Rankings caption's copy of the League page's own toggle**, and only
-     that copy — scoped to the row rather than to `.lg-proj-label`, because the
-     matchup card's is centered on a row of its own with the width for a word
-     where this shares a line with a caption of dates. Measured at 390: with the
-     label the pair wraps and the caption row is 70px, which is two thirds of a
-     table row taken off the one tab that *is* a table; without it the row is
-     36 and the button sits on the caption's own line. Visually hidden rather
-     than removed, the rule the three above it follow: the button still names
-     itself rather than being a lone glyph. */
-  .lg-span-detail .lg-proj-label {
+  /* **The Rankings copy of the League page's own toggle**, and only that copy —
+     scoped to the row it is in rather than to `.lg-proj-label`, because the
+     matchup card's is centered on a row of its own with the width for a word.
+     It named `.lg-span-detail` while this button stood in the table's caption;
+     the button is in the tab row now and the scope followed it, which puts it
+     beside `.projected-toggle-label` above — the Roster view's own copy of this
+     control, in this same row, losing its word at this same width.
+
+     Measured on the Rankings tab at 320 and 640, which is where it pays: with
+     the label the group is 145px and the tab row takes a **third** line at both
+     (132 → 180 and 84 → 132, i.e. 48px of *pinned* chrome off the one tab that
+     is a table); at 77px it packs onto the line the span dropdown is on and the
+     row is 132 and 84, which is exactly what it was before this control joined
+     it. Visually hidden rather than removed, the rule the three above it
+     follow: the button still names itself rather than being a lone glyph. */
+  .view-bar-tabs .lg-proj-label {
     position: absolute;
     width: 1px;
     height: 1px;

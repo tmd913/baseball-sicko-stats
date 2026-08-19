@@ -750,9 +750,13 @@ where everybody had got to.** The Scoreboard answers *am I winning this
 category* — that is what a matchup card is — and the question a manager brings
 to a league table is the other one: two roto points off third in saves with five
 days left is a week to do something about, and two off with one day left is not.
-So the caption row carries a **`Projected`** toggle, and pressing it draws every
-figure, every rank and all three summary columns against the **end of the
-matchup period** rather than against today.
+So the app's tab row carries a **`Projected`** toggle, and pressing it draws
+every figure, every rank and all three summary columns against the **end of the
+matchup period** rather than against today. It stood in the table's own caption
+row until now and the argument for the move is below, under *The toggle is in
+the tab row, and the caption stayed behind* — read the two together, because
+most of what follows was written of the caption's copy and every word of it
+except the address still holds.
 
 **Only on `Current matchup`, and that is not a limitation so much as the only
 span the question has an answer for.** There is no such thing as a projected
@@ -827,6 +831,118 @@ paragraphs are the ones the rest of the app already uses: one account of one
 method. What it gained for this caller is a **`days`** prop, because this tab
 reads the figure off its own response and holds no `EspnProjection` at all.
 
+### The toggle is in the tab row, and the caption stayed behind
+
+**A reversal, and a small one: the button moved a tier up and nothing else about
+it changed.** It was put in the caption row on the reasoning that a control
+saying what the figures *are* belongs against the figures, which is true and is
+still why the *caption* is there. What it missed is what the button actually
+does — it changes **which numbers the table draws**, which is the same kind of
+statement as `Starters`, the research board's include buttons and the Roster
+view's own `Projected`, and every one of those is in the tab row. That last one
+is the whole argument in a line: the app already draws a projected toggle up
+there, so drawing the League's copy two tiers lower made one control look like
+two.
+
+**What makes the move safe is that the sentence never depended on the button.**
+The caption reads `Week 19 · projected to Aug 23 · 5 days still to play` whether
+or not the control is beside it — it is written off `rankings.projected` and
+`projectedDaysLeft`, which come off the response — so a table of guesses is
+still named against the numbers with its control a row away. What is left in
+`.lg-span-detail` is a caption and the one ⓘ that explains a column of it, which
+is what that row was for.
+
+**And that is also what the full-page box keeps.** The tab row is *covered*
+there — measured, `.app-chrome` is `inert` while the box is up — so the toggle
+is out of reach in that mode where it used to travel in with the caption. That
+is the research board's own rule rather than a loss: an expanded table **states**
+its settings and the way to change one is the button that expanded it. Here the
+statement is the caption itself, which the box already keeps
+(`.lg-rankings.is-expanded > :not(.league-scroll):not(.lg-span-detail)`), and
+Escape leaves the mode with `rankproj=1` still on.
+
+**`ProjectedTools` moved whole**, the button and its key being one object by
+that component's own design, so `LeagueRankings` lost `projected`, `onProjected`
+and `busy` and `LeagueView` lost the threading for all three — a prop nobody
+reads is a prop nobody misses. The undelayed flag is now read where it is held:
+`App` passes `rankingsLoading` to the control and `showRankingsWait` to the
+pane, which is the same pair of answers to the same two questions, one hop
+earlier.
+
+**Two CSS declarations, each undoing something written for the row it left.**
+`.lg-proj-tools` carries `margin-left: auto`, which is right at the far end of
+the Scoreboard's head row and wrong in a bar that wraps: each line has its own
+slack, so the toggle would strand itself at the right edge of whichever line it
+landed on — a control walking away from the group it belongs to as the window
+narrows. `.view-bar-tabs .lg-proj-tools { margin-left: 0 }` puts it at the row's
+ordinary 12px gap after the span strip. And the key's anchor becomes
+**`.view-bar`** rather than the group: `.lg-proj-key` is `position: static`
+precisely so a 340px panel hangs off a *row* rather than off a 30px button, and
+this group sits part-way along the tab row — at 390 the button starts at x=187 —
+so `right: 0` against the group would open the panel leftward off the screen.
+Against `.view-bar`, which is the full content width at every size, `right: 0`
+is the app's own gutter. **Nothing else in that bar changes hands**, checked
+rather than assumed: the two absolutely positioned things under there are the
+transactions dot and the calendar's date bubble, anchored to `.lg-tab` and
+`.date-toggle`, both of which declare `position: relative` for exactly that
+purpose, and the date picker's popover hangs off `.drp`.
+
+**The label goes at 640 for the same reason it went before, in a new place.**
+The rule named `.lg-span-detail .lg-proj-label` and now names
+`.view-bar-tabs .lg-proj-label`, which puts it beside `.projected-toggle-label`
+— the Roster view's copy of this control, in this same row, losing its word at
+this same width. Measured on this tab: with the label the group is **145px** and
+the tab row takes a *third* line at 320 and at 640 (**132 → 180** and
+**84 → 132**, i.e. 48px of pinned chrome off the one tab that is a table); at
+**77px** it packs onto the line the span dropdown is on and the row is 132 and
+84, exactly what it was before this control joined it.
+
+### What the move costs, measured
+
+Driven in a browser against the live 12-team league, `.view-bar` and
+`.app-chrome` heights before → after, with the caption beside them:
+
+| width | tab row | pinned chrome | caption | net page |
+| --- | --- | --- | --- | --- |
+| 320 | 132 → **132** | 255 → **255** | 70 → **30** | **−40** |
+| 390 | 132 → **132** | 207 → **207** | 36 → **30** | **−6** |
+| 640 | 84 → **84** | 159 → **159** | 36 → **30** | **−6** |
+| 900 | 82 → **82** | 161 → **161** | 36 → **30** | **−6** |
+| 1024 | 82 → **82** | 161 → **161** | 36 → **30** | **−6** |
+| 1200 | 36 → **82** | 115 → **161** | 36 → **30** | **+40** |
+| 1440 | 36 → **36** | 115 → **115** | 36 → **30** | **−6** |
+| 1920 | 36 → **36** | 115 → **115** | 36 → **30** | **−6** |
+
+**1200 is the one width that pays, and it pays a whole line — and it is
+structural rather than a tuning failure.** The row's four groups measure 289
+(view switch) + 297 (League tabs) + 470 (span pills) + 145 (this) with 12px
+gaps, i.e. **1237px** against the **1156** a 1200px window leaves; without the
+label it is 1169, still 13px over. So there is no width for this control at 1200
+in any dress it can wear, and hiding the word above 640 would buy nothing while
+costing every wider screen its name. What the reader gets back is 6px of caption
+and a control among the other filters; what it costs is 46px of pinned chrome at
+that one width. Stated rather than smoothed over: it is the honest price of the
+move.
+
+**Everything else was driven rather than reasoned about**, at 390 and 1200:
+a press writes `rankproj=1`, swaps the caption to `Week 19 · projected to Aug 23
+· 5 days still to play` and a row's first four cells from
+`98 1st · 53 1st · 47 1st · 19 1st` to **`98 1st · 52 1st · 73 2nd · 27 1st`**,
+and pressing again puts all three back; at t+300ms of a cold read the button
+carries `aria-busy` with the caption and the twelve live rows still standing;
+the button is **43px** throughout at 390 and **111px** throughout at 1200, so it
+does not move under the finger; the four other spans draw **0 toggles** and drop
+`rankproj=1` from the URL; the key opens **276px at x=22** of a 320 screen and
+**320px at x=48** of a 390 one, on screen at 320/390/640/1200/1920; and the
+Roster, Feed, Research, Scoreboard and Transactions views render with **0
+overflow**, no banner, and `.view-bar` heights and a date-picker popover rect
+**identical to `main`** at 390 and 1200 — which is the check `.view-bar`'s new
+`position: relative` owed.
+
+**Bundle: 578.64 → 578.52 KB of JS** (172.36 → 172.32 gzipped) and **155.43 →
+155.49 KB of CSS** (27.82 → 27.83) — the JS down 120 bytes on three props and
+their prose, the CSS up 60 on two declarations and the argument for them.
+
 ### `rankproj=1`, and why it is a third param rather than a reuse
 
 In the URL by the rule `hideil=1`, `starters=1` and `sched=` follow: it changes
@@ -896,7 +1012,10 @@ new fields — checked by fetching both servers and diffing the responses.
 | a row's first four cells | `100 1st · 54 1st · 47 1st · 19 1st` | **`100 1st · 52 1st · 73 2nd · 27 1st`** |
 | rows | 12 | 12 |
 
-**The caption row grows and the table does not**: `.lg-span-detail` goes
+**Of the caption's copy of the button**, which is where it stood when this was
+measured — see *The toggle is in the tab row, and the caption stayed behind*
+above for where it is now and what the move cost. **The caption row grows and
+the table does not**: `.lg-span-detail` goes
 **30 → 36px** at 390, 640, 1200 and 1920 and **30 → 70** at 320, where this bar
 already pays a line for everything; the table is **956.61 / 996.81 / 1142.06 /
 1463.45 / 1920px** and the row **61.55px** at 320 / 390 / 640 / 1200 / 1920 in
