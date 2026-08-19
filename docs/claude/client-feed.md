@@ -20,12 +20,16 @@ it could not do was answer *what actually happened today* without the reader
 scrolling past every strikeout in between. It has a lens now, and a red button
 that says how many plays have arrived since they last looked.
 
-**Seven pills and one of them lit**: `All · HR · Hits · Runs · RBI · SB ·
-Video`, in a row at the head of the stream. That reverses two decisions taken
-when this shipped — that the kinds should be **independent switches** and that
-they should live behind a disclosure **in the pinned tab row** — and both of the
-old arguments are kept below, with what the reversal costs stated rather than
+**Seven pills and one of them lit**: `All · H · RBI · HR · SB · R · Video`,
+in a row at the head of the stream. That reverses two decisions taken when this
+shipped — that the kinds should be **independent switches** and that they should
+live behind a disclosure **in the pinned tab row** — and both of the old
+arguments are kept below, with what the reversal costs stated rather than
 glossed.
+
+**And the row carries a second control at its right end**, `Oldest first`, which
+is not a pill and not about kinds at all — see *The stream can be read forwards*
+below.
 
 **`New` was an eighth pill and is a mode of its own again**, reached from the red
 button in the stream rather than from this row. The row is the **kind** axis and
@@ -37,12 +41,34 @@ last one off is how the whole stream comes back; with one active at a time there
 has to be something to press that means *no lens*. It leads the row and is the
 state the feed opens in.
 
-**The order is a box score's rather than the vocabulary's history**: the two ways
-of reaching a base by hitting it, then the two halves of a run — `Runs` he
-scored, `RBI` he drove in — then the base he took with no hit at all, and last
-the one kind-pill that is not a kind of play but a fact about whether there is
-film of it. `SB` reads after `RBI` for that reason rather than beside the hits,
-where it sat only because it was added with them.
+**The order is the fantasy categories' rather than a box score's**, which is the
+reversal of what this paragraph used to argue. What it said: *the order is a box
+score's rather than the vocabulary's history — the two ways of reaching a base by
+hitting it, then the two halves of a run (`Runs` he scored, `RBI` he drove in),
+then the base he took with no hit at all, and last the one kind-pill that is not
+a kind of play but a fact about whether there is film of it; `SB` reads after
+`RBI` for that reason rather than beside the hits, where it sat only because it
+was added with them.*
+
+That was right about a *line score* and wrong about this row. Nobody reads the
+feed to reconstruct a box score; they read it to find out how the week is going,
+and the week is going in categories. So the run is `H · RBI · HR · SB · R`:
+`H` leads because it is the widest cut of the day — **18 of the 51 items** on the
+day measured below, the one press that turns a stream into the plays that
+mattered — then the three that decide a matchup, then `R`, which is the one
+thing on the row that happens *to* him rather than by him and the only one of the
+five nobody opens this page to count. `Video` keeps the last place it always had,
+for the reason it always had it: it is not a kind of play but a fact about
+whether there is film of one.
+
+**`Hits` and `Runs` are `H` and `R` now**, which the reordering forces rather than
+merely permits. A run of category abbreviations with two whole words in the
+middle of it reads as two kinds of thing on one row, and both single letters are
+forms a box score already uses — the same test every other label here passed. It
+also buys back 24px, which on a row whose content is **353px against a 174px
+scrollport at 320** is 24px of scrolling nobody has to do. The *keys* are
+untouched (`hit`, `run`), so every `plays=` link ever written still opens on the
+pill it named.
 
 **`XBH` was a seventh chip and is gone**, and the two reasons are the ones that
 decide any pill on this row. It answered a question nobody asks of a *stream*: a
@@ -56,11 +82,11 @@ every key it does not know.
 
 **The labels are abbreviations because the row is read across**, and each is a
 form a box score already uses. What an abbreviation cannot say is which plays it
-takes — that a home run is inside `Hits` and inside `RBI`, that `Runs` is him
-crossing the plate where `RBI` is him driving somebody in — so every pill carries
-the sentence as its `title`.
+takes — that a home run is inside `H` and inside `RBI`, that `R` is him crossing
+the plate where `RBI` is him driving somebody in — so every pill carries the
+sentence as its `title`.
 
-**`Hits` reads `outcomeKind` rather than a list of its own**, which is the same
+**`H` reads `outcomeKind` rather than a list of its own**, which is the same
 function the at-bat card's rail is colored by, so a pill and the card it selects
 cannot come to disagree about what a hit is. `XBH` was the one pill that needed a
 set of its own (`XBH_EVENTS`), that function filing the three non-homer hits
@@ -271,7 +297,9 @@ measurable half. A/B'd on the same page by hiding the button, the docs recorded
 back — measured after, chrome is **207px at 320 and 111 at 640**, with 375, 390,
 480, 900, 1200 and 1920 unchanged at 159 / 159 / 159 / 115 / 115 / 115.
 
-**The row scrolls sideways rather than wrapping** (`.feed-filters`), which is the
+**The row scrolls sideways rather than wrapping** — `.feed-filters` when this was
+written, `.feed-filter-kinds` inside it since `Oldest first` joined the row and
+took the scrolling box off it; see *The stream can be read forwards* — which is the
 answer every other strip of pills in this app gives when it outgrows its width —
 the research board's position row and its window tabs, the player page's tab
 strip, the tutorial's jump strip. A wrapping row would change the height of the
@@ -294,6 +322,116 @@ bottom at 165.
 **It is inside the same guard as the feed** (`filteredCards.length > 0`) rather
 than beside it: a row of pills over a page with no players on it would be a
 control over nothing, and the empty state there names its own cause already.
+
+### The stream can be read forwards
+
+**`Oldest first` turns the day round**, and it is at the right end of the pill
+row. The stream was newest-first and nothing else from the day it shipped, which
+is right for the question it is usually opened with — *what just happened* — and
+wrong for the other one people actually ask it: *what happened while I was out*,
+which is a day you read from the first pitch.
+
+**Not an eighth pill.** The pills are single-select over **kinds**, and an order
+is not a kind — a reader who wants the home runs read forwards has to be able to
+say both, and a row where saying one unsays the other cannot put it. That is the
+same fault `New` had on this row and was taken off it for, one section above. So
+the kinds are a `role="group"` of their own (`.feed-filter-kinds`) and this
+stands outside that group.
+
+**A lit toggle rather than a segmented `Newest | Oldest` run**, which is the
+other shape this app has for a control with two values. A segmented run says its
+two values are **peers** — Roster/Feed/Research, Batters/Pitchers, `Next 7` /
+`Next 14` — and these are not peers: newest-first is what makes a stream a
+stream (`byRecency`, and `byPlayOrder`'s own note that a *game* is the thing read
+start to finish), and oldest-first is the departure from it. This app spells a
+departure as a lit toggle whose absence is the default — `Starters`,
+`Watchlist`, `Projected`, `hideil` — and carries only the departure in the URL.
+It is also the narrower control, on a row whose kinds already overflow at 320 and
+390: **94px measured**, where a segmented pair has to carry both words at once and
+can never be narrower than the two of them.
+
+**The label does not change when it lights.** `Oldest first` is both what
+pressing it does and what being lit means; a label that flipped to `Newest first`
+would change the button's width under the finger that pressed it, which is
+*reserve the box* broken by a control that is nothing but a box. Measured: **94 ×
+30px lit and unlit**, at every width. The `title` carries the state instead —
+`Read the day forwards instead, from its first play` off, `The day read forwards,
+first play first — press to put the newest back on top` on — that being the one
+thing on a button that can change size for nothing.
+
+**It sits outside the scrollport rather than at the end of it**, which is the one
+piece of geometry this control cost. `.feed-filters` was itself the scrolling box;
+it is now a plain row holding the kind group — which scrolls — and the toggle,
+`flex: none` with `margin-left: auto`. Putting the toggle inside the scrollport
+would have hidden it behind a sideways scroll at exactly the widths where the row
+is longest: measured, the kinds are **353px of content in a 174px port at 320**
+and **244px at 390**, so `Oldest first` would have been two pill-widths past the
+edge on a phone and visible only on a desktop. The kind group needs `min-width:
+0` to shrink at all — a flex item's automatic minimum size is its content, and
+without it the box refuses to go below its seven pills and pushes the toggle off
+the row instead of scrolling.
+
+**What reversing means for the three sections — only one of them turns.**
+
+- **Recent** turns. It is the section with a clock the reader reads *along*, and
+  it sorts by `byPlayOrder` instead of `byRecency` — that comparator negated
+  rather than a second one written out, so the two cannot come to disagree about
+  a play's own grouped events (cause then effect, either way round). `Load more`
+  turns with it: the page walks *forward* from the first pitch instead of back
+  from the last.
+- **Live does not**, and stays pinned to the top. It is not ordered by a clock at
+  all — `ROLE_ORDER` puts the man at bat above the man on deck above the man on
+  base — so reversing it would say nothing except that on-base now outranks
+  at-bat. And a control that reorders plays is not a control that rebuilds the
+  page: what is happening now is why this page is open.
+- **Upcoming does not either**, and the reason is stronger than "it is the
+  future": it already agrees with both readings. It sorts by first pitch,
+  earliest first, which is *next up first* reading the day backwards and
+  *forwards in time* reading it forwards. The two orders it could be asked for
+  are the same order, so there is nothing to flip — reversing it would only bury
+  the game that starts soonest under the one that starts at ten.
+
+**`oldest=1` in the URL**, absent meaning the stream as it has always opened —
+`newplays=1` and `hideil=1`'s own spelling, and it means the default can be
+redefined later without anyone's link needing revisiting. **Gated on the view and
+not on the batter tab**, unlike the pills beside it: a pitcher's outings are
+stamped with a clock exactly as a plate appearance is, so the toggle is drawn and
+in force on both kind tabs where the kind group is the batter tab's alone. Not a
+saved preference, on `plays=`'s line — which way you want to read this afternoon
+is not a fact about you.
+
+**Measured**, driven in headless Chrome against the live dev API, the roster's
+own day for 2026-08-17 (51 items, the same day the table below counts):
+
+| | newest-first | `oldest=1` |
+| --- | --- | --- |
+| items in the stream | 51 | **51** |
+| head | Crow-Armstrong, CHC, **10th** | Stewart, CIN, **1st** |
+| foot | Stewart, CIN, **1st** | Crow-Armstrong, CHC, **10th** |
+| with `plays=hr` | 6, head Crow-Armstrong 10th | 6, head McGonigle **2nd** |
+| pitcher tab | 2 outings, Snell then McLean | 2, **McLean then Snell** |
+| Live rows (`sim=1`) | 6, and the section leads | **the same 6, same order, still leading** |
+| Upcoming rows (today) | 11 | **the same 11, same order** |
+
+The head and foot swap **exactly**, over the whole list rather than the first
+page: `Load more` was pressed to the end in both directions first, which is what
+makes 51-against-51 a reversal rather than two lists that happen to start
+differently.
+
+**Geometry, at 320 / 390 / 1200**, and the row is the height it always was:
+**34px at all three**, with the toggle at x=204 / 274 / 906 and the feed's own
+top at 181 against the row's bottom at 165 at 1200 — the figures *Where the
+controls sit* recorded before this control existed, unchanged. On the pitcher
+tab, where the kind group is not drawn at all, the toggle is at **the same x=274
+and the row is the same 34px** as on the batter tab, which is what the auto
+margin is for.
+
+**The press is quiet.** It is local state over data already on screen, so no
+wait, no badge and no re-read: measured, `.loading-line` absent through the flip
+and the 51 loaded items still 51 after it — the reader's page depth survives the
+turn. `oldest=banana` opens on the whole stream newest-first (20 items on the
+first page, not nought), which is the direction every parameter in this app
+fails in.
 
 ### The marker, and the cycle the two controls make together
 
@@ -385,15 +523,18 @@ singles, 1 steal, 5 runs, 9 plate appearances with an RBI, every play with a
 
 | pill | drawn | raw |
 | --- | --- | --- |
-| `HR` | **6** | 6 home runs |
-| `Hits` | **18** | 6 HR + 5 2B + 7 1B |
-| `Runs` | **5** | 5 runs scored |
+| `H` | **18** | 6 HR + 5 2B + 7 1B |
 | `RBI` | **9** | 9 plate appearances with an RBI |
+| `HR` | **6** | 6 home runs |
 | `SB` | **1** | 1 steal |
+| `R` | **5** | 5 runs scored |
 | `Video` | **51** | every item — which is the measurement that retired the
 proxy it was drawn from; see *`Video` was selecting the whole stream* above |
 
-Those were taken when the chips unioned, and the union's own two rows (`HR + SB`
+The table is in the row's own order, and the two renamed rows are the two rows
+that were renamed: the sets are the ones they always were, and `HR` was re-read
+off the rendered page after the reorder at **6** to prove it. Those were taken
+when the chips unioned, and the union's own two rows (`HR + SB`
 7, `HR + RBI` 9) are what the row can no longer be asked for. (`XBH` drew **11** —
 5 doubles and 6 home runs — on that same day, which is the figure its own removal
 is argued from above.)
