@@ -1240,6 +1240,7 @@ export function LiveFeed({
   seenPlays = 0,
   newCount = 0,
   onShowNew,
+  onShowAll,
 }: {
   reports: PlayerReport[];
   // Which kind the tabs above are showing — the stream is one kind at a time,
@@ -1264,7 +1265,18 @@ export function LiveFeed({
    * component is exactly the stream it was — no filter, no button, no marker.
    */
   playFilter?: PlayFilterKey | null;
-  /** The `New` lens — the row's own last pill, held here as its own flag. */
+  /**
+   * **New-plays mode** — the stream narrowed to what has arrived since the
+   * reader last marked it read. It was the pill row's own last member and is an
+   * axis of its own again: it asks *when* where the pills ask *what kind*, and
+   * the two AND (`passesFilters`), so `HR` inside the new plays is a question
+   * this section can now be asked.
+   *
+   * **The pitcher tab can never be in it**, and that is App's doing rather than
+   * a test here: it passes `newOnly={feedIsBatters ? feedNewOnly : undefined}`,
+   * so on the pitcher tab this is the default `false`. Which is why the heading
+   * below needs no pitcher wording for the mode.
+   */
   newOnly?: boolean;
   /** How far down the stream this reader has marked read (epoch ms) — what
    *  `New` narrows to. */
@@ -1276,8 +1288,15 @@ export function LiveFeed({
    *  than about the lens, and a count that shrank when the reader ticked `HR`
    *  would be saying the other plays had stopped being new. */
   newCount?: number;
-  /** Press the red button: show the new plays. App turns the `New` filter on. */
+  /** Press the red button: show the new plays. App turns the mode on. */
   onShowNew?: () => void;
+  /**
+   * Leave new-plays mode — every play of the day again. App turns the mode off,
+   * **which is what marks the stream read** (its `setFeedNewOnly`), so this is
+   * the press that says "done with those" and the only one that does. It is
+   * drawn twice, at the two ends of the list; see the section below.
+   */
+  onShowAll?: () => void;
 }) {
   // How much of the Recent section is on screen, grown a page at a time by the
   // "Load more" button. Deliberately not in the URL — it's a reading position,
@@ -1379,14 +1398,47 @@ export function LiveFeed({
   const recent = allRecent.filter((e) => passesFilters(e, playFilter, newOnly, seenPlays, hasFilm));
 
   /**
-   * **The red button, and why it is not drawn while `New` is on.** It is the
+   * **The red button, and why it is not drawn while the mode is on.** It is the
    * doorway to those plays, so with the reader already looking at them it would
    * be a control offering what is on screen — and pressing it would mark them
-   * read, which is what empties a `New` view. So while the filter is on the
-   * marker is frozen and the button is absent, and turning the filter off is
-   * what says "done with those": see App's `setFeedNewOnly`.
+   * read, which is what empties the view. So while the mode is on the marker is
+   * frozen and the button is absent; what stands in its place is the way *out*
+   * (`onShowAll`), and turning the mode off is what says "done with those": see
+   * App's `setFeedNewOnly`.
+   *
+   * The two are therefore mutually exclusive by construction rather than by a
+   * rule, and one of them is in that slot whenever there is anything to say.
    */
   const showNewButton = !newOnly && newCount > 0;
+  /**
+   * **The way out of new-plays mode, drawn at both ends of the list.**
+   *
+   * One at the top, in the slot the red button occupies on the way in, because
+   * that is where a reader who has just arrived is looking; and one at the foot,
+   * after the items and after `Load more`, because a reader who has read down a
+   * short list of new plays is at the *bottom* of it and a control only at the
+   * top would be a scroll back up to reach. It is the same object twice, which
+   * is why it is one component and one handler rather than two buttons that
+   * could come to say different things.
+   *
+   * **Ordinary chrome rather than red.** `--strikeout` in this app means
+   * *something has happened since you looked* — the delta going the wrong way,
+   * the news mark's "filed today", the button above. This is the reader putting
+   * that away, so it takes `.feed-more`'s shape: a centered pill on the page's
+   * own ground, which is already what this list uses at its foot for "there is
+   * more of this".
+   */
+  const backToAll = (where: 'head' | 'foot') =>
+    onShowAll && newOnly ? (
+      <button
+        type="button"
+        className={`feed-more feed-all-plays feed-all-plays-${where}`}
+        onClick={onShowAll}
+        title="Every play of the day again — this marks the new ones read"
+      >
+        Show all plays
+      </button>
+    ) : null;
 
   // Not-yet-started games, earliest first pitch first — so the feed still has
   // something to show before the day's first at-bat (and lists later games while
@@ -1441,8 +1493,17 @@ export function LiveFeed({
 
       {(recent.length > 0 || filtered) && (
         <section className="feed-section">
+          {/* The heading says which list this is, and in the mode it is a
+              different list rather than the same one filtered — which is what
+              earns it its own word. No pitcher wording for it: App gates the
+              mode on the batter tab (`newOnly` above), so `New plays` and
+              `Recent outings` cannot both be reachable. */}
           <h2 className="feed-heading">
-            {kind === 'pitcher' ? 'Recent outings' : 'Recent plays'}
+            {newOnly
+              ? 'New plays'
+              : kind === 'pitcher'
+                ? 'Recent outings'
+                : 'Recent plays'}
           </h2>
           {/* News about the day, at the head of the list the news landed in —
               which is where it can also *do* something. The League page's
@@ -1461,6 +1522,7 @@ export function LiveFeed({
               {newCount} new {newCount === 1 ? 'play' : 'plays'}
             </button>
           )}
+          {backToAll('head')}
           {/* The reels for today's games, still out — see `filmTest`. A line
               rather than a block wait: the days already settled are on screen
               and answered, so this says the list is still filling rather than
@@ -1480,14 +1542,31 @@ export function LiveFeed({
                   <span className="feed-more-count">{recent.length - shown}</span>
                 </button>
               )}
+              {/* After `Load more`, not instead of it: the two answer different
+                  questions — more of *this* list, and back to the other one —
+                  and the reader may want either at the foot of a short list of
+                  new plays. Not drawn over an empty section, where the copy
+                  below names the way out and the top button is a few pixels
+                  above it. */}
+              {backToAll('foot')}
             </>
           ) : (
             /* Emptied by the reader's own controls, so it names them — the
                app's standing rule for a view a filter has cleared, and the one
                state this section could not previously be in. */
+            /* **Two controls can empty this now, and it names whichever did.**
+               The mode and the pills are two axes that AND, so the honest
+               answer has three shapes rather than two — and the third, both at
+               once, is the one it could never have to say while `New` was a
+               pill. Each names the control that undoes it, and the pair names
+               both. */
             <div className="feed-empty">
               {newOnly
-                ? 'Nothing new since you last marked the feed read.'
+                ? playFilter === 'video'
+                  ? 'No new plays with video yet — clips land through the day, and the rest arrive a day later.'
+                  : playFilter
+                    ? 'No new plays of that kind.'
+                    : 'Nothing new since you last marked the feed read.'
                 : playFilter === 'video'
                   ? // Its own sentence, because "of that kind" is not what this
                     // lens selects and because the honest reason is a timing
@@ -1496,7 +1575,20 @@ export function LiveFeed({
                     'No plays with video yet — clips land through the day, and the rest arrive a day later.'
                   : 'No plays of that kind today.'}{' '}
               <span className="feed-empty-how">
-                Change it with the pills above — <b>All</b> is every play of the day.
+                {newOnly && playFilter ? (
+                  <>
+                    Two controls are narrowing this — <b>All</b> above is every kind,
+                    and <b>Show all plays</b> is every play of the day.
+                  </>
+                ) : newOnly ? (
+                  <>
+                    <b>Show all plays</b> above is every play of the day.
+                  </>
+                ) : (
+                  <>
+                    Change it with the pills above — <b>All</b> is every play of the day.
+                  </>
+                )}
               </span>
             </div>
           )}

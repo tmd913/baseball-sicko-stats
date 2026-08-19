@@ -7,13 +7,20 @@
  * actually happened today* — the home runs, the steals, the plays there is film
  * of — without the reader scrolling past every strikeout in between.
  *
- * **One lens at a time**, drawn as a row of pills at the head of the stream they
- * narrow. It was six independent chips that unioned, plus `New` beside them on
- * an axis of its own, behind a `Plays` disclosure up in the pinned tab row; what
- * that bought is stated below, and it lost to the plainer control. A reader
- * arrives at this stream asking one question — *what did they hit today*, *what
- * is new since I looked* — and a set of switches makes them assemble the answer
- * out of parts and then take it apart again.
+ * **One kind at a time**, drawn as a row of pills at the head of the stream they
+ * narrow. It was six independent chips that unioned, behind a `Plays` disclosure
+ * up in the pinned tab row; what that bought is stated below, and it lost to the
+ * plainer control. A reader arrives at this stream asking one question — *what
+ * did they hit today* — and a set of switches makes them assemble the answer out
+ * of parts and then take it apart again.
+ *
+ * **`New` is not one of these pills, and was for a spell.** It asks *when*
+ * rather than *what kind*, so it composes with them rather than replacing them:
+ * "the new home runs" is an ordinary thing to want and a single-select row
+ * holding both axes could not put it. It is a **mode** now — the red
+ * `N new plays` button turns it on and a `Show all plays` button turns it off —
+ * and every pill here goes on working inside it. See `LiveFeed`'s Recent
+ * section, which draws both buttons and whose `passesFilters` ANDs the two.
  *
  * **`All` is a pill rather than the absence of one**, which is what a
  * single-select control owes its reader: with switches, turning the last one off
@@ -23,11 +30,11 @@
  *
  * **What the union bought and what it costs to lose.** The six sets genuinely
  * overlap — a home run is a hit and, nearly always, an RBI and a play with film
- * — so `HR + SB` ("the things worth watching") and `HR + New` ("the new home
- * runs") were both sayable and are not any more. `New` in particular used to
- * *narrow* whatever the chips had selected rather than replace it. The trade is
- * a row a reader can work without a key: pressing a pill is the whole gesture,
- * and what is on screen is what the lit pill says.
+ * — so `HR + SB` ("the things worth watching") was sayable and is not any more.
+ * The trade is a row a reader can work without a key: pressing a pill is the
+ * whole gesture, and what is on screen is what the lit pill says. `HR + New` was
+ * on that casualty list too and has been given back, `New` having left the row
+ * for an axis of its own rather than being one more thing on this one.
  *
  * **`XBH` was a seventh chip and is gone**, and the two reasons are the ones
  * that decide any pill here. It answered a question nobody asks of a *stream*: a
@@ -43,8 +50,6 @@
  * select on, and the row is not drawn.
  */
 
-import type { ReactNode } from 'react';
-
 /**
  * The six kinds a play can be asked for, **in the order the pills read** — which
  * is a box score's own order and not the vocabulary's history: the two ways of
@@ -56,16 +61,15 @@ import type { ReactNode } from 'react';
 export type PlayFilterKey = 'hr' | 'hit' | 'run' | 'rbi' | 'sb' | 'video';
 
 /**
- * What the row is selecting, all of it: the whole stream, one kind of play, or
- * the plays since the reader last marked it read.
+ * What the row is selecting, all of it: the whole stream, or one kind of play.
  *
- * `new` is a member of this union rather than a switch beside it, because the
- * row is single-select and a second lit pill would be exactly the multi-select
- * this replaced. App still holds it as its own piece of state — it is in the URL
- * under its own name and turning it *off* is what marks the stream read — so
- * this type is how the row states the pair rather than how App stores it.
+ * **`new` was a member of this union and is not**, which is the whole of the
+ * reversal above. It named a *when* on a row of *what kinds*, so a reader who
+ * wanted the new home runs had to pick which half of that to ask for. The mode
+ * lives beside the row now, and App's `feedLens` is `playFilter ?? 'all'`
+ * unconditionally rather than a pair read as one lens.
  */
-export type FeedLens = 'all' | PlayFilterKey | 'new';
+export type FeedLens = 'all' | PlayFilterKey;
 
 export interface PlayFilterDef {
   key: PlayFilterKey;
@@ -166,17 +170,13 @@ export function playFilterParam(key: PlayFilterKey | null): string | null {
  */
 export function FeedFilterPills({
   lens,
-  newCount,
   onSelect,
 }: {
   /** Which pill is lit. Exactly one always is. */
   lens: FeedLens;
-  /** How many plays are unseen — the same figure the red button in the stream
-   *  carries, shown on the `New` pill so the two cannot disagree about it. */
-  newCount: number;
   onSelect: (lens: FeedLens) => void;
 }) {
-  const pill = (key: FeedLens, label: string, title: string, extra?: ReactNode) => (
+  const pill = (key: FeedLens, label: string, title: string) => (
     <button
       key={key}
       type="button"
@@ -186,7 +186,6 @@ export function FeedFilterPills({
       title={title}
     >
       {label}
-      {extra}
     </button>
   );
 
@@ -198,16 +197,6 @@ export function FeedFilterPills({
     >
       {pill('all', 'All', 'Every play of the day — the stream as it opens')}
       {PLAY_FILTERS.map((f) => pill(f.key, f.label, f.title))}
-      {pill(
-        'new',
-        'New',
-        lens === 'new'
-          ? 'Showing only the plays you have not marked read — pressing another pill marks them read'
-          : 'Only the plays since you last marked the feed read',
-        newCount > 0 && lens !== 'new' ? (
-          <span className="feed-filter-count">{newCount}</span>
-        ) : null,
-      )}
     </div>
   );
 }

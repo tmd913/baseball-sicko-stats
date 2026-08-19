@@ -10075,6 +10075,23 @@ button.start-line:focus-visible {
    `align-self: center` and the ground of `.feed-more` under it: the two are the
    same object at the two ends of the same list — a full-width band would read
    as a section of the stream rather than as a note above it. */
+/* **The way out of new-plays mode**, at the head of the list and again at its
+   foot. It is `.feed-more`'s pill — ordinary chrome on the page's own ground —
+   because `--strikeout` in this app means *something has happened since you
+   looked* (the red button above it, the news mark's "filed today", a delta
+   going the wrong way) and this is the reader putting that away rather than
+   being told about it.
+
+   The only thing it adds to that class is the top instance's spacing: at the
+   foot `.feed-more`'s `margin-top: 4px` sits under the last item, and at the
+   head it sits under a heading, where the same 4px reads as the heading's own
+   underline rather than as a control. 10px is `.feed-new`'s own gap below the
+   heading, so the two slots — which are mutually exclusive — leave the list
+   starting at one y whichever of them is drawn. */
+.feed-all-plays-head {
+  margin-top: 10px;
+}
+
 .feed-new {
   align-self: center;
   display: inline-flex;
@@ -10178,21 +10195,6 @@ button.start-line:focus-visible {
   padding: 0 12px;
   font-size: 12px;
   white-space: nowrap;
-}
-/* The unseen count, on the `New` pill as well as on the red button in the
-   stream — one figure read in two places, so the row says how much `New` would
-   show before it is pressed. Red for the reason the button is, and dropped once
-   the lens is on: with the stream already narrowed to them, the count is the
-   length of what is on screen. */
-.feed-filter-count {
-  margin-left: 6px;
-  padding: 1px 5px;
-  color: var(--strikeout);
-  background: color-mix(in srgb, var(--strikeout) 18%, transparent);
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
 }
 
 /* Feed headshot — a compact variant of the player card's headshot button. */

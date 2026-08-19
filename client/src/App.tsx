@@ -3622,31 +3622,48 @@ export default function App() {
   }, []);
 
   /**
-   * **Which pill is lit** — one, always. Two pieces of state read as one lens,
-   * so the row can be single-select while `New` keeps the URL param, the red
-   * button and the mark-read side effect that are its own.
+   * **Leave new-plays mode**, which is the press that marks the stream read —
+   * `setFeedNewOnly(false)` advances the watermark, and nothing else does now
+   * that a kind pill no longer passes through it.
+   *
+   * **It does not scroll**, where the way *in* does. Going in, the reader is
+   * handed a different and much shorter list and belongs at the head of it;
+   * coming out, they are somewhere in a list that is about to get longer around
+   * them, and the plays they were reading do not move — the mode is a filter
+   * over the same stream, so dropping it inserts items above and the browser's
+   * own scroll anchoring keeps the item under their eye where it is. Sending
+   * them to the top would throw away a reading position for nothing.
    */
-  const feedLens: FeedLens = feedNewOnly ? 'new' : (playFilter ?? 'all');
+  const showAllPlays = useCallback(() => {
+    setFeedNewOnly(false);
+  }, [setFeedNewOnly]);
 
   /**
-   * **Press a pill.** One active at a time, so every press sets both halves:
-   * picking `New` drops the kind rather than narrowing it, and picking a kind
-   * (or `All`) turns `New` off.
+   * **Which pill is lit** — one, always, and it is the *kind* axis alone now.
    *
-   * **`New` is only turned off when it was on**, which is not a tidiness: doing
-   * that is what *marks the stream read* (`setFeedNewOnly`), and under a
-   * single-select row every press would otherwise pass through it. Measured
-   * before the guard — pressing `HR` from `All` marked the whole day read, so
-   * the `New` pill went to nought for a reader who had never touched it.
+   * `New` was the row's last member and is a mode of its own again, reached
+   * from the red button in the stream rather than from the row; the two AND in
+   * `passesFilters`, so the pills go on selecting a kind whether or not the
+   * mode is on. This is one piece of state read as one lens where it used to
+   * be two read as one.
    */
-  const selectFeedLens = useCallback(
-    (lens: FeedLens) => {
-      setPlayFilter(lens === 'all' || lens === 'new' ? null : lens);
-      if (lens === 'new') setFeedNewOnly(true);
-      else if (feedNewOnly) setFeedNewOnly(false);
-    },
-    [feedNewOnly, setFeedNewOnly],
-  );
+  const feedLens: FeedLens = playFilter ?? 'all';
+
+  /**
+   * **Press a pill.** One kind at a time, and **nothing else** — which is the
+   * whole of what taking `New` out of the row bought.
+   *
+   * While it was a pill this had to turn the mode off, and turning the mode off
+   * is what *marks the stream read* (`setFeedNewOnly`), so every press of every
+   * pill passed through the marker. That needed a guard against the case
+   * measured at the time: pressing `HR` from `All` marked the whole day read
+   * and took a reader who had never touched `New` to nought. With the mode off
+   * this axis there is no path from a pill to the marker at all, so the guard
+   * is gone rather than corrected — the fact it protected is now structural.
+   */
+  const selectFeedLens = useCallback((lens: FeedLens) => {
+    setPlayFilter(lens === 'all' ? null : lens);
+  }, []);
   // Each page keeps its own place, and going back to it lands where you left.
   //
   // Games and Feed are two readings of the same days over one window scroller,
@@ -4169,7 +4186,7 @@ export default function App() {
      outing rather than a play, which is the same fact the kind tabs exist for,
      so there is nothing here for the pills to select on. */
   const feedFilterPills = feedIsBatters ? (
-    <FeedFilterPills lens={feedLens} newCount={newPlayCount} onSelect={selectFeedLens} />
+    <FeedFilterPills lens={feedLens} onSelect={selectFeedLens} />
   ) : null;
 
   /* The calendar, which is both the disclosure for the date controls and the
@@ -5338,6 +5355,7 @@ export default function App() {
             seenPlays={feedIsBatters ? seenPlays : undefined}
             newCount={feedIsBatters ? newPlayCount : undefined}
             onShowNew={feedIsBatters ? showNewPlays : undefined}
+            onShowAll={feedIsBatters ? showAllPlays : undefined}
           />
           </>
         )

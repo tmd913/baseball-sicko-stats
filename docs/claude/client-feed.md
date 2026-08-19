@@ -20,12 +20,17 @@ it could not do was answer *what actually happened today* without the reader
 scrolling past every strikeout in between. It has a lens now, and a red button
 that says how many plays have arrived since they last looked.
 
-**Eight pills and one of them lit**: `All · HR · Hits · Runs · RBI · SB · Video ·
-New`, in a row at the head of the stream. That reverses two decisions taken when
-this shipped — that the kinds should be **independent switches** and that they
-should live behind a disclosure **in the pinned tab row** — and both of the old
-arguments are kept below, with what the reversal costs stated rather than
+**Seven pills and one of them lit**: `All · HR · Hits · Runs · RBI · SB ·
+Video`, in a row at the head of the stream. That reverses two decisions taken
+when this shipped — that the kinds should be **independent switches** and that
+they should live behind a disclosure **in the pinned tab row** — and both of the
+old arguments are kept below, with what the reversal costs stated rather than
 glossed.
+
+**`New` was an eighth pill and is a mode of its own again**, reached from the red
+button in the stream rather than from this row. The row is the **kind** axis and
+nothing else now; see *New plays is a mode, not a pill* below, which is where the
+one-lens rule and this one part company and why.
 
 **`All` is a pill rather than the absence of one.** With switches, turning the
 last one off is how the whole stream comes back; with one active at a time there
@@ -157,36 +162,63 @@ kinds now and `hasFilm` is its own test in `passesFilters` — which is the hone
 shape: the other five are facts about the play, and this one is a fact about
 whether anybody has published a clip of it.
 
-### `New` is the last pill now, and what the union bought is gone with it
+### New plays is a mode, not a pill
 
-**The paragraph this replaces is worth reading rather than deleting**, because
-its argument was right and it is the thing being traded away. It read: *`New` is
-not one of the six and is deliberately kept out of that list — it asks* when
-*rather than* what kind*, so it **narrows** whatever the chips selected instead of
-adding to it, which is the split `inc=` and `watch=1` already make on the research
-board. `HR + New` reads as "the new home runs" and never as "the home runs and
-also everything new."* Measured then: `HR` 6 items, `New` 48, `HR + New` **6**
-rather than 54.
+**This section has now been written three times and the middle version is the
+one being undone.** It began as *`New` is not one of the six and is deliberately
+kept out of that list — it asks* when *rather than* what kind*, so it **narrows**
+whatever the chips selected instead of adding to it*; it then became *single-select
+cannot say that sentence, and the row is single-select*, and `New` was made the
+eighth pill. The first version was right about the data and the second was right
+about the control, and what settles it is that they were answering different
+questions: the row can be single-select **and** the narrowing can survive, as long
+as the narrowing is not in the row.
 
-**Single-select cannot say that sentence, and the row is single-select.** So
-`New` is the eighth pill: pressing it drops whatever kind was lit, and pressing a
-kind drops `New`. What goes with it is `HR + New` and every other pair — `HR + SB`
-("the things worth watching") most of all, the six sets genuinely overlapping.
-What is bought is a row a reader works without a key: pressing a pill is the whole
-gesture, and what is on screen is what the lit pill says.
+**So the row is the kind axis and the mode is reached from the stream.** The red
+`N new plays` button at the head of the Recent section is the only way in — which
+is where it always was, and where it belongs for the reason that section already
+gives: it is news, and it belongs where the news landed and where pressing it can
+also take the reader to it. Pressing it flips the section's heading from `Recent
+plays` to **`New plays`**, and the pills go on selecting a kind underneath.
 
-**It is still two pieces of state and it has to be.** `New` is in the URL under
-its own name (`newplays=1`), it is what the red button in the stream turns on, and
-turning it *off* is what marks the stream read — none of which a seventh member of
-the key union could express. `App.tsx::feedLens` derives which pill is lit from
-the pair and `selectFeedLens` sets both, so the two can never both be in force.
+**`HR + New` is sayable again**, and so is every other pair the union bought and
+the single-select row spent — `HR + SB` ("the things worth watching") is the one
+genuine loss that stays lost, the kinds still being one at a time. Measured on the
+live roster over `Yesterday`: `All` 20 items on screen of 51 new, `New` 20 of 51,
+and **`HR` inside the mode 6** — which is the sentence the middle version could
+not say.
 
-**Turning `New` off only counts when it was on**, which is a guard rather than a
-tidiness: it is what marks the stream read, and under single-select *every* press
-would otherwise pass through it. Measured before the guard — pressing `HR` from
-`All` marked the whole day read, so the `New` pill went to nought for a reader who
-had never touched it. Measured after: the count holds at **40** across
-`All → HR → All`.
+**The heading is what carries the mode**, rather than a lit pill. A mode with no
+mark is a mode a reader forgets they are in; a *heading* that has changed its word
+is the plainest mark a list can have, and it costs the row nothing. There is no
+pitcher wording for it and there does not need to be: `App.tsx` passes
+`newOnly={feedIsBatters ? feedNewOnly : undefined}`, so `New plays` and `Recent
+outings` cannot both be reachable — checked by forcing `?kind=pitcher&newplays=1`,
+which draws `Recent outings`, no pills, no red button and no way out, because
+there is nothing to be out of.
+
+**Two ways back, at the two ends of the list.** One where the red button was,
+because that is where a reader who has just arrived is looking, and one after the
+items and after `Load more`, because a reader who has read down a short list of
+new plays is at the *bottom* of it. Both are `.feed-more`'s pill — ordinary chrome
+rather than red, `--strikeout` in this app meaning *something has happened since
+you looked* rather than *put that away*. The foot one is not drawn over an empty
+section, where the top one is a few pixels above the copy naming it.
+
+**And leaving the mode is the only thing that marks the stream read**, which is
+the half that used to need a guard and is now structural. While `New` was a pill,
+every press of every pill passed through `setFeedNewOnly` — and turning it off is
+what advances the watermark — so a guard was needed against the case measured at
+the time: pressing `HR` from `All` marked the whole day read and took a reader who
+had never touched `New` to nought. `selectFeedLens` no longer touches the mode at
+all, so there is no path from a pill to the marker to guard. Measured: the marker
+holds at `1786504193513` across `New → HR`, and advances to `1787023601744` on
+`Show all plays`.
+
+**It is still two pieces of state**, as it always was — `newplays=1` in the URL,
+the red button, the mark-read side effect — and the two are now genuinely
+independent rather than derived into one lens. A link carrying **both** is a state
+the app can hold and reach: `?plays=hr&newplays=1` opens on the new home runs.
 
 **Two spacing devices came before all of this and are gone with the panel.** `New`
 was set off from the chips by a **hairline**, which the wrap retired (the panel
@@ -273,30 +305,37 @@ cycle.
 - **New** is `entryTime(entry) > seenPlays`, over the **unfiltered** stream: the
   count is news about the day rather than about the lens, and a count that shrank
   when the reader pressed `HR` would be saying the other plays had stopped being
-  new. It is drawn twice, on the `New` pill and on the red button, off the one
-  figure so the two cannot disagree.
-- **The red button** appears when that count is over nought *and* `New` is off.
-  Pressing it turns `New` on and puts the top of the stream back under the reader
-  — they are at the head of the list, which is not where somebody who has been
-  reading is.
-- **The marker is frozen while `New` is on**, and it has to be: the filter narrows
-  to plays newer than the marker, so advancing it while it is in force is asking
-  for none of them. That is also why the button is not drawn then — with the
-  reader already looking at the new plays it would be a control offering what is
-  on screen, and pressing it would clear the very list it opened.
-- **Turning `New` off is what says "done with those"**, so that is what marks the
-  stream read — and under a single-select row that means pressing any *other*
-  pill while `New` is lit. Pressing one while it is **not** lit marks nothing; see
-  the guard above. A reader who never engages accumulates a count, which is what
-  the transactions dot does too.
+  new. It is drawn on the red button alone now, the pill it used to also sit on
+  having gone.
+- **The red button** appears when that count is over nought *and* the mode is off.
+  Pressing it turns the mode on and puts the top of the stream back under the
+  reader — they are at the head of the list, which is not where somebody who has
+  been reading is.
+- **The marker is frozen while the mode is on**, and it has to be: it narrows to
+  plays newer than the marker, so advancing it while it is in force is asking for
+  none of them. That is also why the button is not drawn then — with the reader
+  already looking at the new plays it would be a control offering what is on
+  screen, and pressing it would clear the very list it opened. What stands in its
+  slot instead is the way *out*.
+- **Leaving the mode is what says "done with those"**, so that is what marks the
+  stream read, and it is now the *only* thing that does: `Show all plays`, at
+  either end of the list. Pressing a kind pill marks nothing — not by a guard but
+  because `selectFeedLens` has no path to the marker at all. A reader who never
+  engages accumulates a count, which is what the transactions dot does too.
+- **Coming out does not scroll**, where going in does. Going in the reader is
+  handed a different and much shorter list and belongs at the head of it; coming
+  out they are somewhere in a list that is about to get *longer around them*, and
+  the mode being a filter over the same stream, dropping it inserts items above
+  and the browser's own scroll anchoring keeps the item under their eye where it
+  is. Sending them to the top would throw away a reading position for nothing.
 
 **The count is computed in App rather than here**, off `newPlays` — exported from
 this file so the clock that orders the stream has one definition, the rule
 `playerDayEntries` already sets for the stream and the player page. App owns both
 halves of the feature: it holds the marker, persists it, merges the saved one on
-arrival, and is what turns `New` off, which is the act that needs the timestamp.
-It also holds the pill row's own lens, for the same reason: the row is a function
-of two things App owns and would otherwise have to be told.
+arrival, and is what leaves the mode, which is the act that needs the timestamp.
+It also holds the pill row's own lens, for the same reason — though that is one
+piece of state read as one lens now rather than two read as one.
 
 **The button appearing does not move the reader**, and that is the browser's own
 scroll anchoring rather than a reservation — the same mechanism this file already
@@ -326,39 +365,59 @@ Those were taken when the chips unioned, and the union's own two rows (`HR + SB`
 5 doubles and 6 home runs — on that same day, which is the figure its own removal
 is argued from above.)
 
-**Single-select, driven end to end at 390×844 on the live roster.** Exactly one
-pill is lit at every step, and the URL follows it: `All` 20 items and no `plays=`,
-`HR` **4** and `plays=hr`, `SB` **1** and `plays=sb`, `New` and `newplays=1`,
-`All` back to 20 with the param gone. The `Plays` toggle and its panel are **0**
-on the page at every one.
+**Single-select on the kind axis, driven end to end.** Exactly one pill is lit at
+every step and the URL follows it: `All` with no `plays=`, `HR` and `plays=hr`,
+`SB` and `plays=sb`, `All` back with the param gone. **Seven pills**, no `New`
+among them. The `Plays` toggle and its panel are **0** on the page at every one.
 
-**The whole `New` cycle**, with a marker planted at 2026-08-18T00:00Z: the red
-button reads `40 new plays` and the pill carries a `40` badge; pressing the button
-lights `New`, writes `newplays=1`, and takes the red button away (with the reader
-already looking at the new plays it would be a control offering what is on
-screen); pressing `All` turns it off, advances the marker to the newest play in
-the stream and clears the badge. And the guard: `All → HR → All` leaves the badge
-at **40** and the marker where it was.
+**The whole new-plays cycle**, driven at 1200×900 on the live roster over
+`Yesterday`, with a marker planted seven days back so the count is non-zero
+(**and in a `server/data` of the worktree's own, not the shared one** — the
+marker is a *write*, and forward-only, so a test that plants one in the real
+record cannot put it back):
+
+| | lit | heading | red button | back buttons | items | URL | marker |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| open | `All` | `Recent plays` | `51 new plays` | 0 | 20 | — | 1786504193513 |
+| press it | `All` | **`New plays`** | — | **2** (head + foot) | 20 | `newplays=1` | 1786504193513 |
+| press `HR` | **`HR`** | **`New plays`** | — | 2 | **6** | `plays=hr&newplays=1` | **unchanged** |
+| `Show all plays` | `HR` | `Recent plays` | — | 0 | 6 | `plays=hr` | **1787023601744** |
+
+The third row is the whole of what this change is for: the mode survives a kind
+press, the two params are both in the URL at once, and the marker does not move.
+The fourth is the other half — leaving is what marks it read, and the kind
+survives *that*, which is right: the reader narrowed to home runs and did not ask
+to stop.
 
 **Deep links.** `?plays=hr,sb` — a link written when these unioned — opens on
 **HR** and rewrites itself to `plays=hr`; `?plays=xbh` opens on **All** and drops
 the param. Neither is an empty stream, which is the direction every parameter in
 this app fails in.
 
-**The empty state names the row that emptied it.** `No plays of that kind today.`
-and, on the `New` lens, `Nothing new since you last marked the feed read.`, each
-over `Change it with the pills above — **All** is every play of the day.` The
+**The empty state names whichever control emptied it, and there are three
+answers now rather than two** — the kind, the mode, or **both at once**, which is
+the one it could never have to say while `New` was a pill. Driven at 390×844 on
+`?newplays=1&plays=sb`: `No new plays of that kind.` over `Two controls are
+narrowing this — **All** above is every kind, and **Show all plays** is every play
+of the day.`, with **1** back button (the head one; the foot is not drawn over an
+empty list) and 0 overflow. The other two read `No plays of that kind today.` and
+`Nothing new since you last marked the feed read.` The
 **day-level** message is still held back while a filter is what emptied it
 (`filtered`), `No games for these players.` being a claim about the day and a lie
 over a stream narrowed to home runs on an afternoon of singles.
 
-**Widths, at 320 / 375 / 390 / 480 / 640 / 900 / 1200 / 1920**: page-body overflow
-**0** at every one, and the row is **34px tall at every one** — the property a
-wrapping row could not have. It scrolls sideways below 640 (scrollport 276 / 331 /
-346 / 436 against a 450–480px row) and fits from 640 up (596 / 800 / 800 / 800,
-scrolling nowhere). The pinned chrome is **207 / 159 / 159 / 159 / 111 / 115 / 115
-/ 115**, which is the two lines the `Plays` button used to cost given back at 320
-and 640.
+**Widths, re-measured at 320 / 390 / 640 / 1200 / 1920 with the row a pill
+shorter**: page-body overflow **0** at every one, the row **34px tall at every
+one** — the property a wrapping row could not have — and the pinned chrome
+**207 / 159 / 111 / 115 / 115**, unchanged, so dropping a pill costs the bar
+nothing and gains it nothing. The row scrolls sideways at 320 (114px past its
+276px scrollport) and 390 (44px past 346) and fits from 640 up (596 / 800 / 800,
+scrolling nowhere) — where with the eighth pill it overflowed 390 by rather more.
+
+**And the mode is unreachable where it would mean nothing.** Forcing
+`?kind=pitcher&newplays=1` draws `Recent outings`, **0** pills, **0** back
+buttons and no red button: App gates the mode on the batter tab, so the pitcher
+stream cannot be put into a state it has no way out of.
 
 **And it is drawn only where it can act**: **0** pills on the pitcher tab, **0**
 on the Roster view, and **0** on a matchup team page's feed, which passes none of
@@ -382,6 +441,12 @@ it is pressed. Its dot is the Live heading's own mark in the same red at the sam
 size, and deliberately **does not pulse**: that animation says a game is in
 progress where this says a count is waiting, and two things pulsing in one column
 read as one thing.
+
+**Bundle, for taking `New` out of the row: 574.32 → 574.82 KB of JS** (170.85 →
+170.92 gzipped) and **154.95 → 154.76 KB of CSS** (27.73 → 27.72) — 0.5KB of JS
+raw and 0.07KB over the wire for a mode, two buttons and three empty-state
+sentences, and the CSS **falls** by 0.19KB, `.feed-filter-count` having gone with
+the pill that carried it.
 
 **Bundle, for the feature as it shipped: 560.15 → 565.05 KB of JS** (166.36 →
 168.01 gzipped) and **151.76 → 153.08 KB of CSS** (27.21 → 27.39). **And for the
