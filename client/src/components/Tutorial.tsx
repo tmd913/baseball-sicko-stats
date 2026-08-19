@@ -73,21 +73,21 @@ const SearchIcon = () => (
   </svg>
 );
 
-const CalendarIcon = () => (
+/** The date bar's own step, at the size the bar draws it — the calendar glyph
+ *  this replaced went with the button that carried it. */
+const ChevronIcon = ({ back }: { back?: boolean }) => (
   <svg
     viewBox="0 0 24 24"
-    width="14"
-    height="14"
+    width="18"
+    height="18"
     fill="none"
     stroke="currentColor"
-    strokeWidth="2"
+    strokeWidth="2.4"
     strokeLinecap="round"
     strokeLinejoin="round"
     aria-hidden="true"
-    className="tut-inline-icon"
   >
-    <rect x="3" y="4" width="18" height="17" rx="2" />
-    <path d="M3 9h18M8 2v4M16 2v4" />
+    <path d={back ? 'M15 5l-7 7 7 7' : 'M9 5l7 7-7 7'} />
   </svg>
 );
 
@@ -214,7 +214,23 @@ const CHAPTERS: Chapter[] = [
           The date control decides what every view is showing. The presets cover most
           of it:
         </p>
-        <Demo label="The presets, behind the calendar button on the Roster row">
+        <Demo label="The date bar, under the tabs on every roster page">
+          <div className="date-bar">
+            <div className="date-bar-row">
+              <span className="date-step">
+                <ChevronIcon back />
+              </span>
+              <span className="date-face">
+                <span className="date-face-lead">Today</span>
+                <span className="date-face-range">Mon, Aug 18</span>
+              </span>
+              <span className="date-step">
+                <ChevronIcon />
+              </span>
+            </div>
+          </div>
+        </Demo>
+        <Demo label="The presets, behind a press of the middle">
           <div className="date-presets">
             <span className="date-preset active">Today</span>
             <span className="date-preset">Tomorrow</span>
@@ -242,13 +258,21 @@ const CHAPTERS: Chapter[] = [
           range can run up to 62 days.
         </p>
         <p className="tut-note">
-          All of that lives behind the calendar button at the end of the{' '}
-          <Ui>Roster</Ui> tab row — it is the widest control in the app and you set
-          it once, so it stays out of the way until you want it. Press it and the
-          presets and the range picker open on a line of their own; picking a preset
-          closes them again. Meanwhile the button says which days you are looking at:
-          the preset's own word while one is on, and the dates themselves once you
-          pick a range by hand.
+          The bar is under the tabs on the <Ui>Roster</Ui> and <Ui>Feed</Ui> pages
+          and it says which days you are looking at: the preset's own word over the
+          dates themselves. The arrows either side step by whatever the window is —
+          a day at a time on <Ui>Today</Ui>, a fortnight at a time on{' '}
+          <Ui>Last 15 days</Ui> — and land back on a preset's word whenever the days
+          you arrive at are exactly that preset's. Press the middle and the presets
+          and the range picker open underneath; picking a preset closes them again.
+        </p>
+        <p className="tut-note">
+          It also says when the days on screen are not simply a range. In{' '}
+          <Ui>Schedule</Ui> the table is showing days <em>ahead</em>, so the bar
+          reads <Ui>Schedule · This Matchup</Ui> and the arrows step between the
+          spans your league gives you; with <Ui>Projected</Ui> on it reads{' '}
+          <Ui>Projected</Ui>, those figures being estimates rather than anything
+          that has happened.
         </p>
       </>
     ),
@@ -278,10 +302,6 @@ const CHAPTERS: Chapter[] = [
                 <span className="kind-tab active">Batters</span>
                 <span className="kind-tab">Pitchers</span>
               </div>
-              <span className="date-toggle">
-                <CalendarIcon />
-                <span className="date-toggle-label">Today</span>
-              </span>
             </div>
           </div>
         </Demo>

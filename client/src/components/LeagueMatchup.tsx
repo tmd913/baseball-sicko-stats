@@ -7,14 +7,21 @@ import { LoadingLine } from './Loading';
 import { api } from '../api';
 import { BackButton } from './BackButton';
 import { InfoKey } from './InfoKey';
-import { DateRow, DateToggle } from './DateControls';
-import type { DatePreset } from './DateControls';
+import { DateBar, DateRow, stepRange, stepTitle } from './DateControls';
+import type { DateBarReading, DatePreset } from './DateControls';
 import LeagueTeam from './LeagueTeam';
 import type { FeedLens } from './FeedFilters';
 import { StartersToggle } from './StartersToggle';
 import { ProjectedToggle } from './Projection';
 import { ScheduleSpanTabs, ScheduleToggle } from './ScheduleControl';
-import { buildScheduleIndex, defaultScheduleSpan } from './schedule';
+import {
+  buildScheduleIndex,
+  defaultScheduleSpan,
+  effectiveSpan,
+  spanDates,
+  spanLabel,
+  stepSpan,
+} from './schedule';
 import type { ScheduleSpan } from './schedule';
 import {
   asProjected,
@@ -1271,8 +1278,84 @@ export default function LeagueMatchupView({
    *  `The Homewreckers’s`. */
   const sidePossessive = /s$/i.test(sideName) ? `${sideName}’` : `${sideName}’s`;
 
+  /* This page's own copy of the roster views' date bar, and it is the same
+     component with this page's state in it — see `DateControls.tsx`. Its three
+     readings are this page's three: the Schedule view swaps the table's stat
+     columns for days ahead, the projected lens fills the span with estimates,
+     and otherwise the span is the span.
+
+     The bar sits **below** the tools row rather than in it, which is the shape
+     it takes one level down: the row is groups that wrap, and this is a line.
+     Measured at 390 the four groups already came to 382 against the 358 this
+     box has, so the row wrapped — and it wrapped the calendar by itself, a lone
+     36px square under two full-width switches with its range bubble hanging
+     over nothing. That square is gone and the row is three groups now. */
+  const mupScheduleReading = reading === 'roster' && scheduleSpan !== null;
+  const mupBarSpan = mupScheduleReading
+    ? spanDates(scheduleIndex, scheduleSpan!, matchupWindow, today)
+    : { start: span.start, end: span.end };
+  const mupBarReading: DateBarReading = mupScheduleReading
+    ? {
+        kind: 'schedule',
+        span: spanLabel(effectiveSpan(scheduleSpan!, matchupWindow), matchupWindow).label,
+      }
+    : reading === 'roster' && teamProjected
+      ? { kind: 'projected' }
+      : { kind: 'dates', preset: span.preset };
+  const mupStepTo = (delta: -1 | 1) => {
+    if (mupScheduleReading) {
+      const to = stepSpan(scheduleSpan!, matchupWindow, delta);
+      return to === null
+        ? { run: null, title: delta < 0 ? 'The first span offered' : 'The last span offered' }
+        : {
+            run: () => setScheduleSpan(to),
+            title: `Show ${spanLabel(to, matchupWindow).label}`,
+          };
+    }
+    const to = stepRange(span.start, span.end, delta, spanPresets, maxDate);
+    return {
+      run: to === null ? null : () => setSpan(to),
+      title: stepTitle(span.start, span.end, delta),
+    };
+  };
+  const mupPrev = mupStepTo(-1);
+  const mupNext = mupStepTo(1);
+  const dateBar = (
+    <DateBar
+      reading={mupBarReading}
+      start={mupBarSpan.start}
+      end={mupBarSpan.end}
+      open={dateOpen}
+      onToggle={() => setDateOpen((v) => !v)}
+      onPrev={mupPrev.run}
+      onNext={mupNext.run}
+      prevTitle={mupPrev.title}
+      nextTitle={mupNext.title}
+    >
+      {mupScheduleReading && (
+        <ScheduleSpanTabs
+          span={scheduleSpan!}
+          matchup={matchupWindow}
+          onChange={setScheduleSpan}
+        />
+      )}
+      <DateRow
+        presets={spanPresets}
+        activePreset={span.preset}
+        start={span.start}
+        end={span.end}
+        max={maxDate}
+        onPick={(p) => {
+          setSpan({ start: p.start, end: p.end, preset: p.label });
+          setDateOpen(false);
+        }}
+        onRange={(s, e) => setSpan({ start: s, end: e, preset: null })}
+      />
+    </DateBar>
+  );
+
   const tools = (
-    <div className={`mup-tools${dateOpen ? ' date-open' : ''}`}>
+    <div className="mup-tools">
       <div className="view-switch mup-reading" role="tablist" aria-label="Roster or feed">
         {(['roster', 'feed'] as const).map((r) => (
           <button
@@ -1301,13 +1384,16 @@ export default function LeagueMatchupView({
           </button>
         ))}
       </div>
-      {/* **The two icon buttons travel as a pair**, which is `.view-bar-tabs`'
+      {/* **The icon buttons travel as one group**, which is `.view-bar-tabs`'
           own rule one page down: a group breaks to the next line whole rather
           than one member of it going alone. Measured at 390, the four groups
-          come to 382 against the 358 this box has, so the row wraps — and left
+          came to 382 against the 358 this box has, so the row wraps — and left
           loose it wrapped the *date* button by itself, a lone 36px square under
           two full-width switches with its range bubble hanging over nothing.
-          Paired, the second line is the two icons together. */}
+          That square has since left the row entirely for the bar below (see
+          `dateBar`), which is the same fault answered a second time and for
+          good; the grouping stays, because Schedule, Projected and Starters
+          come and go with the reading and would otherwise break apart. */}
       <div className="mup-tool-icons">
         {/* The Schedule view, on the roster table alone — it swaps that table's
             stat columns for a column per day, and there is nothing in a stream
@@ -1361,37 +1447,12 @@ export default function LeagueMatchupView({
               : `Only the days ${sideName} had each player in his lineup — a day he sat on the bench or the IL is not counted, however he hit`
           }
         />
-        <DateToggle
-          open={dateOpen}
-          onToggle={() => setDateOpen((v) => !v)}
-          start={span.start}
-          end={span.end}
-          activePreset={span.preset}
-        />
       </div>
-      {/* Its own group, so a span strip that only exists while the mode is on
-          cannot push the pair above it about. */}
-      {reading === 'roster' && scheduleSpan !== null && (
-        <ScheduleSpanTabs
-          span={scheduleSpan}
-          matchup={matchupWindow}
-          onChange={setScheduleSpan}
-        />
-      )}
-      {dateOpen && (
-        <DateRow
-          presets={spanPresets}
-          activePreset={span.preset}
-          start={span.start}
-          end={span.end}
-          max={maxDate}
-          onPick={(p) => {
-            setSpan({ start: p.start, end: p.end, preset: p.label });
-            setDateOpen(false);
-          }}
-          onRange={(s, e) => setSpan({ start: s, end: e, preset: null })}
-        />
-      )}
+      {/* The dates and, in the Schedule reading, the span — one bar across the
+          box, arrows either side. See `dateBar` above: the calendar square that
+          used to end the icon run and the span strip that used to be a group of
+          its own are both in it now. */}
+      {dateBar}
     </div>
   );
 

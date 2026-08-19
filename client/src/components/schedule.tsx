@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { handThrows, surname } from '../lib';
+import { addDays, handThrows, surname } from '../lib';
 import type { Column } from './researchColumns';
 import type {
   MatchupWindow,
@@ -107,6 +107,59 @@ export function effectiveSpan(
   matchup: MatchupWindow | null,
 ): ScheduleSpan {
   return scheduleSpans(matchup).includes(span) ? span : defaultScheduleSpan(matchup);
+}
+
+/**
+ * The span one step either side of this one in the run this reader is offered,
+ * or null at either end of it.
+ *
+ * **This is what the date bar's arrows navigate while the Schedule view is the
+ * reading**, and it is deliberately the *offered* run rather than all four
+ * spans: a league that names both its own weeks is offered two, and an arrow
+ * that stepped onto `Next 7` there would produce a span the pills beside it do
+ * not contain. `effectiveSpan` first, for the same reason the control marks
+ * with it — a `sched=7` link opened by such a reader is already drawing
+ * `This Matchup`, and the step has to start from what is on screen.
+ */
+export function stepSpan(
+  span: ScheduleSpan,
+  matchup: MatchupWindow | null,
+  delta: -1 | 1,
+): ScheduleSpan | null {
+  const run = scheduleSpans(matchup);
+  const i = run.indexOf(effectiveSpan(span, matchup)) + delta;
+  return i >= 0 && i < run.length ? run[i] : null;
+}
+
+/**
+ * The first and last day a span actually draws — **what the date bar prints
+ * while the Schedule view is the reading**, that view's columns being the days
+ * on screen rather than the date range.
+ *
+ * Off the index where it has landed, since those are the days the columns
+ * really are (a season ending inside the span draws the days it has). Off the
+ * span's own definition while the window is still being read, so the bar states
+ * a span rather than going blank for the length of a fetch — the same numbers
+ * within a day either way, and the index corrects it the moment it arrives.
+ */
+export function spanDates(
+  index: ScheduleIndex | null,
+  span: ScheduleSpan,
+  matchup: MatchupWindow | null,
+  today: string,
+): { start: string; end: string } {
+  if (index && index.dates.length > 0) {
+    return { start: index.dates[0], end: index.dates[index.dates.length - 1] };
+  }
+  const eff = effectiveSpan(span, matchup);
+  if (eff === 'matchup' && matchup) {
+    return { start: today, end: matchup.end < today ? today : matchup.end };
+  }
+  if (eff === 'next' && matchup?.next) {
+    return { start: matchup.next.start, end: matchup.next.end };
+  }
+  const days = eff === 14 ? 14 : 7;
+  return { start: today, end: addDays(today, days - 1) };
 }
 
 /** `8/16 – 8/23` — a span's own dates, which is what makes a named one

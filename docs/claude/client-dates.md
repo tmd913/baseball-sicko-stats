@@ -1,18 +1,89 @@
-### The date controls, and the range each roster view keeps
+### The date bar, and the range each roster view keeps
 
 Split out of `client.md`, which holds the shell these sit in — the pinned
 chrome, the view tabs and the report the dates decide the days of. This is the
-calendar button and the row it opens, the component a matchup's team pages share
-with it, and the thing that earned them a file of their own: **the Roster and
-the Feed each keep their own range.**
+**full-width bar under the tabs**, the row it opens, the component a matchup's
+team pages share with it, and the thing that earned them a file of their own:
+**the Roster and the Feed each keep their own range.**
 
-**The date controls are behind `.date-toggle` at every width** — not just on a phone. They are 576px of pills and picker — measured against the 1136px content width the app used to cap itself at, where they were easily the widest thing in the chrome — and they are set once and then read for the rest of a session, which is the shape of a thing that belongs behind a button. On a phone the button that opens them is the same calendar reduced to its icon, with the range on a bubble — see the starters toggle's note below, which the two share. They are **rendered once** rather than duplicated into a second location: `.view-bar` already wraps, so `.app.date-open .date-control { flex: 1 1 100% }` is the whole of "open as its own row", and it opens directly under the row whose last item is the button that opened it. **Picking a preset closes the row**, from the pills and the phone dropdown alike: it is the errand the row was opened for. The range picker deliberately doesn't, its own popover needing the row to stay put. Both are hidden on the research board, which has nothing dated to act on, and with the rest of the chrome on the edit screen — by being inside `.view-bar`, which that mode hides, rather than by being named in its list.
+#### It is a bar, and it was a button
 
-**The two pieces are `components/DateControls.tsx` now** — `DateToggle` and `DateRow` — extracted when a second surface needed them: a matchup's team pages are these same roster views read for a leaguemate's team over a span the reader picks, and a second implementation of "Today / Yesterday / a range" beside this one is two controls that will one day disagree about what a preset means. The markup and the classes are unchanged, so every rule above applies to both callers by construction; what each caller keeps is the **state** — which days, which preset, whether the row is open, and what a pick does — that being the only half the two genuinely answer differently. One trap the second caller found and this one never could: `.date-control` is `display: none` by default and undone only by `.app.date-open`, which is a class on the app's own shell, so a row rendered outside it lays out correctly at **0 × 0** and shows nothing. See **Client — the League view**, *A team page is the app's own Roster and Feed views*.
+**The dates run across the whole window, under the navigation chrome and above the page: a step back on the left, the days in the middle, a step forward on the right.** They were a *calendar button*, last in the wrapping row of tab groups, and before that a square icon in the header beside a round chip that stated the range and could not change it. Two things were wrong with the button and neither was fixable inside one:
 
-**The button is on the roster row, not in the header, and it says which days it holds.** Those were two controls until now: a square calendar icon up in the header and a round `dateBadge` chip down in the view bar — the page stating the span in one place and letting you change it in another, and a chip that could only be read sitting an inch from a button that only opened. One control does both, and the label *is* the state: **`activePreset ?? numericRange(start, end)`**, so it reads `Today` while a preset is active — that is what was picked, and it survives the date rolling over — and `8/1 – 8/9` once a range is picked by hand. **Numeric on purpose**: it sits in a wrapping row of tab groups, so every character it spends is one that can push the group after it onto the next line, and the month name buys nothing the number doesn't (the year buys less still — the app shows one season and says so nowhere else on the page). It keeps its label at every width, alone among the chrome's buttons in doing so: the label is the only thing on the page saying which days every number on it is drawn from, and the icon alone would leave that unsaid.
+- **The one fact every number on the page depends on was the smallest thing in the chrome.** `.view-bar` wraps by whole groups, so every character the button spent was one that could push the group after it onto the next line — which is why its label was `8/1 – 8/9` and not a date anyone reads aloud, and why under 640px it lost the label altogether and became a **10px bubble on the corner of a 36px glyph**. Measured, the button was **89px** wide at a desktop and **36px** on a phone.
+- **Moving the dates was a two-press errand at every width.** Open the row, pick, and the row closes again. There was no way at all to say *the day before this one* — the commonest move there is — short of opening the picker and hitting the same day twice.
 
-It is on the roster row for the reason the roster tabs are: the dates qualify exactly those three views and nothing on the research board, so a header slot made it chrome belonging to the whole app when it belongs to one page of it. **Last in the row**, after the tab groups — it answers "which days", the question that comes after "which page", "which kind" and "which reading of them".
+**What it costs and what it buys, measured at six widths** on the live fantasy roster (chrome height, Roster / Feed, `?preset=Today`):
+
+| | before | after |
+| --- | --- | --- |
+| 1920 | 115 / 115 | 169 / 169 |
+| 1200 | 115 / 115 | 169 / 169 |
+| 640 | 159 / 111 | 213 / 165 |
+| 480 | 159 / 159 | 213 / 213 |
+| **390** | **207** / 159 | **213** / 213 |
+| 320 | 255 / 207 | 309 / 261 |
+
+The bar is **54px** and that is what it costs almost everywhere. The exception is the one that matters: at **390 the Roster gained 6px, not 54** — taking the calendar out of the tab row dropped that row from three wrapped lines to two (132px → 84), and the bar then paid for itself but 6. Page-body overflow is **0** at every width on every view, before and after.
+
+**The bar's height does not change when its label does**, which is the rule a control under a finger has to keep. Measured at 1200 and at 320: **54px** on `Today` (`TODAY` over `Wed, Aug 19`), 54 on `Last 15 days` (`Aug 5 – Aug 19`), 54 in the Schedule reading (`SCHEDULE · THIS MATCHUP` over `Aug 19 – Aug 23`) and 54 in the projected one. **No ghost is needed to reserve that box** and that is worth saying, because this file's own rule usually demands one: both lines are *always* filled — there is no state in which the upper one is absent, `Custom range` being what it reads when no rule is in force — so the worst case **is** the ordinary case. Each line is `nowrap` and truncates rather than wrapping; the widest lead the app can print is `Schedule · This Matchup` at **171px**, against the **204** a 320px phone leaves between the two arrows, so nothing is clipped at any width the app supports.
+
+**A three-column grid, not `space-between`.** The middle has to be centered on the *bar* rather than on the space its neighbours leave: the arrows are the same width, so two equal fixed side columns put the label on the bar's own center line whatever it says. Measured, the face's center is **600 at a 1200 window and 195 at 390**, on `Today` and on a fifteen-day range alike — under `space-between` those two labels differ by 21px of width and the text would shuffle under the finger that stepped it. And the face is **sized to its content and centered in that column** rather than stretched across it: stretched it measured **1092px** at a 1200 window, a press target the width of the page, which lights the whole bar on hover and reads as a surface rather than a control.
+
+**The label is words now, not numerals.** `numericRange` and `tightRange` are gone with the button that needed them; `wideRange` prints `Mon, Aug 18` for a day and `Aug 10 – Aug 18` for a range. The terseness was a *budget* rather than a choice, and the bar does not have to keep it — the widest form this produces (`Aug 28 – Sep 11`, a range across a month boundary) is 108px against 204 available at 320. The weekday rides on a single day only, where it is worth something; a range says its length in its two ends. The year stays off both, the app showing one season and saying so nowhere else on the page.
+
+#### The arrows step the window by its own length, and land back on a rule where they can
+
+**A step is the window moved by its own span** — a day steps a day, a week a week, `Last 15 days` fifteen — and the tooltip says which (`Previous day`, `Next 15 days`). The ceiling is the **picker's own `max`**, not today and not a second opinion about which days exist: the arrows have to reach exactly what the calendar reaches, or the bar holds two controls that disagree about the end of the season. There is no floor for the same reason — the picker has none. A disabled arrow keeps its box and its tooltip: it goes **off rather than away**, because a control that vanished would move the label out from under the finger stepping it.
+
+**And this is where a preset had to be decided.** A preset is a rule and the URL carries only the label, so stepping back from `Today` could either freeze the range at yesterday's dates or say `Yesterday` — and the second is the true one: the rule and the range agree on this reader's clock, so a link shared from there re-derives on the recipient's own today, which is exactly what `Yesterday` means. **A step adopts a preset's label wherever the days it lands on are exactly that preset's days**, and produces an honest hand-picked range with no preset otherwise. Driven at 1200:
+
+| press | reads | URL |
+| --- | --- | --- |
+| — | `Today` · Wed, Aug 19 | `?preset=Today` |
+| ‹ | **`Yesterday`** · Tue, Aug 18 | `?preset=Yesterday` |
+| ‹ | `Custom range` · Mon, Aug 17 | `?start=2026-08-17&end=2026-08-17` |
+| › | **`Yesterday`** · Tue, Aug 18 | `?preset=Yesterday` |
+| › | **`Today`** · Wed, Aug 19 | `?preset=Today` |
+
+So a press and an unpress return you to the rule you started on, which is the thing a frozen range would have quietly lost.
+
+#### The bar says which *reading* of the days it is on
+
+Two modes reinterpret the dates, and a bar printing a bare range under either would be stating a fact that is no longer the one on screen.
+
+- **Schedule** replaces the stat columns with one column per day *ahead*. The days on screen are then the span's rather than the range's, so the bar prints `Schedule · This Matchup` over **the days it actually draws** (`spanDates`, off the index where it has landed and off the span's own definition while the window is still being read, so the bar does not go blank for the length of a fetch), and **the arrows step the span run** — `stepSpan`, over `scheduleSpans(matchup)` rather than all four, because an arrow that stepped onto `Next 7` in a league that names both its own weeks would produce a span the pills beside it do not contain. At either end the arrow is off and says `The first span offered` / `The last span offered`, the vocabulary of the reading it is in rather than `Previous day` for a press that would not move a day.
+- **Projected** keeps the range but fills it with estimates over days that have not been played. The lens clears the preset on its way to today → the end of the period, so `Custom range` is what the bar would otherwise read — the label that says nothing about why. It reads `Projected`, and the arrows go on stepping the calendar: the reader is free to move off the lens's days, which is what that lens has always allowed.
+
+Everything else — `Starters`, hide-injured, the kind tabs — narrows *rows* rather than reinterpreting days, and the bar is silent about all of them.
+
+**`ScheduleSpanTabs` came with the span.** It was a group in the tab row beside the toggle that turns the mode on; it is in the bar's disclosure now, under the label the arrows move. Leaving it where it was would have been two controls an inch apart holding one piece of state, which is the fault the calendar and the old `dateBadge` chip were merged to fix. **The research board keeps its own copy in its own bar** and gets no date bar at all — and that is the decision rather than an oversight: the board has no `start`/`end` in the first place (its stats come off the window tabs, `Season · 7d · 15d · 30d · 60d`), so a bar that appeared only in Schedule mode would be a bar the page has no state for the rest of the time. Checked: on `?view=research&sched=matchup` the board draws **0** date bars and its own `This Matchup · Next Matchup` strip, unmoved.
+
+#### The disclosure, and what stopped being needed
+
+**The presets and the range picker are still behind a press**, at every width and not just on a phone: they are 576px of pills and picker against the content width, set once and then read for the rest of a session, which is the shape of a thing that belongs behind a press. They open under the *middle* of the bar — a disclosure and the thing it discloses have to stay together — carrying the span strip above them where the Schedule view is the reading. **Picking a preset closes the row**, from the pills and the phone `<select>` alike: it is the errand the row was opened for. The range picker deliberately doesn't, its own popover needing the row to stay put. Measured, the panel adds **50px** to the bar in the plain reading and **96** in the Schedule one (a span control, a preset control and the picker); the bar goes 54 → 104 → 150 and the pinned chrome follows it.
+
+**Two rules died with the button, and both were traps.** `.date-control` was `display: none` and undone only by `.app.date-open` — a class on the app's own shell — so a date row rendered anywhere else laid out correctly at **0 × 0** and showed nothing; the matchup overlay found exactly that and had to answer it with a second `display` rule of its own, which then had to stay in step. The bar renders its panel **only while it is open**, so the row is a plain flex row again, no shell knows anything about it and there is only one rule. `.date-toggle`'s whole family went too: the label, the corner bubble, the phone square, the `position: relative` it needed to anchor the bubble, and its membership of the header's four-square selector list.
+
+**Where the bar bleeds is the container's business**, which is `--table-bleed`'s rule one box over: `--bar-bleed` is declared by whatever holds the bar — `--app-gutter` (22px) on `.app-chrome`, **12px** on the expanded full-page box — and defaults to 0, which is what a team page's tools want, that row being a centered 800px card column rather than the width of the overlay. Measured: the bar runs **0 → 1200** inside the chrome at a 1200 window and **0 → 1200** inside the expanded box, and **200 → 1000** on a team page, its face centered at 600 in all three.
+
+**Where it is drawn.** On the Roster and the Feed, once there is something to read — the same guard the calendar carried, the dates qualifying exactly those two views and nothing on the research board. In the expanded full-page table, which keeps it for the reason it keeps the kind tabs: a table of dates with nothing on screen saying which days is the state that mode must never be in. And on a matchup's team pages, below their tools row. It goes with the rest of the chrome on the **edit screen** by being **named in `.app.edit-mode`'s list** rather than by being inside `.view-bar` — it used to inherit that for free and is a sibling of that row now; verified, `display: none` under that class where it is `block` without it.
+
+#### What this replaced (kept for the history)
+
+The two paragraphs below are the button's own argument, left as written. The
+rules they describe are gone; the reasoning is why the bar reads the way it
+does, and the second of them is still the live rule for `DateRow` itself.
+
+> **The date controls are behind `.date-toggle` at every width** — not just on a phone. They are 576px of pills and picker — measured against the 1136px content width the app used to cap itself at, where they were easily the widest thing in the chrome — and they are set once and then read for the rest of a session, which is the shape of a thing that belongs behind a button. On a phone the button that opens them is the same calendar reduced to its icon, with the range on a bubble. They are **rendered once** rather than duplicated into a second location: `.view-bar` already wraps, so `.app.date-open .date-control { flex: 1 1 100% }` is the whole of "open as its own row", and it opens directly under the row whose last item is the button that opened it.
+>
+> **The button is on the roster row, not in the header, and it says which days it holds.** Those were two controls until then: a square calendar icon up in the header and a round `dateBadge` chip down in the view bar — the page stating the span in one place and letting you change it in another, and a chip that could only be read sitting an inch from a button that only opened. One control does both, and the label *is* the state: **`activePreset ?? numericRange(start, end)`**, so it reads `Today` while a preset is active — that is what was picked, and it survives the date rolling over — and `8/1 – 8/9` once a range is picked by hand. **Numeric on purpose**: it sits in a wrapping row of tab groups, so every character it spends is one that can push the group after it onto the next line. It kept its label at every width, alone among the chrome's buttons in doing so: the label was the only thing on the page saying which days every number on it is drawn from, and the icon alone would leave that unsaid.
+
+#### One component, two callers
+
+**The pieces are `components/DateControls.tsx`** — `DateBar`, `DateRow`, and the two pure helpers the callers share (`stepRange`, `dateBarFace`) — extracted when a second surface needed them: a matchup's team pages are these same roster views read for a leaguemate's team over a span the reader picks, and a second implementation of "Today / Yesterday / a range" beside this one is two controls that will one day disagree about what a preset means. What each caller keeps is the **state** — which days, which preset, whether the row is open, and what a step does — that being the only half the two genuinely answer differently. The *face* is built by one function so the roster and a team page cannot come to word the same state differently. See **Client — the League view**, *A team page is the app's own Roster and Feed views*.
+
+**Driven on a team page** (`?view=league&mup=110&mt=5`, 1200×900): the bar is 800 × 54 at x=200, its face centered at 600, `Today` → ‹ → `Yesterday`; the Schedule toggle takes it to `Schedule · This Matchup · Aug 19 – Aug 23` with the back arrow off (`The first span offered`) and the forward one reading `Show Next Matchup`; and its panel carries the span strip over a preset row leading with that page's own `Matchup` pill — **one** of them, over six, which is the rule that page already had.
 
 ### The Roster and the Feed keep their own range
 

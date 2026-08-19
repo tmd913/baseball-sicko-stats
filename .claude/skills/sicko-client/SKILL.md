@@ -31,9 +31,11 @@ particular.
 
 - **Read `docs/claude/client-dates.md`** before touching `DateControls.tsx`,
   `DateRangePicker.tsx` or anything that reads `start`/`end`/`activePreset`. It
-  covers the calendar button, the preset row, the picker, the component a
-  matchup's team pages share with it, and **the range the Roster and the Feed
-  each keep of their own** (`DateScope`).
+  covers the **full-width date bar** under the tab row — its two lines, its
+  arrows and what a step does to a preset, and the three readings it names
+  (dates, Schedule, Projected) — the preset row and picker it discloses, the
+  component a matchup's team pages share with it, and **the range the Roster
+  and the Feed each keep of their own** (`DateScope`).
 
 ## Related
 

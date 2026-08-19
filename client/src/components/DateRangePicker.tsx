@@ -21,35 +21,38 @@ function prettyLong(date: string): string {
   });
 }
 
-function numericShort(date: string): string {
+function weekdayShort(date: string): string {
   return new Date(date + 'T12:00:00').toLocaleDateString(undefined, {
-    month: 'numeric',
+    weekday: 'short',
+    month: 'short',
     day: 'numeric',
   });
 }
 
-/** "8/9", or "8/1 – 8/9" across a range. This is what the calendar button says
- *  when no preset is active, and it is deliberately the shortest form there is:
- *  the button sits in a wrapping row of tab groups, so every character it
- *  spends is one that can push the group after it onto the next line. A preset
- *  labels itself with its own word ("Today"), which survives the date rolling
- *  over; only a hand-picked range needs the dates spelled out, and the month
- *  name buys nothing the number doesn't. The year is no loss either — the app
- *  shows one season and says so nowhere else on the page. */
-export function numericRange(start: string, end: string): string {
-  return start === end ? numericShort(start) : `${numericShort(start)} – ${numericShort(end)}`;
-}
-
-/** The same dates with the spaces squeezed out — "8/12", or "8/9–8/10". This is
- *  what the calendar's bubble says on a phone, where the button is an icon and
- *  the bubble is the only thing left saying which days the page is drawn from.
- *  It is a *bubble on a 36px square* rather than a label beside one, so the two
- *  spaces `numericRange` spends on the dash are worth about a character each of
- *  a badge that has none to give — and unlike the button's label it never falls
- *  back to the preset's word, "Today" being what the bubble would then have to
- *  fit and the date being what it is there to say. */
-export function tightRange(start: string, end: string): string {
-  return start === end ? numericShort(start) : `${numericShort(start)}–${numericShort(end)}`;
+/**
+ * `Mon, Aug 18`, or `Aug 10 – Aug 18` across a range — **what the date bar
+ * prints on its lower line.**
+ *
+ * This replaces two forms the calendar button needed and the bar does not.
+ * `numericRange` said `8/1 – 8/9` and `tightRange` said `8/1–8/9`, and both
+ * were budgets rather than choices: the button sat in a wrapping row of tab
+ * groups where every character it spent could push the group after it onto the
+ * next line, and under 640px it was a 10px bubble on the corner of a 36px
+ * glyph. The bar is the full width of the window and the label is the only
+ * thing in the middle of it, so there is nothing to save the characters for —
+ * measured at 320px, the widest form this produces (`Aug 28 – Sep 11`, a range
+ * across a month boundary) is 108px against the 204 the bar leaves between its
+ * two arrows.
+ *
+ * **The weekday only on a single day**, which is where it is worth something: a
+ * manager reading one day wants to know it is a Sunday, and a range already
+ * says its length in its two ends. The year stays off both — the app shows one
+ * season and says so nowhere else on the page.
+ */
+export function wideRange(start: string, end: string): string {
+  return start === end
+    ? weekdayShort(start)
+    : `${prettyShort(start)} – ${prettyShort(end)}`;
 }
 
 function prettyRange(start: string, end: string): string {

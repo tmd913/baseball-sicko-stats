@@ -1,22 +1,73 @@
-import { DateRangePicker, numericRange, tightRange } from './DateRangePicker';
+import type { ReactNode } from 'react';
+import { addDays } from '../lib';
+import { DateRangePicker, wideRange } from './DateRangePicker';
 
 /**
- * The app's date controls, as two pieces: the button that discloses them and
- * the row it discloses.
+ * The app's date controls: **a full-width bar of its own, directly under the
+ * navigation chrome**, and the row it discloses.
  *
- * **Extracted when a second surface needed them**, which is the rule this
- * codebase applies to a control drawn twice: the matchup overlay's team pages
- * are the app's own roster table read for somebody else's team over a span the
- * reader picks, and a second implementation of "Today / Yesterday / a range"
- * beside the first is two controls that will one day disagree about what a
- * preset means. What each caller keeps is the *state* — which days, which
- * preset, and whether the row is open — because that is the only half the two
+ * ---------------------------------------------------------------------------
+ * Why a bar rather than a button in the tab row
+ * ---------------------------------------------------------------------------
+ *
+ * This was a calendar *button*, last in the wrapping row of tab groups, with
+ * the range as its label and — under 640px — as a bubble on the corner of a
+ * 36px glyph. Two things were wrong with that, and neither was fixable inside a
+ * button:
+ *
+ * - **The one fact every number on the page depends on was the smallest thing
+ *   in the chrome.** It read `8/1 – 8/9` because it sat in a row that wrapped,
+ *   so every character it spent was one that could push the group after it onto
+ *   the next line; on a phone it lost even that and became a 10px badge. The
+ *   dates are what the table *is*, and they were being written in the space
+ *   left over.
+ * - **Moving them was a two-press errand at every width.** Open the row, pick,
+ *   and the row closes again. There was no way to say "the day before this one"
+ *   at all — the commonest move there is — short of opening the picker and
+ *   hitting the same day twice.
+ *
+ * The bar answers both: it runs the full width of the window under the tabs,
+ * states the days in the middle in words a reader does not have to decode, and
+ * puts the two steps either side of them, where a thumb reaches on a phone and
+ * a pointer reaches without aiming on a desktop. The presets and the range
+ * picker are still a disclosure behind the middle — they are 576px of control
+ * set once a session, which is the shape of a thing that belongs behind a press
+ * — but they now open under a bar that has already said what they hold.
+ *
+ * ---------------------------------------------------------------------------
+ * The bar says which *reading* of the days it is on
+ * ---------------------------------------------------------------------------
+ *
+ * Two modes reinterpret the dates, and a bar that printed a bare range under
+ * either would be stating a fact that is no longer the one on screen:
+ *
+ * - **Schedule** replaces the stat columns with one column per day *ahead*. The
+ *   days on screen are then the span's rather than the range's, so the bar
+ *   prints the span (`Schedule · This Matchup`) over the days it actually
+ *   draws, and the arrows step through the spans this reader is offered instead
+ *   of through the calendar. The range is not lost — it still decides *whose*
+ *   roster the rows are — and the disclosure carries both controls, the spans
+ *   over the presets.
+ * - **Projected** keeps the range but fills it with estimates over days that
+ *   have not been played. `Custom range` is what the lens leaves behind (it
+ *   moves the reader to today → the end of the period, clearing the preset),
+ *   which is exactly the label that says nothing about why. It reads
+ *   `Projected`.
+ *
+ * Everything else — Starters, hide-injured, the kind tabs — narrows *rows*
+ * rather than reinterpreting days, and the bar is silent about all of it.
+ *
+ * ---------------------------------------------------------------------------
+ * Drawn twice, defined once
+ * ---------------------------------------------------------------------------
+ *
+ * The matchup overlay's team pages are the app's own roster and feed read for
+ * somebody else's team over a span the reader picks, and a second
+ * implementation of "Today / Yesterday / a range" beside the first is two
+ * controls that will one day disagree about what a preset means. What each
+ * caller keeps is the *state* — which days, which preset, whether the row is
+ * open, and what a step does to it — because that is the only half the two
  * genuinely answer differently.
- *
- * The markup and the classes are unchanged, so every rule in `styles.css` that
- * decides how these read (the pills above 640, the `<select>` below it, the
- * bubble on the toggle's corner, `.app.date-open`'s own row) applies to both
- * callers by construction.
  */
 
 /** One named span the presets row offers. */
@@ -26,71 +77,208 @@ export interface DatePreset {
   end: string;
 }
 
-export function DateToggle({
-  open,
-  onToggle,
-  start,
-  end,
-  activePreset,
-}: {
-  open: boolean;
-  onToggle: () => void;
-  start: string;
-  end: string;
-  activePreset: string | null;
-}) {
-  return (
-    <button
-      type="button"
-      className={`date-toggle${open ? ' active' : ''}`}
-      onClick={onToggle}
-      aria-expanded={open}
-      aria-label={open ? 'Close date controls' : 'Change dates'}
-      title={open ? 'Close dates' : 'Change dates'}
-    >
-      {/* 17px, the size every other icon button in the app draws at — it was
-          15, which was fine beside a label and small once a phone made this
-          button the glyph alone beside a 20px clipboard. */}
-      <svg
-        viewBox="0 0 24 24"
-        width="17"
-        height="17"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
-        <rect x="3" y="4" width="18" height="17" rx="2" />
-        <path d="M3 9h18M8 2v4M16 2v4" />
-      </svg>
-      {/* The preset's own word while one is active, so it reads "Today" rather
-          than today's date — that is what was picked, and it survives the date
-          rolling over. A hand-picked range has no name and shows its numbers. */}
-      <span className="date-toggle-label">{activePreset ?? numericRange(start, end)}</span>
-      {/* What the label says once there is no room for a label. On a phone this
-          button and the starters toggle beside it go to their icons — two
-          squares where two words wouldn't fit — and this is the one of the pair
-          that cannot simply lose its wording: the icon says "dates" and the page
-          would then say nowhere at all *which* dates every number on it is drawn
-          from. So the range rides on the corner of the glyph as a bubble.
+/** Whole days in an inclusive ISO range. UTC arithmetic, so no DST boundary can
+ *  round a step the wrong way — the rule `lib.ts::addDays` follows. */
+function dayCount(start: string, end: string): number {
+  const [ys, ms, ds] = start.split('-').map(Number);
+  const [ye, me, de] = end.split('-').map(Number);
+  const diff = Date.UTC(ye, me - 1, de) - Date.UTC(ys, ms - 1, ds);
+  return Math.round(diff / 86_400_000) + 1;
+}
 
-          Numbers rather than the preset's word, always: "Today" is a label's
-          worth of text and this is a badge on a 36px square, where 8/12 says the
-          same thing in half the width and says it exactly. Rendered at every
-          width and hidden by the stylesheet above 640, the way the date presets
-          and their dropdown are already done. */}
-      <span className="date-toggle-bubble">{tightRange(start, end)}</span>
-    </button>
+/**
+ * The range one step either side of this one — **the same window moved by its
+ * own length**, so a day steps a day, a week steps a week and `Last 15 days`
+ * steps fifteen. Null past the ceiling, which is what disables the arrow.
+ *
+ * **The ceiling is the picker's own `max`** rather than today, or a second
+ * opinion about which days exist: the arrows have to reach exactly what the
+ * calendar reaches, or the bar holds two controls that disagree about the end
+ * of the season. (The app's max is 31 December of the current season — the
+ * published schedule runs that far, and it is what `Tomorrow` and the Schedule
+ * view are read from.) There is no floor for the same reason: the picker has
+ * none.
+ *
+ * **A step lands on a preset's label where the days are exactly that preset's
+ * days**, and that is the decision the arrows had to make. A preset is a *rule*
+ * and the URL carries only the label, so stepping back from `Today` could
+ * either freeze the range at yesterday's dates or say `Yesterday` — and the
+ * second is the true one: the rule and the range agree on this reader's clock,
+ * so a link shared from there re-derives on the recipient's own today, which is
+ * what `Yesterday` means. Where no rule matches, the step honestly produces a
+ * hand-picked range with no preset and the bar reads `Custom range`.
+ */
+export function stepRange(
+  start: string,
+  end: string,
+  delta: -1 | 1,
+  presets: DatePreset[],
+  max: string,
+): { start: string; end: string; preset: string | null } | null {
+  const span = dayCount(start, end);
+  const s = addDays(start, delta * span);
+  const e = addDays(end, delta * span);
+  if (e > max) return null;
+  const hit = presets.find((p) => p.start === s && p.end === e);
+  return { start: s, end: e, preset: hit ? hit.label : null };
+}
+
+/** What the arrows call themselves, in a tooltip and to a screen reader. The
+ *  step is the window's own length, so the wording is too — `Previous day` on a
+ *  single day, `Previous 15 days` on a fortnight. */
+export function stepTitle(start: string, end: string, delta: -1 | 1): string {
+  const n = dayCount(start, end);
+  const which = delta < 0 ? 'Previous' : 'Next';
+  return n === 1 ? `${which} day` : `${which} ${n} days`;
+}
+
+/** Which reading of the days the bar is printing — see the file's own note. */
+export type DateBarReading =
+  | { kind: 'dates'; preset: string | null }
+  | { kind: 'projected' }
+  /** `span` is the Schedule control's own label for the span in force. */
+  | { kind: 'schedule'; span: string };
+
+export interface DateBarFace {
+  /** The upper line: what kind of days these are. */
+  lead: string;
+  /** The lower line: which days they are. */
+  range: string;
+}
+
+/**
+ * The two lines the bar prints, from one place so the roster and a team page
+ * cannot come to word the same state differently.
+ *
+ * **Both lines are always filled**, which is what keeps the bar from changing
+ * height under the finger that pressed it: there is no state in which the lead
+ * is absent, so there is nothing to reserve a box for — the worst case *is* the
+ * ordinary case, and each line is `nowrap`. (`Custom range` is the lead when no
+ * rule is in force, and it is a truthful one: the reader picked these days
+ * himself.)
+ */
+export function dateBarFace(
+  reading: DateBarReading,
+  start: string,
+  end: string,
+): DateBarFace {
+  const lead =
+    reading.kind === 'schedule'
+      ? `Schedule · ${reading.span}`
+      : reading.kind === 'projected'
+        ? 'Projected'
+        : (reading.preset ?? 'Custom range');
+  return { lead, range: wideRange(start, end) };
+}
+
+function Chevron({ back }: { back: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      /* `flex: none` is load-bearing rather than decoration: an `<svg>` in a
+         flex row is a flex *item*, and its `width` attribute is a basis it will
+         shrink below the moment the line is tight. See the same note on the
+         starters toggle, whose 20px clipboard once rendered 10 wide. */
+      style={{ flex: 'none' }}
+    >
+      <path d={back ? 'M15 5l-7 7 7 7' : 'M9 5l7 7-7 7'} />
+    </svg>
   );
 }
 
 /**
- * The presets and the range picker themselves. In the app they open as a
- * full-width row of the view bar, directly under the button that opened them —
- * a disclosure and the thing it discloses have to stay together, and following
- * the button down is the whole of that.
+ * The bar itself: a step, the days, a step — and the disclosure under them.
+ *
+ * **A three-column grid rather than a flex row with `space-between`**, because
+ * the middle has to be centered on the *bar* and not on the space its
+ * neighbours leave: the two arrows are the same width, so equal fixed side
+ * columns put the label on the bar's own center line whatever it says, where
+ * `space-between` would slide it about as the range changed width. That is the
+ * difference between a label which sits still as you step through a week and
+ * one which shuffles a few pixels a press.
+ */
+export function DateBar({
+  reading,
+  start,
+  end,
+  open,
+  onToggle,
+  onPrev,
+  onNext,
+  prevTitle,
+  nextTitle,
+  children,
+}: {
+  reading: DateBarReading;
+  start: string;
+  end: string;
+  open: boolean;
+  onToggle: () => void;
+  /** Null disables the arrow — there is nowhere to step in that direction. */
+  onPrev: (() => void) | null;
+  onNext: (() => void) | null;
+  prevTitle: string;
+  nextTitle: string;
+  /** The disclosure: the presets and the picker, plus the span strip where the
+   *  Schedule view is the reading. Rendered only while `open`, which is what
+   *  lets `.date-control` be a plain flex row again rather than a `display:
+   *  none` undone by a class on somebody else's shell. */
+  children: ReactNode;
+}) {
+  const { lead, range } = dateBarFace(reading, start, end);
+  return (
+    <div className={`date-bar${open ? ' open' : ''}`} role="group" aria-label="Dates">
+      <div className="date-bar-row">
+        <button
+          type="button"
+          className="date-step"
+          onClick={() => onPrev?.()}
+          disabled={!onPrev}
+          aria-label={prevTitle}
+          title={prevTitle}
+        >
+          <Chevron back />
+        </button>
+        <button
+          type="button"
+          className={`date-face${open ? ' active' : ''}`}
+          onClick={onToggle}
+          aria-expanded={open}
+          title={open ? 'Close the date controls' : 'Presets and a range picker'}
+        >
+          <span className="date-face-lead">{lead}</span>
+          <span className="date-face-range">{range}</span>
+        </button>
+        <button
+          type="button"
+          className="date-step"
+          onClick={() => onNext?.()}
+          disabled={!onNext}
+          aria-label={nextTitle}
+          title={nextTitle}
+        >
+          <Chevron back={false} />
+        </button>
+      </div>
+      {open && <div className="date-bar-panel">{children}</div>}
+    </div>
+  );
+}
+
+/**
+ * The presets and the range picker themselves, in the bar's disclosure.
+ *
+ * They open under the label that states the range, which is the rule they
+ * followed when that label was a button in the tab row and is the reason they
+ * moved with it: a disclosure and the thing it discloses have to stay together.
  */
 export function DateRow({
   presets,
