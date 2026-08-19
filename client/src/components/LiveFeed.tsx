@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import type { LiveRole } from '../lib';
 import { playerKey } from '../types';
 import { api } from '../api';
@@ -46,6 +46,14 @@ const ROLE_ORDER: Record<LiveRole, number> = {
   'on-base': 2,
   pitching: 3,
 };
+
+/** Where a player with **no** live role sorts in that section — below all four,
+ *  which is where a man the live play has just put out or sent home belongs. */
+const NO_ROLE = 4;
+
+/** The Live section's sort key for one player's block. */
+const liveOrder = (live: { role: LiveRole } | null): number =>
+  live ? ROLE_ORDER[live.role] : NO_ROLE;
 
 /** A player's live game inning, e.g. "Top 7" (falls back to the game's label). */
 function liveInning(game: PlayerGame): string {
@@ -1091,6 +1099,14 @@ export interface PlayerDayEntries {
   /** Completed plays, newest first. A batter's plate appearances and his own
    *  base-running interleaved; a pitcher's whole outing as one item per game. */
   entries: FeedEntry[];
+  /** His base-running off the play **still being thrown** — a steal taken
+   *  behind the batter at the plate, the wild pitch that moved him, the run it
+   *  scored. Pinned to the Live section rather than filed in `entries`, and
+   *  moving into `entries` of its own accord the moment the at-bat resolves.
+   *  Play order (cause before effect), which is also how the Live block reads
+   *  them down the page. Empty for a pitcher, whose base events are rows inside
+   *  his outing rather than items of their own. */
+  liveEvents: FeedEntry[];
   /** Games of his that haven't started, in schedule order — see `isUpcomingFor`
    *  for why this is not simply "his club's games". */
   upcoming: { report: PlayerReport; game: PlayerGame }[];
@@ -1120,6 +1136,19 @@ function baseEntries(report: PlayerReport, game: PlayerGame): FeedEntry[] {
     key: `${report.id}-${game.gamePk}-${evs[0].playId ?? evs[0].timestamp ?? i}`,
   }));
 }
+
+/**
+ * Whether a base-event item happened on the play **still being thrown** — the
+ * one thing that decides whether it is Live or Recent.
+ *
+ * `.some` rather than `.every` because a group is one play and its events
+ * therefore agree; where a group could ever be mixed (two events with no clip
+ * id and the same timestamp), keeping the whole item live is the safe
+ * direction — a group is one line and one clip, so splitting it across two
+ * sections would state the play twice.
+ */
+const isMidAtBat = (e: FeedEntry): boolean =>
+  e.type === 'base' && e.evs.some((ev) => ev.midAtBat);
 
 /**
  * **How many completed plays are newer than a marker, and the timestamp of the
@@ -1197,24 +1226,34 @@ export function playerDayEntries(report: PlayerReport): PlayerDayEntries {
   // his live item *is* his outing, where a batter's is the in-progress at-bat,
   // which is never one of the completed plays below.
   const pinned = live && report.kind === 'pitcher' ? live.game.gamePk : null;
-  const entries = report.games
-    .flatMap((game): FeedEntry[] =>
-      report.kind === 'pitcher'
-        ? game.pitching && game.gamePk !== pinned
-          ? [{ type: 'pitching' as const, report, game }]
-          : []
-        : [
-            ...game.plateAppearances
-              .filter((pa) => pa.event)
-              .map((pa): FeedEntry => ({ type: 'pa', report, game, pa })),
-            ...baseEntries(report, game),
-          ],
-    )
-    .sort(byRecency);
+  const all = report.games.flatMap((game): FeedEntry[] =>
+    report.kind === 'pitcher'
+      ? game.pitching && game.gamePk !== pinned
+        ? [{ type: 'pitching' as const, report, game }]
+        : []
+      : [
+          ...game.plateAppearances
+            .filter((pa) => pa.event)
+            .map((pa): FeedEntry => ({ type: 'pa', report, game, pa })),
+          ...baseEntries(report, game),
+        ],
+  );
+  // **A base event off the play still being thrown is not history yet.** The
+  // in-progress plate appearance has been kept out of this list from the
+  // beginning (`filter((pa) => pa.event)`), and its base events had no such
+  // test at all: a steal taken behind a live batter, or the wild pitch that
+  // moved the man on second, landed in Recent while the play it happened on was
+  // still going on — the two halves of one play in two different sections, with
+  // Recent claiming a completeness the play did not have. Same test now, one
+  // field (`BaseEvent.midAtBat`), so the at-bat and its interruptions move
+  // together: they sit in Live until MLB gives the play a result, and cross into
+  // the stream on the next poll after it does.
+  const entries = all.filter((e) => !isMidAtBat(e)).sort(byRecency);
+  const liveEvents = all.filter(isMidAtBat).sort(byPlayOrder);
   const upcoming = report.games
     .filter((game) => game.status.state === 'scheduled' && isUpcomingFor(report, game))
     .map((game) => ({ report, game }));
-  return { live, entries, upcoming };
+  return { live, entries, liveEvents, upcoming };
 }
 
 /**
@@ -1371,11 +1410,18 @@ export function LiveFeed({
   const perPlayer = reports.map((report) => ({ report, ...playerDayEntries(report) }));
 
   // Players currently in a live at-bat/on-deck/on-base situation, highest-
-  // priority role first (a player is listed once, for their leading role).
+  // priority role first (a player is listed once, for their leading role) —
+  // each with whatever has happened on the play still being thrown under him.
+  //
+  // **A player can be here on those events alone**, with no role left: the
+  // runner caught stealing behind a live batter is out, and the one who scored
+  // on the wild pitch is in the dugout, yet both things happened ten seconds
+  // ago on the play the reader is watching. They sort last (`NO_ROLE`), after
+  // everyone who is still in the middle of something.
   const liveRows = perPlayer
-    .filter((p) => p.live !== null)
-    .map((p) => ({ report: p.report, role: p.live!.role, game: p.live!.game }))
-    .sort((a, b) => ROLE_ORDER[a.role] - ROLE_ORDER[b.role]);
+    .filter((p) => p.live !== null || p.liveEvents.length > 0)
+    .map((p) => ({ report: p.report, live: p.live, events: p.liveEvents }))
+    .sort((a, b) => liveOrder(a.live) - liveOrder(b.live));
 
   // Everything that has happened, interleaved by clock — newest-first unless the
   // reader has turned the stream round (`oldestFirst`): for a batter every
@@ -1527,27 +1573,42 @@ export function LiveFeed({
             Live
           </h2>
           <div className="live-rows">
-            {liveRows.map(({ report, role, game }) =>
-              // A pitcher on the mound reads as his outing so far, innings and
-              // all — the same item the stream below would carry, pinned here.
-              report.kind === 'pitcher' && game.pitching ? (
-                <FeedPitcherGame
-                  key={report.id}
-                  report={report}
-                  game={game}
-                  role={role}
-                  onOpenDetails={onOpenDetails}
-                />
-              ) : (
-                <LiveEntry
-                  key={report.id}
-                  report={report}
-                  role={role}
-                  game={game}
-                  onOpenDetails={onOpenDetails}
-                />
-              ),
-            )}
+            {liveRows.map(({ report, live, events }) => (
+              <Fragment key={report.id}>
+                {live &&
+                  // A pitcher on the mound reads as his outing so far, innings
+                  // and all — the same item the stream below would carry,
+                  // pinned here.
+                  (report.kind === 'pitcher' && live.game.pitching ? (
+                    <FeedPitcherGame
+                      report={report}
+                      game={live.game}
+                      role={live.role}
+                      onOpenDetails={onOpenDetails}
+                    />
+                  ) : (
+                    <LiveEntry
+                      report={report}
+                      role={live.role}
+                      game={live.game}
+                      onOpenDetails={onOpenDetails}
+                    />
+                  ))}
+                {/* What has happened on the play still being thrown, directly
+                    under the man it happened to — **the same `FeedItem` the
+                    Recent stream draws**, deliberately, rather than a line
+                    folded into the live card. It cannot fold: the card belongs
+                    to the *batter* and the event to the *runner*, and on most
+                    rosters those are two different people of whom only one is
+                    watched. And the shape is already what the item needs — the
+                    badge, the situation glyph, MLB's line and the clip, which
+                    an action line would have to give up. It is not filtered
+                    with the stream either: nothing in the Live section is. */}
+                {events.map((entry) => (
+                  <FeedItem key={entryKey(entry)} entry={entry} onOpenDetails={onOpenDetails} />
+                ))}
+              </Fragment>
+            ))}
           </div>
         </section>
       )}

@@ -375,6 +375,16 @@ export interface BaseEvent {
   // numbers them) — what lets a pitcher's inning block put a balk in the
   // middle of the batters he faced rather than at the end of them.
   atBatNumber: number;
+  // Whether that at-bat was **still being played** when the feed was read: MLB
+  // had given the play no result yet, so this steal or wild pitch happened
+  // *during* the plate appearance the Live section is showing. The feed keeps it
+  // in the Live section until the at-bat resolves; it is false everywhere else.
+  //
+  // Live-only by nature — a day snapshot is written once every game is final, so
+  // no play in one can be in progress and every event in a stored day is false —
+  // which is why adding it needs no `DAY_SNAPSHOT_VERSION` bump: a blob written
+  // before it existed reads back `undefined`, which is the answer it should give.
+  midAtBat: boolean;
   // The base the event names: the bag taken or lost for `sb`/`cs`/`po`/`pocs`,
   // and the base he ended up on for the kinds that are pure advances
   // (`balk`/`wp`/`pb`/`di`/`poe`). Null for a run and when MLB says neither.
