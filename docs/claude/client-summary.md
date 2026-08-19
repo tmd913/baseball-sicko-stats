@@ -663,9 +663,12 @@ range needs no case of its own.
 row is this table's row over different numbers and every cell, rate and total
 below it is the arithmetic that was already there — the same economy
 `asProjected` makes for a scoreboard card. Nothing about the leading cells
-changes: the headshot, its pip and status, the slot chip, the identity block, the
-row tints and the opponent cell are facts about the player and his next game
-rather than about the columns.
+changes: the headshot, its pip and status, the identity block, the row tints and
+the opponent cell are facts about the player and his next game rather than about
+the columns. **The slot chip was in that list and no longer is** — see *The
+lineup it would set* below, which is the one leading cell the lens now answers
+for, on the grounds that over days nobody has played there is no slot he is
+*in*.
 
 **A count is printed to a tenth**, and rounded on the **server** rather than on
 screen: the client sums these for the `Total` row, so what a reader adds down a
@@ -690,6 +693,123 @@ instead of it. A line of zeros would claim he plays and does nothing,
 which is the opposite of the truth — the same distinction the research board
 makes when it sends a window a player does not appear on back as `null` rather
 than as a zeroed row.
+
+#### The lineup it would set, and the two arithmetics that follow
+
+**The lens now fills a lineup, which it did not before.** `getRosterProjection`
+is the engine's second caller and was handed `plan: null` on the stated grounds
+that it "has no lineup to fill" — true of a saved watchlist and false of a
+fantasy team, which *is* an ESPN roster with slots and a bench. So in fantasy
+mode it runs the same day-by-day assignment the matchup runs (see **ESPN
+scoreboard**, *The lineup is filled a day at a time*), over the roster
+`fantasyWatchlist` has already returned, and the table says what that came to.
+The two cannot disagree about who starts on Saturday, being one function.
+
+**The chip answers for the days ahead.** The ordinary `FantasySlotTag` names the
+slot ESPN has him in on the last day of the range — the right answer for days
+already played and the wrong one for a span nobody has played, where there is no
+single slot he is *in*: there is a set of decisions, which is exactly what the
+projection has just made. So under the lens it counts them:
+
+- **`4 of 5`** — four of the five days his club plays, lit on the same rule the
+  day chip uses (`starting` means the lineup has him at all).
+- **`benched`** rather than `0 of 5`, because the man the projection never
+  starts is the row a reader is looking for and a nought among counts is not
+  what the eye catches. It keeps the muted outlined shape `BE` has always had,
+  so the column still reads *lit is playing, quiet is not* at a glance.
+- **Nothing at all** where his club has no game left in the span. That is the
+  honest absence — an off day is not a benching, the row's own figures are
+  dashes beside it for the same reason, and a chip would invent a decision
+  nobody made.
+- The days are the **tooltip**, benched ones named, which is what a count has to
+  be able to defer to: *4 of 5* cannot say which four.
+
+**It is `.fantasy-slot` outright rather than a lookalike**, so the two states a
+reader already knows — lit is in, quiet is out — carry over with no new
+vocabulary and **no new CSS at all** (measured: the stylesheet is byte-identical
+across this change).
+
+#### A row is what he would do if he plays; the foot is what the lineup gets
+
+**Two arithmetics on one table, and each is the only honest answer to its own
+question.** A **row** is read to decide *should I start this man*, so cutting it
+by the seat the projection happened to give him would make the row a statement
+about the allocation rather than about the player — the bench bat being weighed
+would read as dashes precisely *because* he has not been started, which is the
+one thing it must not do. A **foot** is read as *what is my week worth*, and
+adding up sixteen players who cannot all be in the lineup at once is a figure
+nobody can act on; that one takes the seated half, and so agrees with the League
+page's matchup projection over the same days.
+
+**The seated half is projected in a second pass rather than the first one
+scaled.** The days are not interchangeable — each carries its own
+opponent-quality multiplier — so a factor would quietly average a man's Tuesday
+against his Sunday.
+
+**And the foot says which arithmetic it is, in the label.** This table's
+standing rule is that a reader can add a column up and get the figure at the
+bottom, which is the whole reason the server rounds each projected component to
+a tenth. This deliberately breaks it: measured on the live league, team 4's rows
+come to **59.5 games** where its lineup gets **48.5**, the gap being the three of
+its fourteen startable bats that cannot be seated. A gap that size has to be
+named **where it is read** rather than explained in a tooltip — half this app's
+traffic has no hover — so the word changes with the arithmetic: **`Total`** when
+it is the column's, **`Lineup`** when it is the plan's, with the sentence on the
+title. Where no lineup was filled at all the two are one and it reads `Total`,
+which is what it has always said.
+
+#### Measured
+
+**Nothing is a new upstream.** The roster is the one `fantasyWatchlist` already
+returns, the slot counts were stashed by the `mSettings` half of that read, and
+the categories come off the scoreboard's own cached minute — a projection that
+could not read them falls back to seating by playing time, which is what
+`seatValues` does with an empty list. Checked on the live league: the roster
+route sees **10 categories, a 26-man roster and slot counts present**.
+
+**Across all twelve teams**, over Aug 19–23: **235 rows full** (`n of n`),
+**10 partial**, **3 benched**, and 66 with no open day at all — the fantasy IL,
+the injured, and clubs with nothing left in the span. The reader's own team is
+one of the ones where it is **inert**, and that is worth recording rather than
+hiding: it carries exactly **11 startable batters against 11 batting seats**, so
+nobody can be benched and every chip reads `n of n`.
+
+**One assignment, read out in full** — team 4 on Aug 19, 14 batters for 11 seats:
+Harper (worth 12.29) → 1B, Buxton (7.78) → UTIL, Trout (7.36) → OF, Chisholm
+(7.00) → 3B, Adell (6.99) → OF, Arraez (5.84) → 2B, Marsh (5.26) → OF,
+Torkelson (4.78) → IF, Reynolds (4.65) → OF, Neto (4.17) → SS, Perez (2.17) → C
+— **all 11 seats filled**, and the three left out are Teoscar (4.59), Yelich
+(3.84) and Riley (3.62). Teoscar outranks two men who *are* seated, which looks
+wrong and is the assignment being right: he is the fifth-best of seven
+outfielders for four OF seats and a UTIL already taken, where Neto is the only
+shortstop on the roster and Perez the only catcher, so each of them holds a
+chair nobody else can use. That is the matroid greedy's whole point, and it is
+why *4 of 5* falls where it does — the same three sit on every contended day and
+all of them start on Aug 20, the one day most of their clubs are idle.
+
+**The two arithmetics, on team 4**: rows **59.5** games / **247.2** PA / **8.0**
+HR against a lineup of **48.5** / **203.7** / **6.6**, the difference being
+exactly the three men it cannot seat (11.0 games, 43.5 PA). The lineup figure
+sits under its own ceiling of 55 seat-days (11 seats × 5 days), the slack being
+Aug 20.
+
+**Driven in a browser at 1000 and 1200**, on both surfaces — the Roster view and
+the matchup's team page, which are one code path. The chips read `5 of 5`,
+`4 of 4`, `1 of 5` and `benched`; the two IL men draw **no chip and dashes**;
+the tooltips read *Projected in the lineup Aug 20 at 3B — benched Aug 19, Aug
+21, Aug 22, Aug 23* and *Projected on the bench every day his club plays — Aug
+19, Aug 21, Aug 22, Aug 23*; the foot reads **`Lineup · 16` at 48.5** against a
+column summing to 59.5, and reverts to `Total` the moment the lens is turned
+off. **0** page overflow and **0** error banners throughout.
+
+**A saved watchlist is untouched**: every row comes back `lineup: null`, so the
+day chip stands and the foot reads `Total` — which is exactly what this table did
+before. (Worth noting for anyone re-measuring: `?roster=saved` in the URL does
+not settle it, the saved roster-source preference loading a moment later and
+putting the app back in fantasy mode. Check the response, not the link.)
+
+**Bundle: 580.31 → 581.37 KB of JS** (172.90 → 173.23 gzipped) and **156.33 KB
+of CSS, unchanged** (27.98) — the chip being `.fantasy-slot` outright.
 
 #### The Opponent column becomes `G`
 
