@@ -57,11 +57,45 @@ export interface ScheduledGame {
   detailedState: string;
 }
 
-/** Postponed per a raw status blob (feed or schedule). MLB reports a postponed
- * game as abstractGameState "Final", so this can't lean on that field: it keys
- * off codedGameState 'D' / the "Postponed" detailedState label. */
+/**
+ * Never played, per a raw status blob (feed or schedule). MLB reports both of
+ * these as abstractGameState "Final", so this can't lean on that field.
+ *
+ * **Two states, not one.** A *postponement* is codedGameState 'D' /
+ * "Postponed"; a *cancellation* is codedGameState 'C' / "Cancelled" — measured
+ * on gamePk 831608, whose schedule reads `('Final', 'C', 'Cancelled')` and
+ * whose feed reads `('Final', 'C', 'Cancelled: Rain')`. Without the second
+ * comparison `isFinalFeed` claims a cancelled game as a real Final with no
+ * score, which is the error `schedule.ts::stateOf` names as the one that would
+ * make the per-row game count lie.
+ *
+ * `Cancelled` is **MLB's own spelling** — a value off the wire rather than
+ * prose of ours. Do not Americanize it; spelled `Canceled` this test silently
+ * stops matching and every cancellation is filed as a game played.
+ *
+ * **Deliberately narrower than `stateOf` on one state: `Suspended`.** That one
+ * buckets a suspension with the postponements because it answers a *forward*
+ * question — whether the schedule grid has a game to plan around — and a
+ * suspended game is not one. This function answers a backward question about a
+ * date already played, and a suspended game *was* partly played: its feed
+ * carries real plays, and `savant.ts` pushes every batter's and pitcher's line
+ * from it whatever this returns. Calling it postponed here would print "did not
+ * happen" over a row whose stats are counted anyway — the same lie in the
+ * opposite direction. Measured: 0 of the 2,458 games of the 2026 regular season
+ * carry `Suspended`, so this costs nothing today and is written down because
+ * the two tests looking almost alike is what would make somebody align them.
+ *
+ * Restated rather than imported from `stateOf` because `schedule.ts` already
+ * imports this module — folding them would close an import cycle. They must
+ * move together; each names the other.
+ */
 function isPostponedStatus(s: GameStatusFields | undefined): boolean {
-  return s?.codedGameState === 'D' || s?.detailedState?.startsWith('Postponed') === true;
+  return (
+    s?.codedGameState === 'D' ||
+    s?.codedGameState === 'C' ||
+    s?.detailedState?.startsWith('Postponed') === true ||
+    s?.detailedState?.startsWith('Cancelled') === true
+  );
 }
 
 /** All regular-season games on a date (YYYY-MM-DD), with their schedule status. */
@@ -1049,11 +1083,15 @@ function isFinalFeed(feed: LiveFeed): boolean {
 }
 
 /**
- * A postponed game — moved to a later date, so it never became live/final on the
- * queried date. MLB reports it with `abstractGameState: "Final"` (so isFinalFeed
- * would claim it) and `codedGameState: 'D'` / `detailedState: "Postponed"` — the
- * reliable signals. `rescheduleDate` points at the makeup game; without this
- * branch the game reads as a real Final (no score) or a next-day scheduled game.
+ * A game that never happened on the queried date — postponed to a later one, or
+ * cancelled outright. MLB reports both with `abstractGameState: "Final"` (so
+ * isFinalFeed would claim either) and the reliable signals are codedGameState
+ * 'D'/'C' and the "Postponed"/"Cancelled" labels; see `isPostponedStatus`, which
+ * carries the measurement and the reason `Suspended` is not in that set.
+ * `rescheduleDate` points at a postponement's makeup game — a cancellation has
+ * none, which is the whole difference between them and does not change the
+ * answer here. Without this branch the game reads as a real Final (no score) or
+ * a next-day scheduled game.
  */
 function isPostponedFeed(feed: LiveFeed): boolean {
   return isPostponedStatus(feed.gameData?.status);

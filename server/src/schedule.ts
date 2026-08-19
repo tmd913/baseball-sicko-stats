@@ -130,7 +130,11 @@ interface ScheduleResponse {
  * schedule's status through this function rather than restating it. The
  * argument above still holds for `isPostponedStatus`, which answers a narrower
  * question against a *feed* payload; this one classifies a schedule status and
- * has two callers.
+ * has two callers. The narrowness is now one state wide and deliberate: that
+ * function agrees with this one on `Postponed` and `Cancelled` and differs on
+ * `Suspended`, because it asks whether a date already played happened and this
+ * asks whether there is a game ahead to plan around. Its doc comment carries
+ * the reasoning; change one of these and read the other.
  */
 export function stateOf(s: StatusFields | undefined): ScheduleGame['state'] {
   const d = s?.detailedState ?? '';
