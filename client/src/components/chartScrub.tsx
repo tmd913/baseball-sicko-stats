@@ -105,22 +105,78 @@ export function ScrubCross({ x, top, bottom }: { x: number; top: number; bottom:
  * a font this app does not choose, so it is read off the rendered box every move
  * (`--chart-tip-nudge`, the rule `--roll-font` and `--clip-w` already follow).
  *
- * **It is clamped to the window and not to the chart**, which is the choice
- * worth stating. Clamping into the wrap would have moved that same box
- * **34.4px** — it hangs that far past the svg's own right edge at 390 — where
- * the fault is 5.4px, and every pixel of that is the readout walking away from
- * the point it names. The constraint that binds a box floating over the page is
- * the edge of the screen; the plot's edge is not an edge at all, the chart wrap
- * having 29px of card either side of it there. `TIP_GUTTER` keeps the border and
- * its shadow off the glass rather than flush against it.
+ * **It is clamped to what actually cuts it, and that is rarely the window.**
+ * This paragraph read *"clamped to the window and not to the chart"* and argued
+ * the plot's edge is not an edge at all — which is true, and is not the whole
+ * list. A box floating over the page is cut by the first ancestor that clips,
+ * and the rolling chart, which is what the window rule was measured on, simply
+ * has none nearer than the glass: `.details-view` is a full-screen scroller
+ * whose padding box *is* the window, so the two answers coincided there and the
+ * rule looked general. The matchup chart is drawn in a dialog, and
+ * `.app-dialog-body` scrolls (`overflow-y: auto`, which forces `overflow-x` to
+ * `auto` with it) inside an `.app-dialog-box` that is `overflow: hidden`.
+ * Measured on week 19's `OPS` chart at the last day, `.741–.486 · Aug 19`, the
+ * window clamp put the box's right edge exactly on its 4px gutter — **386.0 at
+ * 390, 316.0 at 320, 973.1 at 1200** — and the dialog cut it **13.0px, 13.0px
+ * and 14.1px** short of that, taking the second team's last digit and the whole
+ * border with it. So the band is the window **narrowed by every ancestor whose
+ * overflow is not `visible`** (`visibleBand`), which gives the window back
+ * unchanged on the player page — the rolling chart's nine readouts are
+ * identical at all three widths — and gives the dialog's own padding box in the
+ * matchup. It is still not clamped to the *chart*: the wrap is 29px narrower
+ * again either side at 390, and every pixel of that is the readout walking away
+ * from the point it names.
  *
- * The nudge is computed from the anchor and the width rather than from the box's
- * own `getBoundingClientRect().left`, so it does not read back a position it
- * itself moved: run twice on the same anchor it gives the same answer.
+ * **The same band holds it down from the top**, which was never clamped at all
+ * and is the fault the right edge hid. The box sits `-140%` above its anchor,
+ * so a series high in the plot pushes it through the ceiling of the same
+ * scroller: measured on the same chart, `.831–.577 · Aug 11` lost **16.1px at
+ * 390 and 21.7px at 320** off its top — at 320 that is the whole of the figure
+ * line. Above the point is where it belongs, so it goes **under** the point
+ * rather than being slid down over it (`--chart-tip-lift`, the flipped position
+ * being the mirror of the same 40%-of-its-height gap), and only clamps into the
+ * band in the corner where neither side fits.
+ *
+ * Both offsets are computed from the anchor and the box's own width and height
+ * rather than from its `getBoundingClientRect().left`/`top`, so neither reads
+ * back a position it itself moved: run twice on the same anchor they give the
+ * same answer. `TIP_GUTTER` keeps the border and its shadow off the edge rather
+ * than flush against it.
  */
 
-/** How close the readout may come to the edge of the window, in px. */
+/** How close the readout may come to an edge that would cut it, in px. */
 const TIP_GUTTER = 4;
+
+/**
+ * The box the readout has to stay inside: the window, narrowed by every
+ * ancestor that clips.
+ *
+ * Read off the *padding* box (`clientLeft`/`clientWidth`), which is where an
+ * overflow cuts and which excludes a scrollbar's own strip. An ancestor is
+ * asked about each axis separately, because `overflow-x` and `overflow-y` are
+ * two declarations and a box that scrolls in one axis and clips in the other is
+ * the common case rather than the odd one.
+ */
+function visibleBand(el: HTMLElement) {
+  const doc = document.documentElement;
+  const band = { left: 0, right: doc.clientWidth, top: 0, bottom: doc.clientHeight };
+  for (let n = el.parentElement; n && n !== doc; n = n.parentElement) {
+    const cs = getComputedStyle(n);
+    const cutsX = cs.overflowX !== 'visible';
+    const cutsY = cs.overflowY !== 'visible';
+    if (!cutsX && !cutsY) continue;
+    const b = n.getBoundingClientRect();
+    if (cutsX) {
+      band.left = Math.max(band.left, b.left + n.clientLeft);
+      band.right = Math.min(band.right, b.left + n.clientLeft + n.clientWidth);
+    }
+    if (cutsY) {
+      band.top = Math.max(band.top, b.top + n.clientTop);
+      band.bottom = Math.min(band.bottom, b.top + n.clientTop + n.clientHeight);
+    }
+  }
+  return band;
+}
 
 export function ScrubTip({
   x,
@@ -136,25 +192,39 @@ export function ScrubTip({
   children: React.ReactNode;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
-  // Every move, before the paint that would show the box outside the window —
-  // the text changes with the point, so its width is not a value that can be
-  // measured once and kept.
+  // Every move, before the paint that would show the box past an edge that cuts
+  // it — the text changes with the point, so neither its width nor its height is
+  // a value that can be measured once and kept.
   useLayoutEffect(() => {
     const el = ref.current;
     const par = el?.offsetParent as HTMLElement | null;
     if (!el || !par) return;
     const box = par.getBoundingClientRect();
-    // `left` is a percentage of the padding box, which is where `clientLeft`
-    // and `clientWidth` measure from.
-    const anchor = box.left + par.clientLeft + (x / vbw) * par.clientWidth;
-    const half = el.getBoundingClientRect().width / 2;
-    const vw = document.documentElement.clientWidth;
+    // `left`/`top` are percentages of the padding box, which is where
+    // `clientLeft`/`clientTop` and `clientWidth`/`clientHeight` measure from.
+    const ax = box.left + par.clientLeft + (x / vbw) * par.clientWidth;
+    const ay = box.top + par.clientTop + (y / vbh) * par.clientHeight;
+    const own = el.getBoundingClientRect();
+    const half = own.width / 2;
+    const band = visibleBand(el);
+    const lo = band.left + TIP_GUTTER;
+    const hi = band.right - TIP_GUTTER;
     let nudge = 0;
-    if (anchor + half > vw - TIP_GUTTER) nudge = vw - TIP_GUTTER - (anchor + half);
-    // The left edge wins where both overflow, so a box wider than the window
+    if (ax + half > hi) nudge = hi - (ax + half);
+    // The left edge wins where both overflow, so a box wider than the band
     // starts at the left of it rather than being pushed off the other side.
-    if (anchor - half + nudge < TIP_GUTTER) nudge = TIP_GUTTER - (anchor - half);
+    if (ax - half + nudge < lo) nudge = lo - (ax - half);
     el.style.setProperty('--chart-tip-nudge', `${nudge.toFixed(2)}px`);
+
+    // `-140%` is the box's own height plus the 40% of it that is the gap
+    // between the box and the point it names; flipped, that gap is all there is
+    // between them.
+    const gap = own.height * 0.4;
+    let top = ay - gap - own.height;
+    if (top < band.top + TIP_GUTTER) top = ay + gap;
+    top = Math.min(top, band.bottom - TIP_GUTTER - own.height);
+    top = Math.max(top, band.top + TIP_GUTTER);
+    el.style.setProperty('--chart-tip-lift', `${(top - ay).toFixed(2)}px`);
   });
   return (
     <div
