@@ -709,20 +709,45 @@ The two cannot disagree about who starts on Saturday, being one function.
 slot ESPN has him in on the last day of the range — the right answer for days
 already played and the wrong one for a span nobody has played, where there is no
 single slot he is *in*: there is a set of decisions, which is exactly what the
-projection has just made. So under the lens it counts them:
+projection has just made. So under the lens it says **the same two things the
+day chip says, over a span: where he plays and how often.**
 
-- **`4 of 5`** — four of the five days his club plays, lit on the same rule the
-  day chip uses (`starting` means the lineup has him at all).
-- **`benched`** rather than `0 of 5`, because the man the projection never
-  starts is the row a reader is looking for and a nought among counts is not
-  what the eye catches. It keeps the muted outlined shape `BE` has always had,
-  so the column still reads *lit is playing, quiet is not* at a glance.
+| | |
+| --- | --- |
+| one slot, every day | **`2B 5/5`** |
+| two slots | **`3B/UTIL 4/5`** |
+| a single date picked | **`2B`** |
+| never started | **`BE`** |
+| club has no game left | *(no chip)* |
+
+- **The slot leads and the count follows**, because the slot is the fact this
+  column exists for and the one a reader scans a roster by; over a week *where*
+  is only half the answer, which is what the count adds. Lit on the day chip's
+  own rule — `starting` means the lineup has him at all.
+- **Slots are ordered by how many days he spends there**, first appearance
+  breaking a tie, so a man at third all week with one day at UTIL reads
+  `3B/UTIL` rather than whichever he happened to fill on the Monday.
+  `lineup.days` arrives in date order, which is what makes that second key
+  stable.
+- **One open day drops the count.** `2B 1/1` says nothing `2B` does not, and it
+  is the case a reader meets most — a single date picked, where every man has
+  one open day or none — so the chip reads as the plain slot chip it is the rest
+  of the time. It also covers a starter with a single turn in a wider span,
+  where the count answers a question the `G` column beside it already answers.
+- **`BE` rather than a word of its own**, which is the vocabulary the rest of
+  this column already speaks: the day chip draws ESPN's own slot names and `BE`
+  is one of them, so a bench under the lens and a bench without it are the same
+  two letters. It keeps the muted outlined shape that chip has always had, so
+  the column still reads *lit is playing, quiet is not* at a glance — and no
+  count rides along, `BE 0/5` being a nought where the two letters have said it.
 - **Nothing at all** where his club has no game left in the span. That is the
   honest absence — an off day is not a benching, the row's own figures are
   dashes beside it for the same reason, and a chip would invent a decision
   nobody made.
 - The days are the **tooltip**, benched ones named, which is what a count has to
-  be able to defer to: *4 of 5* cannot say which four.
+  be able to defer to: *4/5* cannot say which four. That sentence keeps the word
+  **benched**: it is prose rather than a label, and the two letters that read
+  best on a chip read worst in the middle of one.
 
 **It is `.fantasy-slot` outright rather than a lookalike**, so the two states a
 reader already knows — lit is in, quiet is out — carry over with no new
@@ -793,9 +818,11 @@ exactly the three men it cannot seat (11.0 games, 43.5 PA). The lineup figure
 sits under its own ceiling of 55 seat-days (11 seats × 5 days), the slack being
 Aug 20.
 
-**Driven in a browser at 1000 and 1200**, on both surfaces — the Roster view and
-the matchup's team page, which are one code path. The chips read `5 of 5`,
-`4 of 4`, `1 of 5` and `benched`; the two IL men draw **no chip and dashes**;
+**Driven in a browser at 320, 390, 1000 and 1200**, on both surfaces — the
+Roster view and the matchup's team page, which are one code path. The chips read
+`C 5/5`, `IF 4/4`, `3B/2B 5/5`, `3B 1/5`, `UTIL 1/5` and `BE`, and a single date
+picked draws `C`, `2B`, `UTIL` with **no count on any row**; the two IL men draw
+**no chip and dashes**;
 the tooltips read *Projected in the lineup Aug 20 at 3B — benched Aug 19, Aug
 21, Aug 22, Aug 23* and *Projected on the bench every day his club plays — Aug
 19, Aug 21, Aug 22, Aug 23*; the foot reads **`Lineup · 16` at 48.5** against a
@@ -808,7 +835,15 @@ before. (Worth noting for anyone re-measuring: `?roster=saved` in the URL does
 not settle it, the saved roster-source preference loading a moment later and
 putting the app back in fantasy mode. Check the response, not the link.)
 
-**Bundle: 580.31 → 581.37 KB of JS** (172.90 → 173.23 gzipped) and **156.33 KB
+**What the slot costs the column, measured on the same table at 320, 390 and
+1200**: the widest chip goes **65 → 72px** (`benched` gave way to `3B/2B 5/5`)
+and a typical one **48 → 53**, against a name column of **205px at 320**. The row
+is **58px** before and after, **0** rows wrap at any width, and page overflow is
+**0** — the slot is free, which is what the slack in the one column carrying a
+name was there for. A single date picked draws the chip at **42px**, exactly the
+width of the ordinary day chip it stands in for.
+
+**Bundle: 580.31 → 581.59 KB of JS** (172.90 → 173.33 gzipped) and **156.33 KB
 of CSS, unchanged** (27.98) — the chip being `.fantasy-slot` outright.
 
 #### The Opponent column becomes `G`

@@ -75,15 +75,27 @@ export function FantasySlotTag({ playerKey }: { playerKey: string }) {
  * The ordinary chip names one day's slot, which is the right answer for a table
  * of days already played and the wrong one for a span of days nobody has
  * played: over five days ahead there is no single slot he is *in*, there is a
- * set of decisions. So it counts them — **`4 of 5`**, four of the five days his
- * club plays — and takes the lit state on the same rule the day chip does,
- * `starting` meaning the lineup has him at all.
+ * set of decisions.
  *
- * **`benched` rather than `0 of 5`**, because the one row a reader is looking
- * for here is the man the projection never starts, and a nought among counts is
- * not what the eye catches. It is the same muted, outlined shape the `BE` chip
- * has always had, so the column still reads *lit is playing, quiet is not* at a
- * glance.
+ * **So it says the same two things the day chip says, over a span: where he
+ * plays, and how often** — `2B 5/5`, `3B/UTIL 4/5`. The slot leads because it
+ * is the fact this column exists for and the one a reader scans a roster by;
+ * the count follows because over a week *where* is only half the answer. It
+ * takes the lit state on the day chip's own rule, `starting` meaning the lineup
+ * has him at all.
+ *
+ * **`BE` when it never starts him**, which is the vocabulary the rest of this
+ * column already speaks rather than a word of its own: the day chip draws
+ * ESPN's own slot names and `BE` is one of them, so a bench under the lens and
+ * a bench without it are the same two letters. It keeps the muted outlined
+ * shape that chip has always had, so the column still reads *lit is playing,
+ * quiet is not* at a glance — and no count rides along, `BE 0/5` being a
+ * nought where the two letters have already said it.
+ *
+ * **One open day drops the count**, `2B 1/1` saying nothing `2B` does not. That
+ * is the case a reader meets most — a single date picked, where every man has
+ * one open day or none — and it makes the chip read as the plain slot chip it
+ * is the rest of the time.
  *
  * **Nothing at all where his club has no game left**, which is the honest
  * absence: there is no lineup decision to show, the row's own figures are
@@ -91,23 +103,60 @@ export function FantasySlotTag({ playerKey }: { playerKey: string }) {
  * of an off day.
  *
  * The days themselves are the tooltip, benched ones named — which is where a
- * count has to be able to defer to, since *4 of 5* cannot say which four.
+ * count has to be able to defer to, since *4/5* cannot say which four. That
+ * sentence keeps the word **benched**: it is prose rather than a label, and the
+ * two letters that read best on a chip read worst in the middle of a sentence.
  */
 export function ProjectedSlotTag({ lineup }: { lineup: ProjectedPlayerLine['lineup'] }) {
   if (!lineup || lineup.openDays.length === 0) return null;
   const seated = lineup.days.length;
   const sat = new Set(lineup.days.map((d) => d.day));
   const off = lineup.openDays.filter((d) => !sat.has(d));
-  const startedPart = lineup.days
-    .map((d) => `${prettyGameDate(d.day)} at ${d.slot}`)
-    .join(', ');
+
+  /**
+   * **The slots he holds, his main one first.** A man at third all week with one
+   * day at UTIL reads `3B/UTIL` rather than whichever he happened to fill on the
+   * Monday — so it is ordered by how many days he spends there, and by first
+   * appearance where two are level. `lineup.days` arrives in date order, which
+   * is what makes that second key stable.
+   */
+  const byCount = new Map<string, { n: number; first: number }>();
+  lineup.days.forEach((d, i) => {
+    const got = byCount.get(d.slot);
+    if (got) got.n += 1;
+    else byCount.set(d.slot, { n: 1, first: i });
+  });
+  const slots = [...byCount.entries()]
+    .sort((a, b) => b[1].n - a[1].n || a[1].first - b[1].first)
+    .map(([slot]) => slot);
+
+  /**
+   * **One open day needs no count.** `2B 1/1` says nothing `2B` does not, and
+   * the case it matters for is the one the reader meets most: a single date
+   * picked, where every man has one open day or none and the chip should read
+   * as the plain slot chip it is the rest of the time. It also covers a starter
+   * with a single turn in a wider span, where the count would be answering a
+   * question the `G` column beside it already answers.
+   */
+  const bare = lineup.openDays.length <= 1;
+  const startedPart = lineup.days.map((d) => `${prettyGameDate(d.day)} at ${d.slot}`).join(', ');
   const benchedPart = off.map((d) => prettyGameDate(d)).join(', ');
   const title = seated
     ? `Projected in the lineup ${startedPart}` + (off.length ? ` — benched ${benchedPart}` : '')
     : `Projected on the bench every day his club plays — ${benchedPart}`;
   return (
     <span className={`fantasy-slot${seated ? ' starting' : ''}`} title={title}>
-      {seated ? `${seated} of ${lineup.openDays.length}` : 'benched'}
+      {/* **`BE` rather than a word**, which is the vocabulary the rest of this
+          column already speaks: the day chip has always drawn ESPN's own slot
+          names and `BE` is one of them, so a bench under the lens and a bench
+          without it are the same two letters rather than two spellings of one
+          fact. */}
+      {!seated
+        ? 'BE'
+        : bare
+          ? slots.join('/')
+          : `${slots.join('/')} ${seated}/${lineup.openDays.length}`}
     </span>
   );
 }
+
