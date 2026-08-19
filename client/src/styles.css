@@ -14156,12 +14156,27 @@ span.mup-move-name:hover {
   align-items: flex-end;
   gap: 1px;
 }
-/* ESPN's global rostered percentage — how big a deal the move is. */
+/* ESPN's global rostered percentage — how big a deal the move is — under the
+   word that says what it is a percentage of. The word is `--faint` and two
+   weights lighter than the figure, which is the same division of labor the
+   player page's own `Rostered 63.4%` line makes: the label is the same on every
+   row and so must not compete with the part that differs. */
 .lg-tx-pct {
   font-size: 12px;
   font-weight: 700;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+  /* The label and its figure are one phrase and break as one. Measured at 320
+     the two of them (95.9px at the widest) plus the deltas (157.8) come to
+     261.7 on a 248px line, so something has to give: without this the space
+     between them was where it gave, leaving `Rostered` alone on the first line
+     with the deltas beside it and the number underneath — a label reading as
+     the caption of the wrong thing. The block wraps instead, one rule below. */
+  white-space: nowrap;
+}
+.lg-tx-pct-word {
+  font-weight: 500;
+  color: var(--faint);
 }
 /* One span per window the read found a baseline for, in the order the server
    sends them (ascending), so the newest movement is nearest the figure it
@@ -14256,6 +14271,13 @@ span.mup-move-name:hover {
     justify-content: flex-end;
     gap: 8px;
     padding-left: 0;
+    /* And where even that line is too narrow — 248px at 320, against 261.7 of
+       figure and deltas at the widest — the deltas drop under the figure whole
+       rather than either of them breaking inside itself. Measured over the live
+       league's 40 rows: **5 of them at 320 and none at 390**, costing those five
+       14px each (57 → 71) and the list 70px of its 2185. */
+    flex-wrap: wrap;
+    row-gap: 1px;
   }
 }
 

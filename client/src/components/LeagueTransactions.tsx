@@ -251,8 +251,12 @@ function TxPhoto({
  *   (*somebody just dropped a shortstop*), and ESPN's own eligibility wherever a
  *   league is connected, which on this page it always is.
  * - **The roster %** — how big a deal the move is. A 78%-rostered player being
- *   dropped is news and a 2% one is noise, and it is four characters,
- *   right-aligned so it stays out of the scan path down the names.
+ *   dropped is news and a 2% one is noise. It is **labeled `Rostered`**, in
+ *   `--faint` and lighter than the figure: a bare `78.4%` at the end of a row
+ *   is a percentage of nothing in particular, and this page has no header row
+ *   to say what its columns are the way the research board's `Ros%` does. The
+ *   whole block stays right-aligned so it is out of the scan path down the
+ *   names.
  * - **The club** is the cap logo alone, which is `PlayerIdentity`'s own
  *   sub-line: on a *fantasy* feed it is the least decision-relevant of the four,
  *   and at 15px of mark with the abbreviation on its tooltip it costs the row no
@@ -359,7 +363,14 @@ function PlayerLine({
             className="lg-tx-pct"
             title={`Rostered in ${pct.toFixed(1)}% of all ESPN leagues`}
           >
-            {pct.toFixed(1)}%
+            {/* The word before the figure, not after it: it is the order the
+                player page's own line already puts them in (`Rostered 63.4%`),
+                and this page is one press from that one. `78.4% rostered` reads
+                as the tail of a sentence where every other number on the row is
+                a label and a value, and it would put the word — the part that
+                is the same on every row — where the eye is scanning for the
+                part that differs. */}
+            <span className="lg-tx-pct-word">Rostered</span> {pct.toFixed(1)}%
           </span>
           {/* The move under the figure it moved, which is the shape the player
               page's own header already gives these — the span up front and the
