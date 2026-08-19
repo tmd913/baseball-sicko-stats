@@ -82,7 +82,7 @@ import {
   rostersToWatchlist,
 } from './espn.js';
 import type { EspnRosterPlayer } from './espn.js';
-import { getProjection } from './projection.js';
+import { getProjection, getRosterProjection } from './projection.js';
 import type { WatchPlayer } from './types.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -1306,6 +1306,68 @@ app.get(
     } catch (err) {
       if (!espnError(err, res)) throw err;
     }
+  }),
+);
+
+/**
+ * **What the roster is expected to do over a span** — one projected line per
+ * player, which is what the Roster view's own `Projected` toggle draws.
+ *
+ * A route of its own rather than a field on `/api/report`, and for the reason
+ * `/api/espn/projection` is one beside the scoreboard: that report is read on
+ * every load of two views, and this joins four league-wide boards and the
+ * league's schedule against the roster. Nobody who never presses the toggle
+ * should pay for it.
+ *
+ * It takes the **same three parameters `/api/report` takes** — `start`/`end`,
+ * `source=fantasy` and `teamId=` — and resolves the roster exactly the way that
+ * route does, so the rows this describes are the rows that report describes.
+ * Anything else would be two answers to "which players" a moment apart.
+ *
+ * **Only the games still to be played are projected.** `start` is clamped
+ * forward to today inside `getRosterProjection`, and the client adds the
+ * report's own lines for the days already played — the same *what has happened
+ * plus what is left* shape the matchup card has, and what makes an arbitrary
+ * range need no case of its own.
+ *
+ * **No ESPN league is needed** unless the reader asks for the fantasy roster:
+ * every input is a league-wide board this app already holds. 409 `espn-auth` on
+ * a rejected cookie like every route that does read one.
+ */
+app.get(
+  '/api/projection/roster',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const { start, end } = resolveDateRange(req.query.start, req.query.end);
+    if (dayCount(start, end) > MAX_RANGE_DAYS) {
+      res.status(400).json({ error: `date range too large (max ${MAX_RANGE_DAYS} days)` });
+      return;
+    }
+    const teamParam = req.query.teamId;
+    let teamId: number | null = null;
+    if (typeof teamParam === 'string' && teamParam !== '') {
+      const n = Number(teamParam);
+      if (!Number.isInteger(n) || n <= 0) {
+        res.status(400).json({ error: 'teamId must be a positive integer' });
+        return;
+      }
+      teamId = n;
+    }
+    let watched: WatchPlayer[];
+    if (req.query.source === 'fantasy') {
+      try {
+        // The **end** of the range names which day's lineup the roster is read
+        // at, exactly as `/api/report` reads it — so the players projected are
+        // the players that report is about.
+        watched = (await fantasyWatchlist(userId(req), false, end, { start, end }, teamId)).players;
+      } catch (err) {
+        if (espnError(err, res)) return;
+        throw err;
+      }
+    } else {
+      ({ players: watched } = await getRosterForRange(userId(req), start, end));
+    }
+    res.json(await getRosterProjection(watched, start, end));
   }),
 );
 

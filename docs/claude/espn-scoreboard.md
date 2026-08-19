@@ -814,6 +814,13 @@ pulled warm nightly by `warmer.ts`:
   club average and it is the one a reader would give.
 - **Which way each of them swings** — `bats`/`throws` off `getSeasonPlayers`, for
   the platoon.
+- **Whether he is playing at all, and how often when he is** — the per-day
+  appearance map `statcastWindow.ts` already reduces every day export to
+  (`dayCounts`), each club's own run of games off the same `schedule.ts` cache
+  entry the window comes from, and the thirty 40-man rosters `/api/statuses` and
+  every roster badge already share. See *Hurt is not rested* below; the first of
+  those is the sharpest thing in this list, and it is free — `getResearch(kind,
+  30)` above has already assembled its window from exactly those thirty days.
 
 ### The platoon edge is measured off the day exports, not taken from a book
 
@@ -863,6 +870,10 @@ the week when he is the everyday shortstop now. `getTeamHitting(30)` already
 carries each club's games over the same span, so the numerator and the denominator
 are the same month. The same figure is a reliever's appearance rate.
 
+**That ratio is still the level and no longer the whole answer**, because a
+ratio cannot tell *hurt* from *rested* — see *Hurt is not rested* below, which is
+the correction applied to it.
+
 **No single adjustment may move a figure by more than a fifth** (`ADJ_CLAMP`),
 and every one of them is clamped before use and their product clamped again. Each
 is a ratio of two measured figures and a ratio has no upper bound: a pitcher with
@@ -871,6 +882,107 @@ strength of one start. It keeps the projection's shape decided by **how much a
 player plays** — the thing this can actually know — rather than by whom he plays.
 A batter's adjustment is damped again through `STARTER_SHARE` (0.6), a starter
 facing the top of the order three times and the bullpen covering the rest.
+
+### Hurt is not rested, and a ratio cannot tell them apart
+
+**The play share is how often a man is in his club's game, and for its whole
+life it was one division: his games over his club's, across the last thirty
+days.** That number answers *how often does he play* by conflating two things
+that have nothing to do with each other — the days he was rested and the days he
+was **not there**. Both directions were wrong, and both were reported:
+
+- A man who missed three weeks and has started every game since he was
+  activated read **0.21** and was projected for a fifth of a week he is going to
+  play all of. Adley Rutschman, on the live board.
+- A man placed on the injured list yesterday read **0.89** and was projected for
+  a week he will play none of. Dansby Swanson, the same afternoon — and 26 of
+  the 87 batters off the active roster that day read a share over 0.40.
+
+**So availability is read rather than inferred, and the bench rate is measured
+over the games he was available for.** Three answers in order:
+
+1. **Off the active roster is a share of nothing.** The IL, the minors, a
+   suspension, a DFA — `getAllRosterMembers`' own `status.code !== 'A'`, which
+   is the feed's Upcoming rule (*"someone off the active roster is in none of
+   them"*) and the same test `schedule.ts` already gates a rotation slot on. It
+   is the thirty 40-man rosters `/api/statuses` and every roster badge in the app
+   already read, on their own thirty-minute cache.
+2. **Otherwise, his appearance rate since his last absence ended.** An absence is
+   `ABSENCE_GAMES` of his club's games in a row that he was not in; the games
+   before one belong to a month he was not part of, and holding them against him
+   is the whole of the complaint. A thin stretch since is filled in by his own
+   rate **before** the absence, on `blend`'s own shape — which is what lets the
+   projection answer for a man activated this morning who has played nothing
+   since.
+3. **A club the day exports cannot answer for, or a man who has not appeared in
+   a month**, falls back to the ratio as it was.
+
+**A correction to the ratio rather than a replacement of it, and the units are
+why.** The day export sees a man who *came to the plate*; the board's `games`
+counts an appearance of any kind, a pinch-runner's included — and `projectBatter`
+divides his plate appearances by that same count to get his per-game rate. Read
+as a share outright, the record would answer in the wrong unit and quietly dock a
+utility man for every game he was run for: measured, **Nick Allen is in 84% of
+his club's games and at the plate on 44% of its days**, with no absence anywhere
+in his record. So the record supplies the **shape** — where the gaps are, as the
+factor `since / whole window` — and the board keeps the level.
+
+**The threshold is measured, and it is two numbers.** Over the thirty days
+ending 2026-08-17, the longest run of consecutive club games missed is **2** for
+the 144 batters in 90% or more of them and **4** for the 84 in 75–90% — so at
+**six** a regular's day off, a catcher's weekly rest and a platoon bat's weekend
+against two left-handers are all bench time, and nothing that fires on those can
+fire on this. **A reliever's is twelve**, because a reliever who misses six
+straight may simply not have been needed: measured over 28,021 reliever cases,
+truncating at six on its own *costs* accuracy (mean error 0.1486 against the
+plain share's 0.1443, over-projecting his appearances by 6.2 points of share),
+where twelve is about the shortest stint that would have put him on the list.
+
+**Back-tested against what actually happened, over the whole season.** Every
+player and every day of it, asking each rule for his share and comparing it with
+the share of his club's next six games he really did play — **40,013 batter cases
+and 28,021 reliever ones**, off the 143 day exports on disk:
+
+| | batters | relievers |
+| --- | --- | --- |
+| the ratio, as it was | 0.2087 | 0.1443 |
+| the truncation alone | 0.1791 | 0.1486 |
+| availability alone | 0.1578 | 0.1119 |
+| **both** | **0.1245** | **0.1070** |
+
+a **40%** and a **26%** reduction in mean absolute error, and each half earns its
+place — the truncation alone is a loss on relievers and availability alone
+leaves the returner where he was. On the **5,485** batter cases where he was
+genuinely unavailable, the old rule is off by **0.371** and this one by nothing.
+
+**It is scored in appearance space**, which is worth saying plainly: the
+back-test asks each rule for the share of his club's next six days he will be at
+the plate in, because that is what the record can be checked against, where what
+ships applies the same rule as a factor on the board's ratio. The two are the
+same number for every player whose board games and plate-appearing days agree,
+which is everybody who starts.
+
+**What it costs is a little calibration, stated rather than buried.** The old
+ratio was well calibrated in aggregate (+0.006 of share on a mean of 0.654) by
+being wrong in both directions at once; this runs **+0.018** high, which is 2.7%
+— inside the 3.1% the whole projection is already measured to sit at, and the
+price of being right about two populations rather than cancelling out across
+them. `ABSENCE_GAMES` is what buys it back if it ever needs buying: at twelve
+the batter bias falls to +0.005 and the error rises to 0.1287.
+
+**Measured through the engine on the live board, and checked against an
+independent recompute of the same rule: 708 batters, 0 mismatches.** Of them
+**271 move (38%)** — 186 to zero, every one of them off the active roster, and 85
+up by a median of **0.34**. **Not one is docked**, which is the shape the ratio
+form guarantees it will mostly have: it either raises a man's share or says he is
+not playing. And it costs nothing to read, the thirty days behind it being the
+thirty `getResearch(kind, 30)` has already assembled its own window from — a
+cold roster projection is **87ms** and a warm one 0.
+
+**It falls out for a traded player with no rule of its own.** His appearances are
+under his old club's days and his new club's run has none of them, which reads as
+an absence that ended when he arrived — so he is projected on his time here,
+which is `clubFor`'s own answer to the same question one file over.
 
 ### What it deliberately does not do
 
@@ -884,7 +996,14 @@ facing the top of the order three times and the bullpen covering the rest.
 - **It does not guess at lineup changes.** It projects the players a manager has
   in a lineup slot *right now* — the same assumption `scoringPeriodTotals` already
   makes for today, and the same `NON_ACCRUING_SLOTS` rule. A bench player he
-  starts tomorrow is not in it and neither is anybody on his IL.
+  starts tomorrow is not in it and neither is anybody on his IL. What it *does*
+  read is **MLB's** own roster status, which is a different question and a fact
+  rather than a guess: a man on the injured list plays none of the week whatever
+  slot his manager has left him in.
+- **It does not guess at a return date.** A player on the IL is projected at
+  nothing for the whole span, even where he is due back on Thursday — MLB
+  publishes no such date and the app holds none, so the honest answer is the one
+  it can stand behind. It errs the way the whole file errs: toward saying less.
 - **It does not adjust a pitcher's outs.** A tough lineup shortens an outing, and
   putting that in would move the *denominator* of every rate as well as its
   numerator — a projection that got worse in a way nobody could see. He pitches as
@@ -892,6 +1011,41 @@ facing the top of the order three times and the bullpen covering the rest.
   thing on a pitcher's line that moves the other way from runs.
 - **It is not a probability.** One expected value per category, no distribution and
   no interval, which the key on screen says in as many words.
+
+### The engine has a second caller, and so it has a context
+
+**`projection.ts` is written against a `ProjectionContext` rather than against a
+matchup**, because there are two callers now and they know different things: a
+matchup knows two ESPN rosters and a week, and the **Roster view** knows a saved
+list and whatever range the reader has picked (see **Client — the Roster view**,
+*The Projected reading*). What they share is *the rest of the schedule and how
+everybody has been going* — the league-wide schedule window with its rotation
+map, the season and 30-day research boards for both kinds, the two team-hitting
+cuts for every club that still has a game, and the season roster list for the two
+handedness maps. **Not one of those is a new upstream**, and three of the four are
+pulled warm nightly.
+
+`buildContext(from, to)` assembles it and `projectOneBatter` / `projectOnePitcher`
+are the per-player core; `projectTeam` is a loop over them that merges the buckets,
+which is what it always was written as. **`remainingGames`' rule is unchanged and
+is what keeps a figure from being counted twice**: today counts only where its
+games have not started, and a postponement is not a game anybody gets.
+
+**`getRosterProjection(players, start, end)` is the second entry point.** It keeps
+the per-player buckets apart rather than merging them and turns each into the
+client's own `BattingLine` / `PitchingLine` — so a projected roster row is the
+summary table's row over different numbers, exactly as a projected matchup card is
+the scoreboard's card over different numbers. **A count is rounded to a tenth
+there rather than to a whole number**, and rounded on the *server* so the client's
+`Total` row sums what it printed: a side's week is twenty of these added together
+and rounds to an integer honestly, where a per-player 0.4 home runs over three
+days is a real answer and `0` is not.
+
+**It needs no league at all.** `getOwnership` is the matchup path's alone — every
+input to the context is league-wide — so a reader with a saved roster and no ESPN
+connection gets the same engine. The context is memoized per span on the same
+minute the matchup projection uses, with a rejected read dropped rather than
+remembered.
 
 ### Only the categories go out, and a count is rounded
 

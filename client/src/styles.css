@@ -6021,7 +6021,8 @@ button.start-line:focus-visible {
    follows its own text color, which is what carries its `.on` state. */
 .date-toggle svg,
 .starters-toggle svg,
-.schedule-toggle svg {
+.schedule-toggle svg,
+.projected-toggle svg {
   flex: none;
 }
 .date-toggle svg {
@@ -6502,6 +6503,62 @@ button.start-line:focus-visible {
   flex-direction: column;
   align-items: stretch;
 }
+/**
+ * The projected table's caption, directly above the pane.
+ *
+ * A **caption rather than a control**, which is why it sits here and not up in
+ * the pinned row with the toggle — the same place and the same reasoning as the
+ * research board's count line and the Rankings tab's span line: the one thing
+ * between the controls and the rows says what is under them. It is `flex: none`
+ * in this column so it costs the pane its own height and nothing else, and it
+ * keeps the app's gutters where the table bleeds past them, which is again the
+ * count line's own arrangement.
+ *
+ * `position: relative` is the anchor its key opens from — `.summary-proj-key`
+ * is `position: static` so a 320px panel hangs off this *row* rather than off a
+ * 30px button, which is `.roll-key`'s measured trick and is what keeps it on
+ * screen at a phone's width.
+ */
+.summary-proj-note {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 8px 0 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+/* The one word that says what every figure below it is. The accent, which is
+   what this app spends on *a reading of the data* — the same tag the matchup
+   page's head carries for the same lens. */
+.summary-proj-tag {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.summary-proj-span {
+  font-weight: 700;
+  color: var(--text);
+}
+.summary-proj-days {
+  color: var(--faint);
+}
+/* Opens from the row's left edge, which is where the reading starts — the
+   caption is a full-width row, so there is no button edge worth anchoring to
+   and every width has the room. */
+.summary-proj-key {
+  position: static;
+  display: inline-flex;
+}
+.summary-proj-note .info-key-panel {
+  left: 0;
+  right: auto;
+}
+
 .summary-scroll {
   /* Grow to content, but cap at the available height and scroll past that. */
   flex: 0 1 auto;
@@ -7640,7 +7697,8 @@ button.start-line:focus-visible {
    see `research.ts`.) */
 .research-toggle,
 .starters-toggle,
-.schedule-toggle {
+.schedule-toggle,
+.projected-toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -7657,7 +7715,8 @@ button.start-line:focus-visible {
 }
 .research-toggle:hover,
 .starters-toggle:hover,
-.schedule-toggle:hover {
+.schedule-toggle:hover,
+.projected-toggle:hover {
   color: var(--text);
 }
 /* `.active` is "the panel is open"; `.on` is "the panel holds something",
@@ -7676,20 +7735,23 @@ button.start-line:focus-visible {
    button on a row of tabs, where nothing beside it would say what the glyph
    meant. */
 .starters-toggle,
-.schedule-toggle {
+.schedule-toggle,
+.projected-toggle {
   flex: none;
   white-space: nowrap;
 }
 .research-toggle.on,
 .starters-toggle.on,
-.schedule-toggle.on {
+.schedule-toggle.on,
+.projected-toggle.on {
   color: var(--accent);
   border-color: color-mix(in srgb, var(--accent) 50%, transparent);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 .research-toggle:focus-visible,
 .starters-toggle:focus-visible,
-.schedule-toggle:focus-visible {
+.schedule-toggle:focus-visible,
+.projected-toggle:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
@@ -8251,7 +8313,8 @@ button.start-line:focus-visible {
    block at the end of the file, but still after every base rule it overrides. */
 @media (max-width: 640px) {
   .research-toggle-label,
-  .schedule-toggle-label {
+  .schedule-toggle-label,
+  .projected-toggle-label {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -8284,6 +8347,7 @@ button.start-line:focus-visible {
      leaves around a 15px glyph, so the pair reads as a set. */
   .starters-toggle,
   .schedule-toggle,
+  .projected-toggle,
   .date-toggle {
     width: var(--control-h);
     padding: 0;
@@ -11666,8 +11730,10 @@ button.start-line:focus-visible {
   color: var(--hit);
 }
 /* **Projected replaces Live rather than joining it**, so the tag always says
-   what the figures on the cards *are* — the accent, which is what this app spends
-   on "a reading of the data" against the green it spends on "a game is on". */
+   what the figures on the card *are* — the accent, which is what this app spends
+   on "a reading of the data" against the green it spends on "a game is on".
+   Drawn on the **matchup page's** head alone now; the scoreboard's own toggle
+   moved there with the lens, so its head has only the two live states. */
 .lg-state-proj {
   border-color: color-mix(in srgb, var(--accent) 55%, transparent);
   color: var(--accent);
@@ -11734,18 +11800,6 @@ button.start-line:focus-visible {
    one it is once several are in view. */
 .lg-matchup.lg-mine {
   border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
-}
-/* **A projected card is drawn as a projection**, which is this app's standing
-   rule that an estimate never wears the same clothes as a measurement — the
-   percentile card's dotted bubble, the Splits card's hatched fill, the Schedule
-   grid's dashed chip. A **dashed border** is that rule at the size of a whole
-   card, since every figure on it is projected rather than one of them: marking
-   each cell would be the same claim made twenty times.
-
-   It sits after `.lg-mine` so the reader's own projected matchup keeps its accent
-   *and* takes the dash — the two say different things and both are true. */
-.lg-matchup.lg-proj {
-  border-style: dashed;
 }
 .lg-mine-tag {
   font-size: 10px;
@@ -12122,6 +12176,47 @@ button.start-line:focus-visible {
    figure on it being projected, rather than a mark per cell repeating it. */
 .mup-card.mup-proj {
   border-style: dashed;
+}
+/* **And every bar on it is hatched**, which is the same claim the dashed border
+   makes, said where the reader is actually looking.
+
+   The border marks the *card*; the bars are what the card is read with — the
+   whole-matchup meter at the top and the ten category fills under it are the
+   picture a manager takes the week from, and a solid one says "this is the
+   measurement" in exactly the register a projection must not use. Hatching is
+   this app's standing mark for an estimate — the percentile card's dotted
+   bubble, the Splits card's hatched fill, the Schedule grid's dashed chip — and
+   the stripe here is `.spl-fill--thin`'s own 115° at 3px on, 4px off, so a
+   broken mark means one thing across the app.
+
+   **The color of each stripe is the color the bar already had**, so nothing
+   about *which side is ahead* changes: green marks the winner, the trailing run
+   stays `--faint` and the ties dimmer again. Only the texture says these are
+   figures nobody has played yet.
+
+   Two ordering notes, both load-bearing. The three meter rules are two classes
+   deep and so beat `.mup-meter-lead`'s own one-class `background` on
+   specificity, which is why **`--seg` is written first and `--lead` after it**:
+   between two selectors of equal weight the file's order decides, and a lead
+   that lost would be a leader painted `--faint`. And the fill's own `min-width:
+   2px` sliver stays solid whatever the stripe does, the gradient starting on
+   its 3px of ink — so a near-dead-level category is still visible as a mark
+   rather than as a gap. */
+.mup-proj .mup-fill {
+  background: repeating-linear-gradient(115deg, var(--win) 0 3px, transparent 3px 7px);
+}
+.mup-proj .mup-meter-seg {
+  background: repeating-linear-gradient(115deg, var(--faint) 0 3px, transparent 3px 7px);
+}
+.mup-proj .mup-meter-lead {
+  background: repeating-linear-gradient(115deg, var(--win) 0 3px, transparent 3px 7px);
+}
+.mup-proj .mup-meter-tied {
+  background: repeating-linear-gradient(
+    115deg,
+    color-mix(in srgb, var(--faint) 40%, transparent) 0 3px,
+    transparent 3px 7px
+  );
 }
 /* **The `Projected` toggle's own row, at the foot of the comparison** — see the
    component for why it left the head.

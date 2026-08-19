@@ -32,6 +32,7 @@ import type {
   WatchPlayer,
   XwobaSeries,
   ResearchWindow,
+  RosterProjection,
   TeamHitting,
   TeamHittingWindow,
   EspnRosterPlayer,
@@ -466,6 +467,26 @@ export const api = {
     if (refresh) q.set('refresh', '1');
     const qs = q.toString();
     return request(`/api/espn/projection${qs ? `?${qs}` : ''}`);
+  },
+
+  /**
+   * **What the roster is expected to do over a span** — one projected line per
+   * player, which is what the Roster view's `Projected` toggle draws.
+   *
+   * The same three parameters `report` takes, and the server resolves the
+   * roster the same way, so the rows this describes are the rows that report
+   * describes. Lazy on the toggle: nobody who never presses it pays for it.
+   */
+  async rosterProjection(
+    start: string,
+    end: string,
+    source: 'watchlist' | 'fantasy',
+    teamId?: number | null,
+  ): Promise<RosterProjection> {
+    const q = new URLSearchParams({ start, end });
+    if (source === 'fantasy') q.set('source', 'fantasy');
+    if (teamId != null) q.set('teamId', String(teamId));
+    return request(`/api/projection/roster?${q.toString()}`);
   },
 
   /** The League page's Rankings tab: every team's figure in each of the

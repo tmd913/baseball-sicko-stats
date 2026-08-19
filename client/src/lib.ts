@@ -1642,3 +1642,23 @@ export function projectStarters(
   }
   return out;
 }
+
+/**
+ * An ISO day as `Aug 12`, read as the calendar day it is rather than as an
+ * instant — `new Date('2026-08-12')` is UTC midnight, which in ET is the 11th,
+ * so the parts are taken apart and rebuilt in UTC and printed in UTC.
+ *
+ * In `lib.ts` because four surfaces print a span of days this way now — the
+ * League page's period header, its Rankings caption, a matchup's own head and
+ * the Roster view's projection note — and one of them is not a league page at
+ * all. It was the League view's export until the fourth caller arrived.
+ */
+export function prettyDate(iso: string | null): string {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+}

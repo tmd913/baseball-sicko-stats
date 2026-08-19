@@ -68,9 +68,11 @@
  */
 
 import { addDays, baseballToday } from './etDate';
-import { getSeasonPlayers } from './mlbStats';
+import { mapLimit } from './limit';
+import { getAllRosterMembers, getSeasonPlayers } from './mlbStats';
 import { getResearch } from './research';
-import { getScheduleWindow } from './schedule';
+import { getScheduleWindow, getSeasonRead } from './schedule';
+import { dayCounts, windowDates } from './statcastWindow';
 import { getTeamHitting } from './teamHitting';
 import {
   getMatchupWindow,
@@ -83,10 +85,14 @@ import {
   type EspnRosterPlayer,
 } from './espn';
 import type {
+  BattingLine,
+  PitchingLine,
+  PlayerKind,
   ResearchRow,
   RotationProjection,
   ScheduleGame,
   TeamHittingSplit,
+  WatchPlayer,
 } from './types';
 
 // ---- The measured constants -------------------------------------------------
@@ -152,6 +158,61 @@ const RECENT_WINDOW = 30 as const;
 const RECENT_MAX = 0.4;
 const RECENT_FULL_PA = 100;
 const RECENT_FULL_OUTS = 90;
+
+/**
+ * **How many of his club's games in a row a man has to miss before the stretch
+ * reads as an absence rather than as bench time.**
+ *
+ * This is the whole of the difference between *hurt* and *rested*, and it is
+ * measured rather than picked. Over the thirty days ending 2026-08-17, the
+ * longest run of consecutive club games missed is **2** for the 144 batters who
+ * were in 90% or more of them and **4** for the 84 who were in 75-90% — so at
+ * six, a regular's day off, a catcher's weekly rest and a platoon bat's weekend
+ * against two left-handers are all bench time, and nothing that fires on them
+ * can fire on this.
+ *
+ * **A reliever's is twice that**, and the two are two numbers because the two
+ * are two facts. A batter who misses six straight was not available; a reliever
+ * who does may simply not have been needed — a mop-up man in a quiet week, a
+ * closer in a run of blowouts — so the same rule applied to him is selection
+ * bias with a threshold on it. Measured over 28,021 reliever cases, truncating
+ * at six on its own **costs** accuracy: mean error 0.1486 against the plain
+ * share's 0.1443, over-projecting his appearances by 6.2 points of share. With
+ * the availability signal beside it the two thresholds are within two
+ * ten-thousandths of each other on error (0.1070 against 0.1072) and twelve
+ * halves what is left of the over-projection, +1.2 points against +2.0 — so
+ * twelve, which is also about the length of the shortest stint that would have
+ * put him on the list.
+ */
+const ABSENCE_GAMES: Record<PlayerKind, number> = { batter: 6, pitcher: 12 };
+
+/**
+ * **What a man who has just come back is projected on.**
+ *
+ * The stretch since his return is the evidence, and eight games of it is not
+ * much: `RETURN_FULL` is how many club games earn that stretch its own rate in
+ * full, on the same shape `recentWeight` already uses for the season/recent
+ * blend. Under it the rest is filled in by the stretch **before** the absence —
+ * his own rate in the same role, which is the honest prior for a man who has
+ * just been activated and the reason a projection can answer for one who has
+ * played no games at all since.
+ *
+ * Where there is no stretch before it either — a call-up, or a man traded in
+ * this month — a thin sample is shrunk toward `RETURN_PRIOR` with the weight of
+ * `RETURN_PRIOR_GAMES` club games, so one start off the plane reads as 0.78
+ * rather than as a claim that he plays every day. The figure is the middle of
+ * the measured distribution rather than an everyday share: it is what a man
+ * nobody can say anything about plays, and moving it between 0.4 and 0.7 moves
+ * the season's mean error by four ten-thousandths.
+ */
+const RETURN_FULL = 12;
+const RETURN_PRIOR = 0.55;
+const RETURN_PRIOR_GAMES = 3;
+
+/** The fewest club games of appearance record worth reading. Under it — the
+ *  opening week of a season, a club whose days the day exports have missed —
+ *  the share falls back to the ratio off the boards. */
+const MIN_LINEUP_DAYS = 10;
 
 /**
  * How much of a batter's game the *announced starter* accounts for.
@@ -629,26 +690,257 @@ function meanPitcherWoba(rows: ResearchRow[]): number {
 }
 
 /**
+ * **Who was in his club's lineup, day by day**, and who is off the roster now.
+ *
+ * The play share used to be a ratio off the boards — his games in the last
+ * thirty days over his club's — and a ratio cannot tell *hurt* from *rested*,
+ * which is the whole of what it is being asked. A man who missed three weeks
+ * and has started every game since he was activated read 0.21 and was projected
+ * for a fifth of the week he is going to play all of; a man placed on the IL
+ * yesterday read 0.89 and was projected for a week he will play none of. This is
+ * the record that answers both.
+ *
+ * **It costs no upstream, which is the reason it can be read at all.** The
+ * per-day appearance map is `statcastWindow.ts`'s own `dayCounts`, and
+ * `buildContext` has already awaited `getResearch(kind, 30)`, whose window is
+ * assembled from exactly those thirty days — so on any server that has built the
+ * board they are in memory, and on one that read the board off its blob they are
+ * thirty 25KB blobs beside it. The club's own games come off `getSeasonRead`,
+ * which is the same cache entry `getScheduleWindow` is served from. And the
+ * roster statuses are the thirty 40-man rosters `/api/statuses`, every roster
+ * badge and `schedule.ts`'s own rotation projections already share, on their own
+ * thirty-minute cache.
+ */
+interface LineupRecord {
+  /** club id → the days it played inside the window, oldest first and **one
+   *  entry per day**: the appearance record is per date, so a doubleheader is
+   *  one entry rather than two. It costs the share a little precision on the
+   *  handful of days a club plays twice and it is the only unit the day export
+   *  can answer in. */
+  days: Map<number, string[]>;
+  /** day → who saw a pitch that day, per kind. A batter with no plate
+   *  appearance — a pinch runner, a defensive replacement — is not in it, which
+   *  is the right answer for a projection: no trip to the plate, no production
+   *  to project. */
+  seen: Record<PlayerKind, Map<string, Set<number>>>;
+  /** Who is off the active roster **now** — the IL, the minors, a suspension, a
+   *  DFA. Empty where the roster read failed, which leaves every share exactly
+   *  as it would have been without it. */
+  offRoster: Set<number>;
+}
+
+/** Assemble it. A day that cannot be read is **skipped, not fatal** — the rule
+ *  `windowStatcast` already follows for the same files — and a day with no
+ *  export at all is skipped rather than counted, since an empty day would
+ *  otherwise read as every man in the league sitting out. */
+async function buildLineupRecord(runs: Map<number, { date: string }[]>): Promise<LineupRecord> {
+  const seen: Record<PlayerKind, Map<string, Set<number>>> = {
+    batter: new Map(),
+    pitcher: new Map(),
+  };
+  const read = new Set<string>();
+  const perDay = await mapLimit(windowDates(RECENT_WINDOW), 4, async (date) => {
+    try {
+      return [date, await dayCounts(date)] as const;
+    } catch (err) {
+      console.error(`projection: ${date} appearances unavailable:`, err);
+      return null;
+    }
+  });
+  for (const entry of perDay) {
+    if (!entry) continue;
+    const [date, counts] = entry;
+    const batters = new Set(Object.keys(counts.batter).map(Number));
+    const pitchers = new Set(Object.keys(counts.pitcher).map(Number));
+    if (batters.size === 0 && pitchers.size === 0) continue;
+    seen.batter.set(date, batters);
+    seen.pitcher.set(date, pitchers);
+    read.add(date);
+  }
+
+  const days = new Map<number, string[]>();
+  for (const [club, run] of runs) {
+    const out: string[] = [];
+    for (const g of run) {
+      if (!read.has(g.date)) continue;
+      if (out[out.length - 1] !== g.date) out.push(g.date);
+    }
+    if (out.length > 0) days.set(club, out);
+  }
+
+  const offRoster = new Set<number>();
+  try {
+    for (const [id, m] of await getAllRosterMembers()) {
+      if (m.status.code !== 'A') offRoster.add(id);
+    }
+  } catch (err) {
+    console.error('projection: roster status unavailable:', err);
+  }
+  return { days, seen, offRoster };
+}
+
+/** His club's days inside the window, each flagged with whether he was in it —
+ *  or null where there is no record worth reading, which is a club the day
+ *  exports could not answer for and a man who has not appeared in a month. */
+function lineupFlags(
+  rec: LineupRecord,
+  kind: PlayerKind,
+  id: number,
+  teamId: number,
+): boolean[] | null {
+  const days = rec.days.get(teamId);
+  if (!days || days.length < MIN_LINEUP_DAYS) return null;
+  const seen = rec.seen[kind];
+  const flags = days.map((d) => seen.get(d)?.has(id) === true);
+  return flags.some(Boolean) ? flags : null;
+}
+
+/**
+ * **How often he plays when he is there**, read off that record.
+ *
+ * One sentence: *his appearance rate over his club's games since his last
+ * absence ended*. An absence is `ABSENCE_GAMES` or more of his club's games in a
+ * row that he was not in, which is longer than any rest a regular takes and is
+ * measured to be so; the games before one belong to a month he was not part of,
+ * and holding them against him is the whole of what was being complained about.
+ *
+ * Three properties are worth stating because each is a case that used to be
+ * wrong:
+ *
+ * - **A healthy player is untouched.** No run of that length means no
+ *   truncation, so this returns his plain rate over the window, the factor it is
+ *   read as comes out at 1, and a catcher's five-of-six and a platoon bat's
+ *   four-of-seven are exactly the ratio they always were — measured through the
+ *   engine on the live board, 437 of 708 batters come out identical to the
+ *   digit.
+ * - **An absence that has not ended truncates nothing.** A man who is out is
+ *   answered by the roster status above; one who is on the roster and has not
+ *   played is a bench player, and his whole window is the evidence for that.
+ *   Without this the rule would read a deep reserve's fortnight off as an
+ *   injury and project him on the one week he happened to get in.
+ * - **A man traded in this month falls out for free.** His appearances are under
+ *   his old club's days and his new club's run has none of them, which reads as
+ *   an absence that ended when he arrived — so he is projected on his time here,
+ *   which is `clubFor`'s own answer to the same question one file over.
+ */
+function shareOfFlags(flags: boolean[], kind: PlayerKind): number {
+  const n = flags.length;
+  const absence = ABSENCE_GAMES[kind];
+  const plain = flags.filter(Boolean).length / n;
+
+  let trailing = 0;
+  for (let i = n - 1; i >= 0 && !flags[i]; i--) trailing += 1;
+  if (trailing >= absence) return plain;
+
+  // The last absence that ended, walking forward: `end` is the last game of it.
+  let end = -1;
+  let run = 0;
+  for (let i = 0; i < n; i++) {
+    if (!flags[i]) {
+      run += 1;
+      continue;
+    }
+    if (run >= absence) end = i - 1;
+    run = 0;
+  }
+  if (end < 0) return plain;
+
+  let start = end;
+  while (start >= 0 && !flags[start]) start -= 1;
+  const since = flags.slice(end + 1);
+  const before = flags.slice(0, start + 1);
+  const sinceShare = since.filter(Boolean).length / since.length;
+  if (before.length > 0) {
+    // His own rate in the same role before it, which is what a thin stretch
+    // since is filled in with — `blend`'s own shape, and the reason a man
+    // activated this morning has an answer at all.
+    return blend(
+      before.filter(Boolean).length / before.length,
+      sinceShare,
+      Math.min(1, since.length / RETURN_FULL),
+    );
+  }
+  return (
+    (since.filter(Boolean).length + RETURN_PRIOR_GAMES * RETURN_PRIOR) /
+    (since.length + RETURN_PRIOR_GAMES)
+  );
+}
+
+/**
  * **How often a player is actually in his club's game**, as a share of it.
  *
- * The *recent* window where there is one, and that is the point rather than a
- * refinement: a season ratio is wrong in the one direction that matters most for
- * a projection, because a **call-up** has thirty games of a club's hundred and
- * twenty and would be projected to play a quarter of the week — when he is the
- * everyday shortstop now. `getTeamHitting(30)` already carries each club's games
- * over the same span, so the numerator and the denominator are the same month.
+ * Three answers in order, and the order is the point:
  *
- * The season ratio is the fallback for a man who has not appeared in the last
- * thirty days at all, where it is the only evidence there is; and 1 is the
- * fallback under both, since a player nothing can be said about is better
- * projected as an everyday one than as absent.
+ * 1. **He is off the active roster, so he plays none of them.** The IL, the
+ *    minors, a suspension — the feed's own Upcoming rule (*"someone off the
+ *    active roster is in none of them"*) and `projectStarts`' `projectable`,
+ *    which is what a rotation slot is already gated on. It is the sharpest of
+ *    the three and it was missing entirely: measured on the live board, 87
+ *    batters are off the roster today and **26 of them read a share over 0.40**,
+ *    Dansby Swanson at 0.89 and Vladimir Guerrero Jr. at 0.79 — a full week
+ *    projected for men who will play no part of it.
+ * 2. **The ratio off the boards, corrected by the lineup record.** The ratio is
+ *    what this function was: his games over his club's, recent where the recent
+ *    window has any and the season where it does not. The record then says how
+ *    much of it is an absence, as the factor `shareOfFlags / plain` — his rate
+ *    since he was last available over his rate across the whole window — and 1
+ *    is the fallback for a club the day exports could not answer for and for a
+ *    man who has not appeared in a month.
  *
- * **Measured on the live league**, this is what the first version was missing:
- * projecting every hitter into every remaining club game put the twelve teams'
- * runs at 0.58 per player-game against the 0.41 the same period had actually
- * produced, a 40% over-count that this share is very nearly all of.
+ *    **A factor rather than a share, and the units are why.** The day export
+ *    sees a man who came to the plate; the board's `games` counts an appearance
+ *    of any kind, a pinch-runner's and a defensive replacement's included — and
+ *    `projectBatter` divides his plate appearances by *that* count to get his
+ *    per-game rate. Read as a share outright the record would answer in the
+ *    wrong unit and quietly dock a utility man for every game he was run for:
+ *    measured, Nick Allen is in 84% of his club's games and at the plate on 44%
+ *    of its days, with no absence anywhere in the record. So the record is read
+ *    for its **shape** — where the gaps are — and the board keeps the level.
+ *
+ * **Measured against what actually happened, over the whole season.** Every
+ * player and every day of it, asking each rule for his share and comparing it
+ * with the share of his club's next six games he really did play — 40,013
+ * batter cases and 28,021 reliever ones. The mean absolute error goes
+ * **0.2087 → 0.1245** for batters and **0.1443 → 0.1070** for relievers, a
+ * 40% and a 26% reduction; on the 5,485 batter cases where he was genuinely
+ * unavailable, the old rule was off by **0.371** and this one by nothing. What
+ * it costs is a little calibration — the projection now runs **+1.8 points of
+ * share high** on a mean of 0.654 where the old rule ran +0.6 — which is inside
+ * the 3.1% the whole projection is already measured to sit at, and is the price
+ * of being right about two populations rather than wrong about both in
+ * directions that cancelled.
+ *
+ * **The back-test measures the rule in appearance space** — it asks each rule
+ * for the share of his club's next six days he will be at the plate in, which is
+ * what the record can be scored against. What is shipped applies that rule's
+ * answer as a *factor* on the board's own ratio, for the units reason above; the
+ * two are the same number for every player whose board games and plate-appearing
+ * days agree, which is everyone who starts.
  */
 function playShareOf(
+  ctx: ProjectionContext,
+  kind: PlayerKind,
+  id: number,
+  teamId: number,
+  season: ResearchRow | null,
+  recent: ResearchRow | null,
+): number {
+  if (ctx.lineup.offRoster.has(id)) return 0;
+  const board = boardShare(
+    season,
+    recent,
+    ctx.clubGames.get(teamId) ?? 0,
+    ctx.clubGamesRecent.get(teamId) ?? 0,
+  );
+  const flags = lineupFlags(ctx.lineup, kind, id, teamId);
+  if (flags === null) return board;
+  const plain = flags.filter(Boolean).length / flags.length;
+  if (plain <= 0) return board;
+  return Math.min(1, board * (shareOfFlags(flags, kind) / plain));
+}
+
+/** The ratio the play share was, and is the fallback under. */
+function boardShare(
   season: ResearchRow | null,
   recent: ResearchRow | null,
   clubGamesSeason: number,
@@ -663,14 +955,101 @@ function playShareOf(
   return 1;
 }
 
+/**
+ * **Everything the per-player projections read, assembled once.**
+ *
+ * The engine below is written against this rather than against a matchup,
+ * because it has two callers now and they know different things: a matchup
+ * knows two ESPN rosters and a week, and the roster page knows a saved list and
+ * whatever range the reader has picked. What they share is *the rest of the
+ * schedule and how everybody has been going*, which is this — four cached
+ * boards, the league-wide schedule window and the two team-hitting cuts, none of
+ * which is a new upstream and three of which the warmer pulls nightly.
+ */
+export interface ProjectionContext {
+  pools: Pools;
+  remaining: Map<number, ScheduleGame[]>;
+  starters: Map<number, Set<number>>;
+  clubGames: Map<number, number>;
+  clubGamesRecent: Map<number, number>;
+  /** Who was in his club's lineup day by day, and who is off the roster now —
+   *  what the play share is read off. See `LineupRecord`. */
+  lineup: LineupRecord;
+  /** The span it was built for, and how many days of it still have a game to be
+   *  played — today included only where its games have not started, which is
+   *  `remainingGames`' own rule and the one that keeps a total from being
+   *  counted twice. */
+  from: string;
+  to: string;
+  daysLeft: number;
+}
+
+/** One batter's expected line over the context's remaining games, and how many
+ *  of his club's games he is expected to be in. */
+function projectOneBatter(
+  ctx: ProjectionContext,
+  id: number,
+  into: Bucket,
+): { games: number; placed: boolean } {
+  const { pools } = ctx;
+  const row = pools.batSeason.get(id);
+  if (!row || row.teamId === null) return { games: 0, placed: false };
+  const games = ctx.remaining.get(row.teamId) ?? [];
+  const mults = games.map((g) => {
+    const oppSide = g.homeId === row.teamId ? g.awayId : g.homeId;
+    const named = [...(ctx.starters.get(g.gamePk) ?? [])].find((sid) => {
+      const sp = pools.pitSeason.get(sid);
+      return sp ? sp.teamId === oppSide : false;
+    });
+    return batterGameMult(pools, id, named ?? null);
+  });
+  const recent = pools.batRecent.get(id) ?? null;
+  const share = playShareOf(ctx, 'batter', id, row.teamId, row, recent);
+  projectBatter(row, recent, mults, share, into);
+  // What the projection is actually built on, which is what the reader is
+  // told: his club's remaining games times the share of them he plays.
+  return { games: mults.length * share, placed: true };
+}
+
+/** One pitcher's expected line, and the chances it was drawn over — his turns
+ *  where he starts, his club's games times how often he is used where he
+ *  relieves. */
+function projectOnePitcher(
+  ctx: ProjectionContext,
+  id: number,
+  into: Bucket,
+): { starts: number; reliefGames: number; placed: boolean } {
+  const { pools } = ctx;
+  const row = pools.pitSeason.get(id);
+  if (!row || row.teamId === null) return { starts: 0, reliefGames: 0, placed: false };
+  const games = ctx.remaining.get(row.teamId) ?? [];
+  const oppOf = (g: ScheduleGame): number => (g.homeId === row.teamId ? g.awayId : g.homeId);
+  // His own turns: every remaining game he is named for or projected into.
+  const his = games.filter((g) => ctx.starters.get(g.gamePk)?.has(id) === true);
+  // A **majority of his appearances are starts** is the app's one definition
+  // of a rotation starter (`isRotationStarter`), and it is what decides which
+  // of the two shapes he is projected in.
+  const isStarter = num(row.gamesStarted) * 2 > num(row.games);
+  if (isStarter) {
+    const mults = his.map((g) => pitcherGameMult(pools, id, oppOf(g)));
+    projectPitcher(row, pools.pitRecent.get(id) ?? null, mults, true, into);
+    return { starts: mults.length, reliefGames: 0, placed: true };
+  }
+  // A reliever's chances are his club's games times how often he has actually
+  // been used — `playShareOf`'s own figure, which reads the last thirty days
+  // where it can for the reason that function gives: a man just brought up out
+  // of the bullpen is being used now rather than at his season rate.
+  const rate = playShareOf(ctx, 'pitcher', id, row.teamId, row, pools.pitRecent.get(id) ?? null);
+  const count = Math.round(games.length * rate);
+  const mults = games.slice(0, count).map((g) => pitcherGameMult(pools, id, oppOf(g)));
+  projectPitcher(row, pools.pitRecent.get(id) ?? null, mults, false, into);
+  return { starts: 0, reliefGames: mults.length, placed: true };
+}
+
 /** One team's expected remaining production, and what it was made of. */
 function projectTeam(
   roster: EspnRosterPlayer[],
-  pools: Pools,
-  remaining: Map<number, ScheduleGame[]>,
-  starters: Map<number, Set<number>>,
-  clubGames: Map<number, number>,
-  clubGamesRecent: Map<number, number>,
+  ctx: ProjectionContext,
 ): { bucket: Bucket; hitterGames: number; starts: number; reliefGames: number; skipped: number } {
   const bucket: Bucket = {};
   let hitterGames = 0;
@@ -688,68 +1067,16 @@ function projectTeam(
     const twoWay = p.kinds.includes('pitcher') && p.kinds.includes('batter');
 
     if (!isPitcher) {
-      const row = pools.batSeason.get(id);
-      if (!row || row.teamId === null) {
-        skipped += 1;
-      } else {
-        const games = remaining.get(row.teamId) ?? [];
-        const mults = games.map((g) => {
-          const oppSide = g.homeId === row.teamId ? g.awayId : g.homeId;
-          const named = [...(starters.get(g.gamePk) ?? [])].find((sid) => {
-            const sp = pools.pitSeason.get(sid);
-            return sp ? sp.teamId === oppSide : false;
-          });
-          return batterGameMult(pools, id, named ?? null);
-        });
-        const recent = pools.batRecent.get(id) ?? null;
-        const share = playShareOf(
-          row,
-          recent,
-          clubGames.get(row.teamId) ?? 0,
-          clubGamesRecent.get(row.teamId) ?? 0,
-        );
-        // What the projection is actually built on, which is what the reader is
-        // told: his club's remaining games times the share of them he plays.
-        hitterGames += mults.length * share;
-        projectBatter(row, recent, mults, share, bucket);
-      }
+      const made = projectOneBatter(ctx, id, bucket);
+      hitterGames += made.games;
+      if (!made.placed) skipped += 1;
     }
 
     if (isPitcher || twoWay) {
-      const row = pools.pitSeason.get(id);
-      if (!row || row.teamId === null) {
-        if (!twoWay) skipped += 1;
-        continue;
-      }
-      const games = remaining.get(row.teamId) ?? [];
-      const oppOf = (g: ScheduleGame): number => (g.homeId === row.teamId ? g.awayId : g.homeId);
-      // His own turns: every remaining game he is named for or projected into.
-      const his = games.filter((g) => starters.get(g.gamePk)?.has(id) === true);
-      // A **majority of his appearances are starts** is the app's one definition
-      // of a rotation starter (`isRotationStarter`), and it is what decides which
-      // of the two shapes he is projected in.
-      const isStarter = num(row.gamesStarted) * 2 > num(row.games);
-      if (isStarter) {
-        const mults = his.map((g) => pitcherGameMult(pools, id, oppOf(g)));
-        starts += mults.length;
-        projectPitcher(row, pools.pitRecent.get(id) ?? null, mults, true, bucket);
-      } else {
-        // A reliever's chances are his club's games times how often he has
-        // actually been used — `playShareOf`'s own figure, which reads the last
-        // thirty days where it can for the reason that function gives: a man
-        // just brought up out of the bullpen is being used now rather than at
-        // his season rate.
-        const rate = playShareOf(
-          row,
-          pools.pitRecent.get(id) ?? null,
-          clubGames.get(row.teamId) ?? 0,
-          clubGamesRecent.get(row.teamId) ?? 0,
-        );
-        const count = Math.round(games.length * rate);
-        const mults = games.slice(0, count).map((g) => pitcherGameMult(pools, id, oppOf(g)));
-        reliefGames += mults.length;
-        projectPitcher(row, pools.pitRecent.get(id) ?? null, mults, false, bucket);
-      }
+      const made = projectOnePitcher(ctx, id, bucket);
+      starts += made.starts;
+      reliefGames += made.reliefGames;
+      if (!made.placed && !twoWay) skipped += 1;
     }
   }
   return { bucket, hitterGames, starts, reliefGames, skipped };
@@ -840,33 +1167,24 @@ export function dropProjections(leagueId: number): void {
   for (const k of [...inFlight.keys()]) if (k.startsWith(`${leagueId}:`)) inFlight.delete(k);
 }
 
-async function build(
-  creds: EspnCreds,
-  board: Awaited<ReturnType<typeof getScoreboard>>,
-): Promise<EspnProjection> {
-  const empty = (note: string): EspnProjection => ({
-    matchupPeriod: board.matchupPeriod,
-    ok: false,
-    note,
-    end: null,
-    daysLeft: 0,
-    matchups: [],
-    fetchedAt: Date.now(),
-  });
-
-  if (!board.live) return empty('settled');
-  if (board.categories.length === 0) return empty('no-categories');
-
-  const window = await getMatchupWindow(creds).catch(() => null);
-  if (!window || window.period !== board.matchupPeriod) return empty('no-window');
-
-  const today = baseballToday();
-  if (window.end < today) return empty('over');
-
-  const [ownership, schedule, batSeason, batRecent, pitSeason, pitRecent, players] =
+/**
+ * **The context the two projections share**, assembled from reads the app
+ * already makes: the league-wide schedule window (30 min), the season and
+ * 30-day research boards for both kinds (6h each, pulled warm nightly), the two
+ * team-hitting cuts for every club that still has a game (6h), and the season
+ * roster list for the two handedness maps (1h). Nothing here is a new upstream.
+ *
+ * `from`/`to` are the days to project, inclusive. **Today counts only where its
+ * games have not started** — `remainingGames`' own rule, which is what keeps a
+ * figure that already holds today's production from holding it twice.
+ */
+async function buildContext(from: string, to: string): Promise<ProjectionContext> {
+  const [schedule, seasonRead, batSeason, batRecent, pitSeason, pitRecent, players] =
     await Promise.all([
-      getOwnership(creds),
       getScheduleWindow(),
+      // The same cache entry the window is served from, for the clubs' own runs
+      // — which are what the lineup record's denominator is.
+      getSeasonRead(),
       getResearch('batter', 'season'),
       getResearch('batter', RECENT_WINDOW),
       getResearch('pitcher', 'season'),
@@ -876,11 +1194,14 @@ async function build(
 
   // Every club that still has a game, so the two hitting boards are read for
   // the clubs that matter rather than all thirty regardless.
-  const remaining = remainingGames(schedule.games, today, window.end);
+  const remaining = remainingGames(schedule.games, from, to);
   const clubs = [...new Set([...remaining.keys()])];
-  const [recentSplits, seasonSplits] = await Promise.all([
+  const [recentSplits, seasonSplits, lineup] = await Promise.all([
     Promise.all(clubs.map(async (id) => [id, await getTeamHitting(id, RECENT_WINDOW)] as const)),
     Promise.all(clubs.map(async (id) => [id, await getTeamHitting(id, 'season')] as const)),
+    // Every one of the thirty days behind this is one `getResearch` above has
+    // already assembled its window from, so on a warm server it is memory.
+    buildLineupRecord(seasonRead.season.runs),
   ]);
   const hitting = new Map<number, TeamHittingSplit>();
   const clubGamesRecent = new Map<number, number>();
@@ -919,19 +1240,62 @@ async function build(
     leaguePitcherWoba: meanPitcherWoba(pitSeason.rows),
   };
 
-  const starters = startersByGame(schedule.games, schedule.rotations);
+  // How many days of the span still have a game to be played — the same test
+  // `remainingGames` applies, counted rather than assumed so a span running past
+  // the schedule window's own reach says how far it actually got.
+  const today = baseballToday();
+  let daysLeft = 0;
+  for (let d = from; d <= to; d = addDays(d, 1)) {
+    const any = schedule.games.some(
+      (g) => g.date === d && g.state !== 'postponed' && (d !== today || g.state === 'scheduled'),
+    );
+    if (any) daysLeft += 1;
+  }
+
+  return {
+    pools,
+    remaining,
+    starters: startersByGame(schedule.games, schedule.rotations),
+    clubGames,
+    clubGamesRecent,
+    lineup,
+    from,
+    to,
+    daysLeft,
+  };
+}
+
+async function build(
+  creds: EspnCreds,
+  board: Awaited<ReturnType<typeof getScoreboard>>,
+): Promise<EspnProjection> {
+  const empty = (note: string): EspnProjection => ({
+    matchupPeriod: board.matchupPeriod,
+    ok: false,
+    note,
+    end: null,
+    daysLeft: 0,
+    matchups: [],
+    fetchedAt: Date.now(),
+  });
+
+  if (!board.live) return empty('settled');
+  if (board.categories.length === 0) return empty('no-categories');
+
+  const window = await getMatchupWindow(creds).catch(() => null);
+  if (!window || window.period !== board.matchupPeriod) return empty('no-window');
+
+  const today = baseballToday();
+  if (window.end < today) return empty('over');
+
+  const ownership = await getOwnership(creds);
+  const ctx = await buildContext(today, window.end);
+
   const perTeam = new Map<number, ReturnType<typeof projectTeam>>();
   const project = (teamId: number): ReturnType<typeof projectTeam> => {
     const hit = perTeam.get(teamId);
     if (hit) return hit;
-    const made = projectTeam(
-      ownership.rosters[teamId] ?? [],
-      pools,
-      remaining,
-      starters,
-      clubGames,
-      clubGamesRecent,
-    );
+    const made = projectTeam(ownership.rosters[teamId] ?? [], ctx);
     perTeam.set(teamId, made);
     return made;
   };
@@ -980,23 +1344,228 @@ async function build(
     });
   }
 
-  // How many days are still to be played, today included where its games have
-  // not started — which is the same test `remainingGames` applies.
-  let daysLeft = 0;
-  for (let d = today; d <= window.end; d = addDays(d, 1)) {
-    const any = schedule.games.some(
-      (g) => g.date === d && g.state !== 'postponed' && (d !== today || g.state === 'scheduled'),
-    );
-    if (any) daysLeft += 1;
-  }
-
   return {
     matchupPeriod: board.matchupPeriod,
     ok: true,
     note: null,
     end: window.end,
-    daysLeft,
+    daysLeft: ctx.daysLeft,
     matchups,
+    fetchedAt: Date.now(),
+  };
+}
+
+// ---- The roster page's own projection ---------------------------------------
+
+/**
+ * **One player's expected line over a span**, which is the same engine the
+ * matchup runs and a different question asked of it.
+ *
+ * A matchup asks *where is this week heading*, and its answer is a team's total
+ * added to what ESPN has already scored. The roster page asks *what are my
+ * players going to do over these days*, which is a line per man — so the same
+ * per-player buckets are kept apart rather than merged, and each is turned into
+ * the very `BattingLine` / `PitchingLine` the summary table already draws. That
+ * is what makes this cost the client no new vocabulary: a projected row is the
+ * table's own row over different numbers, exactly as a projected matchup card is
+ * the scoreboard's own card over different numbers (`asProjected`).
+ *
+ * **Only the games still to be played are in it.** The client adds the report's
+ * own lines for the days already played, which is the same `already happened +
+ * what is left` shape the matchup card has — and it is what makes an arbitrary
+ * range work with no case of its own: a past range projects nothing and reads as
+ * it always did, a future one is projection alone, and a range straddling today
+ * is the two halves added together.
+ */
+export interface ProjectedPlayerLine {
+  key: string;
+  id: number;
+  kind: PlayerKind;
+  /** What the line was drawn over — a batter's expected games, a pitcher's
+   *  starts plus relief appearances. **Zero is the honest absence**: a club with
+   *  no game left in the span, a starter whose turn does not fall in it, or a
+   *  man neither board has a row for. The client draws that as dashes rather
+   *  than as a line of noughts, which would claim he plays and does nothing. */
+  chances: number;
+  batting: BattingLine | null;
+  pitching: PitchingLine | null;
+}
+
+export interface RosterProjection {
+  /** The span actually projected — `start` clamped forward to today, since a
+   *  day that has been played is not a day anybody projects. */
+  start: string;
+  end: string;
+  /** Days of it that still have a game to be played. Zero means there was
+   *  nothing to project, which the client says in words rather than drawing a
+   *  table of noughts. */
+  daysLeft: number;
+  players: ProjectedPlayerLine[];
+  fetchedAt: number;
+}
+
+/** A projected count, to a tenth. **Rounded here rather than on screen** so the
+ *  reader can add a column up and get the figure at the foot of it: the client
+ *  sums these, so what it totals is what it printed. A tenth rather than a whole
+ *  number because a per-player projection of 0.4 home runs over three days is a
+ *  real answer and `0` is not. */
+const round1 = (n: number): number => Math.round(n * 10) / 10;
+
+function battingOf(b: Bucket): BattingLine {
+  const hits = round1(b[BAT.h] ?? 0);
+  const doubles = round1(b[BAT.d2] ?? 0);
+  const triples = round1(b[BAT.d3] ?? 0);
+  const hr = round1(b[BAT.hr] ?? 0);
+  // Derived from the **rounded** components, so the slash line the client
+  // computes off this is the slash line of the numbers it printed.
+  const singles = round1(Math.max(0, hits - doubles - triples - hr));
+  return {
+    pa: round1(b[BAT.pa] ?? 0),
+    ab: round1(b[BAT.ab] ?? 0),
+    hits,
+    singles,
+    doubles,
+    triples,
+    hr,
+    bb: round1(b[BAT.bb] ?? 0),
+    so: round1(b[BAT.k] ?? 0),
+    hbp: round1(b[BAT.hbp] ?? 0),
+    runs: round1(b[BAT.r] ?? 0),
+    rbi: round1(b[BAT.rbi] ?? 0),
+    sb: round1(b[BAT.sb] ?? 0),
+    cs: round1(b[BAT.cs] ?? 0),
+    totalBases: round1(singles + 2 * doubles + 3 * triples + 4 * hr),
+    // Statcast has nothing to say about a game nobody has played, and the
+    // summary table reads none of these — an absence rather than a zero, which
+    // is what every other unmeasured field in this app carries.
+    avgExitVelo: null,
+    maxExitVelo: null,
+    maxDistance: null,
+    hardHits: 0,
+    runValue: null,
+  };
+}
+
+function pitchingOf(b: Bucket): PitchingLine {
+  const walks = round1(b[PIT.bb] ?? 0);
+  const hbp = round1(b[PIT.hbp] ?? 0);
+  const tbf = round1(b[PIT.tbf] ?? 0);
+  return {
+    outs: round1(b[PIT.outs] ?? 0),
+    hits: round1(b[PIT.h] ?? 0),
+    runs: round1(b[PIT.r] ?? 0),
+    earnedRuns: round1(b[PIT.er] ?? 0),
+    walks,
+    strikeouts: round1(b[PIT.k] ?? 0),
+    hr: round1(b[PIT.hr] ?? 0),
+    battersFaced: tbf,
+    // Nothing projects a pitch count, a called strike or a wild pitch, and
+    // nothing on the summary table reads one.
+    pitchesThrown: 0,
+    strikes: 0,
+    balls: 0,
+    doubles: 0,
+    triples: 0,
+    hitBatsmen: hbp,
+    atBats: round1(Math.max(0, tbf - walks - hbp)),
+    intentionalWalks: 0,
+    wildPitches: 0,
+    inheritedRunners: 0,
+    inheritedRunnersScored: 0,
+    wins: round1(b[PIT.w] ?? 0),
+    saves: round1(b[PIT.sv] ?? 0),
+    holds: round1(b[PIT.hd] ?? 0),
+  };
+}
+
+/**
+ * The context is memoized on the matchup's own minute, keyed by the span.
+ *
+ * Everything under it is cached for hours already, so what this saves is the
+ * *assembly* — five map builds and a pass over the league's schedule — on a page
+ * whose date control changes the span a press at a time. A rejected read is
+ * dropped rather than remembered, so a failed board is retried by the next
+ * reader instead of being wrong for a minute.
+ */
+const ctxCache = new Map<string, { at: number; value: Promise<ProjectionContext> }>();
+
+function contextFor(from: string, to: string): Promise<ProjectionContext> {
+  const key = `${from}|${to}`;
+  const hit = ctxCache.get(key);
+  if (hit && Date.now() - hit.at < TTL_MS) return hit.value;
+  const value = buildContext(from, to);
+  ctxCache.set(key, { at: Date.now(), value });
+  value.catch(() => ctxCache.delete(key));
+  return value;
+}
+
+/**
+ * **What a roster is expected to do over a span** — one line per player, over
+ * the games of that span that have not been played.
+ *
+ * It needs **no fantasy league at all**, which is worth stating: every input is
+ * a league-wide board this app already holds, so a reader with a saved roster
+ * and no ESPN connection gets the same answer. What a connected league adds is
+ * only the span the toggle *opens* on (the rest of this matchup period) and the
+ * roster it is asked about.
+ */
+export async function getRosterProjection(
+  players: WatchPlayer[],
+  start: string,
+  end: string,
+): Promise<RosterProjection> {
+  const today = baseballToday();
+  // A day that has been played is not a day anybody projects — and the client
+  // is drawing the report's own lines over those days anyway, so clamping here
+  // is what keeps the two halves from overlapping. **Never past `end`**: a range
+  // wholly in the past would otherwise answer with a span running backwards,
+  // which is a caption nobody can read; it answers with its own last day and
+  // `daysLeft: 0`, which is the honest "there is nothing here to project".
+  const from = start < today ? (today > end ? end : today) : start;
+  const empty: RosterProjection = {
+    start: from,
+    end,
+    daysLeft: 0,
+    players: [],
+    fetchedAt: Date.now(),
+  };
+  if (end < from) return empty;
+
+  const ctx = await contextFor(from, end);
+  if (ctx.daysLeft === 0) return { ...empty, fetchedAt: Date.now() };
+
+  const out: ProjectedPlayerLine[] = [];
+  for (const p of players) {
+    const bucket: Bucket = {};
+    if (p.kind === 'pitcher') {
+      const made = projectOnePitcher(ctx, p.id, bucket);
+      const chances = made.starts + made.reliefGames;
+      out.push({
+        key: `${p.kind}-${p.id}`,
+        id: p.id,
+        kind: p.kind,
+        chances: round1(chances),
+        batting: null,
+        pitching: chances > 0 ? pitchingOf(bucket) : null,
+      });
+    } else {
+      const made = projectOneBatter(ctx, p.id, bucket);
+      out.push({
+        key: `${p.kind}-${p.id}`,
+        id: p.id,
+        kind: p.kind,
+        chances: round1(made.games),
+        batting: made.games > 0 ? battingOf(bucket) : null,
+        pitching: null,
+      });
+    }
+  }
+
+  return {
+    start: from,
+    end,
+    daysLeft: ctx.daysLeft,
+    players: out,
     fetchedAt: Date.now(),
   };
 }

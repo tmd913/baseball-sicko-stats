@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { FantasySlotTag } from './FantasySlot';
 import { ExpandButton } from './ExpandButton';
@@ -17,7 +17,15 @@ import {
 } from './schedule';
 import type { ScheduleIndex } from './schedule';
 import { useEligible, useFullPage } from '../hooks';
-import type { BattingLine, PitchingLine, PlayerGame, PlayerReport } from '../types';
+import { ProjectionKey } from './Projection';
+import type {
+  BattingLine,
+  PitchingLine,
+  PlayerGame,
+  PlayerReport,
+  ProjectedPlayerLine,
+  RosterProjection,
+} from '../types';
 import { playerKey } from '../types';
 import type { Corner, LiveRole } from '../lib';
 import {
@@ -37,6 +45,7 @@ import {
   mostRecentGameFirst,
   pitchingCorner,
   positionCell,
+  prettyDate,
   surname,
   whipOf,
 } from '../lib';
@@ -90,21 +99,40 @@ function OpponentCell({ game }: { game: PlayerGame | null }) {
   );
 }
 
-/** The player's aggregate batting line for the range, shown as one table row. */
-function StatCells({ line }: { line: BattingLine }) {
+/**
+ * The player's aggregate batting line for the range, shown as one table row.
+ *
+ * **`fmt` is how a count is printed**, and it is the whole of what the projected
+ * reading changes about this component: a real count is an integer and a
+ * projected one is a tenth (`projCount`), and a player with nothing to project
+ * and nothing played gets an em-dash rather than a row of noughts. The OPS cell
+ * needs no case of its own — a line with no at-bats has no OPS, so `lineOps`
+ * already answers null for exactly the row that is blank.
+ */
+function StatCells({
+  line,
+  fmt = String,
+  blank = false,
+}: {
+  line: BattingLine;
+  fmt?: (n: number) => string;
+  /** Nothing played and nothing to project, so the leading cell is one dash
+   *  rather than `—/—`. Every other cell falls out of `fmt`. */
+  blank?: boolean;
+}) {
   const ops = lineOps(line);
   return (
     <>
       <td className="sum-num sum-hab">
-        {line.hits}/{line.ab}
+        {blank ? '—' : `${fmt(line.hits)}/${fmt(line.ab)}`}
       </td>
-      <td className="sum-num">{line.runs}</td>
-      <td className="sum-num">{line.hr}</td>
-      <td className="sum-num">{line.rbi}</td>
-      <td className="sum-num">{line.sb}</td>
+      <td className="sum-num">{fmt(line.runs)}</td>
+      <td className="sum-num">{fmt(line.hr)}</td>
+      <td className="sum-num">{fmt(line.rbi)}</td>
+      <td className="sum-num">{fmt(line.sb)}</td>
       <td className="sum-num">{ops !== null ? formatRate(ops) : '—'}</td>
-      <td className="sum-num">{line.bb}</td>
-      <td className="sum-num">{line.so}</td>
+      <td className="sum-num">{fmt(line.bb)}</td>
+      <td className="sum-num">{fmt(line.so)}</td>
     </>
   );
 }
@@ -114,23 +142,36 @@ function StatCells({ line }: { line: BattingLine }) {
  * A win / save / hold count, dashed at zero — these columns are empty for almost
  * every row, and a column of noughts reads as data when it isn't.
  */
-function CreditCell({ n }: { n: number }) {
-  return <td className="sum-num">{n > 0 ? n : '—'}</td>;
+function CreditCell({ n, fmt = String }: { n: number; fmt?: (n: number) => string }) {
+  return <td className="sum-num">{n > 0 ? fmt(n) : '—'}</td>;
 }
 
-function PitchStatCells({ line }: { line: PitchingLine }) {
+function PitchStatCells({
+  line,
+  fmt = String,
+  ip = formatIp,
+}: {
+  line: PitchingLine;
+  fmt?: (n: number) => string;
+  /** How the innings cell is written. `formatIp` is the scorebook's `6.2` — two
+   *  thirds of an inning, not two tenths — and it takes a whole out count, which
+   *  a projection has not got: a projected 17.4 outs is `5.8` innings and
+   *  writing it `5.2` would be a decimal read as a fraction. So the projected
+   *  reading passes its own, and the two never meet. */
+  ip?: (outs: number) => string;
+}) {
   return (
     <>
-      <td className="sum-num sum-hab">{line.outs > 0 ? formatIp(line.outs) : '—'}</td>
-      <td className="sum-num">{line.hits}</td>
-      <td className="sum-num">{line.runs}</td>
-      <td className="sum-num">{line.earnedRuns}</td>
-      <td className="sum-num">{line.walks}</td>
-      <td className="sum-num">{line.strikeouts}</td>
-      <td className="sum-num">{line.hr}</td>
-      <CreditCell n={line.wins} />
-      <CreditCell n={line.saves} />
-      <CreditCell n={line.holds} />
+      <td className="sum-num sum-hab">{line.outs > 0 ? ip(line.outs) : '—'}</td>
+      <td className="sum-num">{fmt(line.hits)}</td>
+      <td className="sum-num">{fmt(line.runs)}</td>
+      <td className="sum-num">{fmt(line.earnedRuns)}</td>
+      <td className="sum-num">{fmt(line.walks)}</td>
+      <td className="sum-num">{fmt(line.strikeouts)}</td>
+      <td className="sum-num">{fmt(line.hr)}</td>
+      <CreditCell n={line.wins} fmt={fmt} />
+      <CreditCell n={line.saves} fmt={fmt} />
+      <CreditCell n={line.holds} fmt={fmt} />
       <td className="sum-num">{eraOf(line)}</td>
       <td className="sum-num">{whipOf(line)}</td>
     </>
@@ -140,6 +181,129 @@ function PitchStatCells({ line }: { line: PitchingLine }) {
 /** A pitcher's combined line across every game he pitched in the range. */
 function aggregatePitching(report: PlayerReport): PitchingLine {
   return combinePitchingLines(report.games.filter((g) => g.pitching).map((g) => g.pitching!.line));
+}
+
+/**
+ * ---------------------------------------------------------------------------
+ * The projected reading
+ * ---------------------------------------------------------------------------
+ *
+ * **A projected row is this table's own row over different numbers**, which is
+ * the whole design and is the scoreboard card's own (`asProjected`): rather than
+ * teaching the table a second set of cells, the *line* is swapped and everything
+ * downstream — the slash line, the ERA, the `Total` — is the arithmetic that was
+ * already there.
+ *
+ * **What is swapped in is `what he has already done` + `what he should still
+ * add`.** The server projects only the games of the range that have not been
+ * played, and the report carries his real lines for the ones that have, so the
+ * two halves are added here. That is what makes an arbitrary range need no case
+ * of its own: a past range projects nothing and reads exactly as it always did,
+ * a future one is projection alone, and a range straddling today is the two.
+ */
+export type ProjectedLines = Map<string, ProjectedPlayerLine>;
+
+/**
+ * How a projected count is printed: to a **tenth**, with a whole number left
+ * whole.
+ *
+ * A tenth because a per-player projection of 0.4 home runs over three days is a
+ * real answer where `0` is not — the matchup card rounds to whole numbers and
+ * can, a side's week being twenty of these added together. Whole numbers stay
+ * whole so a range that is entirely in the past reads identically to the
+ * ordinary table, which is what makes the two halves add up on screen: the
+ * server rounds each projected component to a tenth before it sends it, so what
+ * a reader totals down a column is what was printed in it.
+ */
+function projCount(n: number): string {
+  const r = Math.round(n * 10) / 10;
+  return Number.isInteger(r) ? String(r) : r.toFixed(1);
+}
+
+/** Nothing to say: a club with no game left in the span, a starter whose turn
+ *  does not fall in it, a man neither board has a row for. Dashes rather than a
+ *  line of noughts, which would claim he plays and does nothing. */
+const noCount = (): string => '—';
+
+/** Projected innings — `17.4` outs is `5.8` innings, and deliberately not
+ *  `formatIp`'s `5.2`: that form is thirds, and a projected decimal read as one
+ *  would be off by a factor of five. */
+function projIp(outs: number): string {
+  return (outs / 3).toFixed(1);
+}
+
+function projectedBatting(r: PlayerReport, proj: ProjectedPlayerLine | undefined): BattingLine {
+  const lines = r.games.map((g) => g.line);
+  if (proj?.batting) lines.push(proj.batting);
+  return combineLines(lines);
+}
+
+function projectedPitching(r: PlayerReport, proj: ProjectedPlayerLine | undefined): PitchingLine {
+  const lines = r.games.filter((g) => g.pitching).map((g) => g.pitching!.line);
+  if (proj?.pitching) lines.push(proj.pitching);
+  return combinePitchingLines(lines);
+}
+
+/**
+ * The two stat runs, drawn either way — which is one component per kind rather
+ * than a branch at each of the four call sites (a row and a `Total` per table).
+ *
+ * All the projected reading changes is **how a count is written** and whether a
+ * blank row is dashes: a projected line whose player has neither played nor got
+ * a game left is `pa === 0` (or no outs), which is exactly the row that must
+ * not read as a line of noughts.
+ */
+function ProjectableStatCells({ line, projected }: { line: BattingLine; projected: boolean }) {
+  if (!projected) return <StatCells line={line} />;
+  const blank = line.pa === 0;
+  return <StatCells line={line} fmt={blank ? noCount : projCount} blank={blank} />;
+}
+
+function ProjectablePitchCells({ line, projected }: { line: PitchingLine; projected: boolean }) {
+  if (!projected) return <PitchStatCells line={line} />;
+  // The innings, ERA and WHIP cells already dash themselves at no outs, so the
+  // blank row needs nothing but a count formatter that says so.
+  return (
+    <PitchStatCells line={line} fmt={line.outs === 0 ? noCount : projCount} ip={projIp} />
+  );
+}
+
+/**
+ * The caption over a projected table: what the figures are, which days they
+ * cover, and how much of that is still to be played.
+ *
+ * It is the table's **caption** rather than a control, which is why it sits
+ * directly above the pane and not up in the pinned row with the toggle — the
+ * same place and the same reasoning as the research board's count line and the
+ * Rankings tab's span line. The days matter as much as the dates: a span whose
+ * clubs are all idle projects nothing, and a table of dashes with nothing to
+ * explain it is the one state this must not be in.
+ */
+function ProjectionNote({ p }: { p: RosterProjection }) {
+  const span =
+    p.start === p.end ? prettyDate(p.start) : `${prettyDate(p.start)} – ${prettyDate(p.end)}`;
+  // **With nothing left to play the span is not printed**, and that is the
+  // difference between a caption and a claim: over a range wholly in the past
+  // the figures are the report's own and there is no projected span to name, so
+  // naming one would be the lens taking credit for numbers it did not touch.
+  return (
+    <div className="summary-proj-note">
+      <span className="summary-proj-tag">Projected</span>
+      {p.daysLeft > 0 ? (
+        <>
+          <span className="summary-proj-span">{span}</span>
+          <span className="summary-proj-days">
+            {`${p.daysLeft} ${p.daysLeft === 1 ? 'day' : 'days'} still to play`}
+          </span>
+        </>
+      ) : (
+        <span className="summary-proj-days">
+          nothing to project — every game in these days has been played
+        </span>
+      )}
+      <ProjectionKey days={p.daysLeft} className="summary-proj-key" />
+    </div>
+  );
 }
 
 /**
@@ -477,13 +641,23 @@ function BatterTable({
   handlers,
   expand,
   schedule,
+  projection,
 }: {
   batters: PlayerReport[];
   handlers: RowHandlers;
   expand: Expand;
   schedule: ScheduleIndex | null;
+  /** The projected reading, or null for the ordinary one — the mode is the
+   *  *presence of the map* rather than a flag beside one, which is the rule
+   *  `schedule` already follows and what makes "projected with no projection"
+   *  impossible to draw. */
+  projection: ProjectedLines | null;
 }) {
-  const total = combineLines(batters.flatMap((r) => r.games.map((g) => g.line)));
+  const lineOf = (r: PlayerReport): BattingLine =>
+    projection ? projectedBatting(r, projection.get(playerKey(r))) : combineLines(r.games.map((g) => g.line));
+  const total = projection
+    ? combineLines(batters.map(lineOf))
+    : combineLines(batters.flatMap((r) => r.games.map((g) => g.line)));
   const cols = ['H/AB', 'R', 'HR', 'RBI', 'SB', 'OPS', 'BB', 'K'];
   return (
     <table className="summary-table">
@@ -529,7 +703,7 @@ function BatterTable({
               {schedule ? (
                 <ScheduleCells index={schedule} r={r} />
               ) : (
-                <StatCells line={combineLines(r.games.map((g) => g.line))} />
+                <ProjectableStatCells line={lineOf(r)} projected={projection != null} />
               )}
             </tr>
           );
@@ -546,7 +720,7 @@ function BatterTable({
           ) : (
             <>
               <td className="sum-opp" aria-hidden="true" />
-              <StatCells line={total} />
+              <ProjectableStatCells line={total} projected={projection != null} />
             </>
           )}
         </tr>
@@ -561,15 +735,22 @@ function PitcherTable({
   handlers,
   expand,
   schedule,
+  projection,
 }: {
   pitchers: PlayerReport[];
   handlers: RowHandlers;
   expand: Expand;
   schedule: ScheduleIndex | null;
+  /** See `BatterTable`'s own. */
+  projection: ProjectedLines | null;
 }) {
-  const totalLine = combinePitchingLines(
-    pitchers.flatMap((r) => r.games.filter((g) => g.pitching).map((g) => g.pitching!.line)),
-  );
+  const lineOf = (r: PlayerReport): PitchingLine =>
+    projection ? projectedPitching(r, projection.get(playerKey(r))) : aggregatePitching(r);
+  const totalLine = projection
+    ? combinePitchingLines(pitchers.map(lineOf))
+    : combinePitchingLines(
+        pitchers.flatMap((r) => r.games.filter((g) => g.pitching).map((g) => g.pitching!.line)),
+      );
   const cols = ['IP', 'H', 'R', 'ER', 'BB', 'K', 'HR', 'W', 'SV', 'HLD', 'ERA', 'WHIP'];
   return (
     <table className="summary-table summary-table-pitchers">
@@ -615,7 +796,7 @@ function PitcherTable({
               {schedule ? (
                 <ScheduleCells index={schedule} r={r} />
               ) : (
-                <PitchStatCells line={aggregatePitching(r)} />
+                <ProjectablePitchCells line={lineOf(r)} projected={projection != null} />
               )}
             </tr>
           );
@@ -632,7 +813,7 @@ function PitcherTable({
           ) : (
             <>
               <td className="sum-opp" aria-hidden="true" />
-              <PitchStatCells line={totalLine} />
+              <ProjectablePitchCells line={totalLine} projected={projection != null} />
             </>
           )}
         </tr>
@@ -715,6 +896,7 @@ export function SummaryTable({
   onOpenDetails,
   chrome,
   schedule,
+  projection,
 }: {
   reports: PlayerReport[];
   /** The headshot and the name both open the player's page — the one that leads
@@ -730,12 +912,36 @@ export function SummaryTable({
    * in it.
    */
   schedule?: ScheduleIndex | null;
+  /**
+   * The projected reading: what these players are expected to do over the days
+   * in view that have not been played, added to what they have already done.
+   *
+   * **The whole `RosterProjection` rather than the map it is reduced to**,
+   * because the caption above the table is drawn from the rest of it — the span
+   * actually projected, and how many days of it still have a game. Null is the
+   * ordinary table, so the mode is again the *presence of the answer* rather
+   * than a flag beside one: App hands this down only once the read has landed,
+   * and until then the table goes on drawing what it has, which is rule 1 of
+   * the app's loading system.
+   *
+   * It is **exclusive with `schedule`** — that one replaces the stat columns
+   * and this one replaces the figures in them, so they cannot both be a
+   * reading of the same cells. App turns one off when the other goes on, and
+   * this component draws the schedule where it is given both.
+   */
+  projection?: RosterProjection | null;
   /** What to keep from the app's own chrome once the table has the page: the
    *  kind tabs and the date control, handed down as nodes because App owns both
    *  the state behind them and the markup. Rendered only while expanded. */
   chrome?: ReactNode;
 }) {
   const handlers = { onOpenDetails };
+  // Keyed by the app's own `${kind}-${id}`, so a two-way player's bat and his
+  // arm carry their own projections exactly as they carry their own rows.
+  const projLines = useMemo<ProjectedLines | null>(
+    () => (projection ? new Map(projection.players.map((p) => [p.key, p])) : null),
+    [projection],
+  );
   const batters = reports.filter((r) => r.kind !== 'pitcher');
   const pitchers = reports.filter((r) => r.kind === 'pitcher');
   const { isFull, toggle, ref: fullRef } = useFullPage<HTMLDivElement>();
@@ -751,6 +957,10 @@ export function SummaryTable({
           decoration, they are what the numbers *are*, and both are controls you
           reach for while reading. They come along; nothing else does. */}
       {isFull && chrome && <div className="expanded-chrome">{chrome}</div>}
+      {/* The table's caption, directly above the pane — see `ProjectionNote`.
+          Not drawn in schedule mode, where the columns are days rather than
+          figures and there is nothing for it to be a caption to. */}
+      {projection && !schedule && <ProjectionNote p={projection} />}
       <div className="summary-scroll">
         {/* The tables sit in one max-content flex column so the narrower of the
             two stretches to the other's width — otherwise the batter table (fewer
@@ -762,6 +972,7 @@ export function SummaryTable({
               handlers={handlers}
               expand={expand}
               schedule={schedule ?? null}
+              projection={schedule ? null : projLines}
             />
           )}
           {pitchers.length > 0 && (
@@ -770,6 +981,7 @@ export function SummaryTable({
               handlers={handlers}
               expand={expand}
               schedule={schedule ?? null}
+              projection={schedule ? null : projLines}
             />
           )}
         </div>

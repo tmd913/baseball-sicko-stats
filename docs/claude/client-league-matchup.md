@@ -421,31 +421,56 @@ nothing about the components moved: this is `styles.css` alone.
 ### The Projected toggle
 
 **The Summary's figures are where the week has got to, and one press swaps them
-for where it is heading** — the same control the Scoreboard carries, drawn at the
-foot of the comparison it swaps. Why this page did not have one, and why each of the three
-arguments against it is answered rather than waved away, is in **Client — the
-League view**, *The matchup page follows now*; where the projection itself comes
-from is **ESPN fantasy league**, *Where a live matchup is heading*. What is this
-page's own is set out here.
+for where it is heading** — and this is the **one place in the app** that does
+it. The control was the Scoreboard's and was then drawn in both; it is here
+alone now, because with the button off that head a lens carried back to the
+board would be ten dashed cards with nothing on screen to turn them off. The
+whole of that argument, and what the board gave up, is in **Client — the League
+view**, *The Projected toggle is the matchup page's, not this board's*; where
+the projection itself comes from is **ESPN fantasy league**, *Where a live
+matchup is heading*.
 
-**It is `ProjectedTools` and `asProjected`, both the Scoreboard's** — one button
-and one swap drawn in two places, rather than two that agree today. The card's
+**It is `ProjectedTools` and `asProjected`, both of which the Scoreboard still
+owns the code for** — the button and the swap live in `LeagueView` and are drawn
+from here, so the file that holds the card's own arithmetic holds the lens over
+it too. The card's
 whole job is to set two sides against each other across the categories and mark
 the winner, and that arithmetic is identical whether the figures are what has
 happened or what is going to, so the **data** is swapped and every line below it
 is code that was already checked: the rows, the bars, the group tallies, the
 meter and the leading name are untouched.
 
-**Three things say it is a projection**, which is this app's standing rule that an
+**Four things say it is a projection**, which is this app's standing rule that an
 estimate never wears the same clothes as a measurement. The head's tag reads
 **`Projected`** in the accent where it read `Live` — *replacing* it rather than
 joining it, since the tag says what the figures **are** and two of them would be
 the page claiming to be both. The dates beside it run to the **end of the period**
 (`projection.end`) where `board.end` truncates at today, which is right for
 figures that are what has happened and a lie over figures that reach the end of
-the week. And the card takes a **dashed border** (`.mup-proj`), which is the
-scoreboard card's own mark at the same size and for its reason: every figure on it
-is projected, so marking each cell would be the same claim made twenty times.
+the week. The card takes a **dashed border** (`.mup-proj`), at the size of the
+whole card rather than per cell: every figure on it is projected, so marking each
+one would be the same claim made twenty times.
+
+**And every bar on it is hatched**, which is the fourth and is the one a reader
+actually meets. The border marks the *card*; the bars are what the card is **read
+with** — the whole-matchup meter at the top and the ten category fills under it
+are the picture a manager takes the week from, and a solid one says *this is the
+measurement* in exactly the register a projection must not use. So the same
+class carries both marks, and the hatch is `.spl-fill--thin`'s own 115° at 3px
+on and 4px off, which is this app's mark for an estimate everywhere it appears
+(the percentile card's dotted bubble, the Splits card's hatched fill, the
+Schedule grid's dashed chip) — a broken mark means one thing across the app.
+
+**The color of each stripe is the color the bar already had**, so nothing about
+*which side is ahead* changes: green marks the winner, the trailing run of the
+meter stays `--faint` and its ties dimmer again. Only the texture says these are
+figures nobody has played yet. Two ordering notes are in the stylesheet beside
+the rules and are load-bearing — the three meter selectors are two classes deep
+and so beat `.mup-meter-lead`'s own one-class `background`, which is why the
+`--seg` rule is written *before* the `--lead` one (a leader that lost the tie
+would be painted `--faint`); and the fill's `min-width: 2px` sliver stays solid
+whatever the stripe does, the gradient starting on its 3px of ink, so a
+near-dead-level category is still a mark rather than a gap.
 
 **Above `Moves`, at the foot of the categories — not in the head.** It sat at the
 far end of the Back row, beside the `Projected` tag it lights, which is the
@@ -538,12 +563,20 @@ toggle and pressing it back:
 | head tag | `Live` (`lg-state-live`) | **`Projected`** (`lg-state-proj`) |
 | dates | Aug 10 – Aug 18 | **Aug 10 – Aug 23** |
 | card | `mup-card`, `border-style: solid` | **`mup-card mup-proj`, dashed** |
+| a category fill's `background-image` | `none` | **`repeating-linear-gradient(115deg, …)`** in `--win` |
+| the meter's leading run | `none` | **the same gradient in `--win`** |
 | `R` | 35 – 27 | **63 – 57** |
 | `HR` | 13 – 2 | **24 – 11** |
 | URL | *(no `proj`)* | **`proj=1`** |
 | the button's own box | 111.5 × 36, centered above `Moves` | **unchanged** |
 
-and pressing it back gives the live column byte for byte.
+and pressing it back gives the live column byte for byte — `border-style: solid`
+and `background-image: none` on both bars, checked on a card opened with no
+`proj=1` at all.
+
+**And the board behind it stays live**, which is the check the scoping is for:
+`?view=league&proj=1` with no `mup=` draws **0 toggles, `Live`, 0 dashed cards**
+and drops the param from the URL.
 
 **The four gates were driven rather than reasoned about**, each scoped to the page
 rather than to the document — the League view *behind* the overlay draws its own
