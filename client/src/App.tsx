@@ -614,8 +614,9 @@ export default function App() {
    *
    * Still **two pieces of state** for one control, and deliberately: `New` is in
    * the URL under its own name, it is what the red `N new plays` button turns
-   * on, and turning it *off* is what marks the stream read — none of which a
-   * seventh member of the key union could express. The row derives which pill is
+   * on, and turning it *off* is what marks the stream read (as does `Clear`
+   * beside that button, which marks them without turning anything on) — none of
+   * which a seventh member of the key union could express. The row derives which pill is
    * lit from the pair (`feedLens`) and every press sets both (`selectFeedLens`),
    * so the two can never both be in force.
    *
@@ -3807,7 +3808,9 @@ export default function App() {
 
   /**
    * **Turning `New` off is what says "done with those"**, so it is what marks the
-   * stream read; turning it on marks nothing.
+   * stream read; turning it on marks nothing. It is no longer the only press
+   * that reaches the marker — `Clear` beside the red button says the same thing
+   * without the excursion, and reaches it through the same `markPlaysSeen`.
    *
    * The marker has to be **frozen while the filter is on** or the view empties
    * itself the moment it is drawn — the filter narrows to plays newer than the
@@ -3851,6 +3854,29 @@ export default function App() {
   const showAllPlays = useCallback(() => {
     setFeedNewOnly(false);
   }, [setFeedNewOnly]);
+
+  /**
+   * **`Clear`** — the press beside the red button that marks those plays read
+   * *in place*, without the excursion into the mode and back out of it.
+   *
+   * **The same watermark call the way out makes**, rather than a second way to
+   * clear: both land on `markPlaysSeen(newestPlayTs)`, which is the only thing
+   * in this file that moves the marker or writes it. Wired to `markPlaysSeen`
+   * rather than to `showAllPlays` — which would work today, the mode being
+   * already off wherever the button is drawn — because that one is *leaving a
+   * mode*, and a scroll or a URL edit added to it later is a thing a caller
+   * that was never in the mode would silently inherit.
+   *
+   * **It touches neither the mode nor the URL**, and the second half is the
+   * point: `newplays=1` says *which stream this view is showing* and belongs to
+   * the link, where "I have seen these" is a fact about the person and belongs
+   * to their record (`UserPrefs.seenPlays`, above). So the press writes to the
+   * record and leaves the query string exactly as it found it — a reader who
+   * clears and then shares the page shares the page they are looking at.
+   */
+  const clearNewPlays = useCallback(() => {
+    markPlaysSeen(newestPlayTs);
+  }, [markPlaysSeen, newestPlayTs]);
 
   /**
    * **Which pill is lit** — one, always, and it is the *kind* axis alone now.
@@ -5574,6 +5600,7 @@ export default function App() {
             newCount={feedIsBatters ? newPlayCount : undefined}
             onShowNew={feedIsBatters ? showNewPlays : undefined}
             onShowAll={feedIsBatters ? showAllPlays : undefined}
+            onClearNew={feedIsBatters ? clearNewPlays : undefined}
           />
           </>
         )

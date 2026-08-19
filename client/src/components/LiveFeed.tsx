@@ -1241,6 +1241,7 @@ export function LiveFeed({
   newCount = 0,
   onShowNew,
   onShowAll,
+  onClearNew,
 }: {
   reports: PlayerReport[];
   // Which kind the tabs above are showing — the stream is one kind at a time,
@@ -1257,7 +1258,7 @@ export function LiveFeed({
    * Which kind of play the stream is narrowed to — null is all of them. See
    * `FeedFilters.tsx`, which owns the row of pills that sets it.
    *
-   * **All five of these are optional, and the second caller passes none of
+   * **All six of these are optional, and the second caller passes none of
    * them.** A matchup team page draws this same component for a leaguemate's
    * week (`LeagueTeam.tsx`), and neither half of the feature belongs to it: the
    * marker is a fact about how far down *the reader's own* stream they have got,
@@ -1293,10 +1294,23 @@ export function LiveFeed({
   /**
    * Leave new-plays mode — every play of the day again. App turns the mode off,
    * **which is what marks the stream read** (its `setFeedNewOnly`), so this is
-   * the press that says "done with those" and the only one that does. It is
-   * drawn twice, at the two ends of the list; see the section below.
+   * the press that says "done with those" from *inside* the mode. It is drawn
+   * twice, at the two ends of the list; see the section below.
    */
   onShowAll?: () => void;
+  /**
+   * **Mark those plays read without going and looking at them** — the `Clear`
+   * beside the red count button.
+   *
+   * The same watermark and the same write as `onShowAll`: App points both at
+   * `markPlaysSeen(newestPlayTs)`, so there is one definition of *seen* and one
+   * route to the record. What it does not touch is the mode, which is already
+   * off wherever this button is drawn (`showNewButton` below), or the URL,
+   * which never carried the marker in the first place — "these plays are seen"
+   * is a fact about the *person*, saved as `UserPrefs.seenPlays`, where
+   * `newplays=1` is a fact about which stream the view is showing.
+   */
+  onClearNew?: () => void;
 }) {
   // How much of the Recent section is on screen, grown a page at a time by the
   // "Load more" button. Deliberately not in the URL — it's a reading position,
@@ -1512,15 +1526,53 @@ export function LiveFeed({
               not looking at. Here they are looking at it, so the mark carries
               its own count and is the way to the plays it counts. */}
           {showNewButton && onShowNew && (
-            <button
-              type="button"
-              className="feed-new"
-              onClick={onShowNew}
-              title={`${newCount} ${newCount === 1 ? 'play' : 'plays'} since you last marked the feed read — show them`}
-            >
-              <span className="feed-new-dot" aria-hidden="true" />
-              {newCount} new {newCount === 1 ? 'play' : 'plays'}
-            </button>
+            /* Two presses in one slot, because the news admits two answers and
+               only one of them was reachable: *show me* and *I don't need to
+               look*. The second used to cost a trip into the mode and back out
+               of it, since leaving the mode was the only thing that moved the
+               marker — a reader who could see from the count that it was three
+               groundouts had to open them to make them stop being new.
+
+               **`Clear` does not touch the mode**, which is already off
+               wherever this row is drawn, and does not touch the URL, which
+               never carried the marker: it calls the same
+               `markPlaysSeen(newestPlayTs)` that leaving the mode calls. One
+               definition of seen, two doors to it.
+
+               **Both go together, and neither is ever disabled.** They are
+               inside one gate (`showNewButton`), so the instant the count is
+               nought the row is absent rather than sitting there greyed —
+               *a mark that would be on every row marks nothing*, and a `Clear`
+               with nothing to clear is that mark. The vanishing is also the
+               press's own trace, which is why there is no `MIN_SPIN` mark on
+               it: the state it changes is local and immediate, and the write
+               behind it is queued and swallowed, so there is no wait to stand
+               in front of. */
+            <div className="feed-new-row">
+              <button
+                type="button"
+                className="feed-new"
+                onClick={onShowNew}
+                title={`${newCount} ${newCount === 1 ? 'play' : 'plays'} since you last marked the feed read — show them`}
+              >
+                <span className="feed-new-dot" aria-hidden="true" />
+                {newCount} new {newCount === 1 ? 'play' : 'plays'}
+              </button>
+              {onClearNew && (
+                /* `Clear` alone is a word without an object once the count is
+                   read out of the sentence beside it, so the accessible name
+                   carries the count the way the visible pair does. */
+                <button
+                  type="button"
+                  className="feed-clear-new"
+                  onClick={onClearNew}
+                  aria-label={`Mark ${newCount} new ${newCount === 1 ? 'play' : 'plays'} read`}
+                  title="Mark them read where they are — the count goes and the stream stays as it is"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
           )}
           {backToAll('head')}
           {/* The reels for today's games, still out — see `filmTest`. A line
