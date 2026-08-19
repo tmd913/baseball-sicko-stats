@@ -1852,9 +1852,12 @@ body {
    gives up the box: text alone, in the `--faint` the sub-line version already
    takes, which puts it a step behind the position for the same reason it is a
    step behind it there — where he plays is actionable and which hand he does it
-   with is a standing fact about the man. It sits on `.details-name`, a wrapping
-   flex line, so the heading gives way at a width rather than overflowing; at
-   390 it is still one line on every name checked. */
+   with is a standing fact about the man. On the player page it sits on
+   `.details-sub`, the line under the name (it was on `.details-name` itself
+   until that line existed); in the game log's own head it is still inline beside
+   the name, which is why the left margin stays here rather than moving to a
+   gap. Both are wrapping flex lines, so the pair gives way at a width rather
+   than overflowing. */
 .player-hand {
   margin-left: 7px;
   vertical-align: middle;
@@ -4035,6 +4038,40 @@ body {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
+}
+/* Where he plays and which way he does it, on the line under the name and
+   directly above the Rostered figure — the roster row's own `.row-id-sub` shape
+   one page along, and the same three facts in the same order minus the club
+   mark the head's photo has already said.
+
+   A flex row rather than inline flow, for the reason `.details-name` is one:
+   `.player-pos` is a padded, bordered box, and inline layout does not count a
+   box's padding into the line it sits on, so the chip would print outside its
+   own line and the Rostered caption would ride up under it. The 7px gap is the
+   spacing the two tokens already had beside each other on the heading; their
+   own left margins are dropped here because the line begins with them and a
+   9px indent under a flush name reads as a mistake. Both margins stay on the
+   classes themselves — the game log's head still draws the pair inline beside a
+   name, and that one wants them. */
+.details-sub {
+  margin: 5px 0 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px 7px;
+}
+.details-sub .player-pos,
+.details-sub .player-hand {
+  margin-left: 0;
+}
+/* Neither token to draw — a man MLB lists no position for, or the moment before
+   the handedness map lands. The line still holds its box: `visibility: hidden`
+   on a real chip, so what is reserved is exactly what a chip measures in
+   whatever font the platform hands us, rather than a height this file guesses
+   at. This head is pinned chrome, and a line that appears a beat after the page
+   does pushes everything under the reader's finger. */
+.details-sub-ghost {
+  visibility: hidden;
 }
 .details-savant-link {
   display: inline-block;
