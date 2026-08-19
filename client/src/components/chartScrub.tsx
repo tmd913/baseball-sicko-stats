@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 
 /**
  * **The scrub — dragging across a chart to read the point under the finger —
@@ -92,7 +92,36 @@ export function ScrubCross({ x, top, bottom }: { x: number; top: number; bottom:
  * -140%)` in the stylesheet), so a chart anchoring on a plotted point puts the
  * readout above that point and one with two series anchors on the higher of
  * them.
+ *
+ * **Centered on the anchor until centering would put it off the screen**, which
+ * near the ends of a plot it does: the box is half its own width wider than the
+ * point it names, and the last point of both charts sits close enough to the
+ * right edge of a phone's window that the half hangs past it. Measured at the
+ * last plate appearance of the rolling chart, `.364 / PA 256 · 5/31` — a box
+ * **92.9px wide** — ran to `x = 395.4` in a **390** window and to `325.4` in a
+ * **320** one, 5.4px off the screen in both, with the whole of the second line's
+ * date beyond the edge. So the box is nudged back in, and the nudge is a
+ * **measurement rather than a constant**: its width is its own text's, which is
+ * a font this app does not choose, so it is read off the rendered box every move
+ * (`--chart-tip-nudge`, the rule `--roll-font` and `--clip-w` already follow).
+ *
+ * **It is clamped to the window and not to the chart**, which is the choice
+ * worth stating. Clamping into the wrap would have moved that same box
+ * **34.4px** — it hangs that far past the svg's own right edge at 390 — where
+ * the fault is 5.4px, and every pixel of that is the readout walking away from
+ * the point it names. The constraint that binds a box floating over the page is
+ * the edge of the screen; the plot's edge is not an edge at all, the chart wrap
+ * having 29px of card either side of it there. `TIP_GUTTER` keeps the border and
+ * its shadow off the glass rather than flush against it.
+ *
+ * The nudge is computed from the anchor and the width rather than from the box's
+ * own `getBoundingClientRect().left`, so it does not read back a position it
+ * itself moved: run twice on the same anchor it gives the same answer.
  */
+
+/** How close the readout may come to the edge of the window, in px. */
+const TIP_GUTTER = 4;
+
 export function ScrubTip({
   x,
   y,
@@ -106,8 +135,33 @@ export function ScrubTip({
   vbh: number;
   children: React.ReactNode;
 }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  // Every move, before the paint that would show the box outside the window —
+  // the text changes with the point, so its width is not a value that can be
+  // measured once and kept.
+  useLayoutEffect(() => {
+    const el = ref.current;
+    const par = el?.offsetParent as HTMLElement | null;
+    if (!el || !par) return;
+    const box = par.getBoundingClientRect();
+    // `left` is a percentage of the padding box, which is where `clientLeft`
+    // and `clientWidth` measure from.
+    const anchor = box.left + par.clientLeft + (x / vbw) * par.clientWidth;
+    const half = el.getBoundingClientRect().width / 2;
+    const vw = document.documentElement.clientWidth;
+    let nudge = 0;
+    if (anchor + half > vw - TIP_GUTTER) nudge = vw - TIP_GUTTER - (anchor + half);
+    // The left edge wins where both overflow, so a box wider than the window
+    // starts at the left of it rather than being pushed off the other side.
+    if (anchor - half + nudge < TIP_GUTTER) nudge = TIP_GUTTER - (anchor - half);
+    el.style.setProperty('--chart-tip-nudge', `${nudge.toFixed(2)}px`);
+  });
   return (
-    <div className="chart-tip" style={{ left: `${(x / vbw) * 100}%`, top: `${(y / vbh) * 100}%` }}>
+    <div
+      ref={ref}
+      className="chart-tip"
+      style={{ left: `${(x / vbw) * 100}%`, top: `${(y / vbh) * 100}%` }}
+    >
       {children}
     </div>
   );

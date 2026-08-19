@@ -5301,9 +5301,16 @@ button.start-line:focus-visible {
   stroke: var(--panel);
   stroke-width: 2;
 }
+/* **The box centers on its point, and `--chart-tip-nudge` is what buys it back
+   onto the screen.** `chartScrub.tsx` publishes the var on the element from a
+   layout effect and carries the whole argument: half a 92.9px readout is wider
+   than the last point of either plot is from the right edge of a phone's window,
+   so centered it ran 5.4px off the glass at 390 and at 320. The nudge is
+   measured rather than declared because the width it corrects is the width of
+   its own text. Zero by default, which is the box unmoved. */
 .chart-tip {
   position: absolute;
-  transform: translate(-50%, -140%);
+  transform: translate(calc(-50% + var(--chart-tip-nudge, 0px)), -140%);
   pointer-events: none;
   display: flex;
   flex-direction: column;
