@@ -13985,6 +13985,42 @@ span.mup-move-name:hover {
     inset 0 -1px 0 var(--border),
     var(--shadow-bar);
 }
+/* **The dates bar is the band's next line, not the content after it.**
+   `.mup-chrome` ends 12px under its tools row (the padding above, which is
+   load-bearing — it is what keeps the band's hairline off the pills) and then
+   holds 16px clear of whatever follows. That 16 is a gap to *content*, and it
+   is right for the Summary page's card; the dates bar is not content. It is the
+   same object the Roster view carries **inside** `.app-chrome`, one line under
+   the view bar, and there the gap is **14**.
+
+   Measured before this rule, at 1200: the app's bar sits 14px under
+   `.view-bar` (100 → 114) and this one sat **28** under `.mup-tools`
+   (150 → 178) — double, and the thing that still read as too much spacing after
+   the bar itself had been folded onto the roster's rules and measured identical
+   to it in every other respect (53px tall, 7px padding, a 39px row, 36px
+   arrows, the table 1px below).
+
+   **The earlier pass looked at the margin and not the gap.** It recorded "16
+   against the roster bar's 14 — two pixels" and left it alone, which is true of
+   `margin-bottom` on its own and misses the 12px of padding above it inside the
+   same box. Two pixels was worth leaving; fourteen was not.
+
+   `:has()` rather than a class, because nothing about the chrome changes — what
+   changes is what follows it, which is exactly what the selector says. */
+.mup-chrome:has(+ .mup-dates) {
+  margin-bottom: 2px;
+}
+/* And 12 on a phone, which is what the Roster view's own gap measures there
+   (14 at 1200 and 900, 12 at 390 — the view bar's narrow rhythm). Two pixels,
+   but the whole point of this rule is that the two bars are one object, and a
+   number that matches at three widths and not the fourth is a number somebody
+   will re-derive. After the base rule it overrides, per the file's standing
+   rule about media queries and specificity. */
+@media (max-width: 640px) {
+  .mup-chrome:has(+ .mup-dates) {
+    margin-bottom: 0;
+  }
+}
 .mup-bar {
   display: flex;
   align-items: center;

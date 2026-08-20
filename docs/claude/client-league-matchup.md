@@ -1497,6 +1497,40 @@ already follows for a half with no matchup period in it.
 
 **`Summary` is the second thing on this page to wear the word**, the strip above having a `Summary` tab, which is the *comparison page* rather than a reading of a team. They are one press apart and both are `.view-switch` pills. What tells them apart is that the strip is *whose page* and this is *what about him*, and their titles say so; the alternative was a second word for one idea, which is worse — a manager reading his own week wants the summary of it, and a synonym invented to protect a layout is the app lying about what a control is. Flagged here rather than hidden, because it is the one part of this that a reader could trip on.
 
+#### The dates bar is the band's next line, not the content after it
+
+**The bar was folded onto the roster's rules and still read as too much
+spacing**, and the reason is that the fold was of the bar and not of the space
+around it. Measured at 1200, every property of the two bars agrees — 53px tall
+against 54, 7px padding either side, a 39px row, a 39px face at 13.33px, 36×36
+arrows, the table 1px below — and the gap *above* them did not: **14 on the
+Roster view, 28 here**.
+
+`.mup-chrome` ends 12px under its tools row and then holds 16px clear of what
+follows. The 12 is load-bearing — it is what keeps the band's inset hairline off
+the pills, and the rule above says why it has to be padding rather than a margin
+— so the 16 is what gives. It is a gap to *content*, which is right for the
+Summary page's card and wrong for this: the dates bar is the same object the
+Roster view carries **inside** `.app-chrome`, one line under the view bar.
+
+`.mup-chrome:has(+ .mup-dates) { margin-bottom: 2px }`, and `0` under 640.
+`:has()` rather than a class because nothing about the chrome changes — what
+changes is what follows it, which is what the selector says.
+
+**Measured, gap above the bar:**
+
+| window | Roster view | matchup (before) | matchup (after) |
+| --- | --- | --- | --- |
+| 1200 | 14 | 28 | **14** |
+| 900 | 14 | 28 | **14** |
+| 390 | 12 | 28 | **12** |
+
+The phone case is two pixels and is taken anyway: the point of the rule is that
+the two bars are one object, and a number that matches at three widths and not
+the fourth is a number somebody will re-derive. The gap *below* is 1 on both at
+every width, and the comparison page's card still clears the chrome by its own
+16 — the `:has()` does not reach it.
+
 #### `Summary` left the pill strip, and the row came back onto one line
 
 **It was never a third pill.** The strip's other two say *what kind of thing
@@ -1590,7 +1624,7 @@ through 641, 84 on all three at 500 through 360, 132 on all three at 320.
 
 **The app draws this same bar last in `.app-chrome`, whose `padding-bottom` is 0, so the table starts where the bar ends.** Measured at 1400 on the Roster view: the bar runs to y=**168** and the table head begins at y=**169**. `.mup-dates` carried a 12px bottom margin and the same two boxes measured **231** and **244** — the one control the two surfaces share, spending twelve pixels more on one of them than on the other, which is what "the matchup version has too much spacing" turns out to be when it is measured. Folded onto the roster's rule rather than given a smaller number of its own, because the number is *what the box below has to give* and here as there that is nothing: after, the table head is at **232** at 1400, **280** at 390 and **359** at 320, one pixel under the bar in each — and the bar itself is unmoved at 178 / 226 / 305. The Feed reading is unaffected, its first card keeping the 16px `.feed-filters` puts above itself.
 
-The gap *above* the bar is the band's own 16px margin and is left alone: it is `.mup-chrome`'s, shared with the Summary page's card, and it is 16 against the roster bar's 14 — two pixels, against the twelve below.
+The gap *above* the bar was left alone here on the reasoning that it is `.mup-chrome`'s own 16px margin, shared with the Summary page's card, and 16 against the roster bar's 14 — two pixels. **That was measured wrong and has since been fixed** (see *The dates bar is the band's next line* below): 16 is the margin, but `.mup-chrome` also carries 12px of bottom padding inside the same box, so the gap a reader actually sees was **28** against the roster bar's 14. Two pixels was worth leaving; fourteen was the thing that still read as too much spacing after the bar itself had been folded onto the roster's rules.
 
 ### A settled matchup opens on its own days
 
