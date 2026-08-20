@@ -583,6 +583,11 @@ and the two rules it needed are still gone. The trade is deliberate: 48px of a
 phone once, against a scroll back up the stream every time the reader wants the
 day turned round.
 
+**And the same move again on the new-plays page**, which was the one surface
+left drawing the pills in its chrome and now draws them in its page with
+`Oldest first` in its pinned head — see *The new-plays page splits its two
+controls the way every other surface does*.
+
 **The same move on the matchup page's team feed** (`LeagueTeam.tsx`), and it is
 the same argument in that page's own terms: the toggle joins `mup-tools` beside
 the other two *which reading of it* controls (`Schedule`, `Projected`), on the
@@ -649,6 +654,14 @@ the view. The kind group goes on scrolling inside it rather than wrapping: **353
 of content in 353 at 1200, 256 at 390 and 186 at 320**, with `Oldest first` outside
 the scrollport at x=906 / 280 / 210.
 
+**Both paragraphs above are the navbar that carried the pills, and it does not
+any more.** The filters are in the page at the head of the list and only the
+order is still pinned, which takes the box to 66px at 1400 and 390 — see *The
+new-plays page splits its two controls the way every other surface does* below,
+which carries the new figures and the argument. The rest of what is written here
+— the range line, the layer, the two ways out, the inert background — is
+untouched.
+
 **A press cannot get behind it, and the clips behind it stop painting.** With the
 page open `[inert]` is `#root` and a `SCRIPT`; all five sample points (four
 corners and the center) hit inside `.newplays-view`; two real dispatched presses
@@ -698,6 +711,198 @@ branches are gone from it.
 **It pages on its own**, seeded at `FEED_PAGE_SIZE` and reported nowhere: the page
 is opened, read and left, where the feed's own depth has to survive a view switch.
 Measured on 28 new plays: **10 on open, `Load more 18`, 20 after one press.**
+
+### The new-plays page splits its two controls the way every other surface does
+
+**Its navbar carried both and now carries one.** *What the navbar carries*
+above lists "the back button, the filters, the order toggle, and the window the
+plays cover", all of it pinned — which was the one place left in the app where
+the kind pills lived in the chrome rather than in the page. Two sections earlier
+this file argues at length that they should not: *Where the controls sit* puts
+them at the head of the stream they narrow, *The order toggle went to the
+navbar, and the pills did not* separates the two controls by the test a pinned
+bar applies, and `LeagueTeam.tsx` makes the same move a third time on the
+matchup's team feed. The page was the exception because its row was read as *two
+controls with nowhere else to go*. They have somewhere else to go: its own page,
+and its own head.
+
+**So the pills are in the page at the head of the list, and `Oldest first` is in
+the pinned head beside `Back`.** Nothing in the argument is new — a kind is
+picked on arrival, an order is wanted halfway down a list — and the head is this
+page's tab row, the bar that is always on screen. The toggle rides on a row that
+was already there, so what the move costs is nothing and what it buys is a whole
+row of pinned chrome.
+
+**Geometry, driven at 1400 / 390 / 320 on the live roster with 51 new plays**,
+before → after. `.newplays-chrome` is the box, and is what `--details-chrome-h`
+is measured from:
+
+| | 1400 | 390 | 320 |
+| --- | --- | --- | --- |
+| navbar height | 112 → **66** | 112 → **66** | 112 → **114** |
+| `--details-chrome-h` | 112 → **66** | 112 → **66** | 112 → **114** |
+| the head inside it | 46 → 46 | 46 → 46 | 46 → **94**, two rows |
+| the pill row's top | 78 (chrome) → **82 (page)** | 78 → **82** | 78 → **130** |
+| navbar → pills | 16 → **16** | 16 → **16** | 16 → **16** |
+| pills → first item | 16 → **16** | 12 → **12** | 12 → **12** |
+| horizontal overflow | none → none | none → none | none → none |
+
+Neither gap is a new rhythm: the 16 is `.details-chrome`'s own bottom margin
+collapsing with `.feed-filters`' 16px top one, and the 12 under 640px is
+`--stack-gap`, which the narrow block already hands `.live-feed` and
+`.feed-filters` together. Nothing in the page had to be told the pills had
+arrived, and the rule the head used to carry — *no top margin, and the 16px
+bottom one `.details-chrome` takes from its last child* — went with them:
+`.newplays-head` carries it now, its `margin-bottom` going 12 → 16.
+
+**46px of pinned chrome given back at 1400 and 390, and two pixels spent at
+320.** There the head wraps — `Back`, the name and a 99px `Oldest first` come to
+399px of content on a 288px line — so the navbar is 114 where it was 112,
+against a pill row that was 46 of those 112 and now scrolls away with the
+stream. **The row gap for that wrap is declared as 12px on `.newplays-head`**
+rather than left at `.details-head`'s 20: measured, 20 makes the navbar **122**
+and 12 makes it **114**, and 12 is the gap this head had to the pill row while
+the pills were up here. `--details-chrome-h` follows the wrap by itself, which
+is the whole reason it is measured rather than declared.
+
+**The kinds stopped scrolling at 390**, which the move bought without being the
+point of it: the row is the kind group alone now, so the group gets the whole
+column. Content against port: **353 in 256 → 353 in 353 at 390**, and 353 in 186
+→ **353 in 288 at 320**, where it still scrolls and always did.
+
+**`compact` went with the row it existed for.** `FeedOrderToggle` took a flag
+that made it 30px tall for exactly one caller — the navbar row where it stood
+shoulder to shoulder with the pills — and beside `Back` it is the same
+`--control-h` box the tab row draws: measured **99 × 36 at 1400, 390 and 320**,
+lit and unlit. `FeedFilterPills`' `order` prop went with it, and so did
+`.feed-filters .feed-order`'s `margin-left: auto`. A prop with no caller is a
+prop nobody misses.
+
+**The pills are drawn on a guard that is the empty state's own two branches read
+off one condition** — `entries.length > 0 || playFilter !== null`. With a lens in
+force the row is what emptied the page and the sentence under it points at the
+row; with no lens and nothing new there is nothing to narrow, and a row of pills
+would be a control over nothing, which is `filteredCards.length > 0`'s rule one
+page along. Driven with the marker planted at *now*, so the page is empty:
+`?newplays=1` draws **0 pills** over *Nothing new since you last marked the feed
+read. Back is the whole day again.*, and `?newplays=1&plays=hr` draws **7** over
+*No new plays of that kind. The pills above are narrowing this — All is every
+kind of play, and Back is the whole day again.* — a sentence now true in the
+strong sense, the pills being directly above it in the page rather than pinned
+above the page.
+
+**Everything else about the page is untouched**, driven on the same roster: the
+pills still narrow it and the range still narrows with them (`plays=hr` → **3
+items**, `12:43 PM – 11:48 PM` → `2:12 PM – 9:37 PM`; `plays=sb` → **1 item**,
+`8:06 PM` collapsed to one stamp); one Escape closes it, `[inert]` goes **2 →
+0**, `newplays=1` leaves the URL and `plays=hr` survives with the feed behind
+narrowed to the same 3; and `?kind=pitcher&newplays=1` opens **no page at all**.
+The Feed's own page is unmoved — chrome **213px at 390**, the pill row at y=227
+in the page, `Oldest first` in the tab row, the red button reading `51 new
+plays` — and so is the matchup team feed, **7 pills in the page with the toggle
+in `mup-tools`**, which is where this move was copied from.
+
+### What counts as a play, and the ones that were not plays
+
+**A stream item was any plate appearance with an event on it, and MLB files
+plays under a batter that are not his plate appearance.** `playerDayEntries`
+tests `filter((pa) => pa.event)` — a play that has been given a result — and for
+the *client* that is the right test: what it can trust is what the server called
+a plate appearance. What the server called one was too much.
+
+**What was getting through**, counted over every raw feed in the cache — 1,600
+blobs, **672 distinct games, 121,133 plays**:
+
+| filed as | plays | in a batter's stream before | after |
+| --- | --- | --- | --- |
+| `caught_stealing_2b` | 75 | 0 | 0 |
+| `pickoff_1b` | 23 | 0 | 0 |
+| `pickoff_caught_stealing_2b` | 15 | 0 | 0 |
+| `caught_stealing_home` | 4 | 0 | 0 |
+| `caught_stealing_3b` | 3 | 0 | 0 |
+| `pickoff_3b` | 2 | 0 | 0 |
+| `pickoff_2b` | 2 | 0 | 0 |
+| `pickoff_caught_stealing_3b` | 1 | 0 | 0 |
+| `pickoff_caught_stealing_home` | 1 | 0 | 0 |
+| `wild_pitch` | 1 | 0 | 0 |
+| `stolen_base_3b` | 1 | 0 | 0 |
+| `game_advisory` | 1 | 0 | 0 |
+| **`other_out`** | **7** | **7** | **0** |
+
+The first eleven were already excluded **by name** —
+`savant.ts::isBaserunningEvent`, a list of event families applied twice, once to
+the batter's plate appearances and once to the pitcher's batters faced — and
+`game_advisory` by a `continue` of its own in the play loop. `other_out` is a
+runner thrown out advancing (*Victor Robles out at 3rd*, a challenged tag play),
+and nobody had told either list about it. So it was a card in the stream, filed
+under the batter who happened to be at the plate and labeled off the raw event
+type: `eventLabel` prettifies anything it has no name for and the stylesheet
+capitalizes the result, so it read **`OTHER OUT`**. A `pitching_substitution`
+filed as a play of its own — which this API does not do and others have — would
+have read *Pitching Substitution* by exactly the same route.
+
+**Driven, before → after**, on the seven days those seven plays fall on, through
+`/api/players/:id/day` (the route the player page's day dialog reads, drawing
+the same `playerDayEntries` items the stream draws), against MLB's own game log
+for the same player and day:
+
+| | items | derived line | MLB's line |
+| --- | --- | --- | --- |
+| Abimelec Ortiz, Aug 8 | 5 → **4** | 5 AB → **4** | 1-for-**4** |
+| Bryan Reynolds, Aug 7 | 6 → **5** | 6 → **5** | 2-for-**5** |
+| Trevor Larnach, Jul 11 | 4 → **3** | 4 → **3** | 1-for-**3** |
+| Brendan Donovan, Aug 18 | 5 → **4** | 4 → **3** | 1-for-**3** |
+| Steven Kwan, Jul 19 | 5 → **4** | 5 → **4** | 2-for-**4** |
+| Connor Wong, Aug 6 | 5 → **4** | 4 → **3** | 2-for-**3** |
+| Jeremiah Jackson, Aug 6 | 5 → **4** | 4 → **3** | 0-for-**3** |
+
+Every one of the seven was **one at-bat above MLB's own line** before and agrees
+with it exactly after, which is the measurement that makes this a bug rather
+than a preference. Donovan's day drawn in the browser went from `DOUBLE · WILD
+PITCH · STRIKEOUT · OTHER OUT · STRIKEOUT` to the same list with the fourth
+gone; the `WILD PITCH` beside it is *his* base event and stayed, which is the
+half that must not move.
+
+**Excluded at the play rather than at the item**, which is what makes the three
+sections and the two counts agree without anything being told twice. The test is
+`mlbStats.ts::isPlateAppearance`, in the loop that reads the play, and it gates
+the two *rows* the play would contribute — the batter's plate appearance and the
+pitcher's batter faced — and nothing else: the outs and the bases still advance,
+the pitches are still the pitcher's, and the **base event the play really is**
+is still filed under both parties, that being the item the reader wanted all
+along. Everything downstream is one list read through: `passesFilters` narrows
+it for the pills, `newPlays` counts it for the red button, `entries` feeds
+Recent, `liveEvents` feeds Live, `upcoming` never held plays — so a play that is
+not in the stream is not in the tally either, and no count can disagree with the
+list it counts. The client's own `filter((pa) => pa.event)` is left exactly as it
+was: a second test here would be a second definition of a play, free to drift
+from the first.
+
+**The rule is structural rather than a list of names**, which is the whole point
+— a list has to be extended for every kind MLB adds, and had not been extended
+for the one that was actually arriving. **A plate appearance is a play the
+batter is himself one of the runners on**: he reached, he was put out, or he
+struck out, where a runner's play names only the runner. Measured over those 672
+games (50,473 plays): all **50,337** plays of the 21 batter-outcome event types
+carry a runner row for the batter, and all **136** plays of the 13 kinds that
+are not plate appearances carry none. No exceptions either way. `result.type`
+cannot be the test — this API stamps every play `atBat`, caught stealings
+included (**121,133 of 121,133**) — and an in-progress play is a plate
+appearance by definition here, having no result and so no runner rows yet, which
+is `midAtBat` passed in rather than read a second time.
+
+**`DAY_SNAPSHOT_VERSION` goes to 7 for it**, with nothing added to the shape: a
+v6 snapshot holds reports built under the old rule and would go on serving the
+`OTHER OUT` card and the extra at-bat forever. A version guards the meaning of
+what is stored, not only its shape, which is the arsenal blob's own `-v5`
+reason. No `FEED_CACHE_VERSION` bump — the raw feed is untouched, and
+`runners[].details.runner.id` was already in `FEED_FIELDS`.
+
+**What is unchanged, read off the roster's own days**: the per-day item counts
+over the settled days of the week are identical before and after — 2026-08-12
+through 08-18 at **53 / 32 / 46 / 40 / 39 / 43 / 49** — with the day's event mix
+unchanged to the play. Only 08-19 moves (45 → 46), because a live game finished
+between the two reads.
 
 ### The stream opens on ten
 

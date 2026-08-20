@@ -4755,18 +4755,22 @@ export default function App() {
       />
     ) : null;
 
-  /* The same two controls on one row, for the new-plays page's navbar — the one
-     place in the app that has no tab row to hang the order off and one row for
-     everything. Built here because App owns both pieces of state; drawn by
-     `LiveFeed`, which owns the page. */
-  const newPlaysControls = feedIsBatters ? (
-    <FeedFilterPills
-      lens={feedLens}
-      onSelect={selectFeedLens}
-      order={{
-        oldestFirst: feedOldestFirst,
-        onToggle: () => setFeedOldestFirst((v) => !v),
-      }}
+  /* **`Oldest first` for the new-plays page**, which is the same control in the
+     same kind of place: its pinned head is that page's tab row. It is built
+     separately from `feedOrderToggle` above only because that one is gated on
+     the Feed view and this page is drawn from inside it — the word, the box and
+     the handler are one component (`FeedOrderToggle`), so the two drawings
+     cannot come to differ.
+
+     The page's **pills** are `feedFilterPills` itself, handed down as it stands:
+     one description of one row, lit by one `feedLens` and pressed into one
+     `selectFeedLens`, drawn in whichever box is on screen. The page decides
+     whether to draw it at all — see `NewPlaysPage`, which gates it on there
+     being something to narrow. */
+  const newPlaysOrder = feedIsBatters ? (
+    <FeedOrderToggle
+      oldestFirst={feedOldestFirst}
+      onToggle={() => setFeedOldestFirst((v) => !v)}
     />
   ) : null;
 
@@ -6059,9 +6063,11 @@ export default function App() {
             onShowNew={feedIsBatters ? showNewPlays : undefined}
             onShowAll={feedIsBatters ? showAllPlays : undefined}
             onClearNew={feedIsBatters ? clearNewPlays : undefined}
-            /* The new-plays page's navbar — the pills and the order toggle on
-               one row. Gated with the six above for the same reason. */
-            newPlaysControls={feedIsBatters ? newPlaysControls : undefined}
+            /* The new-plays page's two controls, in its two boxes: the order in
+               its pinned head, the pills in the page at the head of the list
+               they narrow. Gated with the six above for the same reason. */
+            newPlaysOrder={feedIsBatters ? newPlaysOrder : undefined}
+            newPlaysFilters={feedIsBatters ? feedFilterPills : undefined}
             /* Not gated on the batter tab, where the six above are: this one is
                not a lens over kinds of play but the direction the clock runs,
                and a pitcher's outings are stamped with one exactly as a plate

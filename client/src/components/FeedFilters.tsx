@@ -59,10 +59,13 @@
  * control a reader reaches *while scrolling*, halfway down a stream they have
  * been reading. See `FeedOrderToggle`.
  *
- * **It is still one component**, because there is a second place both are drawn
- * together: the new-plays page's own navbar (`LiveFeed`'s `NewPlaysPage`),
- * which carries the filters and the order on one row over a list of its own.
- * That caller passes `order` and gets the toggle back inside the row.
+ * **And the new-plays page separates them the same way now.** It was the one
+ * caller that drew both on one row — its navbar had no tab row to hang an order
+ * off — so this row took an `order` prop and put the toggle back inside itself.
+ * That row is gone: the page's pills are in its page, at the head of the list
+ * they narrow, and `Oldest first` is in its pinned head beside `Back`. The prop
+ * went with its last caller, and so did `FeedOrderToggle`'s `compact`, which
+ * existed only to make the toggle 30px tall in that one row.
  */
 
 /**
@@ -197,18 +200,15 @@ export function playFilterParam(key: PlayFilterKey | null): string | null {
  * is the app's own lit state and a pill here is the same object as a pill
  * anywhere else.
  *
- * **The order toggle is not part of this row on the page any more** — it is in
- * the pinned tab row (`FeedOrderToggle`, below, which carries the argument).
- * The one caller that still wants the two on one line is the new-plays page's
- * navbar, which has no tab row to put it in and one row for everything: it
- * passes `order`, and the toggle is drawn at the row's right end exactly as it
- * used to be, `flex: none` with `margin-left: auto` outside the scrollport.
+ * **The order toggle is not part of this row anywhere** — it is in the pinned
+ * bar, which is the tab row on the page and the page's own head on the
+ * new-plays page (`FeedOrderToggle`, below, which carries the argument). This
+ * row is the kinds and nothing else.
  */
 export function FeedFilterPills({
   lens,
   onSelect,
   kinds = true,
-  order,
 }: {
   /** Which pill is lit. Exactly one always is. */
   lens: FeedLens;
@@ -221,12 +221,6 @@ export function FeedFilterPills({
    * row, a row with no kinds in it would be an empty row.
    */
   kinds?: boolean;
-  /**
-   * **The order toggle inside this row**, for the one caller that has nowhere
-   * else to put it — the new-plays page's navbar. Absent on the page, where it
-   * sits with the tabs; see `FeedOrderToggle`.
-   */
-  order?: { oldestFirst: boolean; onToggle: () => void };
 }) {
   const pill = (key: FeedLens, label: string, title: string) => (
     <button
@@ -253,9 +247,6 @@ export function FeedFilterPills({
           {PLAY_FILTERS.map((f) => pill(f.key, f.label, f.title))}
         </div>
       )}
-      {order && (
-        <FeedOrderToggle oldestFirst={order.oldestFirst} onToggle={order.onToggle} compact />
-      )}
     </div>
   );
 }
@@ -265,9 +256,9 @@ export function FeedFilterPills({
  * top. One button, drawn in two places, and the two are one component so they
  * cannot come to word or shape the same control differently.
  *
- * **In the pinned tab row on the page, beside `Starters`**, which is a
- * reversal for this one control of the argument `FeedFilterPills` makes for
- * itself. What the tab-row rule protects is a control a reader has to reach
+ * **In the pinned bar, beside `Starters` on the page and beside `Back` on the
+ * new-plays page**, which is a reversal for this one control of the argument
+ * `FeedFilterPills` makes for itself. What the tab-row rule protects is a control a reader has to reach
  * *while scrolling* — the research board's filters over a six-hundred-row
  * table are the case it was written for. The kind pills are not that: they are
  * the answer to the question the page was opened with and are worked once on
@@ -293,25 +284,24 @@ export function FeedFilterPills({
  * box. The `title` carries the state instead, that being the one thing on a
  * button that can change size for free.
  *
- * **`compact` is the pill height, not a second control.** In the tab row it is
- * a plain `.research-toggle`, `--control-h` tall like `Starters` next to it; in
- * the new-plays navbar it sits shoulder to shoulder with 30px pills and takes
- * `.feed-filter-pill` so the row is one height. Same class, same word, same
- * handler — only the box it stands in differs.
+ * **One box everywhere, and `compact` is gone with the row that needed it.** It
+ * made this button 30px tall (`.feed-filter-pill`) for the one row where it
+ * stood shoulder to shoulder with the pills — the new-plays navbar — and that
+ * row no longer exists: there it now sits beside `Back` in the page's own head,
+ * where `--control-h` is what the row is made of. A prop with no caller is a
+ * prop nobody misses.
  */
 export function FeedOrderToggle({
   oldestFirst,
   onToggle,
-  compact = false,
 }: {
   oldestFirst: boolean;
   onToggle: () => void;
-  compact?: boolean;
 }) {
   return (
     <button
       type="button"
-      className={`research-toggle feed-order${compact ? ' feed-filter-pill' : ''}${oldestFirst ? ' on' : ''}`}
+      className={`research-toggle feed-order${oldestFirst ? ' on' : ''}`}
       aria-pressed={oldestFirst}
       onClick={onToggle}
       title={

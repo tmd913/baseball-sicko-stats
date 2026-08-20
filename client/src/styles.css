@@ -10594,15 +10594,12 @@ button.start-line:focus-visible {
 .feed-order {
   flex: none;
 }
-/* And the one row that still carries both — the new-plays page's navbar, which
-   has no tab row to hang the order off. There it is at the right end and never
-   inside the scrollport: `margin-left: auto` rather than a spacer, so on a row
-   whose kind group has been scrolled it is still in the same place, and it
-   carries `.feed-filter-pill` as well, which is what keeps that row 34px tall
-   rather than 38. */
-.feed-filters .feed-order {
-  margin-left: auto;
-}
+/* There was a second drawing of it — inside the pill row, on the new-plays
+   page's navbar, right-aligned with `margin-left: auto` and shrunk to
+   `.feed-filter-pill`'s 30px so that row was one height. That row is gone: the
+   page's pills are in the page and the toggle is in its pinned head beside
+   `Back`, where it is the same 36px control it is in the tab row. Nothing here
+   is conditional on where it sits any more. */
 /* Tighter than a control on the tab row: eight of these share the row, and each
    is two to five characters where a labeled toggle is a word. */
 .feed-filter-pill {
@@ -10637,16 +10634,28 @@ button.start-line:focus-visible {
 /* The head takes the feed's own column rather than the player page's 680: every
    card under it is `--card-column` wide, so a 680 head would be indented 60px
    from the content it names. `.details-head` is otherwise unchanged — a wrapping
-   flex row centered by its own auto margins. */
-.newplays-head,
-.newplays-chrome .feed-filters {
-  max-width: var(--card-column);
-}
+   flex row centered by its own auto margins, and what it wraps now is
+   `Oldest first`, which sits at its right end on one line at 1400 and 390 and
+   takes a second line at 320. */
 .newplays-head {
+  max-width: var(--card-column);
   flex-wrap: wrap;
-  /* Closer to the controls under it than `.details-head`'s 20px, the two being
-     one box here rather than a head over a tab strip. */
-  margin-bottom: 12px;
+  /* **The gap between the head's two rows when it wraps**, which at 320 it does:
+     `Back`, the name and a 99px `Oldest first` come to 399px of content on a
+     288px line, so the toggle takes a line of its own. `.details-head`'s own
+     row gap is 20px, which is the gap between a head and the tab strip *under*
+     it; a control that has wrapped off this row is the same statement carried
+     on, so it takes the 12px that separated this head from the pill row while
+     the pills were up here. Measured at 320: the navbar is 114px with this and
+     122 without it, against 112 with the pills in it. */
+  row-gap: 12px;
+  /* **The chrome's bottom padding, carried by its last child**, which is what
+     the pill row carried while the pills were in here (`.details-chrome` has
+     none of its own — see there). It was 12px then, on the argument that a head
+     and the controls directly under it are one box; with the controls gone the
+     number is the gap from the pinned bar's text to its own edge, and 16 is what
+     the box below it reads. */
+  margin-bottom: 16px;
 }
 .newplays-id {
   flex: 1 1 auto;
@@ -10659,13 +10668,12 @@ button.start-line:focus-visible {
   font-size: 13px;
   color: var(--muted);
 }
-/* The pill row inside the head, rather than at the top of a stream: it gives up
-   its own top margin (the head above it is the gap) and takes the bottom one
-   `.details-chrome` needs from its last child, that box having no bottom padding
-   of its own — see `.details-chrome`. */
-.newplays-chrome .feed-filters {
-  margin: 0 auto 16px;
-}
+/* The pill row is at the top of the stream it narrows, outside the chrome —
+   which needs no rule at all: `.feed-filters` already centers itself in
+   `--card-column` with a 16px top margin that collapses with `.live-feed`'s own,
+   exactly as it does on the page. What was here was the rule that made it a row
+   of the *head*: no top margin, and the 16px bottom one `.details-chrome` takes
+   from its last child. `.newplays-head` carries that now. */
 
 /* Feed headshot — a compact variant of the player card's headshot button. */
 .feed-photo-link {

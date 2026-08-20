@@ -1309,7 +1309,8 @@ export function LiveFeed({
   onShowNew,
   onShowAll,
   onClearNew,
-  newPlaysControls,
+  newPlaysOrder,
+  newPlaysFilters,
   oldestFirst = false,
 }: {
   reports: PlayerReport[];
@@ -1387,8 +1388,11 @@ export function LiveFeed({
    */
   onClearNew?: () => void;
   /**
-   * **The new-plays page's own navbar controls** — the filter pills and the
-   * order toggle, on one row.
+   * **The new-plays page's two controls**, which sit in two boxes rather than on
+   * one row: `newPlaysOrder` in the page's pinned head beside `Back`, and
+   * `newPlaysFilters` in the page itself at the head of the list they narrow.
+   * They were one node on one row in the head; see `NewPlaysPage`, which draws
+   * them and carries the argument for the split.
    *
    * Built by App and handed down rather than built here, for the reason every
    * other half of this feature is App's: it owns the lens, the marker and the
@@ -1400,7 +1404,8 @@ export function LiveFeed({
    * Absent for the second caller (`LeagueTeam.tsx`), along with the rest of the
    * feature, and absent on the pitcher tab, where App gates the mode itself.
    */
-  newPlaysControls?: ReactNode;
+  newPlaysOrder?: ReactNode;
+  newPlaysFilters?: ReactNode;
   /**
    * **Read the day forwards** — the stream reversed, first play of the day at
    * the top. Default false, which is the stream as it has always been and what
@@ -1773,7 +1778,8 @@ export function LiveFeed({
       {newOnly && onShowAll && (
         <NewPlaysPage
           entries={newRecent}
-          controls={newPlaysControls}
+          order={newPlaysOrder}
+          filters={newPlaysFilters}
           onOpenDetails={onOpenDetails}
           onClose={onShowAll}
           playFilter={playFilter}
@@ -1887,15 +1893,21 @@ function coveredRange(entries: FeedEntry[]): string | null {
  */
 function NewPlaysPage({
   entries,
-  controls,
+  order,
+  filters,
   onOpenDetails,
   onClose,
   playFilter,
 }: {
   entries: FeedEntry[];
-  /** The filters and the order toggle, built by App — this navbar is the only
-   *  place in the app that carries both on one row. */
-  controls?: ReactNode;
+  /** **`Oldest first`**, built by App and drawn in the pinned head beside
+   *  `Back` — the same place it sits on the page, which is the tab row there
+   *  and this head here: the bar that is always on screen. */
+  order?: ReactNode;
+  /** **The kind pills**, built by App and drawn in the page at the head of the
+   *  list they narrow rather than in the head above it. See the render below,
+   *  which carries the argument and the guard. */
+  filters?: ReactNode;
   onOpenDetails: (key: string) => void;
   /** Leave — which is what marks these plays read. App's `showAllPlays`. */
   onClose: () => void;
@@ -1943,10 +1955,37 @@ function NewPlaysPage({
                   empty list, there being no range to state. */}
               {range && <p className="newplays-range">{range}</p>}
             </div>
+            {/* **The order, in the head rather than on a row of its own.** It is
+                the one control here a reader reaches *while scrolling* — which
+                is what a pinned bar is for — and the head is this page's pinned
+                bar, the tab row's part one page along. On its own row it was a
+                second line of chrome carrying one button: measured, the navbar
+                was 112px at 320, 390 and 1200 with the pills in it and is 66
+                with the head alone, so the toggle rides for nothing where the
+                row cost 46. `.details-head` wraps, so at a width that cannot
+                hold `Back`, the name and a 99px control on one line it takes a
+                second line and the measured height follows it — that being why
+                `--details-chrome-h` is measured rather than declared. */}
+            {order}
           </div>
-          {controls}
         </div>
 
+        {/* **The pills go in the page, at the head of the list they narrow**,
+            which is the rule the stream itself follows (`FeedFilterPills`) and
+            the matchup's team feed follows one page along (`LeagueTeam.tsx`):
+            they are the answer to the question the page was opened with, worked
+            once on arrival, where the pinned bar is for a control wanted
+            halfway down. In the head they were also the whole of the second row
+            of a two-row navbar on a phone.
+
+            **Drawn when there is something for them to be narrowing**, and the
+            guard is the empty state's own two branches read off one condition:
+            with a lens in force the row is what emptied the page and the
+            sentence below points at it, and with no lens and no plays there is
+            nothing to narrow and a row of pills would be a control over
+            nothing — which is the same test the feed makes with
+            `filteredCards.length > 0`. */}
+        {(entries.length > 0 || playFilter !== null) && filters}
         <div className="live-feed newplays-feed">
           {entries.length > 0 ? (
             <>
