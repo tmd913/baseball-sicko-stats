@@ -707,38 +707,19 @@ body {
   background-clip: text;
   color: transparent;
 }
-/* Left-aligned, because these open as a row of the view bar under the tabs
-   rather than hanging off the right edge of the header, which is where they
-   used to be and what the flex-end alignment was for. */
-.date-control {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-}
-.date-row {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
-  justify-content: flex-start;
-}
-/* The presets are a segmented control, not a row of separate buttons: they take
-   the view/kind tabs' rules wholesale (see .view-switch / .view-tab), so the
-   selected preset highlights exactly the way the selected tab does instead of
-   merely resembling it. Only the row's own alignment lives here. */
-.date-presets {
-  flex-wrap: nowrap;
-}
-.date-preset {
-  white-space: nowrap;
-}
-/* The preset <select> replaces the pill row on phones (see the media query
-   below); it's hidden on desktop where the pills are shown instead. The research
-   board's three dropdowns — whose players, the time span and the position — are
-   folded in here rather than restyled to match, so every "pills on a desktop,
-   dropdown on a phone" control in the app is one control by construction. */
-.date-presets-select,
+/* **The date row went with its last reader.** `.date-control`, `.date-row`,
+   `.date-presets`, `.date-preset` and `.date-presets-select` were the six
+   preset pills, their phone `<select>` and the field in front of the calendar —
+   the panel the date face used to open. The face opens the calendar itself now
+   in every reading but Schedule (see `.date-bar-pop`), so there is no row, and
+   the pills' own rules were a fold onto `.view-switch`/`.view-tab` in any case:
+   removing them removed five selector names and no declarations.
+
+   **What did not go with them is this dropdown**, which `.date-presets-select`
+   used to head. It is the app's one `<select>` — the research board's three,
+   the Schedule span's, the Rankings span's and the matchup picker's — and the
+   list is now headed by `.research-window-select`, the first surviving member.
+   The rules are unchanged; only the name at the top of the list moved. */
 .research-window-select,
 .research-pos-select,
 .schedule-span-select,
@@ -755,8 +736,10 @@ body {
     no-repeat right 11px center;
   border: 1px solid var(--border);
   color: var(--text);
-  /* Match the date-range picker's box model (.drp-field) so the two controls
-     are the same height where they sit side by side on phones. */
+  /* The app's own control box model — `--control-radius` and `--control-h`,
+     the same two the icon buttons and the tabs take — so a dropdown standing in
+     for a pill row on a phone is the height of the row it replaced. (It used to
+     say this by naming `.drp-field`, the date picker's field, which is gone.) */
   border-radius: var(--control-radius);
   padding: 6px 32px 6px 14px;
   min-height: var(--control-h);
@@ -764,7 +747,6 @@ body {
   font-weight: 600;
   cursor: pointer;
 }
-.date-presets-select:hover,
 .research-window-select:hover,
 .research-pos-select:hover,
 .schedule-span-select:hover,
@@ -772,21 +754,11 @@ body {
 .mup-select:hover {
   border-color: var(--accent);
 }
-/* On phones the header wraps and the date control spans the full width. Swap the
-   pill row (which would overflow off-screen) for a compact dropdown, and
-   left-align the whole control so it reads naturally. */
+/* On phones a pill row that would overflow off-screen gives way to a compact
+   dropdown. The date presets were the first control here to do it and are gone
+   (see above); what is left is the run that copied them. */
 @media (max-width: 640px) {
-  .date-control {
-    align-items: stretch;
-    width: 100%;
-  }
-  /* Specific enough to beat the shared .view-switch rule below, which sets
-     `display: inline-flex` and, being later in the file, would otherwise win
-     and leave both the pill row and its dropdown on screen at once. */
-  .date-row .date-presets {
-    display: none;
-  }
-  /* Same trap, same fix: `.schedule-span` carries `.view-switch`, whose
+  /* `.schedule-span` carries `.view-switch`, whose
      `display: inline-flex` is later in the file and would otherwise leave the
      pills and their dropdown on screen at once. Written as the two classes it
      actually has rather than scoped to a parent, because this run is drawn in
@@ -796,9 +768,6 @@ body {
      row (207px → 255) where the select is 134 and shares its line. */
   .schedule-span.view-switch {
     display: none;
-  }
-  .date-presets-select {
-    display: block;
   }
   .research-window-select,
   .research-pos-select,
@@ -814,35 +783,14 @@ body {
     min-width: 0;
   }
 }
-/* ---- Date range picker ---- */
-.drp {
-  position: relative;
-}
-.drp-field {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  color: var(--text);
-  /* Fully round, like the preset pills and the tabs below them. */
-  border-radius: var(--control-radius);
-  padding: 6px 12px;
-  min-height: var(--control-h);
-  font-size: 13px;
-  cursor: pointer;
-}
-.drp-field:hover {
-  border-color: var(--accent);
-}
-.drp-icon {
-  color: var(--muted);
-  flex-shrink: 0;
-}
-.drp-value {
-  font-weight: 600;
-  white-space: nowrap;
-}
+/* ---- Date range picker ----
+   **The field in front of it is gone**, with `DateRangePicker` itself: `.drp`,
+   `.drp-field`, `.drp-icon` and `.drp-value` were a button reading the range
+   that opened this popover, and they existed because the calendar sat at the
+   end of a preset row where 260px of grid would have been absurd. There is no
+   preset row, so the bar's face opens the grid directly and the field is a
+   press nobody spends. The popover stayed — it is the one calendar surface in
+   the app, and `.date-bar-pop` folds onto it rather than restating it. */
 .drp-popover {
   position: absolute;
   z-index: 30;
@@ -6251,9 +6199,14 @@ button.start-line:focus-visible {
 /* Scoped, because this is a wide pressable *surface* rather than a small aimed
    target: a touch device has no pointer to move away, so the tint would stick
    to the bar after the press that opened the panel and read as a state the app
-   then declines to be in. A pointer user loses nothing. */
+   then declines to be in. A pointer user loses nothing.
+
+   **And only where the face is pressable.** In the fixed bar it is a `<div>`
+   stating a fact, so there is no `:disabled` to lean on and a bare `.date-face`
+   would tint a line of text under the pointer — a control's clothes on
+   something that is not one. */
 @media (hover: hover) {
-  .date-face:hover {
+  .date-bar:not(.date-bar-fixed) .date-face:hover {
     background: var(--panel);
     border-color: var(--border);
   }
@@ -6294,9 +6247,12 @@ button.start-line:focus-visible {
   letter-spacing: -0.01em;
   color: var(--text);
 }
-/* The panel the middle opens: the span strip where the Schedule view is the
-   reading, then the presets and the picker. A column, so a strip that only
-   exists in one mode cannot push the row below it about. */
+/* The panel the middle opens, which is **the Schedule reading and nothing
+   else**: the span run. Every other reading opens the calendar over the page
+   instead (`.date-bar-pop`), so this box holds one control and always the same
+   one. It stays a column rather than becoming a plain wrapper because the strip
+   is centered in it — see the rule below, which is now the whole of why the
+   column is here. */
 .date-bar-panel {
   display: flex;
   flex-direction: column;
@@ -6304,14 +6260,12 @@ button.start-line:focus-visible {
   gap: 10px;
   padding: 10px 0 4px;
 }
-.date-bar-panel .date-control {
-  width: 100%;
-}
 /* **And in the Schedule reading the span strip is sized to its own content and
    centered**, which is the rule the face one row up already keeps and for the
-   same reason. The panel's `align-items: stretch` is right for `.date-control`
-   — that is a *row* of controls and wants the width — and wrong for the strip,
-   which is the control itself: stretched it measured **1180px** at a 1200
+   same reason. The panel's `align-items: stretch` was right for the preset row
+   that used to share this box — that was a *row* of controls and wanted the
+   width — and is wrong for the strip, which is the control itself: stretched it
+   measured **1180px** at a 1200
    window against the 163 its two pills need, a segmented surface the width of
    the page that lights on hover, and **300 / 370** at 320 / 390 against the 100
    the `<select>` wants, its chevron a thumb's width from the word it belongs
@@ -6355,6 +6309,27 @@ button.start-line:focus-visible {
   /* The axis it genuinely scrolls, and only where it scrolls: a flick that runs
      out of calendar must not carry the page under it. */
   overscroll-behavior-y: none;
+}
+/* **And where the days are the page's rather than the reader's** — a matchup
+   team page's Summary reading, whose span is the period's start to today. There
+   are no arrows to lay out, so the three-column grid goes to one: the middle
+   column is centered on the bar already, so a single column is the same center
+   line with the two 36px tracks and their 8px gaps given back. Measured at 1400
+   on a team page, the face's center is **700** either way, so the label does not
+   move as the reader crosses the switch — which is the whole reason this is one
+   grid with a different track list rather than a second box.
+
+   Nothing else is restated. The face keeps its fill, its radius, its two lines
+   and its `min-width` floor; what it loses is the hover tint (above) and the
+   pointer, and it loses those by being a `<div>` rather than by a rule here. */
+.date-bar-fixed .date-bar-row {
+  grid-template-columns: minmax(0, 1fr);
+}
+/* A `<div>` gets `.date-face`'s `cursor: pointer` for free, and it opens
+   nothing. The hand is the one part of the control's clothes that would be a
+   lie rather than a decoration. */
+.date-bar-fixed .date-face {
+  cursor: default;
 }
 /* Edit carries its label, so it overrides the square the shared list gives it —
    everything else in that rule (the panel fill, the border, the hover, the
@@ -7815,7 +7790,7 @@ button.start-line:focus-visible {
    is that row now.
 
    The panels and the chips row take `flex: 1 1 100%` — the same "its own line"
-   `.date-control` uses one level up — since a filter builder has no business
+   `.date-bar` uses one level up — since a filter builder has no business
    sharing a line with the button that opened it. The count line stayed on the
    page below, being the table's caption rather than a control. */
 .research-chrome,
@@ -8678,8 +8653,9 @@ button.start-line:focus-visible {
    12px }` five hundred lines further down, and the 20px clipboard was
    overflowing a 12px content box — centered, so it *looked* right, and
    shrinking to fit it before the glyph was given `flex: none`. That is the same
-   trap `.date-row .date-presets` and the `.research-bar` dropdowns are each
-   written two classes deep to avoid; the honest fix for a whole block is to put
+   trap `.date-row .date-presets` and the `.research-bar` dropdowns were each
+   written two classes deep to avoid (the first of those has since gone with the
+   preset row itself, and is left named here as the record of the trap); the honest fix for a whole block is to put
    it after what it overrides.
 
    **The calendar used to be the second of the pair**, with its range on a
@@ -8718,7 +8694,8 @@ button.start-line:focus-visible {
    name, and on this page of all pages every pixel of height is a row of the
    table. Two classes deep because the shared `.view-switch` rule sets `display:
    inline-flex` and comes later in the file — the same reason `.date-row
-   .date-presets` is written that way — and without the extra specificity a row
+   .date-presets` was written that way, before it went with the preset row — and
+   without the extra specificity a row
    and its dropdown would both be on screen at once. */
 @media (max-width: 640px) {
   .research-bar .research-window-row,
@@ -9559,8 +9536,7 @@ button.start-line:focus-visible {
    asking the same shape of question about a different thing — see
    `docs/claude/client-league.md`. */
 .lg-tabs,
-.lg-span-row,
-.date-presets {
+.lg-span-row {
   display: inline-flex;
   align-items: center;
   min-height: var(--control-h);
@@ -9574,8 +9550,7 @@ button.start-line:focus-visible {
 .kind-tab,
 .research-window-tab,
 .lg-tab,
-.lg-span-tab,
-.date-preset {
+.lg-span-tab {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -9593,16 +9568,14 @@ button.start-line:focus-visible {
 .kind-tab:hover,
 .research-window-tab:hover,
 .lg-tab:hover,
-.lg-span-tab:hover,
-.date-preset:hover {
+.lg-span-tab:hover {
   color: var(--text);
 }
 .view-tab.active,
 .kind-tab.active,
 .research-window-tab.active,
 .lg-tab.active,
-.lg-span-tab.active,
-.date-preset.active {
+.lg-span-tab.active {
   color: var(--on-accent);
   background: var(--accent);
 }
@@ -9610,8 +9583,7 @@ button.start-line:focus-visible {
 .kind-tab:focus-visible,
 .research-window-tab:focus-visible,
 .lg-tab:focus-visible,
-.lg-span-tab:focus-visible,
-.date-preset:focus-visible {
+.lg-span-tab:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -12933,7 +12905,7 @@ button.start-line:focus-visible {
   color: var(--muted);
   flex: none;
 }
-/* Folded onto `.date-presets-select`'s rule so this is the app's one dropdown
+/* Folded onto `.research-window-select`'s rule so this is the app's one dropdown
    rather than a second that resembles it. **It is a select at every width**,
    where every other member of that list is the phone half of a pills-on-desktop
    pair and so defaults to `display: none` — ten pairs of team names is a list
@@ -13605,7 +13577,7 @@ span.mup-move-name:hover {
    never applied**. Measured at 320 before the move: the row gap resolved to the
    base 8px rather than the block's 6, which is 8px off each track, and the
    figures drew at the desktop size. It is the same trap `.date-row
-   .date-presets` and `.research-bar .research-positions` answer two classes
+   .date-presets` and `.research-bar .research-positions` answered two classes
    deep and the narrow-screen rhythm block at the end of the file answers by
    being last; here the whole section is `.mup-*`, so moving the blocks to the
    end of it is the one fix that needs no selector to carry the reason.
@@ -13952,7 +13924,16 @@ span.mup-move-name:hover {
 .mup-dates {
   width: 100%;
   max-width: var(--card-column);
-  margin: 0 auto 12px;
+  /* **And nothing under it, which is the roster bar's own rhythm.** The app
+     draws this same bar last in `.app-chrome`, whose `padding-bottom` is 0, so
+     the table starts where the bar ends: measured at 1400, the bar runs to
+     y=168 and the table head begins at y=169. This row carried a 12px margin of
+     its own and the same two boxes measured 231 and 244 — the one control the
+     two surfaces share, spending twelve pixels more on one of them than on the
+     other. Folded onto the roster's rule rather than given a smaller number of
+     its own, because the number is *what the box below has to give*, and here
+     as there that is nothing. */
+  margin: 0 auto;
 }
 /* **And no seam of its own.** `.date-bar` declares a top hairline for the
    callers that sit it directly under a wrapping tab row — the app's own chrome
@@ -13994,7 +13975,11 @@ span.mup-move-name:hover {
    a row that wraps at 465 and below, that is a whole line of *pinned band*
    appearing and disappearing under the finger of the reader who pressed `Feed`
    (measured: the band is **210px at 390 with them and would be 162 without**).
-   So the pair is drawn on both readings and the feed's copy is a ghost.
+   So the pair is drawn on every reading and the copies that cannot act are
+   ghosts. **How many of the pair is a function of the reading** — `Summary`
+   reserves both, having nothing of its own, and the Feed reserves one above 640
+   and none below it, having the order toggle. See `LeagueMatchup.tsx`, which is
+   where that arithmetic is written down, and the block below.
 
    `display: contents` on the reading that has them, so the two buttons are the
    flex items of the run they are in rather than a box inside it — the roster
@@ -14034,6 +14019,27 @@ span.mup-move-name:hover {
   gap: 8px;
   visibility: hidden;
   order: 1;
+}
+/* **And below 640 the Feed reading reserves nothing at all**, which is the same
+   arithmetic run at the width where every toggle is a 36px square. There the
+   run the ghost is holding a place in is `Schedule` `Projected` `Starters` =
+   **124px**, and the feed's own is `Oldest first` — a word, not a glyph, and so
+   **98.7px** where a square is 36. One reserved square takes the feed run to
+   187 against 124 and the *second* line over: measured at 375, `kind` + the run
+   came to **354 against the 343** that width leaves, so the reader who pressed
+   `Feed` gained a line of pinned band — the fault, wearing the other shoe.
+   Reserving nothing takes it to **143**, and the readings then agree at every
+   width from 320 up bar two narrow seams (≈552–570 and ≈333–345 of window),
+   which is the price of not making every reading carry the union — see the
+   note in `LeagueMatchup.tsx` for what that would have cost instead.
+
+   After the rule it overrides, not beside the rest of the narrow blocks: a
+   media query adds no specificity and both selectors are two classes deep, so
+   the later of the two is the one that wins. */
+@media (max-width: 640px) {
+  .mup-tool-modes.mup-tool-ghost-feed {
+    display: none;
+  }
 }
 
 /* ---- A matchup's three pages -------------------------------------------
@@ -15939,9 +15945,6 @@ html[data-theme='light'] .league-table thead th {
   .app-header {
     gap: var(--stack-gap);
     margin-bottom: var(--stack-gap);
-  }
-  .date-row {
-    gap: var(--stack-gap);
   }
   .view-bar {
     gap: var(--stack-gap);

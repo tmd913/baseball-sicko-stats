@@ -211,8 +211,8 @@ const CHAPTERS: Chapter[] = [
     body: (
       <>
         <p>
-          The date control decides what every view is showing. The presets cover most
-          of it:
+          The date control decides what every view is showing. It is one line under
+          the tabs — a step back, the days, a step forward:
         </p>
         <Demo label="The date bar, under the tabs on every roster page">
           <div className="date-bar">
@@ -230,14 +230,6 @@ const CHAPTERS: Chapter[] = [
             </div>
           </div>
         </Demo>
-        <Demo label="The presets, behind a press of the middle">
-          <div className="date-presets">
-            <span className="date-preset active">Today</span>
-            <span className="date-preset">Tomorrow</span>
-            <span className="date-preset">Yesterday</span>
-            <span className="date-preset">This week</span>
-          </div>
-        </Demo>
         <ul className="tut-list">
           <li>
             <strong>Today</strong> is where you start. The baseball day turns over at
@@ -245,26 +237,29 @@ const CHAPTERS: Chapter[] = [
             tonight.
           </li>
           <li>
-            <strong>Tomorrow</strong> is the look-ahead: scheduled first pitches,
-            announced starters, and how your hitters have done against that hand.
+            <strong>The arrows move a window, not a day.</strong> On{' '}
+            <Ui>Today</Ui> a press is a day either way — back to{' '}
+            <Ui>Yesterday</Ui>, forward to <Ui>Tomorrow</Ui>, which is the
+            look-ahead: scheduled first pitches, announced starters, and how your
+            hitters have done against that hand. On a fortnight a press is a
+            fortnight.
           </li>
           <li>
-            <strong>This week</strong> and <strong>Last 15 days</strong> roll several
-            days into one card per player — every game stacked into one line.
+            <strong>Press the middle for a calendar.</strong> One day picked twice is
+            that day; two days are the range between them. Several days roll into one
+            line per player — every game stacked together. A range can run up to 62
+            days.
           </li>
         </ul>
-        <p>
-          For anything else, the dated button beside them opens a range picker. A
-          range can run up to 62 days.
-        </p>
         <p className="tut-note">
           The bar is under the tabs on the <Ui>Roster</Ui> and <Ui>Feed</Ui> pages
-          and it says which days you are looking at: the preset's own word over the
-          dates themselves. The arrows either side step by whatever the window is —
-          a day at a time on <Ui>Today</Ui>, a fortnight at a time on{' '}
-          <Ui>Last 15 days</Ui> — and land back on a preset's word whenever the days
-          you arrive at are exactly that preset's. Press the middle and the presets
-          and the range picker open underneath; picking a preset closes them again.
+          and it says which days you are looking at: what kind of days they are over
+          the dates themselves. It names a span whenever the days you have arrived at
+          are exactly that span's — step back from <Ui>Today</Ui> and it says{' '}
+          <Ui>Yesterday</Ui>, step forward again and it says <Ui>Today</Ui>, so a
+          link you share from there is about the reader's own day rather than about
+          yours. Anything else it calls a <Ui>Custom range</Ui>, which is the honest
+          word for days you picked yourself.
         </p>
         <p className="tut-note">
           It also says when the days on screen are not simply a range. In{' '}

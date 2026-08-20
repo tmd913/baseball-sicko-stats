@@ -60,7 +60,7 @@ import type { ResearchInclude, ResearchPos, ResearchUi } from './components/Rese
 import { simulateLiveDay } from './simulate';
 import { PlayerDetails } from './components/PlayerDetails';
 import { toStatsColumnKeys } from './components/PlayerWindowTable';
-import { DateBar, DateCalendar, DateRow, stepRange, stepTitle } from './components/DateControls';
+import { DateBar, DateCalendar, stepRange, stepTitle } from './components/DateControls';
 import type { DateBarReading, DatePreset } from './components/DateControls';
 import { ScheduleSpanTabs, ScheduleToggle } from './components/ScheduleControl';
 import {
@@ -103,6 +103,7 @@ import { LeagueOnboarding } from './components/LeagueOnboarding';
 import { ThemeSwatches } from './components/ThemePicker';
 import LeagueView, { LEAGUE_TABS, ProjectedTools } from './components/LeagueView';
 import LeagueMatchupView from './components/LeagueMatchup';
+import type { MatchupReading } from './components/LeagueMatchup';
 import { spanDetail } from './components/LeagueRankings';
 import type { LeagueTab } from './components/LeagueView';
 
@@ -1526,10 +1527,10 @@ export default function App() {
    * that the first tab is the one you land on — so a bare `?view=league` opens
    * on the reader's own matchup and `lt=scoreboard` is written out like every
    * other tab), `mup=` is which matchup, `mt=` which page *of* it, and
-   * `lspan=` the span. None can collide: the app's other params are `preset`,
-   * `start`, `end`, `player`, `view`, `kind`, `sim`, `hideil`, `starters`,
-   * `sched`, `roster`, `pos`, `cols`, `inc`, `scope`, `watch`, `win`, `help`,
-   * `mp` and `league`.
+   * `lspan=` the span. `mr=` is which reading of a team page — see it below.
+   * None can collide: the app's other params are `preset`, `start`, `end`,
+   * `player`, `view`, `kind`, `sim`, `hideil`, `starters`, `sched`, `roster`,
+   * `pos`, `cols`, `inc`, `scope`, `watch`, `win`, `help`, `mp` and `league`.
    *
    * **`mup=` is absent for the reader's own matchup**, which is a *rule* rather
    * than a value — the same reasoning that keeps a date preset in the URL as
@@ -1573,6 +1574,38 @@ export default function App() {
   const [matchupTeam, setMatchupTeam] = useState<number | null>(() => {
     const raw = Number(initialParams.get('mt'));
     return Number.isInteger(raw) && raw > 0 ? raw : null;
+  });
+  /**
+   * **Which reading of that team page is open** — his table over days the
+   * reader picks (`roster`), his table over this matchup so far (`summary`), or
+   * his stream (`feed`).
+   *
+   * **In the URL because it decides which data is on screen**, which is the
+   * test `view=`, `win=`, `mp=` and `mt=` all pass and the reason a sort order
+   * is not a page. `summary` is the half that makes it more than a preference:
+   * it is a *span* the page derives — the matchup's own days, clamped to today
+   * — so a link that dropped it would open on whatever range the recipient's
+   * own default seeded and quietly answer a different question.
+   *
+   * **`mr` because `mp` is the period, `mup` the matchup and `mt` the page of
+   * it**; none of the app's other params can collide with it, and it is
+   * deliberately not reused by anything else — `view=` is the app's own four
+   * and one param meaning two readings in two places is the trap `lspan=`
+   * avoids by not being `win=`.
+   *
+   * **`roster` is the default and is omitted**, the app's standing convention
+   * that the first tab is the one you land on. And it is written only alongside
+   * `mt=`: the matchup's Summary page has no reading to be in, so an `mr=` with
+   * no team page to be a reading *of* would say nothing.
+   *
+   * A running record rather than an opening, like `mt=` above: the page reports
+   * the reading back as the reader crosses the switch.
+   */
+  const [matchupReading, setMatchupReading] = useState<MatchupReading>(() => {
+    const raw = initialParams.get('mr');
+    // An unrecognized value falls back rather than emptying the view, and the
+    // URL keeps what it was handed until the page reports its own reading up.
+    return raw === 'summary' || raw === 'feed' ? raw : 'roster';
   });
   const [rankSpan, setRankSpan] = useState<EspnRankSpan>(() => {
     const raw = initialParams.get('lspan');
@@ -2929,6 +2962,17 @@ export default function App() {
     if (view === 'league' && matchupId != null && matchupTeam != null) {
       p.set('mt', String(matchupTeam));
     }
+    // And which reading of that page. Scoped to `mt=` because a reading is a
+    // reading *of a team page* — the matchup's own Summary page has none — and
+    // written only off the default, the rule every param here follows.
+    if (
+      view === 'league' &&
+      matchupId != null &&
+      matchupTeam != null &&
+      matchupReading !== 'roster'
+    ) {
+      p.set('mr', matchupReading);
+    }
     // Omitted at the default, which is now the week being played — so a link
     // shared without one opens on the recipient's *own* current matchup rather
     // than on the sharer's, which is the same rule a date preset follows.
@@ -2998,6 +3042,7 @@ export default function App() {
     leagueTab,
     matchupId,
     matchupTeam,
+    matchupReading,
     rankSpan,
     rankProjected,
     simulate,
@@ -4782,9 +4827,9 @@ export default function App() {
      before that a square icon in the header beside a round chip that stated
      the range and could not change it. The bar is the third and, this time,
      the whole of the control: the days in the middle, a step either side, and
-     the presets and the picker behind a press of the middle. `DateControls.tsx`
-     carries the argument for the shape; what lives here is the *state* — which
-     days, which reading of them, and what a step does.
+     the calendar behind a press of the middle. `DateControls.tsx` carries the
+     argument for the shape; what lives here is the *state* — which days, which
+     reading of them, and what a step does.
 
      **Below the tab row rather than inside it.** The dates are what every
      number on the page *is*, and inside a row that wraps they were competing
@@ -4874,19 +4919,30 @@ export default function App() {
           />
         ) : null
       }
-      /* **On the Feed the face opens the calendar and nothing else.** The
-         presets were what it opened, and on a stream they are the wrong six
-         words: the Roster is a table read for what a line *comes to* over a
-         named span, where the Feed is a record of what happened, scrolled back
-         through — and going to it is going to a *day*. `DateControls.tsx`
-         carries the geometry (a popover rather than 300px of pinned chrome);
-         `client-dates.md` carries the decision to drop the presets and what is
-         still reachable without them.
+      /* **The face opens the calendar in every reading but Schedule.** The
+         Feed had this first, on the argument that going to a day is going to a
+         *day*; the Roster and the projected lens follow it now, on the same
+         argument one step on. The two presets a reader of dated rows actually
+         presses are `Today` and `Yesterday`, and the arrows already land on
+         both **as rules** — `?preset=Today` → ‹ → `?preset=Yesterday` → › →
+         `?preset=Today`, the URL round-tripping through the rule rather than
+         through a frozen range. The other four were a field-press away from
+         this same calendar, so what the pills bought was one press saved on
+         four spans against one press *added* on every day-level move, which is
+         the move this bar exists for.
 
-         Schedule and Projected are Summary's alone, so there is no reading in
-         which the Feed's bar wants a panel — one test, not two. */
+         `DateControls.tsx` carries the geometry (a popover rather than 300px of
+         pinned chrome measured into `--chrome-h`); `client-dates.md` carries
+         what a preset row was reaching that the calendar does not, and why that
+         was thought a fair trade. `rosterPresets` stays — `stepRange` reads it
+         to name the days an arrow lands on, which is the half of a preset that
+         survives.
+
+         Schedule is the exception because there the columns are days *ahead*:
+         a calendar over a table of fixtures would pick days no column on screen
+         is drawn from, so the span run is the panel and this is null. */
       popover={
-        view === 'feed' ? (
+        scheduleReading ? null : (
           <DateCalendar
             start={start}
             end={end}
@@ -4896,27 +4952,10 @@ export default function App() {
               setDateOpen(false);
             }}
           />
-        ) : null
+        )
       }
       popoverLabel="Pick a range on the calendar"
-    >
-      <DateRow
-        /* The five plus the fantasy week where there is a league to name one.
-           `LeagueMatchupView` below is still handed the bare five, that page
-           adding a `Matchup` of its own for the period being *read* — see
-           `MATCHUP_PRESET`. */
-        presets={rosterPresets}
-        activePreset={activePreset}
-        start={start}
-        end={end}
-        max={maxDate}
-        onPick={(p) => {
-          setRange({ start: p.start, end: p.end, preset: p.label });
-          setDateOpen(false);
-        }}
-        onRange={(s, e) => setRange({ start: s, end: e, preset: null })}
-      />
-    </DateBar>
+    />
   );
 
   // The search bar the header icon opens: a full-width row directly under the
@@ -6114,9 +6153,20 @@ export default function App() {
              page in front of the reader rather than only the one it opened on. */
           initialTeamId={matchupTeam}
           onSideTeam={setMatchupTeam}
+          /* And which reading of that page, on the same terms: seeded from
+             `mr=` at mount, reported back as the reader crosses the switch. */
+          initialReading={matchupReading}
+          onReading={setMatchupReading}
           onClose={() => {
             setMatchupId(null);
             setMatchupTeam(null);
+            /* **A reading is put away with the page it was made on**, which is
+               the rule `rproj=1` and `proj=1` follow: `mr=summary` is about
+               *this* matchup's days, so carrying it onto the next page a reader
+               opens would be a lens surviving its own subject. Closing is a
+               leaving; crossing the strip inside the page is not, and that
+               half is the page's own. */
+            setMatchupReading('roster');
           }}
           onOpenDetails={setDetailsKey}
           /* The same three the Scoreboard gets, so the `Projected` toggle is

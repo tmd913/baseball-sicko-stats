@@ -2,7 +2,6 @@ import { useRef } from 'react';
 import type { ReactNode } from 'react';
 import { addDays, wideRange } from '../lib';
 import { useDismissable, usePopoverFit } from '../hooks';
-import { DateRangePicker } from './DateRangePicker';
 
 /**
  * The app's date controls: **a full-width bar of its own, directly under the
@@ -31,10 +30,26 @@ import { DateRangePicker } from './DateRangePicker';
  * The bar answers both: it runs the full width of the window under the tabs,
  * states the days in the middle in words a reader does not have to decode, and
  * puts the two steps either side of them, where a thumb reaches on a phone and
- * a pointer reaches without aiming on a desktop. The presets and the range
- * picker are still a disclosure behind the middle — they are 576px of control
- * set once a session, which is the shape of a thing that belongs behind a press
- * — but they now open under a bar that has already said what they hold.
+ * a pointer reaches without aiming on a desktop.
+ *
+ * ---------------------------------------------------------------------------
+ * And the middle opens a calendar, not a preset row
+ * ---------------------------------------------------------------------------
+ *
+ * A row of six preset pills and a field that opened a calendar used to be the
+ * disclosure. The Feed dropped it first — going to a day is going to a *day* —
+ * and the Roster has now followed it, on the same argument one step further on:
+ * the two presses the pills genuinely bought (`Today`, `Yesterday`) are the two
+ * the arrows already land on by rule, and the other four were a field away from
+ * the calendar anyway. Reaching any other day was three presses — the face, the
+ * `Aug 19, 2026` field, then the day — of which the middle one existed only to
+ * get past controls the reader was not there for.
+ *
+ * So `popover` is what every reading but **Schedule** opens, and Schedule opens
+ * the span run (`spanControl`) because there the columns are the span's days
+ * and nothing a preset says is on screen. `DateRow` — the pills, the phone
+ * `<select>` and the field in front of the calendar — went with its last
+ * reader, and `DateRangePicker` with it.
  *
  * ---------------------------------------------------------------------------
  * The bar says which *reading* of the days it is on
@@ -145,7 +160,15 @@ export type DateBarReading =
   | { kind: 'dates'; preset: string | null }
   | { kind: 'projected' }
   /** `span` is the Schedule control's own label for the span in force. */
-  | { kind: 'schedule'; span: string };
+  | { kind: 'schedule'; span: string }
+  /**
+   * **The matchup so far** — a team page's Summary reading, whose days are the
+   * period's start to today (clamped to its end) and are not the reader's to
+   * move. It is a *reading* rather than a preset for exactly that reason: a
+   * preset is a rule the reader picks and can step off, and this one is what
+   * the page is. See `fixed` on `DateBar`.
+   */
+  | { kind: 'matchup' };
 
 export interface DateBarFace {
   /** The upper line: what kind of days these are. */
@@ -175,7 +198,12 @@ export function dateBarFace(
       ? `Schedule · ${reading.span}`
       : reading.kind === 'projected'
         ? 'Projected'
-        : (reading.preset ?? 'Custom range');
+        : reading.kind === 'matchup'
+          ? /* Not the week's own name, which the band directly above already
+               carries (`Week 19 · Aug 10 – Aug 20`): what this line owes is
+               *which* of those days, and the answer is all of them up to now. */
+            'Matchup to date'
+          : (reading.preset ?? 'Custom range');
   return { lead, range: wideRange(start, end) };
 }
 
@@ -227,7 +255,7 @@ export function DateBar({
   spanControl,
   popover,
   popoverLabel,
-  children,
+  fixed = false,
 }: {
   reading: DateBarReading;
   start: string;
@@ -243,16 +271,16 @@ export function DateBar({
   prevTitle: string;
   nextTitle: string;
   /**
-   * The whole disclosure **in the Schedule reading**, drawn in place of
-   * `children` rather than above it: the span run, which is the only thing a
-   * reader of that view can pick. The bar decides this rather than each caller,
-   * because the bar is where `reading` already lives — the roster and a team
-   * page would otherwise be two implementations of one rule, which is the fault
-   * this component was extracted to avoid.
+   * The whole disclosure **in the Schedule reading**: the span run, which is
+   * the only thing a reader of that view can pick, the columns there being days
+   * ahead rather than a range. It is the panel's only content — a preset list
+   * under a table of days ahead names days no column on screen is drawn from,
+   * which is the argument that made it the whole panel and, later, the argument
+   * that retired the preset list everywhere else.
    *
-   * **Null falls back to `children`.** A caller with no span control to offer
-   * gets the presets it would have had, rather than an empty panel under a
-   * press that promised one.
+   * A caller hands over exactly one of `spanControl` and `popover`, and which
+   * one is a function of its own reading: Schedule opens the strip, every other
+   * reading opens the calendar.
    */
   spanControl?: ReactNode;
   /**
@@ -260,12 +288,14 @@ export function DateBar({
    * the wrong shape for it** — a panel floating over the page rather than one
    * pushing the page down, hung under the middle of the bar.
    *
-   * It exists for the Feed, whose face opens the calendar straight away, and
-   * the reason is a number: the presets panel is 50px and a month grid is 300,
+   * It came in for the Feed, whose face opens the calendar straight away, and
+   * the reason is a number: the presets panel was 50px and a month grid is 300,
    * so drawn in the flow it would be 300px of pinned chrome on a view whose
    * whole content is a scrolling stream. `--chrome-h` is measured off that box,
    * so the page below would move down by the height of a calendar every time
-   * one was opened. Over the page it costs the chrome nothing.
+   * one was opened. Over the page it costs the chrome nothing — measured, the
+   * chrome does not move at all at 1400, 390 or 320. **Every reading of a range
+   * opens it now**, the Roster's included; only Schedule keeps a panel.
    *
    * **It dismisses like every other popover in this app** — `useDismissable`,
    * so an outside press closes it and is spent on the closing, and Escape goes
@@ -277,32 +307,63 @@ export function DateBar({
    * calendar are one control over one range, and a step with the calendar open
    * moves the grid rather than closing it.
    *
-   * **Null falls back to the disclosure**, which is what every caller that has
-   * not asked for this gets.
+   * **Null is the Schedule reading and nothing else**, where `spanControl`
+   * is the panel instead.
    */
   popover?: ReactNode;
   /** What the popover calls itself, to a screen reader and in the face's own
    *  tooltip — `Pick a range on the calendar`. Ignored without `popover`. */
   popoverLabel?: string;
-  /** The disclosure everywhere else: the presets and the picker. Rendered only
-   *  while `open`, which is what lets `.date-control` be a plain flex row again
-   *  rather than a `display: none` undone by a class on somebody else's
-   *  shell. */
-  children: ReactNode;
+  /**
+   * **The days are a fact about the page rather than a control on it.** The
+   * arrows are not drawn at all and the face is a `<div>`, not a button: it
+   * opens nothing, so there is nothing for a press to promise.
+   *
+   * **Off rather than away is the rule for an arrow that has nowhere to step**,
+   * and this is deliberately not that case. A disabled arrow keeps its box
+   * because the reader *could* have stepped and cannot from here — the tooltip
+   * says why, and the label must not move out from under the finger that is
+   * stepping it. In a fixed reading there is no stepping at all and never was,
+   * so two permanently dead 36px squares either side would be a control the
+   * page does not have; the row goes to one centered column instead.
+   *
+   * It exists for a matchup team page's **Summary** reading, whose span is the
+   * period start to today by definition. Everything else about the bar is
+   * unchanged, which is the point — one bar states the days on every surface,
+   * and this is the one surface where they are not the reader's to pick.
+   */
+  fixed?: boolean;
 }) {
   const { lead, range } = dateBarFace(reading, start, end);
   const asPopover = popover != null;
+  /* A fixed bar has nothing to open, so it is never open — tested here rather
+     than trusted to every caller, a stale `open` surviving a press of `Summary`
+     being exactly the kind of thing that outlives the branch it was written
+     in. */
+  const shown = open && !fixed;
   const barRef = useRef<HTMLDivElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
   /* The hooks run unconditionally and are handed `false` where the bar is a
      disclosure — a disclosure in the pinned chrome has no outside to press
      past and no height to cap, and a conditional hook is not a thing React
      allows in any case. */
-  useDismissable(asPopover && open, barRef, onClose ?? (() => {}));
-  usePopoverFit(asPopover && open, popRef);
+  useDismissable(asPopover && shown, barRef, onClose ?? (() => {}));
+  usePopoverFit(asPopover && shown, popRef);
+  if (fixed) {
+    return (
+      <div className="date-bar date-bar-fixed" role="group" aria-label="Dates">
+        <div className="date-bar-row">
+          <div className="date-face">
+            <span className="date-face-lead">{lead}</span>
+            <span className="date-face-range">{range}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
   return (
     <div
-      className={`date-bar${open ? ' open' : ''}${asPopover ? ' date-bar-anchored' : ''}`}
+      className={`date-bar${shown ? ' open' : ''}${asPopover ? ' date-bar-anchored' : ''}`}
       role="group"
       aria-label="Dates"
       ref={barRef}
@@ -320,26 +381,22 @@ export function DateBar({
         </button>
         <button
           type="button"
-          className={`date-face${open ? ' active' : ''}`}
+          className={`date-face${shown ? ' active' : ''}`}
           onClick={onToggle}
-          aria-expanded={open}
+          aria-expanded={shown}
           aria-haspopup={asPopover ? 'dialog' : undefined}
-          /* The tooltip names what is actually behind the press, and two things
-             change it: the Schedule reading, where a preset list is not what
-             opens, and a caller that has handed over a popover in place of the
-             disclosure — on the Feed the press is a calendar and saying
-             `Presets and a range picker` would name one control this bar does
-             not have and one it opens at a remove. */
+          /* The tooltip names what is actually behind the press, and there are
+             two things it can be: a calendar, which is what every reading of a
+             range opens, or the span run in the Schedule reading, where a
+             calendar would name days no column on screen is drawn from. */
           title={
-            open
+            shown
               ? asPopover
                 ? 'Close the calendar'
                 : 'Close the date controls'
               : asPopover
                 ? popoverLabel ?? 'Pick a range'
-                : reading.kind === 'schedule' && spanControl
-                  ? 'How far ahead'
-                  : 'Presets and a range picker'
+                : 'How far ahead'
           }
         >
           <span className="date-face-lead">{lead}</span>
@@ -356,7 +413,7 @@ export function DateBar({
           <Chevron back={false} />
         </button>
       </div>
-      {open &&
+      {shown &&
         (asPopover ? (
           <div
             className="drp-popover date-bar-pop"
@@ -367,80 +424,8 @@ export function DateBar({
             {popover}
           </div>
         ) : (
-          <div className="date-bar-panel">
-            {reading.kind === 'schedule' && spanControl ? spanControl : children}
-          </div>
+          <div className="date-bar-panel">{spanControl}</div>
         ))}
-    </div>
-  );
-}
-
-/**
- * The presets and the range picker themselves, in the bar's disclosure.
- *
- * They open under the label that states the range, which is the rule they
- * followed when that label was a button in the tab row and is the reason they
- * moved with it: a disclosure and the thing it discloses have to stay together.
- */
-export function DateRow({
-  presets,
-  activePreset,
-  start,
-  end,
-  max,
-  onPick,
-  onRange,
-}: {
-  presets: DatePreset[];
-  activePreset: string | null;
-  start: string;
-  end: string;
-  max: string;
-  /** A named span was chosen. The caller closes the row behind it, that being
-   *  the errand the row was opened for — the range picker deliberately does
-   *  not, its own popover needing the row to stay put. */
-  onPick: (p: DatePreset) => void;
-  onRange: (start: string, end: string) => void;
-}) {
-  return (
-    <div className="date-control">
-      <div className="date-row">
-        {/* Desktop: a row of preset pills. On phones this row is hidden and
-            the equivalent <select> below takes over (see styles.css). */}
-        <div className="date-presets">
-          {presets.map((p) => (
-            <button
-              key={p.label}
-              type="button"
-              className={`date-preset${activePreset === p.label ? ' active' : ''}`}
-              onClick={() => onPick(p)}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-        {/* Phone-only equivalent of the pill row. A custom range (no active
-            preset) shows the disabled placeholder option. */}
-        <select
-          className="date-presets-select"
-          value={activePreset ?? ''}
-          onChange={(e) => {
-            const p = presets.find((x) => x.label === e.target.value);
-            if (p) onPick(p);
-          }}
-          aria-label="Date range preset"
-        >
-          <option value="" disabled>
-            Custom range
-          </option>
-          {presets.map((p) => (
-            <option key={p.label} value={p.label}>
-              {p.label}
-            </option>
-          ))}
-        </select>
-        <DateRangePicker start={start} end={end} max={max} onChange={onRange} />
-      </div>
     </div>
   );
 }
