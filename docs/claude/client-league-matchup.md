@@ -1631,6 +1631,14 @@ chips keeps or drops a whole row. Driven with `lineups` stripped from the
 response: 13 rows → 11, which is the pre-per-day behavior rather than an empty
 table.
 
+**The per-day lineup map fills the slot chips' `startedDays` too**, which was
+`null` here on the stated grounds that this page "reads one day's roster" — true
+of the chip and untrue of the page, which reads the map for the filter above.
+The projected table's `Starts` column needs those days to count the half of the
+span that has been played (**Client — the summary table**, *Both halves, or it
+is not the row's count*), and the chips gain the range title they never had:
+`in The Homewreckers' lineup on 3 of the 5 days in view`.
+
 **The same set now draws the `Total` divider here**, which it did not before.
 `SummaryTable` cuts its table in two at that row — the starters above it, the
 bench and the injured below — and this page handed it no starter set at all, so

@@ -51,10 +51,16 @@ export interface FantasySlot {
    */
   day: string | null;
   /**
-   * How many days of the range in view he was in the lineup on, and how many
-   * days the range holds — null on a single day, and null with no per-day
-   * lineups (an older tab, a failed read), where the slot beside it is the
-   * whole of what is known.
+   * **Which** days of the range in view he was in the lineup on, and how many
+   * days the range holds — null with no per-day lineups (an older tab, a failed
+   * read), where the slot beside it is the whole of what is known.
+   *
+   * The days rather than a count of them, because two things read this now and
+   * only one of them is counting: the chip's title says *3 of the 5 days in
+   * view* and takes the length, and the projected table's `Starts` column has
+   * to know *which* days, since its played half is the games he played on days
+   * you started him (`SummaryTable.tsx::playedStarts`). One field carrying the
+   * days is one fact; a count beside a list would be two that can disagree.
    *
    * The chip's letters and its color are still **one** day's — the last day of
    * the range — because that is what a slot *is*, and there is no honest way to
@@ -64,7 +70,7 @@ export interface FantasySlot {
    * goes in the title rather than on the chip because this table's name column
    * is measured in stat columns pushed off a phone.
    */
-  startedDays: number | null;
+  startedDays: string[] | null;
   rangeDays: number | null;
   /** ESPN's injury designation for him, raw — see `espnInjuryBadge`. It rides
    *  on this map rather than taking one of its own because it comes off the
@@ -107,6 +113,13 @@ export const FantasyRosterContext = createContext<Map<string, FantasySlot> | nul
 
 export function useFantasySlot(key: string): FantasySlot | null {
   return useContext(FantasyRosterContext)?.get(key) ?? null;
+}
+
+/** The whole map, for a caller that asks about more than one player at a time —
+ *  the summary table's `Starts` column, which needs every row's lineup days to
+ *  total the column and to decide who sits above the `Total` divider. */
+export function useFantasyRoster(): Map<string, FantasySlot> | null {
+  return useContext(FantasyRosterContext);
 }
 
 /**

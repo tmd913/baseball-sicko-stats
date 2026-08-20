@@ -2346,14 +2346,15 @@ export default function App() {
     const slotDay = fantasyRoster.endRoster || end > baseballToday() ? end : null;
     for (const p of fantasyRoster.endRoster ?? fantasyRoster.players) {
       if (p.mlbId === null) continue;
-      // How many of the days in view he was in the lineup on — the fact the
-      // chip's one-day slot can't carry over a range. Null without the per-day
-      // map, where there is no second fact to state.
+      // Which of the days in view he was in the lineup on — the fact the chip's
+      // one-day slot can't carry over a range, and the days rather than a count
+      // of them because the projected table's `Starts` column needs to know
+      // *which* (see `SummaryTable.tsx::playedStarts`). Null without the
+      // per-day map, where there is no second fact to state.
       const startedDays =
         fantasyLineups === null
           ? null
-          : rangeDates.filter((d) => startedOn(fantasyLineups, d, p.mlbId as number, p.starting))
-              .length;
+          : rangeDates.filter((d) => startedOn(fantasyLineups, d, p.mlbId as number, p.starting));
       for (const kind of p.kinds) {
         map.set(`${kind}-${p.mlbId}`, {
           slot: p.slot,

@@ -52,7 +52,7 @@ function dayTitle(spot: FantasySlot): string {
 function rangeTitle(spot: FantasySlot): string {
   const { startedDays, rangeDays } = spot;
   if (startedDays === null || rangeDays === null || rangeDays < 2) return '';
-  return ` · in ${spot.owner ?? 'your'} lineup on ${startedDays} of the ${rangeDays} days in view`;
+  return ` · in ${spot.owner ?? 'your'} lineup on ${startedDays.length} of the ${rangeDays} days in view`;
 }
 
 export function FantasySlotTag({ playerKey }: { playerKey: string }) {
@@ -93,6 +93,11 @@ export function readLineup(lineup: NonNullable<ProjectedPlayerLine['lineup']>): 
   seated: number;
   /** Days it could have — his club's games, or a starter's turns. */
   open: number;
+  /** The sentence without its leading word, so a caller with something to say
+   *  *first* — the `Starts` cell, which has the days already played to name —
+   *  can put `projected` mid-sentence where it belongs rather than starting a
+   *  second one. */
+  tail: string;
   title: string;
 } {
   const seated = lineup.days.length;
@@ -111,10 +116,10 @@ export function readLineup(lineup: NonNullable<ProjectedPlayerLine['lineup']>): 
 
   const startedPart = lineup.days.map((d) => `${prettyGameDate(d.day)} at ${d.slot}`).join(', ');
   const benchedPart = off.map((d) => prettyGameDate(d)).join(', ');
-  const title = seated
-    ? `Projected in the lineup ${startedPart}` + (off.length ? ` — benched ${benchedPart}` : '')
-    : `Projected on the bench every day his club plays — ${benchedPart}`;
-  return { slots, seated, open: lineup.openDays.length, title };
+  const tail = seated
+    ? `in the lineup ${startedPart}` + (off.length ? ` — benched ${benchedPart}` : '')
+    : `on the bench every day his club plays — ${benchedPart}`;
+  return { slots, seated, open: lineup.openDays.length, tail, title: `Projected ${tail}` };
 }
 
 /**
@@ -144,8 +149,10 @@ export function readLineup(lineup: NonNullable<ProjectedPlayerLine['lineup']>): 
  * ESPN's own slot names and `BE` is one of them, so a bench under the lens and
  * a bench without it are the same two letters. It keeps the muted outlined
  * shape that chip has always had, so the column still reads *lit is playing,
- * quiet is not* at a glance — and the `Starts` cell beside it reads `0`, which
- * is the same fact in the arithmetic the column keeps.
+ * quiet is not* at a glance. The `Starts` cell beside it counts the **whole
+ * span** rather than the days ahead, so a man benched for the rest of the week
+ * still shows the starts he has already been given — the chip is about the plan
+ * and the column is about the row.
  *
  * **Nothing at all where his club has no game left**, which is the honest
  * absence: there is no lineup decision to show, the row's own figures are

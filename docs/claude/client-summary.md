@@ -314,9 +314,15 @@ where the projection has just filled every one of those days seat by seat. So a
 man the plan starts on **any** day of the span is above the line, which is also
 the set the `Lineup` foot beside it is a total over and the set each name
 column's chip already names. The two halves of a straddling range each take
-their own answer: the plan for the days ahead, `starters` for the days behind,
-so nothing a man banked on Monday drops out of the foot because Thursday's
-lineup has no room for him.
+their own answer: the plan for the days ahead, your actual lineups for the days
+behind, so nothing a man banked on Monday drops out of the foot because
+Thursday's lineup has no room for him. **The test is the `Starts` column's own
+figure** — *does it read more than nought* — rather than a second one written
+here, which is the same rule this section opens with, applied to the lens: the
+line and the number printed beside it cannot part company if they are one
+count. (It was two tests for a day, `starters` answering for the played half,
+and the `Starts` column has since been made to count that half itself — see
+*Both halves, or it is not the row's count*.)
 
 What it fixes is a line that could disagree with the total it labels. Measured
 on team 4 over 8/19–8/23 before the change: **sixteen rows above `Lineup · 16`**,
@@ -918,35 +924,36 @@ two questions had all along.
 | one slot, every day | **`2B`** | **`5`** |
 | two slots | **`3B/UTIL`** | **`4`** |
 | a single date picked | **`2B`** | **`1`** |
-| never started | **`BE`** | **`0`** |
-| club has no game left | *(no chip)* | **`—`** |
+| never started, nor already | **`BE`** | **`0`** |
+| nothing either way | *(no chip)* | **`—`** |
 
 - **It sits beside `G`, which is the column it qualifies.** `G` is games his
-  figures are drawn over and this is days the lineup has room for him, and the
+  figures are drawn over and this is days the lineup had room for him, and the
   gap between the two is the whole argument of *A row is what he would do if he
-  plays; the foot is what the lineup gets* — a reliever reading `G 1 · Starts 4`
-  is a man holding a seat all week for one appearance, which is a thing a
-  manager acts on and which neither number says alone.
+  plays; the foot is what the lineup gets* — a reliever reading `Games 1 ·
+  Starts 5` is a man holding a seat all week for one appearance, which is a
+  thing a manager acts on and which neither number says alone.
 - **A whole number, where every other projected figure is a tenth.** Those are
   shares of a game (`chances` is play-share weighted for a batter, starts plus
   relief for a pitcher, and 0.4 home runs is a real answer where `0` is not); a
   start is a decision the plan made on a named day, and there is no such thing
   as 4.3 of them.
-- **`0` where it benches him every day, `—` where there was no day to decide.**
-  That is the chip's own pair of absences in the arithmetic a column keeps — `BE`
-  against no chip at all — and it holds this table's standing rule that a nought
-  is never drawn where the honest answer is *nothing was asked*: a club with no
-  game left has the rest of its row in dashes for the same reason.
-- **The denominator moves to the title**, which is where the days themselves
-  already were: `4 of 4 — Projected in the lineup Aug 21 at C, Aug 22 at C, Aug
-  23 at C, Aug 24 at C`, and `1 of 4 — … — benched Aug 21, Aug 22, Aug 23`. The
-  cell and the chip read one sentence out of one function (`FantasySlot.tsx::readLineup`),
-  so the two cannot come to describe one plan differently.
-- **The foot adds it up**, and that total is the one figure on the row that is
-  *not* a break from the column: seat-days, which is what the `Lineup` label
-  beside it is a total over. Measured on the live league over 8/19–8/23,
-  batting: rows `3 · 3 · 4 · 4 · 3 · 3 · 4 · 3 · 4 · 3 · 3` and `Lineup · 11`
-  reading **37**.
+- **`0` where nobody started him on any of it, `—` where there was nothing to
+  decide either way.** The dash holds this table's standing rule that a nought is
+  never drawn where the honest answer is *nothing was asked*: a man with no day
+  played in your lineup and no day left for his club has the rest of his row in
+  dashes for the same reason. (Both of those read differently now than they did
+  when this was written — see *Both halves, or it is not the row's count* below.)
+- **The days are on the title**, which is where they already were: `5 starts —
+  started Aug 19; projected in the lineup Aug 20 at 3B, Aug 21 at 1B, Aug 22 at
+  1B, Aug 23 at 1B`, and `1 start — projected in the lineup Aug 20 at UTIL —
+  benched Aug 21, Aug 22, Aug 23`. The projected half of that sentence is
+  `FantasySlot.tsx::readLineup`'s, word for word the one the chip carries, so
+  the two cannot come to describe one plan differently.
+- **The foot adds it up**, which is this table's standing rule about a column
+  and the figure under it. Measured on the live league over 8/19–8/23, batting:
+  rows `4 · 4 · 5 · 5 · 4 · 4 · 5 · 4 · 5 · 4 · 4` and `Lineup · 11` reading
+  **48**.
 - **No new CSS.** The header and the cells are `sum-num`, the class every stat
   column already uses — the stylesheet is byte-identical across this change
   (158,320 raw / 28,282 gzipped, before and after).
@@ -1110,6 +1117,68 @@ rule to add; measured on the live fantasy roster, the batting table goes
 (`3.9/17.1` against `0/1`), the G column being *narrower* than the Opponent one
 — and **1400 → 1400 at 1400**, with the row 58.00px, the header row 51.00, the
 headshot column pinned at 0 and page-body overflow 0 either way.
+
+#### Both halves, or it is not the row's count
+
+**`Starts` counted the projection's half and `Games` counted the row, and one
+table cannot keep two arithmetics.** It shipped that way and was caught by a
+reader inside a day: *4 starts remaining but 5 games for Sal Stewart, even
+though his game for today is finished.* The figures were right about what each
+was counting — his club's game today was final, so the projection had already
+dropped it (which is what the live re-read above is for) and the row read
+`Games 5 · Starts 4`: one game played plus four projected against four
+projected. But *he was started today*. That is a fifth start, and the column
+that would not say so was the one column on the row measuring a different span
+from the rest of it.
+
+**So the played half is counted, by the exact test the `Games` column's played
+half uses.** `playedStarts` is *the games he played on days your lineup had
+him*: `playedGame`'s own per-kind test — a batter's game he came to the plate
+in, a pitcher's game he threw in — intersected with `FantasySlot.startedDays`.
+Sal Stewart now reads **`Games 5 · Starts 5`**, and Austin Riley on a team page
+reads `Starts 2` where the plan gives him one day and the manager already gave
+him today.
+
+- **The lineup days come off the chip's own map.** `FantasySlot.startedDays`
+  went from a *count* of the days in view he was in the lineup on to the **days
+  themselves** — one field carrying one fact, where a count beside a list is two
+  that can disagree. The chip's title takes its length and reads exactly as it
+  did; the column takes the days. A matchup team page filled that field with
+  `null` on the stated grounds that it "reads one day's roster", which was true
+  of the chip and stopped being true of the page — it reads the per-day map for
+  its own `Starters` filter, so it now fills the days from `byDate` and its
+  chips gain the range title they never had.
+- **Two tiers, `projectStarters`' own**, so nothing new can fail here: the
+  per-day map where there is one, and the single end-of-range `starting` flag
+  applied to every played game where there is not (an older tab, a failed read).
+- **A game he played on a day you had him benched is not a start**, and his row
+  still counts it in `Games`. That is *A row is what he would do if he plays*
+  again: the row is about the player and the count of starts is about what you
+  did with him.
+- **Days, not games**, which is what keeps the column consistent with its own
+  other half: the plan seats a man once a day however many games that day holds,
+  so a doubleheader you started him for is one start against two games.
+- **`Starts` above `Games` is the ordinary case, not an error.** A batter
+  started four times who bats in 80% of the games he is started for is `Starts 4
+  · Games 3.3` — a start is a whole decision and a game is a share, which is the
+  same pair the `0.4 home runs` in the row is drawn from.
+- **The divider reads the same count.** `splitStarters` under the lens was
+  asking two questions (the plan's seats, or `starters` plus a played game); it
+  asks one now — *does this column read more than nought* — so the line above the
+  `Lineup` total and the figure printed in it cannot part company.
+- **`0` and `—` shift with it.** `0` is *nobody started him on any of these
+  days*, and the dash is *there was nothing to decide either way* — no day
+  played with him in your lineup and no day left for his club. So a pitcher who
+  threw today in your lineup and whose club is idle for the rest of the span
+  reads `1`, where before the column dashed him.
+
+Measured over 8/19–8/23 on the live roster, batting: the eleven above the line
+read `4 · 4 · 5 · 5 · 4 · 4 · 5 · 4 · 5 · 4 · 4` against `Games` of `3.3 · 3.6 ·
+4.4 · 5 · 3.9 · 4 · 4.4 · 3.7 · 5 · 3.9 · 4`, and `Lineup · 11` reads **48**,
+which is the column added up. On the pitcher tab, Logan Gilbert — who threw
+today and whose club has nothing left in the span — goes from a dash to
+**`Games 1 · Starts 1`**. On team 4: Riley `2`, Yelich `1`, Teoscar `0` and
+below the line, `Lineup · 13` reading **51**.
 
 #### The header is the word, not the letter
 

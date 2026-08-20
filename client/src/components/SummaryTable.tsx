@@ -16,7 +16,8 @@ import {
   tallyWords,
 } from './schedule';
 import type { ScheduleIndex } from './schedule';
-import { useEligible, useFullPage } from '../hooks';
+import type { FantasySlot } from '../hooks';
+import { useEligible, useFantasyRoster, useFullPage } from '../hooks';
 import type {
   BattingLine,
   PitchingLine,
@@ -45,6 +46,7 @@ import {
   mostRecentGameFirst,
   pitchingCorner,
   positionCell,
+  prettyGameDate,
   surname,
   whipOf,
 } from '../lib';
@@ -294,14 +296,59 @@ function ProjectablePitchCells({ line, projected }: { line: PitchingLine; projec
   );
 }
 
-/** Games of the range he actually played — each kind's own test, and both are
- *  the app's existing ones. Read by the `G` column and by `splitStarters`,
- *  which needs to know whether a man benched over the days ahead has anything
- *  banked from the days behind. */
+/** Did he play in this one — each kind's own test, and both are the app's
+ *  existing ones: a batter's game he came to the plate in (`PlayerCard`'s own
+ *  `played`) and a pitcher's game he threw in (`aggregatePitching`'s filter).
+ *  Neither counts the placeholder games a report carries for the days his club
+ *  played without him. */
+function playedGame(kind: PlayerKind, g: PlayerGame): boolean {
+  return kind === 'pitcher' ? g.pitching != null : g.plateAppearances.length > 0;
+}
+
+/** Games of the range he actually played. Read by the `Games` column and by
+ *  `playedStarts` beside it, which asks the same question of a smaller set of
+ *  days. */
 function playedGames(r: PlayerReport): number {
-  return r.kind === 'pitcher'
-    ? r.games.filter((g) => g.pitching).length
-    : r.games.filter((g) => g.plateAppearances.length > 0).length;
+  return r.games.filter((g) => playedGame(r.kind, g)).length;
+}
+
+/**
+ * **The played half of `Starts`** — the games he played on days your lineup
+ * actually had him.
+ *
+ * It is the exact counterpart of `playedGames` beside it, and that is the whole
+ * of the decision: `Games` is *what he has already done + what he should still
+ * add*, so a `Starts` counting only the second half would be the one cell on
+ * the row keeping a different arithmetic — which is precisely what it was.
+ * Measured on the live roster on 2026-08-19, a day whose games are all played:
+ * `Games 5 · Starts 4` for a man started every day of the span, the missing
+ * start being today's, already in the books.
+ *
+ * **Two tiers, `projectStarters`' own**: the per-day lineup map where there is
+ * one (`FantasySlot.startedDays`), and the single end-of-range answer where
+ * there is not — an older tab, a failed read — which is the direction the whole
+ * of that filter fails in.
+ *
+ * A game he played on a day you had him **benched** is not a start, and his row
+ * still counts it: the row is what the *player* did, which is the rule the two
+ * arithmetics below rest on.
+ */
+function playedStartDays(r: PlayerReport, spot: FantasySlot | null): string[] {
+  if (!spot) return [];
+  const days = spot.startedDays ? new Set(spot.startedDays) : null;
+  const kept = r.games.filter(
+    (g) => playedGame(r.kind, g) && (days ? days.has(g.date) : spot.starting),
+  );
+  // **Days, not games**, which is what keeps the column consistent with its own
+  // other half: the plan seats a man once a day however many games that day
+  // holds, so a doubleheader you started him for is one start against two
+  // games. `Games 2 · Starts 1` is the same relationship a play-share gives
+  // every other row, arrived at from the other side.
+  return [...new Set(kept.map((g) => g.date))];
+}
+
+function playedStarts(r: PlayerReport, spot: FantasySlot | null): number {
+  return playedStartDays(r, spot).length;
 }
 
 /**
@@ -392,17 +439,29 @@ function ProjectedGamesCell({ n }: { n: number }) {
  * spends. So the chip keeps *where* he plays and this keeps *how often* — the
  * split the two questions had all along.
  *
+ * **Both halves of the row, like every figure beside it.** The days already
+ * played that your lineup had him plus the days ahead the plan seats him —
+ * `playedStarts` and `lineup.days`. It counted only the second when it was
+ * built, which made it the one cell on the row keeping a different arithmetic
+ * from the `Games` next to it: measured on the live roster on an evening whose
+ * games were all played, a man started every day of the span read **`Games 5 ·
+ * Starts 4`**, the missing start being today's, already in the books. That is
+ * not a rounding difference a reader can talk themselves into — it is the
+ * column disagreeing with its neighbor about what a span is.
+ *
  * **A whole number, where every other projected figure is a tenth.** Those are
  * shares of a game (`chances` is play-share weighted, and half a game is a real
- * answer); a start is a decision the plan made on a named day, and there is no
- * such thing as 4.3 of them.
+ * answer); a start is a decision made on a named day, and there is no such
+ * thing as 4.3 of them. It is why `Starts` sits *above* `Games` on most rows
+ * and should: four starts of a man who bats in 80% of the games he is started
+ * for is `Starts 4 · Games 3.3`, which is the two questions answered
+ * separately.
  *
- * **`0` where it benches him every day, a dash where there was no day to
- * decide.** That is the chip's own pair of states in the arithmetic this column
- * keeps — `BE` against no chip at all — and it is this table's standing rule
- * that a nought must not be drawn where the honest answer is *nothing was
- * asked*: a club with no game left in the span has the rest of its row in
- * dashes for exactly the same reason.
+ * **`0` where nobody started him on any of it, a dash where there was nothing
+ * to decide either way** — no day played with him in your lineup, and no day
+ * left for his club. The dash is this table's standing rule that a nought is
+ * never drawn where the honest answer is *nothing was asked*, and it is the
+ * same absence that dashes the rest of that row.
  *
  * Drawn only where there is a lineup to fill. A saved watchlist and a league
  * that published no slot counts have no plan and so no starts, and a column of
@@ -432,34 +491,63 @@ function ProjectedStartsHead({ kind }: { kind: PlayerKind }) {
   );
 }
 
-/** A `Starts` cell, carrying `readLineup`'s own sentence — the days themselves,
- *  benched ones named, which is what a count cannot say and the chip beside it
- *  says in the same words. */
-function ProjectedStartsCell({ lineup }: { lineup?: ProjectedPlayerLine['lineup'] }) {
-  if (!lineup || lineup.openDays.length === 0) return <td className="sum-num">—</td>;
-  const { seated, open, title } = readLineup(lineup);
+/**
+ * A `Starts` cell: the days already played that you started him on plus the
+ * days ahead the plan seats him, with both named on the title — `readLineup`'s
+ * own sentence for the second half, which is the sentence the chip beside it
+ * carries word for word.
+ *
+ * **A dash only where there was nothing to decide either way** — no day played
+ * with him in your lineup and no day left for his club — which is the same
+ * absence that dashes the rest of his row. `0` is the other thing: days were
+ * there and the answer was no.
+ */
+function ProjectedStartsCell({
+  r,
+  lineup,
+  spot,
+}: {
+  r: PlayerReport;
+  lineup?: ProjectedPlayerLine['lineup'];
+  spot: FantasySlot | null;
+}) {
+  const played = playedStarts(r, spot);
+  const read = lineup && lineup.openDays.length > 0 ? readLineup(lineup) : null;
+  if (!read && played === 0) return <td className="sum-num">—</td>;
+  const n = played + (read?.seated ?? 0);
+  const playedDays = playedStartDays(r, spot);
+  const parts = [
+    playedDays.length > 0 ? `started ${playedDays.map(prettyGameDate).join(', ')}` : '',
+    read ? `projected ${read.tail}` : '',
+  ].filter(Boolean);
   return (
-    <td className="sum-num" title={`${seated} of ${open} — ${title}`}>
-      {seated}
-    </td>
-  );
-}
-
-/** The `Starts` total: the seat-days the plan spends over the men above the
- *  line, which is the column added up as this table's standing rule requires —
- *  and the figure the `Lineup` row beside it is drawn over. */
-function ProjectedStartsTotal({ n }: { n: number }) {
-  return (
-    <td className="sum-num" title="Lineup spots the projection fills over these days, added up">
+    <td className="sum-num" title={`${n} ${n === 1 ? 'start' : 'starts'} — ${parts.join('; ')}`}>
       {n}
     </td>
   );
 }
 
-/** The seat-days one man is given, for the total — 0 where the plan has no
- *  lineup for him at all. */
-function startsOf(proj: ProjectedPlayerLine | undefined): number {
-  return proj?.lineup?.days.length ?? 0;
+/** The `Starts` total: the lineup days the men above the line spend between
+ *  them — started and projected alike, which is the column added up as this
+ *  table's standing rule requires. */
+function ProjectedStartsTotal({ n }: { n: number }) {
+  return (
+    <td className="sum-num" title="Lineup spots these players fill over these days — the ones already started and the ones the projection fills — added up">
+      {n}
+    </td>
+  );
+}
+
+/**
+ * **The whole row's starts** — the days already played that you started him on,
+ * plus the days ahead the plan seats him.
+ *
+ * The same shape as `projectedGames` beside it and for the same reason: every
+ * figure on this row is *what has happened + what is still to come*, and a
+ * count of one half would read as a count of the row.
+ */
+function startsOf(r: PlayerReport, proj: ProjectedPlayerLine | undefined, spot: FantasySlot | null): number {
+  return playedStarts(r, spot) + (proj?.lineup?.days.length ?? 0);
 }
 
 /**
@@ -931,21 +1019,20 @@ function splitStarters(
   players: PlayerReport[],
   starters: Set<string> | null,
   projection: ProjectedLines | null,
+  slots: Map<string, FantasySlot> | null,
 ): { top: PlayerReport[]; rest: PlayerReport[] } {
   // Under the lens the plan is the answer — see the paragraph above. Splitting
   // on anything else puts a man above a `Lineup` total his own seat is not in.
+  // And it is the **column's** own count that decides, both halves of it: the
+  // ordinary press straddles today, so a projected span has a played half the
+  // plan does not answer for and which must not be allowed to drop — a man you
+  // started on Monday and the projection benches on Thursday earned you Monday,
+  // his row carries it, and the foot beside this line adds it up. One test for
+  // the line and the figure printed on it.
   const plan = projection && players.some((r) => projection.get(playerKey(r))?.lineup != null);
   const isTop = plan
     ? (r: PlayerReport) =>
-        startsOf(projection!.get(playerKey(r))) > 0 ||
-        // **And the days behind are the lineup's too.** The ordinary press
-        // straddles today, so a projected span has a played half that the plan
-        // does not answer for and must not be allowed to drop: a man you
-        // started on Monday and the projection benches on Thursday earned you
-        // Monday, his row carries it, and the foot beside this line adds it up.
-        // `starters` is who was in the lineup on those days — the same set the
-        // button uses, over exactly the days the plan is silent about.
-        (starters?.has(playerKey(r)) === true && playedGames(r) > 0)
+        startsOf(r, projection!.get(playerKey(r)), slots?.get(playerKey(r)) ?? null) > 0
     : starters
       ? (r: PlayerReport) => starters.has(playerKey(r))
       : null;
@@ -1008,7 +1095,8 @@ function BatterTable({
 }) {
   const lineOf = (r: PlayerReport): BattingLine =>
     projection ? projectedBatting(r, projection.get(playerKey(r))) : combineLines(r.games.map((g) => g.line));
-  const { top, rest } = splitStarters(batters, starters, projection);
+  const slots = useFantasyRoster();
+  const { top, rest } = splitStarters(batters, starters, projection, slots);
   /** Whether the plan filled a lineup at all — what the `Starts` column is
    *  drawn on. Over the whole tab rather than over `top`, so the header and
    *  the cells under it cannot disagree about how many columns there are. */
@@ -1046,7 +1134,13 @@ function BatterTable({
             {projection && (
               <ProjectedGamesCell n={projectedGames(r, projection.get(playerKey(r)))} />
             )}
-            {anyLineup && <ProjectedStartsCell lineup={projection?.get(playerKey(r))?.lineup} />}
+            {anyLineup && (
+              <ProjectedStartsCell
+                r={r}
+                lineup={projection?.get(playerKey(r))?.lineup}
+                spot={slots?.get(playerKey(r)) ?? null}
+              />
+            )}
             <ProjectableStatCells line={lineOf(r)} projected={projection != null} />
           </>
         )}
@@ -1119,7 +1213,12 @@ function BatterTable({
               )}
               {anyLineup && (
                 <ProjectedStartsTotal
-                  n={top.reduce((n, r) => n + startsOf(projection!.get(playerKey(r))), 0)}
+                  n={top.reduce(
+                    (n, r) =>
+                      n +
+                      startsOf(r, projection!.get(playerKey(r)), slots?.get(playerKey(r)) ?? null),
+                    0,
+                  )}
                 />
               )}
               <ProjectableStatCells line={total} projected={projection != null} />
@@ -1152,7 +1251,8 @@ function PitcherTable({
 }) {
   const lineOf = (r: PlayerReport): PitchingLine =>
     projection ? projectedPitching(r, projection.get(playerKey(r))) : aggregatePitching(r);
-  const { top, rest } = splitStarters(pitchers, starters, projection);
+  const slots = useFantasyRoster();
+  const { top, rest } = splitStarters(pitchers, starters, projection, slots);
   /** See `BatterTable`'s own. */
   const anyLineup = projection != null && pitchers.some((r) => projection.get(playerKey(r))?.lineup != null);
   /** See `BatterTable`'s own. */
@@ -1185,7 +1285,13 @@ function PitcherTable({
             {projection && (
               <ProjectedGamesCell n={projectedGames(r, projection.get(playerKey(r)))} />
             )}
-            {anyLineup && <ProjectedStartsCell lineup={projection?.get(playerKey(r))?.lineup} />}
+            {anyLineup && (
+              <ProjectedStartsCell
+                r={r}
+                lineup={projection?.get(playerKey(r))?.lineup}
+                spot={slots?.get(playerKey(r)) ?? null}
+              />
+            )}
             <ProjectablePitchCells line={lineOf(r)} projected={projection != null} />
           </>
         )}
@@ -1251,7 +1357,12 @@ function PitcherTable({
               )}
               {anyLineup && (
                 <ProjectedStartsTotal
-                  n={top.reduce((n, r) => n + startsOf(projection!.get(playerKey(r))), 0)}
+                  n={top.reduce(
+                    (n, r) =>
+                      n +
+                      startsOf(r, projection!.get(playerKey(r)), slots?.get(playerKey(r)) ?? null),
+                    0,
+                  )}
                 />
               )}
               <ProjectablePitchCells line={totalLine} projected={projection != null} />
