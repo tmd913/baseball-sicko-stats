@@ -87,7 +87,7 @@ import {
 import type { FantasySlot } from './hooks';
 import { LoadingBlock, LoadingLine, SpinningBaseball } from './components/Loading';
 import { StartersToggle } from './components/StartersToggle';
-import { ProjectedToggle } from './components/Projection';
+import { ProjectedToggle, ProjectionKey } from './components/Projection';
 import {
   FeedFilterPills,
   FeedOrderToggle,
@@ -3826,7 +3826,15 @@ export default function App() {
         : playerKind;
   const kindCards = shownKind === 'pitcher' ? cardPitchers : cardBatters;
   /**
-   * The rows the roster views show — Summary, Games and Feed alike.
+   * **The `Starters` filter itself** — who, of the rows the roster views are
+   * showing, is starting. `filteredCards` below is this list where the button
+   * is pressed and the whole tab where it is not, and `starterKeys` is the same
+   * answer as a set of keys, for the divider the summary table's `Total` row
+   * has become.
+   *
+   * It was `filteredCards` outright until that divider wanted the same set with
+   * the button up; the two readings and every edge case below are unchanged,
+   * and only the gate moved (from `startersActive` to `startersOffered`).
    *
    * The filter reached the summary table alone for a while, on the reasoning
    * that "starting today" is a statement about one afternoon where the games
@@ -3852,8 +3860,7 @@ export default function App() {
    * Batters/Pitchers tabs alone, which is right — they say what is watched, not
    * what tonight's lineups came to.
    */
-  const filteredCards = useMemo(() => {
-    if (!startersActive) return kindCards;
+  const starterCards = useMemo(() => {
     // Reading the fantasy team, the button answers a different question, so it
     // reads a different fact: not "is he in tonight's lineup" but "am I
     // starting him". The two are genuinely different populations, and in this
@@ -3896,6 +3903,15 @@ export default function App() {
     // honest answer to "am I starting him". Dropped means you were not playing
     // him on any day in view — including every day before you picked him up,
     // where his line belonged to whoever held him.
+    //
+    // **Computed whether or not the button is pressed**, which it was not
+    // before, because the summary table's `Total` row is now a divider between
+    // the starters and everybody else and needs the same set the button does.
+    // A second test written down there would be a second test that will one
+    // day disagree with this one, and silently. `startersOffered` is what gates
+    // it: over a range with no today in it and no per-day lineups there is
+    // nobody this could name, which is the same reason the button is not drawn.
+    if (!startersOffered) return null;
     if (fantasyLineups || fantasySlots) {
       // Both fantasy tiers are `lib.ts::projectStarters` — the per-day
       // projection where there is a map, and the single end-of-range answer
@@ -3911,7 +3927,24 @@ export default function App() {
     }
     const today = baseballToday();
     return kindCards.filter((r) => isStartingOn(r, today));
-  }, [kindCards, startersActive, fantasySlots, fantasyLineups, rangeDates]);
+  }, [kindCards, startersOffered, fantasySlots, fantasyLineups, rangeDates]);
+
+  /** The rows the filter keeps, or the whole tab where it is off. */
+  const filteredCards = startersActive && starterCards ? starterCards : kindCards;
+
+  /**
+   * The same answer as a set of player keys, for the summary table's `Total`
+   * divider — see `SummaryTable.tsx::splitStarters`. Null is *the app cannot
+   * say*, and there the row goes back to the bottom over everybody.
+   *
+   * Off `starterCards` and not off `filteredCards`: with the button pressed the
+   * two are the same list, and with it up this is still the honest answer to
+   * "who is starting" about the wider table on screen.
+   */
+  const starterKeys = useMemo(
+    () => (starterCards ? new Set(starterCards.map(playerKey)) : null),
+    [starterCards],
+  );
   /**
    * Which of the two rules the toggle applies — see `filteredCards`. The
    * button's tooltip and the empty state under it both have to say which set
@@ -4585,16 +4618,34 @@ export default function App() {
    * as the Schedule toggle is not.
    */
   const projectedToggle = (
-    <ProjectedToggle
-      on={rosterProjected}
-      loading={rosterProjLoading}
-      onToggle={toggleRosterProjected}
-      title={
-        rosterProjected
-          ? 'Back to what has actually happened'
-          : "Add what these players are expected to do over the days still to be played — and open on the days there are games in"
-      }
-    />
+    <span className="projected-group">
+      <ProjectedToggle
+        on={rosterProjected}
+        loading={rosterProjLoading}
+        onToggle={toggleRosterProjected}
+        title={
+          rosterProjected
+            ? 'Back to what has actually happened'
+            : "Add what these players are expected to do over the days still to be played — and open on the days there are games in"
+        }
+      />
+      {/* **The key to the lens, beside the control that turns it on.** It hung
+          off the table's own caption until that caption went — the date bar
+          under the tabs prints `Projected` over the same dates, so the caption
+          was saying twice what the bar says once — and this is where the
+          League page has always kept its copy: an ⓘ next to the button, opening
+          from the row rather than from its own 30px box (`.proj-key`).
+
+          Drawn on the press rather than on the answer, which is the "reserve
+          the box" rule read the only way it can be here: the key is *about* the
+          lens, so it appears the moment the lens is on and cannot arrive a
+          quarter of a second later under the finger that has moved on to the
+          next control. `days` is 0 until the read lands, which the panel words
+          as `over the days left` rather than naming a number it has not got. */}
+      {rosterProjected && (
+        <ProjectionKey days={rosterProjection?.daysLeft ?? 0} className="proj-key" />
+      )}
+    </span>
   );
 
   const startersToggle = startersOffered ? (
@@ -5853,6 +5904,10 @@ export default function App() {
                out, so the report's own figures stand until the projection can
                be added to them. */
             projection={rosterProjected ? rosterProjection : null}
+            /* Who sits above the `Total` row, which is a divider inside the
+               table now rather than a pinned foot — see `starterKeys` and
+               `SummaryTable.tsx::splitStarters`. */
+            starters={starterKeys}
             /* Kept when the table takes the page. The same nodes render in the
                view bar as well, which is behind the expanded box and so never
                on screen at the same time — the alternative is lifting the
