@@ -17,7 +17,6 @@ import {
 } from './schedule';
 import type { ScheduleIndex } from './schedule';
 import { useEligible, useFullPage } from '../hooks';
-import { ProjectionKey } from './Projection';
 import type {
   BattingLine,
   PitchingLine,
@@ -45,7 +44,6 @@ import {
   mostRecentGameFirst,
   pitchingCorner,
   positionCell,
-  prettyDate,
   surname,
   whipOf,
 } from '../lib';
@@ -362,39 +360,39 @@ function ProjectedGamesCell({ n }: { n: number }) {
 }
 
 /**
- * The caption over a projected table: what the figures are, which days they
- * cover, and how much of that is still to be played.
+ * **The one thing the caption said that nothing else on the page can say.**
  *
- * It is the table's **caption** rather than a control, which is why it sits
- * directly above the pane and not up in the pinned row with the toggle — the
- * same place and the same reasoning as the research board's count line and the
- * Rankings tab's span line. The days matter as much as the dates: a span whose
- * clubs are all idle projects nothing, and a table of dashes with nothing to
- * explain it is the one state this must not be in.
+ * What stood here was a full caption — `Projected · Aug 18 – Aug 23 · 6 days
+ * still to play` — and two thirds of it are now printed a few pixels above it,
+ * in the date bar under the tabs: that bar has three readings and the lens is
+ * one of them, so it already leads with `Projected` over the very dates this
+ * line was restating. Two statements of one fact, eight pixels apart, is a
+ * caption that has been made redundant by something better placed — the bar is
+ * pinned, so it says it whether or not the table is scrolled, and it says it in
+ * the expanded mode too. The ⓘ went up beside the `Projected` toggle, which is
+ * the control it explains.
+ *
+ * **What the bar cannot say is that there is nothing to project**, and that is
+ * the one state this must not be silent in: with every day in view already
+ * played the lens adds nothing, and a reader who has just pressed a control and
+ * seen the table not move deserves to be told why rather than left to conclude
+ * the press failed. Where the clubs are idle as well as the days spent it is a
+ * table of *dashes*, which is the same state wearing a worse face. So the
+ * caption survives exactly where it is still the only thing saying anything,
+ * and nowhere else — it is drawn at `daysLeft === 0` and not at all otherwise.
+ *
+ * It keeps its place directly above the pane rather than moving up beside the
+ * toggle, for the reason it was put there in the first place: it is about the
+ * rows under it, not about the control that produced them, and at a phone's
+ * width the tab row has no line to spare for a sentence.
  */
 function ProjectionNote({ p }: { p: RosterProjection }) {
-  const span =
-    p.start === p.end ? prettyDate(p.start) : `${prettyDate(p.start)} – ${prettyDate(p.end)}`;
-  // **With nothing left to play the span is not printed**, and that is the
-  // difference between a caption and a claim: over a range wholly in the past
-  // the figures are the report's own and there is no projected span to name, so
-  // naming one would be the lens taking credit for numbers it did not touch.
+  if (p.daysLeft > 0) return null;
   return (
     <div className="summary-proj-note">
-      <span className="summary-proj-tag">Projected</span>
-      {p.daysLeft > 0 ? (
-        <>
-          <span className="summary-proj-span">{span}</span>
-          <span className="summary-proj-days">
-            {`${p.daysLeft} ${p.daysLeft === 1 ? 'day' : 'days'} still to play`}
-          </span>
-        </>
-      ) : (
-        <span className="summary-proj-days">
-          nothing to project — every game in these days has been played
-        </span>
-      )}
-      <ProjectionKey days={p.daysLeft} className="summary-proj-key" />
+      <span className="summary-proj-days">
+        nothing to project — every game in these days has been played
+      </span>
     </div>
   );
 }
@@ -769,14 +767,84 @@ type Expand = { isFull: boolean; toggle: () => void };
  * `Total` when it is the column's, **`Lineup`** when it is the plan's — and the
  * tooltip carries the sentence.
  */
-function TotalLabel({ n, lineup }: { n: number; lineup: boolean }) {
+/**
+ * **Who the `Total` row is a total of, and where it falls in the table.**
+ *
+ * The row used to be a `<tfoot>` under every player on the tab — starters,
+ * bench and injured list alike — which made the most useful row on the table
+ * the one figure nobody could act on: `what my roster would score if all
+ * sixteen of them could bat`. What a manager reads a roster to find out is what
+ * *tonight's* team is worth, and that is the men above the line.
+ *
+ * So the table is cut in two and the row is the cut: **starters, the total,
+ * then the bench and the injured**. It is a divider inside the body rather than
+ * a foot, so it is no longer pinned to the bottom of the pane — a divider that
+ * followed the scroll would sit across the middle of the rows it is meant to
+ * separate, and there is nothing left for it to be the foot *of*.
+ *
+ * **Who is a starter is not this component's decision**, and deliberately: the
+ * app already has exactly one answer to that question and it is the `Starters`
+ * filter's — `lib.ts::projectStarters`, called once in `App.tsx` whether the
+ * filter is pressed or not, and handed down here as the set of keys it keeps.
+ * A second test written here is a second test that will one day disagree with
+ * the button, and the two would disagree *silently*, the button narrowing to
+ * one set while the line above the total drew another.
+ *
+ * That means the word carries the filter's own two readings and its own edge
+ * cases, which are argued in full at `projectStarters`: on your own roster a
+ * starter is a man in tonight's posted lineup or named as today's starting
+ * pitcher (the field the pip on his headshot is drawn from), and on a fantasy
+ * team he is a man *you* started on some day of the range, however his real
+ * manager has him. **A player the app cannot place is below the line**, which
+ * is the filter's own answer — it keeps what it can name and drops the rest —
+ * and it is the conservative direction: a man counted into a lineup he is not
+ * in overstates the row that is read as *what is tonight worth*, where one left
+ * out of it merely sits with the bench and adds up on his own row as before.
+ *
+ * **Two degenerate cases, and both are the old table exactly.** With nobody
+ * above the line — no lineup posted yet this morning, or a range the filter is
+ * not offered over at all, where `starters` is null — a divider would divide
+ * nothing and label a total of nought, so the row goes back to the bottom over
+ * everybody. With nobody *below* it — the filter already pressed, or a team
+ * every man of which is in the lineup — it is at the bottom for the ordinary
+ * reason, that there is nothing after it. The rule reads the same at both ends:
+ * the row totals what is above it, and what is above it is the whole table
+ * whenever the split has nothing to say.
+ */
+function splitStarters(
+  players: PlayerReport[],
+  starters: Set<string> | null,
+): { top: PlayerReport[]; rest: PlayerReport[] } {
+  if (!starters) return { top: players, rest: [] };
+  const top = players.filter((r) => starters.has(playerKey(r)));
+  if (top.length === 0 || top.length === players.length) return { top: players, rest: [] };
+  return { top, rest: players.filter((r) => !starters.has(playerKey(r))) };
+}
+
+/**
+ * The label on the divider, and the count is the count of what it totals.
+ *
+ * **`Total` or `Lineup` is which arithmetic the figures beside it are** — see
+ * *A row is what he would do if he plays; the foot is what the lineup gets*.
+ * **`n` is who** — and now that the row can have players under it as well as
+ * over it, that number is the men above the line rather than the men on the
+ * tab, which is the whole point of moving it: `Total · 9` on a sixteen-man
+ * roster is a figure a manager can act on where `Total · 16` never was.
+ *
+ * The title says so when there is anything below the line, since the count on
+ * its own cannot: nine of sixteen and nine of nine read identically.
+ */
+function TotalLabel({ n, lineup, split }: { n: number; lineup: boolean; split: boolean }) {
+  const only = split ? ' Only the players above this line are in it; the bench and the injured are below it.' : '';
   return (
     <span
       className="sum-total-label"
       title={
         lineup
-          ? 'What your projected lineup gets — only the days each man holds a lineup spot. The rows above say what each would do if you started him, so this is deliberately less than their sum.'
-          : undefined
+          ? `What your projected lineup gets — only the days each man holds a lineup spot. The rows above say what each would do if you started him, so this is deliberately less than their sum.${only}`
+          : split
+            ? `Your starters, added up.${only}`
+            : undefined
       }
     >
       {lineup ? 'Lineup' : 'Total'} · {n}
@@ -790,6 +858,7 @@ function BatterTable({
   expand,
   schedule,
   projection,
+  starters,
 }: {
   batters: PlayerReport[];
   handlers: RowHandlers;
@@ -800,17 +869,51 @@ function BatterTable({
    *  `schedule` already follows and what makes "projected with no projection"
    *  impossible to draw. */
   projection: ProjectedLines | null;
+  /** Who sits above the `Total` line — see `splitStarters`. */
+  starters: Set<string> | null;
 }) {
   const lineOf = (r: PlayerReport): BattingLine =>
     projection ? projectedBatting(r, projection.get(playerKey(r))) : combineLines(r.games.map((g) => g.line));
-  // The foot's two arithmetics are one arithmetic wherever no lineup was
+  const { top, rest } = splitStarters(batters, starters);
+  // The total's two arithmetics are one arithmetic wherever no lineup was
   // filled — a saved watchlist, a league with no slot counts — and the label
-  // says `Total` there, which is what it has always said.
-  const hasPlan = batters.some((r) => projection?.get(playerKey(r))?.lineup != null);
+  // says `Total` there, which is what it has always said. Read off `top`
+  // rather than the tab, since that is what the row is a total of.
+  const hasPlan = top.some((r) => projection?.get(playerKey(r))?.lineup != null);
   const total = projection
-    ? combineLines(batters.map((r) => projectedBatting(r, projection.get(playerKey(r)), true)))
-    : combineLines(batters.flatMap((r) => r.games.map((g) => g.line)));
+    ? combineLines(top.map((r) => projectedBatting(r, projection.get(playerKey(r)), true)))
+    : combineLines(top.flatMap((r) => r.games.map((g) => g.line)));
   const cols = ['H/AB', 'R', 'HR', 'RBI', 'SB', 'OPS', 'BB', 'K'];
+  /* One row, drawn from either side of the line — the two groups are the same
+     rows in two `<tbody>`s, so this is a function rather than a copy of the
+     markup. */
+  const row = (r: PlayerReport) => {
+    const game = pickGame(r);
+    const role = liveRole(r);
+    return (
+      <tr key={r.id} className={role ? `role-${role}` : undefined}>
+        <LeadCells
+          r={r}
+          game={game}
+          role={role}
+          corner={game ? lineupCorner(game) : null}
+          showOpponent={!schedule && !projection}
+          lineup={projection?.get(playerKey(r))?.lineup}
+          {...handlers}
+        />
+        {schedule ? (
+          <ScheduleCells index={schedule} r={r} />
+        ) : (
+          <>
+            {projection && (
+              <ProjectedGamesCell n={projectedGames(r, projection.get(playerKey(r)))} />
+            )}
+            <ProjectableStatCells line={lineOf(r)} projected={projection != null} />
+          </>
+        )}
+      </tr>
+    );
+  };
   return (
     <table className="summary-table">
       <thead>
@@ -842,43 +945,20 @@ function BatterTable({
           )}
         </tr>
       </thead>
-      <tbody>
-        {batters.map((r) => {
-          const game = pickGame(r);
-          const role = liveRole(r);
-          return (
-            <tr key={r.id} className={role ? `role-${role}` : undefined}>
-              <LeadCells
-                r={r}
-                game={game}
-                role={role}
-                corner={game ? lineupCorner(game) : null}
-                showOpponent={!schedule && !projection}
-                lineup={projection?.get(playerKey(r))?.lineup}
-                {...handlers}
-              />
-              {schedule ? (
-                <ScheduleCells index={schedule} r={r} />
-              ) : (
-                <>
-                  {projection && (
-                    <ProjectedGamesCell n={projectedGames(r, projection.get(playerKey(r)))} />
-                  )}
-                  <ProjectableStatCells line={lineOf(r)} projected={projection != null} />
-                </>
-              )}
-            </tr>
-          );
-        })}
-      </tbody>
-      <tfoot>
-        <tr>
+      <tbody>{top.map(row)}</tbody>
+      {/* A `<tbody>` of its own, which is what keeps the zebra stripe honest:
+          `tbody tr:nth-child(even)` counts within its own body, so the divider
+          is always the first row of its and takes no stripe, and the group
+          under it stripes from its own first row rather than from a parity the
+          line happened to leave behind. */}
+      <tbody className="sum-total-body">
+        <tr className="sum-total-row">
           <td className="sum-img-col" aria-hidden="true" />
           <th className="sum-name-col" scope="row">
-            <TotalLabel n={batters.length} lineup={hasPlan} />
+            <TotalLabel n={top.length} lineup={hasPlan} split={rest.length > 0} />
           </th>
           {schedule ? (
-            <ScheduleTotalCells index={schedule} players={batters} kind="batter" />
+            <ScheduleTotalCells index={schedule} players={top} kind="batter" />
           ) : (
             <>
               {projection ? (
@@ -886,7 +966,7 @@ function BatterTable({
                    row's count added up, so a reader can add the column and get
                    the figure at the foot of it. */
                 <ProjectedGamesCell
-                  n={batters.reduce(
+                  n={top.reduce(
                     (n, r) => n + projectedGames(r, projection.get(playerKey(r)), true),
                     0,
                   )}
@@ -898,7 +978,8 @@ function BatterTable({
             </>
           )}
         </tr>
-      </tfoot>
+      </tbody>
+      {rest.length > 0 && <tbody>{rest.map(row)}</tbody>}
     </table>
   );
 }
@@ -910,6 +991,7 @@ function PitcherTable({
   expand,
   schedule,
   projection,
+  starters,
 }: {
   pitchers: PlayerReport[];
   handlers: RowHandlers;
@@ -917,19 +999,48 @@ function PitcherTable({
   schedule: ScheduleIndex | null;
   /** See `BatterTable`'s own. */
   projection: ProjectedLines | null;
+  /** See `BatterTable`'s own, and `splitStarters`. */
+  starters: Set<string> | null;
 }) {
   const lineOf = (r: PlayerReport): PitchingLine =>
     projection ? projectedPitching(r, projection.get(playerKey(r))) : aggregatePitching(r);
+  const { top, rest } = splitStarters(pitchers, starters);
   /** See `BatterTable`'s own. */
-  const hasPlan = pitchers.some((r) => projection?.get(playerKey(r))?.lineup != null);
+  const hasPlan = top.some((r) => projection?.get(playerKey(r))?.lineup != null);
   const totalLine = projection
-    ? combinePitchingLines(
-        pitchers.map((r) => projectedPitching(r, projection.get(playerKey(r)), true)),
-      )
+    ? combinePitchingLines(top.map((r) => projectedPitching(r, projection.get(playerKey(r)), true)))
     : combinePitchingLines(
-        pitchers.flatMap((r) => r.games.filter((g) => g.pitching).map((g) => g.pitching!.line)),
+        top.flatMap((r) => r.games.filter((g) => g.pitching).map((g) => g.pitching!.line)),
       );
   const cols = ['IP', 'H', 'R', 'ER', 'BB', 'K', 'HR', 'W', 'SV', 'HLD', 'ERA', 'WHIP'];
+  /** See `BatterTable`'s own. */
+  const row = (r: PlayerReport) => {
+    const game = pickGame(r);
+    const role = liveRole(r);
+    return (
+      <tr key={r.id} className={role ? `role-${role}` : undefined}>
+        <LeadCells
+          r={r}
+          game={game}
+          role={role}
+          corner={game ? pitchingCorner(game) : null}
+          showOpponent={!schedule && !projection}
+          lineup={projection?.get(playerKey(r))?.lineup}
+          {...handlers}
+        />
+        {schedule ? (
+          <ScheduleCells index={schedule} r={r} />
+        ) : (
+          <>
+            {projection && (
+              <ProjectedGamesCell n={projectedGames(r, projection.get(playerKey(r)))} />
+            )}
+            <ProjectablePitchCells line={lineOf(r)} projected={projection != null} />
+          </>
+        )}
+      </tr>
+    );
+  };
   return (
     <table className="summary-table summary-table-pitchers">
       <thead>
@@ -961,48 +1072,21 @@ function PitcherTable({
           )}
         </tr>
       </thead>
-      <tbody>
-        {pitchers.map((r) => {
-          const game = pickGame(r);
-          const role = liveRole(r);
-          return (
-            <tr key={r.id} className={role ? `role-${role}` : undefined}>
-              <LeadCells
-                r={r}
-                game={game}
-                role={role}
-                corner={game ? pitchingCorner(game) : null}
-                showOpponent={!schedule && !projection}
-                lineup={projection?.get(playerKey(r))?.lineup}
-                {...handlers}
-              />
-              {schedule ? (
-                <ScheduleCells index={schedule} r={r} />
-              ) : (
-                <>
-                  {projection && (
-                    <ProjectedGamesCell n={projectedGames(r, projection.get(playerKey(r)))} />
-                  )}
-                  <ProjectablePitchCells line={lineOf(r)} projected={projection != null} />
-                </>
-              )}
-            </tr>
-          );
-        })}
-      </tbody>
-      <tfoot>
-        <tr>
+      <tbody>{top.map(row)}</tbody>
+      {/* See `BatterTable`'s own note on why the divider is a body of its own. */}
+      <tbody className="sum-total-body">
+        <tr className="sum-total-row">
           <td className="sum-img-col" aria-hidden="true" />
           <th className="sum-name-col" scope="row">
-            <TotalLabel n={pitchers.length} lineup={hasPlan} />
+            <TotalLabel n={top.length} lineup={hasPlan} split={rest.length > 0} />
           </th>
           {schedule ? (
-            <ScheduleTotalCells index={schedule} players={pitchers} kind="pitcher" />
+            <ScheduleTotalCells index={schedule} players={top} kind="pitcher" />
           ) : (
             <>
               {projection ? (
                 <ProjectedGamesCell
-                  n={pitchers.reduce(
+                  n={top.reduce(
                     (n, r) => n + projectedGames(r, projection.get(playerKey(r)), true),
                     0,
                   )}
@@ -1014,7 +1098,8 @@ function PitcherTable({
             </>
           )}
         </tr>
-      </tfoot>
+      </tbody>
+      {rest.length > 0 && <tbody>{rest.map(row)}</tbody>}
     </table>
   );
 }
@@ -1094,6 +1179,7 @@ export function SummaryTable({
   chrome,
   schedule,
   projection,
+  starters,
 }: {
   reports: PlayerReport[];
   /** The headshot and the name both open the player's page — the one that leads
@@ -1127,6 +1213,17 @@ export function SummaryTable({
    * this component draws the schedule where it is given both.
    */
   projection?: RosterProjection | null;
+  /**
+   * **Which of these players are starting**, as the app's own player keys —
+   * the set `lib.ts::projectStarters` keeps, which is the `Starters` filter's
+   * own answer and is computed in App whether that button is pressed or not.
+   *
+   * They are drawn above the `Total` row and everybody else below it; null is
+   * *the app cannot say* — a range the filter is not offered over — and there
+   * the row goes back to the bottom over the whole table. See `splitStarters`
+   * for the whole of that rule and for why the test is not written here.
+   */
+  starters?: Set<string> | null;
   /** What to keep from the app's own chrome once the table has the page: the
    *  kind tabs and the date control, handed down as nodes because App owns both
    *  the state behind them and the markup. Rendered only while expanded. */
@@ -1170,6 +1267,7 @@ export function SummaryTable({
               expand={expand}
               schedule={schedule ?? null}
               projection={schedule ? null : projLines}
+              starters={starters ?? null}
             />
           )}
           {pitchers.length > 0 && (
@@ -1179,6 +1277,7 @@ export function SummaryTable({
               expand={expand}
               schedule={schedule ?? null}
               projection={schedule ? null : projLines}
+              starters={starters ?? null}
             />
           )}
         </div>

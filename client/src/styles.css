@@ -6507,6 +6507,11 @@ button.start-line:focus-visible {
   align-items: center;
   gap: 8px 10px;
   margin-bottom: 8px;
+  /* The anchor the `Projected` key opens from in this mode — `.view-bar`'s job
+     out in the app and this row's in here, for the identical reason: the panel
+     is `position: absolute` and hangs off whatever is positioned above it, and
+     this row is the full width of the expanded box at every size. */
+  position: relative;
 }
 
 /* One setting, stated. Round because it is a label — the shape this app
@@ -6727,59 +6732,52 @@ button.start-line:focus-visible {
   align-items: stretch;
 }
 /**
- * The projected table's caption, directly above the pane.
+ * **What is left of the projected table's caption.**
  *
- * A **caption rather than a control**, which is why it sits here and not up in
- * the pinned row with the toggle — the same place and the same reasoning as the
- * research board's count line and the Rankings tab's span line: the one thing
- * between the controls and the rows says what is under them. It is `flex: none`
- * in this column so it costs the pane its own height and nothing else, and it
- * keeps the app's gutters where the table bleeds past them, which is again the
- * count line's own arrangement.
+ * It printed `Projected · Aug 18 – Aug 23 · 6 days still to play` and an ⓘ, and
+ * two thirds of that is now the date bar's, a few pixels above it: that bar has
+ * a projected reading and leads with the same word over the same dates. The ⓘ
+ * went up beside the `Projected` toggle (`.proj-key` below), which is the
+ * control it explains. What is left is the one line neither can carry —
+ * *nothing to project, every game in these days has been played* — drawn only
+ * in that state, where the lens adds nothing and the reader who pressed it is
+ * owed the reason.
  *
- * `position: relative` is the anchor its key opens from — `.summary-proj-key`
- * is `position: static` so a 320px panel hangs off this *row* rather than off a
- * 30px button, which is `.roll-key`'s measured trick and is what keeps it on
- * screen at a phone's width.
+ * Still a **caption rather than a control**, which is why it stays here and not
+ * up in the row with the toggle: it is about the rows under it, and a phone's
+ * tab row has no line to spare for a sentence. `flex: none` in this column so
+ * it costs the pane its own height and nothing else, and it keeps the app's
+ * gutters where the table bleeds past them. The anchor it used to declare
+ * (`position: relative`) went with the key.
  */
 .summary-proj-note {
-  position: relative;
   flex: none;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 10px;
   padding: 8px 0 10px;
   font-size: 12px;
   color: var(--muted);
 }
-/* The one word that says what every figure below it is. The accent, which is
-   what this app spends on *a reading of the data* — the same tag the matchup
-   page's head carries for the same lens. */
-.summary-proj-tag {
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--accent);
-}
-.summary-proj-span {
-  font-weight: 700;
-  color: var(--text);
-}
 .summary-proj-days {
   color: var(--faint);
 }
-/* Opens from the row's left edge, which is where the reading starts — the
-   caption is a full-width row, so there is no button edge worth anchoring to
-   and every width has the room. */
-.summary-proj-key {
-  position: static;
+/* The `Projected` toggle and its key as one group, so the tab row's wrap breaks
+   between them and the next control rather than between the two of them —
+   `.view-bar-tabs > *` is `flex: none` and every group in that row is atomic.
+   Deliberately **not** positioned: the panel below has to resolve against the
+   row, not against this 130px box. */
+.projected-group {
   display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
-.summary-proj-note .info-key-panel {
-  left: 0;
-  right: auto;
+/* **The panel opens from the row's right edge, not from the button's.** The
+   group sits part-way along the tab row — after the kind tabs and the Schedule
+   control — so a 320px panel anchored to a 30px button at x≈250 would put its
+   left half off a phone. Nothing between it and `.view-bar` is positioned, and
+   that row is the full content width at every size, so `right: 0` is the app's
+   own gutter. It is `.lg-proj-key`'s arrangement exactly, one row up. */
+.proj-key .info-key-panel {
+  left: auto;
+  right: 0;
 }
 
 .summary-scroll {
@@ -6905,12 +6903,15 @@ button.start-line:focus-visible {
    anywhere, and its overspill is the row's own color over the row's own
    color, into 5px of padding at its narrowest.
 
-   `position: relative` is declared on the body cells alone: the header's and
-   the Total row's are `position: sticky` already, and a rule naming all of them
-   would tie with `.summary-table thead th` on specificity and unstick the
-   header row. And none of this can reach the pinned headshot cell, which is the
-   first in every row and so matches no `+` selector — `--pin-edge` is
-   undisturbed. */
+   `position: relative` is declared on the body cells alone: the header's are
+   `position: sticky` already, and a rule naming all of them would tie with
+   `.summary-table thead th` on specificity and unstick the header row. (The
+   Total row's cells were the second half of that sentence while they were a
+   pinned `<tfoot>`; they are ordinary body cells now — a divider between the
+   starters and the bench rather than a foot — so this rule is what positions
+   them and the cover works there for the ordinary reason.) And none of this can
+   reach the pinned headshot cell, which is the first in every row and so
+   matches no `+` selector — `--pin-edge` is undisturbed. */
 .summary-table tbody th,
 .summary-table tbody td {
   position: relative;
@@ -7037,13 +7038,23 @@ button.start-line:focus-visible {
   z-index: 3;
   --cell-bg: var(--panel-2);
 }
-/* Total row pinned to the bottom while scrolling vertically — a touch more
-   vertical padding sets it apart from the data rows. */
-.summary-table tfoot th,
-.summary-table tfoot td {
-  position: sticky;
-  bottom: 0;
-  z-index: 2;
+/* **The Total row, and it is a divider in the body now rather than a pinned
+   foot.** It used to be a `<tfoot>` under every player on the tab, `position:
+   sticky; bottom: 0`, which is exactly right for a row that totals everything
+   above it and exactly wrong for one that separates the starters from the
+   bench: pinned, the line sat across the middle of the rows it divides and said
+   nothing about where it fell. So the sticky, the `bottom` and the `z-index`
+   that went with them are gone, and what is left is the dressing that made it
+   read as a rule under the numbers — the heavier top border, the bolder ink and
+   a touch more vertical padding than a data row.
+
+   Two classes deep on the row rather than one, because the zebra stripe is
+   `.summary-table tbody tr:nth-child(even) td` and specificity is counted, not
+   read: a single-class rule would lose to it. The row is the only child of a
+   `<tbody>` of its own, which is what keeps the stripe under it alternating
+   from its own first row. */
+.summary-table tbody tr.sum-total-row th,
+.summary-table tbody tr.sum-total-row td {
   padding-top: 15px;
   padding-bottom: 15px;
   --cell-bg: var(--panel-2);
@@ -7051,16 +7062,15 @@ button.start-line:focus-visible {
   border-bottom: none;
   font-weight: 800;
 }
-/* Bottom-left corner, and it has to name its ground the way the top-left one
-   does. `.summary-table .sum-img-col` carries two classes where
-   `.summary-table tfoot td` carries one, so without this the pinned cell of the
-   Total row won the cascade with `--bg` and painted the *page* color inside a
-   `--panel-2` row — a dark block the width of the headshot column at the foot
-   of the table, with a Δ41 edge against the row beside it. The header row has
-   had its own copy of this rule since it was written; this is the same
-   statement for the other end. */
-.summary-table tfoot .sum-img-col {
-  z-index: 3;
+/* Its left-hand corner, which has to name its ground the way the header's does.
+   `.summary-table .sum-img-col` carries two classes where a single-class rule
+   carries one, so without this the pinned cell of the Total row won the cascade
+   with `--bg` and painted the *page* color inside a `--panel-2` row — a dark
+   block the width of the headshot column, with a Δ41 edge against the row beside
+   it. It stays sticky on the horizontal axis with every other cell in that
+   column; what it no longer needs is the `z-index: 3` that lifted it over a
+   row pinned to the bottom of the pane. */
+.summary-table tbody tr.sum-total-row .sum-img-col {
   --cell-bg: var(--panel-2);
 }
 /* A live player's whole row is tinted by their role (at bat / on deck / on
