@@ -689,6 +689,82 @@ pass read 411: that pass measured 412 clean and 408 broken and took the midpoint
 on faith, where this one walked the six widths. The number is this league's
 widest name (127px) against the row's other fixed costs, not a device.
 
+### The sign keeps its shape and gets its color back
+
+**The disc stays gone; the color comes back onto the glyph.** *The mark is the
+sign alone* took both away in one move, and only one of them was the thing being
+objected to. The 20px filled disc was a *shape* the row did not want — it cost
+6px of name and read as a badge on a line of text. The color was carrying
+information, and dropping it took the claim/add distinction off the page with no
+one asking for that. So the slot stays at 14px, paints no ground, and the sign
+itself is colored.
+
+**Four tones, one per move**, where the disc had three. `moveTone` is back and
+exported, keyed **exactly as `moveLabel` keys the word** — same four cases, same
+order, same tests — so the mark says one thing in two registers and a reader who
+learns that purple means a trade has learned what the `title` spells out:
+
+| move | tone | token | why that one |
+| --- | --- | --- | --- |
+| Added | green | `--hit` | off the pool for nothing |
+| Claimed | amber | `--hr` | cost a bid and a place in the waiver order |
+| Dropped | red | `--strikeout` | leaving |
+| Traded | purple | `--live-purple` | neither an arrival off the pool nor a departure to it |
+
+**Where the disc's three tones said what a pickup *cost*, four say which of the
+four moves this was.** The disc left a drop and both sides of a trade sharing
+`--muted`, which is the one pair the row's own text cannot tell apart at a
+glance: a trade already prints `to <Team>` and a drop does not, but that is a
+line of small text at the far end of the row. Purple answers it where the eye
+already is.
+
+**A trade is purple on both sides**, deliberately. `move` says which way this
+row went and `to <Team>` says where, so the color is free to say the thing
+neither does — that this was a deal between two managers rather than a move
+against the pool.
+
+**The tokens are borrowed for their feel, not their play meaning.**
+`--live-purple` is the on-base purple — the ring and rail on a runner at base —
+and it is used here because it is this palette's purple and it is defined in all
+six themes, not because a trade is a stolen base. Same for the other three. That
+is worth saying out loud because this app's standing rule is that color is spent
+on *state*: these four are a state, the state of one row, and the vocabulary
+they are drawn from is a palette rather than a claim.
+
+**Nothing about the row's geometry moved.** The rule added is `color` and only
+`color` — no box, no ground, no font — so the 14px slot, the 411 phone rule and
+the one-line-to-411 collapse width that *Measured again, for the bare sign*
+established all stand unchanged and are not re-measured here.
+
+### Measured for the four tones
+
+**Sampled pixels, all six themes, driven against the live 12-team league** —
+pixels rather than computed values, so the two light palettes' card gradients
+are in the numbers. For each mark the ground is the median of a column of pixels
+6px to its left and the ink is the pixel inside the glyph box furthest from that
+ground, which is the densest part of an antialiased sign:
+
+| theme | Added | Claimed | Dropped | Traded |
+| --- | --- | --- | --- | --- |
+| Dark | 8.97 | 9.83 | 6.63 | 6.56 |
+| Light | 6.51 | 6.44 | 5.62 | 7.04 |
+| Lavender | 8.67 | 8.99 | 6.74 | 6.03 |
+| Maroon | 9.22 | 9.75 | 7.58 | 6.64 |
+| Powder Blue | 7.87 | 6.74 | 5.97 | 6.96 |
+| Midnight | 8.62 | 9.93 | 6.19 | 6.35 |
+
+**All 24 clear the 4.5:1 a 15px glyph owes**, the tightest being **5.62** on
+Light's `−` and the widest 9.93 on Midnight's claim. The `.sr-only` word and the
+`title` are unchanged, so nothing here is the only carrier of the distinction.
+
+**One of the 24 is a planted row and is reported as one.** The league had 18
+adds, 1 claim and 23 drops in the period measured and **no trade at all**, so
+the purple column was read off a drop mark relabeled `lg-tx-move-traded` in the
+DOM. That is honest for a contrast figure — the number is a property of the
+token and the ground behind it, not of the row's data — but it is not a
+sighting of a real trade row, and the layout of one (`to <Team>` on the same
+line) has not been seen since the color changed.
+
 ### Measured again, for the bare sign
 
 **Driven against the dev client and the live 12-team league**, the same 42 rows
