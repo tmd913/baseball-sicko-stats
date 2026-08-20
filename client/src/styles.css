@@ -6277,7 +6277,7 @@ button.start-line:focus-visible {
   text-overflow: ellipsis;
 }
 /* Which reading of the days — the preset's own word, `Custom range`, or the
-   mode (`Projected`, `Schedule · This Matchup`). Small caps above the dates
+   mode (`Projected`, `Schedule · Week 19`). Small caps above the dates
    rather than beside them: it is a qualifier on the line below and reads as
    one, and stacking is also what keeps the bar one height whichever it says. */
 .date-face-lead {

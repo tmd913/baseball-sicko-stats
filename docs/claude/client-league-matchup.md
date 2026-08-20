@@ -1375,6 +1375,21 @@ the board that lists them all. The week is **printed** rather than navigable
 without it and a live period's totals cover the days played so far; the arrows
 stay on the Scoreboard, which is the page about which week.
 
+**And the days go through `wideRange` rather than a `prettyDate` pair of its
+own**, which is the same fold the Scoreboard's own week face made one page over
+— see **Client — the League view**, *The week face*. This head open-coded
+`start === end ? prettyDate(start) : prettyDate(start) – prettyDate(end)`, and
+so did the Rankings caption; all three agreed with the app's date bar on every
+range and parted from it on exactly one span. Driven with the board's own span
+rewritten to each of the three cases, before → after on this head: a **single
+day** `Aug 19` → **`Wed, Aug 19`**, a range **inside one month**
+`Aug 10 – Aug 19` unchanged, a range **crossing a month** `Aug 24 – Sep 6`
+unchanged. It is not a cosmetic case here either: `board.start === headEnd` is
+exactly the **first day of a live period**, so the reading the two spellings
+disagreed about is the one this head takes every other Monday. Checked on the
+rendered page, the head and the Scoreboard's week face now print the identical
+string over the identical numbers.
+
 **Three pages inside it**: the away team, the comparison, the home team — two
 teams with the comparison between them, which is the shape of the thing being
 read and the same arrangement each category has on the card.
@@ -1568,7 +1583,7 @@ the one read and this page asks for it (`onNeedSchedule`) rather than making a
 second. Each surface keeps its own span, since every span is a slice of a window
 already in hand.
 
-**Its span run carries `This Matchup` and `Next Matchup` like everywhere else**,
+**Its span run carries the league's own two weeks like everywhere else** (`Week 19 · Week 20`),
 and it is a connected league that puts them there rather than this page: the two
 dates come from App's own once-per-session read (`matchupWindow`), shared down
 exactly as the schedule window beside it is. Deliberately **not** derived from

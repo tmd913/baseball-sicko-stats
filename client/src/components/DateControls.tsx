@@ -45,7 +45,7 @@ import { DateRangePicker } from './DateRangePicker';
  *
  * - **Schedule** replaces the stat columns with one column per day *ahead*. The
  *   days on screen are then the span's rather than the range's, so the bar
- *   prints the span (`Schedule · This Matchup`) over the days it actually
+ *   prints the span (`Schedule · Week 19`) over the days it actually
  *   draws, and the arrows step through the spans this reader is offered instead
  *   of through the calendar. The range is not lost — it still decides *whose*
  *   roster the rows are — but it is not what the columns are, so **the

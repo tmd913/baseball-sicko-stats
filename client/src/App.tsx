@@ -235,8 +235,8 @@ const MATCHUP_PRESET = 'Matchup';
  * days the score does not.
  *
  * **The days ahead are not lost, they are two other controls**: the Schedule
- * view replaces the stat columns with the fixtures (and offers `This Matchup`
- * and `Next Matchup` as its own spans), and the projected lens already runs
+ * view replaces the stat columns with the fixtures (and offers the league's own
+ * two weeks as its spans), and the projected lens already runs
  * from today to `matchupWindow.end`, which is the rest of this very period. So
  * the split is that this preset answers *what has this week come to* and those
  * two answer *what is left of it*.
@@ -4605,7 +4605,7 @@ export default function App() {
    *
    * **How far ahead is no longer beside it.** `ScheduleSpanTabs` was the second
    * half of this group; it is in the date bar's disclosure now, under a label
-   * that reads `Schedule · This Matchup` and between two arrows that step the
+   * that reads `Schedule · Week 19` and between two arrows that step the
    * run. The span *is* the days on screen in this mode, and the days are what
    * that bar is for — leaving the strip up here would have been the one state
    * this app forbids, two controls an inch apart holding one piece of state.

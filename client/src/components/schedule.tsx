@@ -77,7 +77,7 @@ export function toScheduleSpan(v: string | null): ScheduleSpan | null {
  * on the league: the last matchup period of a season has no `next`, and a
  * segmented control holding a single option is a control with no choice in it
  * — the argument the matchup page's own strip makes for a bye. There the run is
- * `This Matchup · Next 7 · Next 14` and the reader keeps somewhere to go.
+ * `Week 22 · Next 7 · Next 14` and the reader keeps somewhere to go.
  */
 export function scheduleSpans(matchup: MatchupWindow | null): ScheduleSpan[] {
   if (!matchup) return SCHEDULE_SPANS;
@@ -96,7 +96,7 @@ export function defaultScheduleSpan(matchup: MatchupWindow | null): ScheduleSpan
  *
  * One rule where there were two, and it had to become one when the numeric pair
  * stopped always being offered: a `sched=7` link opened by somebody whose
- * league names both its weeks now falls back to `This Matchup` exactly as a
+ * league names both its weeks now falls back to this week exactly as a
  * `sched=matchup` link opened without a league falls back to `Next 7`. Either
  * way the control marks the span the table is actually drawing, which is the
  * one thing it must not get wrong; the URL keeps what it was handed, the rule
@@ -119,7 +119,7 @@ export function effectiveSpan(
  * that stepped onto `Next 7` there would produce a span the pills beside it do
  * not contain. `effectiveSpan` first, for the same reason the control marks
  * with it — a `sched=7` link opened by such a reader is already drawing
- * `This Matchup`, and the step has to start from what is on screen.
+ * this week, and the step has to start from what is on screen.
  */
 export function stepSpan(
   span: ScheduleSpan,
@@ -474,7 +474,7 @@ export function buildScheduleIndex(
   const all = [...new Set(win.games.map((g) => g.date))].sort();
   // A **named** span is a date range and a numeric one is a count of days, and
   // the difference is the whole of what a matchup span is: `Next 7` is the
-  // first seven days with games, where `This Matchup` is every day up to the
+  // first seven days with games, where the named span is every day up to the
   // period's own last, however many that is. Both then intersect the window,
   // which is what keeps a span the schedule cannot reach drawing the days it
   // has rather than inventing the rest — and the window is now long enough to
