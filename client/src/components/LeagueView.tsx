@@ -54,7 +54,7 @@ import type {
   SeasonPlayer,
 } from '../types';
 import { LoadingBlock, SpinningBaseball } from './Loading';
-import { prettyDate } from '../lib';
+import { prettyDate, wideRange } from '../lib';
 
 /** Re-exported: this view's own two neighbors import it from here, and the
  *  helper itself now lives in `lib.ts` — four surfaces print a span of days. */
@@ -703,12 +703,7 @@ function Scoreboard({
    * week's total that stops on Tuesday is a total to date, and the header has to
    * say which days it is of.
    */
-  const span =
-    board.start && board.end
-      ? board.start === board.end
-        ? prettyDate(board.start)
-        : `${prettyDate(board.start)} – ${prettyDate(board.end)}`
-      : null;
+  const span = board.start && board.end ? wideRange(board.start, board.end) : null;
 
   return (
     <>

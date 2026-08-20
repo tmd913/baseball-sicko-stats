@@ -176,11 +176,39 @@ export interface SpanLabel {
   title: string;
 }
 
+/**
+ * **A named span is called `Week 19`, not `This Matchup`, and the reason is a
+ * measurement rather than a preference.**
+ *
+ * The rows this strip rides in were laid out for the fallback pair, and a named
+ * span that costs more than the pair it stands in for costs the reader a line
+ * of pinned chrome. Measured on the research board at 1200 (the bar's own
+ * wrapping row, batters and pitchers alike), the narrowest window at which the
+ * tools run and the strip share a line: `Next 7 · Next 14` **1200**,
+ * `This Matchup · Next Matchup` **1280**, `Week 19 · Week 20` **1200**. At 1200
+ * the long pair therefore took a third line and the pinned chrome went 161 →
+ * 207 for a control 228px wide.
+ *
+ * **And the word is the app's own.** A matchup period is `Week 19` on the
+ * League page's scoreboard head and on a matchup's own head, so this is the
+ * vocabulary the reader already has — it says *which* fantasy week rather than
+ * that it is the current one, which is strictly more than `This Matchup` said,
+ * and the tooltip goes on expanding it (`The rest of matchup period 19 —
+ * 8/10 – 8/23`). `This Week` / `Next Week` was rejected outright and not on
+ * width: the date presets an inch away already carry a `This week`, which is
+ * the *calendar* week — two controls a press apart reading the same words and
+ * meaning two different weeks is the one thing this run must not say.
+ *
+ * **The two pills are the same width by construction**, which is what keeps the
+ * control from changing size under the finger that pressed it: measured, both
+ * `Week 19` and `Week 20` are 75.8px, and `Week 22` / `Week 23` are 75.8 too —
+ * the digits are the same advance, so no week number moves it.
+ */
 export function spanLabel(span: ScheduleSpan, matchup: MatchupWindow | null): SpanLabel {
   const range = (from: string, to: string) => `${shortDate(from)} – ${shortDate(to)}`;
   if (span === 'matchup' && matchup) {
     return {
-      label: 'This Matchup',
+      label: `Week ${matchup.period}`,
       // The period's own dates rather than the days drawn: the columns start
       // today, and what the reader is being told is which fantasy week this is.
       title: `The rest of matchup period ${matchup.period} — ${range(matchup.start, matchup.end)}`,
@@ -188,7 +216,7 @@ export function spanLabel(span: ScheduleSpan, matchup: MatchupWindow | null): Sp
   }
   if (span === 'next' && matchup?.next) {
     return {
-      label: 'Next Matchup',
+      label: `Week ${matchup.next.period}`,
       title: `Matchup period ${matchup.next.period} — ${range(matchup.next.start, matchup.next.end)}`,
     };
   }

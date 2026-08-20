@@ -6307,6 +6307,24 @@ button.start-line:focus-visible {
 .date-bar-panel .date-control {
   width: 100%;
 }
+/* **And in the Schedule reading the span strip is sized to its own content and
+   centered**, which is the rule the face one row up already keeps and for the
+   same reason. The panel's `align-items: stretch` is right for `.date-control`
+   — that is a *row* of controls and wants the width — and wrong for the strip,
+   which is the control itself: stretched it measured **1180px** at a 1200
+   window against the 163 its two pills need, a segmented surface the width of
+   the page that lights on hover, and **300 / 370** at 320 / 390 against the 100
+   the `<select>` wants, its chevron a thumb's width from the word it belongs
+   to. Centered under the label the arrows move, because in that reading the
+   strip *is* the panel and there is nothing to left-align it against.
+
+   Both halves of the swap are named: the pills above 640 and the `<select>`
+   below it are one control, and a rule that caught only the one on screen at
+   the width it was written at is the same bug in the other half. */
+.date-bar-panel > .schedule-span,
+.date-bar-panel > .schedule-span-select {
+  align-self: center;
+}
 /* Edit carries its label, so it overrides the square the shared list gives it —
    everything else in that rule (the panel fill, the border, the hover, the
    accent when active) is what it is there for. It renders in one place now, as

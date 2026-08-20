@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
-import { addDays } from '../lib';
-import { DateRangePicker, wideRange } from './DateRangePicker';
+import { addDays, wideRange } from '../lib';
+import { DateRangePicker } from './DateRangePicker';
 
 /**
  * The app's date controls: **a full-width bar of its own, directly under the

@@ -1668,6 +1668,50 @@ export function prettyDate(iso: string | null): string {
   });
 }
 
+/** The same day with its weekday — `Wed, Aug 19`. Only ever reached through
+ *  `wideRange`, a span of one day being the only place the weekday is worth
+ *  the characters. Same UTC rebuild as `prettyDate`, for the same reason. */
+function prettyWeekday(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
+/**
+ * **A span of days, in the app's one wording** — `Wed, Aug 19` for a single day
+ * and `Aug 10 – Aug 19` across a range, which is what the date bar's lower line
+ * prints and now what every head that states a span prints beside it.
+ *
+ * It was two functions and they agreed on three of the four cases, which is the
+ * shape of a thing that will one day disagree. `wideRange` lived in
+ * `DateRangePicker.tsx` and the League's three heads each open-coded
+ * `start === end ? prettyDate(start) : prettyDate(start) + ' – ' + prettyDate(end)`.
+ * Evaluated side by side in the browser, the only span they parted on was a
+ * one-day one — the roster's date face said **`Wed, Aug 19`** where a matchup's
+ * head said **`Aug 19`** — and a range inside a month (`Aug 10 – Aug 19`),
+ * across a month (`Aug 24 – Sep 6`) and across a year end (`Dec 28 – Jan 3`)
+ * came out character for character the same from both. So the fold changes one
+ * reading and settles three.
+ *
+ * **The weekday only on a single day**, which is where it is worth something: a
+ * manager reading one day wants to know it is a Wednesday, and a range already
+ * says its length in its two ends. The year stays off both — the app shows one
+ * season and says so nowhere else on the page.
+ *
+ * Here rather than in `DateRangePicker.tsx` because that file is deliberately
+ * self-contained for the *picker*, and this is now read by the date bar, a
+ * matchup's head, the Scoreboard's head and the Rankings caption — none of
+ * which opens a calendar. `prettyDate` was already in `lib.ts` for exactly that
+ * argument, one caller earlier.
+ */
+export function wideRange(start: string, end: string): string {
+  return start === end ? prettyWeekday(start) : `${prettyDate(start)} – ${prettyDate(end)}`;
+}
+
 /**
  * How often the League page re-reads what it is showing, while it is showing
  * it.

@@ -29,6 +29,7 @@ import type {
   EspnRankings,
 } from '../types';
 import { useFullPage } from '../hooks';
+import { wideRange } from '../lib';
 import { ExpandButton } from './ExpandButton';
 import { InfoKey } from './InfoKey';
 import { LoadingBlock } from './Loading';
@@ -136,12 +137,7 @@ function rankBadge(rank: number | undefined, n: number): React.CSSProperties | u
  */
 export function spanDetail(info: EspnRankSpanInfo | undefined): string {
   if (!info) return '';
-  const days =
-    info.start && info.end
-      ? info.start === info.end
-        ? prettyDate(info.start)
-        : `${prettyDate(info.start)} – ${prettyDate(info.end)}`
-      : null;
+  const days = info.start && info.end ? wideRange(info.start, info.end) : null;
   const weeks =
     info.periods == null
       ? null

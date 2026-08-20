@@ -41,7 +41,7 @@ import {
   TeamLogo,
 } from './LeagueView';
 import { moveLabel } from './LeagueTransactions';
-import { addDays, easternDate, LEAGUE_POLL_MS } from '../lib';
+import { addDays, easternDate, LEAGUE_POLL_MS, wideRange } from '../lib';
 import type {
   EspnCategory,
   EspnMatchupSeries,
@@ -894,12 +894,14 @@ export default function LeagueMatchupView({
   const period = (
     <span className="mup-week">
       <span className="mup-week-n">Week {board.matchupPeriod}</span>
+      {/* **The date bar's own wording, not a second one that agrees with it.**
+          This head open-coded the span and so did the Scoreboard's and the
+          Rankings caption, and all three parted from the roster's date face on
+          exactly one reading: a period one day old printed `Aug 19` here where
+          the bar printed `Wed, Aug 19`. `wideRange` is the one function now —
+          see `lib.ts`. */}
       {board.start && headEnd && (
-        <span className="mup-week-dates">
-          {board.start === headEnd
-            ? prettyDate(board.start)
-            : `${prettyDate(board.start)} – ${prettyDate(headEnd)}`}
-        </span>
+        <span className="mup-week-dates">{wideRange(board.start, headEnd)}</span>
       )}
       {/* **`Projected` replaces `Live` rather than joining it**, which is the
           Scoreboard's own rule: the tag says what the figures on the page *are*,
