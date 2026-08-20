@@ -13451,7 +13451,7 @@ span.mup-move-name:hover {
   padding-bottom: 12px;
 }
 .mup-view.roster-mode > .mup-chrome,
-.mup-view.roster-mode > .mup-tools {
+.mup-view.roster-mode > .mup-dates {
   flex: none;
   position: static;
 }
@@ -13581,7 +13581,17 @@ span.mup-move-name:hover {
 /* A team page's own controls — the roster views' controls, because a team page
    is those views. It wraps like the app's own tab row and breaks between
    groups rather than inside one, every group being `flex: none` by its own
-   rule. */
+   rule.
+
+   **It is the last row of the pinned band and not the first row of the page**,
+   which is the strip's own argument one line up: *which manager* and *which
+   reading of him* are one statement, and pinning half of it left the other half
+   an inch of page a reader partway down a feed had to go back up for. Its
+   spacing follows the band's rule rather than a page's — a **top** margin to
+   the strip and none below it, the 12px under the row being `.mup-chrome`'s own
+   padding, which is where that number lives for every child of the band (see
+   there, where a bottom margin on the strip collapsed straight out of it and
+   left the pills sitting on the band's hairline). */
 .mup-tools {
   display: flex;
   flex-wrap: wrap;
@@ -13595,7 +13605,36 @@ span.mup-move-name:hover {
      before and after. */
   gap: 12px;
   max-width: var(--card-column);
+  margin: 12px auto 0;
+}
+/* The dates keep the page, and this is the box they keep it in: the same
+   centered card column the tools row is, at the same 12px from the table it has
+   always had. The gap above it is the band's own 16px — `.mup-chrome`'s bottom
+   margin, which stays outside the sticky box on `.details-chrome`'s argument
+   that it must not ride down the page.
+
+   **`width: 100%` because an auto margin on the cross axis suppresses a flex
+   item's stretch**, which is this stylesheet's own rule and which the roster
+   reading walks straight into: `.mup-view.roster-mode` is a column flex box, so
+   this row is a flex item and its `margin: 0 auto` shrank it to its content —
+   measured, the bar was **233px** at 1200 and at 390 alike, against the 800 and
+   358 the same bar takes on the Feed reading an inch away. The width restores
+   the stretch and the auto margins go on centering it inside the cap. */
+.mup-dates {
+  width: 100%;
+  max-width: var(--card-column);
   margin: 0 auto 12px;
+}
+/* **And no seam of its own.** `.date-bar` declares a top hairline for the
+   callers that sit it directly under a wrapping tab row — the app's own chrome
+   and the expanded table's — where it is the line between the tabs and the
+   dates. That row is in the band now, and the band closes itself with a
+   full-width hairline of its own: measured, the bar's rule drew a **second line
+   16px below the first**, and the card column's width rather than the window's,
+   so it read as a stray rule across the middle of the page rather than as an
+   edge of anything. */
+.mup-dates .date-bar {
+  border-top: 0;
 }
 /* The dates are a bar of their own across this box, last in the tools — the
    same object the roster views draw under their tab row, and the same argument
@@ -13621,6 +13660,19 @@ span.mup-move-name:hover {
 .mup-tool-icons {
   flex: none;
 }
+/* **The Schedule and Projected toggles as one reservable pair.** They are the
+   roster reading's alone, and on the Feed reading the run is 80px shorter — in
+   a row that wraps at 465 and below, that is a whole line of *pinned band*
+   appearing and disappearing under the finger of the reader who pressed `Feed`
+   (measured: the band is **210px at 390 with them and would be 162 without**).
+   So the pair is drawn on both readings and the feed's copy is a ghost.
+
+   `display: contents` on the reading that has them, so the two buttons are the
+   flex items of the run they are in rather than a box inside it — the roster
+   reading's row is laid out exactly as it was before this wrapper existed. */
+.mup-tool-modes {
+  display: contents;
+}
 /* The mode toggles and the filter as one group, so the row breaks between the
    two switches and the run rather than stranding one 36px square on a line of
    its own — see the note in `LeagueMatchup.tsx`. */
@@ -13628,6 +13680,31 @@ span.mup-move-name:hover {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+/* **The ghost holds the box open at every width, and holds it open at the
+   end.** `visibility: hidden` on the real buttons rather than a width declared
+   here: what is reserved is then exactly what these two measure in whatever
+   font the platform hands us, at whatever width they are being measured at —
+   `.details-sub-ghost` and `.mv-callouts-ghost` are the same technique, and it
+   is why `--chrome-h` is a measurement rather than a number. The gap is
+   `.mup-tool-icons`' own, so the ghost takes precisely the space the pair
+   vacated and the row wraps identically on the two readings.
+
+   **`order: 1` is what makes it free above the wrap.** The reservation was
+   first scoped to a media query on the width the row wraps at, so that a
+   desktop would not carry 210px of blank in the middle of its bar — a
+   breakpoint derived from three measured group widths, which a wider font moves
+   without telling anyone. Ordered last instead, the blank is *trailing* space
+   in the final group of a left-aligned row: invisible at every width, and
+   correct at every width, with no number in it. Measured before it: at 320 the
+   feed's lone `Starters` clipboard sat **90px in from the left edge** of its own
+   line, the ghost holding its place ahead of it. */
+.mup-tool-modes.mup-tool-ghost {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  visibility: hidden;
+  order: 1;
 }
 
 /* ---- A matchup's three pages -------------------------------------------

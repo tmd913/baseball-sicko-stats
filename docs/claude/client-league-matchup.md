@@ -2075,6 +2075,118 @@ them, the card follows at the same 16px gap (115 → 127), and the page overflow
 by **0** at each. The bye head reads the same 12 (its 16 inside the band became
 the chrome's 12) with its own row unchanged: logo, name, `Bye`, `Acq`.
 
+### The tools row went into the band, and the dates stayed on the page
+
+**The strip has been pinned since this became a page, and only half of what it
+says was pinned with it.** The strip answers *which manager*; the tools row
+under it — `Roster · Feed`, `Batters · Pitchers`, `Schedule`, `Projected`,
+`Starters` — answers *which reading of him, which kind, which players*, and it
+sat on the page an inch below the band. Those are one statement, and they are
+the controls a reader crossing a leaguemate's week reaches for most: they are in
+the band now, as its last row. The paragraph above that argued the other way —
+that the row belongs to two of the three pages and would be an empty band on the
+third — is kept, because its objection is a fact about the Summary page rather
+than an argument: the band is drawn from what the page has, so Summary simply
+has no row, exactly as a bye has no strip.
+
+**The dates did not come**, which is this change's one exception. `.date-bar` is
+a line across the box rather than a group in a row, so it cannot pack beside
+them — it would be a third line of pinned chrome on a phone, on a band that
+already carries the way back, the week, the strip and the tools. It is also the
+only control here that opens a *panel over the page* rather than changing the
+page in place, and a disclosure is at its clearest directly above the thing it
+is about. It keeps its own row (`.mup-dates`) at the same 12px from the table it
+always had.
+
+**Measured at 320 / 390 / 480 / 640 / 1200, before → after, on the live league's
+week 19, team 4 of matchup 111.** The band is the whole of what moved:
+
+| | Summary | team page, before | team page, after |
+| --- | --- | --- | --- |
+| band at 1200 / 640 / 480 | 114 | **114** | **162** |
+| band at 390 | 114 | **114** | **210** |
+| band at 320 | 145 | **145** | **289** |
+| tools row | *(none)* | on the page, `y=130` | in the band, `y=114` |
+| date row | *(none)* | `y=178` (1200), 226 (390), 305 (320) | **the same three** |
+
+**Nothing on the roster reading moved by a pixel.** The table's first row starts
+at the same y before and after at every width — 292 at 390, 371 at 320 — because
+`.mup-view.roster-mode` was already a static column and those rows were already
+above the pane rather than in it. What the move buys is what happens on the
+*other* reading: scrolled 400px into a team's feed, the strip and the tools are
+still at `y=0` and `y=114`, where before the tools were at `y=-270` and the
+reader was 400px from any of them. The date row goes with the page, as it should
+— `y=-222` at 1200 from the same scroll.
+
+**The band is measured now, and it was not measured at all before.** `.mup-view`
+is folded onto `.details-view`, which defaults `--details-chrome-h` to `0px` and
+turns it into the `--scroll-offset` every `scroll-margin-top` inside the overlay
+reads — so a clip in a team page's feed scrolling itself into view was clearing
+nothing and landing behind the band. `useOverlayChromeOffset` (the player page's
+own hook, unchanged) now publishes it: measured, `--scroll-offset` reads
+`calc(162px + 12px)` at 1200 and `calc(210px + 12px)` at 390 on the Feed
+reading, `calc(114px + 12px)` on Summary, and **`calc(0px + 12px)` on the roster
+reading** — where the chrome is `static` and the table's own pane is the
+scroller, which the hook reads off the computed `position` rather than off a
+second copy of that rule. Three heights for one box at one width, which is
+exactly the case `--chrome-h` exists for one level down.
+
+**The Feed reading's two missing buttons are reserved, not removed.** `Schedule`
+and `Projected` are the roster table's alone, so the run is 80px shorter on the
+Feed reading — and the row wraps below 466 (the three groups measure 131 + 155 +
+124 against a box of `100vw − 32`). Left to itself that is a **whole line of
+pinned band appearing and disappearing under the finger that pressed `Feed`**:
+measured before the fix, the row went 150 → 102 at 390 and 198 → 150 at 320, the
+band with it. So the pair is drawn on both readings and the feed's copy is a
+ghost — `visibility: hidden` on the real buttons, which is `.details-sub-ghost`'s
+and `.mv-callouts-ghost`'s technique and reserves exactly what they measure in
+whatever font the platform hands us. Measured after: the band is **162 / 210 /
+289 on both readings** at 1200 / 390 / 320, the two ghosted buttons are out of
+the tab order and out of the accessibility tree (the chrome offers 11 buttons on
+the roster reading and 9 on the feed), and the wrapper carries `aria-hidden`.
+
+**`order: 1` is what makes the reservation free above the wrap.** It was first
+scoped to a media query at the width the row wraps at, so a desktop would not
+carry 210px of blank in the middle of its bar — a breakpoint derived from three
+measured group widths, which a wider font moves without telling anyone. Ordered
+last instead, the blank is *trailing* space in the final group of a left-aligned
+row: invisible at every width and correct at every width, with no number in it.
+Measured with the ghost in place: at 320 the feed's lone `Starters` clipboard sat
+**90px in from the left edge** of its own line; ordered last it sits at 16, which
+is the row's own gutter, and at 1200 it sits where it always did.
+
+**Two faults the move turned up, both in the row that stayed.**
+
+- **The date bar shrank to its content on the roster reading.**
+  `.mup-view.roster-mode` is a column flex box, so `.mup-dates` is a flex item
+  and its `margin: 0 auto` suppressed the stretch — this file's own rule, walked
+  straight into. Measured: the bar was **233px at 1200 and at 390 alike**,
+  against the 800 and 358 the same bar takes on the Feed reading an inch away.
+  `width: 100%` restores it and the auto margins go on centering it inside the
+  cap.
+- **It drew a second hairline.** `.date-bar` declares a `border-top` as the seam
+  between a tab row and the dates, for the callers that sit it directly under
+  one. That row is in the band now and the band closes itself with a full-width
+  hairline of its own, so the bar's rule read as **a second line 16px below the
+  first**, at the card column's width rather than the window's — a stray rule
+  across the middle of the page. Dropped for this caller alone.
+
+**What a phone pays.** At 390 the band is 210px of an 844px screen (25%, against
+the player page's 193 at the same width, which that page's own note accepts);
+at 320 it is 289, where the Back-and-week row already wraps and the tools take
+three lines. The roster reading pays none of it, having spent those pixels
+already. The Feed reading's first item starts 48px lower at 390 and 320 than it
+did — the reserved line — and at exactly the same y from 480 up, where nothing
+wraps. Page-body and overlay overflow are **0 at every width on all three
+pages**, before and after. A bye still has no strip and now carries the tools
+under its own head: **205px at 390, 157 at 1200**, 14 rows, 0 overflow. And the
+roster table's sticky header is unaffected — scrolled 300px into the pane, the
+header row is 1px from its top.
+
+**Bundle: 577.92 → 578.12 KB of JS** (170.12 → 170.15 gzipped) and **154.15 →
+154.38 KB of CSS** (27.24 → 27.29) — 0.2KB and 0.23KB raw, 30 and 50 bytes over
+the wire, for a hook call, a ghost and the rules above.
+
 ### The headline sits beside the badge on a phone, where it stacked under the name
 
 **This reverses the passage below it, which is kept because its measurement is
@@ -2195,7 +2307,9 @@ where the rules are.
 - **A team page**: the tools row is `Roster · Feed`, `Batters · Pitchers`,
   Schedule and the date button reading **`Today`** — one row from 640 up and two
   below it, the two icon buttons paired on the second. 13 rows with **13 slot
-  chips**, and the feed 18 items.
+  chips**, and the feed 18 items. *(That row is the band's last row now, and the
+  dates are the only part of it still on the page — see* The tools row went into
+  the band*, where both are re-measured.)*
 - **The date row** opens on a line of its own under the button, offering
   **`Matchup · Today · Tomorrow · Yesterday · This week · Last 15 days`**;
   picking `Matchup` takes the label to `Matchup`, the table to **14 rows** (the

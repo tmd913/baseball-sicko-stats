@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { answersEscape, useLockBodyScroll, useOverlayFocus } from '../hooks';
+import {
+  answersEscape,
+  useLockBodyScroll,
+  useOverlayChromeOffset,
+  useOverlayFocus,
+} from '../hooks';
 import { DialogLayerContext, Modal } from './Modal';
 import { MatchupSeriesChart } from './MatchupSeriesChart';
 import { LoadingLine } from './Loading';
@@ -441,6 +446,22 @@ export default function LeagueMatchupView({
   useLockBodyScroll();
   const viewRef = useRef<HTMLDivElement | null>(null);
   useOverlayFocus(viewRef);
+  /**
+   * **The band is measured rather than declared**, which is what carrying a
+   * team page's controls costs it: the head is one row of tabs on the Summary
+   * page, that row plus the tools on a team page, and the tools themselves wrap
+   * to a second line on a phone — three heights for one box, and no stylesheet
+   * can know which is in force. `useOverlayChromeOffset` writes it onto the
+   * overlay as `--details-chrome-h`, where `.details-view`'s own rule (this
+   * page is folded onto it) turns it into the `--scroll-offset` every
+   * `scroll-margin-top` inside here reads — a clip in a team page's feed
+   * scrolling itself into view was landing behind this band, and it now clears
+   * whatever the band currently is. Zero whenever it is not pinned, which the
+   * hook reads off the computed `position` rather than off a second copy of the
+   * rule: the roster reading makes the chrome `static` and gives the scroll to
+   * the table's own pane.
+   */
+  const chromeRef = useOverlayChromeOffset<HTMLDivElement>(viewRef);
 
   /**
    * **The page it opens on, resolved from the team the caller named.** A
@@ -876,8 +897,8 @@ export default function LeagueMatchupView({
    * it — see `.mup-nav-row`, which does that with a grid rather than by
    * centering the pair (which would sit the tabs 19px left of center).
    */
-  const head = (extra: ReactNode, key?: ReactNode) => (
-    <div className="mup-chrome">
+  const head = (extra: ReactNode, key?: ReactNode, tools?: ReactNode) => (
+    <div className="mup-chrome" ref={chromeRef}>
       <div className="mup-bar">
         {/* The way back, and the only one this page needs: it was opened from a
             card on the Scoreboard and returns to it. It is `BackButton` — the
@@ -907,6 +928,15 @@ export default function LeagueMatchupView({
       ) : (
         extra
       )}
+      {/* **And a team page's own controls travel with the strip**, for the
+          reason the strip is here at all: which manager, which reading of him,
+          which kind and which players are one statement — *what is on screen* —
+          and half of it scrolling away under the other half is the fault
+          `.details-chrome` and `.app-chrome` each answer by pinning the pair.
+          They were an inch of page a reader partway down a feed had to go back
+          up for; the band holds them now, and the days stay on the page (see
+          `.mup-dates`, which is the one control that did not come). */}
+      {tools}
     </div>
   );
 
@@ -1268,9 +1298,20 @@ export default function LeagueMatchupView({
    * span, and the dates: the same set, drawn from the same components, so a
    * reader who knows the Roster page knows this one.
    *
-   * They sit on the page rather than in the pinned head, which holds the way
-   * back and the week alone: this row belongs to two of the three pages and
-   * would be an empty band on the third.
+   * **They sit in the pinned head with the strip**, and they used to sit on the
+   * page under it. The objection to putting them there was that the row belongs
+   * to two of the three pages and would be an empty band on the third — which
+   * is a fact about the Summary page and not an argument: the band is drawn
+   * from what the page has, so on Summary there is simply no row, exactly as
+   * there is no strip on a bye. What the page position actually cost is the
+   * thing the strip is pinned to avoid: *which manager* stayed on screen the
+   * whole way down a feed while *which reading of him* and *which kind* were an
+   * inch of page you had to go back up for, and they are the controls a reader
+   * crossing a leaguemate's week reaches for most.
+   *
+   * **The dates did not come with them.** See `dateBar` below, which is a line
+   * across the box rather than a group in a row and would be a third line of
+   * pinned chrome — where the row it opens is already a panel over the page.
    */
   const sideName =
     sideTeamId === null ? 'this team' : teams.get(sideTeamId)?.name ?? `Team ${sideTeamId}`;
@@ -1290,7 +1331,16 @@ export default function LeagueMatchupView({
      Measured at 390 the four groups already came to 382 against the 358 this
      box has, so the row wrapped — and it wrapped the calendar by itself, a lone
      36px square under two full-width switches with its range bubble hanging
-     over nothing. That square is gone and the row is three groups now. */
+     over nothing. That square is gone and the row is three groups now.
+
+     **And it stayed on the page when the tools row went into the band.** It is
+     a line rather than a group, so it cannot pack beside them — it would be a
+     third row of pinned chrome on a phone, on a page whose band already carries
+     the way back, the week, the strip and the tools. It is also the one control
+     here that opens a panel *over* the page rather than changing it in place,
+     and a disclosure is at its clearest directly above the thing it is about.
+     It keeps its own row under the band (`.mup-dates`), at the same 12px from
+     the table it always had. */
   const mupScheduleReading = reading === 'roster' && scheduleSpan !== null;
   const mupBarSpan = mupScheduleReading
     ? spanDates(scheduleIndex, scheduleSpan!, matchupWindow, today)
@@ -1396,10 +1446,34 @@ export default function LeagueMatchupView({
           good; the grouping stays, because Schedule, Projected and Starters
           come and go with the reading and would otherwise break apart. */}
       <div className="mup-tool-icons">
-        {/* The Schedule view, on the roster table alone — it swaps that table's
-            stat columns for a column per day, and there is nothing in a stream
-            of things that have happened for a fixture list to replace. */}
-        {reading === 'roster' && (
+        {/* **The two toggles the feed has no use for are drawn either way, and
+            hidden on that reading rather than removed.** They are the roster
+            table's alone — the Schedule view swaps its stat columns for a column
+            per day, and there is nothing in a stream of things that have already
+            happened for a fixture list or a projection to replace — so on the
+            Feed reading the run is `Starters` by itself.
+
+            Taking them out takes 80px out of a row that **wraps on a phone**,
+            which is 40px of *pinned* band appearing and disappearing under the
+            finger of the reader who pressed `Feed`: the rule this app applies
+            everywhere is to reserve the worst case and let the box be still.
+            Reserved with a real pair under `visibility: hidden` — `.details-sub`
+            and the movement chart's callouts do the same — so what is held open
+            is exactly what these two buttons measure in whatever font the
+            platform hands us, and not a height this file guesses at. Hidden
+            that way they are out of the tab order and out of the accessibility
+            tree, which is what `.mv-callouts-ghost` relies on too.
+
+            And it is held open at the **end** of the run rather than in place,
+            which is what makes it free at a width where nothing wraps: trailing
+            blank in the last group of a left-aligned row is invisible, where in
+            place it left the feed's lone clipboard 90px adrift of its own line.
+            That is `order` on the ghost, so the DOM keeps the roster row's own
+            order — see `.mup-tool-modes`. */}
+        <span
+          className={`mup-tool-modes${reading === 'roster' ? '' : ' mup-tool-ghost'}`}
+          aria-hidden={reading === 'roster' ? undefined : true}
+        >
           <ScheduleToggle
             on={scheduleSpan !== null}
             loading={scheduleLoading}
@@ -1416,15 +1490,11 @@ export default function LeagueMatchupView({
               })
             }
           />
-        )}
-        {/* **The projected reading, after the Schedule view and before
-            `Starters`** — the roster row's own order, where these two are the
-            third of *which page, which kind, which reading of it, which
-            players, which days*: the stats behind you, the fixtures ahead, and
-            what the fixtures are worth. On the roster table alone, for the
-            reason the Schedule view is: a feed is a record of things that
-            happened and there is no honest projected version of one. */}
-        {reading === 'roster' && (
+          {/* **The projected reading, after the Schedule view and before
+              `Starters`** — the roster row's own order, where these two are the
+              third of *which page, which kind, which reading of it, which
+              players, which days*: the stats behind you, the fixtures ahead, and
+              what the fixtures are worth. */}
           <ProjectedToggle
             on={teamProjected}
             loading={teamProjLoading}
@@ -1435,7 +1505,7 @@ export default function LeagueMatchupView({
                 : `Add what ${sideName} should get from these players over the days still to be played — and open on the days there are games in`
             }
           />
-        )}
+        </span>
         {/* **Which way the feed's clock runs**, on the feed reading alone —
             there being no order to a table. It is beside the other two "which
             reading of it" controls for that reason, and it is *here* rather
@@ -1443,7 +1513,13 @@ export default function LeagueMatchupView({
             reason: the pills answer the question the page was opened with and
             are worked on arrival, where an order is wanted by a reader already
             well down a stream, and this run is the part of the page that does
-            not scroll away from them. See `FeedOrderToggle`. */}
+            not scroll away from them. See `FeedOrderToggle`.
+
+            **Outside the ghosted span, not inside it.** The span reserves the
+            roster reading's two toggles so the band cannot shorten under a
+            finger that pressed `Feed`; this button is the feed reading's own
+            and has nothing to reserve against, so putting it in there would
+            make the ghost hold a slot the roster reading never fills. */}
         {reading === 'feed' && (
           <FeedOrderToggle oldestFirst={feedOldest} onToggle={() => setFeedOldest((v) => !v)} />
         )}
@@ -1460,13 +1536,15 @@ export default function LeagueMatchupView({
           }
         />
       </div>
-      {/* The dates and, in the Schedule reading, the span — one bar across the
-          box, arrows either side. See `dateBar` above: the calendar square that
-          used to end the icon run and the span strip that used to be a group of
-          its own are both in it now. */}
-      {dateBar}
     </div>
   );
+
+  /* The dates and, in the Schedule reading, the span — one bar across the box,
+     arrows either side, on its own row under the band. See `dateBar` above: the
+     calendar square that used to end the icon run and the span strip that used
+     to be a group of its own are both in it, and it is the one control of this
+     page's that stayed on the page when the rest went into the head. */
+  const dates = <div className="mup-dates">{dateBar}</div>;
 
   return (
     <DialogLayerContext.Provider value={MATCHUP_LAYER}>
@@ -1490,11 +1568,11 @@ export default function LeagueMatchupView({
         tabIndex={-1}
         className={`mup-view${sideTeamId !== null && reading === 'roster' ? ' roster-mode' : ''}`}
       >
-        {head(nav, barsKey)}
+        {head(nav, barsKey, sideTeamId !== null ? tools : null)}
 
         {sideTeamId !== null ? (
           <>
-            {tools}
+            {dates}
             <LeagueTeam
               /* Keyed on the team alone: the span, the kind and the reading are
                  the chrome's and must not remount the page — only crossing to
