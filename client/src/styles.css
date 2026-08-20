@@ -9833,8 +9833,35 @@ button.start-line:focus-visible {
    1200, a 246px card in a 774px body, its `1fr` bar track collapsed to nothing
    and every fill 0px wide. The same sentence `.details-chrome` records for the
    head and tabs it took out of a flex row. The 680px cap and the auto margins
-   still do their work above that width. */
-.upcoming-detail .pct-card {
+   still do their work above that width.
+
+   **And `.start-detail` is on the rule, because the trap was sprung a second
+   time by the wrapper being folded on without it.** The player page's Schedule
+   tab opens this same card from an upcoming row, in the same `.play-detail-box`
+   at the same width — the two wrappers already share the flex column above —
+   but that fold left this line behind, so from that caller the card shrank to
+   its own content all over again: measured at 1400, **246px in a 774px body,
+   the rail track 0px and all eight fills rendered at 0.00px**; at 390 and at
+   320 the card was 185px and the track 0 again. (The fills are *drawn* in both
+   cases — eight `.spl-fill` nodes with their inline `calc(frac × (50% −
+   inset))` — and 50% of a 0px track is 0px, which is why the card reads as a
+   list of figures with no bars rather than as a card with something missing.
+   The player it happens to be opened on decides how obvious it is: a thin-split
+   card carries the amber note, whose own max-content is 623.75px, so the
+   shrink-to-fit lands near the 680 cap and the bars come back by accident.
+   Aaron Judge's card looks right; Shohei Ohtani's is the 246.)
+
+   **The three fixes that are not this one were measured too**, on the same card
+   at 1400: `align-self: stretch` on the card and `align-items: stretch` on the
+   wrapper both leave it at 246 — an auto cross-axis margin doesn't lose to
+   either, it makes the item ignore alignment and center at its hypothetical
+   size, which is the whole of the trap. A `min-width` on `.spl-track` does put
+   ink back (200px track, eight fills painted) and is the wrong shape of answer:
+   it is a declared number where the right one is *the width the box has to
+   give*, and it still left a 446px card floating in a 774px body. `width: 100%`
+   is the only one that reads the container, and it is the line already here. */
+.upcoming-detail .pct-card,
+.start-detail .pct-card {
   width: 100%;
 }
 /* "Load more" under the Recent section — the stream shows a page at a time, so

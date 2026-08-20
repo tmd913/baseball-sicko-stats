@@ -147,6 +147,10 @@ cell *and* something just outside its edge, both read the token — assigning
 **An auto margin on the cross axis suppresses a flex item's stretch.** A
 `margin: 0 auto` card inside a column flex shrinks to its content
 (`.upcoming-detail .pct-card` is the fix; `.details-chrome` records the same).
+**It has bitten the same card twice** — `.start-detail` was folded onto
+`.upcoming-detail` for the flex column and not onto the `width: 100%` beside it,
+and the splits card came back at 246px in a 774px body with every bar 0px wide.
+Fold a wrapper on and check what else its twin is carrying.
 
 **Layout containment makes a box a containing block for `position: fixed`
 descendants.** `container-type: inline-size` on a dialog body means a
