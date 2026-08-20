@@ -453,9 +453,10 @@ function projectBatter(
  *
  * A **starter** is projected per *start* — `mults` is one multiplier per start
  * his rotation slot or his club's own announcement puts him in — and a
- * **reliever** per *appearance*, which is his club's remaining games times how
- * often he has actually been used. Both are per **out** underneath, because
- * outs are what a pitcher's rates are over and what ERA and WHIP divide by.
+ * **reliever** per *club game*, each worth `appearanceShare` of an outing,
+ * which is how often he has actually been used. Both are per **out**
+ * underneath, because outs are what a pitcher's rates are over and what ERA and
+ * WHIP divide by.
  *
  * **Outs themselves take no matchup adjustment**, which is a deliberate
  * omission: a tough lineup shortens an outing and a soft one lengthens it, and
@@ -496,12 +497,36 @@ function projectPitcher(
    * this projection rather than through a rule of its own.
    */
   startsGame = false,
+  /**
+   * **How much of an appearance each entry in `mults` is worth**, and it is
+   * `projectBatter`'s `playShare` arriving on the pitching side.
+   *
+   * A starter passes the default 1: `mults` is one entry per *turn*, and a turn
+   * is a whole outing. A **reliever** passes his appearance rate, `mults` being
+   * one entry per club game — because he is not in a whole game, he is in about
+   * two fifths of one, and which two fifths nobody knows. So every remaining
+   * game contributes its own share, which is the arithmetic a batter's line has
+   * always been built on and the one `pitcherCandidate` one screen down has
+   * always used for the same man (`day.set(g.date, rate)`).
+   *
+   * The alternative — rounding the span to a whole number of appearances and
+   * projecting those — is what this replaced, and it is wrong in three ways
+   * measured on the live board: it **rounds a short span to nothing** (on
+   * 2026-08-21 alone, 5 of the 12 busiest relievers in baseball projected `0`
+   * chances and a null line, drawn as a row of dashes beside a batter who got
+   * a fractional one on the same day), it **throws the fraction away on every
+   * span** (Sam Moll over three days: 3 games × 0.44 = 1.32 appearances, filed
+   * as 1), and it took the **first** N games of the span rather than a share of
+   * each, so a reliever's opponent-quality multipliers came off the front of
+   * the week and none of the back of it.
+   */
+  appearanceShare = 1,
 ): void {
   const outs = num(row.outs);
   const games = num(row.games);
   const gs = num(row.gamesStarted);
   const denom = starterView ? gs : games;
-  if (outs <= 0 || denom <= 0 || mults.length === 0) return;
+  if (outs <= 0 || denom <= 0 || mults.length === 0 || appearanceShare <= 0) return;
 
   const w = recentWeight(num(recent?.outs), RECENT_FULL_OUTS);
   const per = (s: number | null | undefined, r: number | null | undefined): number =>
@@ -531,9 +556,14 @@ function projectPitcher(
 
   for (const m of mults) {
     const km = inverse(m);
-    const o = outsPer;
-    add(into, PIT.gp, 1);
-    if (starterView) add(into, PIT.gs, 1);
+    // **His outing scaled by how often he is in one**, which is `projectBatter`'s
+    // `paPerGame * playShare` on this side of the ball: every rate below is per
+    // out, so scaling the outs scales the whole line and nothing else has to
+    // know. The four per-*appearance* figures below it are not per out and take
+    // the share explicitly.
+    const o = outsPer * appearanceShare;
+    add(into, PIT.gp, appearanceShare);
+    if (starterView) add(into, PIT.gs, appearanceShare);
     add(into, PIT.outs, o);
     add(into, PIT.tbf, tbfRate * o * m);
     add(into, PIT.h, hRate * o * m);
@@ -543,11 +573,11 @@ function projectPitcher(
     add(into, PIT.er, erRate * o * m);
     add(into, PIT.r, rRate * o * m);
     add(into, PIT.k, kRate * o * km);
-    add(into, PIT.w, wPer * km);
-    add(into, PIT.l, lPer * m);
-    add(into, PIT.sv, svPer * km);
-    add(into, PIT.hd, hdPer * km);
-    add(into, PIT.svhd, (svPer + hdPer) * km);
+    add(into, PIT.w, wPer * km * appearanceShare);
+    add(into, PIT.l, lPer * m * appearanceShare);
+    add(into, PIT.sv, svPer * km * appearanceShare);
+    add(into, PIT.hd, hdPer * km * appearanceShare);
+    add(into, PIT.svhd, (svPer + hdPer) * km * appearanceShare);
   }
 }
 
@@ -1199,11 +1229,21 @@ function projectOnePitcher(
   // been used — `playShareOf`'s own figure, which reads the last thirty days
   // where it can for the reason that function gives: a man just brought up out
   // of the bullpen is being used now rather than at his season rate.
+  //
+  // **Every remaining game at a share of an appearance, not a whole number of
+  // them.** A batter's line has always been built this way (`projectOneBatter`
+  // hands `projectBatter` its `share` and gets a fractional `games` back) and so
+  // has the lineup planner's reading of this very man (`pitcherCandidate` sets
+  // `day.set(g.date, rate)`), so this is the one place in the file that
+  // disagreed with the other two. Rounding a span to whole appearances rounded
+  // a **one-day span to none** — the whole of the "relievers get no projection
+  // on individual dates" fault, since a rate near 0.4 is the ordinary bullpen
+  // arm and `Math.round(0.4)` is 0 — and threw the fraction away on every
+  // longer one besides. See `projectPitcher`'s `appearanceShare`.
   const rate = playShareOf(ctx, 'pitcher', id, row.teamId, row, pools.pitRecent.get(id) ?? null);
-  const count = Math.round(games.length * rate);
-  const mults = games.slice(0, count).map((g) => pitcherGameMult(pools, id, oppOf(g)));
-  projectPitcher(row, pools.pitRecent.get(id) ?? null, mults, false, into);
-  return { starts: 0, reliefGames: mults.length, placed: true };
+  const mults = games.map((g) => pitcherGameMult(pools, id, oppOf(g)));
+  projectPitcher(row, pools.pitRecent.get(id) ?? null, mults, false, into, false, rate);
+  return { starts: 0, reliefGames: mults.length * rate, placed: true };
 }
 
 
@@ -2020,9 +2060,17 @@ export interface ProjectedPlayerLine {
   kind: PlayerKind;
   /** What the line was drawn over — a batter's expected games, a pitcher's
    *  starts plus relief appearances. **Zero is the honest absence**: a club with
-   *  no game left in the span, a starter whose turn does not fall in it, or a
-   *  man neither board has a row for. The client draws that as dashes rather
-   *  than as a line of noughts, which would claim he plays and does nothing. */
+   *  no game left in the span, a starter whose turn does not fall in it, a man
+   *  off the active roster, or a man neither board has a row for. The client
+   *  draws that as dashes rather than as a line of noughts, which would claim he
+   *  plays and does nothing.
+   *
+   *  **A fraction is not an absence**, and that is the distinction this used to
+   *  lose on the pitching side: a reliever's chances are a share of every game
+   *  his club has left, so a one-day span is `0.4` of an appearance rather than
+   *  zero of one — the honest answer to *is he pitching tonight*, which is
+   *  *probably not, and here is what it is worth if he does*. See
+   *  `projectPitcher`'s `appearanceShare`. */
   chances: number;
   batting: BattingLine | null;
   pitching: PitchingLine | null;

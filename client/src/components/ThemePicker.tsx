@@ -5,7 +5,7 @@ import { THEMES, type ThemeId } from '../theme';
  * the settings popover and the invite page's onboarding flow.
  *
  * **It is shared rather than resembled**, which is this app's standing rule for
- * a control drawn twice (`DateControls`, `StartersToggle`, `PlayerIdentity`,
+ * a control drawn twice (`DateControls`, `ScheduleControl`, `PlayerIdentity`,
  * `ColumnPicker`): a second copy of six buttons and their swatch pills is a
  * second thing that will one day disagree with the first about what a theme
  * looks like — and a swatch's whole claim is that it *is* a picture of the

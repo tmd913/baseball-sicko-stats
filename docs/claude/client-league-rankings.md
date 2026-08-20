@@ -714,7 +714,7 @@ so it takes that control's answers exactly: pills on a desktop, a native
 `<select>` under 640px, **both rendered and swapped by one media query** rather
 than by a JS media test that could drift from the CSS, which is the rule every
 "pills on a desktop, dropdown on a phone" control in this app follows.
-`.lg-span-select` is folded onto `.date-presets-select` / `.research-window-select`
+`.lg-span-select` is folded onto `.research-window-select`
 / `.research-pos-select` so all four are one control by construction, and the
 pill row is hidden two classes deep (`.view-bar-tabs .lg-span-row`) for the
 reason `.research-bar .research-window-row` is: the shared `.view-switch` rule
@@ -838,8 +838,8 @@ it changed.** It was put in the caption row on the reasoning that a control
 saying what the figures *are* belongs against the figures, which is true and is
 still why the *caption* is there. What it missed is what the button actually
 does — it changes **which numbers the table draws**, which is the same kind of
-statement as `Starters`, the research board's include buttons and the Roster
-view's own `Projected`, and every one of those is in the tab row. That last one
+statement as the research board's include buttons and the Roster view's own
+`Projected`, and both of those are in the tab row. That last one
 is the whole argument in a line: the app already draws a projected toggle up
 there, so drawing the League's copy two tiers lower made one control look like
 two.
@@ -945,7 +945,7 @@ their prose, the CSS up 60 on two declarations and the argument for them.
 
 ### `rankproj=1`, and why it is a third param rather than a reuse
 
-In the URL by the rule `hideil=1`, `starters=1` and `sched=` follow: it changes
+In the URL by the rule `hideil=1` and `sched=` follow: it changes
 *what the numbers are*, so a link that carries it describes a different table.
 
 **A third param rather than either of the two the app already has**, because
@@ -960,9 +960,10 @@ collide with it (`preset`, `start`, `end`, `player`, `view`, `kind`, `sim`,
 
 **Written only on the span it can act on.** Moving to `Season` drops it and
 coming back writes it again, so a link to a season table never carries a lens
-that table has no answer for. **Not a saved preference**, for `starters=1`'s
-reason: which figures a reader wants in front of them is a lens for an
-afternoon, and a saved copy would be a table of guesses drawn a fortnight later.
+that table has no answer for. **Not a saved preference**, by the line every
+lens in this app sits the far side of: which figures a reader wants in front of
+them is a lens for an afternoon rather than a standing fact about the reader, and
+a saved copy would be a table of guesses drawn a fortnight later.
 
 **And it does not outlive the tab.** Leaving the Rankings tab — for the
 Scoreboard, for Transactions, or off the League view altogether — puts the lens

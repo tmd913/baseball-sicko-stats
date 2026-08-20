@@ -338,7 +338,7 @@ desktop pair.
 
 **It is the same trap this stylesheet already documents three times** — the
 narrow-screen rhythm block being last in the file, `.date-row .date-presets`
-going two classes deep, and the `.starters-toggle` glyph rules that had to move
+going two classes deep, and the roster row's toggle glyph rules that had to move
 below `.research-toggle`. The fix here is the file-order one rather than the
 specificity one, because it is a whole block rather than a rule: both media
 blocks now sit **after `.mup-note`**, which is the last `.mup-*` rule they
@@ -1485,6 +1485,42 @@ over, so picking it makes every row the arithmetic behind a category. It is
 absent where the period has no dates to name, the rule the Rankings span strip
 already follows for a half with no matchup period in it.
 
+### A team page's third reading: `Summary`, the matchup so far
+
+**`Roster · Summary · Feed`.** The middle one is the app's own table over **the matchup's own days** — the period's start to today, clamped to its end — and it is a *reading* rather than a preset because those days are not the reader's to move. The span is `board.start`/`board.end`, which the scoreboard already truncates at today for the week being played, so the table is summed over **exactly the days the category card two presses away is summed over**. Driven on the live week (`?view=league&mup=110&mt=5`), the bar reads `MATCHUP TO DATE` over `Aug 10 – Aug 20` and the table draws 17 rows of eleven-day totals (Royce Lewis `10/35`, 4 R, 4 RBI, `.714`) where the Roster reading beside it, on `Today`, draws the same 15 rows at `0/0`. On a settled matchup (`&mp=18&mup=104`) it reads `Aug 3 – Aug 9`, the whole period.
+
+**It is where the `Matchup` pill went.** That pill led this page's preset row and was the reason a reader was on the page at all; the preset row has gone from every bar in the app (the face opens a calendar — see **The date bar**, *And then the Roster's face opened the calendar too*), and this is that pill promoted from *a range you can pick* to *a reading you can be in*, which is what it was in practice. The reader's own span is **kept** rather than overwritten, so crossing back to `Roster` puts them on the days they left.
+
+**The date bar states the days and offers nothing** — `fixed`, so no arrows and a `<div>` face. A range the reader could step would be a Summary of something other than this matchup one press later, which is the one thing this reading cannot be. Measured: `steps` **0**, face tag `DIV`, `cursor: default`, face center **700 at 1400 / 195 at 390 / 160 at 320** — the same number the other two readings put it at, so nothing moves as the switch is crossed.
+
+**In the URL as `mr=`**, the rule *which data a view shows belongs in the URL*. That is a change of position rather than of rule: `mup` and `mt` were the whole of what a matchup link carried while a reading was only which *cut of the same span* a page drew, and `summary` is not that — it is a different span, derived rather than picked, which a link that dropped it would silently turn back into whatever range the recipient's own default seeded. All three values ride (`roster` is the omitted default, the app's convention that the first tab is the one you land on), it is written only alongside `mt=` (the matchup's own Summary *page* has no reading to be in), and it is a **running record**: the page reports the reading up as the reader crosses the switch, exactly as it reports the side. `mr` because `mp` is the period, `mup` the matchup and `mt` the page of it. Driven: `?…&mt=5&mr=summary` opens on Summary with 17 rows and no arrows; pressing `Roster` drops `mr=` from the URL; pressing `Feed` writes `mr=feed`; and `Back` clears it with `mup=` and `mt=`, a reading being put away with the page it was made on (the rule `rproj=1` and `proj=1` follow).
+
+**`Summary` is the second thing on this page to wear the word**, the strip above having a `Summary` tab, which is the *comparison page* rather than a reading of a team. They are one press apart and both are `.view-switch` pills. What tells them apart is that the strip is *whose page* and this is *what about him*, and their titles say so; the alternative was a second word for one idea, which is worse — a manager reading his own week wants the summary of it, and a synonym invented to protect a layout is the app lying about what a control is. Flagged here rather than hidden, because it is the one part of this that a reader could trip on.
+
+#### The third pill took the tools row's slack, and the ghost had to be re-derived
+
+**A third reading pill is 88px, and the row had 40.** `.mup-tools` is capped at the 800px card column, and at 1400 the run was `reading 217 · kind 155 · icons` with two 12px gaps. On the roster reading the icons come to **346** (`Schedule` 111 + `Projected` 114 + `Starters` 105) and the total to **741**; on the Feed reading the ghosted pair is still 233 and the order toggle adds 99, so the icons come to **452** and the total to **848** — over the column, so the row wrapped **on that reading alone** and the band went 162 → 210. That is a whole line of pinned chrome appearing under the finger that pressed `Feed`, which is the exact fault the ghost exists to prevent, reintroduced by the pill.
+
+**So the ghost reserves the *difference*, not the pair.** The rule is: hold open whatever the roster reading has that this one has not, less whatever this one has that the roster reading has not. `Summary` has nothing of its own and reserves **both**. The Feed has the order toggle and reserves **one** — `Projected` (113.5 against `Schedule`'s 111.1, the nearer of the two to the 126 that would make the runs equal). Below 640 it reserves **none**: there every toggle is a 36px square and the roster run is 124, while `Oldest first` is a *word*, not a glyph, and measures 98.7 — one reserved square takes the feed run to 187 and, at 375, `kind` + the run to **354 against the 343** that width leaves, which is the same fault wearing the other shoe. Reserving nothing takes it to 143.
+
+**Exactly equal was available and was rejected.** Draw all four in every reading and ghost what does not apply and the run is 452 on every one of them — but 452 does not fit an 800px column, so the row wraps in *all three* readings and the band is 210 at every desktop width instead of 162, and 258 instead of 210 on a phone. That is 48px of pinned chrome bought from every reader, always, to close three seams.
+
+**Measured across the three readings at nineteen window widths** (`?view=league&mup=110&mt=5`, band height in px):
+
+| window | 1400 | 1000 | 900 | 800 | 780 | 770 | 700 | 660 | 641 | 640 | 560 | 500 | 430 | 400 | 390 | 375 | 360 | 340 | 320 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Roster | 162 | 162 | 162 | 162 | 162 | 210 | 210 | 210 | 210 | 162 | 162 | 210 | 210 | 210 | 210 | 210 | 210 | 241 | 289 |
+| Summary | 162 | 162 | 162 | 162 | 162 | 210 | 210 | 210 | 210 | 162 | 162 | 210 | 210 | 210 | 210 | 210 | 210 | 241 | 289 |
+| Feed | 162 | 162 | 162 | 162 | 162 | **162** | 210 | 210 | 210 | 162 | **210** | 210 | 210 | 210 | 210 | 210 | 210 | **289** | 289 |
+
+Three seams remain, all of them narrow bands of window width where the Feed reading alone is a line out — **≈761–773, ≈552–570, ≈333–345** — and none of them is a device width. Every common one (320, 360, 375, 390, 430, 500, 640, 800, 900, 1000, 1400) is identical across all three readings.
+
+#### The dates row lost its own margin, which was the roster bar's rule all along
+
+**The app draws this same bar last in `.app-chrome`, whose `padding-bottom` is 0, so the table starts where the bar ends.** Measured at 1400 on the Roster view: the bar runs to y=**168** and the table head begins at y=**169**. `.mup-dates` carried a 12px bottom margin and the same two boxes measured **231** and **244** — the one control the two surfaces share, spending twelve pixels more on one of them than on the other, which is what "the matchup version has too much spacing" turns out to be when it is measured. Folded onto the roster's rule rather than given a smaller number of its own, because the number is *what the box below has to give* and here as there that is nothing: after, the table head is at **232** at 1400, **280** at 390 and **359** at 320, one pixel under the bar in each — and the bar itself is unmoved at 178 / 226 / 305. The Feed reading is unaffected, its first card keeping the 16px `.feed-filters` puts above itself.
+
+The gap *above* the bar is the band's own 16px margin and is left alone: it is `.mup-chrome`'s, shared with the Summary page's card, and it is 16 against the roster bar's 14 — two pixels, against the twelve below.
+
 ### A settled matchup opens on its own days
 
 **That paragraph said "the days start at today" flatly, and the four words added
@@ -1528,7 +1564,7 @@ other matchup is a fresh mount and a fresh default.
 **This is the team pages' control and reaches nothing else.** The whole `tools`
 row is drawn only where a side is selected, so the Summary page has no date
 control to default — checked at both widths on both kinds of matchup: **0**
-`.date-toggle` on it. *(That square has since left the row for a bar of its own below it — see `client-dates.md`. The grouping stays, Schedule / Projected / Starters coming and going with the reading.)*
+`.date-toggle` on it. *(That square has since left the row for a bar of its own below it — see `client-dates.md`. The grouping stays, Schedule and Projected coming and going with the reading.)*
 
 **Measured on the live 12-team league at 1200×900 and 390×844, before → after.**
 The **live** matchup (week 19, `Live`, Aug 10 – Aug 16) is unchanged: the date
@@ -1592,8 +1628,14 @@ for the week being played — the same two dates this page prints in its head an
 the wrong two to draw a forward-looking grid from (see **ESPN fantasy league**,
 *The matchup window*).
 
-**A team page carries the `Starters` filter too, and this reverses the paragraph
-that stood here.** What it said was: *what a team page does **not** carry is the
+**A team page carried the `Starters` filter too, and it is gone with the roster
+row's.** *(Superseded at the button, and kept whole for the machinery, which
+stayed: the per-day lineup map this section put on the wire is what fills the
+slot chips' `startedDays` and what draws the `Total` divider on these pages. Only
+the control that read it a third way has left. The removal itself is argued in
+**Client — the summary table**, *The roster row had one filter, `Starters`, and
+it is gone*, and what it cost this page is at the end of this section.)* The
+paragraph this one reversed said: *what a team page does **not** carry is the
 `Starters` filter, and that is a scope line rather than an oversight — that
 control reads the day-by-day lineup map, which the app has for the reader's own
 team and no route returns for anybody else's. It would be a server change to
@@ -1654,56 +1696,47 @@ span that has been played (**Client — the summary table**, *Both halves, or it
 is not the row's count*), and the chips gain the range title they never had:
 `in The Homewreckers' lineup on 3 of the 5 days in view`.
 
-**The same set now draws the `Total` divider here**, which it did not before.
-`SummaryTable` cuts its table in two at that row — the starters above it, the
-bench and the injured below — and this page handed it no starter set at all, so
-the whole team sat above an undivided foot while the button beside it narrowed
-to eleven of them. It is the set `projectStarters` already returns for the
-filter, computed whether the button is pressed or not and passed down as keys,
-exactly as `App.tsx` does on the reader's own roster: a second test written for
-the line is a second test that will one day disagree with the button, silently.
-Measured on team 4 today: `Total · 16` at the bottom → **`Total · 11` with five
-rows under it**, and pressing `Starters` leaves precisely those eleven. Under
-the projected lens the plan answers instead — see **Client — the summary table**,
-*The `Total` row is a divider now*, where the whole of that rule lives.
+**The same set draws the `Total` divider here**, which it did not before, and it
+is the half of this feature that outlived the button. `SummaryTable` cuts its
+table in two at that row — the starters above it, the bench and the injured below
+— and this page handed it no starter set at all, so the whole team sat above an
+undivided foot. It is the set `projectStarters` already returns, passed down as
+keys exactly as `App.tsx` does on the reader's own roster: a second test written
+for the line is a second test that will one day disagree with the first,
+silently. Measured on team 4: `Total · 16` at the bottom → **`Total · 11` with
+five rows under it**, those eleven being the men that manager started on some day
+of the span. Under the projected lens the plan answers instead — see **Client —
+the summary table**, *The `Total` row is a divider now*, where the whole of that
+rule lives.
 
-**The toggle is `components/StartersToggle.tsx`, shared with the roster row**
-rather than a lookalike — the same `.starters-toggle` class folded onto
-`.research-toggle`, the same lineup-card glyph, the same `.on` and never
-`.active`, and the same phone rule: measured, **105px with its label at 1200 and
-a 36px square at 390** with the label visually hidden rather than removed. It was
-inline in `App.tsx` while the roster row was its only home; a second button would
-be two controls that will one day differ, which is the rule that pulled
-`DateControls` out of the same file when these pages needed the dates.
+**What the button was, and what removing it cost this page.** It was
+`components/StartersToggle.tsx` shared with the roster row rather than a
+lookalike — the same `.starters-toggle` class folded onto `.research-toggle`, the
+same lineup-card glyph, the same phone rule (105px with its label at 1200, a 36px
+square at 390) — held as overlay state so it survived crossing from one manager
+to the other, always offered here where the roster row gated it on `rangeHasToday`
+(there is no MLB reading of the word on a leaguemate's page; his lineup is a real
+fact about every day of every range). It had its own empty state in the wording
+that is true here, *none of these batters were in The Homewreckers’ lineup on any
+of these days*, over `Turn off “Starters” …`; both are gone with it, and
+`LeagueTeam` draws every row of the kind on screen.
 
-**It sits in the icon pair, between the reading and the days** — the roster row's
-own order, the questions coming as *which page, which kind, which reading of it,
-which players, which days*. It costs the row no line at either width: measured,
-`.mup-tools` is **36px at 1200 and 84px at 390 with the filter on or off**, and
-the page body and the view each overflow by **0**.
-
-**The overlay owns the flag**, for the reason it owns the reading, the kind and
-the dates: those are chrome above *both* team pages and must not reset when the
-reader crosses from one manager to the other (checked — it survives the crossing
-and re-applies to the other side's rows). And it is **state rather than anything
-in the URL**, which is where every other control on this page sits: `mup` and
-`mt` are the whole of what a matchup link carries.
-
-**It is always offered**, unlike the roster row's own, which is hidden over a
-range with no today in it. That gate exists because the *MLB* reading of the word
-is a fact about tonight, and there is no MLB reading here: a leaguemate's lineup
-is a real fact about every day of every range, and where the per-day map is
-missing the end-of-range roster answers for it.
-
-**The empty state names its cause in the wording that is true here** — it is
-*his* lineup, not the reader's, so neither of the app's own two sentences would
-do. Driven with every day's lineup emptied: `Nothing to show — none of these
-batters were in The Homewreckers’ lineup on any of these days` over a range and
-`… are in The Homewreckers’ lineup` on a single day, both over `Turn off
-“Starters” in the row above to see his whole team — the days he had these players
-on his bench or his IL are what it is leaving out`. It takes `possessive()`, the
-helper the slot chip's own owner already uses, which is what stops the live
-league producing `The Homewreckers’s`.
+**Removing it broke the band's own promise, and the fix is the reservation run
+both ways.** `.mup-tool-icons` reserves the Schedule and Projected pair as a
+ghost on the Feed reading so the pinned band cannot change height under the
+finger that pressed `Feed` — and the feed's own order toggle was deliberately
+*outside* that ghost, on the argument that the roster reading was the wider run
+and so had nothing to reserve against. It was, by exactly this one 36px square.
+With the square gone the roster reading became the **narrower** run, and at 320
+the band went **84 → 132** crossing to Feed: the same 48px of pinned chrome
+moving under the same finger, arriving from the other direction. So
+`.mup-tool-order` is folded onto `.mup-tool-modes`' selector list and the order
+toggle is ghosted on the roster reading exactly as the pair is ghosted on the
+feed's. Measured on the live league, Roster → Feed: **36 → 36** at 1400, **84 →
+84** at 465 and 390, **132 → 132** at 320, page overflow 0 at all four. Against
+`main` at the same widths the band is identical on both readings; what `main` had
+was 84 → 84 at 390 and **132 → 132** at 320 with three buttons in the run, so the
+row wraps as it always did and one button fewer is inside it.
 
 **What it costs the page**, measured through the route on the live league: a team
 page's report is **2.00s genuinely cold** (a fresh process with that team's
@@ -1819,7 +1852,7 @@ range the lens moved the reader to stays when Schedule takes over, the days
 ahead being exactly what a schedule is for.
 
 **The overlay owns the flag and the read**, for the reason it owns the reading,
-the kind, the dates and `starters`: they are chrome above *both* team pages and
+the kind and the dates: they are chrome above *both* team pages and
 must not reset when the reader crosses from one manager to the other. And it is
 **state rather than anything in the URL** — `mup` and `mt` are the whole of what
 a matchup link carries.
@@ -1921,8 +1954,9 @@ flag that gates the prop so the two cannot disagree — a pitcher's stream item 
 his whole outing, so no pill here could match one and the lens passed through
 would empty his feed on behalf of a control that tab does not offer. Driven:
 crossing to `Pitchers` with `HR` lit draws **0 pills** and the whole outing list,
-and crossing back re-lights `HR` over 2 items — `starters`' own rule for an
-excursion.
+and crossing back re-lights `HR` over 2 items: a lens the reader set is still set
+on the screen that does not offer it, and what a control cannot narrow it does not
+un-set.
 
 **Measured, before → after, on both pages at once.** The row takes the stream's
 own column and its `auto` margins, so its left edge is the left edge of the items
@@ -1966,7 +2000,7 @@ leaguemate's plays would be counting his day against the reader's marker, and
 unpassed, and `.feed-new` is absent from this page in every state driven above.
 
 **The lens is the overlay's state**, for the reason it owns the reading, the kind,
-the dates and `starters`: it is chrome above *both* team pages and must not reset
+and the dates: it is chrome above *both* team pages and must not reset
 when the reader crosses from one manager to the other. And it is **state rather
 than anything in the URL** — `mup` and `mt` are the whole of what a matchup link
 carries, and `plays=` stays the app's own Feed view's alone, two params never
@@ -1995,7 +2029,7 @@ down a stream. On the app's own Feed that meant the tab row; here it means
 **On the feed reading alone**, unlike those two, which are the roster reading's:
 there is no order to a table, and there is no honest projected version of a
 stream. `{reading === 'feed' && …}` is the whole of the gate, and it takes the
-same 99 × 36 box `Starters` sits next to.
+same 99 × 36 box the order toggle sits next to.
 
 **The button says its direction now** — `▲ Oldest first` / `▼ Newest first`, and
 the arrow alone where the bar is too narrow for the word. `mup-tools` declares
@@ -2145,8 +2179,8 @@ the chrome's 12) with its own row unchanged: logo, name, `Bye`, `Acq`.
 
 **The strip has been pinned since this became a page, and only half of what it
 says was pinned with it.** The strip answers *which manager*; the tools row
-under it — `Roster · Feed`, `Batters · Pitchers`, `Schedule`, `Projected`,
-`Starters` — answers *which reading of him, which kind, which players*, and it
+under it — `Roster · Feed`, `Batters · Pitchers`, `Schedule`, `Projected` —
+answers *which reading of him, which kind, which players*, and it
 sat on the page an inch below the band. Those are one statement, and they are
 the controls a reader crossing a leaguemate's week reaches for most: they are in
 the band now, as its last row. The paragraph above that argued the other way —
@@ -2217,7 +2251,7 @@ carry 210px of blank in the middle of its bar — a breakpoint derived from thre
 measured group widths, which a wider font moves without telling anyone. Ordered
 last instead, the blank is *trailing* space in the final group of a left-aligned
 row: invisible at every width and correct at every width, with no number in it.
-Measured with the ghost in place: at 320 the feed's lone `Starters` clipboard sat
+Measured with the ghost in place: at 320 the feed's lone remaining button sat
 **90px in from the left edge** of its own line; ordered last it sits at 16, which
 is the row's own gutter, and at 1200 it sits where it always did.
 

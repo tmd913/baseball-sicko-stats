@@ -55,7 +55,7 @@ Two modes reinterpret the dates, and a bar printing a bare range under either wo
 - **Schedule** replaces the stat columns with one column per day *ahead*. The days on screen are then the span's rather than the range's, so the bar prints `Schedule · Week 19` over **the days it actually draws** (`spanDates`, off the index where it has landed and off the span's own definition while the window is still being read, so the bar does not go blank for the length of a fetch), and **the arrows step the span run** — `stepSpan`, over `scheduleSpans(matchup)` rather than all four, because an arrow that stepped onto `Next 7` in a league that names both its own weeks would produce a span the pills beside it do not contain. At either end the arrow is off and says `The first span offered` / `The last span offered`, the vocabulary of the reading it is in rather than `Previous day` for a press that would not move a day.
 - **Projected** keeps the range but fills it with estimates over days that have not been played. The lens clears the preset on its way to today → the end of the period, so `Custom range` is what the bar would otherwise read — the label that says nothing about why. It reads `Projected`, and the arrows go on stepping the calendar: the reader is free to move off the lens's days, which is what that lens has always allowed.
 
-Everything else — `Starters`, hide-injured, the kind tabs — narrows *rows* rather than reinterpreting days, and the bar is silent about all of them.
+Everything else — hide-injured, the kind tabs — narrows *rows* rather than reinterpreting days, and the bar is silent about all of them.
 
 **`ScheduleSpanTabs` came with the span.** It was a group in the tab row beside the toggle that turns the mode on; it is in the bar's disclosure now, under the label the arrows move. Leaving it where it was would have been two controls an inch apart holding one piece of state, which is the fault the calendar and the old `dateBadge` chip were merged to fix. **The research board keeps its own copy in its own bar** and gets no date bar at all — and that is the decision rather than an oversight: the board has no `start`/`end` in the first place (its stats come off the window tabs, `Season · 7d · 15d · 30d · 60d`), so a bar that appeared only in Schedule mode would be a bar the page has no state for the rest of the time. Checked: on `?view=research&sched=matchup` the board draws **0** date bars and its own two-week strip, unmoved.
 
@@ -119,6 +119,39 @@ The pills, the phone `<select>` and the field-behind-a-calendar are all untouche
 
 **`DateRangePicker` split in two for it.** `DateCalendar` is the month head, the grid and the foot — no field, no open state — and `DateRangePicker` is that calendar behind the field the Roster's panel wants. The two surfaces share the grid rather than being two grids that agree today about how a range is picked. The effect that used to re-center the grid and drop a half-made selection on every open is gone with the split: the calendar is mounted only while it is shown, so a fresh mount does both in its own initializers, and the remaining effect watches `end` — which is what makes an arrow pressed with the calendar open move the grid to the month the reader has just been moved to.
 
+#### And then the Roster's face opened the calendar too, and `DateRow` went with its last reader
+
+**The paragraph above made the case for the Feed and closed by saying the pills were "untouched on the Roster, where the case for them is the case that was always made".** That case has now been re-read against what the arrows actually do, and it does not hold. The six pills bought two things a reader presses and four they do not:
+
+- **`Today` and `Yesterday` are already the arrows.** `stepRange` lands on a preset's *label* wherever the days it reaches are exactly that preset's days, so `?preset=Today` → ‹ → `?preset=Yesterday` → › → `?preset=Today` round-trips through the **rule**, not through a frozen range. Driven at 1400, 390 and 320 on the live roster: identical at all three. Those are the two moves a dated table takes, and neither needed a panel.
+- **The other four were a press away from the calendar anyway.** `This week`, `Last 15 days`, `Tomorrow` and (on a connected league) `Matchup` are spans; a span is two presses on the grid. What the pills saved was one press on four spans, against one press *added* on every day-level move — the face, then the `Aug 19, 2026` field, then the day — which is the move the bar exists for.
+
+**So `popover` is what every reading but Schedule opens**, on the Roster, in the projected reading, in the full-page table box and on a matchup's team pages alike. Schedule keeps its panel for the reason it already had: the columns there are days *ahead*, and a calendar over a table of fixtures picks days no column is drawn from.
+
+**Measured at 1400 × 900 on the live fantasy roster**, pressing the face in each reading (`?preset=Today`, `&rproj=1`, `&sched=matchup`):
+
+| reading | before | after |
+| --- | --- | --- |
+| dates | a 50px panel, six pills and a field; bar 54 → 104 | a **260 × 318** calendar over the page; bar **54**, chrome **169** unmoved, first table row at **169** either way |
+| projected | the same 50px panel | the same calendar, `Projected` still the lead |
+| schedule | the span strip, 50px panel | **unchanged** — the strip, 50px, bar 54 → 104 |
+
+and at 390 and 320 the calendar is 260 × 318 at x=65 and x=30, centered on the bar's own center line (195 / 160) with `--popover-max-h` measuring 612 and 516. Page-body overflow **0** at every width in every reading.
+
+**`DateRow` had no reader left, so it is gone**, and `DateRangePicker` — the calendar behind a *field* — with it: the field existed because the grid sat at the end of a preset row, and there is no preset row. `DateCalendar` is the whole of the picker now. Out of the stylesheet with them went `.date-control`, `.date-row`, `.date-presets`, `.date-preset`, `.date-presets-select`, `.drp`, `.drp-field`, `.drp-icon`, `.drp-value` and the two narrow-screen rules that hid the pill row — **five selector names and no declarations**, the pills having been a fold onto `.view-switch`/`.view-tab` all along. `.date-presets-select` headed the app's one dropdown rule (the research board's three, the Schedule span's, the Rankings span's, the matchup picker's); the list is headed by `.research-window-select` now and nothing in it changed but the name at the top. Bundle over the whole branch (this change plus the Summary reading beside it): CSS **159,545 → 158,755** raw and **28,553 → 28,438** gzipped; JS **602,263 → 600,818** raw and **177,464 → 177,299** gzipped — smaller on all four counts, which a change that removes a component and five selector names should be.
+
+**What is genuinely lost, said plainly.** A preset is a *rule* and the calendar can only produce a *range*, so `This week`, `Last 15 days` and `Matchup` are now reachable as days but not as rules: two presses on the grid give you the same table under `Custom range`, and a link shared from there carries `start`/`end` rather than a label the recipient's own clock re-derives. `Today` and `Yesterday` keep their rules through the arrows, and a `?preset=` link written before this change still opens exactly as it did — nothing stopped *reading* labels, only writing them from a pill. The one that stings is `Matchup` on the roster; the matchup page answers it directly now, with a **Summary** reading whose days are the period's and are not the reader's to move (see **Client — a league matchup**).
+
+**The how-to page's Dates chapter was rewritten with it**, because a tutorial drawing a control the app no longer has is worse than no tutorial: the `Demo` replica of the pill row is gone, the list is `Today` / what an arrow does / what the middle opens, and the note explains `Custom range` rather than "picking a preset closes them again".
+
+#### And where the days are not the reader's to pick, the bar says so and offers nothing
+
+**`fixed` on `DateBar`**: no arrows, and the face is a `<div>` rather than a `<button>`. It exists for a matchup team page's **Summary** reading, whose span is the period's start to today.
+
+**This is deliberately not the disabled-arrow rule.** A step that has nowhere to go goes *off rather than away* — it keeps its 36px box because the reader could have stepped and cannot from *here*, and a control that vanished would move the label out from under the finger stepping it. In a fixed reading there is no stepping at all and never was, so two permanently dead squares would be a control the page does not have. The row goes from `--control-h · 1fr · --control-h` to a single `minmax(0, 1fr)`, which is the same center line with the two tracks and their gaps given back: **measured at 1400 on a team page, the face's center is 700 either way**, so the label does not move as the reader crosses the switch — which is why this is one grid with a different track list rather than a second box.
+
+Nothing else is restated. The face keeps its fill, radius, two lines and `min-width` floor; it loses the hover tint (the `@media (hover: hover)` rule is now `.date-bar:not(.date-bar-fixed) .date-face:hover`, because a `<div>` has no `:disabled` to lean on) and the pointer cursor, and it loses those by being a `<div>` rather than by a rule about what it says.
+
 #### What this replaced (kept for the history)
 
 The two paragraphs below are the button's own argument, left as written. The
@@ -131,7 +164,7 @@ does, and the second of them is still the live rule for `DateRow` itself.
 
 #### One component, two callers
 
-**The pieces are `components/DateControls.tsx`** — `DateBar`, `DateRow`, and the two pure helpers the callers share (`stepRange`, `dateBarFace`) — extracted when a second surface needed them: a matchup's team pages are these same roster views read for a leaguemate's team over a span the reader picks, and a second implementation of "Today / Yesterday / a range" beside this one is two controls that will one day disagree about what a preset means. What each caller keeps is the **state** — which days, which preset, whether the row is open, and what a step does — that being the only half the two genuinely answer differently. The *face* is built by one function so the roster and a team page cannot come to word the same state differently. See **Client — the League view**, *A team page is the app's own Roster and Feed views*.
+**The pieces are `components/DateControls.tsx`** — `DateBar`, `DateRow` (since removed with the preset row, above) and the two pure helpers the callers share (`stepRange`, `dateBarFace`) — extracted when a second surface needed them: a matchup's team pages are these same roster views read for a leaguemate's team over a span the reader picks, and a second implementation of "Today / Yesterday / a range" beside this one is two controls that will one day disagree about what a preset means. What each caller keeps is the **state** — which days, which preset, whether the row is open, and what a step does — that being the only half the two genuinely answer differently. The *face* is built by one function so the roster and a team page cannot come to word the same state differently. See **Client — the League view**, *A team page is the app's own Roster and Feed views*.
 
 **Driven on a team page** (`?view=league&mup=110&mt=5`, 1200×900): the bar is 800 × 54 at x=200, its face centered at 600, `Today` → ‹ → `Yesterday`; the Schedule toggle takes it to `Schedule · This Matchup · Aug 19 – Aug 23` with the back arrow off (`The first span offered`) and the forward one reading `Show Next Matchup`; and its panel carries a preset row leading with that page's own `Matchup` pill — **one** of them, over six, which is the rule that page already had. That was driven before the panel came to hold the span run alone in the Schedule reading, which this page takes from the same component and for the same reason: there its panel is the span strip and that pill is not in it, being exactly the preset that reading makes least true.
 
@@ -223,7 +256,10 @@ That function is a pure five and is memoized once at mount; these days come off
 `/api/espn/matchup-window`, a read App already makes once per session on a
 connected league for the Schedule control's two named spans. `rosterPresets` is
 the five plus this one where there is a window to name it with, and it is the
-list the two roster views' `DateRow` is handed.
+list the two roster views' `DateRow` was handed. **There is no `DateRow` now** —
+see *And then the Roster's face opened the calendar too* — and `rosterPresets`
+survives it as the list `stepRange` reads to name the days an arrow lands on,
+which is the half of a preset that outlived the pills.
 
 #### The end is clamped to today, and the whole period is not what it names
 

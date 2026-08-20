@@ -408,7 +408,7 @@ function ProjectedGamesHead({ kind }: { kind: PlayerKind }) {
       scope="col"
       title={
         kind === 'pitcher'
-          ? 'Appearances behind these figures — games he pitches in, a start and a relief outing alike: the ones already thrown over the days in view plus the ones he is expected still to get'
+          ? 'Appearances behind these figures — games he pitches in, a start and a relief outing alike: the ones already thrown over the days in view plus the ones he is expected still to get. A reliever’s is a share of every game his club has left rather than a whole outing on a night nobody can name, so a fraction is the honest count and the line beside it is worth the same fraction'
           : 'Games behind these figures — the ones he has come to the plate in over the days in view plus the ones he is expected still to get'
       }
     >
