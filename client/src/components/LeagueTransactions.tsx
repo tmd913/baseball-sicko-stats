@@ -134,21 +134,6 @@ export function moveLabel(p: EspnTransactionPlayer): string {
   return p.via === 'waiver' ? 'Claimed' : 'Added';
 }
 
-/** What the same move costs, which is the half of `moveLabel` a color can
- *  carry. The row draws the direction as a mark (`+` in, `−` out) and spends
- *  color on **how a man was got**: `free` off the pool for nothing, `waiver`
- *  for a bid and his place in the order, and `plain` for the two moves that are
- *  not a pickup off the pool at all — a drop, and either side of a trade, which
- *  the header's two team names and the row's own `to <Team>` already say.
- *
- *  Not exported: the matchup page's Moves section has room for the word and
- *  uses it, so `moveLabel` stays the one vocabulary and this is one page's
- *  reading of it. */
-function moveTone(p: EspnTransactionPlayer): 'free' | 'waiver' | 'plain' {
-  if (p.via === 'trade' || p.move === 'drop') return 'plain';
-  return p.via === 'waiver' ? 'waiver' : 'free';
-}
-
 function PlayerName({
   player,
   onOpenPlayer,
@@ -355,9 +340,9 @@ function PlayerLine({
 
   return (
     <li className={`lg-tx-player lg-tx-${player.move}`}>
-      {/* The mark is the direction and the color is what it cost — the word
-          itself stays, for the tooltip and for a screen reader. */}
-      <span className={`lg-tx-move lg-tx-move-${moveTone(player)}`} title={moveLabel(player)}>
+      {/* The mark is the direction and nothing else — the word itself stays,
+          for the tooltip and for a screen reader. */}
+      <span className="lg-tx-move" title={moveLabel(player)}>
         <span aria-hidden="true">{player.move === 'drop' ? '−' : '+'}</span>
         <span className="sr-only">{moveLabel(player)}</span>
       </span>

@@ -488,6 +488,13 @@ over the wire, for a span, a word and two wrapping rules.
 
 ### The move is a mark, and the color is what it cost
 
+*The colored half of this section is superseded — see* The mark is the sign
+alone *below, which keeps the mark and the word and drops the tone. What is
+still live here is the mark itself, the 14px slot, and why the word stays in the
+`title` and the `.sr-only` span. The passage is left as written rather than cut,
+because the reasoning for spending color on the cost is the reasoning that was
+weighed and set aside.*
+
 **The word was costing the row 44px it had nowhere to spend.** *The word for the
 move is the manager's* above argues four words — `Added`, `Claimed`, `Dropped`,
 `Traded` — in a fixed 58px slot, so that the names under one another start at
@@ -573,6 +580,12 @@ over the wire, for a tone function, two spans and a measured number.
 
 ### The mark sits on a ground, because add and drop are states
 
+*Superseded in full — the disc came off and the three grounds with it; see* The
+mark is the sign alone *below. The two things worth keeping out of it are the
+contrast method (sampled pixels off the rendered page, not token arithmetic) and
+the finding that the slot's width is what the phone rule is made of, which is
+why that rule moved twice.*
+
 **A colored glyph in a text row reads as text.** *The move is a mark, and the
 color is what it cost* put `+` and `−` in the row where the word had been and
 tinted them; what it did not do is make them look like *marks*, and the two
@@ -637,3 +650,73 @@ at **1200 / 640 / 440 / 418 / 417 / 416 / 412 / 411 / 390 / 375 / 320**:
 **Bundle: 600,229 → 600,229 bytes of JS** (176,931 → 176,931 gzipped — no
 TypeScript was touched) and **158,320 → 158,450 of CSS** (28,282 → 28,309): 130
 bytes raw and 27 over the wire, for a disc, three grounds and a moved number.
+
+### The mark is the sign alone
+
+**The mark went back to being a `+` or a `−` and nothing else.** *The move is a
+mark, and the color is what it cost* put the direction in a glyph and spent the
+freed color on the pickup's price; *The mark sits on a ground* then made that
+color a 20px filled disc. Both are gone: the slot is 14px again, it paints no
+ground, and the glyph takes the row's own text color (`rgb(223,225,226)` on
+Dark) like every other run of text on the row.
+
+**This narrows what the row says, and the narrowing is the point rather than a
+side effect.** What is lost is the claim/add distinction *at a glance* — a
+waiver claim and a free pickup now draw the same `+`, where a moment ago one was
+amber and the other green. It has not left the row: the word is still the slot's
+`title` and its `.sr-only` text, so a pointer and a screen reader both still get
+`Claimed` rather than a plus sign, and the matchup page's Moves section still
+prints the word in full. But a reader scanning the feed with their eyes now reads
+**direction only**, and must hover or open the row to learn the price. That is
+the trade, made deliberately: the feed is scanned for *who moved and which way*,
+the price is a second question, and a per-row tint answering a second question is
+what the app's own rule calls color spent on emphasis.
+
+**`moveTone` went with its last reader**, which was the one class-name
+expression on the row. It was never exported — the note in its own docblock said
+so — so nothing else could have held it, and `grep` over both workspaces
+confirms `moveLabel` is the only export of this file that anything imports
+(`LeagueMatchup.tsx`, for the Moves section). `.lg-tx-move-free`,
+`.lg-tx-move-waiver` and `.lg-tx-move-plain` went with it. `--hr` and
+`--on-accent` stay, with 48 and 23 other readers in the stylesheet apiece.
+
+**The phone rule moved 416 → 410, and it was re-read rather than reasoned.** The
+disc's 6px came back to the name, so the same 42 rows now go unellipsized
+further down. Driven with the phone rule switched off and swept **413 → 408**:
+0 of 42 ellipsized at 413, 412 and **411**, and 2 of 42 at 410, 409 and 408 —
+so `@media (max-width: 410px)`. Note this reads 410 where the 14px slot's first
+pass read 411: that pass measured 412 clean and 408 broken and took the midpoint
+on faith, where this one walked the six widths. The number is this league's
+widest name (127px) against the row's other fixed costs, not a device.
+
+### Measured again, for the bare sign
+
+**Driven against the dev client and the live 12-team league**, the same 42 rows
+at **1200 / 640 / 440 / 418 / 417 / 416 / 412 / 411 / 410 / 390 / 375 / 320**:
+
+- **The row holds one line from 411 up**, where it held from 417: the list is
+  **3932 → 3235px at each of 416, 412 and 411** — 697px off the page, the same
+  42 rows going `40×1, 49×9, 56×16, 57×15, 64×1` → `32×9, 39×16, 40×16, 47×1`.
+- **Nothing else moved at all.** 3189px at 1200 / 640 / 440 and 3235 at 418 /
+  417 before and after; 3932 at 410 and 390, 3955 at 375, **4411 at 320** —
+  identical row for row, with the same 3 rows of 42 dropping their deltas under
+  the figure at 320.
+- **0 names ellipsized at all twelve widths**, before and after, and
+  **page-body horizontal overflow 0** at all twelve.
+- **The name's baseline does not move**: the first eight rows' name tops read
+  `8, 7.5, 0.5, 0.5, 7.5, 7.5, 0.5, 7.5`px from the row's top on both sides,
+  the same eight the disc recorded.
+- **The slot is 14×15 at `border-radius: 0`** where it was 20×20 at 50%, its
+  background computes `rgba(0,0,0,0)` on every row, and its color is the row's
+  own `rgb(223,225,226)`. The `.sr-only` word still measures 1px, so it costs
+  the slot nothing.
+- **Every mark still carries its word**: `+` ×18 with `title="Added"`, `+` ×1
+  with `title="Claimed"`, `−` ×23 with `title="Dropped"` — the same 18 / 1 / 23
+  the three tones used to draw, now with the count living only in the tooltip.
+- **The matchup page is untouched**, re-checked on `?view=league&mup=111`: **0
+  `.lg-tx-move` marks**, 75 `mup-move*` elements, the four `In`/`Out` headings,
+  and `moveLabel` still feeding each row's `title` (`Added · Aug 17`).
+
+**Bundle: 602,263 → 602,148 bytes of JS** (176,878 → 176,846 gzipped) and
+**159,545 → 159,309 of CSS** (28,289 → 28,243) — **115 and 236 bytes off** raw,
+32 and 46 over the wire. A change that removes more than it adds, on both files.
