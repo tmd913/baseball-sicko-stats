@@ -604,9 +604,12 @@ one-day observed span, so the header's own commonest edge case is the one the
 two spellings disagree about. One function, and the weekday rides where it is
 worth something, which is the roster face's own rule.
 
-Measured after, at 1400 / 390 / 320: the face is **172 × 39** at all three
-against the roster face's 200 × 39 — one height, one shape, and the week and its
-days on one line at every width. (172 is declared rather than inherited:
+Measured after, off the two rendered pages at 1400, the computed styles are
+identical line for line — upper `10.5px / 800 / uppercase / rgb(158, 161, 162)`,
+lower `15px / 800 / none / rgb(223, 225, 226)` — reading `TODAY · Wed, Aug 19`
+on the Roster and `WEEK 19 · Aug 10 – Aug 19` here. The face is **172 × 39** at
+1400, 390 and 320 alike against the roster face's 200 × 39 — one height, one
+shape, and the week and its days on one line at every width. (172 is declared rather than inherited:
 `.date-face` is `max-content` with a percentage floor, which is right in a grid
 column that is already the middle of a full-width bar and wrong between two
 arrows in a shrink-to-fit row, where the percentage resolves against an
