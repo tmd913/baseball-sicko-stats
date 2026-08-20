@@ -212,10 +212,11 @@ reader's eye already is.
 **And its door reads `Team →` rather than `Breakdown →`**, there being no
 breakdown to open — the page goes straight to his roster (below).
 
-**The period is navigable and its dates are printed.** `‹ Week 19 · Aug 10 –
-Aug 14 · Live ›`, with the two arrows as the app's `--control-h` icon square.
-The dates are not decoration and the `Live`/`Final` tag beside them is what
-makes them readable: a **live** period's totals cover the days played *so far*
+**The period is navigable and its dates are printed.** `‹ WEEK 19 · Aug 10 –
+Aug 14 · Live ›`, with the two arrows as the app's `--control-h` icon square and
+the middle the app's own date face, which opens the league's weeks as a list —
+see *The week reads like the app's date face* below. The dates are not
+decoration and the `Live`/`Final` tag beside them is what makes them readable: a **live** period's totals cover the days played *so far*
 (ESPN's `pointsByScoringPeriod` truncates at its own current day), so the span
 and the tag have to be read together or the numbers claim a whole week they have
 not had. Measured on the live league: week 19 reads `Aug 10 – Aug 14 · Live`
@@ -568,6 +569,127 @@ it — see *A matchup is a page, not a tab* below. `lt=` goes back to omitting
 `scoreboard`, and an older `lt=matchup` is read as the board that matchup was
 always a row of (checked: the link opens on the Scoreboard with `lt` dropped
 from the URL, and one carrying `mup=` as well opens the page over it).
+
+### The week reads like the app's date face, and it opens the league's weeks
+
+Two changes to one control, made together because they are one question: *which
+week is this, and how do I get to another one.*
+
+#### It printed the same kind of fact as the date bar, in the opposite order
+
+**`.lg-period-label` was `Week 19` at 15px bold over `Aug 10 – Aug 19` at 12px
+muted** — the qualifier large, the days small. Four lines of chrome above it, on
+the Roster and the Feed, the app's own date face prints the qualifier as 10.5px
+small caps *above* the days at 15px bold. Two faces stating "which days these
+numbers are of", inverted with respect to each other, on pages a reader crosses
+between in one press.
+
+Printed side by side before this, at 1400:
+
+| | upper line | lower line |
+| --- | --- | --- |
+| Roster's date face | `TODAY` (10.5px, 800, muted, small caps) | `Wed, Aug 19` (15px, 800) |
+| Scoreboard's week | `Week 19` (15px, 700) | `Aug 10 – Aug 19` (12px, muted) |
+
+**They are the same object now**: `.date-face` outright, folded onto in the JSX
+rather than restyled here, with `.date-face-lead` carrying `Week 19` and
+`.date-face-range` the days. The three rules it replaced —
+`.lg-period-label`, `.lg-period-n`, `.lg-period-dates` — are gone.
+
+**And the days go through `wideRange`, not a second `prettyDate` pair.** The two
+functions agree on a range (`Aug 10 – Aug 19` either way) and part on a single
+day: `prettyDate` says `Aug 19` and `wideRange` says `Wed, Aug 19`. That is not
+a cosmetic difference here — the **first day of a live period** is exactly a
+one-day observed span, so the header's own commonest edge case is the one the
+two spellings disagree about. One function, and the weekday rides where it is
+worth something, which is the roster face's own rule.
+
+Measured after, at 1400 / 390 / 320: the face is **172 × 39** at all three
+against the roster face's 200 × 39 — one height, one shape, and the week and its
+days on one line at every width. (172 is declared rather than inherited:
+`.date-face` is `max-content` with a percentage floor, which is right in a grid
+column that is already the middle of a full-width bar and wrong between two
+arrows in a shrink-to-fit row, where the percentage resolves against an
+indefinite width. The old label reserved 108 and wrapped.)
+
+#### And the face opens the league's weeks as a list
+
+**‹ and › step one period, so week 3 from week 19 is sixteen presses** — and a
+reader who wants *the week of the trade deadline* has no way to ask for it at
+all. The face opens the league's own matchup weeks, each named and dated, and
+picking one calls the very same `onPeriod` the arrows call: one door, two ways
+in, not two mechanisms.
+
+**Driven at 1400, the arrow and the row are byte-identical**:
+
+| move | face | tag | cards | URL |
+| --- | --- | --- | --- | --- |
+| — | `WEEK 19` · Aug 10 – Aug 19 | Live | 10 | `?view=league` |
+| ‹ | `WEEK 18` · Aug 3 – Aug 9 | Final | 6 | `&mp=18` |
+| › | `WEEK 19` · Aug 10 – Aug 19 | Live | 10 | `&mp=19` |
+| list → `Week 18` | `WEEK 18` · Aug 3 – Aug 9 | Final | 6 | `&mp=18` |
+| list → `Week 3` | `WEEK 3` · Apr 13 – Apr 19 | Final | 6 | `&mp=3` |
+
+The last row is the point: one press for what sixteen would have been, and
+`mp=` still carries the period the same way, so a link out of the list is the
+link the arrows would have written.
+
+**No new upstream, and that was the constraint.** `leagueMeta.periods` is
+already in hand on every scoreboard read — it is what `prevPeriod` and
+`nextPeriod` are computed from — and `dateForPeriod` is one cached anchor plus
+`addDays`. So `EspnScoreboard` gained a `periods: EspnPeriodSpan[]`, filled from
+the same two calls the header's own `start`/`end` are filled from, and the whole
+list costs no request. Checked on the live league: **19 materialised periods,
+contiguous, no gaps**, `Week 1 · Mar 25 – Apr 5` through `Week 19 · Aug 10 – Aug
+19`, and the entry for the live period is byte-identical to the header's own
+dates. **No cache version was bumped and none was owed**: the scoreboard's
+frozen blob holds `EspnMatchup[]` and nothing else, so nothing reads this field
+back out of one.
+
+**The dates are the observed span, deliberately** — the same truncation the
+header carries on the live week. A list whose row for the week you are on read
+further than the face above it does would be two dates for one week, and the
+face's is the one the numbers on screen actually are. The whole-period reading
+exists and has its own route (`/api/espn/matchup-window`), for the
+forward-looking question that answers.
+
+**Newest first.** The board opens on the week being played and the weeks a
+manager looks back at are the ones just behind it; ascending, the live week is
+nineteen rows down a scrolling list and the common errand is the expensive one.
+Reversed on the client rather than on the wire — the server publishes the
+schedule's own order, which is what `prevPeriod` and `nextPeriod` index into.
+The **selected** week is brought into view on open regardless, written as a
+`scrollTop` rather than `scrollIntoView`, which scrolls every scrollable
+ancestor including the page and would carry the board out from under a popover
+that has just opened. Driven at 390 on `?mp=3`: the list opens at `scrollTop`
+46 of a possible 46, with `Week 3` visible.
+
+**It hangs off the head row, not off its own group** — `.lg-proj-key`'s measured
+trick, one edge over. The group sits behind the ‹ arrow, so its own left edge is
+**62px** in at 320, and a 260px panel from there runs 62 → 322 against a 320
+window: measured at **2px of page-body overflow** before the anchor moved.
+Against `.lg-head`, which is the content width at every size, `left: 0` is the
+app's own gutter. Measured, open:
+
+| | panel | runs | foot | window | overflow-x |
+| --- | --- | --- | --- | --- | --- |
+| 1400 × 900 | 260 × 658 | 300 → 560 | 834 | 900 | 0 |
+| 390 × 844 | 260 × **612** (capped) | 22 → 282 | 832 | 844 | 0 |
+| 320 × 844 | 260 × **531** (capped) | 22 → 282 | 832 | 844 | 0 |
+
+The cap is `usePopoverFit`'s `--popover-max-h`, and it is doing work rather than
+sitting there: the list's natural height is **656** at every width — 19 rows —
+so a phone is 44 to 125px short of it and scrolls inside the panel, with
+`overscroll-behavior-y: none` so a flick that runs out of weeks does not carry
+the board under it.
+
+**It dismisses like every other popover in this app.** `useDismissable`, so
+Escape undoes exactly this one thing and an outside press is spent on the
+closing: driven at 1400 with the list open, a single press on the matchup card
+behind it **closed the list and did not open the matchup** (`?view=league`
+unchanged, no `mup=`), and a second press on the same spot opened it
+(`&mup=109&mt=6`) — which is what a first press dismissing means and what every
+platform does.
 
 ### The period arrows live inside the Scoreboard tab
 

@@ -2196,6 +2196,34 @@ export interface EspnStandingsTeam {
   values: Record<number, number>;
 }
 
+/**
+ * One matchup period the league's schedule carries, with the days it covers —
+ * **the same arithmetic `EspnScoreboard.start`/`end` are, run for every period
+ * instead of for the one being shown.**
+ *
+ * It is here so the client can offer the weeks as a *list* rather than only as
+ * two arrows, and it is derived rather than fetched: `leagueMeta.periods` is
+ * already in hand on every scoreboard read (it is what `prevPeriod` and
+ * `nextPeriod` are computed from) and `dateForPeriod` is one cached anchor plus
+ * `addDays`, so the whole list costs no upstream request at all.
+ *
+ * **The dates are the *observed* span, deliberately** — the same truncation
+ * `start`/`end` carry on the live period. A list whose entry for the week you
+ * are on read further than the header above it does would be two dates for one
+ * week, and the header's is the one the numbers on screen actually are. The
+ * whole-period reading exists and has its own route (`getMatchupWindow`), for
+ * the forward-looking question it answers.
+ *
+ * Null dates where the period anchor could not be read — the same failure the
+ * header's own dates take, and the list then names the week without them rather
+ * than dropping it.
+ */
+export interface EspnPeriodSpan {
+  period: number;
+  start: string | null;
+  end: string | null;
+}
+
 export interface EspnScoreboard {
   format: EspnScoringFormat;
   /** ESPN's own word for the format, so an unsupported one can be named on
@@ -2207,6 +2235,11 @@ export interface EspnScoreboard {
   matchupPeriod: number;
   prevPeriod: number | null;
   nextPeriod: number | null;
+  /** Every matchup period the schedule has materialised, in order, with the
+   *  days each covers — see `EspnPeriodSpan`. The arrows are two members of
+   *  this list; the client draws the rest of it as the week list behind the
+   *  header. Empty on a league whose schedule could not be read at all. */
+  periods: EspnPeriodSpan[];
   /** The ET calendar days this period's totals cover. For a **live** matchup
    *  that is the days played *so far*, which is what the numbers on screen
    *  actually are: `pointsByScoringPeriod` truncates at ESPN's own current day.
@@ -3078,6 +3111,19 @@ export async function getScoreboard(
     span && span.last ? dateForPeriod(span.last) : Promise.resolve(null),
   ]);
 
+  // Every period, dated by the very same two calls — written as one expression
+  // over `meta.periods` rather than beside the pair above, so the week the
+  // header is on and the week's own row in the list cannot come to print
+  // different days. `dateForPeriod` awaits one cached anchor and then does
+  // arithmetic, so the whole list is that one await.
+  const periods: EspnPeriodSpan[] = await Promise.all(
+    meta.periods.map(async (p) => ({
+      period: p.period,
+      start: p.first ? await dateForPeriod(p.first) : null,
+      end: p.last ? await dateForPeriod(p.last) : null,
+    })),
+  );
+
   // A league with no matchups at all is not a league whose matchups failed to
   // read: `standings` and `unknown` are both answered with the table alone.
   const matchups =
@@ -3109,6 +3155,7 @@ export async function getScoreboard(
     ),
     prevPeriod: at > 0 ? meta.periods[at - 1].period : null,
     nextPeriod: at >= 0 && at < meta.periods.length - 1 ? meta.periods[at + 1].period : null,
+    periods,
     start,
     end,
     live,
