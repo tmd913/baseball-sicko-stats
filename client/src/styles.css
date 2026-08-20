@@ -13387,7 +13387,7 @@ span.mup-move-name:hover {
   padding-bottom: 12px;
 }
 .mup-view.roster-mode > .mup-chrome,
-.mup-view.roster-mode > .mup-tools {
+.mup-view.roster-mode > .mup-dates {
   flex: none;
   position: static;
 }
@@ -13517,7 +13517,17 @@ span.mup-move-name:hover {
 /* A team page's own controls — the roster views' controls, because a team page
    is those views. It wraps like the app's own tab row and breaks between
    groups rather than inside one, every group being `flex: none` by its own
-   rule. */
+   rule.
+
+   **It is the last row of the pinned band and not the first row of the page**,
+   which is the strip's own argument one line up: *which manager* and *which
+   reading of him* are one statement, and pinning half of it left the other half
+   an inch of page a reader partway down a feed had to go back up for. Its
+   spacing follows the band's rule rather than a page's — a **top** margin to
+   the strip and none below it, the 12px under the row being `.mup-chrome`'s own
+   padding, which is where that number lives for every child of the band (see
+   there, where a bottom margin on the strip collapsed straight out of it and
+   left the pills sitting on the band's hairline). */
 .mup-tools {
   display: flex;
   flex-wrap: wrap;
@@ -13530,6 +13540,15 @@ span.mup-move-name:hover {
      it, and costs no wrap at any width — 2 rows at 320 and 390, 1 from 480 up,
      before and after. */
   gap: 12px;
+  max-width: var(--card-column);
+  margin: 12px auto 0;
+}
+/* The dates keep the page, and this is the box they keep it in: the same
+   centered card column the tools row is, at the same 12px from the table it has
+   always had. The gap above it is the band's own 16px — `.mup-chrome`'s bottom
+   margin, which stays outside the sticky box on `.details-chrome`'s argument
+   that it must not ride down the page. */
+.mup-dates {
   max-width: var(--card-column);
   margin: 0 auto 12px;
 }
@@ -13557,6 +13576,24 @@ span.mup-move-name:hover {
 .mup-tool-icons {
   flex: none;
 }
+/* **The Schedule and Projected toggles as one reservable pair.** They are the
+   roster reading's alone, and on the Feed reading the row is 80px shorter — on
+   a phone, where it wraps, that is a line of *pinned band* coming and going
+   under the finger that pressed `Feed`. So the pair is drawn either way and the
+   feed's copy is a ghost: laid out, invisible, out of the tab order.
+
+   `display: contents` on the reading that has them, so the two buttons are the
+   flex items of the run they are in rather than a box inside it — the roster
+   reading's row is laid out exactly as it was before this wrapper existed. */
+.mup-tool-modes {
+  display: contents;
+}
+/* Above the wrap there is nothing to hold open: the run is simply shorter and
+   the row is one line either way, so the ghost is not drawn at all rather than
+   leaving 80px of blank in the middle of a bar. */
+.mup-tool-modes.mup-tool-ghost {
+  display: none;
+}
 /* The mode toggles and the filter as one group, so the row breaks between the
    two switches and the run rather than stranding one 36px square on a line of
    its own — see the note in `LeagueMatchup.tsx`. */
@@ -13564,6 +13601,25 @@ span.mup-move-name:hover {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+/* **Where the row wraps, the pair holds its box open.** `visibility: hidden` on
+   the real buttons rather than a width in this file: what is reserved is then
+   exactly what these two measure at this width, in a font this app does not
+   choose — the rule `.details-sub-ghost` and `.mv-callouts-ghost` already
+   follow, and the reason `--chrome-h` is measured rather than declared one
+   level up. The gap is `.mup-tool-icons`' own, so the ghost occupies precisely
+   the space the pair vacated.
+
+   It sits after the `display: none` it overrides, a media query adding no
+   specificity — the trap this file has recorded five times and twice on these
+   very blocks. */
+@media (max-width: 479px) {
+  .mup-tool-modes.mup-tool-ghost {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    visibility: hidden;
+  }
 }
 
 /* ---- A matchup's three pages -------------------------------------------
