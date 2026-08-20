@@ -7197,6 +7197,28 @@ button.start-line:focus-visible {
 .summary-legend {
   justify-content: center;
 }
+/* **The key rides inside the scrolling pane**, which is what stopped it being a
+   strip held against the bottom of the window — see `SummaryTable.tsx`, where
+   the move is argued. Two declarations are what it costs:
+
+   `position: sticky; left: 0` keeps it under the reader's eye across the
+   *horizontal* axis, which is the one thing being inside a two-axis scroller
+   would otherwise take away: a wide table scrolled out to `K` would have left
+   the key behind at the far left of a 1952px content box. It is the same
+   pinning the headshot column already takes, on the same axis and for the same
+   reason, and it is deliberately not the vertical one — a key you scroll to is
+   the whole point of moving it.
+
+   `width` is left to the block itself, i.e. the scroller's own client width, so
+   the four items center in the *viewport* rather than on the table's
+   `max-content`. Measured on a phone before that was settled: as a child of
+   `.summary-tables` at 390 the key was laid out in a 714px box and its items
+   sat from x≈190 to x≈524, half of them off the right of a screen nobody had
+   scrolled yet. */
+.summary-scroll > .summary-legend {
+  position: sticky;
+  left: 0;
+}
 .summary-legend-item,
 .roll-legend-item,
 .mser-legend-item {
