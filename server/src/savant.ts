@@ -441,26 +441,6 @@ const BALL_DESC = new Set([
 ]);
 const isStrikePitch = (description: string): boolean => !BALL_DESC.has(description);
 
-// Baserunning / pickoff plays carry the batter who was up but aren't plate
-// appearances, so they're excluded from the "batters faced" result list.
-function isBaserunningEvent(e: string | null): boolean {
-  if (!e) return false;
-  return (
-    e.startsWith('pickoff') ||
-    e.startsWith('caught_stealing') ||
-    e.startsWith('stolen_base') ||
-    e === 'wild_pitch' ||
-    e === 'passed_ball' ||
-    e === 'balk' ||
-    e === 'other_advance' ||
-    e === 'defensive_indiff' ||
-    e === 'runner_double_play' ||
-    e === 'cs_double_play' ||
-    e === 'error' ||
-    e === 'runner_placed'
-  );
-}
-
 const mean = (xs: (number | null)[]): number | null => {
   const v = xs.filter((x): x is number => x !== null);
   return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
@@ -655,9 +635,11 @@ function buildPitcherGame(
   isStart: boolean,
 ): PitcherGame {
   const overall = aggregatePitches(pg.pitches);
-  // Baserunning-only plays (pickoffs, steals) carry a batter but aren't plate
-  // appearances, so they're out of both the result list and the splits.
-  const faced = pg.facedBatters.filter((fb) => !isBaserunningEvent(fb.event));
+  // A play that carries the batter who was up but is not his plate appearance —
+  // a pickoff, a steal, a runner thrown out — never reaches `facedBatters` in
+  // the first place now (`mlbStats.ts::isPlateAppearance`), where this filtered
+  // them out a second time on a list of event names it had to be told about.
+  const faced = pg.facedBatters;
   const byHand = (stand: string) => faced.filter((fb) => fb.stand === stand);
   const hasHand = (stand: string) => faced.some((fb) => fb.stand === stand);
 
@@ -837,15 +819,13 @@ async function buildStatsApiDay(date: string): Promise<{
       awayStarters: g.awayStarters,
     });
     for (const bg of g.batters.values()) {
-      // A play whose *result* is a baserunning event carries the batter who was
-      // up but is not his plate appearance — MLB only files one that way when it
-      // ended the half-inning (all 31 of them in a checked 111 games were the
-      // third out), so the at-bat itself resumes in the next inning and this row
-      // is somebody else's caught stealing wearing his name. It was showing up
-      // in his feed as an out and counting toward his PA total; the pitcher side
-      // has excluded it since `buildPitcherGame`, and now both do.
+      // A play whose *result* is somebody else's — a caught stealing, a pickoff,
+      // a runner thrown out at the plate — carries the batter who was up but is
+      // not his plate appearance, and does not reach this list at all any more:
+      // the test is `mlbStats.ts::isPlateAppearance`, one structural rule where
+      // this was a list of event families that had to be extended for each new
+      // one and had never been extended for `other_out`.
       const plateAppearances: PlateAppearance[] = bg.plateAppearances
-        .filter((pa) => !isBaserunningEvent(pa.event))
         .map((pa) => ({
           atBatNumber: pa.atBatNumber,
           inning: pa.inning,
@@ -1038,8 +1018,14 @@ function projectDay(day: ParsedDay, filter: DayFilter): ParsedDay {
  *  win/save/hold credits, and each game's opposing team id; v4 fills the
  *  opposing probable starter on a pitcher's own game, which used to be null; v5
  *  gives each base event its clip, description, matchup and count, which a v4
- *  snapshot has none of and would go on serving as a bare badge forever. */
-const DAY_SNAPSHOT_VERSION = 6;
+ *  snapshot has none of and would go on serving as a bare badge forever; v7
+ *  drops the plays MLB files under the batter who was up but which are not his
+ *  plate appearance (`mlbStats.ts::isPlateAppearance`), nothing being added and
+ *  only the meaning of what is stored having changed — a v6 snapshot has those
+ *  rows baked into its reports and would go on drawing an `OTHER OUT` card in
+ *  the stream and counting it as an at-bat, which is the arsenal blob's own
+ *  reason for going to `-v5`. */
+const DAY_SNAPSHOT_VERSION = 7;
 
 /**
  * The on-the-wire form of a day.

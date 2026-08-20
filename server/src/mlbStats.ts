@@ -1957,6 +1957,49 @@ async function getLiveData(gamePk: number): Promise<{ feed: LiveFeed; winExp: Ma
 // v7 added the boxscore's per-game wins/saves/holds; v8 added what a base-running
 // event needs to describe itself — runners[].details.playIndex, the action
 // events' actionPlayId/description/score, and movement.start.
+/**
+ * **Whether a play is the batter's plate appearance at all**, which not every
+ * play MLB files under a batter is.
+ *
+ * A runner thrown out on the bases ends the half-inning where he stands, and
+ * MLB files that as a play of its own carrying the **matchup of the batter who
+ * was up** — `caught_stealing_2b`, `pickoff_1b`, `other_out` ("Victor Robles
+ * out at 3rd", a challenged tag play), `wild_pitch`, `stolen_base_3b`. It is
+ * somebody else's play wearing his name, and it was reaching his stream as an
+ * at-bat card (`OTHER OUT` under Brendan Donovan on 2026-08-18, whose own line
+ * that day is 1-for-3 and read 4 AB) and his batting line as an extra at-bat.
+ *
+ * **The test is structural rather than a list of event types**, and that is
+ * what this replaces: a denylist naming the baserunning families (`savant.ts`'s
+ * `isBaserunningEvent`) had to be extended for every kind MLB adds and had not
+ * been for `other_out`, nor for the administrative plays — a substitution, a
+ * mound visit, an ejection — that MLB files as plays in other seasons of this
+ * API and that would each have drawn a card labeled off the raw event type
+ * (`eventLabel` prettifies an unknown one, so `pitching_substitution` reads as
+ * *Pitching Substitution*). `result.type` cannot answer it: this API stamps
+ * every play `atBat`, the caught stealings included — measured, 121,133 of
+ * 121,133 plays over 1,600 cached feeds.
+ *
+ * What separates them is who the play *happened to*: **a plate appearance is a
+ * play the batter is himself a runner on** — he reached, he was put out, or he
+ * struck out — and a runner's play names only the runner. Measured over the
+ * 672 distinct games in the cache (50,473 plays): all 50,337 plays of the 21
+ * batter-outcome event types carry a runner row for the batter, and all 136
+ * plays of the 13 that are not plate appearances carry none. No exceptions
+ * either way.
+ *
+ * **In-progress plays are plate appearances by definition here**: MLB has given
+ * the play no result and so no runner rows yet, and that at-bat is the one the
+ * Live section is showing. `midAtBat` is the same expression this file already
+ * uses for "still being played", passed in rather than re-read, so the live
+ * at-bat and this test cannot come to disagree about which play is live.
+ */
+function isPlateAppearance(play: FeedPlay, midAtBat: boolean): boolean {
+  if (midAtBat) return true;
+  const batterId = play.matchup?.batter?.id;
+  return (play.runners ?? []).some((r) => r.details?.runner?.id === batterId);
+}
+
 const FEED_CACHE_VERSION = 8;
 
 export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
@@ -2055,6 +2098,13 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
     // not emit a pitching change or a mound visit as a play of its own, it
     // files them in the `playEvents` of the at-bat they interrupted.
     const midAtBat = !play.result?.eventType;
+    // Whether this play is the batter's at-bat at all, or a runner's play filed
+    // under the batter who happened to be up (`isPlateAppearance`). It gates the
+    // two *rows* the play would otherwise contribute — his plate appearance and
+    // the pitcher's batter-faced — and nothing else: the outs, the bases, the
+    // pitches and the base event the play really is are all still read off it,
+    // that base event being the item the reader wants.
+    const isPa = isPlateAppearance(play, midAtBat);
     const halfKey = `${play.about?.inning}-${play.about?.halfInning}`;
     if (halfKey !== currentHalfKey) {
       currentHalfKey = halfKey;
@@ -2167,33 +2217,34 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
       }
     }
 
-    bg.plateAppearances.push({
-      atBatNumber: atBatIndex + 1,
-      inning: play.about?.inning ?? 0,
-      half: play.about?.halfInning?.toLowerCase() === 'top' ? 'Top' : 'Bot',
-      timestamp: play.about?.endTime ?? play.about?.startTime ?? null,
-      outsWhenUp,
-      onBase,
-      stand: play.matchup?.batSide?.code ?? null,
-      pThrows: play.matchup?.pitchHand?.code ?? null,
-      pitcherId: play.matchup?.pitcher?.id ?? null,
-      pitcherName: play.matchup?.pitcher?.fullName ?? null,
-      event: play.result?.eventType ?? null,
-      description: play.result?.description ?? '',
-      rbi: play.result?.rbi ?? 0,
-      playId: lastPlayId,
-      awayScore: play.result?.awayScore ?? null,
-      homeScore: play.result?.homeScore ?? null,
-      launchSpeed: lastHit?.launchSpeed ?? null,
-      launchAngle: lastHit?.launchAngle ?? null,
-      hitDistance: lastHit?.totalDistance ?? null,
-      bbType: lastHit?.trajectory ?? null,
-      deltaWinExp: winExpByAtBat.get(atBatIndex) ?? null,
-      pitches,
-      // In progress = no result yet, which is exactly the at-bat the Live
-      // section is showing. See the field's note on why it stops there.
-      actions: play.result?.eventType ? [] : playActions(play),
-    });
+    if (isPa)
+      bg.plateAppearances.push({
+        atBatNumber: atBatIndex + 1,
+        inning: play.about?.inning ?? 0,
+        half: play.about?.halfInning?.toLowerCase() === 'top' ? 'Top' : 'Bot',
+        timestamp: play.about?.endTime ?? play.about?.startTime ?? null,
+        outsWhenUp,
+        onBase,
+        stand: play.matchup?.batSide?.code ?? null,
+        pThrows: play.matchup?.pitchHand?.code ?? null,
+        pitcherId: play.matchup?.pitcher?.id ?? null,
+        pitcherName: play.matchup?.pitcher?.fullName ?? null,
+        event: play.result?.eventType ?? null,
+        description: play.result?.description ?? '',
+        rbi: play.result?.rbi ?? 0,
+        playId: lastPlayId,
+        awayScore: play.result?.awayScore ?? null,
+        homeScore: play.result?.homeScore ?? null,
+        launchSpeed: lastHit?.launchSpeed ?? null,
+        launchAngle: lastHit?.launchAngle ?? null,
+        hitDistance: lastHit?.totalDistance ?? null,
+        bbType: lastHit?.trajectory ?? null,
+        deltaWinExp: winExpByAtBat.get(atBatIndex) ?? null,
+        pitches,
+        // In progress = no result yet, which is exactly the at-bat the Live
+        // section is showing. See the field's note on why it stops there.
+        actions: play.result?.eventType ? [] : playActions(play),
+      });
 
     // Pitcher's-eye view: the same play, regrouped under the pitcher who threw it.
     const pitcherId = play.matchup?.pitcher?.id;
@@ -2207,28 +2258,29 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
         pitchers.set(pitcherId, pg);
       }
       pg.throws = play.matchup?.pitchHand?.code ?? pg.throws;
-      pg.facedBatters.push({
-        batterId,
-        batterName,
-        stand: play.matchup?.batSide?.code ?? null,
-        atBatNumber: atBatIndex + 1,
-        inning: play.about?.inning ?? 0,
-        half: evHalf,
-        outsWhenUp,
-        onBase,
-        event: play.result?.eventType ?? null,
-        description: play.result?.description ?? '',
-        rbi: play.result?.rbi ?? 0,
-        runs: playRuns,
-        earnedRuns: playEarned,
-        timestamp: evTime,
-        playId: lastPlayId,
-        launchSpeed: lastHit?.launchSpeed ?? null,
-        launchAngle: lastHit?.launchAngle ?? null,
-        hitDistance: lastHit?.totalDistance ?? null,
-        bbType: lastHit?.trajectory ?? null,
-        pitches,
-      });
+      if (isPa)
+        pg.facedBatters.push({
+          batterId,
+          batterName,
+          stand: play.matchup?.batSide?.code ?? null,
+          atBatNumber: atBatIndex + 1,
+          inning: play.about?.inning ?? 0,
+          half: evHalf,
+          outsWhenUp,
+          onBase,
+          event: play.result?.eventType ?? null,
+          description: play.result?.description ?? '',
+          rbi: play.result?.rbi ?? 0,
+          runs: playRuns,
+          earnedRuns: playEarned,
+          timestamp: evTime,
+          playId: lastPlayId,
+          launchSpeed: lastHit?.launchSpeed ?? null,
+          launchAngle: lastHit?.launchAngle ?? null,
+          hitDistance: lastHit?.totalDistance ?? null,
+          bbType: lastHit?.trajectory ?? null,
+          pitches,
+        });
       for (const p of pitches) pg.pitches.push(p);
     }
   }
