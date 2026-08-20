@@ -305,6 +305,38 @@ day: two `<tbody>`s, eleven rows, `Total · 11` reading the identical `3/30 · 1
 what is above it, and what is above it is the whole table whenever the split has
 nothing to say.
 
+**Under the lens the plan answers, and that is the same rule rather than an
+exception to it.** There is still exactly one test in the app for who is
+starting; what changes is that over days nobody has played, ESPN's lineup is not
+it. That one describes *today*, and on a span of days ahead the `Starters`
+filter's own fallback is today's lineup carried forward — an honest guess, made
+where the projection has just filled every one of those days seat by seat. So a
+man the plan starts on **any** day of the span is above the line, which is also
+the set the `Lineup` foot beside it is a total over and the set each name
+column's chip already names. The two halves of a straddling range each take
+their own answer: the plan for the days ahead, `starters` for the days behind,
+so nothing a man banked on Monday drops out of the foot because Thursday's
+lineup has no room for him.
+
+What it fixes is a line that could disagree with the total it labels. Measured
+on team 4 over 8/19–8/23 before the change: **sixteen rows above `Lineup · 16`**,
+among them Teoscar Hernández drawing `BE` and two men whose clubs have nothing
+left — three players the plan seats on no day, in the half of the table that is
+supposed to be what the plan gets. After: **thirteen above, `Lineup · 13`**, the
+three below it, and Austin Riley and Christian Yelich (`1 of 4`, benched the
+other three days) **above** it, which is the reading the user's own question
+asks for — a man with a start in the range is a starter. On the reader's own
+roster over the ordinary press (8/19–8/23) it is eleven above and the three on
+the IL below, unchanged, since there the two tests already agreed.
+
+**The team page runs it too, and now passes the same set the button uses.** A
+matchup's team pages are this component, and they handed it no `starters` at
+all, so the divider they drew was the old undivided foot. `LeagueTeam` computes
+the key set the way App does — `projectStarters` over the span, whether the
+button is pressed or not — so the line and the button cannot disagree there
+either. Measured on team 4's ordinary reading: `Total · 11` with five below it,
+and pressing `Starters` leaves exactly those eleven.
+
 **The count on the label is the count of what it totals**, which is the whole
 point of the move: `Total · 9` on a sixteen-man roster is a figure a manager can
 act on where `Total · 16` never was. `Lineup` still replaces the word where the
@@ -859,6 +891,87 @@ day chip says, over a span: where he plays and how often.**
 reader already knows — lit is in, quiet is out — carry over with no new
 vocabulary and **no new CSS at all** (measured: the stylesheet is byte-identical
 across this change).
+
+#### The count comes off the chip and becomes the `Starts` column
+
+*(Which supersedes the count half of the section above — the table of chip
+forms, the ordering key and the "one open day drops the count" rule. The chip
+still says **where**, and everything written above about the slots, the `BE` and
+the absent chip stands unchanged; what moved is **how often**. The paragraphs
+are left as written, this file's rule for its own superseded reasoning, and the
+two states a reader can now read off two places instead of one are named in the
+table below.)*
+
+**`2B 5/5` put a fact about the *span* in the one cell that carries facts about
+the *player*.** Everything else the lens says about a week is a column — the
+figures, the `G` beside them, the total under all of them — and a column is
+scanned, compared row to row and added up at the foot. A count at the end of a
+pill in the name column could do none of the three: no two rows' counts line up
+(the chips are different widths, `IF/UTIL 4/4` against `C 4/4`), the `Total` row
+had nowhere to say how many seat-days the plan spends, and the reader who wants
+*who is my week actually going to* had to read sixteen pills to find out. So the
+chip keeps **where he plays** and a column takes **how often** — the split the
+two questions had all along.
+
+| | chip | `Starts` |
+| --- | --- | --- |
+| one slot, every day | **`2B`** | **`5`** |
+| two slots | **`3B/UTIL`** | **`4`** |
+| a single date picked | **`2B`** | **`1`** |
+| never started | **`BE`** | **`0`** |
+| club has no game left | *(no chip)* | **`—`** |
+
+- **It sits beside `G`, which is the column it qualifies.** `G` is games his
+  figures are drawn over and this is days the lineup has room for him, and the
+  gap between the two is the whole argument of *A row is what he would do if he
+  plays; the foot is what the lineup gets* — a reliever reading `G 1 · Starts 4`
+  is a man holding a seat all week for one appearance, which is a thing a
+  manager acts on and which neither number says alone.
+- **A whole number, where every other projected figure is a tenth.** Those are
+  shares of a game (`chances` is play-share weighted for a batter, starts plus
+  relief for a pitcher, and 0.4 home runs is a real answer where `0` is not); a
+  start is a decision the plan made on a named day, and there is no such thing
+  as 4.3 of them.
+- **`0` where it benches him every day, `—` where there was no day to decide.**
+  That is the chip's own pair of absences in the arithmetic a column keeps — `BE`
+  against no chip at all — and it holds this table's standing rule that a nought
+  is never drawn where the honest answer is *nothing was asked*: a club with no
+  game left has the rest of its row in dashes for the same reason.
+- **The denominator moves to the title**, which is where the days themselves
+  already were: `4 of 4 — Projected in the lineup Aug 21 at C, Aug 22 at C, Aug
+  23 at C, Aug 24 at C`, and `1 of 4 — … — benched Aug 21, Aug 22, Aug 23`. The
+  cell and the chip read one sentence out of one function (`FantasySlot.tsx::readLineup`),
+  so the two cannot come to describe one plan differently.
+- **The foot adds it up**, and that total is the one figure on the row that is
+  *not* a break from the column: seat-days, which is what the `Lineup` label
+  beside it is a total over. Measured on the live league over 8/19–8/23,
+  batting: rows `3 · 3 · 4 · 4 · 3 · 3 · 4 · 3 · 4 · 3 · 3` and `Lineup · 11`
+  reading **37**.
+- **No new CSS.** The header and the cells are `sum-num`, the class every stat
+  column already uses — the stylesheet is byte-identical across this change
+  (158,320 raw / 28,282 gzipped, before and after).
+
+**Drawn only where there is a lineup to fill.** A saved watchlist and a league
+that published no slot counts have no plan, so the column would be dashes to the
+bottom; `anyLineup` is read over the whole tab rather than over the men above
+the divider, so the header and the cells under it cannot disagree about how many
+columns the table has. Driven with the roster source switched to the saved
+watchlist over the same span: **no `Starts` column, no chips, `Total · 1`** —
+which is exactly what that reading drew before this change. (The server settles
+it as well: `/api/projection/roster` without `source=fantasy` comes back with
+**0 of 4 rows carrying a lineup**.)
+
+**What it costs the table, measured on the live fantasy roster at 1400, 390 and
+320.** The chip pays for most of it: widest **78.4 → 56.3px** (`IF/UTIL 4/4`
+became `IF/UTIL`), typical **53 → 42**, so the name column gives back
+**333.9 → 295.2px** at 1400 and **236.1 → 225** at 390 while the new column
+takes 64.3 at 390 and 61.6 at 320. The batting table is **1400 → 1400 at 1400**
+(the slack absorbs it whole) and **744.6 → 797.8 at 390**, where the table
+already scrolls inside its pane; rows are **58px** and the divider 48 before and
+after, **0** rows wrap at any width, and page-body overflow is **0** throughout.
+
+**Bundle: 597,032 → 598,222 bytes of JS** (176,055 → 176,298 gzipped) — 1.2KB
+raw and 243 bytes over the wire — and **CSS byte-identical**.
 
 #### A row is what he would do if he plays; the foot is what the lineup gets
 

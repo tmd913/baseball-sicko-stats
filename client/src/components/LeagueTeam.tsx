@@ -9,6 +9,7 @@ import { FeedFilterPills } from './FeedFilters';
 import type { FeedLens } from './FeedFilters';
 import { SummaryTable } from './SummaryTable';
 import type { ScheduleIndex } from './schedule';
+import { playerKey } from '../types';
 import type {
   EspnRosterPlayer,
   EspnStandingsTeam,
@@ -252,11 +253,23 @@ export default function LeagueTeam({
    * chips: `starting` is the flag on the day the span ends, which is the same
    * answer the app falls back to when a per-day read fails.
    */
-  const cards = useMemo(() => {
-    if (!starters) return kindCards;
+  const starterCards = useMemo(() => {
     const startingIds = new Set((roster ?? []).flatMap((p) => (p.starting && p.mlbId !== null ? [p.mlbId] : [])));
     return projectStarters(kindCards, dates, byDate, (r) => startingIds.has(r.id));
-  }, [kindCards, starters, roster, byDate, dates]);
+  }, [kindCards, roster, byDate, dates]);
+  const cards = starters ? starterCards : kindCards;
+  /**
+   * **The same answer as a set of player keys**, for the summary table's `Total`
+   * divider — `SummaryTable.tsx::splitStarters`, and App does this on its own
+   * roster in the same two lines.
+   *
+   * Computed whether the button is pressed or not, for the reason it is over
+   * there: the divider needs the set the button uses, and a second test written
+   * for it is a second test that will one day disagree with the button —
+   * silently, the button narrowing to one set while the line above the total
+   * drew another.
+   */
+  const starterKeys = useMemo(() => new Set(starterCards.map(playerKey)), [starterCards]);
 
   // Never over data: the block wait is behind the app's own delay, so a warm
   // answer never flashes one, and a span change re-reads with the old rows
@@ -316,6 +329,8 @@ export default function LeagueTeam({
           onOpenDetails={onOpenDetails}
           schedule={schedule}
           projection={projection}
+          /* Who sits above the `Total` line — see `splitStarters`. */
+          starters={starterKeys}
         />
       ) : (
         <>

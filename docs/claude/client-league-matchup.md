@@ -1612,6 +1612,19 @@ chips keeps or drops a whole row. Driven with `lineups` stripped from the
 response: 13 rows → 11, which is the pre-per-day behavior rather than an empty
 table.
 
+**The same set now draws the `Total` divider here**, which it did not before.
+`SummaryTable` cuts its table in two at that row — the starters above it, the
+bench and the injured below — and this page handed it no starter set at all, so
+the whole team sat above an undivided foot while the button beside it narrowed
+to eleven of them. It is the set `projectStarters` already returns for the
+filter, computed whether the button is pressed or not and passed down as keys,
+exactly as `App.tsx` does on the reader's own roster: a second test written for
+the line is a second test that will one day disagree with the button, silently.
+Measured on team 4 today: `Total · 16` at the bottom → **`Total · 11` with five
+rows under it**, and pressing `Starters` leaves precisely those eleven. Under
+the projected lens the plan answers instead — see **Client — the summary table**,
+*The `Total` row is a divider now*, where the whole of that rule lives.
+
 **The toggle is `components/StartersToggle.tsx`, shared with the roster row**
 rather than a lookalike — the same `.starters-toggle` class folded onto
 `.research-toggle`, the same lineup-card glyph, the same `.on` and never
