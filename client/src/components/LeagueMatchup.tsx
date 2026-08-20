@@ -347,6 +347,62 @@ function MovesColumn({
   );
 }
 
+/** **`Summary` is a toggle, not a tab.**
+ *
+ *  It was the middle of three reading pills and it did not belong there: the
+ *  other two say *what kind of thing this page is showing* — a table or a
+ *  stream — where this one says *over which days*, which is the question the
+ *  bar below the row answers and the one `Schedule` and `Projected` qualify. A
+ *  reader looking for the matchup's own totals was reaching past `Feed` to find
+ *  them.
+ *
+ *  So it sits with the two toggles that ask the same kind of question, takes
+ *  their shape by being folded onto their selector lists, and leaves the pill
+ *  strip saying the one thing it is good at: table or stream. The strip losing
+ *  its middle pill is also what gets this row onto one line — see the note on
+ *  `.mup-tool-icons`.
+ *
+ *  **It is still a reading**, and `MatchupReading` still has its three values:
+ *  what changed is where the control lives and what shape it wears, not what
+ *  the page does. Pressing it while it is on goes back to `roster`, the reading
+ *  it is a lens over — which is the behavior of every other toggle in this run
+ *  and the reason it is `aria-pressed` rather than a tab.
+ *
+ *  **It also settles the two-`Summary` collision.** The strip above this row
+ *  has a `Summary` tab — the comparison page — and for a while both were
+ *  `.view-switch` pills one press apart, told apart only by their titles. They
+ *  are two different shapes now, which is what they always were: one is which
+ *  page you are on, the other is a lens over the page you are on. */
+function SummaryToggle({ on, onToggle, title }: { on: boolean; onToggle: () => void; title: string }) {
+  return (
+    <button
+      type="button"
+      className={`summary-toggle${on ? ' on' : ''}`}
+      aria-pressed={on}
+      onClick={onToggle}
+      title={title}
+    >
+      {/* Three rows over a rule — a column of days added up. Drawn here rather
+          than imported: it is this page's only use, and it is 19px to match
+          `ProjectedGlyph` beside it rather than the 17 that glyph defaults to. */}
+      <svg
+        viewBox="0 0 24 24"
+        width={19}
+        height={19}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2.2}
+        strokeLinecap="round"
+        aria-hidden="true"
+      >
+        <path d="M5 6h14M5 11h14M5 16h9" />
+        <path d="M5 20.5h14" strokeWidth={2.6} />
+      </svg>
+      <span className="summary-toggle-label">Summary</span>
+    </button>
+  );
+}
+
 function SideHead({
   side,
   team,
@@ -1545,7 +1601,7 @@ export default function LeagueMatchupView({
           the summary of it, and calling it anything else on a team page would
           be this app inventing a synonym to protect a layout. */}
       <div className="view-switch mup-reading" role="tablist" aria-label="Reading">
-        {(['roster', 'summary', 'feed'] as const).map((r) => (
+        {(['roster', 'feed'] as const).map((r) => (
           <button
             key={r}
             type="button"
@@ -1555,13 +1611,11 @@ export default function LeagueMatchupView({
             title={
               r === 'roster'
                 ? `${sidePossessive} table over the days you pick`
-                : r === 'summary'
-                  ? `${sidePossessive} table over this matchup so far`
-                  : `${sidePossessive} plays, in order`
+                : `${sidePossessive} plays, in order`
             }
             onClick={() => setReading(r)}
           >
-            {r === 'roster' ? 'Roster' : r === 'summary' ? 'Summary' : 'Feed'}
+            {r === 'roster' ? 'Roster' : 'Feed'}
           </button>
         ))}
       </div>
@@ -1706,6 +1760,23 @@ export default function LeagueMatchupView({
             pinned chrome moving under the same finger. So both runs are ghosted
             now and the argument is symmetric: each reading holds the other's
             slot open, and the row wraps identically whichever is on. */}
+        {/* **Outside both ghosts, because it applies in every reading.** It is
+            the way into the matchup's own days and the way back out, so it is
+            drawn and pressable on `roster`, on `summary` and on `feed` alike —
+            there is no reading it does not answer, and so nothing to reserve
+            for it and nothing for it to reserve against. It sits after the
+            modes and before the order toggle, which keeps the run in the
+            question order the roster row uses: which page, which kind, which
+            reading of it, over which days. */}
+        <SummaryToggle
+          on={reading === 'summary'}
+          onToggle={() => setReading((r) => (r === 'summary' ? 'roster' : 'summary'))}
+          title={
+            reading === 'summary'
+              ? 'Back to the days you pick'
+              : `${sidePossessive} table over this matchup so far — every day of it up to today, which is the span the category card is summed over`
+          }
+        />
         <span
           className={`mup-tool-order${reading === 'feed' ? '' : ' mup-tool-ghost'}`}
           aria-hidden={reading === 'feed' ? undefined : true}

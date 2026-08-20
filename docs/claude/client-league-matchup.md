@@ -1497,6 +1497,70 @@ already follows for a half with no matchup period in it.
 
 **`Summary` is the second thing on this page to wear the word**, the strip above having a `Summary` tab, which is the *comparison page* rather than a reading of a team. They are one press apart and both are `.view-switch` pills. What tells them apart is that the strip is *whose page* and this is *what about him*, and their titles say so; the alternative was a second word for one idea, which is worse — a manager reading his own week wants the summary of it, and a synonym invented to protect a layout is the app lying about what a control is. Flagged here rather than hidden, because it is the one part of this that a reader could trip on.
 
+#### `Summary` left the pill strip, and the row came back onto one line
+
+**It was never a third pill.** The strip's other two say *what kind of thing
+this page is showing* — a table or a stream — where `Summary` says *over which
+days*, which is the question the bar below answers and the one `Schedule` and
+`Projected` qualify. A reader after the matchup's own totals was reaching past
+`Feed` to find them, and the word collided with the `Summary` **tab** one row up
+(the comparison page) while both were `.view-switch` pills told apart only by
+their titles.
+
+**So it is a toggle, folded onto `.research-toggle` / `.schedule-toggle` /
+`.projected-toggle`'s six selector lists** rather than styled to resemble them,
+and the two `Summary`s are now two different shapes — which is what they always
+were: one is *which page you are on*, the other is *a lens over the page you are
+on*. `MatchupReading` still has its three values; what moved is where the
+control lives, not what the page does. Pressing it while on returns to `roster`,
+the reading it is a lens over, which is why it is `aria-pressed` and not a tab.
+It is drawn and pressable in **every** reading — there is no reading it does not
+answer — so it sits outside both ghosts and has nothing to reserve against.
+
+**The union is four controls now**, so the *previous* section's arithmetic is
+superseded (its rule is not): with words the run is 480 and the row needs
+**789.6px** of a box that caps at 800, so the words fit only at a ~900 window
+and up. Squared, the run is 168 and the row needs **477.6**.
+
+**Two thresholds follow, both container queries on `.mup-tools`**, because this
+box is *narrower than the window it is in* — at a 900 window it is already 800,
+at an 800 window it is 768, and a media query cannot see that:
+
+- **`@container (max-width: 789px)`** squares the whole run. Measured, the
+  crossover lands between **822 and 820** of window: 822 keeps the words (icons
+  480), 820 is squares (icons 168).
+- **`@container (max-width: 477px)`** gives `.kind-switch` `order: 1`. Under
+  ~510 the row must wrap *something* — 130.5 + 155.1 + 168 with two group gaps
+  needs 477.6 of the 398 a 430 window leaves — and wrapping is not the question;
+  *which group* wraps is. `Batters | Pitchers` is the one a reader changes least
+  often here, and the pills and the toggles are one question asked twice, so
+  splitting *those* put half a thought under the other half. By `order` rather
+  than by markup, so the DOM keeps the row's question order for a screen reader
+  and the tab sequence, and only the paint moves.
+
+**Measured, what sits on each line** (`?view=league&mup=111&mt=4`):
+
+| window | band | line 1 | line 2 | line 3 |
+| --- | --- | --- | --- | --- |
+| 1400 / 900 | 36 | pills 131 + kind 155 + icons **480** | — | — |
+| 800 / 600 / 510 | 36 | pills 131 + kind 155 + icons **168** | — | — |
+| 500 / 430 / 390 | 84 | pills 131 + icons 168 | kind 155 | — |
+| 320 | 132 | pills 131 | icons 168 | kind 155 |
+
+**The row is one line from 510 up, where it was one line from 822 up** and two
+lines everywhere below. The band is unchanged at 84 between 390 and 500 — the
+reorder buys no height, it spends the same two lines better.
+
+**At 320 it is three lines and stays three.** 131 + 168 with a 12px gap needs
+311 of the 288 that width leaves, so the pills and the toggles cannot share a
+line there whatever the order. That is stated rather than worked around: the
+alternative is shortening `Roster`/`Feed` or the kind switch to glyphs, which
+buys one line at one width and costs every reader above it a control that no
+longer says what it is.
+
+**Equality across the readings survived all of it** — 36 / 36 / 36 at 1400
+through 641, 84 on all three at 500 through 360, 132 on all three at 320.
+
 #### The third pill took the tools row's slack, and the ghost had to be re-derived
 
 **A third reading pill is 88px, and the row had 40.** `.mup-tools` is capped at the 800px card column, and at 1400 the run was `reading 217 · kind 155 · icons` with two 12px gaps. On the roster reading the icons came to **346** (`Schedule` 111 + `Projected` 114 + `Starters` 105) and the total to **741**; on the Feed reading the ghosted pair was still 233 and the order toggle added 99, so the icons came to **452** and the total to **848** — over the column, so the row wrapped **on that reading alone** and the band went 162 → 210. That is a whole line of pinned chrome appearing under the finger that pressed `Feed`, which is the exact fault the ghost exists to prevent, reintroduced by the pill.
