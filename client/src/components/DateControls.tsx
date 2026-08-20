@@ -46,8 +46,9 @@ import { DateRangePicker, wideRange } from './DateRangePicker';
  *   prints the span (`Schedule · This Matchup`) over the days it actually
  *   draws, and the arrows step through the spans this reader is offered instead
  *   of through the calendar. The range is not lost — it still decides *whose*
- *   roster the rows are — and the disclosure carries both controls, the spans
- *   over the presets.
+ *   roster the rows are — but it is not what the columns are, so **the
+ *   disclosure holds the span run alone** (`spanControl`) rather than the span
+ *   run over a preset list that names days no column on screen is drawn from.
  * - **Projected** keeps the range but fills it with estimates over days that
  *   have not been played. `Custom range` is what the lens leaves behind (it
  *   moves the reader to today → the end of the period, clearing the preset),
@@ -215,6 +216,7 @@ export function DateBar({
   onNext,
   prevTitle,
   nextTitle,
+  spanControl,
   children,
 }: {
   reading: DateBarReading;
@@ -227,10 +229,23 @@ export function DateBar({
   onNext: (() => void) | null;
   prevTitle: string;
   nextTitle: string;
-  /** The disclosure: the presets and the picker, plus the span strip where the
-   *  Schedule view is the reading. Rendered only while `open`, which is what
-   *  lets `.date-control` be a plain flex row again rather than a `display:
-   *  none` undone by a class on somebody else's shell. */
+  /**
+   * The whole disclosure **in the Schedule reading**, drawn in place of
+   * `children` rather than above it: the span run, which is the only thing a
+   * reader of that view can pick. The bar decides this rather than each caller,
+   * because the bar is where `reading` already lives — the roster and a team
+   * page would otherwise be two implementations of one rule, which is the fault
+   * this component was extracted to avoid.
+   *
+   * **Null falls back to `children`.** A caller with no span control to offer
+   * gets the presets it would have had, rather than an empty panel under a
+   * press that promised one.
+   */
+  spanControl?: ReactNode;
+  /** The disclosure everywhere else: the presets and the picker. Rendered only
+   *  while `open`, which is what lets `.date-control` be a plain flex row again
+   *  rather than a `display: none` undone by a class on somebody else's
+   *  shell. */
   children: ReactNode;
 }) {
   const { lead, range } = dateBarFace(reading, start, end);
@@ -252,7 +267,15 @@ export function DateBar({
           className={`date-face${open ? ' active' : ''}`}
           onClick={onToggle}
           aria-expanded={open}
-          title={open ? 'Close the date controls' : 'Presets and a range picker'}
+          /* The tooltip names what is actually behind the press, which the
+             Schedule reading changes: a preset list is not what opens there. */
+          title={
+            open
+              ? 'Close the date controls'
+              : reading.kind === 'schedule' && spanControl
+                ? 'How far ahead'
+                : 'Presets and a range picker'
+          }
         >
           <span className="date-face-lead">{lead}</span>
           <span className="date-face-range">{range}</span>
@@ -268,7 +291,11 @@ export function DateBar({
           <Chevron back={false} />
         </button>
       </div>
-      {open && <div className="date-bar-panel">{children}</div>}
+      {open && (
+        <div className="date-bar-panel">
+          {reading.kind === 'schedule' && spanControl ? spanControl : children}
+        </div>
+      )}
     </div>
   );
 }

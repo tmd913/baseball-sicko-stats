@@ -4751,19 +4751,23 @@ export default function App() {
          reader finds that out. */
       prevTitle={prevStep.title}
       nextTitle={nextStep.title}
+      /* The span strip, and in the Schedule reading it is the *whole* panel —
+         the bar draws it in place of the presets rather than above them, the
+         columns there being days ahead rather than a stat range. It was a group
+         in the tab row beside the toggle that turns the mode on, and it came
+         here with the days: the bar's arrows step it, so the strip that names
+         the whole run belongs under the label they move. The board keeps its
+         own copy in its own bar — it has no dates and so no bar. */
+      spanControl={
+        scheduleReading ? (
+          <ScheduleSpanTabs
+            span={scheduleSpan!}
+            matchup={matchupWindow}
+            onChange={setScheduleSpan}
+          />
+        ) : null
+      }
     >
-      {/* The span strip, where the Schedule view is the reading. It was a group
-          in the tab row beside the toggle that turns the mode on, and it came
-          here with the days: the bar's arrows step it, so the strip that names
-          the whole run belongs under the label they move. The board keeps its
-          own copy in its own bar — it has no dates and so no bar. */}
-      {scheduleReading && (
-        <ScheduleSpanTabs
-          span={scheduleSpan!}
-          matchup={matchupWindow}
-          onChange={setScheduleSpan}
-        />
-      )}
       <DateRow
         /* The five plus the fantasy week where there is a league to name one.
            `LeagueMatchupView` below is still handed the bare five, that page
