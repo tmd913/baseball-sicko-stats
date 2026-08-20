@@ -1925,6 +1925,29 @@ under a 97-item stream, an offset the reader never asked for on a list they had
 never seen; **after: 20**, which is where a new list opens. The remount key moved
 with it, so the two cannot come apart.
 
+### And `Oldest first` left that row for `mup-tools`
+
+**The section above is intact and this is one control leaving it**, which is the
+Feed view's own move a page along. `client-feed.md`'s *The order toggle went to
+the navbar, and the pills did not* carries the argument: what the pinned row
+protects is a control a reader has to reach **while scrolling**, and the pills
+are not that — worked once on arrival, the answer to the question the page was
+opened with — where an order is exactly that, wanted by somebody already well
+down a stream. On the app's own Feed that meant the tab row; here it means
+`mup-tools`, this page's equivalent, and the toggle sits beside the other two
+*which reading of it* controls, `Schedule` and `Projected`.
+
+**On the feed reading alone**, unlike those two, which are the roster reading's:
+there is no order to a table, and there is no honest projected version of a
+stream. `{reading === 'feed' && …}` is the whole of the gate, and it takes the
+same 99 × 36 box `Starters` sits next to.
+
+**Which leaves the pill row the batter tab's alone.** It was drawn on both tabs
+*because* of the toggle — an outing carries a clock exactly as a plate appearance
+does — so with the toggle gone a pitcher tab would draw an empty row.
+`LeagueTeam` gates it on `kind === 'batter'` now, which is the flag that already
+gated the pills inside it.
+
 ### `Rosters` is gone, because the team tabs are it
 
 **It opened both teams' rosters side by side, slot by slot, behind a toggle in

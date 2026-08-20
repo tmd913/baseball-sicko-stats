@@ -10471,15 +10471,25 @@ button.start-line:focus-visible {
 .feed-filter-kinds::-webkit-scrollbar {
   display: none;
 }
-/* The stream's direction, at the right end of the row and never inside the
-   scrollport. `margin-left: auto` rather than a spacer, so on the pitcher tab —
-   where the kind group is not drawn at all — it is still in the same place
-   rather than sliding to the left edge. It carries `.feed-filter-pill` as well
-   as `.research-toggle`, which is what keeps the row 34px tall: a bare
-   `.research-toggle` is `--control-h` (36px) and would have grown the row by 4px
-   the first time a pitcher tab drew it. */
+/* **The stream's direction, and it is in the pinned tab row now.** It was at
+   the right end of the pill row for a spell; the argument for moving it is in
+   `FeedFilters.tsx` and comes to this — the pills answer the question the page
+   was opened with and are worked on arrival, where an order is wanted by a
+   reader already well down a stream, and a control reached *while scrolling* is
+   what the tab row exists for.
+
+   Bare here: in the tab row it is a plain `.research-toggle`, `--control-h`
+   (36px) like `Starters` beside it, and nothing about it is the pill row's. */
 .feed-order {
   flex: none;
+}
+/* And the one row that still carries both — the new-plays page's navbar, which
+   has no tab row to hang the order off. There it is at the right end and never
+   inside the scrollport: `margin-left: auto` rather than a spacer, so on a row
+   whose kind group has been scrolled it is still in the same place, and it
+   carries `.feed-filter-pill` as well, which is what keeps that row 34px tall
+   rather than 38. */
+.feed-filters .feed-order {
   margin-left: auto;
 }
 /* Tighter than a control on the tab row: eight of these share the row, and each
@@ -10490,6 +10500,60 @@ button.start-line:focus-visible {
   padding: 0 12px;
   font-size: 12px;
   white-space: nowrap;
+}
+
+/* ---- The new-plays page -------------------------------------------------
+   The plays that have arrived since the reader last marked the stream read, as
+   a full-screen page over the feed rather than as a mode narrowing it in place.
+   `LiveFeed.tsx::NewPlaysPage` carries the argument; what is here is the layer
+   and the head.
+
+   **Folded onto `.details-view` for everything about being a page** — the fixed
+   box, its own scroller, `overscroll-behavior: none`, the reserved scrollbar
+   gutter, the 16px gutters — and onto `.details-chrome` for the pinned head,
+   which is the same statement one page along: *which plays, and which reading of
+   them*. `.mup-view` and `.outing-view` set both precedents.
+
+   **What is its own is the layer: 48**, `.mup-view`'s number and for
+   `.mup-view`'s reason. A name or a headshot on any of these cards opens the
+   player page, which is fixed at 50, and two boxes on one layer are two boxes
+   `overlayAbove` cannot order — both read nothing above them and one press of
+   Escape is answered by whichever listener runs first. At 48 the ladder is
+   feed → new plays → player page → whatever that page opens, one rung a press. */
+.newplays-view {
+  z-index: 48;
+}
+/* The head takes the feed's own column rather than the player page's 680: every
+   card under it is `--card-column` wide, so a 680 head would be indented 60px
+   from the content it names. `.details-head` is otherwise unchanged — a wrapping
+   flex row centered by its own auto margins. */
+.newplays-head,
+.newplays-chrome .feed-filters {
+  max-width: var(--card-column);
+}
+.newplays-head {
+  flex-wrap: wrap;
+  /* Closer to the controls under it than `.details-head`'s 20px, the two being
+     one box here rather than a head over a tab strip. */
+  margin-bottom: 12px;
+}
+.newplays-id {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* What the list covers, on the line under the name — `.outing-sub`'s shape, for
+   the same job one page along. */
+.newplays-range {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+/* The pill row inside the head, rather than at the top of a stream: it gives up
+   its own top margin (the head above it is the gap) and takes the bottom one
+   `.details-chrome` needs from its last child, that box having no bottom padding
+   of its own — see `.details-chrome`. */
+.newplays-chrome .feed-filters {
+  margin: 0 auto 16px;
 }
 
 /* Feed headshot — a compact variant of the player card's headshot button. */

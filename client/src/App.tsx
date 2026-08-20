@@ -90,6 +90,7 @@ import { StartersToggle } from './components/StartersToggle';
 import { ProjectedToggle } from './components/Projection';
 import {
   FeedFilterPills,
+  FeedOrderToggle,
   playFilterParam,
   toPlayFilter,
   type FeedLens,
@@ -3988,13 +3989,17 @@ export default function App() {
   );
 
   /**
-   * The red button's press: show the new plays, and put the top of the stream
-   * back under the reader — they are at the head of the list, which is not where
-   * somebody who has been reading is.
+   * The red button's press: open the new plays.
+   *
+   * **It used to scroll the page to the top**, and that was right while the new
+   * plays were a *mode over this stream*: the reader was handed a different and
+   * much shorter list in the same box, and belonged at the head of it. They are
+   * a page of their own now, with its own scroller opening at its own top, so
+   * scrolling the page **behind** it would throw away a reading position nobody
+   * asked to leave — and throw it away invisibly, under a box that covers it.
    */
   const showNewPlays = useCallback(() => {
     setFeedNewOnlyState(true);
-    window.scrollTo({ top: 0 });
   }, []);
 
   /**
@@ -4628,20 +4633,40 @@ export default function App() {
      exist for, so there is nothing here for the pills to select on. The row is
      drawn on both tabs now, carrying the one control that is not about kinds:
      `Oldest first`, which turns the stream round. */
-  const feedFilterPills =
+  const feedFilterPills = feedIsBatters ? (
+    <FeedFilterPills lens={feedLens} onSelect={selectFeedLens} />
+  ) : null;
+
+  /* **`Oldest first` is in the tab row**, and it is the one feed control that
+     is — which is the standing rule applied rather than a second reversal of
+     it. What the tab row protects is a control a reader has to reach *while
+     scrolling*; the pills above are not that (worked once on arrival, the
+     answer to the question the page was opened with) and an order is exactly
+     that, wanted by a reader already forty items down a day. Drawn on both kind
+     tabs, unlike the pills: an outing carries a clock the same way a plate
+     appearance does. See `FeedOrderToggle`. */
+  const feedOrderToggle =
     view === 'feed' ? (
-      <FeedFilterPills
-        lens={feedLens}
-        onSelect={selectFeedLens}
-        /* The kind group is the batter tab's; the order toggle beside it is
-           both tabs'. See the row's own file — an outing has a clock, so a
-           pitcher's day reads forwards on the same press, and the toggle keeps
-           its place at the row's right end whichever tab is up. */
-        kinds={feedIsBatters}
+      <FeedOrderToggle
         oldestFirst={feedOldestFirst}
-        onToggleOrder={() => setFeedOldestFirst((v) => !v)}
+        onToggle={() => setFeedOldestFirst((v) => !v)}
       />
     ) : null;
+
+  /* The same two controls on one row, for the new-plays page's navbar — the one
+     place in the app that has no tab row to hang the order off and one row for
+     everything. Built here because App owns both pieces of state; drawn by
+     `LiveFeed`, which owns the page. */
+  const newPlaysControls = feedIsBatters ? (
+    <FeedFilterPills
+      lens={feedLens}
+      onSelect={selectFeedLens}
+      order={{
+        oldestFirst: feedOldestFirst,
+        onToggle: () => setFeedOldestFirst((v) => !v),
+      }}
+    />
+  ) : null;
 
   /* ---------------------------------------------------------------------
      The date bar — the full-width strip under the tabs.
@@ -5460,6 +5485,11 @@ export default function App() {
               {view === 'summary' && projectedToggle}
               {/* Only over a range that contains today — see `startersToggle`. */}
               {startersToggle}
+              {/* Which way the feed's clock runs — see `feedOrderToggle`. The
+                  one feed control up here, and the pills are not: an order is
+                  wanted halfway down a stream, where a kind is chosen on
+                  arrival. */}
+              {feedOrderToggle}
               {/* Which kinds of play the feed draws is no longer here: the
                   `Plays` disclosure and its panel became a row of pills at the
                   head of the stream itself — see `feedFilterPills`. Nor are the
@@ -5893,6 +5923,9 @@ export default function App() {
             onShowNew={feedIsBatters ? showNewPlays : undefined}
             onShowAll={feedIsBatters ? showAllPlays : undefined}
             onClearNew={feedIsBatters ? clearNewPlays : undefined}
+            /* The new-plays page's navbar — the pills and the order toggle on
+               one row. Gated with the six above for the same reason. */
+            newPlaysControls={feedIsBatters ? newPlaysControls : undefined}
             /* Not gated on the batter tab, where the six above are: this one is
                not a lens over kinds of play but the direction the clock runs,
                and a pitcher's outings are stamped with one exactly as a plate

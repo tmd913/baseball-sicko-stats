@@ -1,4 +1,5 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import type { LiveRole } from '../lib';
 import { playerKey } from '../types';
 import { api } from '../api';
@@ -25,9 +26,16 @@ import type {
   PlayerKind,
   PlayerReport,
 } from '../types';
-import { useDelayedFlag } from '../hooks';
+import {
+  answersEscape,
+  useDelayedFlag,
+  useLockBodyScroll,
+  useOverlayChromeOffset,
+  useOverlayFocus,
+} from '../hooks';
+import { BackButton } from './BackButton';
 import { LoadingLine } from './Loading';
-import { Modal } from './Modal';
+import { DialogLayerContext, Modal } from './Modal';
 import { BaseDiamond, PlaySituation } from './BaseDiamond';
 import { InlineVideoClip, PlateAppearanceCard } from './PlateAppearanceCard';
 import { BatterSplitsTab } from './PlatoonSplits';
@@ -35,9 +43,22 @@ import { OpponentSection, PitchingTag, outingBar } from './PitcherCard';
 import { OutingPage } from './OutingPage';
 import type { PlayFilterKey } from './FeedFilters';
 
-/** How many stream items the Recent section shows at a time — a day of at-bats
- * across a roster runs to hundreds, and every one of them mounts a card. */
-export const FEED_PAGE_SIZE = 20;
+/**
+ * How many stream items the Recent section shows at a time — a day of at-bats
+ * across a roster runs to hundreds, and every one of them mounts a card.
+ *
+ * **Ten, and it was twenty.** Twenty was a page of *scrolling*: on a full slate
+ * the stream opened on more than a phone screen of cards and the reader's first
+ * gesture was always down. Ten is a page a reader can see the end of, which is
+ * what makes `Load more` a choice rather than the only thing left to do — and
+ * `Load more` carries the remainder as a count for exactly that reason, so a
+ * cut list can never read as *that is all there is*.
+ *
+ * The number is a floor rather than a ceiling: App and `LeagueTeam` seed the
+ * component with whatever the reader had grown it to (`feedShown`), so a page
+ * they had already opened to sixty comes back at sixty.
+ */
+export const FEED_PAGE_SIZE = 10;
 
 /** Priority order for the Live section: at bat, then on deck, then on base. */
 const ROLE_ORDER: Record<LiveRole, number> = {
@@ -1288,6 +1309,7 @@ export function LiveFeed({
   onShowNew,
   onShowAll,
   onClearNew,
+  newPlaysControls,
   oldestFirst = false,
 }: {
   reports: PlayerReport[];
@@ -1314,16 +1336,20 @@ export function LiveFeed({
    */
   playFilter?: PlayFilterKey | null;
   /**
-   * **New-plays mode** — the stream narrowed to what has arrived since the
-   * reader last marked it read. It was the pill row's own last member and is an
-   * axis of its own again: it asks *when* where the pills ask *what kind*, and
-   * the two AND (`passesFilters`), so `HR` inside the new plays is a question
-   * this section can now be asked.
+   * **Whether the new-plays page is open** — the plays that have arrived since
+   * the reader last marked the stream read, on a full-screen page of their own
+   * over this one (`NewPlaysPage` below).
    *
-   * **The pitcher tab can never be in it**, and that is App's doing rather than
-   * a test here: it passes `newOnly={feedIsBatters ? feedNewOnly : undefined}`,
-   * so on the pitcher tab this is the default `false`. Which is why the heading
-   * below needs no pitcher wording for the mode.
+   * It was a *mode* over this same list: the Recent section's heading changed
+   * its word and the items under it narrowed. It asks *when* where the pills ask
+   * *what kind* and the two still AND (`passesFilters`), so `HR` inside the new
+   * plays is a question the page can be asked — the pills are on its navbar. But
+   * they narrow the page's list rather than this one, and the stream underneath
+   * is the whole day whether the page is up or not.
+   *
+   * **The pitcher tab can never open it**, and that is App's doing rather than a
+   * test here: it passes `newOnly={feedIsBatters ? feedNewOnly : undefined}`, so
+   * on the pitcher tab this is the default `false`.
    */
   newOnly?: boolean;
   /** How far down the stream this reader has marked read (epoch ms) — what
@@ -1336,13 +1362,15 @@ export function LiveFeed({
    *  than about the lens, and a count that shrank when the reader ticked `HR`
    *  would be saying the other plays had stopped being new. */
   newCount?: number;
-  /** Press the red button: show the new plays. App turns the mode on. */
+  /** Press the red button: open the new-plays page. App turns the mode on. */
   onShowNew?: () => void;
   /**
-   * Leave new-plays mode — every play of the day again. App turns the mode off,
-   * **which is what marks the stream read** (its `setFeedNewOnly`), so this is
-   * the press that says "done with those" from *inside* the mode. It is drawn
-   * twice, at the two ends of the list; see the section below.
+   * Close the new-plays page — every play of the day again. App turns the mode
+   * off, **which is what marks the stream read** (its `setFeedNewOnly`), so this
+   * is the press that says "done with those" from *inside* the page. It is drawn
+   * twice, at the two ends of it: the `Back` button in the pinned head and a
+   * `Show all plays` after the last card. It is also what Escape calls, and what
+   * gates the page being drawn at all — a page with no way out is not a page.
    */
   onShowAll?: () => void;
   /**
@@ -1358,6 +1386,21 @@ export function LiveFeed({
    * `newplays=1` is a fact about which stream the view is showing.
    */
   onClearNew?: () => void;
+  /**
+   * **The new-plays page's own navbar controls** — the filter pills and the
+   * order toggle, on one row.
+   *
+   * Built by App and handed down rather than built here, for the reason every
+   * other half of this feature is App's: it owns the lens, the marker and the
+   * URL those controls write. What this file owns is the box they are drawn in,
+   * which is the page below and nothing this component can hand upwards — the
+   * page is portalled out of here, so App cannot render it and cannot know
+   * whether it is open.
+   *
+   * Absent for the second caller (`LeagueTeam.tsx`), along with the rest of the
+   * feature, and absent on the pitcher tab, where App gates the mode itself.
+   */
+  newPlaysControls?: ReactNode;
   /**
    * **Read the day forwards** — the stream reversed, first play of the day at
    * the top. Default false, which is the stream as it has always been and what
@@ -1497,50 +1540,32 @@ export function LiveFeed({
    *  rather than as *there is no film*. */
   const pendingFilm = playFilter === 'video' && liveGames.some((pk) => !reels.has(pk));
   const showFilmWait = useDelayedFlag(pendingFilm);
-  const recent = allRecent.filter((e) => passesFilters(e, playFilter, newOnly, seenPlays, hasFilm));
+  /**
+   * **The page's own stream, and the new-plays page's, are two lists now.**
+   *
+   * The mode used to narrow *this* list in place — same section, same items,
+   * a heading that changed its word — so the two tests ANDed into one filter.
+   * The new plays are a page of their own over the feed (`NewPlaysPage`
+   * below), so the stream underneath it goes on being the whole day: what a
+   * reader has been reading does not rearrange itself behind a box they opened.
+   * `passesFilters` takes both tests still, and each caller passes the one it
+   * means.
+   */
+  const recent = allRecent.filter((e) => passesFilters(e, playFilter, false, 0, hasFilm));
+  const newRecent = newOnly
+    ? allRecent.filter((e) => passesFilters(e, playFilter, true, seenPlays, hasFilm))
+    : EMPTY_ENTRIES;
 
   /**
-   * **The red button, and why it is not drawn while the mode is on.** It is the
-   * doorway to those plays, so with the reader already looking at them it would
-   * be a control offering what is on screen — and pressing it would mark them
-   * read, which is what empties the view. So while the mode is on the marker is
-   * frozen and the button is absent; what stands in its place is the way *out*
-   * (`onShowAll`), and turning the mode off is what says "done with those": see
-   * App's `setFeedNewOnly`.
-   *
-   * The two are therefore mutually exclusive by construction rather than by a
-   * rule, and one of them is in that slot whenever there is anything to say.
+   * **The red button, and why it is not drawn while the page is open.** It is
+   * the doorway to those plays, so with the reader already looking at them it
+   * would be a control offering what is on screen — and pressing it would mark
+   * them read, which is what empties the page. So while the page is up the
+   * marker is frozen and the button is absent; the way *out* is the page's own
+   * Back button and the `Show all plays` at the foot of its list, and leaving
+   * is what says "done with those": see App's `setFeedNewOnly`.
    */
   const showNewButton = !newOnly && newCount > 0;
-  /**
-   * **The way out of new-plays mode, drawn at both ends of the list.**
-   *
-   * One at the top, in the slot the red button occupies on the way in, because
-   * that is where a reader who has just arrived is looking; and one at the foot,
-   * after the items and after `Load more`, because a reader who has read down a
-   * short list of new plays is at the *bottom* of it and a control only at the
-   * top would be a scroll back up to reach. It is the same object twice, which
-   * is why it is one component and one handler rather than two buttons that
-   * could come to say different things.
-   *
-   * **Ordinary chrome rather than red.** `--strikeout` in this app means
-   * *something has happened since you looked* — the delta going the wrong way,
-   * the news mark's "filed today", the button above. This is the reader putting
-   * that away, so it takes `.feed-more`'s shape: a centered pill on the page's
-   * own ground, which is already what this list uses at its foot for "there is
-   * more of this".
-   */
-  const backToAll = (where: 'head' | 'foot') =>
-    onShowAll && newOnly ? (
-      <button
-        type="button"
-        className={`feed-more feed-all-plays feed-all-plays-${where}`}
-        onClick={onShowAll}
-        title="Every play of the day again — this marks the new ones read"
-      >
-        Show all plays
-      </button>
-    ) : null;
 
   // Not-yet-started games, earliest first pitch first — so the feed still has
   // something to show before the day's first at-bat (and lists later games while
@@ -1615,17 +1640,12 @@ export function LiveFeed({
 
       {(recent.length > 0 || filtered) && (
         <section className="feed-section">
-          {/* The heading says which list this is, and in the mode it is a
-              different list rather than the same one filtered — which is what
-              earns it its own word. No pitcher wording for it: App gates the
-              mode on the batter tab (`newOnly` above), so `New plays` and
-              `Recent outings` cannot both be reachable. */}
+          {/* The heading says which list this is, and there is only one list
+              here again: `New plays` was this word's other value while the mode
+              narrowed this section in place, and it has gone with the mode to
+              the page's own head, where it names a box rather than a state. */}
           <h2 className="feed-heading">
-            {newOnly
-              ? 'New plays'
-              : kind === 'pitcher'
-                ? 'Recent outings'
-                : 'Recent plays'}
+            {kind === 'pitcher' ? 'Recent outings' : 'Recent plays'}
           </h2>
           {/* News about the day, at the head of the list the news landed in —
               which is where it can also *do* something. The League page's
@@ -1682,7 +1702,6 @@ export function LiveFeed({
               )}
             </div>
           )}
-          {backToAll('head')}
           {/* The reels for today's games, still out — see `filmTest`. A line
               rather than a block wait: the days already settled are on screen
               and answered, so this says the list is still filling rather than
@@ -1702,53 +1721,24 @@ export function LiveFeed({
                   <span className="feed-more-count">{recent.length - shown}</span>
                 </button>
               )}
-              {/* After `Load more`, not instead of it: the two answer different
-                  questions — more of *this* list, and back to the other one —
-                  and the reader may want either at the foot of a short list of
-                  new plays. Not drawn over an empty section, where the copy
-                  below names the way out and the top button is a few pixels
-                  above it. */}
-              {backToAll('foot')}
             </>
           ) : (
             /* Emptied by the reader's own controls, so it names them — the
-               app's standing rule for a view a filter has cleared, and the one
-               state this section could not previously be in. */
-            /* **Two controls can empty this now, and it names whichever did.**
-               The mode and the pills are two axes that AND, so the honest
-               answer has three shapes rather than two — and the third, both at
-               once, is the one it could never have to say while `New` was a
-               pill. Each names the control that undoes it, and the pair names
-               both. */
+               app's standing rule for a view a filter has cleared.
+               **One control can empty this now**, where it was two: the mode
+               went to a page of its own, and that page carries its own empty
+               state naming its own way out (`NewPlaysPage`). What is left here
+               is the lens, and the sentence it always had. */
             <div className="feed-empty">
-              {newOnly
-                ? playFilter === 'video'
-                  ? 'No new plays with video yet — clips land through the day, and the rest arrive a day later.'
-                  : playFilter
-                    ? 'No new plays of that kind.'
-                    : 'Nothing new since you last marked the feed read.'
-                : playFilter === 'video'
-                  ? // Its own sentence, because "of that kind" is not what this
-                    // lens selects and because the honest reason is a timing
-                    // one: MLB cuts a day's highlights as it goes, and Savant
-                    // has the rest of the plays a day later.
-                    'No plays with video yet — clips land through the day, and the rest arrive a day later.'
-                  : 'No plays of that kind today.'}{' '}
+              {playFilter === 'video'
+                ? // Its own sentence, because "of that kind" is not what this
+                  // lens selects and because the honest reason is a timing
+                  // one: MLB cuts a day's highlights as it goes, and Savant
+                  // has the rest of the plays a day later.
+                  'No plays with video yet — clips land through the day, and the rest arrive a day later.'
+                : 'No plays of that kind today.'}{' '}
               <span className="feed-empty-how">
-                {newOnly && playFilter ? (
-                  <>
-                    Two controls are narrowing this — <b>All</b> above is every kind,
-                    and <b>Show all plays</b> is every play of the day.
-                  </>
-                ) : newOnly ? (
-                  <>
-                    <b>Show all plays</b> above is every play of the day.
-                  </>
-                ) : (
-                  <>
-                    Change it with the pills above — <b>All</b> is every play of the day.
-                  </>
-                )}
+                Change it with the pills above — <b>All</b> is every play of the day.
               </span>
             </div>
           )}
@@ -1772,6 +1762,251 @@ export function LiveFeed({
       )}
 
       {isEmpty && <div className="feed-empty">No games for these players.</div>}
+
+      {/* **The new plays, as a page over this one.** Rendered from inside the
+          feed because this is where the stream's vocabulary is — the same
+          `allRecent`, the same `passesFilters`, the same `FeedItem` — and
+          portalled to the body from in there, so nothing about where it is
+          written reaches where it is laid out. Drawn only when App has the mode
+          on *and* has handed over the way out: `onShowAll` is what closes it,
+          and a page with no way out is not a page. */}
+      {newOnly && onShowAll && (
+        <NewPlaysPage
+          entries={newRecent}
+          controls={newPlaysControls}
+          onOpenDetails={onOpenDetails}
+          onClose={onShowAll}
+          playFilter={playFilter}
+        />
+      )}
     </div>
+  );
+}
+
+/** The empty list the feed hands `NewPlaysPage` when the mode is off — a module
+ *  constant rather than a fresh `[]` each render, the array being a dependency
+ *  of that page's own memo. */
+const EMPTY_ENTRIES: FeedEntry[] = [];
+
+/** This page's layer. See `NewPlaysPage` for why it is 48 and not 50. */
+const NEWPLAYS_LAYER = 48;
+
+/**
+ * **The window a list of plays covers, as one line** — `2:41 – 4:07 PM` on one
+ * afternoon, `Aug 18, 7:12 PM – Aug 19, 4:07 PM` across two.
+ *
+ * The date is printed only where it is *load-bearing*: a stream held to one
+ * baseball day says which day in the app's own date bar, and repeating it on
+ * every reading of it is noise. Two days is the case the sentence exists for —
+ * a range excursion, or a night game that finished after midnight — and there
+ * the two stamps are the whole of what the reader needs.
+ *
+ * Off the same `entryTime` the stream is ordered by rather than a second read
+ * of the timestamps, which is this file's standing rule: two readings of when a
+ * play happened must not be able to disagree.
+ */
+function coveredRange(entries: FeedEntry[]): string | null {
+  if (entries.length === 0) return null;
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const e of entries) {
+    const t = entryTime(e);
+    if (t < lo) lo = t;
+    if (t > hi) hi = t;
+  }
+  if (!Number.isFinite(lo) || !Number.isFinite(hi)) return null;
+  const a = new Date(lo);
+  const b = new Date(hi);
+  const time = (d: Date) => d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const day = (d: Date) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  if (a.toDateString() === b.toDateString()) {
+    // One stamp where the two land in the same minute: "4:07 – 4:07 PM" is a
+    // range that says nothing a single time does not.
+    return time(a) === time(b) ? time(a) : `${time(a)} – ${time(b)}`;
+  }
+  return `${day(a)}, ${time(a)} – ${day(b)}, ${time(b)}`;
+}
+
+/**
+ * **The new plays, as a full-screen page over the feed.**
+ *
+ * They were an inline mode: the Recent section's own heading changed its word
+ * and the list under it narrowed. What that could not do is *hold still* — a
+ * reader forty items down the stream pressed a red button and the stream they
+ * were reading rearranged itself around them, and coming back out rearranged it
+ * again. A page leaves the feed exactly as it was, which is what makes going and
+ * looking free.
+ *
+ * **It rides on `.details-view`**, the class every full-screen page in this app
+ * rides on: its own fixed box, its own scroller, `useLockBodyScroll`,
+ * `useOverlayFocus` (focus in on open and back out on close, the background
+ * `inert`), a `BackButton` and Escape through `answersEscape`, so a ladder
+ * unwinds one rung per press. See **Popups, overlays and the Escape ladder**.
+ *
+ * **Portalled to `document.body`**, which is a fact about CSS rather than about
+ * this ladder: `.app-dialog-body` declares `container-type: inline-size`, and
+ * layout containment makes a box a containing block for `position: fixed`
+ * descendants — so a page rendered inside one would be laid out inside that
+ * dialog. Nothing opens this from inside a dialog today; the portal is what
+ * keeps that from being the bug the day something does.
+ *
+ * **Layer 48 rather than `.details-view`'s own 50** (`.newplays-view`), which is
+ * `.mup-view`'s number and for `.mup-view`'s reason: a name or a headshot on any
+ * of these cards opens the **player page**, which is fixed at 50, and two boxes
+ * on one layer are two boxes `overlayAbove` cannot order — both read nothing
+ * above them, and one press of Escape is then answered by whichever listener
+ * happens to run first. At 48 the ladder is `feed → new plays (48) → player page
+ * (50) → whatever that page opens`.
+ *
+ * **It takes no layer from `DialogLayerContext`**, and that is deliberate: this
+ * page is opened from exactly one place, the red button in the stream, with
+ * nothing above it — where `OutingPage` is drawn at three depths and has to
+ * climb from wherever it was opened. A fixed 48 is the honest statement of a box
+ * with one entry point. It provides its own layer downward all the same, so a
+ * dialog raised from a card inside it climbs above it rather than under it.
+ *
+ * **No `swallowNextClick`.** That rule is for a dismissal by a press *outside*
+ * the box — a popover's, where the control under the finger was never covered
+ * and the click lands on it. This page is opaque and full-screen and has no
+ * backdrop: the only presses that close it are its own two buttons and Escape,
+ * and a click on a button is already spent on that button.
+ *
+ * **The clips behind it stop painting**, which costs this page nothing to
+ * arrange: `[inert] video` is keyed on the mark `useOverlayFocus` takes, so the
+ * feed's own `<video>` layers are hidden for exactly as long as this box covers
+ * them, and the ones on *these* cards — outside `#root`, inside the top box —
+ * are not.
+ *
+ * **Linkable, on the parameter it already had.** `newplays=1` said *which
+ * stream this view is showing* while this was a mode and says *this page is
+ * open* now, which is the same fact one shape along; App writes it and reads it
+ * exactly as before, so every link ever written still opens on these plays and
+ * `?plays=hr&newplays=1` still opens on the new home runs. No second parameter,
+ * which is the rule: two params must never mean two things, and one page is not
+ * two things.
+ */
+function NewPlaysPage({
+  entries,
+  controls,
+  onOpenDetails,
+  onClose,
+  playFilter,
+}: {
+  entries: FeedEntry[];
+  /** The filters and the order toggle, built by App — this navbar is the only
+   *  place in the app that carries both on one row. */
+  controls?: ReactNode;
+  onOpenDetails: (key: string) => void;
+  /** Leave — which is what marks these plays read. App's `showAllPlays`. */
+  onClose: () => void;
+  playFilter: PlayFilterKey | null;
+}) {
+  useLockBodyScroll();
+  const viewRef = useRef<HTMLDivElement | null>(null);
+  useOverlayFocus(viewRef);
+  // The pinned head's height, measured rather than declared — it carries a row
+  // of controls that wraps at narrow widths, so there is no one number for it.
+  const chromeRef = useOverlayChromeOffset<HTMLDivElement>(viewRef);
+  // This page's own reading depth, and it starts where the stream does. Not
+  // reported anywhere: the page is opened, read and left, where the feed's own
+  // depth has to survive a view switch.
+  const [shown, setShown] = useState(FEED_PAGE_SIZE);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (answersEscape(e, viewRef.current)) onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  /* The window these plays cover, off the list as it stands — so it narrows
+     with the pills, which is the honest reading: it states the range of what is
+     *on this page*, not of a set the reader can no longer see. */
+  const range = useMemo(() => coveredRange(entries), [entries]);
+
+  return createPortal(
+    <DialogLayerContext.Provider value={NEWPLAYS_LAYER}>
+      <div ref={viewRef} tabIndex={-1} className="details-view newplays-view">
+        {/* The head and the controls are one pinned box, `.details-chrome`'s own
+            argument one page along: they are one statement of *which plays and
+            which reading of them*, and a reader thirty cards down a list of new
+            plays must not have to go back up to get out of it. */}
+        <div className="details-chrome newplays-chrome" ref={chromeRef}>
+          <div className="details-head newplays-head">
+            <BackButton onClose={onClose} />
+            <div className="newplays-id">
+              <h1 className="details-name">New plays</h1>
+              {/* What the list covers, in the head rather than over the items:
+                  it is a fact about the page, and a line above the first card
+                  would scroll away from the reader it is telling. Absent over an
+                  empty list, there being no range to state. */}
+              {range && <p className="newplays-range">{range}</p>}
+            </div>
+          </div>
+          {controls}
+        </div>
+
+        <div className="live-feed newplays-feed">
+          {entries.length > 0 ? (
+            <>
+              <div className="feed-items">
+                {entries.slice(0, shown).map((entry) => (
+                  <FeedItem key={entryKey(entry)} entry={entry} onOpenDetails={onOpenDetails} />
+                ))}
+              </div>
+              {entries.length > shown && (
+                <button
+                  type="button"
+                  className="feed-more"
+                  onClick={() => setShown((n) => n + FEED_PAGE_SIZE)}
+                >
+                  Load more
+                  <span className="feed-more-count">{entries.length - shown}</span>
+                </button>
+              )}
+              {/* The second way out, at the foot. A reader who has read down a
+                  short list of new plays is at the *bottom* of it, and Back is a
+                  scroll away at the top — the same argument the two `Show all
+                  plays` buttons made when this was a mode, one of which the
+                  pinned head has now taken over. Ordinary chrome rather than
+                  red: `--strikeout` in this app means *something has happened
+                  since you looked*, and this is the reader putting that away. */}
+              <button
+                type="button"
+                className="feed-more feed-all-plays feed-all-plays-foot"
+                onClick={onClose}
+                title="Back to every play of the day — this marks the new ones read"
+              >
+                Show all plays
+              </button>
+            </>
+          ) : (
+            /* Emptied by the reader's own control, so it names it — and the
+               control is on this page's own navbar, which is where it points. */
+            <div className="feed-empty">
+              {playFilter === 'video'
+                ? 'No new plays with video yet — clips land through the day, and the rest arrive a day later.'
+                : playFilter
+                  ? 'No new plays of that kind.'
+                  : 'Nothing new since you last marked the feed read.'}{' '}
+              <span className="feed-empty-how">
+                {playFilter ? (
+                  <>
+                    The pills above are narrowing this — <b>All</b> is every kind of
+                    play, and <b>Back</b> is the whole day again.
+                  </>
+                ) : (
+                  <>
+                    <b>Back</b> is the whole day again.
+                  </>
+                )}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+    </DialogLayerContext.Provider>,
+    document.body,
   );
 }

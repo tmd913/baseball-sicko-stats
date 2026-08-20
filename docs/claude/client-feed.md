@@ -528,6 +528,204 @@ relies on for a new at-bat arriving above somebody mid-read. Measured: scrolled 
 1400 with the item under the reader's eye at y=1773, inserting the button takes
 `scrollY` to 1444 (its own 44px) and the **item moves 0px**.
 
+### The order toggle went to the navbar, and the pills did not
+
+**One of the two controls above the stream has moved into the pinned tab row,
+and this reverses — for that one control — the argument two sections up.** The
+pills stay in the page, and the reasoning there stands word for word; what it
+turns out to have been describing is a *kind* of control rather than the whole
+row.
+
+**The test the tab row applies is "does a reader have to reach this while
+scrolling".** *Where the controls sit* wrote that down and then applied it to
+the row as a unit: the board's filters qualify a table six hundred rows long and
+losing them off the top of the page would be losing them, where these qualify a
+stream read from the top and worked once on arrival. That is exactly right about
+the **kinds** — nobody is forty items into a day's plays and then decides they
+wanted only the home runs; picking a kind is what you do when you arrive, and it
+is the answer to the question the page was opened with. It is exactly wrong
+about the **order**. *What happened while I was out* is a question a reader asks
+after they have started reading, and the control that answers it was at the top
+of a stream they had already scrolled past — 700px past it, in the case
+measured. So `Oldest first` goes with the tabs, which are pinned, and the kinds
+stay where they are.
+
+**Both halves are drawn from one component** (`FeedFilters.tsx::FeedOrderToggle`
+and `FeedFilterPills`), because there is one place that still wants them on one
+row: the new-plays page's own navbar, which has no tab row to hang an order off.
+That caller passes `order` and gets the toggle back inside the row, at its right
+end, `flex: none` with `margin-left: auto` outside the scrollport — unchanged
+from where it stood. `compact` is the only difference between the two drawings
+and it is a height: in the tab row it is a bare `.research-toggle`,
+`--control-h` (36px) like `Starters` beside it, and in the navbar it takes
+`.feed-filter-pill` so that row is one height. **Measured: 99 × 36 in the tab row
+at 320, 390, 640, 900, 1200 and 1920** — the same box at every width, and the
+same box lit and unlit, which is the *reserve the box* rule the label's own
+refusal to flip to `Newest first` already answers.
+
+**The pill row is the batter tab's alone now**, where it was drawn on both. It
+was drawn on both *because* of the toggle — an outing carries a clock like a
+plate appearance does — and with the toggle gone a pitcher tab would draw an
+empty row. Checked at `?kind=pitcher&newplays=1&plays=hr`: **no pill row, the
+toggle still in the tab row, no red button, no new-plays page, `Recent
+outings`** — the same excursion the old gate was measured on, one control
+further along. The row's own height is untouched at **34px**, the kinds being
+what set it.
+
+**What it costs is a line of chrome at two widths, and it is the same line the
+`Plays` disclosure gave back.** A/B'd on the same page by hiding the button:
+**320 goes 261 → 309px of chrome** and **640 goes 165 → 213**, a 48px line
+either way (a 36px control and the row's 12px gap); **390, 900, 1200 and 1920
+are unchanged** at 213 / 169 / 169 / 169. *Where the controls sit* recorded the
+disclosure's removal buying back exactly 320 and 640, so this spends one of the
+two things that purchase bought and keeps the other — the panel, its count badge
+and the two rules it needed are still gone. The trade is deliberate: 48px of a
+phone once, against a scroll back up the stream every time the reader wants the
+day turned round.
+
+**The same move on the matchup page's team feed** (`LeagueTeam.tsx`), and it is
+the same argument in that page's own terms: the toggle joins `mup-tools` beside
+the other two *which reading of it* controls (`Schedule`, `Projected`), on the
+feed reading alone — there is no order to a table — and the pill row there is
+drawn on the batter tab alone for the reason it is here. See **The Feed reading
+takes the play-filter pills** in `client-league-matchup.md`.
+
+### The new plays are a page now, not a mode
+
+**`New plays is a mode, not a pill` has been overtaken, and only its middle
+clause.** The mode was right that `New` asks *when* where the pills ask *what
+kind*, that the two must be able to AND, and that the red button belongs where
+the news landed. What it got wrong is what pressing it should *do*. Narrowing
+the Recent section in place meant the stream a reader was reading rearranged
+itself around them — items above them vanished, the heading under their thumb
+changed its word — and then rearranged itself again on the way out. The section
+even had to argue its way out of scrolling on the return leg for that reason.
+
+**So the plays open as a page over the feed** (`LiveFeed.tsx::NewPlaysPage`), and
+the stream underneath is the whole day whether the page is up or not. Measured
+at 1200×900 with the reader 700px down: opening the page leaves **10 items and
+both section headings** exactly as they were behind it, and one press of Escape
+puts the reader back at **656** — 700 less the 44px the red button's own row
+gives up when the count goes to nought, which is the browser's scroll anchoring
+doing what *The button appearing does not move the reader* already measured, in
+the other direction.
+
+**It rides on `.details-view`**, the class every full-screen page in this app
+rides on, and takes the conventions with it: its own fixed box and scroller,
+`useLockBodyScroll`, `useOverlayFocus`, `answersEscape`, a `BackButton` and a
+pinned head. **Portalled to `document.body`** — measured, `parentElement` is
+`BODY` — which is a fact about CSS rather than about this ladder:
+`.app-dialog-body` declares `container-type: inline-size`, and layout
+containment makes a box a containing block for `position: fixed` descendants, so
+a page rendered inside one would be laid out inside that dialog. Nothing opens
+this from inside a dialog today; the portal is what keeps that from becoming a
+bug the day something does.
+
+**Layer 48, not `.details-view`'s own 50**, and the reason is the Escape ladder
+rather than stacking. A name or a headshot on any of these cards opens the
+**player page**, which is fixed at 50; two boxes on one layer are two boxes
+`overlayAbove` cannot order, and both would read nothing above them, so one press
+would be answered by whichever listener happened to run first. At 48 —
+`.mup-view`'s number, for `.mup-view`'s reason — the ladder is `feed → new plays
+(48) → player page (50)`. Driven: with a player page open over it, the page
+reads **z-index 50 against 48**, `.newplays-view` carries `inert`, focus is
+inside the player page, and Escape unwinds one rung a press.
+
+**What the navbar carries**, all of it pinned: the back button, the filters, the
+order toggle, and **the window the plays cover**. That last is off the same
+`entryTime` the stream is ordered by rather than a second read of the timestamps,
+and it narrows with the pills, which is the honest reading — it states the range
+of what is *on this page*. Measured: **`12:43 PM – 8:34 PM`** over 28 new plays,
+**`2:12 PM – 8:34 PM`** with `HR` lit, and **`8:06 PM`** where the lens leaves one
+play, the two stamps collapsing to one rather than printing `8:06 – 8:06 PM`. The
+date is printed only across two days (`Aug 18, 7:12 PM – Aug 19, 4:07 PM`): one
+baseball day is already named in the app's own date bar and repeating it on every
+reading of it is noise.
+
+**Geometry: the navbar is 112px at 320, 390 and 1200** — the same box at all
+three, the head being 46px of it — and **100px** where there is no range to state
+(an empty page). No horizontal overflow at any of the three, on the page or in
+the view. The kind group goes on scrolling inside it rather than wrapping: **353px
+of content in 353 at 1200, 256 at 390 and 186 at 320**, with `Oldest first` outside
+the scrollport at x=906 / 280 / 210.
+
+**A press cannot get behind it, and the clips behind it stop painting.** With the
+page open `[inert]` is `#root` and a `SCRIPT`; all five sample points (four
+corners and the center) hit inside `.newplays-view`; two real dispatched presses
+at the bottom corners open nothing, change the feed's 10 items not at all and
+leave the URL byte for byte. And `2 of 2` of the feed's own `<video>` elements read
+`visibility: hidden` while the page is up and **both are visible again** the
+moment it closes — the `[inert] video` rule composing for free, which is what it
+was written to do.
+
+**No `swallowNextClick`.** That rule is for a dismissal by a press *outside* the
+box, where the control under the finger was never covered and the click lands on
+it. This page is opaque and full-screen and has no backdrop: the only presses
+that close it are its own two buttons and Escape, and a click on a button is
+already spent on that button.
+
+**Two ways out, at the two ends, exactly as the mode had.** `Back` in the pinned
+head — which is the half the mode had to draw at the top of its list and now gets
+for free from the head being pinned — and `Show all plays` after the last card,
+because a reader who has read down a short list of new plays is at the bottom of
+it. Both call the same `onShowAll`, so there is one definition of leaving and one
+route to the marker; **leaving is still what marks the stream read**, and `Clear`
+beside the red button is still the other answer. Measured: one Escape takes
+`newplays=1` out of the URL, drops `[inert]` to nought, leaves the feed's 10 items
+standing and takes the red button away with the count.
+
+**Linkable on the parameter it already had.** `newplays=1` said *which stream this
+view is showing* and says *this page is open*, which is the same fact one shape
+along — so no second parameter was invented, which is the rule that two params
+must never mean two things. Driven: **`?view=feed&newplays=1&plays=hr` opens the
+page with `HR` lit on 2 items** and the feed behind it narrowed to the same 2;
+`?newplays=1&oldest=1` opens it with both toggles lit and the first play of the
+day at the head (`McGonigle, DET @ PIT, 1st`) where `?newplays=1` alone heads on
+the newest (`Stewart, CIN vs STL, 6th`); and **`newplays=banana` opens the plain
+feed on 10 items** rather than emptying it, which is the direction every parameter
+in this app fails in.
+
+**The page has its own empty state and its own way out named in it**, which is
+what the section it replaces could not do without also naming the pills: `Nothing
+new since you last marked the feed read. Back is the whole day again.` and, with a
+lens on, `No new plays of that kind. The pills above are narrowing this — All is
+every kind of play, and Back is the whole day again.` Both drawn with no range
+line and no foot button, there being nothing to state a range over and nothing to
+have read down. The feed's own empty state is one sentence shorter for it: the
+three-shaped answer the two axes forced is one axis again, and the mode's two
+branches are gone from it.
+
+**It pages on its own**, seeded at `FEED_PAGE_SIZE` and reported nowhere: the page
+is opened, read and left, where the feed's own depth has to survive a view switch.
+Measured on 28 new plays: **10 on open, `Load more 18`, 20 after one press.**
+
+### The stream opens on ten
+
+**`FEED_PAGE_SIZE` is 10 and was 20.** Twenty was a page of *scrolling* — on a
+full slate the stream opened on more than a phone screen of cards and the
+reader's first gesture was always down, which is the opposite of what a first
+page is for. Ten is a page a reader can see the end of, which is what makes
+`Load more` a choice rather than the only thing left to do.
+
+**Measured on the live roster, 28 items in the Recent section: 10 items on first
+paint at 320, 390, 640, 900, 1200 and 1920**, with `Load more 18` under them at
+every one of the six. The count under the button is what stops a cut list reading
+as *that is all there is*, and it was already there — this is the file's existing
+paging idiom taken at a smaller step, not a new control.
+
+**The read is silent**, which is the loading rule rather than a property of the
+number: `Load more` grows a slice of a list already in hand, so there is no
+request, no wait and no badge — the same reason the order toggle's press is
+quiet. And the number is a **floor rather than a ceiling**: App and `LeagueTeam`
+seed the component from `feedShown`, so a page a reader had already grown to
+sixty comes back at sixty after a view switch, which is the fault that made App
+hold the count in the first place.
+
+**Bundle: 591.79 → 593.90 KB of JS** (176.58 → 177.08 gzipped), **CSS 157.84 →
+158.17** (28.18 → 28.24) — 2.1KB raw and 0.5KB over the wire for a page, a
+component split in two and the comments arguing both.
+
+
 ### Measured
 
 **Every count checked against the raw API figures** for 2026-08-17 (43 plate
