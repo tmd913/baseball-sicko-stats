@@ -106,10 +106,12 @@ export function ScheduleToggle({
  * one thing that row must not say.
  *
  * **On a phone it is a `<select>`**, which is the app's own answer for every
- * strip of pills that outgrows a narrow screen — the date presets, the research
- * board's window tabs and its position row all make the same swap at 640, and
- * `.schedule-span-select` is folded onto `.date-presets-select` so all of them
- * are one control by construction. Both are rendered and the media query picks,
+ * strip of pills that outgrows a narrow screen — the research board's window
+ * tabs, its position row and the Rankings spans all make the same swap at 640,
+ * and `.schedule-span-select` is folded onto `.research-window-select` so all
+ * of them are one control by construction. (The date presets were the first of
+ * them and headed that selector list; they went with the preset row, and the
+ * list's head moved to the first surviving member.) Both are rendered and the media query picks,
  * rather than a JS media test that could drift from the CSS.
  *
  * It swaps at one width whatever the run holds, and that is the point rather

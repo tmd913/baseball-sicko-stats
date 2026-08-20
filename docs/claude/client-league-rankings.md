@@ -714,7 +714,7 @@ so it takes that control's answers exactly: pills on a desktop, a native
 `<select>` under 640px, **both rendered and swapped by one media query** rather
 than by a JS media test that could drift from the CSS, which is the rule every
 "pills on a desktop, dropdown on a phone" control in this app follows.
-`.lg-span-select` is folded onto `.date-presets-select` / `.research-window-select`
+`.lg-span-select` is folded onto `.research-window-select`
 / `.research-pos-select` so all four are one control by construction, and the
 pill row is hidden two classes deep (`.view-bar-tabs .lg-span-row`) for the
 reason `.research-bar .research-window-row` is: the shared `.view-switch` rule

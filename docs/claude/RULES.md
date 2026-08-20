@@ -245,7 +245,7 @@ paint over the box covering it.
 
 - **Which data a view shows → the URL.** `preset`/`start`/`end`, `view`, `kind`,
   `hideil`, `starters`, `sched`, `plays`, `roster`, `pos`, `cols`, `inc`,
-  `win`, `mp`, `mup`, `mt`, `lt`, `lspan`, `proj`, `rproj`. A link that leaves
+  `win`, `mp`, `mup`, `mt`, `mr`, `lt`, `lspan`, `proj`, `rproj`. A link that leaves
   one out describes a different page.
 - **A fact about the person → a saved preference** on the user's own record
   (`UserPrefs`). Absence means the default, so a default can change without

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 // Self-contained ISO-date ('YYYY-MM-DD') helpers. Same-format ISO strings sort
 // lexicographically, so string comparison is a valid date comparison.
@@ -199,90 +199,15 @@ export function DateCalendar({
   );
 }
 
-/**
- * The calendar **behind a field** — a button reading the range, and the grid in
- * a popover under it.
- *
- * This is the shape the Roster's date panel wants: it sits at the end of a row
- * of preset pills, where a bare calendar would be 260px of grid under six
- * controls that answer the same question in a word. The Feed's bar draws
- * `DateCalendar` on its own instead, and the two share the grid rather than
- * two grids agreeing about how a range is picked.
- */
-export function DateRangePicker({
-  start,
-  end,
-  max,
-  onChange,
-}: {
-  start: string;
-  end: string;
-  /** Latest selectable day (inclusive), as an ISO date. */
-  max: string;
-  onChange: (start: string, end: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
+/* **`DateRangePicker` — the calendar behind a field — went with its last
+   reader.** It was the shape the Roster's date panel wanted: a button reading
+   the range at the end of a row of preset pills, where a bare calendar would
+   have been 260px of grid under six controls answering the same question in a
+   word. There is no preset row now (see `DateControls.tsx`), so there is
+   nothing for a field to sit beside and nothing the extra press bought — every
+   caller draws `DateCalendar` directly. `.drp`, `.drp-field`, `.drp-icon` and
+   `.drp-value` went out of the stylesheet with it; `.drp-popover` stayed, the
+   bar folding onto it for the one calendar surface this app has.
 
-  // Close on outside click or Escape.
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
-
-  return (
-    <div className="drp" ref={rootRef}>
-      <button
-        type="button"
-        className="drp-field"
-        onClick={() => setOpen((o) => !o)}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-      >
-        <svg
-          className="drp-icon"
-          viewBox="0 0 24 24"
-          width="15"
-          height="15"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <rect x="3" y="4" width="18" height="17" rx="2" />
-          <path d="M3 9h18M8 2v4M16 2v4" />
-        </svg>
-        <span className="drp-value">{prettyRange(start, end)}</span>
-      </button>
-      {open && (
-        <div className="drp-popover" role="dialog">
-          {/* Mounted only while open, which is what replaced the effect that
-              used to re-center the grid and drop a half-made selection on every
-              `open` — a fresh mount does both in its own initializers. */}
-          <DateCalendar
-            start={start}
-            end={end}
-            max={max}
-            onChange={(s, e) => {
-              onChange(s, e);
-              setOpen(false);
-            }}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
+   The file keeps its name. It is the range picker, and the range picker is now
+   exactly the calendar. */

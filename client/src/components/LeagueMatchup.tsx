@@ -12,7 +12,7 @@ import { LoadingLine } from './Loading';
 import { api } from '../api';
 import { BackButton } from './BackButton';
 import { InfoKey } from './InfoKey';
-import { DateBar, DateCalendar, DateRow, stepRange, stepTitle } from './DateControls';
+import { DateBar, DateCalendar, stepRange, stepTitle } from './DateControls';
 import type { DateBarReading, DatePreset } from './DateControls';
 import LeagueTeam from './LeagueTeam';
 import { FeedOrderToggle } from './FeedFilters';
@@ -103,6 +103,20 @@ const MATCHUP_LAYER = 48;
 
 /** Which of the three pages of a matchup is on screen. */
 type MatchupSideTab = 'away' | 'summary' | 'home';
+
+/**
+ * **Which reading of a team page is on screen**, which is a different question
+ * from which page — `MatchupSideTab` picks the manager, this picks what is said
+ * about him.
+ *
+ * `roster` and `feed` are the app's own two roster views, which is what a team
+ * page *is*. `summary` is the third and is this page's alone: the same table
+ * over **the matchup so far**, which is a span rather than a filter, and the
+ * one span that makes the table agree with the category card next door.
+ *
+ * Exported because it rides in the URL as `mr=` and App holds it — see there.
+ */
+export type MatchupReading = 'roster' | 'summary' | 'feed';
 
 /** The winner of one category, from the two figures. `outcome`'s twin in
  *  `LeagueView.tsx` and deliberately the same arithmetic: ESPN fills its own
@@ -363,6 +377,8 @@ export default function LeagueMatchupView({
   matchupId,
   initialTeamId,
   onSideTeam,
+  initialReading,
+  onReading,
   onClose,
   onOpenDetails,
   projection,
@@ -396,6 +412,17 @@ export default function LeagueMatchupView({
    * param on this view follows.
    */
   onSideTeam?: (teamId: number | null) => void;
+  /**
+   * **Which reading of a team page it opens on**, and — like `initialTeamId` —
+   * read once at mount, the switch owning it after that. `mr=` in the URL; see
+   * `reading` below for why a reading is in the URL at all and `App.tsx` for
+   * why the param is spelled the way it is.
+   */
+  initialReading?: MatchupReading;
+  /** And the reading reported back as the reader crosses the switch, so `mr=`
+   *  describes the page in front of them rather than the one it opened on —
+   *  the rule `onSideTeam` follows one line up. */
+  onReading?: (reading: MatchupReading) => void;
   onClose: () => void;
   onOpenDetails: (key: string) => void;
   /**
@@ -483,7 +510,25 @@ export default function LeagueMatchupView({
     // that isn't open.
     return 'summary';
   });
-  const [reading, setReading] = useState<'roster' | 'feed'>('roster');
+  /**
+   * **Which of a team page's three readings is on screen.**
+   *
+   * `roster` is the app's own Roster table over a span the reader picks,
+   * `summary` is that same table over **the matchup so far** and nothing else,
+   * and `feed` is his stream. Seeded from `mr=` at mount, the rule
+   * `initialTeamId` follows: the strip owns it after that, and it is reported
+   * back up so the param describes the page in front of the reader.
+   *
+   * **A reading is in the URL because it decides which data is on screen** —
+   * the test `view=`, `win=`, `mp=` and `mt=` are all in the URL for. That is a
+   * change of position rather than of rule: `mup` and `mt` were the whole of
+   * what a matchup link carried while a reading was only *which cut of the same
+   * span* a page drew, and `summary` is not that — it is a different span,
+   * derived rather than picked, which a link that dropped it would silently
+   * turn back into whatever range the recipient's own default seeded. The three
+   * things still out of the URL (`kind`, the feed's lens and its order) narrow rows inside a reading; they do not decide the days.
+   */
+  const [reading, setReading] = useState<MatchupReading>(() => initialReading ?? 'roster');
   const [kind, setKind] = useState<PlayerKind>('batter');
   /**
    * **Which kind of play the feed reading is narrowed to** — the app's own row
@@ -506,9 +551,9 @@ export default function LeagueMatchupView({
    * `Clear` would mark the reader's own feed read from a page that is not it.
    *
    * The overlay owns it for the reason it owns the reading, the kind, the dates
-   * and the reading: those are chrome above *both* team pages and must not reset
-   * when the reader crosses from one manager to the other. And it is **state rather
-   * than anything in the URL** — `mup` and `mt` are the whole of what a matchup
+   * — those are chrome above *both* team pages and must not reset when the
+   * reader crosses from one manager to the other. And it is **state rather than
+   * anything in the URL** — `mup`, `mt` and `mr` are the whole of what a matchup
    * link carries, and `plays=` stays the app's own Feed view's alone, two params
    * never meaning two things.
    */
@@ -516,8 +561,8 @@ export default function LeagueMatchupView({
   /**
    * **And which way that stream runs**, held beside the lens and for its
    * reasons: it is chrome above *both* team pages, so it must survive crossing
-   * managers, and it stays out of the URL because `mup` and `mt` are the whole
-   * of what a matchup link carries.
+   * managers, and it stays out of the URL because `mup`, `mt` and `mr` are the
+   * whole of what a matchup link carries.
    *
    * It arrived by collision rather than by design — the matchup feed gained the
    * pill row and the app's feed gained an order toggle in two branches written
@@ -538,10 +583,10 @@ export default function LeagueMatchupView({
    * of cells beside the plain table and the Schedule view.
    *
    * The overlay owns it for the reason it owns the reading, the kind, the dates
-   * and the reading: those are chrome above *both* team pages and must not
-   * reset when the reader crosses from one manager to the other. And it is state
-   * rather than anything in the URL, which is where every control on this page
-   * sits — `mup` and `mt` are the whole of what a matchup link carries.
+   * — those are chrome above *both* team pages and must not reset when the
+   * reader crosses from one manager to the other. And it is state rather than
+   * anything in the URL — `mup`, `mt` and `mr` are the whole of what a matchup
+   * link carries, and this is a lens over a reading rather than a reading.
    *
    * **Not the Summary page's `Projected`**, which is a different lens on a
    * different object: that one projects the *matchup*'s categories and lives
@@ -699,6 +744,12 @@ export default function LeagueMatchupView({
   useEffect(() => {
     onSideTeam?.(sideTeamId);
   }, [sideTeamId, onSideTeam]);
+
+  /** And the reading, for `onSideTeam`'s reason exactly: `mr=` has to describe
+   *  the page in front of the reader, not the one the link opened. */
+  useEffect(() => {
+    onReading?.(reading);
+  }, [reading, onReading]);
 
   /**
    * **This team's projection**, read on the first press and whenever the team,
@@ -1333,6 +1384,11 @@ export default function LeagueMatchupView({
   const sideName =
     sideTeamId === null ? 'this team' : teams.get(sideTeamId)?.name ?? `Team ${sideTeamId}`;
 
+  /* A club whose name already ends in an `s` takes the bare apostrophe. Its last
+     reader used to be the `Starters` title; it survives that button's removal
+     because the Summary face's titles name whose table is on screen. */
+  const sidePossessive = /s$/i.test(sideName) ? `${sideName}’` : `${sideName}’s`;
+
   /* This page's own copy of the roster views' date bar, and it is the same
      component with this page's state in it — see `DateControls.tsx`. Its three
      readings are this page's three: the Schedule view swaps the table's stat
@@ -1355,17 +1411,40 @@ export default function LeagueMatchupView({
      It keeps its own row under the band (`.mup-dates`), at the same 12px from
      the table it always had. */
   const mupScheduleReading = reading === 'roster' && scheduleSpan !== null;
+  /**
+   * **The Summary reading's days, which are the page's rather than the
+   * reader's**: the matchup's own span, which `board.start`/`board.end` already
+   * publish clamped to today for the week being played (see `matchupSpan` and
+   * *The matchup window* in **ESPN fantasy league**). So the table is summed
+   * over exactly the days the category card next door is, which is the whole of
+   * what this reading is for — the `Matchup` pill said the same thing and said
+   * it as a *pick*, one press away from being stepped off by an arrow.
+   *
+   * **The fallback is the reader's own span**, for the reason the `Matchup`
+   * pill was absent rather than dead in that case: a period with no dates to
+   * name has no days for this reading either, and the honest answer is the ones
+   * already on screen rather than an empty table. `matchupSpan` is null only
+   * where the board carries no dates at all.
+   */
+  const summarySpan = matchupSpan ?? { start: span.start, end: span.end };
+  const mupSummaryReading = reading === 'summary';
+  /** The days actually on screen, whichever reading is drawing them — read by
+   *  the table below and by the `Starters` tooltip, which says a different
+   *  sentence for one day than for many. */
+  const viewSpan = mupSummaryReading ? summarySpan : { start: span.start, end: span.end };
   const mupBarSpan = mupScheduleReading
     ? spanDates(scheduleIndex, scheduleSpan!, matchupWindow, today)
-    : { start: span.start, end: span.end };
+    : viewSpan;
   const mupBarReading: DateBarReading = mupScheduleReading
     ? {
         kind: 'schedule',
         span: spanLabel(effectiveSpan(scheduleSpan!, matchupWindow), matchupWindow).label,
       }
-    : reading === 'roster' && teamProjected
-      ? { kind: 'projected' }
-      : { kind: 'dates', preset: span.preset };
+    : mupSummaryReading
+      ? { kind: 'matchup' }
+      : reading === 'roster' && teamProjected
+        ? { kind: 'projected' }
+        : { kind: 'dates', preset: span.preset };
   const mupStepTo = (delta: -1 | 1) => {
     if (mupScheduleReading) {
       const to = stepSpan(scheduleSpan!, matchupWindow, delta);
@@ -1409,14 +1488,14 @@ export default function LeagueMatchupView({
           />
         ) : null
       }
-      /* And the same rule the app's Feed is on, from the same component: in the
-         feed reading the face opens the calendar rather than a preset row. This
-         page's preset row leads with a `Matchup` pill of its own, which makes
-         the case *stronger* here rather than weaker — the whole page is already
-         one matchup period, so the pill that names it is the one preset a
-         reader of this feed has least reason to press. */
+      /* And the same rule the app's own bar is on, from the same component: the
+         face opens the calendar. The Feed reading had it first here and the
+         Roster reading has it now, the preset row having gone from both bars
+         together — and on this page the pill that led that row was `Matchup`,
+         which is exactly the span the Summary reading beside it now *is*, held
+         rather than picked. */
       popover={
-        reading === 'feed' ? (
+        mupScheduleReading || mupSummaryReading ? null : (
           <DateCalendar
             start={span.start}
             end={span.end}
@@ -1426,38 +1505,63 @@ export default function LeagueMatchupView({
               setDateOpen(false);
             }}
           />
-        ) : null
+        )
       }
       popoverLabel="Pick a range on the calendar"
-    >
-      <DateRow
-        presets={spanPresets}
-        activePreset={span.preset}
-        start={span.start}
-        end={span.end}
-        max={maxDate}
-        onPick={(p) => {
-          setSpan({ start: p.start, end: p.end, preset: p.label });
-          setDateOpen(false);
-        }}
-        onRange={(s, e) => setSpan({ start: s, end: e, preset: null })}
-      />
-    </DateBar>
+      /* **In the Summary reading the days are the page**, so the bar states
+         them and offers nothing: no arrows, and a face that is a `<div>` rather
+         than a button. A range the reader could step would be a Summary of
+         something other than this matchup a press later, which is the one thing
+         this reading cannot be. */
+      fixed={mupSummaryReading}
+    />
   );
 
   const tools = (
     <div className="mup-tools">
-      <div className="view-switch mup-reading" role="tablist" aria-label="Roster or feed">
-        {(['roster', 'feed'] as const).map((r) => (
+      {/* **Three readings, and `Summary` is the middle one.**
+
+          It is the app's Roster table over the matchup's own days — the span the
+          category card two presses away is summed over — and it is a *reading*
+          rather than a preset because it is not the reader's to move: the days
+          are the period's, clamped to today, and an arrow that stepped off them
+          would leave a page still calling itself a summary of this week. So the
+          bar below draws them as text (see `dateBar`, `fixed`).
+
+          **It replaces the pill that used to lead this page's preset row.**
+          `Matchup` was the first of six there and the reason a reader was on
+          this page at all; the preset row has gone from every bar in the app
+          (the face opens a calendar now), and this is where that one pill's job
+          went — promoted from *a range you can pick* to *a reading you can be
+          in*, which is what it always was in practice.
+
+          **The word is `Summary`, and it is the second thing on this page to
+          wear it** — the strip above has a `Summary` tab, which is the
+          comparison page rather than a reading of a team. They are one press
+          apart and both are `.view-switch` pills. The two are told apart by the
+          strip being *whose* page and this being *what about him*, and by their
+          titles saying so in as many words; the alternative was a second word
+          for one idea, which is worse — a manager reading his own week wants
+          the summary of it, and calling it anything else on a team page would
+          be this app inventing a synonym to protect a layout. */}
+      <div className="view-switch mup-reading" role="tablist" aria-label="Reading">
+        {(['roster', 'summary', 'feed'] as const).map((r) => (
           <button
             key={r}
             type="button"
             role="tab"
             aria-selected={reading === r}
             className={`view-tab${reading === r ? ' active' : ''}`}
+            title={
+              r === 'roster'
+                ? `${sidePossessive} table over the days you pick`
+                : r === 'summary'
+                  ? `${sidePossessive} table over this matchup so far`
+                  : `${sidePossessive} plays, in order`
+            }
             onClick={() => setReading(r)}
           >
-            {r === 'roster' ? 'Roster' : 'Feed'}
+            {r === 'roster' ? 'Roster' : r === 'summary' ? 'Summary' : 'Feed'}
           </button>
         ))}
       </div>
@@ -1511,9 +1615,42 @@ export default function LeagueMatchupView({
             That is `order` on the ghost, so the DOM keeps the roster row's own
             order — see `.mup-tool-modes`. */}
         <span
-          className={`mup-tool-modes${reading === 'roster' ? '' : ' mup-tool-ghost'}`}
+          /* **What the ghost reserves is the *difference*, not the pair.** The
+             rule is: hold open whatever the roster reading has that this one
+             has not, less whatever this one has that the roster reading has
+             not. `Summary` has nothing of its own, so it reserves both. The
+             Feed reading has the order toggle, so it reserves **one** — and it
+             has to, because a third reading pill took the row's slack: measured
+             at 1400, where the tools row is capped at the 800px card column,
+             the feed run went 452 with both reserved against the roster's 346,
+             and the row wrapped on that reading alone (band 162 → 210, a whole
+             line of pinned chrome appearing under the finger that pressed
+             `Feed` — the exact fault this ghost exists to prevent). With one
+             reserved the run is **333** against 346, the total 729 against 741,
+             and the band is 162 on all three readings.
+
+             `Projected` is the one kept (113.5px against `Schedule`'s 111.1),
+             being the nearer of the two to the 126 that would make the runs
+             exactly equal.
+
+             **Exactly equal is available and was rejected**: draw all four in
+             every reading and ghost what does not apply, and the run is 452 on
+             every one of them — but 452 does not fit the 800px column, so the
+             row wraps in *all three* readings and the band is 210 at every
+             desktop width instead of 162, and 258 instead of 210 on a phone.
+             That is 48px of pinned chrome bought from every reader, always, to
+             close three seams. Measured across the readings at nineteen widths,
+             what is left is: **162 / 162 / 162** at 1400, 1000, 900, 800 and
+             780; **210** on all three at 700, 660, 641, 500, 430, 400, 390,
+             375 and 360; **289** on all three at 320 — and three narrow bands
+             of window width where the Feed reading alone is a line out (≈761–773,
+             ≈552–570, ≈333–345, none of them a device width). */
+          className={`mup-tool-modes${reading === 'roster' ? '' : ' mup-tool-ghost'}${
+            reading === 'feed' ? ' mup-tool-ghost-feed' : ''
+          }`}
           aria-hidden={reading === 'roster' ? undefined : true}
         >
+          {reading !== 'feed' && (
           <ScheduleToggle
             on={scheduleSpan !== null}
             loading={scheduleLoading}
@@ -1530,6 +1667,7 @@ export default function LeagueMatchupView({
               })
             }
           />
+          )}
           {/* **The projected reading, after the Schedule view** — the roster
               row's own order, where these two are the third of *which page,
               which kind, which reading of it, which players, which days*: the
@@ -1604,7 +1742,7 @@ export default function LeagueMatchupView({
       <div
         ref={viewRef}
         tabIndex={-1}
-        className={`mup-view${sideTeamId !== null && reading === 'roster' ? ' roster-mode' : ''}`}
+        className={`mup-view${sideTeamId !== null && reading !== 'feed' ? ' roster-mode' : ''}`}
       >
         {head(nav, barsKey, sideTeamId !== null ? tools : null)}
 
@@ -1619,10 +1757,18 @@ export default function LeagueMatchupView({
               key={sideTeamId}
               teamId={sideTeamId}
               team={teams.get(sideTeamId)}
-              start={span.start}
-              end={span.end}
+              /* The days the reading is drawing, which on `summary` are the
+                 matchup's own rather than the span the reader last picked —
+                 that span is *kept*, not overwritten, so crossing back to
+                 `Roster` puts them on the days they left. */
+              start={viewSpan.start}
+              end={viewSpan.end}
               kind={kind}
-              reading={reading}
+              /* `summary` is the roster table read over other days, so the page
+                 below is handed the table it already draws — a fourth value
+                 there would be a second definition of what a table of a team
+                 is. */
+              reading={reading === 'feed' ? 'feed' : 'roster'}
               /* The pills are drawn *inside* that page rather than beside it
                  here, which is the Feed view's own rule: a row of pills over an
                  empty page would be a control over nothing, and the two empty

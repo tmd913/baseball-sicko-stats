@@ -1485,6 +1485,42 @@ over, so picking it makes every row the arithmetic behind a category. It is
 absent where the period has no dates to name, the rule the Rankings span strip
 already follows for a half with no matchup period in it.
 
+### A team page's third reading: `Summary`, the matchup so far
+
+**`Roster · Summary · Feed`.** The middle one is the app's own table over **the matchup's own days** — the period's start to today, clamped to its end — and it is a *reading* rather than a preset because those days are not the reader's to move. The span is `board.start`/`board.end`, which the scoreboard already truncates at today for the week being played, so the table is summed over **exactly the days the category card two presses away is summed over**. Driven on the live week (`?view=league&mup=110&mt=5`), the bar reads `MATCHUP TO DATE` over `Aug 10 – Aug 20` and the table draws 17 rows of eleven-day totals (Royce Lewis `10/35`, 4 R, 4 RBI, `.714`) where the Roster reading beside it, on `Today`, draws the same 15 rows at `0/0`. On a settled matchup (`&mp=18&mup=104`) it reads `Aug 3 – Aug 9`, the whole period.
+
+**It is where the `Matchup` pill went.** That pill led this page's preset row and was the reason a reader was on the page at all; the preset row has gone from every bar in the app (the face opens a calendar — see **The date bar**, *And then the Roster's face opened the calendar too*), and this is that pill promoted from *a range you can pick* to *a reading you can be in*, which is what it was in practice. The reader's own span is **kept** rather than overwritten, so crossing back to `Roster` puts them on the days they left.
+
+**The date bar states the days and offers nothing** — `fixed`, so no arrows and a `<div>` face. A range the reader could step would be a Summary of something other than this matchup one press later, which is the one thing this reading cannot be. Measured: `steps` **0**, face tag `DIV`, `cursor: default`, face center **700 at 1400 / 195 at 390 / 160 at 320** — the same number the other two readings put it at, so nothing moves as the switch is crossed.
+
+**In the URL as `mr=`**, the rule *which data a view shows belongs in the URL*. That is a change of position rather than of rule: `mup` and `mt` were the whole of what a matchup link carried while a reading was only which *cut of the same span* a page drew, and `summary` is not that — it is a different span, derived rather than picked, which a link that dropped it would silently turn back into whatever range the recipient's own default seeded. All three values ride (`roster` is the omitted default, the app's convention that the first tab is the one you land on), it is written only alongside `mt=` (the matchup's own Summary *page* has no reading to be in), and it is a **running record**: the page reports the reading up as the reader crosses the switch, exactly as it reports the side. `mr` because `mp` is the period, `mup` the matchup and `mt` the page of it. Driven: `?…&mt=5&mr=summary` opens on Summary with 17 rows and no arrows; pressing `Roster` drops `mr=` from the URL; pressing `Feed` writes `mr=feed`; and `Back` clears it with `mup=` and `mt=`, a reading being put away with the page it was made on (the rule `rproj=1` and `proj=1` follow).
+
+**`Summary` is the second thing on this page to wear the word**, the strip above having a `Summary` tab, which is the *comparison page* rather than a reading of a team. They are one press apart and both are `.view-switch` pills. What tells them apart is that the strip is *whose page* and this is *what about him*, and their titles say so; the alternative was a second word for one idea, which is worse — a manager reading his own week wants the summary of it, and a synonym invented to protect a layout is the app lying about what a control is. Flagged here rather than hidden, because it is the one part of this that a reader could trip on.
+
+#### The third pill took the tools row's slack, and the ghost had to be re-derived
+
+**A third reading pill is 88px, and the row had 40.** `.mup-tools` is capped at the 800px card column, and at 1400 the run was `reading 217 · kind 155 · icons` with two 12px gaps. On the roster reading the icons come to **346** (`Schedule` 111 + `Projected` 114 + `Starters` 105) and the total to **741**; on the Feed reading the ghosted pair is still 233 and the order toggle adds 99, so the icons come to **452** and the total to **848** — over the column, so the row wrapped **on that reading alone** and the band went 162 → 210. That is a whole line of pinned chrome appearing under the finger that pressed `Feed`, which is the exact fault the ghost exists to prevent, reintroduced by the pill.
+
+**So the ghost reserves the *difference*, not the pair.** The rule is: hold open whatever the roster reading has that this one has not, less whatever this one has that the roster reading has not. `Summary` has nothing of its own and reserves **both**. The Feed has the order toggle and reserves **one** — `Projected` (113.5 against `Schedule`'s 111.1, the nearer of the two to the 126 that would make the runs equal). Below 640 it reserves **none**: there every toggle is a 36px square and the roster run is 124, while `Oldest first` is a *word*, not a glyph, and measures 98.7 — one reserved square takes the feed run to 187 and, at 375, `kind` + the run to **354 against the 343** that width leaves, which is the same fault wearing the other shoe. Reserving nothing takes it to 143.
+
+**Exactly equal was available and was rejected.** Draw all four in every reading and ghost what does not apply and the run is 452 on every one of them — but 452 does not fit an 800px column, so the row wraps in *all three* readings and the band is 210 at every desktop width instead of 162, and 258 instead of 210 on a phone. That is 48px of pinned chrome bought from every reader, always, to close three seams.
+
+**Measured across the three readings at nineteen window widths** (`?view=league&mup=110&mt=5`, band height in px):
+
+| window | 1400 | 1000 | 900 | 800 | 780 | 770 | 700 | 660 | 641 | 640 | 560 | 500 | 430 | 400 | 390 | 375 | 360 | 340 | 320 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Roster | 162 | 162 | 162 | 162 | 162 | 210 | 210 | 210 | 210 | 162 | 162 | 210 | 210 | 210 | 210 | 210 | 210 | 241 | 289 |
+| Summary | 162 | 162 | 162 | 162 | 162 | 210 | 210 | 210 | 210 | 162 | 162 | 210 | 210 | 210 | 210 | 210 | 210 | 241 | 289 |
+| Feed | 162 | 162 | 162 | 162 | 162 | **162** | 210 | 210 | 210 | 162 | **210** | 210 | 210 | 210 | 210 | 210 | 210 | **289** | 289 |
+
+Three seams remain, all of them narrow bands of window width where the Feed reading alone is a line out — **≈761–773, ≈552–570, ≈333–345** — and none of them is a device width. Every common one (320, 360, 375, 390, 430, 500, 640, 800, 900, 1000, 1400) is identical across all three readings.
+
+#### The dates row lost its own margin, which was the roster bar's rule all along
+
+**The app draws this same bar last in `.app-chrome`, whose `padding-bottom` is 0, so the table starts where the bar ends.** Measured at 1400 on the Roster view: the bar runs to y=**168** and the table head begins at y=**169**. `.mup-dates` carried a 12px bottom margin and the same two boxes measured **231** and **244** — the one control the two surfaces share, spending twelve pixels more on one of them than on the other, which is what "the matchup version has too much spacing" turns out to be when it is measured. Folded onto the roster's rule rather than given a smaller number of its own, because the number is *what the box below has to give* and here as there that is nothing: after, the table head is at **232** at 1400, **280** at 390 and **359** at 320, one pixel under the bar in each — and the bar itself is unmoved at 178 / 226 / 305. The Feed reading is unaffected, its first card keeping the 16px `.feed-filters` puts above itself.
+
+The gap *above* the bar is the band's own 16px margin and is left alone: it is `.mup-chrome`'s, shared with the Summary page's card, and it is 16 against the roster bar's 14 — two pixels, against the twelve below.
+
 ### A settled matchup opens on its own days
 
 **That paragraph said "the days start at today" flatly, and the four words added
