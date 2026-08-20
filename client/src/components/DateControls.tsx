@@ -1,8 +1,8 @@
 import { useRef } from 'react';
 import type { ReactNode } from 'react';
-import { addDays } from '../lib';
+import { addDays, wideRange } from '../lib';
 import { useDismissable, usePopoverFit } from '../hooks';
-import { DateRangePicker, wideRange } from './DateRangePicker';
+import { DateRangePicker } from './DateRangePicker';
 
 /**
  * The app's date controls: **a full-width bar of its own, directly under the
@@ -45,7 +45,7 @@ import { DateRangePicker, wideRange } from './DateRangePicker';
  *
  * - **Schedule** replaces the stat columns with one column per day *ahead*. The
  *   days on screen are then the span's rather than the range's, so the bar
- *   prints the span (`Schedule · This Matchup`) over the days it actually
+ *   prints the span (`Schedule · Week 19`) over the days it actually
  *   draws, and the arrows step through the spans this reader is offered instead
  *   of through the calendar. The range is not lost — it still decides *whose*
  *   roster the rows are — but it is not what the columns are, so **the

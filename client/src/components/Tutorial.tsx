@@ -269,7 +269,7 @@ const CHAPTERS: Chapter[] = [
         <p className="tut-note">
           It also says when the days on screen are not simply a range. In{' '}
           <Ui>Schedule</Ui> the table is showing days <em>ahead</em>, so the bar
-          reads <Ui>Schedule · This Matchup</Ui> and the arrows step between the
+          reads <Ui>Schedule · Week 19</Ui> and the arrows step between the
           spans your league gives you; with <Ui>Projected</Ui> on it reads{' '}
           <Ui>Projected</Ui>, those figures being estimates rather than anything
           that has happened.

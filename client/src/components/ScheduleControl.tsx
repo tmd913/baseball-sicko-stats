@@ -78,13 +78,13 @@ export function ScheduleToggle({
 /**
  * How far ahead, offered only while the mode is on.
  *
- * **A connected league is offered `This Matchup` and `Next Matchup` and nothing
- * else; everyone else gets `Next 7` and `Next 14`.** The named pair is what a
+ * **A connected league is offered its own two weeks — `Week 19` and `Week 20` —
+ * and nothing else; everyone else gets `Next 7` and `Next 14`.** The named pair is what a
  * fantasy manager actually plans in — a matchup period rather than a rolling
  * week that starts today and ends in the middle of one — and on the live league
  * today the two are nowhere near the same span: this matchup is a fortnight's
  * playoff round with eight days left, and next runs a fortnight after that.
- * `This Matchup` is what the mode opens on (`defaultScheduleSpan`), because it
+ * This week is what the mode opens on (`defaultScheduleSpan`), because it
  * is the question the view is opened with.
  *
  * The numeric pair is a **fallback rather than a fifth and sixth option** — see

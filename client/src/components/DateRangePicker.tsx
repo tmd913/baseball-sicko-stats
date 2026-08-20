@@ -21,39 +21,17 @@ function prettyLong(date: string): string {
   });
 }
 
-function weekdayShort(date: string): string {
-  return new Date(date + 'T12:00:00').toLocaleDateString(undefined, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  });
-}
-
-/**
- * `Mon, Aug 18`, or `Aug 10 – Aug 18` across a range — **what the date bar
- * prints on its lower line.**
- *
- * This replaces two forms the calendar button needed and the bar does not.
- * `numericRange` said `8/1 – 8/9` and `tightRange` said `8/1–8/9`, and both
- * were budgets rather than choices: the button sat in a wrapping row of tab
- * groups where every character it spent could push the group after it onto the
- * next line, and under 640px it was a 10px bubble on the corner of a 36px
- * glyph. The bar is the full width of the window and the label is the only
- * thing in the middle of it, so there is nothing to save the characters for —
- * measured at 320px, the widest form this produces (`Aug 28 – Sep 11`, a range
- * across a month boundary) is 108px against the 204 the bar leaves between its
- * two arrows.
- *
- * **The weekday only on a single day**, which is where it is worth something: a
- * manager reading one day wants to know it is a Sunday, and a range already
- * says its length in its two ends. The year stays off both — the app shows one
- * season and says so nowhere else on the page.
- */
-export function wideRange(start: string, end: string): string {
-  return start === end
-    ? weekdayShort(start)
-    : `${prettyShort(start)} – ${prettyShort(end)}`;
-}
+/* `wideRange` — `Mon, Aug 18`, or `Aug 10 – Aug 18` across a range — **is in
+   `lib.ts` now**, with `prettyDate` it is built on. It was here because the
+   date bar was its only caller and the bar's picker is this file; it has four
+   callers now and three of them (a matchup's head, the Scoreboard's head, the
+   Rankings caption) never open a calendar. It replaced two numeric forms the
+   old calendar *button* needed and the bar does not — `numericRange` said
+   `8/1 – 8/9` and `tightRange` said `8/1–8/9`, both budgets rather than
+   choices, the button having sat in a wrapping row of tab groups where every
+   character it spent could push the group after it onto the next line. What is
+   left here is the picker's own field label, which is a different form: it
+   carries the year, because a calendar you are picking *in* has a year on it. */
 
 function prettyRange(start: string, end: string): string {
   return start === end

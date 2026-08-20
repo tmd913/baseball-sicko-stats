@@ -56,8 +56,7 @@ import type {
 } from '../types';
 import { LoadingBlock, SpinningBaseball } from './Loading';
 import { useDismissable, usePopoverFit } from '../hooks';
-import { wideRange } from './DateRangePicker';
-import { prettyDate } from '../lib';
+import { prettyDate, wideRange } from '../lib';
 
 /** Re-exported: this view's own two neighbors import it from here, and the
  *  helper itself now lives in `lib.ts` — four surfaces print a span of days. */
