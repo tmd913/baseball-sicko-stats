@@ -14577,32 +14577,59 @@ span.mup-move-name:hover {
    start at one x — the same arithmetic the summary table's fantasy slot chip
    makes for its own column. It held the *word* (`Claimed`, the widest the
    vocabulary holds) in 58px; `+` and `−` say the same direction in 14, and the
-   44px that buys is what lets the row stay one line down to 416 instead of
+   44px that buys is what lets the row stay one line down to 417 instead of
    giving the ownership block its own line from 640 (see the phone rule below).
-   The word is not lost — it is the slot's `title` and its `.sr-only` text. */
+   The word is not lost — it is the slot's `title` and its `.sr-only` text.
+
+   **The slot is a filled disc**, which is how the rest of this app draws a
+   mark that is a *state* rather than a run of text — `.lineup-spot`, the pip on
+   a headshot, is the same object one size up: a state color as the ground and
+   `--on-accent` as the ink. Round rather than `--radius-ctl`, because this is
+   read and never pressed. Not folded onto `.lineup-spot`'s selector list: that
+   rule carries a `1.5px solid var(--panel)` ring it needs to sit on a
+   photograph and a `font-weight: 700` this glyph does not want, so the two
+   would be one selector and two overrides — the fold rule's own test for two
+   things that merely resemble each other.
+
+   **20px, and the 6px it costs the row is measured**: the disc clears the 15px
+   glyph by 2.5px on every side, and the single-line row still carries this
+   league's widest name unellipsized down to 417 — so the phone rule below moved
+   411 → 416 with it. 18px left the glyph 1.5px a side and read as a ring drawn
+   round it rather than a ground under it. */
 .lg-tx-move {
-  min-width: 14px;
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
   flex: none;
-  text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
   font-size: 15px;
   font-weight: 800;
   line-height: 1;
+  color: var(--on-accent);
 }
 /* Color is spent on **what the pickup cost**, which is the distinction the word
    was carrying (`Claimed` rather than `Added`) and the one a reader of a feed
    acts on: `--hit` for a man taken off the pool for nothing, `--hr` for one
-   that cost a bid and a place in the waiver order. Neither is on every row —
-   between them they mark about half of one — and the third tone is no color at
-   all: a drop and either side of a trade are not pickups off the pool, and the
-   header's two team names and the row's `to <Team>` already say which. */
+   that cost a bid and a place in the waiver order, and `--muted` for the two
+   moves that are not a pickup off the pool at all — a drop, and either side of
+   a trade, which the header's two team names and the row's `to <Team>` already
+   say. It is the ground now rather than the glyph; the ink is `--on-accent` on
+   all three. Read off the rendered page in all six themes — sampled pixels, so
+   the two light palettes' card gradients are in the numbers — the glyph clears
+   its disc by **6.94–11.22:1** and the disc clears the row's own ground by
+   **5.48–9.93:1**, against the 4.5 a 15px glyph owes and the 3 a graphical
+   object does. */
 .lg-tx-move-free {
-  color: var(--hit);
+  background: var(--hit);
 }
 .lg-tx-move-waiver {
-  color: var(--hr);
+  background: var(--hr);
 }
 .lg-tx-move-plain {
-  color: var(--muted);
+  background: var(--muted);
 }
 .lg-tx-name {
   background: none;
@@ -14660,10 +14687,15 @@ span.mup-move-name:hover {
    and 2 of 42 go at 408. So the wrap begins at 411 and every width above it
    keeps the figure on the line above its deltas beside a full-width name.
 
+   **It is 416 now, because the mark took its disc.** Same 42 rows, same league:
+   0 of 42 ellipsized down to **417** and 2 at 416, which is the 14 → 20px slot
+   read straight back off the page. The rule is the number, so the number moved
+   with the slot rather than the slot being sized to keep the number.
+
    This is the one place the row wraps, and it does not undo the rule above it:
    what must not wrap is the *identity block*, which still ellipsizes, so a
    nine-player trade is nine rows of two lines rather than nine paragraphs. */
-@media (max-width: 411px) {
+@media (max-width: 416px) {
   .lg-tx-player {
     flex-wrap: wrap;
     row-gap: 2px;

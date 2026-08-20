@@ -570,3 +570,70 @@ read before and after at **320 / 375 / 390 / 411 / 412 / 440 / 640 / 1200**:
 **Bundle: 581,598 → 581,833 bytes of JS** (171,038 → 171,094 gzipped) and
 **156,330 → 156,363 of CSS** (27,720 → 27,736) — 235 and 33 bytes raw, 56 and 16
 over the wire, for a tone function, two spans and a measured number.
+
+### The mark sits on a ground, because add and drop are states
+
+**A colored glyph in a text row reads as text.** *The move is a mark, and the
+color is what it cost* put `+` and `−` in the row where the word had been and
+tinted them; what it did not do is make them look like *marks*, and the two
+things this feed is read for — a man arriving and a man leaving — are exactly
+the kind of state the rest of this app draws as a filled disc. So the slot is
+one now: the tone is the **ground** and `--on-accent` is the ink, which is
+`.lineup-spot`'s own construction one size up.
+
+**Not folded onto `.lineup-spot`.** That rule carries a `1.5px solid
+var(--panel)` ring it needs to sit legibly on a photograph and a `font-weight:
+700` this glyph does not want, so sharing the selector list would buy one
+declaration and cost two overrides — which is the fold rule's own test for two
+things that merely *resemble* each other. The idiom is shared; the rule is not.
+
+**The three tones are unchanged, and that is the point.** `--hit` off the pool
+for nothing, `--hr` for a bid, `--muted` for a drop or either side of a trade —
+still 18 / 1 / 23 over the 42 rows the first page draws. **Two direction-keyed
+grounds were the obvious alternative and were rejected**: green for in and red
+for out is the color this page already declined to spend on a direction the
+glyph is carrying, and it would have thrown away the claim/add distinction the
+section above bought the word to keep.
+
+**Contrast, sampled off the rendered page** — actual pixels rather than token
+arithmetic, so the two light palettes' card gradients are in the figures. In all
+six themes the glyph clears its disc by **6.94–11.22:1** (lowest: `--muted` on
+Lavender) and the disc clears the row's own ground by **5.48–9.93:1** (lowest:
+`--muted` on Light), against the 4.5 a 15px glyph owes and the 3 a graphical
+object does. The grounds measure exactly their tokens — `#86cf86 / #eec066 /
+#9ea1a2` on Dark, `#0d5424 / #7c4400 / #55404a` on Powder Blue.
+
+**20px, and the six pixels it costs are what moved the breakpoint.** The disc
+has to clear a 15px glyph, and at 18px it cleared it by 1.5px a side and read as
+a ring drawn round the `+` rather than a ground under it; at 20 it is 2.5px a
+side, which is the measured `inkTop` on every row. The 14 → 20px slot then took
+6px off the name, so the same 42 rows now go unellipsized down to **417** where
+they went to 412, and 2 of 42 ellipsize at 416 — so the phone rule moved
+**411 → 416**. The rule is the number, and the number was re-read rather than
+the disc being sized to protect it.
+
+**Nothing on the matchup page changed, and nothing should have.** Its Moves
+section draws **0 `.lg-tx-move` marks** (measured on `?view=league&mup=111`: 30
+move rows under four `In`/`Out` headings): direction there is a *heading over a
+run*, not a per-row glyph, and the word rides in each row's `title`. The one
+thing the two surfaces share is `moveLabel`, which is untouched.
+
+### Measured again, for the disc
+
+**Driven against the dev client and the live 12-team league**, the same 42 rows
+at **1200 / 640 / 440 / 418 / 417 / 416 / 412 / 411 / 390 / 375 / 320**:
+
+- **Row heights identical at every width**, before and after: `32×9, 39×16,
+  40×16, 47×1` from 417 up, `40×1, 49×9, 56×16, 57×15, 64×1` from 416 down, and
+  `40×1, 49×9, 56×15, 57×13, 64×1, 70×1, 71×2` at 320. The disc is 20px inside a
+  row the 32px headshot already sets, so it costs the row no height at all.
+- **The name's baseline does not move**: the first eight rows' name tops read
+  `8, 7.5, 0.5, 0.5, 7.5, 7.5, 0.5, 7.5`px from the row's top before and after.
+- **The slot is 20×20 at `border-radius: 50%`** where it was 14×15 at 0, and the
+  glyph's ink box is 15px high with **2.5px above and below it** on every row.
+- **0 names ellipsized at all eleven widths** and **page-body horizontal
+  overflow 0** at all eleven, with the breakpoint at 416.
+
+**Bundle: 600,229 → 600,229 bytes of JS** (176,931 → 176,931 gzipped — no
+TypeScript was touched) and **158,320 → 158,450 of CSS** (28,282 → 28,309): 130
+bytes raw and 27 over the wire, for a disc, three grounds and a moved number.
