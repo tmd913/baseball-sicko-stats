@@ -1452,6 +1452,7 @@ export function SummaryTable({
   reports,
   onOpenDetails,
   chrome,
+  paneChrome,
   schedule,
   projection,
   starters,
@@ -1503,6 +1504,25 @@ export function SummaryTable({
    *  kind tabs and the date control, handed down as nodes because App owns both
    *  the state behind them and the markup. Rendered only while expanded. */
   chrome?: ReactNode;
+  /**
+   * **The app's tools row and date bar, drawn inside this table's own
+   * scroller.**
+   *
+   * The Roster view is a viewport-tall flex column in which only
+   * `.summary-scroll` scrolls, and `position: sticky` sticks to the box that
+   * scrolls — so a date bar rendered *above* this pane is pinned to a column
+   * that never moves, while the header row inside it is pinned to the pane. Two
+   * boxes stuck to two different edges, drawn as one band, with the first row
+   * of the table lost in the difference.
+   *
+   * As the pane's first children they stick to the same scrollport, one under
+   * the other: the tools row scrolls away with the rows, the bar holds at the
+   * top of the pane, and the header row holds directly under the bar (the
+   * stylesheet reads `--date-bar-h` for that offset, measured because the bar's
+   * own height is). Nodes rather than props, for the reason `chrome` is: App
+   * owns the state behind both and the markup of both.
+   */
+  paneChrome?: ReactNode;
 }) {
   const handlers = { onOpenDetails };
   // Keyed by the app's own `${kind}-${id}`, so a two-way player's bat and his
@@ -1530,7 +1550,24 @@ export function SummaryTable({
           Not drawn in schedule mode, where the columns are days rather than
           figures and there is nothing for it to be a caption to. */}
       {projection && !schedule && <ProjectionNote p={projection} />}
-      <div className="summary-scroll">
+      {/* `has-pane-chrome` is what the header row's sticky offset reads: with
+          the bar in here it holds at `--date-bar-h`, and without it at 0. A
+          class rather than `:has(> .date-bar)` because the condition is *whose*
+          bar it is rather than whether one is present — the expanded box draws
+          its own above the pane, and a header row stuck 54px down under nothing
+          is a band of table showing through the gap. */}
+      <div className={`summary-scroll${paneChrome && !isFull ? ' has-pane-chrome' : ''}`}>
+        {/* The app's own tools row and date bar, in here rather than above —
+            see `paneChrome`. First, because the bar sticks to the top of this
+            pane and the header row sticks under it.
+
+            **Not while expanded**, where `.expanded-chrome` above the pane
+            already carries them: that box is a fixed-height column of its own
+            with its own 12px gutter, so the bar is above the scroller there and
+            the header row sticks at the pane's own top, which is the
+            arrangement that mode has always had. Rendering both would be two
+            date bars on one screen. */}
+        {!isFull && paneChrome}
         {/* The tables sit in one max-content flex column so the narrower of the
             two stretches to the other's width — otherwise the batter table (fewer
             columns) would stop short of the scrolled-right edge. */}

@@ -136,14 +136,48 @@ const MIN_SPIN = 450;
  * `summary` rather than `roster` because that is the name `view=` has always
  * used for it, and it is the default every link in the wild omits.
  */
-type View = 'summary' | 'feed' | 'research' | 'league';
+type View = 'summary' | 'feed' | 'research' | 'matchup' | 'league';
 
-/** The two pages that report on a roster over a range — the ones the kind tabs,
- *  the date controls and the report itself belong to.
- *  Research and League are each about something else (the whole league's season
- *  and the fantasy league's week), and neither has a kind or a date. */
+/** The two *readings* of the Roster page — the stat table and the stream. They
+ *  are one tab now (`Roster`) and were two, and the pair survives as the value
+ *  of `view` for the reason `view=feed` survives in the wild: the reading is
+ *  still a page's worth of difference to everything downstream — its own date
+ *  range, its own scroll memory, its own URL — and only the *chrome* changed.
+ *  Research and Matchup and League are each about something else (the whole
+ *  league's season, this week's opponent, the fantasy league), and none of them
+ *  has a date range of its own. */
 function isRosterView(v: View): boolean {
   return v === 'summary' || v === 'feed';
+}
+
+/** The Feed reading's mark: a day as a run of entries down a rail, which is
+ *  what the stream is — deliberately not a clock or a list icon, the other two
+ *  candidates, since what distinguishes this reading from the table beside it
+ *  is that it is one thing after another rather than one row per player. */
+function FeedGlyph() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="19"
+      height="19"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      aria-hidden="true"
+      style={{ flex: 'none' }}
+    >
+      <path d="M4 6h3M4 12h3M4 18h3" />
+      <path d="M11 6h9M11 12h9M11 18h6" />
+    </svg>
+  );
+}
+
+/** The four tabs, and which `view` values each of them owns. The Roster tab
+ *  covers two, so the strip cannot test equality — a `Roster` pill unlit while
+ *  the Feed reading is on screen would be the row lying about where you are. */
+function mainTab(v: View): 'roster' | 'matchup' | 'research' | 'league' {
+  return v === 'summary' || v === 'feed' ? 'roster' : v;
 }
 
 /** Which of the two roster views a date range belongs to — see `dateScope`. */
@@ -470,6 +504,10 @@ export default function App() {
     // alternative, silently dropping to Roster, would leave a reader who was
     // handed a link with nothing on screen to explain where it went.
     if (v === 'league') return 'league';
+    // Same bargain as League, one tab over: it needs a connected league to draw
+    // anything, and a link naming it is read before the ESPN status has landed.
+    // It opens, and says why if there is no league behind it.
+    if (v === 'matchup') return 'matchup';
     // **Three dead view names, all meaning the feed.** `games` was the
     // card-per-player page and `players` its own older name; both became the
     // feed's grouping, and the grouping has since become the player page's
@@ -489,6 +527,14 @@ export default function App() {
      guarded on `isRosterView` so Research and League leave the last roster
      view's range standing rather than swapping it — see `dateScopeRef`. */
   if (isRosterView(view)) dateScopeRef.current = view === 'feed' ? 'feed' : 'summary';
+  /* **Which reading the Roster tab returns to.** The tab covers two `view`
+     values and a press on it has to mean *the page*, not one of its readings —
+     so a reader who was in the stream, went to Research and came back finds the
+     stream. Written during render on the same terms as `dateScopeRef` above:
+     derived purely from `view`, idempotent, and only while a roster reading is
+     on screen, so a crossing leaves the last one standing. */
+  const lastRosterView = useRef<View>('summary');
+  if (isRosterView(view)) lastRosterView.current = view;
   const { start, end, preset: activePreset } = ranges[dateScopeRef.current];
   /** Move the range **of the page on screen**, which is the only one a control
    *  in the chrome can have been pressed from. The scope is read off the ref at
@@ -1626,6 +1672,19 @@ export default function App() {
     // URL keeps what it was handed until the page reports its own reading up.
     return raw === 'summary' || raw === 'feed' ? raw : 'roster';
   });
+
+  /**
+   * **A matchup page is on screen**, reached either way.
+   *
+   * There are two doors into one page — a card on the Scoreboard, which opens
+   * it *over* the League view (`mup=`), and the `Matchup` tab, which is that
+   * page as a page. Everything that is a fact about the page rather than about
+   * the door has to test both: which side of it is open (`mt=`), which reading
+   * of that side (`mr=`), the projected lens (`proj=1`) and the read behind it.
+   * Written once, because two copies of this test are two copies that will one
+   * day disagree about whether the lens is drawn.
+   */
+  const matchupPageOpen = view === 'matchup' || (view === 'league' && matchupId != null);
   const [rankSpan, setRankSpan] = useState<EspnRankSpan>(() => {
     const raw = initialParams.get('lspan');
     // **`matchup` is the default**, which is the week a manager opens this tab
@@ -1886,9 +1945,14 @@ export default function App() {
    * already needed it.
    */
   const needsScoreboard =
-    view === 'league' &&
     espnConnected &&
-    (leagueTab === 'scoreboard' || leagueTab === 'rankings' || matchupId != null);
+    ((view === 'league' &&
+      (leagueTab === 'scoreboard' || leagueTab === 'rankings' || matchupId != null)) ||
+      // **The Matchup tab is the fourth reading that needs it**, and it needs
+      // it more plainly than the other three: the board is the only thing that
+      // says which matchup is *mine* (`myTeamId` against each row's two sides),
+      // so without it the page has not merely no figures but no subject.
+      view === 'matchup');
 
   /**
    * The scoreboard, read on entry to the League view and whenever the period
@@ -1987,7 +2051,7 @@ export default function App() {
   useEffect(() => {
     // **The matchup page is the only reader**, the Scoreboard's toggle having
     // moved there — so a reader who never opens a card never pays for it.
-    if (!projected || view !== 'league' || matchupId == null || !espnConnected) {
+    if (!projected || !matchupPageOpen || !espnConnected) {
       // **Cleared on the way out, not only on the way in.** Turning the lens off
       // while a read is in flight discards its answer — and a flag left true is
       // a ball spinning for ever on a button that is no longer doing anything.
@@ -1998,7 +2062,7 @@ export default function App() {
       return;
     }
     loadLeagueProjection();
-  }, [projected, view, matchupId, espnConnected, loadLeagueProjection]);
+  }, [projected, matchupPageOpen, espnConnected, loadLeagueProjection]);
 
   /** A projection belongs to one matchup period, so stepping the arrows drops
    *  it rather than letting last week's figures be drawn over this one. */
@@ -2970,7 +3034,7 @@ export default function App() {
     // Transactions has no figures to project — so anywhere else this would be a
     // param naming a lens that is not in force — and a parameter that cannot
     // describe the page it opens is a parameter that lies about it.
-    if (view === 'league' && matchupId != null && projected) p.set('proj', '1');
+    if (matchupPageOpen && projected) p.set('proj', '1');
     // Which matchup is open **over** the view, which is a page rather than a
     // tab — so it is written whatever tab is behind it, and a link carrying it
     // opens that page the way `player=` opens a player's.
@@ -2979,18 +3043,13 @@ export default function App() {
     // the middle. Written only alongside `mup=`, since it names a page of a
     // matchup rather than a page of the view — a `mt=` with no matchup to be a
     // side of would say nothing.
-    if (view === 'league' && matchupId != null && matchupTeam != null) {
+    if (matchupPageOpen && matchupTeam != null) {
       p.set('mt', String(matchupTeam));
     }
     // And which reading of that page. Scoped to `mt=` because a reading is a
     // reading *of a team page* — the matchup's own Summary page has none — and
     // written only off the default, the rule every param here follows.
-    if (
-      view === 'league' &&
-      matchupId != null &&
-      matchupTeam != null &&
-      matchupReading !== 'roster'
-    ) {
+    if (matchupPageOpen && matchupTeam != null && matchupReading !== 'roster') {
       p.set('mr', matchupReading);
     }
     // Omitted at the default, which is now the week being played — so a link
@@ -3426,6 +3485,12 @@ export default function App() {
    * cannot both be in force.
    */
   const toggleRosterProjected = useCallback(() => {
+    // Back to the table first, for the reason the Schedule toggle does it: this
+    // is a reading of the stat columns and the stream has none. Harmless when
+    // the reader is already there, and it must come before the state below —
+    // the `view !== 'summary'` reset would otherwise fire on the same commit
+    // and put the lens straight back out.
+    setView('summary');
     setRosterProjected((on) => {
       if (on) {
         const back = beforeProjection.current;
@@ -3546,9 +3611,9 @@ export default function App() {
     // The matchup page is where `proj=1` is drawn, written and read (see the
     // URL sync and the projection's own effect, both gated on this same pair),
     // so this is that page leaving the screen rather than being covered.
-    if (!projected || (view === 'league' && matchupId != null)) return;
+    if (!projected || matchupPageOpen) return;
     setProjected(false);
-  }, [view, matchupId, projected]);
+  }, [matchupPageOpen, projected]);
 
   useEffect(() => {
     // The tab, not the span: see above. The rankings read (up beside the
@@ -4324,6 +4389,25 @@ export default function App() {
    * lands a pill inside the edge rather than flush with it, so the strip says
    * there is more of itself to swipe to.
    */
+  /**
+   * **My own matchup this period**, which is the whole subject of the `Matchup`
+   * tab — the board is what says which of its rows is mine (`myTeamId` against
+   * each side), so the tab has no subject until it lands.
+   *
+   * Null means the board holds no row carrying this team at all, which the tab
+   * has to answer for itself. **A bye is not that case** — ESPN publishes one
+   * as an ordinary matchup with no away side, so it is found here like any
+   * other and the page draws its own bye head, which is the honest answer and
+   * one this app already had. What is left for the empty state is a period this
+   * manager is simply not in.
+   */
+  const myMatchupId = useMemo(() => {
+    const me = scoreboard?.myTeamId;
+    if (!scoreboard || me == null) return null;
+    const m = scoreboard.matchups.find((x) => x.home.teamId === me || x.away?.teamId === me);
+    return m ? m.id : null;
+  }, [scoreboard]);
+
   const leagueTabsRef = useRef<HTMLDivElement | null>(null);
   useLayoutEffect(() => {
     const row = leagueTabsRef.current;
@@ -4563,6 +4647,63 @@ export default function App() {
    * is the roster as it stood on those days, so it still says whose roster is on
    * screen even when nothing on screen is drawn from those days.
    */
+  /**
+   * **The Feed is a reading of the Roster page, not a page beside it.**
+   *
+   * It was a tab of its own, and the argument for that was sound as far as it
+   * went — *Summary is as different from Feed as either is from Research* —
+   * but it was an argument about the two readings and not about what the tab
+   * row is for. The row says which of four **subjects** you are on: your
+   * roster, your week, the league's season, your fantasy league. The stream and
+   * the table are one subject read two ways, which is the same sentence
+   * `Schedule` and `Projected` already were: the stats behind you, the fixtures
+   * ahead, what the fixtures are worth — and the day as it happened.
+   *
+   * **So it joins that run and takes its rules.** Four readings, one of which
+   * is the plain table (nothing lit), and pressing a lit one puts it away.
+   * `scheduleSpan` and `rosterProjected` are cleared on the way in for the
+   * reason they clear each other: a stream has no stat columns for a schedule
+   * to replace or a projection to fill, so a toggle left lit would sit over a
+   * page it is not reading. (The projected lens clears itself as well, its own
+   * `view !== 'summary'` reset restoring the range it moved — this only has to
+   * be sure the *reading* it names is off.)
+   *
+   * **The `view` value survives**, and that is deliberate rather than
+   * leftover: `view=feed` is in every link in the wild, the stream keeps its
+   * own date range (`DateScope`), its own scroll memory and its own five
+   * params, and none of that is chrome. What changed is which row the control
+   * sits in.
+   */
+  const feedToggle =
+    isRosterView(view) && showRosterViews ? (
+      <button
+        type="button"
+        /* Folded onto `.research-toggle`'s selector lists rather than styled
+           anew, so the four readings of this page are one object by
+           construction. A plain switch with no panel, so it takes `.on` and
+           never `.active`. */
+        className={`feed-toggle${view === 'feed' ? ' on' : ''}`}
+        aria-pressed={view === 'feed'}
+        onClick={() => {
+          if (view === 'feed') {
+            setView('summary');
+            return;
+          }
+          setScheduleSpan(null);
+          setRosterProjected(false);
+          setView('feed');
+        }}
+        title={
+          view === 'feed'
+            ? 'Back to the stat table'
+            : 'Read these days as they happened — every plate appearance and outing in the order it came'
+        }
+      >
+        <FeedGlyph />
+        <span className="feed-toggle-label">Feed</span>
+      </button>
+    ) : null;
+
   const scheduleControl = (
       <ScheduleToggle
         on={scheduleSpan !== null}
@@ -4572,6 +4713,11 @@ export default function App() {
             setScheduleSpan(null);
             return;
           }
+          // **The reading run is four wide and one deep**, so turning this on
+          // from the stream comes back to the table it is a reading *of* —
+          // the same exclusivity stated one control over. Without it a press
+          // would light a toggle whose columns are on a page nobody is on.
+          if (view !== 'summary') setView('summary');
           // **The projected lens goes off with it**, which is the same
           // exclusivity `toggleRosterProjected` states from the other side:
           // this replaces the stat *columns* with days and that replaces the
@@ -4699,6 +4845,78 @@ export default function App() {
   ) : null;
 
   /* ---------------------------------------------------------------------
+     The tools row — the band under the tabs, above the dates.
+     ---------------------------------------------------------------------
+
+     **Every control that says which *reading* of the page you are on**, in one
+     row of its own: the Roster's four readings (Feed, Schedule, Projected and
+     the plain table, which is none of them lit) with the stream's order beside
+     them, the League view's own three tabs and the Rankings span and lens, and
+     the research board's whole control set portalled in.
+
+     They were all in the tab row, as groups beside the page pills, and the row
+     wrapped between whole groups as the width allowed. That was one row saying
+     two different kinds of thing — *which page* and *which reading of it* —
+     and it was the page pills that paid for it: the control a reader looks for
+     first was the same weight as a span strip, and moved down the window as the
+     window narrowed. Split, the tabs are the width of the page and always the
+     first line, and the readings have a line of their own to wrap inside.
+
+     **And this row scrolls away where the tabs do not.** That is the whole
+     bargain the split buys: which page you are on is the last thing that should
+     leave the screen, and which reading is a thing you set on arrival — so the
+     tabs are pinned, this is in the page, and the dates come back under the
+     tabs once it has gone (see `dateBar`). On the Roster's table reading both
+     this and the bar are rendered *inside the table's own scroller*, which is
+     what puts them and the sticky header row against the same scrollport —
+     see `paneChrome` below.
+
+     Its groups keep the tab row's own rule — each is `flex: none`, so the row
+     fits as many whole ones per line as the width allows and breaks between two
+     rather than inside one. The order is the order the questions come in:
+     which reading, then how it is ordered, then what it is drawn from. */
+  const rosterTools = isRosterView(view) && showRosterViews && !editMode;
+  const viewTools =
+    rosterTools || view === 'research' || (view === 'league' && espnConnected) ? (
+      <div className="view-tools">
+        {/* Scoreboard / Rankings / Transactions. */}
+        {leagueTabs}
+        {/* Which span the Rankings table is drawn from. */}
+        {leagueSpanTabs}
+        {/* And whether it is drawn to the end of the week. */}
+        {leagueRankProjected}
+        {rosterTools && (
+          <>
+            {/* The day as it happened, in place of the table — see `feedToggle`. */}
+            {feedToggle}
+            {/* The days ahead, in place of the stat columns — see `scheduleControl`. */}
+            {scheduleControl}
+            {/* And what those days are worth — see `projectedToggle`. */}
+            {projectedToggle}
+            {/* Which way the stream's clock runs — see `feedOrderToggle`. The one
+                feed control up here, and the pills are not: an order is wanted
+                halfway down a stream, where a kind of play is chosen on arrival. */}
+            {feedOrderToggle}
+          </>
+        )}
+        {/* The research board's own controls. They are the same kind of
+            statement as everything else in this row — which players, which
+            span, which position, which columns of them — and they sat in the
+            tab row until the tabs became the width of the page.
+
+            The box is empty here and filled by `ResearchTable`, which portals
+            its bar into it: the controls are inseparable from the board's
+            column vocabulary and belong in the file that owns it (see the
+            portal there). `.research-chrome` and `.research-bar` are
+            `display: contents` so their groups are items of *this* flex
+            container and take part in its wrap; a box of their own would move
+            as one block or not at all. Rendered only on the research view, so
+            no other page carries an empty row of chrome. */}
+        {view === 'research' && <div className="research-chrome" ref={setResearchChrome} />}
+      </div>
+    ) : null;
+
+  /* ---------------------------------------------------------------------
      The date bar — the full-width strip under the tabs.
      ---------------------------------------------------------------------
 
@@ -4766,6 +4984,9 @@ export default function App() {
   const nextStep = stepTo(1);
   const dateBar = (
     <DateBar
+      /* The one bar whose height the app publishes — `--date-bar-h`, which is
+         what the summary table's header row sticks below. See `measure`. */
+      measure
       reading={barReading}
       start={barSpan.start}
       end={barSpan.end}
@@ -4836,6 +5057,37 @@ export default function App() {
       popoverLabel="Pick a range on the calendar"
     />
   );
+
+  /**
+   * **The table's reading takes the tools row and the dates into its own
+   * pane**, and this is the one test that decides it.
+   *
+   * `.app.summary-mode` is a viewport-tall flex column in which only
+   * `.summary-scroll` scrolls, and `position: sticky` sticks to *the box that
+   * scrolls*. So a date bar left in the page there is pinned to a column that
+   * never moves — it would simply sit where it was laid out — while the table's
+   * own header row is pinned to the pane, 54px lower and behind nothing. The
+   * two would be one band on screen and two bands to the browser, and the gap
+   * between them is where the first row of the table would disappear.
+   *
+   * Inside the pane both stick against the same scrollport, one under the
+   * other, and the tools row above them scrolls away with the rows — which is
+   * the whole of what this arrangement is for.
+   *
+   * **`viewCards.length` is in the test because the pane is**: with nothing to
+   * draw, `SummaryTable` is not rendered at all, so there is no pane to hand
+   * them to and they go back in the page above the empty state. Missing that is
+   * a roster page with no dates on it, which is exactly the state the full-page
+   * mode's own rule forbids.
+   */
+  const tableTakesChrome = view === 'summary' && !editMode && viewCards.length > 0;
+  /** The two rows, as the pane's own first children — see `tableTakesChrome`. */
+  const paneChrome = tableTakesChrome ? (
+    <>
+      {viewTools}
+      {showRosterViews && dateBar}
+    </>
+  ) : null;
 
   // The search bar the header icon opens: a full-width row directly under the
   // header, above the view tabs. It is a row of its own rather than an overlay
@@ -4977,6 +5229,14 @@ export default function App() {
          one — it took this page over when Edit moved off the Games view. */
       className={`app${view === 'summary' && !editMode ? ' summary-mode' : ''}${
         view === 'research' ? ' research-mode' : ''
+      }${
+        /* The matchup page is a page of its own with its own pinned band and
+           its own scroller — as an overlay it was `position: fixed; inset: 0`
+           and got that for free. As a tab it needs the column the other two
+           fixed-height views take, for the identical reason: a team page's
+           roster reading pins the table's header row, and a sticky row sticks
+           to the box that scrolls. */
+        view === 'matchup' ? ' matchup-mode' : ''
       }${
         /* The Rankings tab is a wide table read across and wants the same
            fixed-height column the board has, so its header row can pin to a
@@ -5386,87 +5646,107 @@ export default function App() {
       {/* Across the top, under the header — see `searchBar`. */}
       {searchBar}
 
-      {/* Three tiers of tabs, in the order the choices actually nest.
-          **Roster · Feed · Research**, one row and three pages, with Batters /
-          Pitchers beside them applying to the first two.
+      {/* **The main tabs: Roster · Matchup · Research · League.**
 
-          It was two tiers until the Games view went. The top row was the real
-          division — the watchlist over a range against the whole league over a
-          season — and under it sat Roster's own Summary / Games / Feed. Folding
-          Games into the feed as a grouping (see `View`) left that sub-row with
-          two tabs, and a tier of chrome to hold one choice is a tier too many:
-          Summary and Feed are as different from each other as either is from
-          Research, so they read as siblings of it rather than as a drawer under
-          one of them. Feed sits in the middle, between the roster it reports on
-          and the league it doesn't.
+          Four pages, one strip, and the strip is the *width of the window* with
+          the page you are on underlined — the shape the player page's own tabs
+          have always had (`.details-tabs`), applied one tier up.
 
-          The search no longer appears here in any case — it is in the header
-          now, which is also what lets the tabs stay hidden until something is
-          watched without stranding a new user: the only way to add a first
-          player is app chrome, not a bar that comes and goes with the view. */}
+          It was a **segmented control** in a wrapping row of tab groups, and
+          both halves of that were the same compromise: a pill run sized to its
+          words sat at the left of a row it shared with the kind tabs, the
+          reading toggles, the league's own tabs and the whole research control
+          set, and the row's rule was that it wrapped between whole groups. So
+          the one control that says *which page of the app you are on* was the
+          same weight as a control deciding which span a table is drawn over,
+          and it moved down the page as the window narrowed. Full width, it is
+          the first thing on the page and the same thing at every width, and the
+          underline is the app's own way of saying *this one* where a filled
+          pill is how it says *this option*.
+
+          **It keeps its own class rather than growing out of `.view-switch`**,
+          which is the standing rule read the other way round: two things that
+          are the same object share a selector list, and these two have stopped
+          being the same object. `.view-switch` is still the segmented control —
+          the Schedule spans, a matchup's tools, the opposing-lineup cuts — and
+          a fold that had this strip and those pills agreeing about a border and
+          a radius would be one rule holding two shapes apart by exception.
+
+          **Roster covers two `view` values**, the table and the feed, which is
+          why the strip tests `mainTab(view)` rather than equality: the Feed is
+          a *reading* of the Roster page now (see the tools row below), and a
+          `Roster` pill unlit while its feed is on screen would be the row lying
+          about where you are.
+
+          The search no longer appears here — it is in the header, which is also
+          what lets the tabs stay hidden until something is watched without
+          stranding a new user: the only way to add a first player is app
+          chrome, not a bar that comes and goes with the view. */}
       {showViewToggle && (
         <div className="view-bar">
-          <div className="view-bar-tabs">
-            {/* **The whole tablist waits on `initialLoadSettled`, element and
-                all** — see where it's computed. It is drawn all at once rather
-                than a pill at a time, since Research needs no roster and has
-                nothing else gating it, and showing it a beat before its
-                siblings is exactly the flicker this waits out.
+          {/* **The whole tablist waits on `initialLoadSettled`, element and
+              all** — see where it's computed. It is drawn all at once rather
+              than a tab at a time, since Research needs no roster and has
+              nothing else gating it, and showing it a beat before its siblings
+              is exactly the flicker this waits out.
 
-                The gate is on the `<div>` rather than inside it, and that is
-                the whole of a fix rather than a detail: `.view-switch` is a
-                *segmented control*, so it carries a `--panel` ground, a border,
-                a 12px radius and `min-height: var(--control-h)` of its own.
-                Empty, it drew all of that around nothing — an **8 × 36px** nub
-                (3px of padding a side plus the border) sitting at the left of
-                the chrome for the whole of the first read, which reads as a
-                broken control rather than as a bar that has not filled in yet.
-                It also put an empty `role="tablist"` in the accessibility tree.
-                Nothing else in `.view-bar-tabs` is affected — the kind tabs,
-                the roster row's own controls and the research board's chrome
-                are gated on their own conditions and none of them depends on
-                the report. */}
-            {initialLoadSettled && (
-            <div className="view-switch" role="tablist" aria-label="Page">
-              <>
-              {/* Nothing watched, nothing to put on either roster page — so
-                  these two pills only appear once there is something to read. */}
+              The gate is on the element rather than inside it, and that is the
+              whole of a fix rather than a detail: the strip carries a rule
+              along its foot and a `--control-h` floor of its own, so an empty
+              one drew a bare line across the top of the page for the whole of
+              the first read — a broken control rather than a bar that has not
+              filled in yet. It also put an empty `role="tablist"` in the
+              accessibility tree. Nothing under the strip is affected: the tools
+              row, the date bar and the research board's own chrome are gated on
+              their own conditions and none of them depends on the report. */}
+          {initialLoadSettled && (
+            <div className="main-tabs" role="tablist" aria-label="Page">
+              {/* Nothing watched, nothing for either reading to report on — so
+                  this tab only appears once there is something to read. */}
               {showRosterViews && (
                 <button
                   type="button"
                   role="tab"
-                  aria-selected={view === 'summary'}
-                  className={`view-tab${view === 'summary' ? ' active' : ''}`}
+                  aria-selected={mainTab(view) === 'roster'}
+                  className={`main-tab${mainTab(view) === 'roster' ? ' is-active' : ''}`}
                   onClick={() => {
-                    // The reorder screen lives on this page now, so coming back
-                    // to it is not a reason to close it. The other two are.
-                    setView('summary');
+                    // Back to the reading it was left on, which is what makes
+                    // the Feed a reading rather than a page: a reader who was
+                    // in the stream and went to Research returns to the stream.
+                    // The reorder screen lives on this page, so coming back to
+                    // it is not a reason to close it — the other three are.
+                    setView(lastRosterView.current);
                   }}
                 >
                   Roster
                 </button>
               )}
-              {showRosterViews && (
+              {/* **This week's opponent.** It needs a league for the same
+                  reason League does — there is no matchup without one — and it
+                  is drawn the moment one is connected, in either roster mode:
+                  whose week it is, is a fact about the league rather than about
+                  which list the roster readings are drawn from. */}
+              {espnConnected && (
                 <button
                   type="button"
                   role="tab"
-                  aria-selected={view === 'feed'}
-                  className={`view-tab${view === 'feed' ? ' active' : ''}`}
+                  aria-selected={view === 'matchup'}
+                  className={`main-tab${view === 'matchup' ? ' is-active' : ''}`}
                   onClick={() => {
                     setEditMode(false);
-                    setView('feed');
+                    setView('matchup');
                   }}
                 >
-                  Feed
+                  Matchup
                 </button>
               )}
-              {/* Always present, watchlist or not — the league board is the
-                  one page that doesn't depend on what you're tracking. */}
+              {/* Always present, roster or not — the league board is the one
+                  page that doesn't depend on what you're tracking. */}
               <button
                 type="button"
                 role="tab"
                 aria-selected={view === 'research'}
-                className={`view-tab${view === 'research' ? ' active' : ''}`}
+                className={`main-tab${view === 'research' ? ' is-active' : ''}`}
                 onClick={() => {
                   setEditMode(false);
                   setView('research');
@@ -5474,19 +5754,12 @@ export default function App() {
               >
                 Research
               </button>
-              {/* Where Research needs no roster and is therefore always
-                  present, this one needs a **league** — there is no scoreboard
-                  without one, and a pill leading to a page that could only ever
-                  say "connect a league" is chrome for a feature the reader
-                  hasn't got. Drawn the moment one is connected, in either
-                  roster mode: the league's matchups are a fact about the league
-                  rather than about which list the roster views are reading. */}
               {espnConnected && (
                 <button
                   type="button"
                   role="tab"
                   aria-selected={view === 'league'}
-                  className={`view-tab${view === 'league' ? ' active' : ''}`}
+                  className={`main-tab${view === 'league' ? ' is-active' : ''}`}
                   onClick={() => {
                     setEditMode(false);
                     setView('league');
@@ -5495,97 +5768,28 @@ export default function App() {
                   League
                 </button>
               )}
-              </>
             </div>
-            )}
-            {/* Batters / Pitchers. */}
-            {/* Scoreboard / Rankings / Transactions. */}
-            {leagueTabs}
-            {/* Which span the Rankings table is drawn from. */}
-            {leagueSpanTabs}
-            {/* And whether it is drawn to the end of the week. */}
-            {leagueRankProjected}
-            {/* The roster row's own reading controls. All of it in the one
-                wrapping row:
-                each group is `flex: none`, so the row fits as many whole groups
-                per line as the width allows and breaks between them rather than
-                inside one — the order is the order the questions come in (which
-                page, which kind, which reading of it, which players, which
-                days), and where the line falls is the window's business rather
-                than something fixed in the markup.
-
-                Where the Summary / Games / Feed switch used to be: those three
-                became two pages and a toggle, so what stood here as a tab group
-                now stands here as the toggle that replaced the third of them. */}
-            {isRosterView(view) && showRosterViews && (
-              <>
-              {/* Which reading of these players — the stats over the range, or
-                  the days ahead. See `scheduleControl`. */}
-              {view === 'summary' && scheduleControl}
-              {/* And what the days ahead are worth — see `projectedToggle`. */}
-              {view === 'summary' && projectedToggle}
-              {/* Which way the feed's clock runs — see `feedOrderToggle`. The
-                  one feed control up here, and the pills are not: an order is
-                  wanted halfway down a stream, where a kind is chosen on
-                  arrival. */}
-              {feedOrderToggle}
-              {/* Which kinds of play the feed draws is no longer here: the
-                  `Plays` disclosure and its panel became a row of pills at the
-                  head of the stream itself — see `feedFilterPills`. Nor are the
-                  dates: the calendar that ended this row is a bar of its own
-                  below it now — see `dateBar` — which gives this row back the
-                  89px it spent at a desktop (36 on a phone) and buys the label
-                  the width of the window. Measured, that is what takes the row
-                  from three wrapped lines to two at 390. */}
-              </>
-            )}
-            {/* The research board's own controls, in the tab row itself. They
-                are the same kind of statement as the pills beside them — which
-                page, then which players, which span, which position, which
-                columns — and they sat below the chrome as a band of their own
-                until now, so the page opened on two stacked control areas with
-                nothing on screen to say why they were two.
-
-                In the row rather than merely in the box, because this row is
-                already the app's answer to "too many groups for one line": each
-                group is atomic and the wrap fits as many whole ones per line as
-                the width allows. So on a wide screen the whole control set
-                finishes the tab row, and as the window narrows the last group
-                drops to a line of its own — the same behavior the kind tabs and
-                the date button have always had here, and nothing pins which
-                group lands where. `.research-chrome` and `.research-bar` are
-                `display: contents` for exactly that reason: the groups have to
-                be items of *this* flex container to take part in its wrap, and a
-                box of their own would move as one block or not at all.
-
-                The box is empty here and filled by `ResearchTable`, which
-                portals its bar into it: the controls are inseparable from the
-                board's column vocabulary and belong in the file that owns it
-                (see the portal there). Rendered only on the research view, so no
-                other page carries an empty row of chrome. */}
-            {view === 'research' && <div className="research-chrome" ref={setResearchChrome} />}
-          </div>
+          )}
         </div>
       )}
-      {/* The dates, as a bar of their own under the tabs — see `dateBar`.
-
-          **Inside `.app-chrome` and outside `.view-bar`.** Inside, because
-          `--chrome-h` is one measurement of one pinned box and everything that
-          clears the chrome (the scroll offset, the sticky table headers, the
-          per-page scroll memory) reads it; a bar pinned separately would be a
-          second height for the same bargain. Outside `.view-bar`, because that
-          row's whole rule is that its groups are atomic and wrap as the width
-          allows, and this one is not a group — it is a line, always, and it
-          spans the window rather than sitting in the slack of a row.
-
-          Drawn on the two roster views alone and only once there is something
-          to read, which is the guard the calendar carried in the row: the
-          research board has nothing dated to act on, and the League page's
-          dates are its own. It goes with the rest of the chrome on the edit
-          screen through `.app.edit-mode`, which now names it — it used to
-          inherit that by being inside `.view-bar`. */}
-      {isRosterView(view) && showRosterViews && dateBar}
       </div>
+      {/* ↑ `.app-chrome` closes here, and it closes one row earlier than it
+          used to. The date bar was the last thing inside it; the tools row and
+          the bar are both in the **page** now, and only the title row and the
+          tabs are pinned.
+
+          What that buys is the thing the reader asked for and the thing this
+          app's chrome had quietly stopped doing: the bar reached 303px at 320px
+          wide, most of a phone held sideways, because everything that could be
+          called chrome was in it. Pinned, it is the header and four tabs — one
+          line, at every width — and the readings scroll away with the page they
+          are about.
+
+          The bar itself is still pinned, one tier down: `.date-bar` is sticky
+          under the chrome on every page that scrolls the window, and inside the
+          table's own scroller on the one that doesn't. Either way it is the
+          dates and the column headers that stay, which is what a stat table
+          read down thirty rows actually needs on screen. */}
 
       {/* Outside the pinned box on purpose: a failed report is news about the
           page rather than a control over it, and it would otherwise hold a
@@ -5601,6 +5805,26 @@ export default function App() {
       {scheduleError && (
         <div className="error-banner">⚠ Couldn’t read the schedule — {scheduleError}</div>
       )}
+
+      {/* The tools row and the dates, in the page — **except on the one page
+          that does not scroll the page**.
+
+          The Roster's table reading is a viewport-tall flex column in which
+          only `.summary-scroll` scrolls, and a sticky box sticks to the box
+          that scrolls. Left out here, the bar would be pinned above a pane it
+          is not inside and the table's own header row would be pinned inside a
+          pane whose top is 54px lower — two things stuck to two different
+          edges, saying they are one band. So on that reading both are handed to
+          `SummaryTable` and rendered as the first children of the pane itself
+          (`paneChrome`), where the tools row scrolls away with the rows and the
+          bar and the header row stick against the same scrollport, one under
+          the other.
+
+          Everywhere else the window is the scroller and this is the plain
+          arrangement: the tools row in the flow, the bar sticky under the
+          pinned chrome. */}
+      {!tableTakesChrome && viewTools}
+      {!tableTakesChrome && isRosterView(view) && showRosterViews && dateBar}
 
       {/* `!usingFantasy`, because this block is about the *saved* list and in
           fantasy mode the views are not reading it: a user with an ESPN team
@@ -5725,7 +5949,86 @@ export default function App() {
       )}
 
 
-      {view === 'league' ? (
+      {/* **This week's opponent, as a tab of its own.**
+
+          It is the same page the Scoreboard opens over itself — one component,
+          drawn `standalone` (see `LeagueMatchup.tsx`) — because a matchup read
+          from a card and a matchup read from the tab strip are the same
+          matchup. What the tab adds is that it is *mine*: the board is asked
+          which row carries `myTeamId` and the page opens on it, where from the
+          Scoreboard the reader names the card.
+
+          Three states before there is a page, and each says its own cause
+          rather than sharing one: no league (the tab is drawn anyway, so a
+          reader who has not connected one is told why rather than shown a
+          blank), no board yet (the app's ordinary block wait, named), and no
+          row for this team on the board there is. A **bye** is none of those —
+          it is a matchup with one side, found like any other, and the page has
+          its own head for it. */}
+      {view === 'matchup' ? (
+        !espnConnected ? (
+          <div className="empty-state">
+            <p className="empty-title">No league connected</p>
+            <p>
+              Connect your ESPN league to read this week&rsquo;s matchup — use the fantasy
+              button in the header.
+            </p>
+            <div className="empty-actions">
+              <button type="button" className="empty-help" onClick={openEspnSettings}>
+                Connect a league
+              </button>
+            </div>
+          </div>
+        ) : scoreboard === null ? (
+          scoreboardError ? (
+            <div className="empty-state">
+              <p className="empty-title">Couldn&rsquo;t read your league</p>
+              <p>{scoreboardError}</p>
+            </div>
+          ) : (
+            <LoadingBlock>Reading your league&rsquo;s scoreboard</LoadingBlock>
+          )
+        ) : myMatchupId === null ? (
+          <div className="empty-state">
+            <p className="empty-title">No matchup for your team this week</p>
+            <p>
+              This period&rsquo;s scoreboard has no row for your team. The League tab has
+              the rest of it.
+            </p>
+          </div>
+        ) : (
+          <LeagueMatchupView
+            standalone
+            board={scoreboard}
+            matchupId={myMatchupId}
+            /* Which page of it, and which reading of that page — the same two
+               params the overlay writes (`mt=`, `mr=`), because they describe
+               the same three pages however the matchup was reached. */
+            initialTeamId={matchupTeam}
+            onSideTeam={setMatchupTeam}
+            initialReading={matchupReading}
+            onReading={setMatchupReading}
+            /* Never called — there is nothing behind a tab to go back to, and
+               `standalone` is what draws neither the Back row nor the Escape
+               listener that would call this. */
+            onClose={() => {}}
+            onOpenDetails={setDetailsKey}
+            projection={projection}
+            projected={projected}
+            projectionLoading={projLoading}
+            onProjected={setProjected}
+            presets={presets}
+            maxDate={maxDate}
+            today={baseballToday()}
+            scheduleWindow={scheduleWindow}
+            scheduleLoading={scheduleLoading}
+            matchupWindow={matchupWindow}
+            onNeedSchedule={needSchedule}
+            transactions={transactions}
+            onOpenPlayer={openLeaguePlayer}
+          />
+        )
+      ) : view === 'league' ? (
         <LeagueView
           tab={leagueTab}
           board={scoreboard}
@@ -5842,6 +6145,10 @@ export default function App() {
           <SummaryTable
             reports={viewCards}
             onOpenDetails={setDetailsKey}
+            /* The tools row and the dates, rendered as the pane's own first
+               children so the bar and the table's header row stick against the
+               same scrollport — see `tableTakesChrome`. */
+            paneChrome={paneChrome}
             /* Null while the mode is off *and* while its one read is still out,
                so the stat columns stand until the days can replace them. */
             schedule={scheduleIndex}
@@ -5866,7 +6173,15 @@ export default function App() {
                     instead. The mode and its span most of all: a table of dates
                     with nothing on screen saying how far they run is the state
                     this must never be in, and the control is also the way back
-                    to the stats without leaving the page. */}
+                    to the stats without leaving the page.
+
+                    **The Feed toggle is deliberately not here.** The other two
+                    are readings of *this table* and the way back out of them is
+                    this row; the stream is a different page's worth of content
+                    and there is no table for the full-page box to be around
+                    once it is on — pressing it would empty the very box the
+                    control sits in. It is a press away, up in the tools row,
+                    once the box is closed. */}
                 {scheduleControl}
                 {projectedToggle}
                 {/* The bar comes with them, and takes a line of its own here

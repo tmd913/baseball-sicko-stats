@@ -435,6 +435,7 @@ export default function LeagueMatchupView({
   initialReading,
   onReading,
   onClose,
+  standalone,
   onOpenDetails,
   projection,
   projected,
@@ -479,6 +480,24 @@ export default function LeagueMatchupView({
    *  the rule `onSideTeam` follows one line up. */
   onReading?: (reading: MatchupReading) => void;
   onClose: () => void;
+  /**
+   * **The same page, as a tab rather than as a box over one.**
+   *
+   * This component is drawn in two places and they are the same page: the
+   * League view's Scoreboard opens a *card* as a page over itself, and the
+   * `Matchup` tab opens the reader's own week as a page of the app. What
+   * differs is not the matchup but what is behind it — an overlay covers a
+   * view and has to pin it, inert it, take its focus and give it back on
+   * Escape; a tab has nothing behind it to do any of that to.
+   *
+   * So the flag turns off exactly those four and the way out that goes with
+   * them (`onClose` is never called, and the Back row is not drawn — the tab
+   * strip above is the navigation). Everything the page *is* — the three
+   * readings, the strip, the dates, the tools, the bars — is untouched, which
+   * is the point: two drawings of one page, not two pages that resemble each
+   * other.
+   */
+  standalone?: boolean;
   onOpenDetails: (key: string) => void;
   /**
    * **Where this week is heading**, and the reader's own lens on it — the
@@ -524,9 +543,11 @@ export default function LeagueMatchupView({
   matchupWindow: MatchupWindow | null;
   onNeedSchedule: () => void;
 }) {
-  useLockBodyScroll();
+  // Both off in the standalone reading — see `standalone`. A page does not pin
+  // the document it is part of, and there is no background outside a tab.
+  useLockBodyScroll(!standalone);
   const viewRef = useRef<HTMLDivElement | null>(null);
-  useOverlayFocus(viewRef);
+  useOverlayFocus(viewRef, undefined, !standalone);
   /**
    * **The band is measured rather than declared**, which is what carrying a
    * team page's controls costs it: the head is one row of tabs on the Summary
@@ -932,6 +953,10 @@ export default function LeagueMatchupView({
    * table box lives *inside* this overlay and answers for itself.
    */
   useEffect(() => {
+    // Nothing to close in the standalone reading, and that is the whole test:
+    // one press of Escape undoes exactly one thing, so a listener that answers
+    // and then does nothing would swallow the press a dialog above it wanted.
+    if (standalone) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       if (viewRef.current?.querySelector('.is-expanded')) return;
@@ -940,7 +965,7 @@ export default function LeagueMatchupView({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, standalone]);
 
   // Turning the Schedule view on is what asks App for the window; it is one
   // read per session, shared with the roster views' own copy of this mode.
@@ -1028,7 +1053,11 @@ export default function LeagueMatchupView({
             around the text `‹ Back`, which is the same *class* as the player
             page's and was not the same button: 65.03 × 31 against 80.08 × 34,
             the chevron being an 18px icon there and a text glyph here. */}
-        <BackButton onClose={onClose} />
+        {/* The way back, and only where there is somewhere to go back *to*: the
+            Scoreboard card this was opened from. As the `Matchup` tab it is a
+            page of the app and the tab strip above is how you leave it, so a
+            Back button here would be a control pointing at nothing. */}
+        {!standalone && <BackButton onClose={onClose} />}
         {/* Printed rather than navigable. The arrows are the Scoreboard's,
             which is the page about *which* week; here the week is context the
             numbers cannot be read without — a live period's totals cover the
@@ -1798,7 +1827,9 @@ export default function LeagueMatchupView({
       <div
         ref={viewRef}
         tabIndex={-1}
-        className={`mup-view${sideTeamId !== null && reading !== 'feed' ? ' roster-mode' : ''}`}
+        className={`mup-view${standalone ? ' mup-page' : ''}${
+          sideTeamId !== null && reading !== 'feed' ? ' roster-mode' : ''
+        }`}
       >
         {head(nav, barsKey, sideTeamId !== null ? tools : null)}
 

@@ -936,9 +936,19 @@ feed 207/159/159/159/111/115/115/115, research 347/255/255/207/159/207/207/161).
 
 ### The three tabs are in the app's tab row
 
+*(The row they moved into is `.view-tools` now, a band under the tabs rather
+than the tab row itself — see **Client**, *The tabs are the width of the window*.
+Nothing in this section changes but the name: the main tabs became a full-width
+underlined strip and everything that says which **reading** of a page you are on
+— these three, the Rankings span, its `Projected` toggle, the roster's four
+readings and the research board's whole control set — moved down one row
+together, keeping the same `flex: none` wrap rule and the same measurements. The
+one thing that genuinely changed is that the band scrolls away, being in the
+page: which page you are on is pinned, which tab of it is not.)*
+
 **They rendered on the page, directly above what they selected**, which is where
 a tab strip belongs when the page is all there is — and this app already has a
-row for exactly that statement. `.view-bar-tabs` holds the view switch, the kind
+row for exactly that statement. `.view-bar-tabs` held the view switch, the kind
 tabs and the roster row's own controls, and its whole rule is that each group is
 `flex: none` so the row fits as many whole groups per line as the width allows.
 A second strip of tabs an inch under the first read as a different kind of

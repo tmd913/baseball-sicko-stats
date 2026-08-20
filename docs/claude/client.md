@@ -19,7 +19,7 @@ The words are now used one way each, everywhere. See **Roster, watchlist, users 
 
 A roster entry is identified by **`${kind}-${id}`** (`playerKey()` in both `types.ts` files), not by the MLB id: a **two-way player is two entries**, watched as a hitter, as a pitcher, or both. `getSeasonPlayers` emits a row per kind for primary-position code `Y`, so the roster search offers Ohtani twice. Everything downstream keys on that: `store.ts` (add dedupes on kind+id; `removeRosterPlayer(id, kind)` — omitting `kind` removes every entry for the id, which is what a pre-two-way client means), `PlayerAdder`'s watched-set and `detailsKey`. (Three more have gone: `expandedKeys` and the `id="player-<key>"` the summary table's names used to scroll to, retired when one player's day became the player page's own tab and the jump became a plain `setDetailsKey`; and the feed's own `feedOpenKeys`, retired when every openable shape in the feed became a **popup** rather than an accordion and its open state stopped being anything App had to name — see **Details are popups, not accordions** below.) `PUT /api/watchlist/order` takes **`keys`**, usually just one kind's, and `reorderRoster` splices them back into the slots that kind already occupied so the other kind never moves. **The watchlist is nothing but those keys** — `PUT /api/watch` takes one and a boolean — which is what makes a two-way player watchable as a pitcher and not as a batter, exactly as he is rosterable as one and not the other.
 
-**Three views, one row of tabs: Roster · Feed · Research.** Roster is the summary table over the date range, Feed the same players and days read as a stream, Research the whole league over the season.
+**Three views, one row of tabs: Roster · Feed · Research.** *(Superseded — the row is four tabs and the Feed is a reading of the Roster page; see **Four tabs, and the Feed became a reading of the Roster** below. Kept as written, this file's rule for its own reasoning, because the argument that collapsed the two tiers is the argument that later moved the Feed as well.)* Roster is the summary table over the date range, Feed the same players and days read as a stream, Research the whole league over the season.
 
 It was two tiers once, and the thing that collapsed it is worth keeping because it is the same observation twice. The top row was the real division — the roster over a range against the league over a season — and under it sat Roster's own **Summary / Games / Feed**, three readings of one set of players over one set of days. But Games and Feed were not two readings. Games was a card per player over the range; the feed was a stream over the same range; what differed was the **sort order**, roster against clock. Sorting is not a page. So Games became a grouping *on* the feed, and Roster was left holding a single reading with a whole tier of chrome to select it.
 
@@ -30,6 +30,178 @@ What remains is three pages that really are three questions, and they read as si
 **`view` is one piece of state again** (`'summary' | 'feed' | 'research'`), the `section`/`rosterTab` pair and the `setView` shim over them having existed only to hold the two tiers apart. `summary` is still the default and still omitted from the URL — renaming the param to match the `Roster` label would cost every link in the wild and buy a word.
 
 **Three dead names are still read, and all of them mean the feed.** `view=games` was the card-per-player page and `view=players` its own older name; both became the feed's grouping, and the grouping is now the player page's Overview tab. The **feed** is where they still land, and that is the right answer rather than a lazy one: it is the same players over the same days, which is the closest thing to what those links asked for, where the page they *became* needs a player named and a bare `view=games` names none. **`group=player` and `expanded=` are read only in the sense that they are ignored** — the first URL sync drops both, the cards they named existing nowhere now. That is the courtesy `readKeys` extends to pre-two-way ids, and the safe direction for an old link to be read in: it opens on something, rather than on a default that says nothing about what was asked for.
+
+### Four tabs, and the Feed became a reading of the Roster
+
+**The row above is the record of how this got to three pages and one row, and
+the row is four tabs now: Roster · Matchup · Research · League.** Nothing in
+that argument was wrong about the two readings; it was answering the wrong
+question. *Summary is as different from Feed as either is from Research* is a
+claim about the two **readings**, and what the tab row is for is which of four
+**subjects** you are on — your roster, your week, the league's season, your
+fantasy league. The stream and the table are one subject read two ways, and the
+sentence they belong in was already written a row down: the stats behind you,
+the fixtures ahead, what the fixtures are worth. The day as it happened is the
+fourth of those, not a fifth page.
+
+**So `Feed` is a toggle in the reading run** (`feedToggle`), beside `Schedule`
+and `Projected` and folded onto `.research-toggle`'s selector lists with them,
+so the four readings are one object by construction. They are mutually
+exclusive and the plain table is *none of them lit*: pressing `Feed` clears
+`scheduleSpan` and `rosterProjected` for the reason those two already clear each
+other — a stream has no stat columns for a schedule to replace or a projection
+to fill, so a toggle left lit would sit over a page it is not reading. Pressing
+`Schedule` or `Projected` from the stream comes back to the table first
+(`setView('summary')` ahead of the state, which has to be that way round or the
+`view !== 'summary'` reset fires on the same commit and puts the lens straight
+back out).
+
+**`view` still holds `'feed'`, and that is deliberate rather than leftover.**
+Every link in the wild carries `view=feed`; the stream keeps its own date range
+(`DateScope`), its own scroll memory and its own five params, and none of that
+is chrome. What changed is which row the control sits in. `mainTab(view)` is
+what the strip tests, since the `Roster` tab covers two values and a pill unlit
+over its own stream would be the row lying about where you are; `lastRosterView`
+is a render-time ref on `dateScopeRef`'s own terms (derived from `view`,
+idempotent, written only while a roster reading is on screen) so the tab returns
+to the reading it was left on.
+
+**`Matchup` is the fourth tab and is the page the Scoreboard already had.** One
+component drawn twice — see **Client — a league matchup**, *The same page, as a
+tab*: a card on the Scoreboard opens it *over* the League view and this opens
+the reader's own week as a page of the app. What differs is not the matchup but
+what is behind it, so `standalone` turns off exactly the four things an overlay
+owes the view it covers (the pinned body, the inert background, the focus
+capture, the Escape listener) and the Back row that goes with them. `myMatchupId`
+is the board row carrying `myTeamId`; a **bye** is found there like any other,
+ESPN publishing one as a matchup with no away side, and the page draws its own
+bye head — the empty state is for a period this manager is not in at all.
+
+**`matchupPageOpen` is the one test for "a matchup page is on screen"**, either
+door. `mt=`, `mr=`, `proj=1` and the projection read all hang off it; two copies
+of that test are two copies that will one day disagree about whether the lens is
+drawn.
+
+### The tabs are the width of the window, and the chrome is two rows shorter
+
+**The strip is `.main-tabs`/`.main-tab`, full width with the active tab
+underlined**, which is `.details-tabs`' shape one tier up. It was a segmented
+control at the head of the wrapping row, and both halves of that were the same
+compromise: the one control saying which page of the app you are on had the same
+weight as a span strip, and it moved down the window as the window narrowed.
+Each tab is `flex: 1 1 0` — basis zero rather than auto, so four tabs are four
+quarters whatever their words are (`Research` is 62px of text against `League`'s
+46, and basis-auto would make the strip a set of proportions rather than a set
+of columns).
+
+**It keeps its own selector rather than folding onto `.view-switch`**, which is
+this repo's fold-don't-restyle rule read the other way round: two things that
+are the same object share a list, and these two have stopped being the same
+object. `.view-switch` is still the segmented control — the Schedule spans, a
+matchup's tools, the opposing-lineup cuts — and a fold that had this strip and
+those pills agreeing about a border, a ground and a radius would be one rule
+holding two shapes apart by exception. The strip is also **the bottom of the
+chrome**: `.view-bar` has no bottom margin, so the active tab's 2px underline
+sits on the chrome's own hairline rather than 14px above it.
+
+**Everything that is not a page is in `.view-tools`, a band in the page.** The
+roster's four readings and the stream's order, the League view's three tabs and
+the Rankings span and lens, and the research board's whole control set portalled
+in — all the things that used to share the tab row. It keeps that row's rule
+exactly (`flex: none` on every group, so the row breaks between two rather than
+inside one) and the `container-type: inline-size` the feed-order toggle's two
+thresholds are measured against came with it: `.view-tools` is a block-level box
+the width of its container, so it takes the declaration where it stands, where
+`.view-bar-tabs` was a shrink-to-fit flex item and taking containment there took
+its intrinsic contribution to nought (measured then: the whole tab row **1356 →
+0px** at 1400, every tab still painted).
+
+**And the band scrolls away, where the tabs do not.** That is the whole of what
+the split buys and it is what was asked for: which page you are on is the last
+thing that should leave the screen, and which reading is a thing set on arrival.
+The pinned box reached **303px at 320px wide** because everything that could be
+called chrome was in it; it is the title row and four tabs now — **102px at
+1200, 100 at 390, 148 at 320** (the header wrapping at that last width and
+nothing else).
+
+### The sticky ladder, and the one place it is not a ladder
+
+```
+.app-chrome    title row + tabs   pinned
+.view-tools    which reading      scrolls away
+.date-bar      which days         pinned, under the chrome
+  thead                           pinned, under the bar
+```
+
+**The bar left the chrome to make that possible**, and it is pinned on its own
+(`.app > .date-bar`, `top: var(--chrome-h)`, `z-index: 39` — under the chrome's
+41). `--chrome-h` is zero wherever the chrome is not pinned (the fixed-height
+columns, a short window), so one declaration answers three states with no rule
+per view; `@media (max-height: 560px)` unpins the bar for the reason it unpins
+the chrome, and by name rather than by inheritance, since a zero `--chrome-h`
+would otherwise leave the bar as the one thing holding a band against a 390px
+screen. `--scroll-offset` gained `--date-bar-h` with it, or a clip scrolled to
+the top of the window on the Feed lands behind 54px of dates.
+
+**`--date-bar-h` is measured, by `hooks.ts::usePublishedHeight`** — the third of
+this file's measured heights and the plainest, `--chrome-h` needing to read
+`position` off the computed style and `--details-chrome-h` needing to write onto
+an overlay rather than the root. It is **0 on the way out as well as in**: the
+property is what a table's header row sticks below, and a stale height there is
+a 54px band of nothing above the first column heading on every view with no bar.
+Only the app's own bar publishes it (`measure` on `DateBar`) — a team page's and
+the expanded box's are neither of them the one a page's header row is under.
+
+**The exception is the Roster's table reading, and it is not an exception to the
+ladder but to where the ladder is drawn.** That view is a viewport-tall flex
+column in which only `.summary-scroll` scrolls, and **a sticky box sticks to the
+box that scrolls**. A bar left in the page there is pinned to a column that never
+moves; the table's header row is pinned to the pane, 54px lower. Two boxes stuck
+to two different edges, drawn as one band, with the first rows of the table lost
+in the difference. So App hands both rows to `SummaryTable` as `paneChrome` and
+they are rendered as the pane's own first children, where they stick against the
+same scrollport — and they take `position: sticky; left: 0` as well, the pane
+scrolling in both directions, which is the horizontal pinning the legend at the
+foot of that pane already documents.
+
+**Measured at 1200×900 on the live fantasy roster**, before → after a 600px
+scroll of the pane and then 400px across it:
+
+| | at rest | scrolled down | and across |
+| --- | --- | --- | --- |
+| `.app-chrome` | y 0, h 102 | **0** | **0** |
+| `.view-tools` | y 102 | **−498** | −498, x **0** |
+| `.date-bar` | y 158 | **102** | 102, x **0** |
+| `thead` | y 212 | **156** | 156 |
+
+which is the pane's top, the bar's height on top of it, and nothing else moving.
+`thead`'s `top` is `var(--pane-bar-h, 0px)`, set to `--date-bar-h` by
+`.summary-scroll.has-pane-chrome` — a class rather than `:has(> .date-bar)`,
+because the question is *whose* bar it is: the expanded full-page box draws its
+own above the pane, and a header row held 54px down under nothing there would be
+a band of rows showing through the gap. Checked expanded: one date bar, in
+`.expanded-chrome`, `has-pane-chrome` off, `thead` at the pane's own top.
+
+**`flex: none` on both rows in the page, and that is the trap the move creates
+rather than a tidying.** The bar carries `flex: 1 1 100%` — "its own line",
+written for the wrapping rows it used to sit in — and the fixed-height views make
+`.app` a **column** flex container, where that basis is 100% of the *height*. Left
+alone, a 54px bar became the whole viewport and pushed the table off the bottom
+of it. In the chrome and in the pane it was inert, both of those being blocks.
+
+**Driven across all four tabs and four widths.** The four readings are exclusive
+and there is exactly **one** date bar in every one of them (table, Feed,
+Schedule, Projected), with the bar's lead reading `Today` / `Today` /
+`Schedule · Week 19` / `Projected` and the `Roster` tab lit throughout.
+`--chrome-h` / `--date-bar-h` go `0/54` on the Roster, `0/0` on Research,
+`102/0` on League and `0/0` on the Matchup tab (whose own bar is a team page's
+and does not publish). The feed-order toggle still loses its word at a container
+of 335 — 276 at a 320 window, 346 at 390 — which is the threshold measured on
+the old tab row, unmoved. **Page-body overflow is 0** at 320, 390, 640, 1200 and
+1920 on every view. Bundle: JS **598.51 → 602.53 KB** (178.32 → 179.11 gzipped)
+and CSS **159.28 → 161.29** (28.58 → 28.93) — 4.0KB and 2.0KB raw, 0.8 and 0.35
+over the wire, for a fourth view, a fourth reading, a tab strip, a band, a
+measured height and the how-to page's rewritten chapter.
 
 The Roster and Feed pills only render once something is on the roster (`showRosterViews`); **Research needs no roster and is always there** — with nothing rostered the bar is that lone pill, which is the one tab a new user can actually use.
 

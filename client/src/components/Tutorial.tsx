@@ -275,25 +275,43 @@ const CHAPTERS: Chapter[] = [
   {
     id: 'tut-views',
     tab: 'Views',
-    title: 'Two ways to read the day',
+    title: 'The tabs, and two ways to read a day',
     body: (
       <>
         <p>
-          <Ui>Roster</Ui> and <Ui>Feed</Ui> are two takes on the same thing: your own
-          players over the dates you picked. One is a table you read across, the other
-          a stream you read down. Pick whichever answers the question you actually
-          have. (<Ui>Research</Ui> at the end is the other thing entirely: the whole
-          league, covered in the next chapter.)
+          The tabs across the top are the four things this app is about — your{' '}
+          <Ui>Roster</Ui>, your <Ui>Matchup</Ui> this week, the whole league on{' '}
+          <Ui>Research</Ui>, and your <Ui>League</Ui>. They stay where they are as you
+          scroll.
         </p>
-        <Demo label="The view bar — the groups wrap as the window allows">
+        <p>
+          <Ui>Roster</Ui> is your own players over the dates you picked, and the row of
+          buttons under the tabs is <em>how</em> you read them: nothing pressed is the
+          stat table, <Ui>Feed</Ui> is the same players and days as a stream you read
+          down, and <Ui>Schedule</Ui> and <Ui>Projected</Ui> have their own chapters.
+          One at a time — pressing one puts the others away — and pressing the lit one
+          puts you back on the table.
+        </p>
+        <Demo label="The tabs, and the reading buttons under them">
+          {/* The two rows stack and take the stage's whole width — the stage is
+              a centered wrapping flex row, which is right for a run of chips
+              and wrong for a replica of two full-width bands: side by side, the
+              tab strip shrank to its words and the three buttons wrapped into a
+              column beside it. */}
+          <div className="tut-demo-stack">
           <div className="view-bar">
-            <div className="view-bar-tabs">
-              <div className="view-switch">
-                <span className="view-tab active">Roster</span>
-                <span className="view-tab">Feed</span>
-                <span className="view-tab">Research</span>
-              </div>
+            <div className="main-tabs">
+              <span className="main-tab is-active">Roster</span>
+              <span className="main-tab">Matchup</span>
+              <span className="main-tab">Research</span>
+              <span className="main-tab">League</span>
             </div>
+          </div>
+          <div className="view-tools">
+            <span className="feed-toggle on">Feed</span>
+            <span className="schedule-toggle">Schedule</span>
+            <span className="projected-toggle">Projected</span>
+          </div>
           </div>
         </Demo>
         <dl className="tut-defs">
@@ -334,8 +352,8 @@ const CHAPTERS: Chapter[] = [
           pitchers are a second block under the batters with their own column headings,
           and those headings take over the top of the screen as you scroll down to
           them. On the feed a pitcher's outings are their own section above the plays.{' '}
-          <Ui>Research</Ui>, at the end of the row, is a different animal — the whole
-          league rather than your roster — and has the next chapter to itself.
+          <Ui>Research</Ui> is a different animal — the whole league rather than your
+          roster — and has the next chapter to itself.
         </p>
       </>
     ),

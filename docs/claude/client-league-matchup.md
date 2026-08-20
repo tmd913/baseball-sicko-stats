@@ -1448,6 +1448,65 @@ eye already is, and here there is no second column so it read as a word adrift
 which in a 12-team league's first playoff round is eight of the ten cards,
 leaving it off would put his own team out of reach entirely.
 
+### The same page, as a tab: `Matchup`
+
+**It is a top-level tab now as well as a page over the League view**, and they
+are the same page — one component, drawn twice, which is this repo's rule
+wherever two surfaces would otherwise be two things that resemble each other
+(`ScheduleToggle`, `PlayerIdentity`, `DateBar`). The Scoreboard opens a **card**
+as a page over itself; the tab opens the **reader's own** week as a page of the
+app, `App.tsx::myMatchupId` being the board row carrying `myTeamId`.
+
+**What differs is not the matchup but what is behind it.** An overlay covers a
+view and owes it four things — a pinned body, an inert background, the focus
+taken and given back, and Escape to leave by — and a tab has nothing behind it
+to do any of that to. So `standalone` turns off exactly those four and the Back
+row that goes with them (`useLockBodyScroll(!standalone)`,
+`useOverlayFocus(viewRef, undefined, !standalone)`, an early return in the
+Escape effect, and `{!standalone && <BackButton …/>}`). Everything the page *is*
+— the three readings, the strip, the dates, the tools, the bars, the acquisitions
+— is untouched.
+
+**The Escape return is not a tidying.** One press undoes exactly one thing, so a
+listener that answers `answersEscape` and then calls a no-op `onClose` would
+*swallow* the press a dialog above it wanted. Driven on the tab: Escape does
+nothing, a name opens a player page over it (body pinned, chrome inert, focus in
+the overlay), and one press of Escape closes that player and leaves the matchup
+standing.
+
+**The box it needs is the third `100dvh` column in the app.** As an overlay
+`.mup-view` is `position: fixed; inset: 0`, which is where its own scroller, its
+pinned band and a team page's `roster-mode` column all come from; a tab has to be
+given the same box by hand. `.app.matchup-mode` is `.app.summary-mode`'s
+arrangement exactly — viewport-tall flex column, chrome static at the top of it —
+and `.mup-view.mup-page` is `flex: 1; min-height: 0` inside it with the overlay's
+layer, ground, side padding and scrollbar gutter given back. **Two classes deep
+and placed in the matchup section**, since `.mup-view`'s own layer rule is
+further down the file than the `.app.matchup-mode` block and a single-class
+selector up there would lose to it on source order — this stylesheet's
+source-order trap in its plainest form.
+
+**And the band's bleed is the container's, which changed.** `.mup-chrome` bleeds
+`-16px`, the overlay's own side padding; inside `.app` the padding is the app's
+22px gutter, so the band stopped **6px short of each edge** over a table that
+reaches 0 (measured: band x 6, w 1188 against a pane at x 0, w 1200). It reads
+`--app-gutter` in the standalone reading, which is `--bar-bleed` and
+`--table-bleed`'s own rule stated a third time. Re-measured: band **x 0, w
+1200**, pane **x 0, w 1200**, page-body overflow **0**.
+
+**A bye is found here like any other**, ESPN publishing one as a matchup with no
+away side, and the page draws its own bye head — so the tab's empty state is for
+a period this manager has no row in at all, not for a bye. Driven on the live
+league in a bye week: the tab opens on the team page (`mt=6` written back by
+`onSideTeam`, which is the same reporting the overlay does), `Week 19 · Aug 10 –
+Aug 23 · LIVE` over `BYE` and `Acquisitions: 5/10`.
+
+**`matchupPageOpen` is the one test for "a matchup page is on screen"**, either
+door — `view === 'matchup' || (view === 'league' && matchupId != null)`. `mt=`,
+`mr=`, `proj=1`, the projected lens's own reset and the projection read all hang
+off it. Two copies of that test are two copies that will one day disagree about
+whether the lens is drawn.
+
 ### A team page is the app's own Roster and Feed views
 
 **`components/LeagueTeam.tsx` draws `SummaryTable` and `LiveFeed`**, the very

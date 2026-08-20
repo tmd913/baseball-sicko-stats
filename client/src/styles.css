@@ -240,7 +240,18 @@
      pinned (the summary and research views, and a short window), which is what
      makes the fallback here the right one for a page with no chrome at all. */
   --chrome-h: 0px;
-  --scroll-offset: calc(var(--chrome-h) + 12px);
+  /* And the second pinned band, one tier down: the dates. The chrome used to
+     hold them, so `--chrome-h` covered both; the bar is in the page now (the
+     tools row between them scrolls away, which is the whole point of the
+     split), and a card scrolled to the top of the window would otherwise land
+     behind 54px of date bar. Published by `hooks.ts::usePublishedHeight` and
+     zero wherever no bar is drawn — the research board, the League view — which
+     is what keeps this one calc right for every page rather than needing a rule
+     per view. On the Roster's table reading it is zero *here* as well and 54px
+     inside the pane, the bar being a child of the scroller there: nothing in
+     that view scrolls the window, so nothing reads this. */
+  --date-bar-h: 0px;
+  --scroll-offset: calc(var(--chrome-h) + var(--date-bar-h) + 12px);
 
   /* The bar controls — roster search, view/kind tabs, the Edit toggle — share
      one height so a row of them reads as one set, whatever their own text size.
@@ -495,6 +506,14 @@ body {
      overlay (16px) while an expanded table's is the full-page box (12px). */
   --table-bleed: var(--app-gutter);
 }
+/* And the same answer for the date bar, which is a child of the page now rather
+   than of the pinned chrome — see `.date-bar`'s own note on `--bar-bleed`. The
+   child combinator is load-bearing: the bar is *also* rendered inside
+   `.summary-scroll`, which has already bled through these gutters itself, and a
+   second helping there would put the bar 22px off each edge of the window. */
+.app > .date-bar {
+  --bar-bleed: var(--app-gutter);
+}
 
 /* ---- The pinned chrome ----------------------------------------------------
    The header, the search bar and the view bar in one box, held against the top
@@ -580,6 +599,7 @@ body {
    y=0 on the two views beside it. */
 .app.summary-mode .app-chrome,
 .app.research-mode .app-chrome,
+.app.matchup-mode .app-chrome,
 .app.league-rank-mode .app-chrome {
   position: static;
 }
@@ -2558,7 +2578,7 @@ body {
 /* The two controls on one wrapping line — the span, then which games. That is
    the order the questions come in, and it is the roster row's own order: which
    reading of them, then which days. Each is `flex: none` so a narrow card
-   breaks *between* the two rather than inside one, the rule `.view-bar-tabs`
+   breaks *between* the two rather than inside one, the rule `.view-tools`
    already applies one tier up. */
 .opp-controls {
   display: flex;
@@ -5880,47 +5900,122 @@ button.start-line:focus-visible {
   }
 }
 
-/* ---- View bar: Summary/Players/Feed tabs on the left, the player search (and
-   its Edit toggle) on the right ---- */
+/* ---- The main tabs: Roster · Matchup · Research · League ------------------
+   The last row of the pinned chrome, and the whole width of it.
+
+   It was a **segmented control** at the head of a wrapping row it shared with
+   every other group of chrome the app has — the kind tabs, the roster's reading
+   toggles, the League view's three tabs, the whole research control set — and
+   the row's rule was that it wrapped between whole groups as the width allowed.
+   Two things were wrong with that and both are the same thing: the one control
+   that says *which page of the app you are on* had the same weight as a control
+   deciding which span a table is drawn over, and it moved down the window as
+   the window narrowed.
+
+   Full width, it is the first thing on the page and the same shape at every
+   one. The underline is the app's own way of saying *this one* where a filled
+   pill is how it says *this option* — the shape `.details-tabs` has always had
+   one tier down, and this is that argument applied one tier up.
+
+   **It keeps its own selector rather than folding onto `.view-switch`**, which
+   is this stylesheet's standing rule read the other way round: two things that
+   are the same object share a list, and these two have stopped being the same
+   object. `.view-switch` is still the segmented control — the Schedule spans, a
+   matchup's tools, the opposing-lineup cuts — and a fold that had this strip
+   and those pills agreeing about a border, a ground and a radius would be one
+   rule holding two shapes apart by exception.
+
+   **The strip is the bottom of the chrome**, which is why `.view-bar` has no
+   bottom margin: the active tab's 2px underline sits directly on the chrome's
+   own hairline, so the bar closes itself with the mark that says where you are
+   rather than with a rule and then a mark 14px apart. */
 .view-bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px 12px;
+  /* The anchor the Rankings tab's `Projected` key used to open from moved with
+     that control to `.view-tools`; nothing absolutely positioned is left in
+     here. The transactions dot is anchored to `.lg-tab`, which declares
+     `position: relative` for exactly that purpose. */
+}
+.main-tabs {
+  display: flex;
+  width: 100%;
+  min-height: var(--control-h);
+}
+.main-tab {
+  /* **Equal shares of the window.** `flex: 1 1 0` rather than `1 1 auto`, so
+     four tabs are four quarters whatever their words are — `Research` is 62px
+     of text against `League`'s 46, and basis-`auto` would make the strip a set
+     of proportions rather than a set of columns. `min-width: 0` lets a tab
+     ellipsize rather than force the strip wider than the page. */
+  flex: 1 1 0;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 9px 6px;
+  background: none;
+  border: none;
+  /* The underline, transparent until it is the page you are on. A border on the
+     tab rather than a rule on the strip with a mark over it: the strip's foot
+     *is* the chrome's hairline, so one 2px border is the whole mark and there
+     is nothing for it to have to overlap. */
+  border-bottom: 2px solid transparent;
+  /* `font: inherit` is a shorthand and would reset the size — see the rule at
+     the top of this file. */
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: color 0.14s ease, border-color 0.14s ease;
+}
+.main-tab:hover {
+  color: var(--text);
+}
+.main-tab.is-active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.main-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* ---- The tools row: which reading of the page ----------------------------
+   Every control that says which *reading* of a page is on screen, in a band of
+   its own under the tabs: the Roster's four readings (Feed, Schedule, Projected
+   — and the plain table, which is none of them lit) with the stream's order
+   beside them, the League view's three tabs and the Rankings span and lens, and
+   the research board's whole control set portalled in.
+
+   **It is in the page and the tabs are pinned**, which is the whole bargain the
+   split buys. Which page you are on is the last thing that should leave the
+   screen; which reading is a thing set on arrival, and a band of it held against
+   the top of a phone was most of the 303px the chrome reached at 320px wide.
+
+   Its groups keep the old row's rule exactly — `flex: none`, so the row fits as
+   many whole ones per line as the width allows and breaks between two rather
+   than inside one. Nothing here pins which group lands where; the window
+   decides. */
+.view-tools {
+  display: flex;
   flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
   margin-bottom: 14px;
   /* The anchor the Rankings tab's `Projected` key opens from — `.lg-head`'s job
      on the Scoreboard and `.mup-bar`'s on a matchup, and here for the identical
      reason: that key is `position: static` so its 340px panel hangs off a *row*
      rather than off a 30px button part-way along one, which at a phone's width
      would put half of it off the screen. This row is the full content width at
-     every size, so `right: 0` is the app's own gutter.
-     Nothing else in the bar changes hands: the one absolutely positioned thing
-     under here — the transactions dot — is anchored to `.lg-tab`, which
-     declares `position: relative` for exactly that purpose, and the date
-     picker's own popover hangs off `.drp`. The calendar's date bubble was the
-     second of the pair and went with the calendar, the dates being a bar under
-     this row now rather than a button in it. */
+     every size, so `right: 0` is the app's own gutter. */
   position: relative;
 }
-/* The two tiers of tabs — Summary/Players/Feed and Batters/Pitchers — as one
-   group, so the view bar's space-between doesn't push them apart. They share a
-   row while it's wide enough and the kind tabs wrap under the view tabs when it
-   isn't. */
-.view-bar-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 12px;
-}
-/* Every group in that row is atomic: `flex: none` so none of them shrinks, and
-   the wrap then fits as many whole groups per line as the width allows and
-   breaks *between* two rather than inside one. That is the whole layout rule —
-   the roster tabs took a forced row of their own for a while (`flex: 1 1 100%`,
-   which reads as "its own line" in a wrapping bar), and a fixed break costs a
-   desktop a line it has the room for and doesn't save a phone one. Nothing here
-   pins which group lands where; the window decides. */
-.view-bar-tabs > * {
+.view-tools > * {
   flex: none;
 }
 
@@ -6104,11 +6199,108 @@ button.start-line:focus-visible {
      hairline of its own below, so this is the only one the bar declares. */
   border-top: 1px solid var(--border);
 }
-.app-chrome {
-  --bar-bleed: var(--app-gutter);
-}
 .expanded-chrome {
   --bar-bleed: 12px;
+}
+
+/* ---- The bar is pinned, and the row above it is not ----------------------
+   The chrome used to hold the dates, so everything above the page was one
+   pinned box. It is the title row and the tabs now, and the two rows that were
+   under them inside it — the readings and the days — are in the page:
+
+     .app-chrome   title row + tabs      pinned
+     .view-tools   which reading          scrolls away
+     .date-bar     which days             pinned, under the chrome
+       thead                              pinned, under the bar
+
+   Which page you are on and which days the numbers are is what a reader needs
+   held; which reading is set on arrival. The saving is real and is the reason
+   the split was asked for: the pinned box reached **303px at 320px wide**
+   because everything that could be called chrome was in it.
+
+   `top` is the chrome's own measured height, which is zero wherever the chrome
+   is not pinned — the two fixed-height columns and a short window — and there
+   the bar simply sits where it is laid out, in a page that does not scroll. One
+   declaration, three states, no rule per view.
+
+   The ground is the chrome's own bottom stop rather than a new color: the tools
+   row passes *under* this bar, so it has to be opaque, and anything else would
+   be a second band of panel a shade off the one directly above it. */
+.app > .view-tools,
+.app > .date-bar {
+  /* **`flex: none`, and this is the trap the move creates rather than a
+     tidying.** The bar carries `flex: 1 1 100%` — "its own line", written for
+     the wrapping rows it used to sit in — and the two fixed-height views make
+     `.app` a *column* flex container, where that basis is 100% of the
+     **height**. Left alone, a 54px bar became the whole of the viewport and
+     pushed the table off the bottom of it. In the chrome and in the pane it was
+     inert, both of those being blocks. */
+  flex: none;
+}
+.app > .date-bar {
+  position: sticky;
+  top: var(--chrome-h);
+  z-index: 39;
+  background: var(--bg-2);
+  /* The seam under it, where the bar in the chrome had one above it: the chrome
+     closes itself with a hairline, so a border-top here would be the second of
+     two lines a pixel apart, and what this bar now needs is a line between
+     itself and the page passing under it. */
+  border-top: none;
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow-bar);
+}
+/* A short window unpins the chrome (see `.app-chrome`'s own rule) and this goes
+   with it, for that rule's reason and not by inheriting it: `--chrome-h` would
+   already be 0 here, so the bar would pin itself to the top of the window and
+   be the one thing left holding a band against a 390px-tall screen. */
+@media (max-height: 560px) {
+  .app > .date-bar {
+    position: static;
+  }
+}
+
+/* ---- …and on the Roster's table reading, both rows are inside the pane ----
+   That view is a viewport-tall flex column in which only `.summary-scroll`
+   scrolls, and **a sticky box sticks to the box that scrolls**. A bar left in
+   the page there is pinned to a column that never moves — it would sit where it
+   was laid out and nothing more — while the table's own header row is pinned to
+   the pane, 54px lower. Two boxes stuck to two different edges, drawn as one
+   band, with the first rows of the table lost in the difference.
+
+   So `SummaryTable` renders both as the pane's own first children
+   (`paneChrome`), where they stick against the same scrollport: the tools row
+   scrolls away with the rows, the bar holds at the top of the pane and the
+   header row holds directly under the bar.
+
+   **Sticky on the inline axis as well**, which is the half a nested scroller
+   adds and the half the legend at the foot of this pane already documents: the
+   pane scrolls in both directions, so without `left: 0` a reader scrolled out
+   to the K column would leave the dates behind at the far left of a 1,900px
+   content box. Their width is the pane's own client width — a block child of a
+   scroll container sizes to its content box, not to its scroll width — so
+   pinning at 0 puts them across the viewport exactly as they were. */
+.summary-scroll > .view-tools,
+.summary-scroll > .date-bar {
+  position: sticky;
+  left: 0;
+  /* The pane has already bled back out through `.app`'s gutters, so these two
+     are at the window's edges and put their own gutter back. The bar does not:
+     it is a full-width band by design and carries its own 10px of padding, so
+     it wants the edge it now has. */
+}
+.summary-scroll > .view-tools {
+  padding: 10px var(--app-gutter) 0;
+  margin-bottom: 10px;
+}
+.summary-scroll > .date-bar {
+  top: 0;
+  /* Above the header row (2) and above its own top-left corner cell (3): the
+     rows and the headings both pass under this. */
+  z-index: 4;
+  background: var(--bg);
+  border-top: none;
+  border-bottom: 1px solid var(--border);
 }
 /* **A three-column grid, not a flex row with `space-between`.** The middle has
    to be centered on the *bar* rather than on the space its neighbours leave:
@@ -6359,6 +6551,7 @@ button.start-line:focus-visible {
    same reason (see `DateControls.tsx`). */
 .schedule-toggle svg,
 .projected-toggle svg,
+.feed-toggle svg,
 .summary-toggle svg {
   flex: none;
 }
@@ -6455,6 +6648,11 @@ button.start-line:focus-visible {
 .app.edit-mode .settings-menu,
 .app.edit-mode .fantasy-menu,
 .app.edit-mode .view-bar,
+/* The tools row goes with it. It is gated on `!editMode` in the render as well
+   — a reading toggle over a screen with no table to read is not a thing this
+   mode can be in — and it is named here for the reason the date bar is: one
+   statement of what the mode hides, in the place that states it. */
+.app.edit-mode .view-tools,
 /* The date bar is named here rather than inheriting the row's fate: it used to
    be a button *inside* `.view-bar` and went with it for free, and it is a
    sibling of that row now. A control set left standing over a screen it cannot
@@ -6699,6 +6897,35 @@ button.start-line:focus-visible {
   flex-direction: column;
   overflow: hidden;
 }
+
+/* ---- The matchup as a tab -------------------------------------------------
+   The same page the Scoreboard opens over itself, drawn as a page of the app —
+   see `LeagueMatchup.tsx::standalone`. As an overlay it is `position: fixed;
+   inset: 0` with its own scroller, which is where its pinned band and its
+   roster reading's fixed-height column both come from. A tab has to be given
+   the same box by hand, and this is the third view to take the column the other
+   two already take: the app is the viewport, the chrome is static at the top of
+   it, and the page below scrolls inside itself.
+
+   Everything in `.mup-view` is then untouched — its band still pins to the box
+   that scrolls, `--details-chrome-h` still measures it, and the team page's
+   roster reading still turns that box into a column of its own. */
+.app.matchup-mode {
+  height: 100dvh;
+  padding: 0 var(--app-gutter);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+/* The chrome's negative side margins are the app's gutters, and the app still
+   has them; what it loses here is the 14px above and below, the page under the
+   bar being a box that runs to the edge of the window exactly as the summary
+   table's pane does. */
+.app.matchup-mode .app-chrome {
+  margin-top: 0;
+  margin-bottom: 0;
+  padding-top: 14px;
+}
 /* The *document* mustn't bounce on these two views either — the pane inside
    consumes its own gesture, but iOS hands the drag to the page whenever the
    pane can't scroll in the axis it was dragged in (a summary table of six rows
@@ -6806,7 +7033,7 @@ button.start-line:focus-visible {
 }
 /* The `Projected` toggle and its key as one group, so the tab row's wrap breaks
    between them and the next control rather than between the two of them —
-   `.view-bar-tabs > *` is `flex: none` and every group in that row is atomic.
+   `.view-tools > *` is `flex: none` and every group in that row is atomic.
    Deliberately **not** positioned: the panel below has to resolve against the
    row, not against this 130px box. */
 .projected-group {
@@ -6817,14 +7044,22 @@ button.start-line:focus-visible {
 /* **The panel opens from the row's right edge, not from the button's.** The
    group sits part-way along the tab row — after the kind tabs and the Schedule
    control — so a 320px panel anchored to a 30px button at x≈250 would put its
-   left half off a phone. Nothing between it and `.view-bar` is positioned, and
-   that row is the full content width at every size, so `right: 0` is the app's
-   own gutter. It is `.lg-proj-key`'s arrangement exactly, one row up. */
+   left half off a phone. Nothing between it and `.view-tools` is positioned,
+   and that row is the full content width at every size, so `right: 0` is the
+   app's own gutter. It is `.lg-proj-key`'s arrangement exactly, one row up. */
 .proj-key .info-key-panel {
   left: auto;
   right: 0;
 }
 
+/* What the header row sticks below — see `.summary-table thead th`. A class
+   rather than `:has(> .date-bar)` because the question is *whose* bar it is
+   rather than whether one is present: the expanded box draws its own above the
+   pane, and a header row held 54px down under nothing there would be a band of
+   rows showing through the gap. */
+.summary-scroll.has-pane-chrome {
+  --pane-bar-h: var(--date-bar-h, 0px);
+}
 .summary-scroll {
   /* Grow to content, but cap at the available height and scroll past that. */
   flex: 0 1 auto;
@@ -7055,10 +7290,15 @@ button.start-line:focus-visible {
 .summary-table td:last-child {
   padding-right: clamp(10px, 3vw, 32px);
 }
-/* Header row sticks to the top while scrolling vertically. */
+/* Header row sticks to the top while scrolling vertically — under the date bar
+   where the pane is carrying one (`--pane-bar-h`, set by `.has-pane-chrome`
+   below off the bar's *measured* height), and at the pane's own top where it is
+   not: the expanded full-page box keeps its bar above the scroller, and the
+   research board and the matchup team pages have no bar in the pane at all.
+   Zero is therefore the right default and the only one that needed writing. */
 .summary-table thead th {
   position: sticky;
-  top: 0;
+  top: var(--pane-bar-h, 0px);
   z-index: 2;
   --cell-bg: var(--panel-2);
   font-size: 12px;
@@ -7767,7 +8007,7 @@ button.start-line:focus-visible {
    sortable headers. */
 
 /* The board's control set lives **in the pinned chrome, in the tab row itself**
-   — App renders an empty box inside `.view-bar-tabs` and `ResearchTable` portals
+   — App renders an empty box inside `.view-tools` and `ResearchTable` portals
    its bar into it. The bar, its three panels and the chips row were children of
    `.research-view` and so sat below the chrome as a second band of controls: the
    app's own box, a hairline, and then 80 to 180px more of the same kind of
@@ -7776,7 +8016,7 @@ button.start-line:focus-visible {
    position and which columns of them.
 
    **Both wrappers are `display: contents`**, and that is the whole layout rule.
-   `.view-bar-tabs` is already the app's answer to "more groups than fit on a
+   `.view-tools` is already the app's answer to "more groups than fit on a
    line": every group in it is atomic, and the wrap fits as many whole ones per
    line as the width allows, breaking *between* two rather than inside one. For
    the scope pills, the window tabs, the position row and the tools to take part
@@ -7798,10 +8038,10 @@ button.start-line:focus-visible {
   display: contents;
 }
 /* Each of them a full line of its own, under whatever row of controls it was
-   opened from. Selected through `.research-chrome`, not through `.view-bar-tabs`:
+   opened from. Selected through `.research-chrome`, not through `.view-tools`:
    `display: contents` hoists the *boxes* into that flex container but leaves the
    DOM tree alone, so a child combinator still has to name the parent these
-   elements really have. Written the other way (`.view-bar-tabs > .research-panel`)
+   elements really have. Written the other way (`.view-tools > .research-panel`)
    it matches nothing, and the panel takes its content width — a 168px search
    field wedged onto the end of the tab row. */
 .research-chrome > .research-panel,
@@ -8000,6 +8240,11 @@ button.start-line:focus-visible {
 .research-toggle,
 .schedule-toggle,
 .projected-toggle,
+/* The Roster's fourth reading, folded in with the other two rather than styled
+   to resemble them — `Feed`, `Schedule` and `Projected` are one run of readings
+   of one page and read identically by construction. It takes `.on` and never
+   `.active`, being a plain switch with no panel. */
+.feed-toggle,
 .summary-toggle {
   display: inline-flex;
   align-items: center;
@@ -8017,7 +8262,8 @@ button.start-line:focus-visible {
 }
 .research-toggle:hover,
 .schedule-toggle:hover,
-.projected-toggle:hover {
+.projected-toggle:hover,
+.feed-toggle:hover {
   color: var(--text);
 }
 /* `.active` is "the panel is open"; `.on` is "the panel holds something",
@@ -8037,6 +8283,7 @@ button.start-line:focus-visible {
    meant. */
 .schedule-toggle,
 .projected-toggle,
+.feed-toggle,
 .summary-toggle {
   flex: none;
   white-space: nowrap;
@@ -8044,6 +8291,7 @@ button.start-line:focus-visible {
 .research-toggle.on,
 .schedule-toggle.on,
 .projected-toggle.on,
+.feed-toggle.on,
 .summary-toggle.on {
   color: var(--accent);
   border-color: color-mix(in srgb, var(--accent) 50%, transparent);
@@ -8052,6 +8300,7 @@ button.start-line:focus-visible {
 .research-toggle:focus-visible,
 .schedule-toggle:focus-visible,
 .projected-toggle:focus-visible,
+.feed-toggle:focus-visible,
 .summary-toggle:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
@@ -8616,6 +8865,7 @@ button.start-line:focus-visible {
   .research-toggle-label,
   .schedule-toggle-label,
   .projected-toggle-label,
+  .feed-toggle-label,
   .summary-toggle-label,
   /* **The Rankings copy of the League page's own toggle**, and only that copy —
      scoped to the row it is in rather than to `.lg-proj-label`, because the
@@ -8632,7 +8882,7 @@ button.start-line:focus-visible {
      row is 132 and 84, which is exactly what it was before this control joined
      it. Visually hidden rather than removed, the rule the three above it
      follow: the button still names itself rather than being a lone glyph. */
-  .view-bar-tabs .lg-proj-label {
+  .view-tools .lg-proj-label {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -8646,9 +8896,10 @@ button.start-line:focus-visible {
 }
 
 /* ---- The roster row's mode toggles on a phone --------------------------------
-   Schedule and Projected go to their glyphs under 640px, which is what gets the
-   roster tabs and the toggles onto one line — the run is 84px where two labels
-   alone were 174. The rules live *here*, below the whole `.research-toggle`
+   Feed, Schedule and Projected go to their glyphs under 640px, which is what
+   keeps the reading run on one line — three squares and their gaps against
+   three labeled pills. (It was two of them and the measurement was the pair's:
+   84px of squares where two labels alone were 174.) The rules live *here*, below the whole `.research-toggle`
    family, and not up beside the buttons' own base rules where they were first
    written: a media query adds no specificity, so `padding: 0` there lost to
    `.research-toggle, .schedule-toggle { padding: 0 12px }` five hundred lines
@@ -8671,6 +8922,7 @@ button.start-line:focus-visible {
      15px glyph, so the run reads as a set. */
   .schedule-toggle,
   .projected-toggle,
+  .feed-toggle,
   .summary-toggle {
     width: var(--control-h);
     padding: 0;
@@ -8695,7 +8947,7 @@ button.start-line:focus-visible {
      shared `.view-switch` rule sets `display: inline-flex` later in the file,
      so without a second class both the pills and their dropdown would be on
      screen at once. */
-  .view-bar-tabs .lg-span-row {
+  .view-tools .lg-span-row {
     display: none;
   }
 }
@@ -10592,18 +10844,21 @@ button.start-line:focus-visible {
    and where that number came from. A container query with no container silently
    fails, which is why the declaration sits on the bar and not on the button.
 
-   **`.view-bar` and not `.view-bar-tabs`**, which is the app's *layout
-   containment* rule met in its second form. The tab row is the only child of
-   `.view-bar`, which is a flex row, so the row is a **flex item whose width is
-   shrink-to-fit** — and inline-size containment is precisely the promise that
-   the box's inline size does not depend on its contents, so its intrinsic
-   contribution goes to nought. Measured with the declaration on the row: the
-   whole tab row **1356px → 0px** at 1400, every tab still painted and
-   overflowing a zero-width box. The container has to be a box that is already
-   filling its parent, and the bar around it is one. The other two are
-   block-level boxes in block containers and take the declaration where they
-   stand. */
-.view-bar,
+   **It is `.view-tools` now, and that is a move rather than a rewrite.** The
+   toggle this measures used to sit in the tab row and sits in the tools row;
+   the thresholds below were measured on a box that is the full content width at
+   every size, and this one is too, so the numbers carry over unchanged. What
+   the old note recorded is worth keeping because it is the trap and not the
+   selector: the declaration was on `.view-bar` rather than on `.view-bar-tabs`
+   because *inline-size containment is the promise that a box's inline size does
+   not depend on its contents*, so declaring it on a shrink-to-fit flex item
+   takes that item's intrinsic contribution to nought — measured then, the whole
+   tab row **1356px → 0px** at 1400, every tab still painted and overflowing a
+   zero-width box. The container has to be a box that is already filling its
+   parent. `.view-tools` is a block-level box in a block container (and a
+   block-level child of the pane on the Roster's table reading), so it takes the
+   declaration where it stands, exactly as the other two do. */
+.view-tools,
 .newplays-head,
 .mup-tools {
   container-type: inline-size;
@@ -11282,6 +11537,24 @@ button.start-line:focus-visible {
   display: flex;
   flex-direction: column;
   align-items: center;
+  gap: 10px;
+}
+/* A demo of something that is a **band** rather than a run of chips: it takes
+   the stage's whole width and stacks its rows, where the stage itself is a
+   centered wrapping row. Without it the Views chapter's replica of the tab strip
+   shrank to its four words and the three reading buttons wrapped into a column
+   beside it — two bars drawn as a pair of columns. */
+/* And the stage stretches to hold one. It is `align-items: center`'s child, so
+   it is shrink-to-fit — right for a run of chips, and it left the tab strip
+   sized to its four words with `Matchup` and `Research` touching rather than a
+   quarter of the box each. */
+.tut-demo:has(.tut-demo-stack) .tut-demo-stage {
+  align-self: stretch;
+}
+.tut-demo-stack {
+  flex: 1 1 100%;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
 }
 .tut-demo-stage {
@@ -12713,10 +12986,10 @@ button.start-line:focus-visible {
    `position: static` precisely so a 340px panel hangs off a **row** rather than
    off a 30px button. This group sits part-way along the tab row — after two tab
    strips — so `right: 0` against the group would open the panel leftward from
-   x≈250 on a phone and put its left half off the screen. Against `.view-bar`,
-   which is the full content width at every size, `right: 0` is the app's own
+   x≈250 on a phone and put its left half off the screen. Against
+   `.view-tools`, which is the full content width at every size, `right: 0` is the app's own
    right gutter and the panel is on screen at 320 as at 1920. */
-.view-bar-tabs .lg-proj-tools {
+.view-tools .lg-proj-tools {
   margin-left: 0;
 }
 
@@ -13919,6 +14192,47 @@ span.mup-move-name:hover {
   min-height: 0;
 }
 
+/* ---- The matchup as a tab ----
+   See `.app.matchup-mode` above for the column this sits in. Written two
+   classes deep and placed *here*: `.mup-view`'s own layer rule is further down
+   this file than the `.app.matchup-mode` block, so a single-class selector up
+   there would lose to it on source order. */
+/* The band bleeds through the box's own side padding, and as a tab that box is
+   `.app` rather than the window — 22px against the overlay's 16. Left at 16 it
+   stopped **6px short of each edge** on a page whose table below it reaches 0
+   (measured: the band at x=6, w=1188 against a table at x=0, w=1200), which is
+   a hairline that does not meet the edge it is drawn to. This is `--bar-bleed`
+   and `--table-bleed`'s own rule stated a third time: the number belongs to the
+   container, and the container has changed. */
+.mup-view.mup-page > .mup-chrome {
+  margin-left: calc(-1 * var(--app-gutter));
+  margin-right: calc(-1 * var(--app-gutter));
+  padding-left: var(--app-gutter);
+  padding-right: var(--app-gutter);
+}
+.mup-view.mup-page {
+  /* Out of the overlay layer entirely: it is a page in the flow now, and a
+     fixed box over the app would cover the very tabs that lead to it. */
+  position: static;
+  inset: auto;
+  z-index: auto;
+  flex: 1;
+  min-height: 0;
+  /* The app's own gutters are outside this box, so it gives none of its own —
+     and the wide tables inside it bleed back through *those*, which is the
+     `--table-bleed` rule read one container out. As an overlay the box is the
+     window and the number is its own 16px. */
+  padding-left: 0;
+  padding-right: 0;
+  --table-bleed: var(--app-gutter);
+  /* It has no page behind it to be a ground for. */
+  background: none;
+  /* And no scrollbar gutter to reserve: that exists because the overlay pins
+     the body and takes the page's own scrollbar away, which a tab does not. */
+  scrollbar-gutter: auto;
+}
+
+
 /* The head: the way back, and which week the numbers are. Pinned, on
    `.details-chrome`'s own argument one page along — it is the last thing that
    should scroll away from under a page being read, and it is the way out. */
@@ -14703,7 +15017,7 @@ span.mup-move-name:hover {
   margin: 0 auto 14px;
 }
 /* The span strip breaks **between** two pills rather than inside one, which is
-   the rule `.view-bar-tabs` states one tier up. Without it `Current matchup`
+   the rule `.view-tools` states one tier up. Without it `Current matchup`
    wraps inside its own button on a phone — a two-line pill in a row of
    one-line ones, which `align-items: center` then leaves at a different top
    from its neighbors. */
@@ -14729,18 +15043,16 @@ span.mup-move-name:hover {
    cannot share one with the view switch anyway (289px + 377 against 346), so
    the row is honest rather than spent, and taking the full width is what makes
    the overflow the strip's own rather than the page's. Above 640 it fits on
-   one line and keeps `.view-bar-tabs`' own `flex: none`. */
+   one line and keeps `.view-tools`' own `flex: none`. */
 @media (max-width: 640px) {
-  /* And the row it sits in has to be allowed to shrink to the window, or the
-     strip's own `min-width: 0` buys nothing: `.view-bar-tabs` is a wrapping
-     flex item with the default `min-width: auto`, so its intrinsic width was
-     the 377px of the widest thing in it and the *row* overflowed the page by
-     9px while the strip inside it sat there at its full width, unscrolled.
-     Measured at 390: `.view-bar` 346 with a 377 scroll width. */
-  .view-bar .view-bar-tabs {
-    min-width: 0;
-  }
-  .view-bar-tabs .lg-tabs {
+  /* The row-shrink rule that stood here is gone with the box it named. It read
+     `.view-bar .view-bar-tabs { min-width: 0 }`, and it existed because the
+     strip sat inside a *wrapping flex item* whose automatic minimum was the
+     377px of the widest thing in it — so the row overflowed the page by 9px at
+     390 while the strip inside it sat unscrolled at its full width. The tools
+     row is a block-level box the width of its container, with no intrinsic
+     minimum to defeat, so there is nothing left to unstick. */
+  .view-tools .lg-tabs {
     /* **It hugs its pills and shrinks only when it has to**, where it took
        `flex: 1 1 100%` — a full row of its own — while it had four tabs and
        377px of content against a 346px phone. It has three and **295px** now,
@@ -16185,12 +16497,12 @@ html[data-theme='light'] .league-table thead th {
     gap: var(--stack-gap);
     margin-bottom: var(--stack-gap);
   }
-  .view-bar {
+  /* `.view-bar` holds one full-width strip and nothing that wraps, so it has
+     no gap and no bottom margin to tighten — the tab row *is* the bottom of the
+     chrome. What takes the phone's step is the row under it. */
+  .view-tools {
     gap: var(--stack-gap);
     margin-bottom: var(--stack-gap);
-  }
-  .view-bar-tabs {
-    gap: var(--stack-gap);
   }
   .player-list {
     gap: var(--stack-gap);
