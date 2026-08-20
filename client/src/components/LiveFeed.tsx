@@ -1312,6 +1312,7 @@ export function LiveFeed({
   newPlaysOrder,
   newPlaysFilters,
   oldestFirst = false,
+  newOldestFirst = false,
 }: {
   reports: PlayerReport[];
   // Which kind the tabs above are showing — the stream is one kind at a time,
@@ -1434,6 +1435,20 @@ export function LiveFeed({
    *   that starts soonest under the one that starts at ten.
    */
   oldestFirst?: boolean;
+  /**
+   * **The new-plays page's direction, which is not this stream's.** It was one
+   * flag for both, and the fault was that the page is a box opened *over* a
+   * stream that is still on screen behind it: reversing the page reversed the
+   * feed underneath, and leaving the page put the reader back on a day running
+   * backwards with nothing on that page having said so. Two flags, two
+   * parameters (`oldest=1` here, `noldest=1` there) — see App's
+   * `newPlaysOldestFirst`, which carries the argument and the default.
+   *
+   * It reaches exactly one list, `newRecent` below. Live and Upcoming are not
+   * on the page at all, so the three-sections note above is the whole of what
+   * an order can turn here.
+   */
+  newOldestFirst?: boolean;
 }) {
   // How much of the Recent section is on screen, grown a page at a time by the
   // "Load more" button. Deliberately not in the URL — it's a reading position,
@@ -1557,8 +1572,17 @@ export function LiveFeed({
    * means.
    */
   const recent = allRecent.filter((e) => passesFilters(e, playFilter, false, 0, hasFilm));
+  /* **And it is sorted again on its own direction.** `allRecent` is already in
+     this stream's order, and `filter` hands back a fresh array, so the page's
+     list is re-sorted in place rather than merged a second time — one flip of
+     one comparator, the same pair (`byPlayOrder` / `byRecency`) the stream
+     uses, so the two lists cannot come to disagree about a play's own grouped
+     events. Where the two directions agree this is a sort over an already
+     sorted array and costs nothing worth measuring. */
   const newRecent = newOnly
-    ? allRecent.filter((e) => passesFilters(e, playFilter, true, seenPlays, hasFilm))
+    ? allRecent
+        .filter((e) => passesFilters(e, playFilter, true, seenPlays, hasFilm))
+        .sort(newOldestFirst ? byPlayOrder : byRecency)
     : EMPTY_ENTRIES;
 
   /**
@@ -1900,9 +1924,11 @@ function NewPlaysPage({
   playFilter,
 }: {
   entries: FeedEntry[];
-  /** **`Oldest first`**, built by App and drawn in the pinned head beside
-   *  `Back` — the same place it sits on the page, which is the tab row there
-   *  and this head here: the bar that is always on screen. */
+  /** **The direction control**, built by App and drawn in the pinned head
+   *  beside `Back` — the same place it sits on the page, which is the tab row
+   *  there and this head here: the bar that is always on screen. It is wired to
+   *  `newPlaysOldestFirst`, this page's own state, and not to the stream's; see
+   *  `newOldestFirst` above and App's note on the parameter. */
   order?: ReactNode;
   /** **The kind pills**, built by App and drawn in the page at the head of the
    *  list they narrow rather than in the head above it. See the render below,
@@ -1960,12 +1986,17 @@ function NewPlaysPage({
                 is what a pinned bar is for — and the head is this page's pinned
                 bar, the tab row's part one page along. On its own row it was a
                 second line of chrome carrying one button: measured, the navbar
-                was 112px at 320, 390 and 1200 with the pills in it and is 66
+                was 112px at 320, 390 and 1200 with the pills in it and is 82
                 with the head alone, so the toggle rides for nothing where the
-                row cost 46. `.details-head` wraps, so at a width that cannot
-                hold `Back`, the name and a 99px control on one line it takes a
-                second line and the measured height follows it — that being why
-                `--details-chrome-h` is measured rather than declared. */}
+                row cost 46. (66 of that 82 until `.newplays-chrome` was given
+                the bottom padding its head's margin was collapsing out of —
+                see `styles.css`.) `.details-head` wraps, so at a width that
+                cannot hold `Back`, the name and this control on one line it
+                takes a second line and the measured height follows it — that
+                being why `--details-chrome-h` is measured rather than declared.
+                It does not wrap at any width now, the control dropping its word
+                below a 360px container, but a two-day range line can still
+                wrap it. */}
             {order}
           </div>
         </div>
