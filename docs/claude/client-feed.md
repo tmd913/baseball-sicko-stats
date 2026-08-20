@@ -12,6 +12,52 @@ here is only the consequence: the range this page is on is not the one the
 summary table is on, so the report behind the two of them can differ and a
 crossing between them costs the read that difference implies.
 
+### One stream of both kinds, with the outings above the plays
+
+**The feed used to be one kind at a time**, and the Recent section's heading was
+the tell: `{kind === 'pitcher' ? 'Recent outings' : 'Recent plays'}`, one list
+whose word changed with the tab above it. The tabs are gone (see **Client**,
+*Kind tabs — removed*), so the stream carries a whole roster.
+
+**The two do not interleave.** An outing is a whole game's work in one card and
+a play is one swing, and sorting them together by clock put a six-inning start
+between two groundouts as though the three were the same size of event. So the
+outings are their own section — `outings`, everything in `allRecent` of type
+`pitching` — and the plays are `allPlays`, everything else. **Above**, because a
+start is the day's larger fact and because it is what a reader with two pitchers
+on his roster came to check; the plays below it are the long tail he scrolls.
+
+**The play pills do not reach the outings, and that is why the split is on
+`type` rather than on the filtered list.** A pitching entry has no play kinds at
+all — `playKinds` returns an empty set for it — so any lens but `All` would have
+emptied the outings section as a *side effect* of narrowing the plays, which is
+a control saying it does one thing and doing two. Measured on 2026-08-19 over
+the live roster: `All` gives **3 outings / 10 plays**, the `HR` lens **3 / 3**
+and the `SB` lens **3 / 1** — the outings unmoved under all three.
+
+**The outings are unpaged.** A roster carries two or three starters and a day
+gives each at most one card, so there is nothing for a `Load more` to hold back;
+the plays below keep the ten-at-a-time paging and the `shown` key, which is what
+that machinery was written for.
+
+**`newPlays` counts plays and skips outings.** The red button says `N new plays`
+and the page it opens is a page of plays, so counting a start in it would be the
+mark naming one thing and opening another. `newRecent` filters `allPlays` for
+the same reason.
+
+**Live and Upcoming needed nothing.** Both were already built from per-player
+entries that never tested the kind, so both carry the whole roster the moment
+the filter above them goes. Driven with the app's own live simulator (`sim=1`),
+the Live section shows **9 items across all four role tints** — `role-at-bat`,
+`role-on-deck`, `role-on-base` and `role-pitching` — in one list. Upcoming on
+2026-08-20 drew **7 rows, three of them pitchers** (Dylan Lee, Didier Fuentes,
+Trevor Megill) beside four batters, ordered by first pitch as it always was.
+
+**The pills' gate changed from a tab to a fact about the roster.** They were
+drawn on the batter tab alone; the test is now *are there any batters here*, so
+a roster of nothing but pitchers still draws a feed — outings, upcoming starts —
+without six lenses over a list none of them can touch.
+
 ### The batter feed narrows to kinds of play, and says when something is new
 
 **On a full slate the stream is hundreds of items** — every plate appearance of

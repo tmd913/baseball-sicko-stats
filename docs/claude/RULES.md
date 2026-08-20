@@ -243,7 +243,7 @@ paint over the box covering it.
 
 ### State, and where it lives
 
-- **Which data a view shows → the URL.** `preset`/`start`/`end`, `view`, `kind`,
+- **Which data a view shows → the URL.** `preset`/`start`/`end`, `view`,
   `hideil`, `starters`, `sched`, `plays`, `roster`, `pos`, `cols`, `inc`,
   `win`, `mp`, `mup`, `mt`, `mr`, `lt`, `lspan`, `proj`, `rproj`. A link that leaves
   one out describes a different page.

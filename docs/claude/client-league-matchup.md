@@ -1531,6 +1531,33 @@ the fourth is a number somebody will re-derive. The gap *below* is 1 on both at
 every width, and the comparison page's card still clears the chrome by its own
 16 — the `:has()` does not reach it.
 
+#### The kind switch left the row too, and the thresholds moved with it
+
+**`Batters | Pitchers` is gone from this row**, with every other kind tab in the
+app (see **Client**, *Kind tabs — removed*). The team page draws one table of
+both kinds, so the group the section below spends three paragraphs deciding how
+to wrap is no longer in the row at all, and `.mup-tools .kind-switch { order: 1 }`
+went with it — a rule whose subject had stopped existing.
+
+**Both numbers below are re-derived, and the row is better off.** The remaining
+groups are the reading pills at 130.5 and the icon run at 480 with its words,
+which with one 12px gap needs **622.5** rather than 789.6. So the squaring
+threshold is `@container (max-width: 622px)`: measured, the crossover lands
+between **655 and 654** of window — 655 keeps the words (icons 480), 654 is
+squares (icons 168) — where it used to fall between 822 and 820. The words
+survive 167px further down than they did.
+
+**And the row is one line from ~350 up**, where the previous pass left it one
+line from 510. Measured at 1400, 900, 800, 700, 660, 655, 654, 640, 600, 500,
+430, 390: **one line, band 36, at every one**. Two lines begin at 340 (131 + 168
+with a 12px gap needs 311 of the 288 a 320 window leaves), which is the same
+arithmetic the section below states and the same conclusion: at that width the
+pills and the toggles cannot share a line whatever the order.
+
+**Equality across the readings is unchanged** — 36 on all three of Roster,
+Summary and Feed at every width from 1400 down to 360, and 84 on all three at
+320.
+
 #### `Summary` left the pill strip, and the row came back onto one line
 
 **It was never a third pill.** The strip's other two say *what kind of thing

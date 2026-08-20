@@ -51,7 +51,6 @@ import type {
   EspnTransactionPlayer,
   EspnTransactions,
   MatchupWindow,
-  PlayerKind,
   RosterProjection,
   ScheduleWindow,
 } from '../types';
@@ -585,7 +584,6 @@ export default function LeagueMatchupView({
    * things still out of the URL (`kind`, the feed's lens and its order) narrow rows inside a reading; they do not decide the days.
    */
   const [reading, setReading] = useState<MatchupReading>(() => initialReading ?? 'roster');
-  const [kind, setKind] = useState<PlayerKind>('batter');
   /**
    * **Which kind of play the feed reading is narrowed to** — the app's own row
    * of pills (`FeedFilterPills`), on somebody else's stream.
@@ -1619,20 +1617,6 @@ export default function LeagueMatchupView({
           </button>
         ))}
       </div>
-      <div className="kind-switch" role="tablist" aria-label="Batters or pitchers">
-        {(['batter', 'pitcher'] as const).map((k) => (
-          <button
-            key={k}
-            type="button"
-            role="tab"
-            aria-selected={kind === k}
-            className={`kind-tab${kind === k ? ' active' : ''}`}
-            onClick={() => setKind(k)}
-          >
-            {k === 'batter' ? 'Batters' : 'Pitchers'}
-          </button>
-        ))}
-      </div>
       {/* **The icon buttons travel as one group**, which is `.view-bar-tabs`'
           own rule one page down: a group breaks to the next line whole rather
           than one member of it going alone. Measured at 390, the four groups
@@ -1835,7 +1819,6 @@ export default function LeagueMatchupView({
                  `Roster` puts them on the days they left. */
               start={viewSpan.start}
               end={viewSpan.end}
-              kind={kind}
               /* `summary` is the roster table read over other days, so the page
                  below is handed the table it already draws — a fourth value
                  there would be a second definition of what a table of a team

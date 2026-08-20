@@ -237,6 +237,42 @@ The tab row itself goes 84 → 84 at 390 on the Roster and **132 → 84** on the
 
 **`components/StartersToggle.tsx` is deleted**, and `.starters-toggle` is out of the five `.research-toggle` selector lists it was folded into. Nothing in those lists was written for it: `.schedule-toggle` and `.projected-toggle` are still folded on and still carry the base, the hover, the `flex: none`, the `.on` fill, the focus ring and the two narrow-screen blocks, so the family reads as it did. The one rule that *was* its own — the visually-hidden `.starters-toggle-label` under 640px — went with it.
 
+#### One table of both kinds, and the pitcher header takes over from the batter one
+
+**The tabs are gone and the batters and the pitchers are one list**, pitchers
+below batters. See **Client**, *Kind tabs — removed*, for why; what matters here
+is that this component needed no drawing code for it. `SummaryTable` has
+rendered a `BatterTable` and a `PitcherTable` into one `.summary-tables` column
+since it was written — the case was reachable from the matchup team page and
+nowhere else, every other caller having filtered to one kind upstream. All that
+changed is what arrives in `reports`.
+
+**The header handoff is `position: sticky` doing what it already did.** Each
+table's `thead th` is `sticky; top: 0`, which pins *within its own table's box*:
+the batter header holds the top edge until the batter table's bottom passes it,
+and the pitcher header takes the edge as its own table arrives. Nothing
+arbitrates between them and nothing needed to.
+
+**Measured, because the seam is the part that could have been ugly.** The two
+tables sit at a **0px** gap, so the handoff has no interval in which neither
+header owns the edge. Swept the scroller 1px at a time across 81 consecutive
+positions spanning the handoff (`scrollTop` 852 → 932 on an 18-batter,
+15-pitcher roster at 1200×900): **exactly one header covered the top edge at
+every one of them** — never zero, never two. A coarser 12px sweep over the whole
+bottom third agrees. Were the gap ever made non-zero, that interval comes back
+and reads as the header flickering off and on.
+
+**Different column counts, one width.** The batter table has 11 columns and the
+pitcher table 15, and `.summary-tables` is `width: max-content` with each table
+at `width: 100%`, so both take the wider one's width and the narrower stretches
+to meet it. That is what stops the batter table ending short of the scrolled-
+right edge, and it is why the horizontal axis needed no work either. Measured on
+the live roster, both tables and the column identical to the tenth of a pixel at
+every width — **1200 / 1200 at 1200, 884.6 at 640, 784.1 at 390, 769.5 at 320**
+— with the scroller's `scrollWidth` matching the column and **0px of page-body
+overflow** at all four. Scrolled fully right at each, **both** headshot columns
+pin at `left: 0` and the legend stays at 0 (−0.5 at 320, its own half-pixel).
+
 #### The `Total` row is a divider now, and it totals the men above it
 
 **The most useful row on the table was the one figure nobody could act on.** It
