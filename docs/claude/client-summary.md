@@ -6,7 +6,7 @@ hide-injured filter). The three wide tables' shared behavior — the full-page
 mode, the bleed, the sticky columns — is described here and referred to from the
 other two.
 
-- **summary** (`SummaryTable.tsx`, the default, listed first) — a full-page stat table over the range (one row per player: opponent/score, H/AB, R, HR, RBI, SB, OPS, BB, K; aggregate `Total` row pinned at the bottom). The opponent column shows the matchup pre-game, the live score + inning while a game is on, and the final score once it's over — for a representative game picked live-first, then scheduled, then most recent — and, **before first pitch only**, the other side's announced starter on a second line (`game.probablePitcher`, **surname only**: this is the column whose width costs a stat column off the right of a phone, so the name takes a line rather than widening the cell). Pre-game the start time moves up beside the matchup, so the cell is two lines in every state instead of three in one of them; once the game is under way the starter drops off, the score and inning being what matters by then (and the batter as likely to be facing a reliever). On the pitcher tab that starter is his counterpart, not someone he faces. **In neither of the table's other two readings is that column drawn at all** — the Schedule view and the projected lens each replace it with `G`, for the same reason stated twice: one representative game says nothing about a span of days ahead (see *What the mode swaps* and *The Opponent column becomes `G`* below). Hides the overall-stats chips, and the search bar too — *except* when the roster is empty, since the view tabs are also hidden until something is on it, so a new user would otherwise have no way to add a first player (`showAdder` in `App.tsx`). The `.app.summary-mode` class turns the app into a fixed-height flex column so only the table scrolls.
+- **summary** (`SummaryTable.tsx`, the default, listed first) — a full-page stat table over the range (one row per player: opponent/score, H/AB, R, HR, RBI, SB, OPS, BB, K; a `Total` row **between the starters and the bench**, summing the men above it — see *The `Total` row is a divider now* below). The opponent column shows the matchup pre-game, the live score + inning while a game is on, and the final score once it's over — for a representative game picked live-first, then scheduled, then most recent — and, **before first pitch only**, the other side's announced starter on a second line (`game.probablePitcher`, **surname only**: this is the column whose width costs a stat column off the right of a phone, so the name takes a line rather than widening the cell). Pre-game the start time moves up beside the matchup, so the cell is two lines in every state instead of three in one of them; once the game is under way the starter drops off, the score and inning being what matters by then (and the batter as likely to be facing a reliever). On the pitcher tab that starter is his counterpart, not someone he faces. **In neither of the table's other two readings is that column drawn at all** — the Schedule view and the projected lens each replace it with `G`, for the same reason stated twice: one representative game says nothing about a span of days ahead (see *What the mode swaps* and *The Opponent column becomes `G`* below). Hides the overall-stats chips, and the search bar too — *except* when the roster is empty, since the view tabs are also hidden until something is on it, so a new user would otherwise have no way to add a first player (`showAdder` in `App.tsx`). The `.app.summary-mode` class turns the app into a fixed-height flex column so only the table scrolls.
 
 **And on this view the column gives its vertical margins back too**, the way the three wide tables give back the side gutters (`--table-bleed`, above): the table meets the bar above it and the bottom of the window below. There were two of them and they were both 14px, one from each box — `.app`'s own `padding-bottom` and the chrome's `margin-bottom` — and neither was doing any work here. The pane *is* the page on this view: there is nothing under it to be held off and nothing above it but the bar, so both were a strip of background showing through where a reader expects rows. **The 80px `.app` carries at the bottom is not the culprit it looks like** and never reached this view: the `.app.summary-mode, .app.research-mode` rule has overridden it to 14 since summary mode was written, which is why the fix is a *pair* of 14s and why removing only one of them would have taken the table to one edge and not the other. `padding-bottom` alone rather than the whole padding — the top 14px is already spoken for by the chrome's negative top margin, and the sides are what `--table-bleed` reads to know how far the table may bleed back out through them. Measured before and after at 320, 390, 640, 1200 and 1920 wide and on a 500px-tall window, on both the batter and the pitcher tab: 14px above the header row and 14px below the pinned total row at every one of them, **0 and 0** after, with the total row landing on the window's own bottom edge less the 1px the bottom border takes — the same pixel the sticky-column note above measures.
 
@@ -232,6 +232,106 @@ It reads the player's **own report**, not the league-wide `/api/statuses` map th
 **It is only offered over a range that contains today**, and its effect and its URL param are gated on the same test (`rangeHasToday`, `startersActive`). Over "Yesterday" or a week in July there is nobody it could keep, and a control that empties a table with no way to read why is a trap — the same reasoning that hides the date row on the research board, which has nothing dated to act on. The *state* survives the excursion, so going back to Today finds the toggle as it was left, and a `starters=1` link opened on a July range filters nothing rather than showing a blank table with no control on screen to undo it.
 
 **On the roster row, not in the settings menu.** The gear is app chrome and everything in it reads as app-wide — hide-injured decides the summary *and* the feed, muting decides every clip in the app — where this qualifies the two roster views and nothing on the research board, and a menu entry that did nothing over there would be a setting lying about its own reach. So it sits with the tabs that select the page it belongs to, and goes with them on Research, which is the honest version of "it doesn't apply here". Between the reading and the days, which is the research board's own order rather than an exception to this row's: the scope pills there name *which players* and sit ahead of the window that names which span. It is `.starters-toggle`, **folded into `.research-toggle`'s selector lists** rather than restyled to resemble them — it is the same object as the board's Watchlist button two views over, a plain toggle with no panel, so it takes `.on` and never `.active`. (Qualified was the closer twin of the two, being a filter rather than a widener, and is gone — see below.) **On a phone it and the calendar go to their glyphs**, both of them 36px squares, which is the one thing that gets the roster tabs and their two filters onto a single line. It kept its word at every width until now, on the argument that the board's four toggles drop theirs because they are a *known run* of icons where this was one button on a row of tabs with nothing beside it to say what the glyph meant. That argument was right and is what changed: the calendar beside it is the second icon, so the pair is the run, and the two together are 84px of a line where the two labels were 174. Above 640 both keep their words, there being room for them. The labels are *visually* hidden rather than removed, the rule `.research-toggle-label` already follows, so each button still names itself to a screen reader rather than being a lone `aria-hidden` glyph, and each keeps the `title` a pointer gets.
+
+#### The `Total` row is a divider now, and it totals the men above it
+
+**The most useful row on the table was the one figure nobody could act on.** It
+was a `<tfoot>` under *every* player on the tab — starters, bench and injured
+list alike — which answers the question *what would my roster score if all
+sixteen of them could bat at once*. Nobody asks that. What a manager opens a
+roster to find out is what **tonight's team** is worth, and that is the men
+above the line.
+
+So the table is cut in two and the row is the cut: **the starters, the `Total`,
+then the bench and the injured under it**, and the row sums only what is above
+it. Measured on the live 12-team league, batting on 2026-08-15: eleven lineup
+slots over the line and `Total · 11` reading `3/30 · 1 R · 0 HR · 3 RBI · 0 SB ·
+.417 · 6 BB · 8 K`, which is the eleven rows added up to the character —
+against a bench `BE` under the line (Carson Benge, `1/2`, 1 R, 1 HR, 1 RBI, 2
+BB, 1 K) that the old foot would have carried into every one of those cells and
+this one does not. The same cut in the Schedule view, same day: `Total · 11` and
+`G 48` against the eleven rows' 4+4+5+5+4+4+5+4+5+4+4, and the per-day counts
+`11 · 4 · 11 · 11 · 11` where three injured men below the line have games on
+four of those five days and are counted on none of them.
+
+**It is not sticky any more**, and the two facts are one fact: a row that totals
+everything above it belongs pinned to the foot of the pane, and a row that
+*divides* one half of the table from the other has to be where it falls or it says
+nothing. Pinned, it sat across the middle of the rows it separates. Measured on
+the live table at 1200×700 — pane 494px, row 48 — the divider now reads 689 →
+489 → 271px from the top of the pane as the pane scrolls 0 → 200 → 418, where
+sticky it held 446 at every one of them. The `position: sticky`, the `bottom: 0`
+and the `z-index` went with it, as did the `z-index: 3` that lifted its pinned
+headshot cell over a row hanging off the bottom of the box; what stays is the
+dressing that makes it read as a rule under the numbers — the 2px top border,
+the bolder ink, 15px of vertical padding against a body row's own. **Every
+measurement above this section that reads "the pinned total row 1px off the pane's bottom" is a record
+of a build in which it was pinned**, and each is left as written for the reason
+this file leaves all its superseded reasoning: the number was true, and what
+those passages were measuring — the pane meeting the window, the gutters, the
+chrome — is untouched by a row inside it moving.
+
+**Who is a starter is not the table's decision, and that is deliberate.** The
+app has exactly one answer to that question and it is the `Starters` button's —
+`lib.ts::projectStarters`, described above. App calls it whether the button is
+pressed or not (`starterCards`) and hands the table the keys it keeps
+(`starterKeys`); `SummaryTable.tsx::splitStarters` does nothing but look them
+up. A test written down there would be a second test that will one day disagree
+with the button, and it would disagree **silently** — the button narrowing to
+one set of men while the line above the total drew another.
+
+That means the word carries the filter's own two readings, and its own edge
+cases. On your own roster a starter is a man in tonight's posted lineup or named
+as today's starting pitcher; on a fantasy team he is a man **you** started on
+some day of the range, however his real manager has him — so over
+2026-08-12…08-19 a `BE` chip (Chris Sale, Jake Bennett) and a man since dropped
+(Kevin Gausman, no chip at all) all sit above the line, every one of them
+started on some day of that range, and `Total · 15` is those fifteen. **A player
+the app cannot place goes below the line**, which is what the filter does with
+him — it keeps what it can name and drops the rest — and it is the conservative
+direction of the two: counting a man into a lineup he is not in overstates the
+one row that is read as *what is tonight worth*, where leaving him out puts him
+with the bench and leaves his own row adding up exactly as before.
+
+**Two degenerate cases, and both are the old table to the pixel.** With nobody
+above the line — nothing posted yet this morning, or a range the filter is not
+offered over at all (`startersOffered` false, `starters` null) — a divider would
+divide nothing and label a total of nought, so the row goes back to the bottom
+over everybody. With nobody below it — the filter already pressed, or a team
+every man of which is in the lineup — it is at the bottom for the ordinary
+reason, that there is nothing after it. Measured with `starters=1` on the same
+day: two `<tbody>`s, eleven rows, `Total · 11` reading the identical `3/30 · 1 ·
+0 · 3 · 0 · .417 · 6 · 8`. The rule reads the same at both ends — the row totals
+what is above it, and what is above it is the whole table whenever the split has
+nothing to say.
+
+**The count on the label is the count of what it totals**, which is the whole
+point of the move: `Total · 9` on a sixteen-man roster is a figure a manager can
+act on where `Total · 16` never was. `Lineup` still replaces the word where the
+projection filled one, and both now narrow to the same set — measured under the
+lens on `Today`, `Lineup · 11` over eleven rows with three injured below. The
+title says the split is there, since the count alone cannot: nine of sixteen and
+nine of nine read identically.
+
+**The divider is a `<tbody>` of its own**, which is what keeps the stripe
+honest. `tbody tr:nth-child(even)` counts inside its own body, so the row is
+always the first of its and takes no stripe, and the group under it stripes from
+its own first row rather than from whatever parity the line happened to leave
+behind. Measured at 1200: `#121314 / #202122` alternating down the eleven above,
+`#2a2b2c` on the divider (`--panel-2`, and its pinned headshot cell names the
+same ground rather than inheriting the page's `--bg`), then `#121314 / #202122 /
+#121314` down the three below. The alternative was a third `nth-child` selector
+and an `:not()`, which is a rule that has to be kept in step with the markup;
+this is the markup saying it.
+
+**Measured at 320 / 390 / 640 / 1200 / 1920, on both tabs.** Every invariant the
+table is already measured against is unchanged at every width and on both:
+page-body overflow **0**, the headshot column pinned at **0**, a **58.00px**
+row, a **51.00px** header row, and the divider itself **48.00px** — the pinned
+foot's own height, the padding being the only thing it kept. Batters split 11 /
+1 / 3 and pitchers 10 / 1 / 5 at all five widths, the two tables behaving
+identically by construction: the split, the label and the schedule-mode
+narrowing are one function each, called twice.
 
 *(Superseded, and kept for what it explains: the calendar is a full-width bar under the tab row now — see `client-dates.md`, **It is a bar, and it was a button** — so the bubble, the visually-hidden label and the square are all gone with it, and the phone run below is the mode toggles and `Starters` alone. The rule the paragraph establishes is why the bar states its days in full at every width.)* **The calendar cannot simply lose its wording, so its range moves to a bubble on the corner of the glyph** (`.date-toggle-bubble`). Its label is the only thing on the page saying which days every number on it is drawn from — that is why that button was never allowed to be a square in the first place — and an unlabeled calendar icon would leave it unsaid. The bubble says the same fact in the space a badge takes: `8/12`, or `7/29–8/12` over a range, from `tightRange` in `DateRangePicker.tsx`. **Numbers rather than the preset's word, always**, where the label reads "Today": a preset's name is a label's worth of text and this is a badge on a 36px square, where `8/12` says the same thing in half the width and says it exactly. It is rendered at every width and hidden by the stylesheet above 640, the way the date presets and their dropdown already are.
 
@@ -565,9 +665,11 @@ That is **734 cells named across all three tiers and not one of them wrong**, an
 the wire, for a club derivation, an inverted index, a line in every cell and the
 paragraphs above restated where the rules are.
 
-#### The `Total` row is the most useful row on the table
+#### And each day's cell in the `Total` row is a body count
 
-In schedule mode each day's cell in the `<tfoot>` is **how many of these players have a game that day** — the "do I have enough bodies on Thursday" question, which no other view in the app can answer and which falls out of the same pass for nothing. Measured on a real 12-man fantasy roster: `Total · 12 | 75 | 12 12 12 9 12 12 5` — twelve on each of the first three days, nine on Monday and five on Thursday, over 75 games in the week. The two leading cells are the ordinary sums.
+In schedule mode each day's cell in that row is **how many of these players have a game that day** — the "do I have enough bodies on Thursday" question, which no other view in the app can answer and which falls out of the same pass for nothing. Measured on a real 12-man fantasy roster: `Total · 12 | 75 | 12 12 12 9 12 12 5` — twelve on each of the first three days, nine on Monday and five on Thursday, over 75 games in the week. The two leading cells are the ordinary sums.
+
+*(That row is a divider between the starters and the bench now rather than a `<tfoot>` over everybody, and this mode narrows with it — the counts are of the men above the line, `ScheduleTotalCells` taking the same list the stat totals do. Measured on 2026-08-15 with the live league: `Total · 11`, `G 48` against the eleven rows' own 4+4+5+5+4+4+5+4+5+4+4, and `11 · 4 · 11 · 11 · 11` down the days where three injured men below the line have games on four of the five and are counted on none. The question the cell answers is unchanged and is now asked of the team you are actually playing: an injured man is not a body you have on Thursday. See *The `Total` row is a divider now*.)*
 
 #### What the mode swaps, and what it leaves alone
 
@@ -898,16 +1000,17 @@ headshot column pinned at 0 and page-body overflow 0 either way.
 
 #### The caption, and the key behind it
 
-`Projected · Aug 18 – Aug 23 · 6 days still to play`, directly above the pane —
-the table's **caption** rather than a control, which is why it is not up in the
-pinned row with the toggle: the research board's count line and the Rankings
-tab's span line are the same object in the same place. The **days** matter as
-much as the dates, because a span whose clubs are all idle projects nothing, and
-a table of dashes with nothing to explain it is the one state this must not be
-in. With nothing left to play the span is **not printed at all** and the line
-reads `nothing to project — every game in these days has been played`: naming a
-projected span there would be the lens taking credit for figures it did not
-touch.
+*(Superseded in its first two thirds, and kept because the paragraph below is
+what the correction is measured against.)* `Projected · Aug 18 – Aug 23 · 6 days
+still to play`, directly above the pane — the table's **caption** rather than a
+control, which is why it is not up in the pinned row with the toggle: the
+research board's count line and the Rankings tab's span line are the same object
+in the same place. The **days** matter as much as the dates, because a span whose
+clubs are all idle projects nothing, and a table of dashes with nothing to
+explain it is the one state this must not be in. With nothing left to play the
+span is **not printed at all** and the line reads `nothing to project — every
+game in these days has been played`: naming a projected span there would be the
+lens taking credit for figures it did not touch.
 
 The ⓘ beside it is **`ProjectionKey`, shared with the League page** — see
 **Client — the League view**, *The key and the glyph are one component*. Its
@@ -915,6 +1018,65 @@ The ⓘ beside it is **`ProjectionKey`, shared with the League page** — see
 already done plus what he should add* rather than naming a league's scoring
 categories. It is anchored to the caption row rather than to its own 30px button,
 which is `.roll-key`'s measured trick.
+
+#### The caption was saying twice what the bar above it says once
+
+**It was written before the date bar had a projected reading, and the two now
+sit eight pixels apart.** The bar under the tabs prints its lead over its range,
+and one of its three readings *is* this lens: `PROJECTED` over `Aug 19 – Aug 23`,
+measured on the running app the instant the toggle is pressed. The caption
+underneath then printed `Projected` again, and the same two dates again, in a
+row of its own. That is not a caption a reader gains anything from — and the bar
+says it **better**, being pinned (so it is on screen with the pane scrolled to
+its foot) and coming along into the expanded mode, where the caption was two
+scroll positions away from the numbers it described.
+
+So the caption goes, and with it the accent `Projected` tag, the span and the
+`N days still to play` line. **Two things it carried do not.**
+
+**The ⓘ moves up beside the `Projected` toggle**, which is the control it
+explains and is where the League page has kept its own copy all along
+(`.lg-proj-key`, one row up). Drawn **on the press rather than on the answer** —
+`days` is 0 until the read lands and the panel words that as *over the days
+left* rather than naming a number it has not got — because a key that appeared a
+quarter of a second after the press would move the row under the finger that had
+gone on to the next control. It hangs off **the row** rather than off its own
+30px button, the trick this file records four times: nothing between it and
+`.view-bar` is positioned, so `right: 0` is the app's own gutter. Measured with
+the panel open: 858→1178 inside a 1200 window, 48→368 inside 390, 22→298 inside
+320 (the `min(320px, 100vw - 44px)` cap doing the last one), and 868→1188 inside
+the expanded box at 1200, whose chrome row takes `position: relative` for
+exactly this.
+
+**And the one line neither the bar nor the toggle can carry stays where it was**
+— `nothing to project — every game in these days has been played`, drawn at
+`daysLeft === 0` and not at all otherwise. This is the state the paragraph above
+calls the one this must not be silent in, and it survives the redundancy
+argument untouched: the bar can say *which days*, and it cannot say *there is
+nothing in them*. A reader who has pressed a control and watched the table not
+move is owed the reason, and where the clubs are idle as well as the days spent
+it is a table of dashes with nothing else on the page to explain it. Reached by
+an inbound `rproj=1` over a past range — a **press** moves the reader to the days
+there are games in, which is that toggle's own documented rule, so the press
+cannot land here. Measured on `?start=2026-08-12&end=2026-08-14&rproj=1`: the
+bar reads `PROJECTED` over `Aug 12 – Aug 14`, the line is drawn at 22px in from
+the app's gutter and 33px tall at 1200 (48px, two lines, at 390), the table
+below it carries the report's own figures, and page-body overflow is **0** at
+both.
+
+**It keeps its place directly above the pane** rather than moving up beside the
+toggle with the ⓘ, and the caption's original argument is why: it is about the
+rows under it, not about the control that produced them — and at a phone's width
+the tab row has not got a line to spare for a sentence, where the pane can give
+up 48px in the one state where its rows say nothing anyway.
+
+**Bundle for the two together: 591.79 → 592.28 KB of JS** (176.58 → 176.69
+gzipped) and **157.84 → 157.62 KB of CSS** (28.18 → 28.17) — 0.5KB of JS raw and
+0.1KB over the wire, against **0.2KB of CSS given back** raw and 0.01 gzipped.
+The stylesheet shrinking is the honest report: a divider needs less than a
+pinned foot did (the sticky, the offset, two z-indexes) and a caption reduced to
+one line needs less than four rules and an anchor, so what the split and the
+group beside the toggle cost is more than paid for by what came out.
 
 #### `rproj=1`, and why it is not `proj=1`
 
