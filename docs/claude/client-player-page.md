@@ -1372,6 +1372,18 @@ that says there is nothing behind it. **Measured on Aaron Judge's thirteen
 rows: 9 are presses and 4 are static**, which is the same 9-of-13 the opposing
 starter is named on, because it is the same fact.
 
+**Reusing the feed's box did not reuse all of the feed's stylesheet, and it cost
+the batter's dialog its bars.** `.start-detail` was folded onto `.upcoming-detail`
+for the flex column and *not* onto `.upcoming-detail .pct-card { width: 100% }`,
+so from this caller `.pct-card`'s `margin: 0 auto` suppressed its stretch and it
+shrank to its own content — measured on Ohtani's Aug 20 row, **a 246px card in a
+774px body at 1400, its `1fr` rail track 0px and all eight fills rendered at
+0.00px**; 185px and a 0 track at 390 and at 320. The dialog itself was never
+narrow (800 / 358 / 288, unchanged). The fix is that selector folded on, and the
+whole of the diagnosis — including the three alternatives that lose and why a
+thin-split card hides the fault — is in `client-player-splits.md`, *The card has
+three callers, and the third one got no bars*.
+
 **The club-line cache moved rather than being written twice.** It was
 `ProjectedStartsBlock`'s own `opps`/`asked`/`loadOpponent`, and two lists of
 dated rows now read one club's season line on a press, so it is
