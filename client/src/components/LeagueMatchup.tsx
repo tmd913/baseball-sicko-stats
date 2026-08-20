@@ -10,6 +10,7 @@ import { InfoKey } from './InfoKey';
 import { DateBar, DateRow, stepRange, stepTitle } from './DateControls';
 import type { DateBarReading, DatePreset } from './DateControls';
 import LeagueTeam from './LeagueTeam';
+import { FeedOrderToggle } from './FeedFilters';
 import type { FeedLens } from './FeedFilters';
 import { StartersToggle } from './StartersToggle';
 import { ProjectedToggle } from './Projection';
@@ -1435,6 +1436,17 @@ export default function LeagueMatchupView({
             }
           />
         )}
+        {/* **Which way the feed's clock runs**, on the feed reading alone —
+            there being no order to a table. It is beside the other two "which
+            reading of it" controls for that reason, and it is *here* rather
+            than in the pill row inside the page for the Feed view's own
+            reason: the pills answer the question the page was opened with and
+            are worked on arrival, where an order is wanted by a reader already
+            well down a stream, and this run is the part of the page that does
+            not scroll away from them. See `FeedOrderToggle`. */}
+        {reading === 'feed' && (
+          <FeedOrderToggle oldestFirst={feedOldest} onToggle={() => setFeedOldest((v) => !v)} />
+        )}
         {/* Between the reading and the days, which is the roster row's own
             order: the questions come as *which page, which kind, which reading
             of it, which players, which days*. */}
@@ -1503,7 +1515,6 @@ export default function LeagueMatchupView({
               lens={feedLens}
               onLens={setFeedLens}
               oldestFirst={feedOldest}
-              onToggleOrder={() => setFeedOldest((v) => !v)}
               schedule={reading === 'roster' ? scheduleIndex : null}
               /* Held with the team it was read for, so crossing to the other
                  manager draws the plain table until his own answer lands rather

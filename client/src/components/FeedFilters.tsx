@@ -49,12 +49,20 @@
  * rather than a play — the same fact the kind tabs exist for — so there is
  * nothing here to select on, and the kind group is not drawn.
  *
- * **The row itself is drawn on both tabs**, because it carries a second control
- * that is not about kinds at all: `Oldest first`, which turns the stream round.
- * An outing has a clock like a plate appearance does, so a pitcher's day reads
- * forwards on the same press, and the toggle keeps its place at the row's right
- * end whichever tab is up. See `FeedFilterPills` for the shape and why it is
- * not an eighth pill.
+ * **The row is the batter tab's alone again, and the order toggle has left it
+ * for the navbar.** `Oldest first` was at this row's right end for a spell —
+ * drawn on both tabs, since an outing has a clock like a plate appearance does
+ * — and it is in the pinned tab row now, beside `Starters`. The two controls
+ * are not the same kind of thing and this file's own argument for putting the
+ * pills in the page is what separates them: the pills answer the question the
+ * page was opened with and are worked once on arrival, where an order is a
+ * control a reader reaches *while scrolling*, halfway down a stream they have
+ * been reading. See `FeedOrderToggle`.
+ *
+ * **It is still one component**, because there is a second place both are drawn
+ * together: the new-plays page's own navbar (`LiveFeed`'s `NewPlaysPage`),
+ * which carries the filters and the order on one row over a list of its own.
+ * That caller passes `order` and gets the toggle back inside the row.
  */
 
 /**
@@ -189,45 +197,18 @@ export function playFilterParam(key: PlayFilterKey | null): string | null {
  * is the app's own lit state and a pill here is the same object as a pill
  * anywhere else.
  *
- * **And the row carries a second axis at its right end: `Oldest first`.**
- *
- * **Not an eighth pill**, which is the mistake `New` made and was reversed for:
- * the pills are single-select over *kinds*, and an order is not a kind — a
- * reader who wants the home runs read forwards has to be able to say both. So
- * the kinds are a `role="group"` of their own (`.feed-filter-kinds`) and this
- * stands outside it.
- *
- * **A lit toggle rather than a segmented `Newest | Oldest` run**, which is the
- * other shape this app has for a two-valued control. A segmented run says its
- * two values are *peers* — Roster/Feed/Research, Batters/Pitchers — and these
- * are not: newest-first is what makes a stream a stream (see `byRecency`, and
- * `byPlayOrder`'s own note that a *game* is the thing read forwards), and
- * oldest-first is the departure from it. This app spells a departure as a lit
- * toggle whose absence is the default — `Starters`, `Watchlist`, `Projected`,
- * `hideil` — and carries only the departure in the URL (`oldest=1`). It also
- * costs half the width of a segmented pair, on a row that is already a
- * scrollport at 320.
- *
- * **The label does not change when it lights.** `Oldest first` is what pressing
- * it does and what being lit means, in one word each way; a label that flipped
- * to `Newest first` would change the button's width under the finger that
- * pressed it, which is this app's *reserve the box* rule broken by a control
- * that is nothing but a box. The `title` carries the state instead, that being
- * the one thing on a button that can change size for free.
- *
- * **It sits outside the scrollport rather than at the end of it.** The kinds
- * scroll — seven pills do not fit 320 and never did — and a control the reader
- * has to discover by scrolling a row sideways is a control most of them will
- * not find. This one is `flex: none` with `margin-left: auto` in a row that no
- * longer scrolls as a whole, so it is in the same place at every width and on
- * both kind tabs, and the pills go on scrolling underneath it.
+ * **The order toggle is not part of this row on the page any more** — it is in
+ * the pinned tab row (`FeedOrderToggle`, below, which carries the argument).
+ * The one caller that still wants the two on one line is the new-plays page's
+ * navbar, which has no tab row to put it in and one row for everything: it
+ * passes `order`, and the toggle is drawn at the row's right end exactly as it
+ * used to be, `flex: none` with `margin-left: auto` outside the scrollport.
  */
 export function FeedFilterPills({
   lens,
   onSelect,
   kinds = true,
-  oldestFirst,
-  onToggleOrder,
+  order,
 }: {
   /** Which pill is lit. Exactly one always is. */
   lens: FeedLens;
@@ -235,13 +216,17 @@ export function FeedFilterPills({
   /**
    * Whether the **kind** group is drawn at all — false on the pitcher tab,
    * where a stream item is a whole outing rather than a play and there is
-   * nothing for these pills to select on. The order toggle beside it is drawn
-   * either way: outings have a clock too.
+   * nothing for these pills to select on. On the page that is now the whole of
+   * whether this row is drawn at all: with the order toggle gone to the tab
+   * row, a row with no kinds in it would be an empty row.
    */
   kinds?: boolean;
-  /** Whether the stream is running forwards — see `feed-order` below. */
-  oldestFirst: boolean;
-  onToggleOrder: () => void;
+  /**
+   * **The order toggle inside this row**, for the one caller that has nowhere
+   * else to put it — the new-plays page's navbar. Absent on the page, where it
+   * sits with the tabs; see `FeedOrderToggle`.
+   */
+  order?: { oldestFirst: boolean; onToggle: () => void };
 }) {
   const pill = (key: FeedLens, label: string, title: string) => (
     <button
@@ -268,19 +253,74 @@ export function FeedFilterPills({
           {PLAY_FILTERS.map((f) => pill(f.key, f.label, f.title))}
         </div>
       )}
-      <button
-        type="button"
-        className={`research-toggle feed-filter-pill feed-order${oldestFirst ? ' on' : ''}`}
-        aria-pressed={oldestFirst}
-        onClick={onToggleOrder}
-        title={
-          oldestFirst
-            ? 'The day read forwards, first play first — press to put the newest back on top'
-            : 'Read the day forwards instead, from its first play'
-        }
-      >
-        Oldest first
-      </button>
+      {order && (
+        <FeedOrderToggle oldestFirst={order.oldestFirst} onToggle={order.onToggle} compact />
+      )}
     </div>
+  );
+}
+
+/**
+ * **`Oldest first`** — the stream turned round, first play of the day at the
+ * top. One button, drawn in two places, and the two are one component so they
+ * cannot come to word or shape the same control differently.
+ *
+ * **In the pinned tab row on the page, beside `Starters`**, which is a
+ * reversal for this one control of the argument `FeedFilterPills` makes for
+ * itself. What the tab-row rule protects is a control a reader has to reach
+ * *while scrolling* — the research board's filters over a six-hundred-row
+ * table are the case it was written for. The kind pills are not that: they are
+ * the answer to the question the page was opened with and are worked once on
+ * arrival, so they stay in the page at the head of the stream they narrow. An
+ * **order** is the other kind. A reader forty items down a day's plays who
+ * wants it read forwards is exactly the reader the pills' argument excludes,
+ * and reaching a control at the top of a scrolled stream is a journey back up
+ * it. So this one goes with the tabs, which are pinned and are always there.
+ *
+ * **A lit toggle rather than a segmented `Newest | Oldest` run**, which is the
+ * other shape this app has for a two-valued control. A segmented run says its
+ * two values are *peers* — Roster/Feed/Research, Batters/Pitchers — and these
+ * are not: newest-first is what makes a stream a stream (see `byRecency`, and
+ * `byPlayOrder`'s own note that a *game* is the thing read forwards), and
+ * oldest-first is the departure from it. This app spells a departure as a lit
+ * toggle whose absence is the default — `Starters`, `Watchlist`, `Projected`,
+ * `hideil` — and carries only the departure in the URL (`oldest=1`).
+ *
+ * **The label does not change when it lights.** `Oldest first` is what pressing
+ * it does and what being lit means; a label that flipped to `Newest first`
+ * would change the button's width under the finger that pressed it, which is
+ * this app's *reserve the box* rule broken by a control that is nothing but a
+ * box. The `title` carries the state instead, that being the one thing on a
+ * button that can change size for free.
+ *
+ * **`compact` is the pill height, not a second control.** In the tab row it is
+ * a plain `.research-toggle`, `--control-h` tall like `Starters` next to it; in
+ * the new-plays navbar it sits shoulder to shoulder with 30px pills and takes
+ * `.feed-filter-pill` so the row is one height. Same class, same word, same
+ * handler — only the box it stands in differs.
+ */
+export function FeedOrderToggle({
+  oldestFirst,
+  onToggle,
+  compact = false,
+}: {
+  oldestFirst: boolean;
+  onToggle: () => void;
+  compact?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      className={`research-toggle feed-order${compact ? ' feed-filter-pill' : ''}${oldestFirst ? ' on' : ''}`}
+      aria-pressed={oldestFirst}
+      onClick={onToggle}
+      title={
+        oldestFirst
+          ? 'The day read forwards, first play first — press to put the newest back on top'
+          : 'Read the day forwards instead, from its first play'
+      }
+    >
+      Oldest first
+    </button>
   );
 }

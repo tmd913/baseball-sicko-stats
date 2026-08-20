@@ -72,7 +72,6 @@ export default function LeagueTeam({
   lens,
   onLens,
   oldestFirst,
-  onToggleOrder,
   schedule,
   projection,
   onOpenDetails,
@@ -102,7 +101,6 @@ export default function LeagueTeam({
   /** Which way the stream runs, and the press that turns it — the overlay's,
    *  beside the lens, so crossing to the other manager keeps both. */
   oldestFirst: boolean;
-  onToggleOrder: () => void;
   /** The Schedule view's index, or null for the ordinary stat columns — the
    *  same "the mode is the presence of an index" rule App applies, so a table
    *  can never be in schedule mode with no schedule in it. */
@@ -339,18 +337,15 @@ export default function LeagueTeam({
               one and passing the lens through would empty the pitcher feed on
               behalf of a control that tab does not offer. The *state* is the
               overlay's and survives the excursion, exactly as `starters` does. */}
-          {/* **The kind group is the batter tab's; the toggle beside it is both
-              tabs'** — an outing has a clock too, so the row is drawn either way
-              and `kinds` is what varies. That is the app's own Feed row exactly
-              (see `App`), which is the point: one control, drawn the same on
-              both pages. */}
-          <FeedFilterPills
-            lens={lens}
-            onSelect={onLens}
-            kinds={kind === 'batter'}
-            oldestFirst={oldestFirst}
-            onToggleOrder={onToggleOrder}
-          />
+          {/* **The order toggle has left this row for `mup-tools`**, which is
+              the Feed view's own move one page along: there it went to the
+              pinned tab row, here to this page's control run, and the reason is
+              the same either side — the pills are worked on arrival and an
+              order is wanted halfway down a stream, where a control at the head
+              of the page is a scroll back up. So this row is the kinds alone
+              and is drawn on the batter tab alone: with the toggle gone, a
+              pitcher tab would draw an empty row. */}
+          {kind === 'batter' && <FeedFilterPills lens={lens} onSelect={onLens} />}
           <LiveFeed
             /* Keyed on the kind and the days, so the stream starts at its first
                page when the list becomes a different list — the app's own
