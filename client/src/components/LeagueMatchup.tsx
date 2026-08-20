@@ -17,7 +17,6 @@ import type { DateBarReading, DatePreset } from './DateControls';
 import LeagueTeam from './LeagueTeam';
 import { FeedOrderToggle } from './FeedFilters';
 import type { FeedLens } from './FeedFilters';
-import { StartersToggle } from './StartersToggle';
 import { ProjectedToggle } from './Projection';
 import { ScheduleSpanTabs, ScheduleToggle } from './ScheduleControl';
 import {
@@ -487,23 +486,6 @@ export default function LeagueMatchupView({
   const [reading, setReading] = useState<'roster' | 'feed'>('roster');
   const [kind, setKind] = useState<PlayerKind>('batter');
   /**
-   * **Only the men this manager actually started**, over the days he started
-   * them — the app's own `Starters` filter, on somebody else's lineup.
-   *
-   * The overlay owns it for the reason it owns the reading, the kind and the
-   * dates: those are chrome above *both* team pages and must not reset when the
-   * reader crosses from one manager to the other. And it is state rather than
-   * anything in the URL, which is where every other control on this page sits —
-   * `mup` and `mt` are the whole of what a matchup link carries.
-   *
-   * **Always offered**, unlike the roster row's own, which is hidden over a
-   * range with no today in it: that gate exists because the *MLB* reading of
-   * the word is a fact about tonight, and there is no MLB reading here. A
-   * leaguemate's lineup is a real fact about every day of every range, and
-   * where the per-day map is missing the end-of-range roster answers for it.
-   */
-  const [starters, setStarters] = useState(false);
-  /**
    * **Which kind of play the feed reading is narrowed to** — the app's own row
    * of pills (`FeedFilterPills`), on somebody else's stream.
    *
@@ -524,8 +506,8 @@ export default function LeagueMatchupView({
    * `Clear` would mark the reader's own feed read from a page that is not it.
    *
    * The overlay owns it for the reason it owns the reading, the kind, the dates
-   * and `starters`: it is chrome above *both* team pages and must not reset when
-   * the reader crosses from one manager to the other. And it is **state rather
+   * and the reading: those are chrome above *both* team pages and must not reset
+   * when the reader crosses from one manager to the other. And it is **state rather
    * than anything in the URL** — `mup` and `mt` are the whole of what a matchup
    * link carries, and `plays=` stays the app's own Feed view's alone, two params
    * never meaning two things.
@@ -556,8 +538,8 @@ export default function LeagueMatchupView({
    * of cells beside the plain table and the Schedule view.
    *
    * The overlay owns it for the reason it owns the reading, the kind, the dates
-   * and `starters`: it is chrome above *both* team pages and must not reset
-   * when the reader crosses from one manager to the other. And it is state
+   * and the reading: those are chrome above *both* team pages and must not
+   * reset when the reader crosses from one manager to the other. And it is state
    * rather than anything in the URL, which is where every control on this page
    * sits — `mup` and `mt` are the whole of what a matchup link carries.
    *
@@ -1350,10 +1332,6 @@ export default function LeagueMatchupView({
    */
   const sideName =
     sideTeamId === null ? 'this team' : teams.get(sideTeamId)?.name ?? `Team ${sideTeamId}`;
-  /** The same rule the slot chip's owner follows: a name already ending in `s`
-   *  takes the bare apostrophe, or the live league produces
-   *  `The Homewreckers’s`. */
-  const sidePossessive = /s$/i.test(sideName) ? `${sideName}’` : `${sideName}’s`;
 
   /* This page's own copy of the roster views' date bar, and it is the same
      component with this page's state in it — see `DateControls.tsx`. Its three
@@ -1505,15 +1483,15 @@ export default function LeagueMatchupView({
           two full-width switches with its range bubble hanging over nothing.
           That square has since left the row entirely for the bar below (see
           `dateBar`), which is the same fault answered a second time and for
-          good; the grouping stays, because Schedule, Projected and Starters
-          come and go with the reading and would otherwise break apart. */}
+          good; the grouping stays, because Schedule and Projected come and go
+          with the reading and would otherwise break apart. */}
       <div className="mup-tool-icons">
         {/* **The two toggles the feed has no use for are drawn either way, and
             hidden on that reading rather than removed.** They are the roster
             table's alone — the Schedule view swaps its stat columns for a column
             per day, and there is nothing in a stream of things that have already
             happened for a fixture list or a projection to replace — so on the
-            Feed reading the run is `Starters` by itself.
+            Feed reading the run is the order toggle by itself.
 
             Taking them out takes 80px out of a row that **wraps on a phone**,
             which is 40px of *pinned* band appearing and disappearing under the
@@ -1552,11 +1530,11 @@ export default function LeagueMatchupView({
               })
             }
           />
-          {/* **The projected reading, after the Schedule view and before
-              `Starters`** — the roster row's own order, where these two are the
-              third of *which page, which kind, which reading of it, which
-              players, which days*: the stats behind you, the fixtures ahead, and
-              what the fixtures are worth. */}
+          {/* **The projected reading, after the Schedule view** — the roster
+              row's own order, where these two are the third of *which page,
+              which kind, which reading of it, which players, which days*: the
+              stats behind you, the fixtures ahead, and what the fixtures are
+              worth. */}
           <ProjectedToggle
             on={teamProjected}
             loading={teamProjLoading}
@@ -1577,26 +1555,24 @@ export default function LeagueMatchupView({
             well down a stream, and this run is the part of the page that does
             not scroll away from them. See `FeedOrderToggle`.
 
-            **Outside the ghosted span, not inside it.** The span reserves the
-            roster reading's two toggles so the band cannot shorten under a
-            finger that pressed `Feed`; this button is the feed reading's own
-            and has nothing to reserve against, so putting it in there would
-            make the ghost hold a slot the roster reading never fills. */}
-        {reading === 'feed' && (
+            **It is reserved on the roster reading, the mirror of the span
+            above it.** The rule this row keeps is that the band measures the
+            same on both readings, and the reservation used to run one way only
+            — the modes ghosted on the Feed reading, this button simply absent
+            on the other — on the reasoning that the roster reading was the
+            wider of the two and so had nothing to reserve against. It was, by
+            one 36px square, while it carried a third toggle; with that toggle
+            gone the roster reading is the *narrower* of the two, and at 320 the
+            band went **84 → 132** crossing to Feed, which is the same 48px of
+            pinned chrome moving under the same finger. So both runs are ghosted
+            now and the argument is symmetric: each reading holds the other's
+            slot open, and the row wraps identically whichever is on. */}
+        <span
+          className={`mup-tool-order${reading === 'feed' ? '' : ' mup-tool-ghost'}`}
+          aria-hidden={reading === 'feed' ? undefined : true}
+        >
           <FeedOrderToggle oldestFirst={feedOldest} onToggle={() => setFeedOldest((v) => !v)} />
-        )}
-        {/* Between the reading and the days, which is the roster row's own
-            order: the questions come as *which page, which kind, which reading
-            of it, which players, which days*. */}
-        <StartersToggle
-          on={starters}
-          onToggle={() => setStarters((v) => !v)}
-          title={
-            span.start === span.end
-              ? `Only the players in ${sidePossessive} lineup that day — his bench and his IL are hidden whatever their clubs do with them`
-              : `Only the days ${sideName} had each player in his lineup — a day he sat on the bench or the IL is not counted, however he hit`
-          }
-        />
+        </span>
       </div>
     </div>
   );
@@ -1647,7 +1623,6 @@ export default function LeagueMatchupView({
               end={span.end}
               kind={kind}
               reading={reading}
-              starters={starters}
               /* The pills are drawn *inside* that page rather than beside it
                  here, which is the Feed view's own rule: a row of pills over an
                  empty page would be a control over nothing, and the two empty
