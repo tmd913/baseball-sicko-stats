@@ -293,10 +293,6 @@ const CHAPTERS: Chapter[] = [
                 <span className="view-tab">Feed</span>
                 <span className="view-tab">Research</span>
               </div>
-              <div className="kind-switch">
-                <span className="kind-tab active">Batters</span>
-                <span className="kind-tab">Pitchers</span>
-              </div>
             </div>
           </div>
         </Demo>
@@ -334,11 +330,12 @@ const CHAPTERS: Chapter[] = [
           </dd>
         </dl>
         <p className="tut-note">
-          Both show one kind at a time. Once you watch both batters and pitchers, the{' '}
-          <Ui>Batters</Ui> / <Ui>Pitchers</Ui> tabs appear beside them and follow you
-          from page to page. <Ui>Research</Ui>, at the end of the row, is a different
-          animal — the whole league rather than your roster — and has the next chapter
-          to itself.
+          Both show your whole roster — batters first, then pitchers. On the table the
+          pitchers are a second block under the batters with their own column headings,
+          and those headings take over the top of the screen as you scroll down to
+          them. On the feed a pitcher's outings are their own section above the plays.{' '}
+          <Ui>Research</Ui>, at the end of the row, is a different animal — the whole
+          league rather than your roster — and has the next chapter to itself.
         </p>
       </>
     ),
@@ -699,12 +696,10 @@ const CHAPTERS: Chapter[] = [
           </Step>
         </ol>
         <p className="tut-note">
-          Batters and pitchers are ordered independently — you're only ever reordering
-          the tab you're on, and the other kind stays where it was, so the{' '}
-          <Ui>Batters · Pitchers</Ui> switch comes along to the edit screen and sits
-          beside its title — and it counts your roster rather than what the views
-          are showing, so a player hidden by <Ui>Hide injured players</Ui> is still
-          here to be dropped. A player can also be removed from their player page.
+          The list is your whole roster, batters then pitchers, in the order the table
+          draws them — and it counts your roster rather than what the views are showing,
+          so a player hidden by <Ui>Hide injured players</Ui> is still here to be
+          dropped. A player can also be removed from their player page.
         </p>
       </>
     ),
@@ -769,8 +764,8 @@ const CHAPTERS: Chapter[] = [
             screenful.
           </li>
           <li>
-            <strong>The address bar is your state.</strong> The dates, the view, the
-            kind, which cards are open, which player page you're on, and on the league
+            <strong>The address bar is your state.</strong> The dates, the view, which
+            cards are open, which player page you're on, and on the league
             board the position, the time span and the columns — all of it lives in the
             URL. Reload and you're where you left off; send the link and someone else
             lands on the same screen. A link saved under <Ui>Today</Ui> opens on the

@@ -499,12 +499,6 @@ export default function App() {
   const setRange = useCallback((r: DateRange) => {
     setRanges((prev) => ({ ...prev, [dateScopeRef.current]: r }));
   }, []);
-  // Which half of the watchlist the players view is showing. Its own tab row,
-  // since a batter card and a pitcher card have nothing in common to scan down.
-  // Only surfaced when both kinds are watched; batters are the default.
-  const [playerKind, setPlayerKind] = useState<'batter' | 'pitcher'>(() =>
-    initialParams.get('kind') === 'pitcher' ? 'pitcher' : 'batter',
-  );
   // Demo toggle: overlay a synthetic live-day state on the loaded reports so the
   // live-only UI can be exercised when nothing is actually being played. Still
   // reachable by hand as `?sim=1`; only its settings-menu entry is hidden (see
@@ -2935,7 +2929,6 @@ export default function App() {
     }
     if (detailsKey) p.set('player', detailsKey);
     if (view !== 'summary') p.set('view', view);
-    if (playerKind !== 'batter') p.set('kind', playerKind);
     // Only meaningful on the research view, and 'batters' is its default.
     if (view === 'research' && researchPos !== 'batters') p.set('pos', researchPos);
     // Likewise, with the whole season as the default. A window is the one page
@@ -3061,7 +3054,6 @@ export default function App() {
     activePreset,
     detailsKey,
     view,
-    playerKind,
     researchPos,
     researchWindow,
     researchInclude,
@@ -3938,19 +3930,24 @@ export default function App() {
         : displayReports,
     [displayReports, hideInjured],
   );
-  const cardBatters = shownReports.filter((r) => r.kind !== 'pitcher');
-  const cardPitchers = shownReports.filter((r) => r.kind === 'pitcher');
-  const showKindTabs = cardBatters.length > 0 && cardPitchers.length > 0;
-  // With one kind empty the tabs are hidden, so the list shows whichever kind is
-  // left — a stale `kind=` (or a filter that just emptied that half) can't leave
-  // the user staring at nothing with no tab to click back to.
-  const shownKind =
-    cardPitchers.length === 0 && cardBatters.length > 0
-      ? 'batter'
-      : cardBatters.length === 0 && cardPitchers.length > 0
-        ? 'pitcher'
-        : playerKind;
-  const kindCards = shownKind === 'pitcher' ? cardPitchers : cardBatters;
+  /**
+   * **The roster views show one list, batters and pitchers together.**
+   *
+   * There was a tab row here and a `kind=` param behind it, on the reasoning
+   * that "a batter card and a pitcher card have nothing in common to scan
+   * down". That is true of the *columns* and false of the *roster*: a manager
+   * asking what his team did today is asking about nine batters and two
+   * pitchers, and answering in two halves made him press a tab to find out
+   * whether the other half had done anything. Both surfaces already knew how
+   * to draw the two together — `SummaryTable` has stacked a `BatterTable` and
+   * a `PitcherTable` in one scroller since it was written, and the feed's
+   * sections are built from per-player entries that never cared which kind
+   * they came from — so what went was the filter above them, not any drawing
+   * code.
+   *
+   * No sort here: the table splits this itself and the feed sorts by clock.
+   */
+  const viewCards = shownReports;
   /**
    * **Who, of the rows the roster views are showing, is starting** — as a set of
    * player keys, for the divider the summary table's `Total` row has become
@@ -3992,14 +3989,14 @@ export default function App() {
     const cards =
       fantasyLineups || fantasySlots
         ? projectStarters(
-            kindCards,
+            viewCards,
             rangeDates,
             fantasyLineups,
             (r) => fantasySlots?.get(playerKey(r))?.starting === true,
           )
-        : kindCards.filter((r) => isStartingOn(r, baseballToday()));
+        : viewCards.filter((r) => isStartingOn(r, baseballToday()));
     return new Set(cards.map(playerKey));
-  }, [kindCards, startersKnown, fantasySlots, fantasyLineups, rangeDates]);
+  }, [viewCards, startersKnown, fantasySlots, fantasyLineups, rangeDates]);
 
   /**
    * **The two numbers the red `N new plays` button is made of** — how many plays
@@ -4012,18 +4009,27 @@ export default function App() {
    * from `LiveFeed` so the clock that orders the stream has one definition, the
    * rule `playerDayEntries` already sets for the stream and the player page.
    *
-   * **Off `kindCards` rather than off whatever the reader's lens has left on
+   * **Off `viewCards` rather than off whatever the reader's lens has left on
    * screen**, so the count is news about the day rather than about the lens: a
    * ticked chip must not make the plays it hides stop being new.
    *
    * **The batter feed only**, since a pitcher's stream item is his whole outing
    * rather than a play — the same fact the kind tabs exist for.
    */
-  const feedIsBatters = view === 'feed' && shownKind === 'batter';
+  /**
+   * **Whether the feed has any batter plays to narrow**, which is what the play
+   * pills and the new-plays machinery are about. It was `shownKind === 'batter'`
+   * while the stream was one kind at a time; the stream is both kinds now, so
+   * the question is no longer *which tab* but *is there anything of that shape
+   * on it*. A roster of nothing but pitchers still draws a feed — outings,
+   * upcoming starts — and still has no plays to filter, so the pills stay off
+   * it rather than offering six lenses over a list none of them can touch.
+   */
+  const feedHasBatters = view === 'feed' && shownReports.some((r) => r.kind !== 'pitcher');
   const { count: newPlayCount, newest: newestPlayTs } = useMemo(
     () =>
-      feedIsBatters ? newPlays(kindCards, seenPlays) : { count: 0, newest: 0 },
-    [feedIsBatters, kindCards, seenPlays],
+      feedHasBatters ? newPlays(viewCards, seenPlays) : { count: 0, newest: 0 },
+    [feedHasBatters, viewCards, seenPlays],
   );
 
   /**
@@ -4167,9 +4173,9 @@ export default function App() {
   // The league page has no kind — it is one board about one league — so it
   // keys on the view alone, exactly as the research board does.
   const scrollKey =
-    view === 'research' || view === 'league' ? view : `${view}:${shownKind}`;
+    view;
   // The feed's own key — see `feedShown` above, which is keyed by it.
-  const feedKey = `${shownKind}-${start}-${end}`;
+  const feedKey = `${start}-${end}`;
   // Read by the scroll listener, which is bound once and would otherwise close
   // over the key from the render that bound it.
   const scrollKeyRef = useRef(scrollKey);
@@ -4305,39 +4311,6 @@ export default function App() {
       release();
     };
   }, [scrollKey]);
-  // The second tier of tabs, in the view bar beside the view switch: every view
-  // below shows a single kind at a time, so the pair reads as one control.
-  //
-  // **It is a function because the edit screen asks it a different question.**
-  // The view bar's tabs are drawn from `shownReports`, which is downstream of
-  // hide-injured; the reorder screen is deliberately upstream of that filter,
-  // so it has its own answer to which kinds are on the roster and which of them
-  // is showing (see `editPlayers` below). One factory called twice keeps the
-  // two rows the same control rather than two that resemble each other.
-  const kindSwitch = (show: boolean, kind: 'batter' | 'pitcher') =>
-    show ? (
-      <div className="kind-switch" role="tablist" aria-label="Batters or pitchers">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={kind === 'batter'}
-          className={`kind-tab${kind === 'batter' ? ' active' : ''}`}
-          onClick={() => setPlayerKind('batter')}
-        >
-          Batters
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={kind === 'pitcher'}
-          className={`kind-tab${kind === 'pitcher' ? ' active' : ''}`}
-          onClick={() => setPlayerKind('pitcher')}
-        >
-          Pitchers
-        </button>
-      </div>
-    ) : null;
-  const kindTabs = kindSwitch(showKindTabs, shownKind);
   /**
    * **The selected League tab is scrolled into view on a phone**, where that
    * strip scrolls sideways rather than wrapping. Four tabs are 377px against
@@ -4677,12 +4650,12 @@ export default function App() {
      already in the page for that same reason. The `Plays` disclosure it replaces
      is gone from the row above with it.
 
-     **Batter tab only** (`feedIsBatters`) — *the pills*: a pitcher's stream item
+     **Batter tab only** (`feedHasBatters`) — *the pills*: a pitcher's stream item
      is his whole outing rather than a play, which is the same fact the kind tabs
      exist for, so there is nothing here for the pills to select on. The row is
      drawn on both tabs now, carrying the one control that is not about kinds:
      `Oldest first`, which turns the stream round. */
-  const feedFilterPills = feedIsBatters ? (
+  const feedFilterPills = feedHasBatters ? (
     <FeedFilterPills lens={feedLens} onSelect={selectFeedLens} />
   ) : null;
 
@@ -4718,7 +4691,7 @@ export default function App() {
      `selectFeedLens`, drawn in whichever box is on screen. The page decides
      whether to draw it at all — see `NewPlaysPage`, which gates it on there
      being something to narrow. */
-  const newPlaysOrder = feedIsBatters ? (
+  const newPlaysOrder = feedHasBatters ? (
     <FeedOrderToggle
       oldestFirst={newPlaysOldestFirst}
       onToggle={() => setNewPlaysOldestFirst((v) => !v)}
@@ -4905,27 +4878,17 @@ export default function App() {
   // roster" means one thing everywhere; in this mode that is always the saved
   // list, the screen being hidden while a fantasy team is in view.
   //
-  // **And its kind split is its own, not the view bar's.** `shownKind` and
-  // `showKindTabs` are computed off `shownReports`, which is downstream of
-  // hide-injured — so on a roster of one batter and one pitcher with the batter
-  // on the IL and the filter on, the view bar drops the Batters tab and this
-  // screen followed it: the injured man was unreachable in the one place that
-  // can drop him, which is the exact composition the comment above says this is
-  // upstream of. So the screen splits `editRoster` itself and gets its own tabs
-  // from the same factory, and the filters reach the views and stop there.
+  // **It used to have a kind split of its own**, and the note here argued at
+  // length why that split had to be computed from `editRoster` rather than
+  // inherited from the view bar — a batter hidden by the IL filter dropped the
+  // Batters tab from the bar, and the screen following it made the one man the
+  // screen exists to remove unreachable. The whole composition is gone with the
+  // tabs: the list is the roster, batters then pitchers, in one order.
   const editRoster = reports.filter((r) => rosterKeys.has(playerKey(r)));
-  const editBatters = editRoster.filter((r) => r.kind !== 'pitcher');
-  const editPitchers = editRoster.filter((r) => r.kind === 'pitcher');
-  // Same fallback the view bar makes, for the same reason: with one kind empty
-  // there are no tabs, so show whichever kind is left rather than leaving a
-  // stale `kind=` staring at an empty screen.
-  const editKind =
-    editPitchers.length === 0 && editBatters.length > 0
-      ? 'batter'
-      : editBatters.length === 0 && editPitchers.length > 0
-        ? 'pitcher'
-        : playerKind;
-  const editPlayers = (editKind === 'pitcher' ? editPitchers : editBatters).map((r) => ({
+  const editPlayers = [
+    ...editRoster.filter((r) => r.kind !== 'pitcher'),
+    ...editRoster.filter((r) => r.kind === 'pitcher'),
+  ].map((r) => ({
     id: r.id,
     key: playerKey(r),
     name: r.name,
@@ -4944,16 +4907,14 @@ export default function App() {
      button wore, so the control that leaves the mode is the same control that
      used to enter it.
 
-     The kind switch comes with it. It is the header's own `kindTabs`, rendered
-     here because the view bar is hidden in this mode and it is the only way to
-     reach the other kind's order — hiding the chrome shouldn't mean a roster
-     whose pitchers can no longer be reordered. It renders only when both kinds
-     are watched, as ever. */
+     The kind switch used to come with it, because the view bar is hidden in
+     this mode and it was the only way to reach the other kind's order. There is
+     no other kind's order now — one list holds both, batters first, which is
+     the order every other surface draws them in. */
   const editPage = (
     <div className="edit-page">
       <div className="edit-page-head">
         <h2 className="edit-page-title">Edit players</h2>
-        {kindSwitch(editBatters.length > 0 && editPitchers.length > 0, editKind)}
         <button
           type="button"
           className="edit-order-btn active"
@@ -5538,7 +5499,6 @@ export default function App() {
             </div>
             )}
             {/* Batters / Pitchers. */}
-            {isRosterView(view) && kindTabs}
             {/* Scoreboard / Rankings / Transactions. */}
             {leagueTabs}
             {/* Which span the Rankings table is drawn from. */}
@@ -5757,7 +5717,7 @@ export default function App() {
           either that a setting is doing it. One message for every view now: the
           toggle is the only thing that can empty a view this way, where the
           summary table used to drop them whatever it said. */}
-      {isRosterView(view) && displayReports.length > 0 && kindCards.length === 0 && !editMode && (
+      {isRosterView(view) && displayReports.length > 0 && viewCards.length === 0 && !editMode && (
         <div className="empty-state">
           <p className="empty-title">Nothing to show — everyone here is on the IL</p>
           <p>Turn off “Hide injured players” in settings (the gear by the title) to see them.</p>
@@ -5878,9 +5838,9 @@ export default function App() {
             {editPage}
           </div>
         ) : (
-        kindCards.length > 0 && (
+        viewCards.length > 0 && (
           <SummaryTable
-            reports={kindCards}
+            reports={viewCards}
             onOpenDetails={setDetailsKey}
             /* Null while the mode is off *and* while its one read is still out,
                so the stat columns stand until the days can replace them. */
@@ -5901,7 +5861,6 @@ export default function App() {
                invisible elements. */
             chrome={
               <>
-                {kindTabs}
                 {/* Expanded, the research board reduces its control set to a
                     row of read-only badges; this view keeps its live controls
                     instead. The mode and its span most of all: a table of dates
@@ -5923,19 +5882,18 @@ export default function App() {
         )
         )
       ) : (
-        kindCards.length > 0 && (
+        viewCards.length > 0 && (
           <>
           {/* The lens, at the head of the stream it narrows — see
               `feedFilterPills`. Inside the same guard as the feed rather than
               beside it: a row of pills over an empty page would be a control
               over nothing, and the empty state below already names its cause. */}
           {feedFilterPills}
-          {/* Keyed so switching kind or date range starts the stream back at its
+          {/* Keyed so changing the date range starts the stream back at its
              first page; a live poll (data only) leaves it alone. */}
           <LiveFeed
             key={feedKey}
-            reports={kindCards}
-            kind={shownKind}
+            reports={viewCards}
             onOpenDetails={setDetailsKey}
             shown={feedShown.current.get(feedKey) ?? FEED_PAGE_SIZE}
             onShowMore={(n) => feedShown.current.set(feedKey, n)}
@@ -5949,18 +5907,18 @@ export default function App() {
                the lens straight back in force. A lens the reader set is still
                set on the screen that does not offer it; what a control cannot
                narrow, it does not un-set. */
-            playFilter={feedIsBatters ? playFilter : undefined}
-            newOnly={feedIsBatters ? feedNewOnly : undefined}
-            seenPlays={feedIsBatters ? seenPlays : undefined}
-            newCount={feedIsBatters ? newPlayCount : undefined}
-            onShowNew={feedIsBatters ? showNewPlays : undefined}
-            onShowAll={feedIsBatters ? showAllPlays : undefined}
-            onClearNew={feedIsBatters ? clearNewPlays : undefined}
+            playFilter={feedHasBatters ? playFilter : undefined}
+            newOnly={feedHasBatters ? feedNewOnly : undefined}
+            seenPlays={feedHasBatters ? seenPlays : undefined}
+            newCount={feedHasBatters ? newPlayCount : undefined}
+            onShowNew={feedHasBatters ? showNewPlays : undefined}
+            onShowAll={feedHasBatters ? showAllPlays : undefined}
+            onClearNew={feedHasBatters ? clearNewPlays : undefined}
             /* The new-plays page's two controls, in its two boxes: the order in
                its pinned head, the pills in the page at the head of the list
                they narrow. Gated with the six above for the same reason. */
-            newPlaysOrder={feedIsBatters ? newPlaysOrder : undefined}
-            newPlaysFilters={feedIsBatters ? feedFilterPills : undefined}
+            newPlaysOrder={feedHasBatters ? newPlaysOrder : undefined}
+            newPlaysFilters={feedHasBatters ? feedFilterPills : undefined}
             /* Not gated on the batter tab, where the six above are: this one is
                not a lens over kinds of play but the direction the clock runs,
                and a pitcher's outings are stamped with one exactly as a plate
@@ -5969,7 +5927,7 @@ export default function App() {
             /* And the page over it has its own — see `newPlaysOldestFirst`.
                Gated with the six above rather than with the line above it: the
                page is only ever drawn on the batter tab. */
-            newOldestFirst={feedIsBatters ? newPlaysOldestFirst : undefined}
+            newOldestFirst={feedHasBatters ? newPlaysOldestFirst : undefined}
           />
           </>
         )

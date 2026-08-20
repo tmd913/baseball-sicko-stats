@@ -7902,7 +7902,7 @@ button.start-line:focus-visible {
    so the two buttons sat edge to edge at every width. A second `gap: 8px`
    written next to it would have been a lookalike free to drift from this one
    the next time either moved; folding is the rule this stylesheet applies to
-   `.kind-switch` over `.view-switch` and `.settings-toggle` over `.sim-toggle`,
+   `.stats-table` over `.glog-table` and `.settings-toggle` over `.sim-toggle`,
    and the two runs are the same object by the test that matters — the same
    controls, side by side, spaced the same. What each row does *not* share is
    its place in a layout, so `flex: none` is declared under this run's own name
@@ -9519,7 +9519,6 @@ button.start-line:focus-visible {
    always styled off `.view-switch`/`.view-tab`, which is the point of folding
    rather than restyling. */
 .view-switch,
-.kind-switch,
 .research-window-row,
 /* The League page's three tabs, and the Rankings tab's four spans. Folded here
    rather than restyled to resemble the row above them: the first is the view
@@ -9538,7 +9537,6 @@ button.start-line:focus-visible {
   border-radius: var(--control-radius);
 }
 .view-tab,
-.kind-tab,
 .research-window-tab,
 .lg-tab,
 .lg-span-tab {
@@ -9556,14 +9554,12 @@ button.start-line:focus-visible {
   transition: color 0.14s ease, background 0.14s ease;
 }
 .view-tab:hover,
-.kind-tab:hover,
 .research-window-tab:hover,
 .lg-tab:hover,
 .lg-span-tab:hover {
   color: var(--text);
 }
 .view-tab.active,
-.kind-tab.active,
 .research-window-tab.active,
 .lg-tab.active,
 .lg-span-tab.active {
@@ -9571,7 +9567,6 @@ button.start-line:focus-visible {
   background: var(--accent);
 }
 .view-tab:focus-visible,
-.kind-tab:focus-visible,
 .research-window-tab:focus-visible,
 .lg-tab:focus-visible,
 .lg-span-tab:focus-visible {
@@ -9664,40 +9659,6 @@ button.start-line:focus-visible {
   .feed-heading-dot {
     animation: none;
   }
-}
-
-/* Batters / Pitchers tabs — each view below shows one kind at a time. Same
-   shape as the top-level view tabs (see .view-switch, which shares these rules
-   with them and with the header's date presets), and they sit beside them in
-   the view bar. */
-.kind-switch {
-  align-self: flex-start;
-}
-/* "Batters" / "Pitchers" divider — splits each feed section into its two
-   halves. Only rendered when that section holds both kinds, so it never appears
-   as a lone label over a single group. The trailing rule runs out to the full
-   width to read as a section break rather than a row label. */
-.kind-heading {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 0;
-  font-size: 12px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--muted);
-}
-.kind-heading::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--border);
-}
-/* A little extra air above the second heading, which follows a group of cards
-   rather than the section's own heading. */
-.kind-heading:not(:first-child) {
-  margin-top: 8px;
 }
 
 /* Live section: players currently at bat / on deck / on base. Each entry is a
@@ -14198,7 +14159,6 @@ span.mup-move-name:hover {
    overlay, and a bar reaching past its edges would be wider than the table it
    sits over. */
 .mup-tools .view-switch,
-.mup-tools .kind-switch,
 .mup-tools .schedule-toggle,
 .mup-tool-icons {
   flex: none;
@@ -14282,7 +14242,7 @@ span.mup-move-name:hover {
    is a statement about a card column that caps at 800 and is *narrower than the
    window it is in* — at a 900 window this box is already 800, and at 800 it is
    768. A media query cannot see that and would have to guess the difference. */
-@container (max-width: 789px) {
+@container (max-width: 622px) {
   .mup-tool-icons .schedule-toggle,
   .mup-tool-icons .projected-toggle,
   .mup-tool-icons .summary-toggle,
@@ -14304,31 +14264,6 @@ span.mup-move-name:hover {
     clip: rect(0, 0, 0, 0);
     white-space: nowrap;
     border: 0;
-  }
-}
-
-/* **Below the width where all three groups fit, the *kind* switch is the one
-   that goes.** Under ~510 the row must wrap something: the two switches are
-   130.5 and 155.1 and the squared icon run is 168, which with two group gaps
-   needs 477.6 of the 398 a 430 window leaves. Wrapping is not the question —
-   which group wraps is.
-
-   It is `Batters | Pitchers`. The reading pills and the toggles are one
-   question asked twice — *what am I looking at, and how* — and splitting them
-   across two lines put the answer to the second half under the first with a
-   line break in the middle of a thought. Which kind of player is a different
-   question, and it is the one a reader changes least often on this page. So it
-   takes the second line whole, by `order` rather than by being moved in the
-   markup: the DOM keeps the row's own question order (which page, which kind,
-   which reading of it, over which days) for a screen reader and for the tab
-   sequence, and only the paint moves.
-
-   Measured at 430: the first line is the pills and the four squares at 310.5 of
-   398, the second is the kind switch. The band is unchanged at 84 — this buys
-   no height, it spends the same two lines better. */
-@container (max-width: 477px) {
-  .mup-tools .kind-switch {
-    order: 1;
   }
 }
 
@@ -14471,12 +14406,6 @@ span.mup-move-name:hover {
 .lgt-sub {
   font-size: 11px;
   color: var(--muted);
-}
-/* The kind switch to the right end of the row, which is where every other
-   control in this app's own tab rows sits relative to the label beside it. */
-.lgt-head .kind-switch {
-  margin-left: auto;
-  flex: none;
 }
 /* The week added up, then the week as it happened. The gap is the app's own
    step between two blocks on one page. */

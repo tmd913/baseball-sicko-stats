@@ -13,7 +13,6 @@ import { playerKey } from '../types';
 import type {
   EspnRosterPlayer,
   EspnStandingsTeam,
-  PlayerKind,
   PlayerReport,
   RosterProjection,
 } from '../types';
@@ -30,7 +29,7 @@ import type {
  * `LiveFeed`, the same two components the app draws its own roster with, over
  * the same shape of report.
  *
- * **Which reading, which kind and which days are all the overlay's**, handed
+ * **Which reading and which days are both the overlay's**, handed
  * down rather than held here: they are chrome that sits above both team pages
  * and must not reset when the reader crosses from one manager to the other —
  * a date set on one side is a question about the matchup, not about a team. All
@@ -54,8 +53,9 @@ function possessive(name: string | undefined): string | null {
  *  page down. A reading position rather than a view, so it is state rather than
  *  anything in the URL.
  *
- *  **Keyed by kind *and* by the days**, exactly as App keys its own
- *  (`${shownKind}-${start}-${end}`): it was keyed by kind alone, so a reader who
+ *  **Keyed by the days**, exactly as App keys its own (`${start}-${end}`). It
+ *  was keyed by kind *and* by the days while there were two streams; it was
+ *  keyed by kind alone before that, so a reader who
  *  had pressed `Load more` twice over the matchup week and then moved the date
  *  control to today came back to a twenty-item stream carrying an offset of
  *  sixty. Two kinds over two ranges are four lists, and a reading position
@@ -67,7 +67,6 @@ export default function LeagueTeam({
   team,
   start,
   end,
-  kind,
   reading,
   lens,
   onLens,
@@ -83,7 +82,6 @@ export default function LeagueTeam({
    *  preset that makes a row here the arithmetic behind a category above. */
   start: string;
   end: string;
-  kind: PlayerKind;
   /** The table or the stream: the app's own two roster views, as two tabs. */
   reading: 'roster' | 'feed';
   /** **Which kind of play the feed reading draws** — the app's own single-select
@@ -234,14 +232,15 @@ export default function LeagueTeam({
     return map;
   }, [roster, team, end, byDate, dates]);
 
-  const kindCards = useMemo(
-    () => (report ?? []).filter((r) => (kind === 'pitcher' ? r.kind === 'pitcher' : r.kind !== 'pitcher')),
-    [report, kind],
-  );
+  /** **Both kinds, in one list** — the tab row that used to cut this page in
+   *  half is gone app-wide, and the table below stacks a batter table and a
+   *  pitcher table by itself. See App's `viewCards` for the whole of that. */
+  const teamCards = report ?? [];
 
-  /** The stream's identity: which kind, over which days — App's own `feedKey`,
-   *  and what both the remount and the paging position are keyed by. */
-  const feedKey = `${kind}-${start}-${end}`;
+  /** The stream's identity: which days — App's own `feedKey`, and what both the
+   *  remount and the paging position are keyed by. It named a kind while there
+   *  were two streams to tell apart; there is one. */
+  const feedKey = `${start}-${end}`;
 
   /**
    * **The app's own projection, over somebody else's lineup.**
@@ -257,8 +256,8 @@ export default function LeagueTeam({
    */
   const starterCards = useMemo(() => {
     const startingIds = new Set((roster ?? []).flatMap((p) => (p.starting && p.mlbId !== null ? [p.mlbId] : [])));
-    return projectStarters(kindCards, dates, byDate, (r) => startingIds.has(r.id));
-  }, [kindCards, roster, byDate, dates]);
+    return projectStarters(teamCards, dates, byDate, (r) => startingIds.has(r.id));
+  }, [teamCards, roster, byDate, dates]);
   /**
    * **The same answer as a set of player keys**, for the summary table's `Total`
    * divider — `SummaryTable.tsx::splitStarters`, and App does this on its own
@@ -280,14 +279,13 @@ export default function LeagueTeam({
   }
   if (!report) return null;
   const who = team?.name ?? `Team ${teamId}`;
-  const kinds = kind === 'pitcher' ? 'pitchers' : 'batters';
-  if (kindCards.length === 0) {
+  if (teamCards.length === 0) {
     return (
       <div className="empty-state">
-        <h3>No {kinds} on this team over these days</h3>
+        <h3>Nobody on this team over these days</h3>
         <p>
-          {who} had nobody of this kind on the roster over the days in view. The date control
-          above is what changes them.
+          {who} had nobody on the roster over the days in view. The date control above is what
+          changes them.
         </p>
       </div>
     );
@@ -297,7 +295,7 @@ export default function LeagueTeam({
     <FantasyRosterContext.Provider value={slots}>
       {reading === 'roster' ? (
         <SummaryTable
-          reports={kindCards}
+          reports={teamCards}
           onOpenDetails={onOpenDetails}
           schedule={schedule}
           projection={projection}
@@ -329,19 +327,19 @@ export default function LeagueTeam({
               pinned tab row, here to this page's control run, and the reason is
               the same either side — the pills are worked on arrival and an
               order is wanted halfway down a stream, where a control at the head
-              of the page is a scroll back up. So this row is the kinds alone
-              and is drawn on the batter tab alone: with the toggle gone, a
-              pitcher tab would draw an empty row. */}
-          {kind === 'batter' && <FeedFilterPills lens={lens} onSelect={onLens} />}
+              of the page is a scroll back up. So this row is the kinds alone.
+              It was drawn on the batter tab alone, there being nothing for a
+              lens to narrow on the other one; the stream carries both kinds
+              now, and the pills narrow the plays in it while the outings
+              section above them is left whole — see `LiveFeed`'s `outings`. */}
+          <FeedFilterPills lens={lens} onSelect={onLens} />
           <LiveFeed
-            /* Keyed on the kind and the days, so the stream starts at its first
-               page when the list becomes a different list — the app's own
-               `feedKey`. **Not on the lens**: narrowing to home runs is the same
+            /* Keyed on the days, so the stream starts at its first page when
+               the list becomes a different list — the app's own `feedKey`. **Not on the lens**: narrowing to home runs is the same
                list read through a lens rather than another list, and App does
                not key on it either. */
             key={feedKey}
-            reports={kindCards}
-            kind={kind}
+            reports={teamCards}
             onOpenDetails={onOpenDetails}
             shown={shown.current[feedKey] ?? FEED_PAGE_SIZE}
             onShowMore={(n) => {
@@ -353,7 +351,7 @@ export default function LeagueTeam({
                team — so a red count over a leaguemate's plays would count his
                day against it and `Clear` would mark the reader's own feed read
                from a page that is not it. See `LeagueMatchup`'s `feedLens`. */
-            playFilter={kind === 'batter' && lens !== 'all' ? lens : undefined}
+            playFilter={lens !== 'all' ? lens : undefined}
             oldestFirst={oldestFirst}
           />
         </>

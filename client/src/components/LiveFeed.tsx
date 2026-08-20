@@ -23,7 +23,6 @@ import type {
   BaseEvent,
   PlateAppearance,
   PlayerGame,
-  PlayerKind,
   PlayerReport,
 } from '../types';
 import {
@@ -1196,6 +1195,11 @@ export function newPlays(
   let newest = 0;
   for (const report of reports) {
     for (const e of playerDayEntries(report).entries) {
+      // Outings are not plays. They have a section of their own above the
+      // stream, the button says `N new plays`, and the page it opens is a page
+      // of plays — counting a start in it would be the mark naming one thing
+      // and opening another.
+      if (e.type === 'pitching') continue;
       const t = entryTime(e);
       if (t > newest) newest = t;
       if (t > seenPlays) count += 1;
@@ -1298,7 +1302,6 @@ export function playerDayEntries(report: PlayerReport): PlayerDayEntries {
  */
 export function LiveFeed({
   reports,
-  kind,
   onOpenDetails,
   shown: shownFromParent,
   onShowMore,
@@ -1315,9 +1318,6 @@ export function LiveFeed({
   newOldestFirst = false,
 }: {
   reports: PlayerReport[];
-  // Which kind the tabs above are showing — the stream is one kind at a time,
-  // and a pitcher's items are outings rather than plays.
-  kind: PlayerKind;
   /** Open a player's page — what the headshot and the name both do now. */
   onOpenDetails: (key: string) => void;
   /** How much of the Recent section to open on, and where to report a "Load
@@ -1571,7 +1571,28 @@ export function LiveFeed({
    * `passesFilters` takes both tests still, and each caller passes the one it
    * means.
    */
-  const recent = allRecent.filter((e) => passesFilters(e, playFilter, false, 0, hasFilm));
+  /**
+   * **The outings are their own list, above the plays.**
+   *
+   * They used to be the *same* list under a different heading — the stream was
+   * one kind at a time, so `Recent outings` and `Recent plays` were one section
+   * whose word changed with the tab. With both kinds on one feed they cannot
+   * be: an outing is a whole game's work in one card and a play is one swing,
+   * and interleaving them by clock put a six-inning start between two
+   * groundouts as though the three were the same size of event. Above, because
+   * a start is the day's larger fact and because it is the thing a reader with
+   * two pitchers on his roster came to check.
+   *
+   * **The play pills do not reach them**, and that is the whole reason this
+   * split is a filter on `type` rather than on the filtered list: a pitching
+   * entry has no play kinds at all (`playKinds` returns an empty set for it),
+   * so any lens but `All` would have emptied the outings section as a side
+   * effect of narrowing the plays. The pills say what they narrow and they
+   * narrow that.
+   */
+  const outings = allRecent.filter((e) => e.type === 'pitching');
+  const allPlays = allRecent.filter((e) => e.type !== 'pitching');
+  const recent = allPlays.filter((e) => passesFilters(e, playFilter, false, 0, hasFilm));
   /* **And it is sorted again on its own direction.** `allRecent` is already in
      this stream's order, and `filter` hands back a fresh array, so the page's
      list is re-sorted in place rather than merged a second time — one flip of
@@ -1580,7 +1601,7 @@ export function LiveFeed({
      events. Where the two directions agree this is a sort over an already
      sorted array and costs nothing worth measuring. */
   const newRecent = newOnly
-    ? allRecent
+    ? allPlays
         .filter((e) => passesFilters(e, playFilter, true, seenPlays, hasFilm))
         .sort(newOldestFirst ? byPlayOrder : byRecency)
     : EMPTY_ENTRIES;
@@ -1614,7 +1635,7 @@ export function LiveFeed({
    * an afternoon of singles — so the Recent section keeps its own heading and
    * says which control did it, and the day-level message is held back.
    */
-  const filtered = allRecent.length > 0 && recent.length === 0;
+  const filtered = allPlays.length > 0 && recent.length === 0;
   const isEmpty =
     liveRows.length === 0 && allRecent.length === 0 && upcoming.length === 0;
 
@@ -1667,15 +1688,31 @@ export function LiveFeed({
         </section>
       )}
 
+      {/* **The outings, above the plays.** Its own section and its own heading,
+          unpaged and unfiltered: a roster carries two or three starters and a
+          day gives each of them at most one card, so there is nothing here for
+          a `Load more` to hold back — where the plays below it are a hundred
+          at-bats and are paged ten at a time. See `outings`. */}
+      {outings.length > 0 && (
+        <section className="feed-section">
+          <h2 className="feed-heading">Recent outings</h2>
+          <div className="feed-items">
+            {outings.map((entry) => (
+              <FeedItem key={entryKey(entry)} entry={entry} onOpenDetails={onOpenDetails} />
+            ))}
+          </div>
+        </section>
+      )}
+
       {(recent.length > 0 || filtered) && (
         <section className="feed-section">
-          {/* The heading says which list this is, and there is only one list
-              here again: `New plays` was this word's other value while the mode
-              narrowed this section in place, and it has gone with the mode to
-              the page's own head, where it names a box rather than a state. */}
-          <h2 className="feed-heading">
-            {kind === 'pitcher' ? 'Recent outings' : 'Recent plays'}
-          </h2>
+          {/* The heading says which list this is, and it says one word now
+              rather than two. `Recent outings` was this heading's other value
+              while the stream was one kind at a time; the outings have a
+              section of their own above, so this one is only ever the plays.
+              (`New plays` was a third value, and went to the new-plays page's
+              own head, where it names a box rather than a state.) */}
+          <h2 className="feed-heading">Recent plays</h2>
           {/* News about the day, at the head of the list the news landed in —
               which is where it can also *do* something. The League page's
               Transactions dot is the same statement made on a tab, and it can
