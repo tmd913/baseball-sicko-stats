@@ -217,29 +217,25 @@ CSS is two rules; the comments arguing them cost the bundle nothing.
 
 **Driven in a browser for each of the three states the block can be in.** With the league connected it reads the eligibility whole — `C/DH` under Rutschman, `1B/3B/DH` under Sal Stewart, `SP` under Ohtani's *pitcher* row where his batting row reads `DH` (`eligibleForKind`, so a two-way player answers once per kind). With `/api/espn/ownership` blocked it falls back per row and says so on hover — `C — MLB's listed position; ESPN has no eligibility for him`, and `SP — off his appearances this season; …` on the pitching tab — at the same 58px row. And with the fantasy roster read blocked, so no slot chip renders, every name in the column still starts at one x (110.4px, against 160.4 with the chip) and the table is still 1200 wide with 0 overflow. The research board was re-measured through the same change and is untouched: 58.00px rows, a 31.08px block, the same tables at 1952.91 (batting) and 2011.50 (pitching), 0 overflow.
 
-**The roster row's one filter is `Starters`** — only the players actually starting today: a hitter in a posted lineup, a pitcher named as today's starting pitcher (`isStartingOn` in `lib.ts`, the same `lineupStatus`/`pitchingRole` fields the pip on his headshot is drawn from). It answers the question all three of these views are opened with on a game day — who is in tonight — where the unfiltered version answers it by making you read the pips down a column of thirty rows, half of whom aren't playing.
+**The roster row had one filter, `Starters`, and it is gone.** It kept only the players actually starting today — a hitter in a posted lineup, a pitcher named as today's starter, and on a connected ESPN team *your* lineup rather than his club's. It is removed because it was not worth its place: the fact it filtered on is already on every row it filtered, as the lineup pip on the headshot, so what the button bought was a way of hiding the men the pips had already told you about. What it cost is on the other side of the ledger and is measured below.
 
-**It reaches Roster and Feed alike** (and so both of the feed's own readings), where for a while it was the summary table's alone. The argument for keeping it there was that "starting today" is a statement about one afternoon, while the other views are a record of a range, so they had no business losing a player because tonight's lineup left him out. What that missed is that the *question* does not change with the reading: these are the same players over the same days read two ways, and on a game day you ask either of them who is in tonight. Which games the numbers come from is what the **dates** decide, and the two compose — a week's games for the nine men starting tonight is an ordinary thing to want. The button vanishing as you crossed pages also read as the filter being switched *off* rather than as it not applying, which is the thing a control on a row of tabs must never do. What it still doesn't touch is the **edit screen**, which reads `editPlayers` off the raw reports narrowed to `rosterKeys` — and, since the fix recorded under **Injured players** in `client.md`, splits its own kinds rather than borrowing the view bar's: dropping a player from the roster is what that screen is for, so neither filter may reach it, by row or by tab. The extra button cost the other views **no row of chrome at any width** — measured at 320 / 360 / 375 / 390 / 430 / 640 / 900 / 1200 / 1920, the tab row wrapped identically everywhere to the way it already did on Summary (4 / 3 / 2 / 2 / 2 / 2 / 1 / 1 / 1 rows, 309 → 115px of chrome) with no horizontal overflow anywhere, a 36px square and its gap fitting in the slack the calendar already left.
+**What survives it is the set, not the button.** The summary table's `Total` row is a divider between the men who are starting and everybody else (see below), and that line needs exactly the answer the filter computed. So `App.tsx::starterKeys` is what is left: the same two readings — tonight's MLB lineup card on a saved roster (`isStartingOn` in `lib.ts`, the same `lineupStatus`/`pitchingRole` fields the pip is drawn from), *your* fantasy lineup where the views are reading an ESPN team, deliberately not the union of the two — and the same fallbacks, `lib.ts::projectStarters` asking it a day at a time where there is a per-day lineup map and off the end-of-range roster where there is not. `startersKnown` gates it, on `rangeHasToday || fantasyLineups !== null`: over a range with no today in it and no per-day lineups there is nobody it could name, and the divider goes back to the bottom rather than drawing a line it cannot justify. **A leaguemate's team page keeps the same set for the same divider** (`LeagueTeam.tsx`), and lost its own copy of the button with this one.
 
-It reads the player's **own report**, not the league-wide `/api/statuses` map the research board and the details view use. Those two fetch that map because they have *no* report — they open on strangers — while every row here is a watched player whose `PlayerReport` is already in hand, so asking a hundred kilobytes of the whole league for the twenty players on screen would be a second source of the same fact, free to disagree with the pip beside it. Reading a `PlayerGame` also makes the **date explicit**, which it has to be: a report spans the range in view, and "starting" said of a game four days ago is a fact about a night that has already happened. A postponed game is not a start — its lineup is posted and then means nothing, which is what the "!" pip already says — and a doubleheader passes on either game.
+**The projection onto lineup days went with the button and is not missed.** While the filter existed it did not merely keep or drop a row: over a range it *cut days*, projecting each report onto the days the man was actually in the lineup, so a player started Monday and benched Wednesday kept Monday's line and lost Wednesday's. That arithmetic lives on inside `projectStarters` — the team pages and the divider still run it — but nothing narrows a report by it any more, which means every row on the roster is now the whole of the man's range on every reading. The measurement that argued the day-cutting is left below as the record of what it bought, since it is what the arithmetic still in `projectStarters` was checked against: on the live 12-team league over 2026-08-06…08-12, batting went 14 rows to **12** and the `Total` from `80/279` to **`77/268`**, where a row-level filter gave 11 and `72/258`; pitching went 15 rows to **13** and **64.1 IP → 61.1**, which a filter that only removed rows could not have done.
 
-**Reading a fantasy team it reads your fantasy lineup instead**, because the question the button asks changes with the roster and so the fact it reads has to. On your own roster "Starters" is tonight's lineup card; on your ESPN team it is *your* lineup — a man you have started survives whether or not his real manager wrote him in, since he is accruing you a zero tonight and that is exactly what the table was opened to find out, and a man on your bench is dropped however MLB has him batting, since he accrues you nothing. Deliberately **not the union of the two tests**, which was the obvious alternative and is "starting for anyone": a set that answers no question anybody asks of this table, and one that would put every benched player back on a table narrowed precisely to the ones you are playing. Nor does the swap lose anything — whether one of your starters is in his own club's lineup is already on his headshot, as the pip drawn from the very field the other rule reads, so the narrowed table is where you read it. The slots come off `FantasyRosterContext` (`EspnRosterPlayer.starting` — bench is slot 16, IL 17, everything else a lineup spot; see **ESPN fantasy league**), which is null in saved-roster mode and so leaves that mode untouched. It is null *also* while the roster read is in flight or after it has failed, and there the filter falls back to the MLB test rather than emptying the table: an empty table under a lit toggle reads as "nobody is starting", which would be a claim where the truth is that the app hasn't been told yet. The tooltip says which of the two readings is in force, since the label is one word and "Starters" is the right word for both.
+**What it cost, measured.** The button was a 36px square in the wrapping tab row, drawn on **both** roster readings. Removing it takes a whole line of *pinned* chrome off a phone and — the part nobody had noticed — stops the band changing height under the finger that crosses between them. Driven on the live roster at 1400 / 390 / 320, reading `.app-chrome` on the Roster view and again on the Feed:
 
-**And over a range it cuts days, not just rows** — which is the thing this filter was quietly wrong about for as long as it existed. A range is a range of *lineups*: the server now reads one per day, each at that day's own ESPN scoring period (see **ESPN fantasy league**, **A range is a range of lineups**), and `filteredCards` **projects** each report onto the days he was actually in the lineup rather than keeping or dropping his whole week. Applying today's lineup to seven days is arithmetic nobody wants: a man you started on Monday and benched on Wednesday earned you Monday's line and none of Wednesday's, where the row-level filter either counted all of it or none. Nothing downstream had to be told — the summary table's rows, its `Total` and the feed's items all sum `report.games`, so cutting the games is the whole of the change.
+| width | before, Roster → Feed | after, Roster → Feed |
+| --- | --- | --- |
+| 1400 | 169 → 169 | 169 → 169 |
+| 390 | **213 → 261** | **213 → 213** |
+| 320 | **302 → 309** | **261 → 261** |
 
-**A player kept with no games left is not the same as one dropped.** He is kept when he was in your lineup on some day of the range and simply had no game to play — a row of dashes, and the honest answer to "am I starting him" — which is also what preserves the single-day behavior exactly. Dropped means you were not playing him on any day in view, *including every day before you picked him up*: a day you did not hold him is a day he was not in your lineup, which is the same answer as benched and belongs to whoever did hold him. **The man you have since dropped is on the page now**, where this paragraph used to close by saying he could not be — the report's player list is your team **as it stood over those days** rather than as it stands, on both kinds of roster (see **The roster is a range of rosters** in **Roster, watchlist, users and auth**, and **A range is a range of rosters** in **ESPN fantasy league**). So the filter's arithmetic is unchanged and the population it runs over is wider: Monday's line is his, and the toggle keeps it if he was in your lineup that Monday. **And he carries the chip he wore on the last day of the range**, where this used to say he carried none at all — the chip is anchored to that day rather than to today, so a catcher you started on Monday and dropped on Wednesday reads `C` over a Monday range instead of nothing over anybody's. See **The slot chip and the order are the range end's, not today's** in **ESPN fantasy league**, which is where that anchor and its fallback are argued.
+The tab row itself goes 84 → 84 at 390 on the Roster and **132 → 84** on the Feed, and **125 → 84** at 320. Page overflow is 0 at every width in every state, before and after. The same removal on a matchup's team pages needed a second reservation to keep that promise there — see **Client — a league matchup**, *A team page carried the `Starters` filter too*.
 
-**Measured on the live 12-team league, 2026-08-06…08-12 with the filter on**, batting: the table goes from 14 rows to **12**, and the `Total` from `80/279` unfiltered to **`77/268`, 44 R, 10 HR, 47 RBI** — where the old whole-range rule gives 11 rows and `72/258`, 42 R, 10 HR, 44 RBI, because it drops Kyle Stowers (IL today, in the lineup on four of the seven days) outright and credits Carson Benge his two benched days. 4 of the 12 kept batters had at least one day cut. On the pitcher tab, 15 rows → **13** and **64.1 IP → 61.1**, ERA 2.80 → 2.93 — a filter that only removed rows could not have moved the innings. Over the widest range the app allows (62 days) it is 14 rows → 13 and `664/2461` → `565/2061`. Every one of those numbers was reproduced independently off `/api/report` and `/api/espn/roster` and matches the browser to the digit.
+**The `starters=1` parameter is gone from the URL**, and an inbound link carrying it now falls back rather than emptying anything: the app does not read it, the table draws every row, and the parameter is dropped from the URL it rewrites (checked — `?view=summary&starters=1` opens 15 rows and rewrites to `?preset=Today&roster=fantasy`). Several passages in `App.tsx` used to cite it as the precedent for a lens being in the URL and not in `UserPrefs`; each of them now states the rule on its own terms — *a standing fact about the reader is a preference, a lens for an afternoon is a parameter* — rather than pointing at a control that is not there.
 
-**The `rangeHasToday` gate comes off when the per-day map is there.** That gate exists because the MLB reading of this filter is a fact about tonight, so over a week in July there is nobody it could keep and a control that empties a table with no way to read why is a trap. A lineup read per day retires the argument in fantasy mode: every day of the range has its own answer, so "the men I started" is exactly as meaningful over `Yesterday` or last July as it is today — which is the other half of what this feature is for, since a lineup you have changed since is precisely what a past range could not report. Measured on `Yesterday`: the toggle is offered, lit, and takes 14 batters to 11 and `12/46` to `11/43`. Without the map — saved-roster mode, an older tab, a read that failed — the old gate stands, since the single end-of-range lineup really is only about one afternoon.
-
-**A date missing from the map falls back to the chips' own lineup**, `startedOn` being the one place that question is answered so the filter and the count on a slot chip cannot come to disagree. Absent means the server could not read that day, not that nobody started: falling back to the end-of-range `starting` is the answer the app gave before per-day lineups existed and the right direction to fail in. That fallback got quietly better when the chips did — `starting` is the flag from the **last day of the range** now rather than from today, so an unreadable Tuesday inside a week ending Friday is answered by Friday's lineup instead of by this morning's. **The saved-roster reading is untouched** and stays `isStartingOn(r, today)` — a club's lineup is not a thing the reader set, a hitter's stats on a day he was not in it are empty anyway, so projecting there would remove nothing and change the meaning of a control four of the five presets cannot even reach.
-
-**It is in the URL (`starters=1`) and is not a saved preference**, and the split between those two is the point. The URL because it changes *which players a view is reporting on*, which is the rule `hideil=1` and `roster=fantasy` follow. Not a preference because an IL stint is a standing fact about a player and is as true next Tuesday as today, where who is starting is true for an afternoon: a saved copy would be a filter switched on for one night's lineups quietly narrowing a table read a week later, a stored answer to a question that has since changed. So there is no `UserPrefs` key, no route, and none of the already-touched ref dance the other two need.
-
-**It is only offered over a range that contains today**, and its effect and its URL param are gated on the same test (`rangeHasToday`, `startersActive`). Over "Yesterday" or a week in July there is nobody it could keep, and a control that empties a table with no way to read why is a trap — the same reasoning that hides the date row on the research board, which has nothing dated to act on. The *state* survives the excursion, so going back to Today finds the toggle as it was left, and a `starters=1` link opened on a July range filters nothing rather than showing a blank table with no control on screen to undo it.
-
-**On the roster row, not in the settings menu.** The gear is app chrome and everything in it reads as app-wide — hide-injured decides the summary *and* the feed, muting decides every clip in the app — where this qualifies the two roster views and nothing on the research board, and a menu entry that did nothing over there would be a setting lying about its own reach. So it sits with the tabs that select the page it belongs to, and goes with them on Research, which is the honest version of "it doesn't apply here". Between the reading and the days, which is the research board's own order rather than an exception to this row's: the scope pills there name *which players* and sit ahead of the window that names which span. It is `.starters-toggle`, **folded into `.research-toggle`'s selector lists** rather than restyled to resemble them — it is the same object as the board's Watchlist button two views over, a plain toggle with no panel, so it takes `.on` and never `.active`. (Qualified was the closer twin of the two, being a filter rather than a widener, and is gone — see below.) **On a phone it and the calendar go to their glyphs**, both of them 36px squares, which is the one thing that gets the roster tabs and their two filters onto a single line. It kept its word at every width until now, on the argument that the board's four toggles drop theirs because they are a *known run* of icons where this was one button on a row of tabs with nothing beside it to say what the glyph meant. That argument was right and is what changed: the calendar beside it is the second icon, so the pair is the run, and the two together are 84px of a line where the two labels were 174. Above 640 both keep their words, there being room for them. The labels are *visually* hidden rather than removed, the rule `.research-toggle-label` already follows, so each button still names itself to a screen reader rather than being a lone `aria-hidden` glyph, and each keeps the `title` a pointer gets.
+**`components/StartersToggle.tsx` is deleted**, and `.starters-toggle` is out of the five `.research-toggle` selector lists it was folded into. Nothing in those lists was written for it: `.schedule-toggle` and `.projected-toggle` are still folded on and still carry the base, the hover, the `flex: none`, the `.on` fill, the focus ring and the two narrow-screen blocks, so the family reads as it did. The one rule that *was* its own — the visually-hidden `.starters-toggle-label` under 640px — went with it.
 
 #### The `Total` row is a divider now, and it totals the men above it
 
@@ -280,15 +276,17 @@ those passages were measuring — the pane meeting the window, the gutters, the
 chrome — is untouched by a row inside it moving.
 
 **Who is a starter is not the table's decision, and that is deliberate.** The
-app has exactly one answer to that question and it is the `Starters` button's —
-`lib.ts::projectStarters`, described above. App calls it whether the button is
-pressed or not (`starterCards`) and hands the table the keys it keeps
-(`starterKeys`); `SummaryTable.tsx::splitStarters` does nothing but look them
-up. A test written down there would be a second test that will one day disagree
-with the button, and it would disagree **silently** — the button narrowing to
-one set of men while the line above the total drew another.
+app has exactly one answer to that question — `App.tsx::starterKeys`, over
+`lib.ts::projectStarters`, described above — and hands the table the keys it
+keeps; `SummaryTable.tsx::splitStarters` does nothing but look them up. A test
+written down there would be a second test that will one day disagree with the
+first, and it would disagree **silently**, one set of men counted in the foot
+while the line above it was drawn round another. *(The set was the `Starters`
+button's while that button existed, computed whether it was pressed or not
+precisely so the line and the filter could not part company. The button is gone
+and the set is not: this row is what it is still computed for.)*
 
-That means the word carries the filter's own two readings, and its own edge
+That means the word carries what were the filter's two readings, and its edge
 cases. On your own roster a starter is a man in tonight's posted lineup or named
 as today's starting pitcher; on a fantasy team he is a man **you** started on
 some day of the range, however his real manager has him — so over
@@ -302,13 +300,13 @@ one row that is read as *what is tonight worth*, where leaving him out puts him
 with the bench and leaves his own row adding up exactly as before.
 
 **Two degenerate cases, and both are the old table to the pixel.** With nobody
-above the line — nothing posted yet this morning, or a range the filter is not
-offered over at all (`startersOffered` false, `starters` null) — a divider would
+above the line — nothing posted yet this morning, or a range the set cannot be
+computed over at all (`startersKnown` false, `starters` null) — a divider would
 divide nothing and label a total of nought, so the row goes back to the bottom
-over everybody. With nobody below it — the filter already pressed, or a team
-every man of which is in the lineup — it is at the bottom for the ordinary
-reason, that there is nothing after it. Measured with `starters=1` on the same
-day: two `<tbody>`s, eleven rows, `Total · 11` reading the identical `3/30 · 1 ·
+over everybody. With nobody below it — a team every man of which is in the
+lineup — it is at the bottom for the ordinary reason, that there is nothing
+after it. Measured on a table narrowed to those eleven on the same day: two
+`<tbody>`s, eleven rows, `Total · 11` reading the identical `3/30 · 1 ·
 0 · 3 · 0 · .417 · 6 · 8`. The rule reads the same at both ends — the row totals
 what is above it, and what is above it is the whole table whenever the split has
 nothing to say.
@@ -316,9 +314,9 @@ nothing to say.
 **Under the lens the plan answers, and that is the same rule rather than an
 exception to it.** There is still exactly one test in the app for who is
 starting; what changes is that over days nobody has played, ESPN's lineup is not
-it. That one describes *today*, and on a span of days ahead the `Starters`
-filter's own fallback is today's lineup carried forward — an honest guess, made
-where the projection has just filled every one of those days seat by seat. So a
+it. That one describes *today*, and on a span of days ahead the fallback is
+today's lineup carried forward — an honest guess, made where the projection has
+just filled every one of those days seat by seat. So a
 man the plan starts on **any** day of the span is above the line, which is also
 the set the `Lineup` foot beside it is a total over and the set each name
 column's chip already names. The two halves of a straddling range each take
@@ -328,7 +326,7 @@ Thursday's lineup has no room for him. **The test is the `Starts` column's own
 figure** — *does it read more than nought* — rather than a second one written
 here, which is the same rule this section opens with, applied to the lens: the
 line and the number printed beside it cannot part company if they are one
-count. (It was two tests for a day, `starters` answering for the played half,
+count. (It was two tests for a day, the starter set answering for the played half,
 and the `Starts` column has since been made to count that half itself — see
 *Both halves, or it is not the row's count*.)
 
@@ -343,13 +341,13 @@ asks for — a man with a start in the range is a starter. On the reader's own
 roster over the ordinary press (8/19–8/23) it is eleven above and the three on
 the IL below, unchanged, since there the two tests already agreed.
 
-**The team page runs it too, and now passes the same set the button uses.** A
-matchup's team pages are this component, and they handed it no `starters` at
-all, so the divider they drew was the old undivided foot. `LeagueTeam` computes
-the key set the way App does — `projectStarters` over the span, whether the
-button is pressed or not — so the line and the button cannot disagree there
-either. Measured on team 4's ordinary reading: `Total · 11` with five below it,
-and pressing `Starters` leaves exactly those eleven.
+**The team page runs it too, off the same arithmetic.** A matchup's team pages
+are this component, and they handed it no starter set at all, so the divider
+they drew was the old undivided foot. `LeagueTeam` computes the key set the way
+App does — `projectStarters` over the span — so the two surfaces cannot draw the
+line in two places. Measured on team 4's ordinary reading: `Total · 11` with
+five below it, those eleven being exactly the men that team's manager started on
+some day of the span.
 
 **The count on the label is the count of what it totals**, which is the whole
 point of the move: `Total · 9` on a sixteen-man roster is a figure a manager can
@@ -386,6 +384,8 @@ It hangs off the corner the way a notification badge does, and **it is anchored 
 **No margin of its own, and the measurement is what it costs at the right edge.** Centered, the bubble needed `margin-left: 10px` to clear the starters toggle — a number sized against the row's own slack (at 390 the roster tabs and the two squares come to 315px of the 346 the gutters leave, so 31px are spendable before the calendar is pushed onto a line of its own, which is the whole thing the phone swap bought; 16px each side was tried and cost exactly that row at 375 and at 390). Left-anchored it needs none, so the gap from the starters button goes **23px → 13px** (12 between the buttons themselves) and is the same 13 at every width from 360 up. What it buys is paid on the right: the overhang past a 36px square is 18.6px on a fortnight's range and 29.5px on `10/29–10/31`, the widest string the app can print. Measured at 320 / 360 / 375 / 390 / 430 / 540 / 600 with that widest string forced into the bubble, on the summary view with the filter on: **no horizontal overflow of the page at any of them** — the only width where the row is full enough for the overhang to reach the edge of the screen is **360**, where a real range clears it by 4px and the widest possible one is clipped by 6, which is the price of the ten pixels and is paid in a corner rather than in the layout.
 
 Open, the button fills with the accent and the bubble **inverts** (dark pill, accent text): same-colored, the two merged into one lollipop with a dark seam through the middle.
+
+*(Superseded — the button the next six paragraphs describe is gone, and with it its glyph, its label rule and its filtering. They are kept for the two lessons that outlived it: an `<svg>` in a flex row is a flex **item** and needs `flex: none` or its `width` is a basis it shrinks below, and a narrow-screen block must sit **after** the family it overrides, a media query adding no specificity. Both rules now hold the roster row's two mode toggles up, and the stylesheet states them there. See **The roster row had one filter, `Starters`, and it is gone** above.)*
 
 **The starters glyph is a clipboard**, which is what the filter is — the men written on tonight's lineup card. It was three shortening rules, a fair drawing of a filtered list, and it had to go because it was *optically* tiny rather than small: its strokes span 10 of the viewBox's 24 units, so at 15px they came to about 6px of ink adrift in the middle of a 36px square — fine beside a word, not fine as the whole of a button. It draws at **20px** against the calendar's 17 (the size every other icon button in the app uses), and spans **3–21 across and 2–22 down** of its viewBox, the first clipboard drawn here having been 16 units wide against the calendar's 18 — a tall narrow outline carries less weight than a wide one whatever its box says.
 
@@ -467,13 +467,13 @@ So the mode carries **its own span**, and the precedent is the research board's 
 
 #### What the URL carries, and what it deliberately does not
 
-**`sched=7` / `sched=14` / `sched=matchup` / `sched=next`, absent meaning off** — one parameter carrying both the mode and its span, so it can never say a span with no mode, which is the same economy that keeps `starters=1` out of a URL where it does nothing. It is in the URL by the rule `hideil=1` and `roster=fantasy` follow: it changes *what data the view is showing*, so a link that carries it describes a different table.
+**`sched=7` / `sched=14` / `sched=matchup` / `sched=next`, absent meaning off** — one parameter carrying both the mode and its span, so it can never say a span with no mode: a parameter that cannot describe the page it opens is a parameter that lies about it. It is in the URL by the rule `hideil=1` and `roster=fantasy` follow: it changes *what data the view is showing*, so a link that carries it describes a different table.
 
 **It is not a saved preference**, and the line is `view`'s rather than `hideInjured`'s. Which *reading* of your players you are on is restored by a link and a reload, not by a record — that is the footing `view=feed` and `kind=pitcher` are already on — so there is no `UserPrefs` key, no route, and none of the already-touched ref dance the saved toggles need. **One flag and one span for both tables**, because they are one vocabulary the way `statRanks` says they are, and because "the next 7 days" — and "this matchup" — mean one thing wherever they are read.
 
 #### On a phone the run is a dropdown
 
-**How many spans a reader is offered is a fact about his league**, so the pill row's width is not ours to know: the fallback run measures **367px at 390 against the 346** the app's gutters leave, taking a line of its own and the pinned chrome from 207px to 255. The `<select>` is **134px** whatever the run holds and shared its line with the `Starters` and calendar buttons beside it. *(Both the pill row and the `<select>` are in the **date bar's disclosure** now rather than in the tab row — the bar's arrows step the span, so the strip that names the whole run belongs under the label they move. The measurement above is what the row cost while it was up there; the board, which has no date bar, keeps its own copy in its own bar and is unaffected.)* A control whose shape depended on what somebody's league happened to publish would be worse than one that is simply a dropdown on a phone.
+**How many spans a reader is offered is a fact about his league**, so the pill row's width is not ours to know: the fallback run measures **367px at 390 against the 346** the app's gutters leave, taking a line of its own and the pinned chrome from 207px to 255. The `<select>` is **134px** whatever the run holds and shared its line with the filter and calendar buttons beside it. *(Both the pill row and the `<select>` are in the **date bar's disclosure** now rather than in the tab row — the bar's arrows step the span, so the strip that names the whole run belongs under the label they move. The measurement above is what the row cost while it was up there; the board, which has no date bar, keeps its own copy in its own bar and is unaffected.)* A control whose shape depended on what somebody's league happened to publish would be worse than one that is simply a dropdown on a phone.
 
 It is the app's own swap rather than a new one — the date presets, the research board's window tabs and its position row all become a `<select>` at 640, and `.schedule-span-select` is folded onto `.research-window-select` — `.date-presets-select` headed that list until the date presets went with the preset row — so every "pills on a desktop, dropdown on a phone" control in the app is one control by construction. **Both are rendered and the media query picks**, rather than a JS media test that could drift from the CSS. The hide rule is written as the two classes the pill row actually has (`.schedule-span.view-switch`) rather than scoped to a parent, because this run is drawn in three of them — the roster row, the board's tools and a team page's — and `.view-switch`'s own `display: inline-flex` is later in the file and would otherwise leave both on screen at once. That is the trap `.date-row .date-presets` already documents, met from a third direction.
 
@@ -729,6 +729,78 @@ off the rendered cells before and after and identical, as is the legend's own
 158.34 KB of CSS** (28.30 → 28.37) — 130 bytes and 20 bytes raw, for a mark that
 gives 33 rows their 58px back.
 
+#### The stroke encloses both lines, and the legend stopped crossing the top one
+
+**The border was round the opponent alone, and the opposing starter hung loose
+underneath it.** That is the pill-under-the-opponent shape the section above
+replaced, one line lower: a box round `vs PIT` and a caption below it, two
+things in a cell with nothing saying they were one, and the reader pairing them.
+The mark is about a *day*, and the man the other club is throwing that day is as
+much a fact about it as the opponent is — so `.sched-vs` goes **inside**
+`.sched-opp-box`, which is now a column flex aligned `flex-end` like the cell
+around it. Measured on the live roster and the SP board at 1400 / 390 / 320: the
+starter line sits inside the stroke on **3 of 3** start cells that name one on
+the roster and **26 of 26** on the board, where it was 0 of 3 and 0 of 26.
+
+**The legend was overlapping the opponent the whole time, and that is the fault
+this change had to answer rather than inherit.** `SP` is centered on the bottom
+stroke, so half its 9px line falls *inside* the box — and inside the box was
+`vs PIT`. Its ground is opaque (`--cell-bg`, by the rule above), so the mark was
+painting over the bottom four pixels of the opponent on **6 of 6** start cells on
+the roster and **29 of 29** on the board. It went unnoticed because a team
+abbreviation is all caps and has no descenders to lose; a pitcher's surname does,
+and pulling `RHP Gray` inside the box would have put a nineteen-pixel notch
+through the middle of a name.
+
+**So the half that hangs upward is reserved as padding inside the box**, and the
+old `margin-bottom: 5px` — which reserved the half that hangs *downward*, back
+when there was a caption below to protect — is what pays for it. The two are the
+same five pixels moved from outside the box to inside it, which is why the cell
+is **the same height either side of this change**: 32.39px on a start day with a
+starter named, 21.39 without, and the row **58**. The downward half now leaves
+the cell altogether and lands in the `<td>`'s own 12px bottom padding (measured
+4.00px of overhang against 13.31px of padding).
+
+**Reserved by arithmetic rather than by a laid-out ghost**, which is the one
+place this app's *reserve the worst case, don't declare a height* rule is
+answered with a number — and it is answered with a number because the worst case
+here is not a function of anything this app does not control. `.sched-sp`
+declares its own `font-size: 9px` and `line-height: 1` precisely so the legend's
+height cannot be whatever `normal` resolves to; 9px tall by construction is 4.5
+above the stroke, and 5 is what the box already spent on it. A ghost laid out in
+the flow would reserve the whole 9 and cost the row 4px for nothing.
+
+**Measured, before → after, at 1400 / 390 / 320 on both tables** (roster pitcher
+tab `sched=7`, board `pos=SP`):
+
+| | before | after |
+| --- | --- | --- |
+| legend overlapping a text run | 6/6 roster, 29/29 board | **0, 0** |
+| starter line inside the stroke | 0/3, 0/26 | **3/3, 26/26** |
+| cell height (start day, starter named) | 32.39 | **32.39** |
+| row heights | 48 / 58 roster, 58 board | **unchanged** |
+| right-edge agreement, start vs plain day | ≤0.01px over 88 + 330 spans | **≤0.01px** |
+| legend center off the stroke's | 0.00px | **0.00px** |
+| legend ground vs its own `<td>`'s | identical | **identical** |
+| page-body overflow | 0 | **0** |
+
+**What it costs is width, and only where a start day is the widest cell in its
+column.** The box's 4px of side padding and 1px stroke now wrap the *longer* of
+the two lines rather than the shorter, so a column whose width was set by
+`RHP Misiorowski` gains the box's 10px minus the 5px the negative right margin
+already gives back. The tables go **676.28 → 686.28** at 390 and **658.94 →
+668.94** at 320 on the roster, **654.25 → 663.66** and **637.03 → 646.44** on the
+board, and are **1400 either way** at 1400 where both have slack. Both tables
+scroll sideways at a phone width in any case, and the page body overflows by 0 at
+every width before and after.
+
+**A doubleheader pays 3px for it.** The upper cell's legend used to hang into the
+box's own bottom margin and so stayed inside its cell; it now hangs past the
+cell, into the gap between the two. `.sched-cell + .sched-cell` goes **2px → 5**,
+which is the same half-legend the box reserves above the stroke, and is only ever
+paid on a day a club plays twice.
+
+
 #### What it costs is width, which is free here, and one row a screen, which is not
 
 **The label is surname and hand rather than the whole name**, and that is
@@ -848,11 +920,11 @@ In schedule mode each day's cell in that row is **how many of these players have
 
 The **opponent column goes** with the stats: it is one representative game's matchup, and the whole table beside it is every game of the span. Everything else on the leading cells stays — the headshot with its lineup pip and status code, the fantasy slot chip, the identity block, the row tints and their legend — because none of them is about the columns.
 
-**`Starters` and the calendar are untouched**, which is the same split the board makes between its row-narrowing controls and its column-dressing ones: this changes which *columns* the table has, where those two decide which *rows* and which days the report was built from. The calendar keeps the second job it always had — over a range the report's player list is the roster as it stood on those days — so it still says whose roster is on screen even when nothing on screen is drawn from those days.
+**The calendar is untouched**, which is the same split the board makes between the controls that decide which rows and days a report is built from and the ones that dress its columns: this changes which *columns* the table has, where the calendar decides which days the report came from. *(The `Starters` filter was the other half of that pair and is gone — see above.)* The calendar keeps the second job it always had — over a range the report's player list is the roster as it stood on those days — so it still says whose roster is on screen even when nothing on screen is drawn from those days.
 
-**The toggle leads its group**, ahead of `Starters` and the calendar, which is this row's own documented order rather than an exception to it: the questions come in the sequence *which page, which kind, **which reading of it**, which players, which days*, and the mode is literally the third of those. (On the board it reads in the tools run after the controls that narrow rows and before the two that dress the columns, which is that run's own order — the two placements answer to two different rows and each is argued where it sits.)
+**The toggle leads its group**, ahead of the calendar, which is this row's own documented order rather than an exception to it: the questions come in the sequence *which page, which kind, **which reading of it**, which players, which days*, and the mode is literally the third of those. (On the board it reads in the tools run after the controls that narrow rows and before the two that dress the columns, which is that run's own order — the two placements answer to two different rows and each is argued where it sits.)
 
-**Expanded, the mode and its span come along as live controls** rather than being reduced to a badge, exactly as the kind tabs, the dates and the `Starters` filter do: a grid of dates with nothing on screen saying how far it runs is the one state this must never be in, and the toggle is also the way back to the stats without leaving the page. (The board, whose expanded chrome is badges, gets a badge instead — see **the research board**.)
+**Expanded, the mode and its span come along as live controls** rather than being reduced to a badge, exactly as the kind tabs and the dates do: a grid of dates with nothing on screen saying how far it runs is the one state this must never be in, and the toggle is also the way back to the stats without leaving the page. (The board, whose expanded chrome is badges, gets a badge instead — see **the research board**.)
 
 **Nothing blanks while the window is being read.** The mode is the *presence of an index* rather than a flag beside one — App holds the window and hands the table an index only once it has landed — which makes "in schedule mode with no schedule" impossible to draw: both tables go on showing their stat columns until it lands, which is rule 1 of the app's loading system, and the only mark the press leaves is the spinning baseball inside the toggle that started it. A read that **fails** leaves the stat columns standing and says so in a banner of its own, separate from the report's, since the report behind the page is untouched.
 
@@ -972,6 +1044,80 @@ instead of it. A line of zeros would claim he plays and does nothing,
 which is the opposite of the truth — the same distinction the research board
 makes when it sends a window a player does not appear on back as `null` rather
 than as a zeroed row.
+
+#### A reliever's day was dashes, and a fraction of an appearance is the answer
+
+**Every reliever on the roster read as a row of em-dashes on a single date**, and
+the reason was not the lens, the role test or a probable-starter gate. It was the
+appearance model: `server/src/projection.ts::projectOnePitcher` rounded a
+reliever's span to a **whole number of outings** — `Math.round(clubGames × rate)`
+— and then projected exactly that many. The ordinary bullpen arm is used in
+something like two fifths of his club's games, and `Math.round(0.4)` is 0, so
+over one day he had no appearance to be projected into, `chances` came back 0 and
+the client dashed the row. Measured on 2026-08-21 over the twelve busiest
+relievers in baseball: **5 of 12 answered `chances 0` and a null line**, on a day
+their clubs were all playing.
+
+**Two more faults in the same three lines, both invisible.** The rounding also
+threw the fraction away on *every* span, not just short ones — Sam Moll over
+three days is 3 × 0.44 = 1.32 appearances, filed as 1, a quarter of the answer
+gone — and the whole number was taken as `games.slice(0, count)`, the **first**
+N games of the span, so a reliever's opponent-quality multipliers came off the
+front of the week and none of the back of it.
+
+**The fix is the treatment a batter's line has always had.** `projectBatter`
+takes a `playShare` and scales what one game is worth by it, which is how a
+hitter gets `4.8 games` and a fractional line over a five-day span. So
+`projectPitcher` gained an `appearanceShare`: a starter passes the default 1 and
+`mults` is one entry per *turn*, a reliever passes his appearance rate and
+`mults` is one entry per *club game*. Every remaining game then contributes its
+own share — which also settles the opponent mix, each day carrying its own
+multiplier at the same weight.
+
+**It is the arithmetic the lineup planner in the same file was already using for
+the same man.** `pitcherCandidate` values a reliever's day as `day.set(g.date,
+rate)` — a fraction of an appearance — while `projectOnePitcher` insisted on
+whole ones. Two answers to one question, in one file; there is one now.
+
+**Measured on the live board, before → after.** Over the twelve busiest relievers
+on a one-day span (2026-08-21): `chances 0` and a null line on **5 of 12** →
+**0 of 12**, the rest reading 0.4–0.6 of an appearance. Over three days the whole
+numbers become fractions with no change of level (Sam Moll `1 → 1.4`, Tyler
+Rogers `2 → 1.5`, Eduard Bazardo `2 → 1.6`); over seven the level is where it
+was (Rogers `3 → 3`, Bazardo `4 → 3.8`, Moll `3 → 3.3`). Driven in the browser on
+the live fantasy roster over 2026-08-21, pitcher tab, `rproj=1` — the four
+relievers the plan seats, every one of them holding a lineup slot (`Starts 1`):
+
+| | before | after |
+| --- | --- | --- |
+| Dylan Lee | `Games — · IP — · K — · HLD —` | `0.5 · 0.4 · 0.5 · 0.2` |
+| Didier Fuentes | all dashes | `0.4 · 0.5 · 0.7 · 0.1` |
+| Trevor Megill | all dashes | `0.4 · 0.4 · 0.4 · SV 0.2` |
+| Tanner Scott | all dashes | `0.5 · 0.4 · 0.6 · SV 0.2` |
+| `Lineup` foot | `Games 3 · IP 17.9 · K 17.8 · SV — · HLD —` | `4.8 · 19.6 · 20 · 0.4 · 0.5` |
+
+The three starters on the same table are untouched to the digit, which is the
+other half of the check: `appearanceShare` defaults to 1 and a turn is still a
+whole outing.
+
+**And a fraction is the honest clothing, not a compromise.** This app's rule is
+that an estimate must never wear a measurement's clothes, and a reliever's day is
+the most uncertain thing the lens draws — nobody knows which nights he warms up.
+A whole projected outing on a named date would claim exactly the thing that
+cannot be known; `0.4` of an appearance cannot be mistaken for one, because no
+outing anybody ever threw was four tenths of an appearance. It also lands inside
+the mark the projected reading already carries: a measured count is printed
+whole and a projected one to a tenth (`projCount`), so a reliever's row is in
+tenths from end to end. The `Games` header's own title and the `How the
+projection works` key both say it in words — *a reliever's is a share of every
+game his club has left, since nobody knows which nights he warms up*.
+
+**No cache version moves with it.** Nothing in `projection.ts` is written to a
+blob: the context is memoized in memory on the matchup's own minute and the
+roster projection is computed per request. The wire shape is unchanged too — the
+only field whose *meaning* moved is `EspnProjectedSide.reliefGames`, which goes
+from an integer to a fraction and which nothing in either workspace reads.
+
 
 #### The lineup it would set, and the two arithmetics that follow
 
@@ -1281,7 +1427,7 @@ him today.
   did; the column takes the days. A matchup team page filled that field with
   `null` on the stated grounds that it "reads one day's roster", which was true
   of the chip and stopped being true of the page — it reads the per-day map for
-  its own `Starters` filter, so it now fills the days from `byDate` and its
+  its own `Total` divider, so it now fills the days from `byDate` and its
   chips gain the range title they never had.
 - **Two tiers, `projectStarters`' own**, so nothing new can fail here: the
   per-day map where there is one, and the single end-of-range `starting` flag
@@ -1484,14 +1630,14 @@ group beside the toggle cost is more than paid for by what came out.
 
 #### `rproj=1`, and why it is not `proj=1`
 
-In the URL by the rule `hideil=1`, `starters=1`, `sched=` and `plays=` follow: it
+In the URL by the rule `hideil=1`, `sched=` and `plays=` follow: it
 changes *what the numbers are*, so a link carrying it describes a different
 table. **A different param from the League page's `proj=1`** because that one
 means a *matchup* — one param meaning two things in two views is exactly the trap
 `lspan=` avoids by not being `win=`, and a link is read before anything on screen
 can say which view it was written on.
 
-**Not a saved preference**, for `starters=1`'s reason: which figures a reader
+**Not a saved preference**, by the line every lens in this app sits the far side of: which figures a reader
 wants in front of them is a lens for an afternoon, and a saved copy would mean a
 table quietly showing next week's estimates a fortnight later.
 
@@ -1573,8 +1719,8 @@ each opened on purpose. And **the two of them are read against each other**: a
 manager comparing a projected matchup with his projected finish moves between
 the Scoreboard and the Rankings on the same week, and a rule that reset them on
 the way out would have to answer why it does not reset them on the way between —
-which is the same trap `starters=1` avoids by staying in force across the kind
-tabs.
+which is the same trap the feed's play lens avoids by staying in force across
+the kind tabs.
 
 **That paragraph is superseded and is left standing as the reasoning it was.**
 The two League lenses now go away with their own pages — see *A page opens
@@ -1616,7 +1762,7 @@ fully in view. What the control costs the pinned row is **a wrapped line at 375,
 1920**, A/B'd by hiding the button on the same page.
 
 **Full-page mode** carries the caption and puts the toggle in
-`.expanded-chrome` beside the kind tabs, the Schedule control, `Starters` and the
+`.expanded-chrome` beside the kind tabs, the Schedule control and the
 dates — a live control rather than a badge, for the reason that row's own note
 gives: it is what the figures *are*, and it is the way back to them without
 leaving the page.

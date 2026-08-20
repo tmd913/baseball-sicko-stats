@@ -71,7 +71,7 @@ what it is, and most of them are not recoverable from the code.
 | `store.ts` `storage.ts` `auth.ts` `cognito.ts` `auth.tsx` `invite.ts` | `sicko-server` |
 | `espn.ts` `projection.ts` `EspnSettings.tsx` `LeagueOnboarding.tsx` | `sicko-espn` |
 | `App.tsx` `hooks.ts` `lib.ts` `api.ts` `PlayerAdder.tsx` `Loading.tsx` `DateControls.tsx` `DateRangePicker.tsx` `simulate.ts` | `sicko-client` |
-| `SummaryTable.tsx` `PlayerIdentity.tsx` `PhotoStatus.tsx` `schedule.tsx` `ScheduleControl.tsx` `StartersToggle.tsx` `ExpandButton.tsx` | `sicko-roster` |
+| `SummaryTable.tsx` `PlayerIdentity.tsx` `PhotoStatus.tsx` `schedule.tsx` `ScheduleControl.tsx` `ExpandButton.tsx` | `sicko-roster` |
 | `ResearchTable.tsx` `researchColumns.tsx` `ColumnPicker.tsx` `columnRanks.tsx` `WatchStar` `LockMark.tsx` `NewsMark.tsx` | `sicko-research` |
 | `LiveFeed.tsx` `PlayerDay.tsx` `PlateAppearanceCard.tsx` `FeedFilters.tsx` `BaseDiamond.tsx` `ClipVideo.tsx` | `sicko-feed` |
 | `PlayerDetails.tsx` `PlayerOverview.tsx` `PlayerSchedule.tsx` `GameLog.tsx` `PlatoonSplits.tsx` `RollingXwoba.tsx` `PlayerWindowTable.tsx` `PlayerNews.tsx` `PlayerOrderEditor.tsx` `Tutorial.tsx` | `sicko-player-page` |

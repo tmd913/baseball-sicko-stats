@@ -84,7 +84,10 @@ export function ProjectionKey({
           come is the estimate below. <b>Games</b> is how many he appears in over those days —
           the ones he bats in, or for a pitcher his outings, a start and a relief appearance
           alike — and <b>Starts</b> is how many of the days his club plays your fantasy lineup
-          has room for him.
+          has room for him. <b>A reliever&rsquo;s Games is a fraction on purpose.</b> Nobody
+          knows which nights he warms up, so every game his club has left carries the share of
+          an outing he is usually good for — half an appearance tonight is what a man used in
+          half his club&rsquo;s games is worth, and the line beside it is worth the same share.
         </p>
       )}
       <p>

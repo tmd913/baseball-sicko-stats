@@ -493,7 +493,7 @@ the other three views and the page's own chrome are all untouched.
 ### What it draws and what it deliberately does not
 
 The League page is neither a roster reading nor the board, so it carries **no
-kind tabs, no date control, no `Starters` toggle** and none of the report's own
+kind tabs, no date control, no roster-narrowing controls** and none of the report's own
 waits or empty states. Every one of those was gated on `view !== 'research'` —
 right while Research was the only page that is not a roster reading, and the
 League view is the second — so the nine render sites now read
@@ -501,8 +501,8 @@ League view is the second — so the nine render sites now read
 that carried the same string were left naming the board**, which is what they
 always meant: the ownership read the board depends on, the statuses map it
 draws, and the board's own fetch. Measured: on the League view `kind-switch`,
-`date-toggle` (`date-bar` since) and `starters-toggle` are each **0**, and on Roster and Feed each
-is **1**, unchanged.
+`date-toggle` (`date-bar` since) and `starters-toggle` (gone since) are each **0**, and on Roster
+and Feed each was **1**, unchanged.
 
 **The scroll offset keys on the view alone** (`'league'`), exactly as the
 research board's does, because this page has no kind: it is one board about one

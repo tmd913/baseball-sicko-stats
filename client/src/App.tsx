@@ -87,7 +87,6 @@ import {
 } from './hooks';
 import type { FantasySlot } from './hooks';
 import { LoadingBlock, LoadingLine, SpinningBaseball } from './components/Loading';
-import { StartersToggle } from './components/StartersToggle';
 import { ProjectedToggle, ProjectionKey } from './components/Projection';
 import {
   FeedFilterPills,
@@ -140,7 +139,7 @@ const MIN_SPIN = 450;
 type View = 'summary' | 'feed' | 'research' | 'league';
 
 /** The two pages that report on a roster over a range — the ones the kind tabs,
- *  the date controls, the `Starters` filter and the report itself belong to.
+ *  the date controls and the report itself belong to.
  *  Research and League are each about something else (the whole league's season
  *  and the fantasy league's week), and neither has a kind or a date. */
 function isRosterView(v: View): boolean {
@@ -568,26 +567,6 @@ export default function App() {
     );
   }, [queueUserWrite]);
   /**
-   * Narrow the summary table to the players who are actually starting today —
-   * a hitter in the posted lineup, a pitcher named as today's starter.
-   *
-   * **In the URL** (`starters=1`), by the same rule `hideil=1` follows: it
-   * changes *which players a view is reporting on*, so a link that carries it
-   * is saying something about the data rather than about how it is drawn.
-   *
-   * **Not saved as a preference**, which is where it parts from hide-injured.
-   * An IL stint is a standing fact about a player and is as true next Tuesday
-   * as it is today, so a saved "hide them" is a setting. Who is starting is
-   * true for an afternoon and false by the next morning, and a saved copy would
-   * mean a filter switched on for one night's lineups silently narrowing a
-   * table read a week later — a stored answer to a question that has since
-   * changed. So there is no `UserPrefs` key, no route, and none of the
-   * already-touched dance the other two need.
-   */
-  const [startersOnly, setStartersOnly] = useState<boolean>(
-    () => initialParams.get('starters') === '1',
-  );
-  /**
    * **The batter feed's lens** — which kind of play the stream draws, or whether
    * it is narrowed to the plays the reader has not marked read.
    *
@@ -604,15 +583,17 @@ export default function App() {
    * lit from the pair (`feedLens`) and every press sets both (`selectFeedLens`),
    * so the two can never both be in force.
    *
-   * **In the URL** (`plays=hr` and `newplays=1`), by the rule `hideil=1`,
-   * `starters=1` and `sched=` follow: each changes *which* items the view draws,
-   * so a link that carries one describes a different stream.
+   * **In the URL** (`plays=hr` and `newplays=1`), by the rule `hideil=1` and
+   * `sched=` follow: each changes *which* items the view draws, so a link that
+   * carries one describes a different stream.
    *
-   * **Not saved as preferences**, and the line is `starters=1`'s: which plays
-   * you want in front of you is a lens for an afternoon, and a saved copy would
-   * mean a feed silently narrowed to home runs a week later. So no `UserPrefs`
-   * key for either, and none of the already-touched ref dance the saved toggles
-   * need. The *marker* below is saved; the lens is not.
+   * **Not saved as preferences**, and the line is the one every lens in this app
+   * is on the far side of: a standing fact about a player (an IL stint) is as
+   * true next Tuesday as today and is worth storing, where which plays you want
+   * in front of you is a lens for an afternoon — a saved copy would mean a feed
+   * silently narrowed to home runs a week later. So no `UserPrefs` key for
+   * either, and none of the already-touched ref dance the saved toggles need.
+   * The *marker* below is saved; the lens is not.
    */
   const [playFilter, setPlayFilter] = useState<PlayFilterKey | null>(() =>
     toPlayFilter(initialParams.get('plays')),
@@ -675,8 +656,9 @@ export default function App() {
    * **In the URL as `sched=7` / `sched=14`**, by the rule `hideil=1` and
    * `roster=fantasy` follow: it changes *what data the view is showing*, so a
    * link that carries it describes a different table. One param rather than a
-   * mode flag and a span beside it, so it can never say something meaningless —
-   * the same reason `starters=1` is kept out of a URL where it does nothing.
+   * mode flag and a span beside it, so it can never say something meaningless:
+   * a parameter that cannot describe the page it opens is a parameter that lies
+   * about it.
    *
    * **Not a saved preference**, and the line is `view`'s rather than
    * `hideInjured`'s: which *reading* of your players you are on is restored by a
@@ -714,12 +696,14 @@ export default function App() {
    * a *matchup*: one param meaning two things in two views is exactly the trap
    * `lspan=` avoids by not being `win=`, and a link is read before anything on
    * screen can say which view it was written on. Both are in the URL by the same
-   * rule (`hideil=1`, `starters=1`, `sched=`, `plays=`): each changes *what the
-   * numbers are*, so a link carrying one describes a different table.
+   * rule (`hideil=1`, `sched=`, `plays=`): each changes *what the numbers are*,
+   * so a link carrying one describes a different table.
    *
-   * **Not a saved preference**, for `starters=1`'s reason: which figures a
-   * reader wants in front of them is a lens for an afternoon, and a saved copy
-   * would mean a table quietly showing next week's estimates a fortnight later.
+   * **Not a saved preference**, which is where every lens in this app parts from
+   * hide-injured: an IL stint is a standing fact about a player, where which
+   * figures a reader wants in front of them is a lens for an afternoon — a saved
+   * copy would mean a table quietly showing next week's estimates a fortnight
+   * later.
    *
    * The **read is lazy on the toggle** — it joins four league-wide boards and
    * the league's schedule against the roster, so nobody who never presses it
@@ -929,13 +913,12 @@ export default function App() {
         : null,
     [scheduleSpan, scheduleWindow, matchupWindow, pitcherLookup, playersLoading],
   );
-  // The filter is about *today*, so it can only act on a range that contains
-  // today. Over "Yesterday" or a custom week in July there is nobody it could
-  // keep, and a control that empties a table with no way to read why is a trap
-  // — the same reasoning that hides the date row on the research board, which
-  // has nothing dated to act on. The state survives the excursion (going back
-  // to Today finds the toggle as it was left) and only its *effect* is gated,
-  // which is also what keeps `starters=1` out of a URL where it does nothing.
+  // Does the range on screen contain today at all — which is what anything
+  // asking a question *about* today has to be gated on. Over "Yesterday" or a
+  // custom week in July there is no answer to be had, and a mark drawn on one
+  // anyway would be a claim about a day nobody is looking at. The same
+  // reasoning hides the date row on the research board, which has nothing dated
+  // to act on.
   const rangeHasToday = useMemo(() => {
     const today = baseballToday();
     return start <= today && today <= end;
@@ -1464,14 +1447,15 @@ export default function App() {
    * **Where this period's matchups are heading** — the Scoreboard's `Projected`
    * toggle, and the projection it swaps its figures for.
    *
-   * **In the URL as `proj=1`**, by the rule `hideil=1`, `starters=1`, `sched=`
-   * and `plays=` follow: it changes *what the numbers are*, so a link that
+   * **In the URL as `proj=1`**, by the rule `hideil=1`, `sched=` and `plays=`
+   * follow: it changes *what the numbers are*, so a link that
    * carries it describes a different board — and "here is where this week is
    * going" is a thing a leaguemate is worth sending.
    *
    * **Not a saved preference.** Which figures you want in front of you is a lens
-   * for an afternoon, exactly as `starters=1` is, and a saved copy would mean a
-   * board silently showing projections a fortnight later. So there is no
+   * for an afternoon, where a preference is a standing fact about the reader,
+   * and a saved copy would mean a board silently showing projections a
+   * fortnight later. So there is no
    * `UserPrefs` key and none of the already-touched ref dance the saved toggles
    * need.
    *
@@ -1529,7 +1513,7 @@ export default function App() {
    * other tab), `mup=` is which matchup, `mt=` which page *of* it, and
    * `lspan=` the span. `mr=` is which reading of a team page — see it below.
    * None can collide: the app's other params are `preset`, `start`, `end`,
-   * `player`, `view`, `kind`, `sim`, `hideil`, `starters`, `sched`, `roster`,
+   * `player`, `view`, `kind`, `sim`, `hideil`, `sched`, `roster`,
    * `pos`, `cols`, `inc`, `scope`, `watch`, `win`, `help`, `mp` and `league`.
    *
    * **`mup=` is absent for the reader's own matchup**, which is a *rule* rather
@@ -1642,8 +1626,9 @@ export default function App() {
    * span it can act on (see the URL sync), so a link to a season table never
    * carries a lens that table has no answer for.
    *
-   * **Not a saved preference**, for `starters=1`'s reason: which figures a
-   * reader wants in front of them is a lens for an afternoon, and a saved copy
+   * **Not a saved preference**, by the line every lens in this app sits the far
+   * side of: which figures a reader wants in front of them is a lens for an
+   * afternoon rather than a standing fact about the reader, and a saved copy
    * would be a table of guesses drawn a fortnight later.
    *
    * The re-ranking is the **server's** — see `espn.ts::getRankings`. Everything
@@ -2403,19 +2388,20 @@ export default function App() {
   }, [usingFantasy, fantasyRoster, fantasyLineups, rangeDates, end]);
 
   /**
-   * **Per-day lineups take the gate off.** The `rangeHasToday` rule exists
-   * because the MLB reading of this filter is a fact about tonight, so over a
-   * week in July there is nobody it could keep and a control that empties a
-   * table with no way to read why is a trap. That argument does not survive a
-   * lineup read per day: on a fantasy team every day of the range now has its
-   * own answer, so "the men I started" is exactly as meaningful over `Yesterday`
-   * or last July as it is today. Without the map — saved-roster mode, an older
-   * tab, a failed read — the old gate stands, since the single end-of-range
-   * lineup really is only about one afternoon.
+   * **Whether "who is starting" has an answer over this range at all** — what
+   * `starterCards` and the summary table's `Total` divider are gated on.
+   *
+   * Two tiers, and the second is what takes the gate off. The **MLB** reading
+   * is a fact about tonight, so over a week in July there is nobody it could
+   * name and a divider drawn on it would be a line across a table meaning
+   * nothing. A **per-day lineup read** does not have that problem: on a fantasy
+   * team every day of the range has its own answer, so "the men I started" is
+   * exactly as meaningful over `Yesterday` or last July as it is today. Without
+   * the map — saved-roster mode, an older tab, a failed read — the first tier
+   * stands, since the single end-of-range lineup really is only about one
+   * afternoon.
    */
-  const startersPerDay = fantasyLineups !== null;
-  const startersOffered = rangeHasToday || startersPerDay;
-  const startersActive = startersOnly && startersOffered;
+  const startersKnown = rangeHasToday || fantasyLineups !== null;
 
   /**
    * Your fantasy team **as it stands**, as player keys — or null when the views
@@ -2948,8 +2934,8 @@ export default function App() {
     // **matchup page**, which is the one place that draws it: the Scoreboard's
     // own toggle is gone (see `LeagueView`), Rankings has its own spans and
     // Transactions has no figures to project — so anywhere else this would be a
-    // param naming a lens that is not in force, which is the test `starters=1`
-    // already applies to itself.
+    // param naming a lens that is not in force — and a parameter that cannot
+    // describe the page it opens is a parameter that lies about it.
     if (view === 'league' && matchupId != null && projected) p.set('proj', '1');
     // Which matchup is open **over** the view, which is a page rather than a
     // tab — so it is written whatever tab is behind it, and a link carrying it
@@ -2993,19 +2979,17 @@ export default function App() {
     }
     if (simulate) p.set('sim', '1');
     if (hideInjured) p.set('hideil', '1');
-    // Only while it is actually narrowing something — see `startersActive`.
-    if (startersActive) p.set('starters', '1');
     // The feed's own lens — one key, the row above being single-select.
     //
-    // Gated on the **view** rather than on the view and the batter tab, which is
-    // where this parts from `starters=1` beside it. That one drops out of the URL
-    // over a range with no today in it because there it would be a claim about
-    // data it cannot narrow — a recipient would open a link that says `starters`
-    // over an unfiltered table. This is a lens the reader set on the batter tab
-    // and it is still set: the pitcher tab does not offer it (a pitcher's item is
-    // an outing, not a play), and switching back puts it straight back in force.
-    // Dropping it on the way over and re-adding it on the way back would churn
-    // the query string on every kind switch to say the same thing.
+    // Gated on the **view** rather than on the view and the batter tab, and the
+    // distinction is worth stating because the obvious rule is the other one: a
+    // parameter that cannot narrow what a recipient opens has no business in a
+    // link, so a control offered on one screen and not another might be expected
+    // to drop out on the way over. This is a lens the reader set on the batter
+    // tab and it is *still set*: the pitcher tab does not offer it (a pitcher's
+    // item is an outing, not a play), and switching back puts it straight back in
+    // force. Dropping it on the way over and re-adding it on the way back would
+    // churn the query string on every kind switch to say the same thing.
     if (view === 'feed') {
       const plays = playFilterParam(playFilter);
       if (plays) p.set('plays', plays);
@@ -3047,7 +3031,6 @@ export default function App() {
     rankProjected,
     simulate,
     hideInjured,
-    startersActive,
     scheduleSpan,
     rosterProjected,
     rosterSource,
@@ -3922,133 +3905,54 @@ export default function App() {
         : playerKind;
   const kindCards = shownKind === 'pitcher' ? cardPitchers : cardBatters;
   /**
-   * **The `Starters` filter itself** — who, of the rows the roster views are
-   * showing, is starting. `filteredCards` below is this list where the button
-   * is pressed and the whole tab where it is not, and `starterKeys` is the same
-   * answer as a set of keys, for the divider the summary table's `Total` row
-   * has become.
+   * **Who, of the rows the roster views are showing, is starting** — as a set of
+   * player keys, for the divider the summary table's `Total` row has become
+   * (`SummaryTable.tsx::splitStarters`). Null is *the app cannot say*, and there
+   * the row goes back to the bottom over everybody.
    *
-   * It was `filteredCards` outright until that divider wanted the same set with
-   * the button up; the two readings and every edge case below are unchanged,
-   * and only the gate moved (from `startersActive` to `startersOffered`).
+   * This was the `Starters` filter's own list, and the filter is gone; what
+   * survives it is the half the divider needs, with every edge case below the
+   * one that filter was argued into. **The reading still changes with the
+   * roster**, because the question does. On your own saved roster "starting"
+   * is tonight's MLB lineup card — a hitter in a posted lineup, a pitcher named
+   * as today's starter, the same `lineupStatus`/`pitchingRole` fields the pip on
+   * his headshot is drawn from. Reading your **fantasy** team it is *your*
+   * lineup: a man you have started is a start whether or not his real manager
+   * wrote him in, since he is accruing you a zero tonight, and a man on your
+   * bench is not one however MLB has him batting, since he accrues you nothing.
+   * Deliberately **not** the union of the two, which is "starting for anyone" —
+   * a set that answers no question anybody asks of this table.
    *
-   * The filter reached the summary table alone for a while, on the reasoning
-   * that "starting today" is a statement about one afternoon where the games
-   * list is a record of a range and the feed a chronological one, so neither
-   * had any business losing a player because tonight's lineup left him out.
-   * What that missed is that the question is the same on all three: on a game
-   * day you open whichever of them you read the roster in to see who is
-   * actually in tonight, and picking those men out by the pips down a column of
-   * thirty is exactly the work this button exists to save. A record of the
-   * range is what the *dates* decide; who is on the page is what this decides,
-   * and the two compose — a week's games for the nine men starting tonight is a
-   * perfectly ordinary thing to ask for.
+   * `fantasySlots` is null in saved-roster mode, which is what leaves that mode
+   * on the MLB reading. It is *also* null while the roster read is in flight or
+   * after it has failed, and falling back to the MLB test there is the right
+   * direction to fail in: the alternative is a divider that claims nobody is
+   * starting when the truth is that the app has not been told yet.
    *
-   * So the toggle belongs to the roster row rather than to one of its tabs, and
-   * it narrows whatever that row is showing. What it still does not touch is
-   * the edit screen, which reads `editPlayers` off the raw reports: dropping a
-   * player from the roster is what that screen is for.
+   * **A range is a range of lineups**, so the fantasy tiers ask the question a
+   * day at a time (`lib.ts::projectStarters`, the per-day map where there is one
+   * and the single end-of-range answer where there is not) — a man you started
+   * on Monday and benched on Wednesday is a starter over a range containing
+   * Monday. A matchup's team pages run that identical arithmetic over a
+   * leaguemate's lineup, which is why it is shared rather than written here.
    *
-   * Filtered *here* rather than up in `shownReports`, where hide-injured is,
-   * because the two are still different questions. An injured player is absent
-   * for weeks, so dropping him ahead of the kind split keeps the tab counts
-   * equal to the lists under them; filtering below it leaves the
-   * Batters/Pitchers tabs alone, which is right — they say what is watched, not
-   * what tonight's lineups came to.
+   * `startersKnown` is what gates it: over a range with no today in it and no
+   * per-day lineups there is nobody this could name, and the divider goes back
+   * to the bottom rather than drawing a line it cannot justify.
    */
-  const starterCards = useMemo(() => {
-    // Reading the fantasy team, the button answers a different question, so it
-    // reads a different fact: not "is he in tonight's lineup" but "am I
-    // starting him". The two are genuinely different populations, and in this
-    // mode only one of them is the honest reading of the word. A man in your
-    // lineup whom his real manager left out is still your start — he is
-    // accruing you a zero tonight, which is exactly the thing you opened the
-    // table to find out — while a player on your bench accrues you nothing
-    // however he hits, so keeping him because MLB has him batting third would
-    // be answering about somebody else's roster.
-    //
-    // Deliberately **not** the union of the two tests, which was the obvious
-    // alternative: the union is "starting for anyone", a set that belongs to no
-    // question anybody asks of this table, and it would put every benched
-    // player back on a table narrowed precisely to the ones you are playing.
-    // Nor is anything lost by the swap — whether one of your starters is in his
-    // own club's lineup is already on his headshot, as the pip this filter and
-    // that pip are both drawn from, so the narrowed table is where you read it.
-    //
-    // `fantasySlots` is null in saved-roster mode, which is what leaves that
-    // mode untouched. It is *also* null while the roster read is in flight or
-    // after it has failed, and falling back to the MLB test there is the right
-    // direction to fail in: an empty table under a lit toggle reads as "nobody
-    // is starting", which would be a claim where the truth is that the app
-    // hasn't been told yet.
-    //
-    // **And a range is a range of lineups, so the filter cuts days as well as
-    // rows.** Applying one lineup to a week is the arithmetic this whole thing
-    // was wrong about: a man you started on Monday and benched on Wednesday
-    // earned you Monday and none of Wednesday, where a row-level filter either
-    // counted his whole week or dropped him from it. With the per-day map in
-    // hand each report is **projected** onto the days he was actually in the
-    // lineup — the games on every other day simply aren't his to have — and the
-    // summary table's rows, its Total and the feed's items all add up correctly
-    // with no knowledge of any of this, since every one of them sums
-    // `report.games`.
-    //
-    // A player kept with **no games left** is deliberate and is not the same as
-    // one dropped: he is kept when he was in the lineup on some day of the
-    // range and simply had no game to play, which is a row of dashes and the
-    // honest answer to "am I starting him". Dropped means you were not playing
-    // him on any day in view — including every day before you picked him up,
-    // where his line belonged to whoever held him.
-    //
-    // **Computed whether or not the button is pressed**, which it was not
-    // before, because the summary table's `Total` row is now a divider between
-    // the starters and everybody else and needs the same set the button does.
-    // A second test written down there would be a second test that will one
-    // day disagree with this one, and silently. `startersOffered` is what gates
-    // it: over a range with no today in it and no per-day lineups there is
-    // nobody this could name, which is the same reason the button is not drawn.
-    if (!startersOffered) return null;
-    if (fantasyLineups || fantasySlots) {
-      // Both fantasy tiers are `lib.ts::projectStarters` — the per-day
-      // projection where there is a map, and the single end-of-range answer
-      // where there isn't. A matchup's team pages run the identical arithmetic
-      // over a leaguemate's lineup, which is why it is shared rather than
-      // written here.
-      return projectStarters(
-        kindCards,
-        rangeDates,
-        fantasyLineups,
-        (r) => fantasySlots?.get(playerKey(r))?.starting === true,
-      );
-    }
-    const today = baseballToday();
-    return kindCards.filter((r) => isStartingOn(r, today));
-  }, [kindCards, startersOffered, fantasySlots, fantasyLineups, rangeDates]);
-
-  /** The rows the filter keeps, or the whole tab where it is off. */
-  const filteredCards = startersActive && starterCards ? starterCards : kindCards;
-
-  /**
-   * The same answer as a set of player keys, for the summary table's `Total`
-   * divider — see `SummaryTable.tsx::splitStarters`. Null is *the app cannot
-   * say*, and there the row goes back to the bottom over everybody.
-   *
-   * Off `starterCards` and not off `filteredCards`: with the button pressed the
-   * two are the same list, and with it up this is still the honest answer to
-   * "who is starting" about the wider table on screen.
-   */
-  const starterKeys = useMemo(
-    () => (starterCards ? new Set(starterCards.map(playerKey)) : null),
-    [starterCards],
-  );
-  /**
-   * Which of the two rules the toggle applies — see `filteredCards`. The
-   * button's tooltip and the empty state under it both have to say which set
-   * they are talking about, and neither should hold a second copy of the test:
-   * the map being there is what makes the filter read the fantasy lineup, so
-   * the map being there is what these read too.
-   */
-  const startersReadFantasy = fantasySlots !== null;
+  const starterKeys = useMemo(() => {
+    if (!startersKnown) return null;
+    const cards =
+      fantasyLineups || fantasySlots
+        ? projectStarters(
+            kindCards,
+            rangeDates,
+            fantasyLineups,
+            (r) => fantasySlots?.get(playerKey(r))?.starting === true,
+          )
+        : kindCards.filter((r) => isStartingOn(r, baseballToday()));
+    return new Set(cards.map(playerKey));
+  }, [kindCards, startersKnown, fantasySlots, fantasyLineups, rangeDates]);
 
   /**
    * **The two numbers the red `N new plays` button is made of** — how many plays
@@ -4061,8 +3965,8 @@ export default function App() {
    * from `LiveFeed` so the clock that orders the stream has one definition, the
    * rule `playerDayEntries` already sets for the stream and the player page.
    *
-   * **Off `kindCards` rather than `filteredCards`**, so the count is news about
-   * the day rather than about the reader's own lens: a `Starters` filter or a
+   * **Off `kindCards` rather than off whatever the reader's lens has left on
+   * screen**, so the count is news about the day rather than about the lens: a
    * ticked chip must not make the plays it hides stop being new.
    *
    * **The batter feed only**, since a pitcher's stream item is his whole outing
@@ -4511,8 +4415,8 @@ export default function App() {
 
      It moves for the reason every other filter in this app is up here: what
      this button changes is **which numbers the table draws**, which is the same
-     kind of statement as `Starters`, the board's include buttons and the Roster
-     view's own `Projected` — and that last one is the argument in one line,
+     kind of statement as the board's include buttons and the Roster view's own
+     `Projected` — and that last one is the argument in one line,
      since the app already draws a projected toggle in this row and drawing the
      League's copy two tiers lower made the same control look like two. The row
      is also the app's answer to "more groups than fit on a line": each group is
@@ -4610,39 +4514,6 @@ export default function App() {
     </div>
   );
 
-  /* The roster row's one filter: only the players who are actually starting
-     today — a hitter in the posted lineup, a pitcher named as today's starter.
-
-     **On the roster row, not in the settings menu.** The gear is app chrome and
-     everything in it reads as app-wide (hide-injured decides the summary *and*
-     the games list, muting decides every clip in the app); this qualifies the
-     three roster views and nothing on the research board, and a menu entry that
-     quietly did nothing over there would be a setting lying about its own
-     reach. The roster row is where the app already says which slice of the
-     roster is on screen, so the filter goes beside the tabs that select it —
-     and goes with them on Research, which is the honest version of "it doesn't
-     apply here".
-
-     **It stays put across the three tabs**, where it used to be the summary's
-     alone: Summary, Games and Feed are three readings of the same players over
-     the same days, so a control that says *which players* has the same meaning
-     in all three, and a button that vanished when you crossed to Games read as
-     the filter being switched off rather than as it not applying. See
-     `filteredCards` for what it narrows.
-
-     **Between the reading and the days**, which is the research board's order
-     rather than an exception to this row's: the scope pills there name *which
-     players* and sit ahead of the window that names which span. Same question,
-     same place in the run.
-
-     It is a plain toggle with no panel, so it takes `.on` and never `.active`,
-     and it is folded into `.research-toggle`'s selector lists rather than
-     restyled to resemble the board's own panel-less toggle, the Watchlist
-     button it is the twin of — a plain switch that decides who is in a table,
-     stated on the control that opens it. Under 640px it goes to its glyph
-     alongside the calendar beside it — the pair is a run of two icons where a
-     lone one on a row of tabs would have nothing beside it to say what it
-     meant, and the two labels were 174px of a line a phone hasn't got. */
 
   /**
    * The Schedule toggle — the roster row's copy of the control the research
@@ -4656,8 +4527,8 @@ export default function App() {
    * this app forbids, two controls an inch apart holding one piece of state.
    * The board keeps its own copy in its own bar, having no dates and so no bar.
    *
-   * **It leads the group**, ahead of `Starters` and the calendar, which is this
-   * row's own documented order rather than an exception to it: the questions
+   * **It leads the group**, ahead of the calendar, which is this row's own
+   * documented order rather than an exception to it: the questions
    * come in the sequence *which page, which kind, **which reading of it**,
    * which players, which days*, and the mode is literally the third of those.
    * (The board puts it in its tools run after the controls that narrow *rows*
@@ -4665,9 +4536,9 @@ export default function App() {
    * order; the two placements answer to two different rows and each is argued
    * where it sits.)
    *
-   * **`Starters` and the calendar are untouched by it**, and that is the same
-   * split the board makes: this changes which *columns* the table has, where
-   * those two decide which *rows* and which days the report was built from. The
+   * **The calendar is untouched by it**, and that is the same split the board
+   * makes: this changes which *columns* the table has, where the calendar
+   * decides which days the report was built from. The
    * calendar keeps its second job here — over a range the report's player list
    * is the roster as it stood on those days, so it still says whose roster is on
    * screen even when nothing on screen is drawn from those days.
@@ -4744,30 +4615,14 @@ export default function App() {
     </span>
   );
 
-  const startersToggle = startersOffered ? (
-      <StartersToggle
-        on={startersOnly}
-        onToggle={() => setStartersOnly((v) => !v)}
-        /* The word means one thing on your own roster and another on your
-           fantasy team, so the tooltip says which. The label can't — it is one
-           word, and "Starters" is the right word for both readings. */
-        title={
-          startersPerDay && rangeDates.length > 1
-            ? 'Only the days you had each player in your fantasy lineup — a day he sat on your bench or your IL is not counted, however he hit'
-            : startersReadFantasy
-              ? 'Only the players in your fantasy starting lineup — your bench and IL are hidden whatever their clubs do with them'
-              : "Only the players starting today — hitters in a posted lineup, pitchers named as today's starter"
-        }
-      />
-    ) : null;
 
   /* The batter feed's play filters — one row of pills at the head of the stream
      they narrow.
 
      **In the page rather than in the pinned tab row**, which is a reversal of
      this app's standing rule that a control deciding *which rows a view shows*
-     lives with the tabs that select the view (`Starters`, the research board's
-     whole control set, the include buttons). What that rule protects is a
+     lives with the tabs that select the view (the research board's whole
+     control set, the include buttons). What that rule protects is a
      control a reader has to reach *while scrolling*, which is what the board's
      filters over a six-hundred-row table are; this one is worked on arrival and
      is the answer to the question the page was opened with, so it goes where the
@@ -5276,9 +5131,9 @@ export default function App() {
                     being invisible to it until the range moved past. Counting
                     the set the screen itself edits is what makes the entry
                     present exactly when there is something behind it. It is
-                    also upstream of hide-injured and of `Starters` by
-                    construction, which `reports` was only by accident: dropping
-                    an injured player is precisely what this screen is for, so
+                    also upstream of hide-injured by construction, which
+                    `reports` was only by accident: dropping an injured player
+                    is precisely what this screen is for, so
                     the entry to it must not be filtered away with him.
 
                     **Zero is still nothing**, and stays hidden: there is
@@ -5639,8 +5494,8 @@ export default function App() {
             {leagueSpanTabs}
             {/* And whether it is drawn to the end of the week. */}
             {leagueRankProjected}
-            {/* The feed's grouping, the starters filter and the calendar that
-                says which days they cover. All of it in the one wrapping row:
+            {/* The roster row's own reading controls. All of it in the one
+                wrapping row:
                 each group is `flex: none`, so the row fits as many whole groups
                 per line as the width allows and breaks between them rather than
                 inside one — the order is the order the questions come in (which
@@ -5658,8 +5513,6 @@ export default function App() {
               {view === 'summary' && scheduleControl}
               {/* And what the days ahead are worth — see `projectedToggle`. */}
               {view === 'summary' && projectedToggle}
-              {/* Only over a range that contains today — see `startersToggle`. */}
-              {startersToggle}
               {/* Which way the feed's clock runs — see `feedOrderToggle`. The
                   one feed control up here, and the pills are not: an order is
                   wanted halfway down a stream, where a kind is chosen on
@@ -5860,45 +5713,6 @@ export default function App() {
         </div>
       )}
 
-      {/* The other thing that can empty a roster view, and the reason it needs
-          its own wording: the message above names the toggle that did it, and
-          the gear is the wrong place to send someone whose page was narrowed by
-          a button on the tab row. On all three now, the filter having stopped
-          being the summary's alone — and off the edit screen, which the filter
-          never touches. */}
-      {isRosterView(view) &&
-        kindCards.length > 0 &&
-        filteredCards.length === 0 &&
-        !editMode && (
-          <div className="empty-state">
-            <p className="empty-title">
-              {startersPerDay && rangeDates.length > 1
-                ? 'Nothing to show — nobody here was in your lineup on any of these days'
-                : startersReadFantasy
-                  ? 'Nothing to show — nobody here is in your lineup today'
-                  : 'Nothing to show — nobody here is starting today'}
-            </p>
-            {/* Two causes, two messages. The MLB reading can be empty simply
-                because the day is young, which is the thing a reader most needs
-                told at 9am; the fantasy reading cannot — your lineup is set the
-                moment you set it, so an empty table there means the kind on
-                screen really is all bench and IL, and offering the lineup-card
-                excuse would send someone off to wait for something that has
-                already happened. */}
-            {startersReadFantasy ? (
-              <p>
-                Turn off “Starters” in the row above to see your whole team — the days you had
-                these players on your bench or your IL are what it is leaving out.
-              </p>
-            ) : (
-              <p>
-                Turn off “Starters” in the row above to see everyone. Lineups post a couple of
-                hours before first pitch, so an empty page in the morning may only mean they
-                aren’t out yet.
-              </p>
-            )}
-          </div>
-        )}
 
       {view === 'league' ? (
         <LeagueView
@@ -6013,9 +5827,9 @@ export default function App() {
             {editPage}
           </div>
         ) : (
-        filteredCards.length > 0 && (
+        kindCards.length > 0 && (
           <SummaryTable
-            reports={filteredCards}
+            reports={kindCards}
             onOpenDetails={setDetailsKey}
             /* Null while the mode is off *and* while its one read is still out,
                so the stat columns stand until the days can replace them. */
@@ -6037,23 +5851,14 @@ export default function App() {
             chrome={
               <>
                 {kindTabs}
-                {/* Expanded, the mode and its span are live controls rather
-                    than a badge — the same argument the starters filter makes
-                    below, one step stronger: a table of dates with nothing on
-                    screen saying how far they run is the state this must never
-                    be in, and this is also the way back to the stats without
-                    leaving the page. */}
+                {/* Expanded, the research board reduces its control set to a
+                    row of read-only badges; this view keeps its live controls
+                    instead. The mode and its span most of all: a table of dates
+                    with nothing on screen saying how far they run is the state
+                    this must never be in, and the control is also the way back
+                    to the stats without leaving the page. */}
                 {scheduleControl}
                 {projectedToggle}
-                {/* Expanded, the research board reduces its control set to a
-                    row of read-only badges; this view keeps its controls
-                    instead, and the filter comes with them for the same reason
-                    the kind tabs and the dates do — it is what the rows *are*,
-                    and a table narrowed to nine names with nothing on screen
-                    saying why is the one state this must never be in. Being the
-                    live control rather than a badge, it is also the way back
-                    out without leaving the page. */}
-                {startersToggle}
                 {/* The bar comes with them, and takes a line of its own here
                     the way it does in the chrome (`flex: 1 1 100%`). Its bleed
                     is this box's rather than the app's: it reads
@@ -6067,7 +5872,7 @@ export default function App() {
         )
         )
       ) : (
-        filteredCards.length > 0 && (
+        kindCards.length > 0 && (
           <>
           {/* The lens, at the head of the stream it narrows — see
               `feedFilterPills`. Inside the same guard as the feed rather than
@@ -6075,13 +5880,10 @@ export default function App() {
               over nothing, and the empty state below already names its cause. */}
           {feedFilterPills}
           {/* Keyed so switching kind or date range starts the stream back at its
-             first page; a live poll (data only) leaves it alone. The starters
-             filter deliberately isn't in that key: it changes which players the
-             stream is about, and re-reading it from the top is what the reader
-             wants when the list has become a different one. */}
+             first page; a live poll (data only) leaves it alone. */}
           <LiveFeed
             key={feedKey}
-            reports={filteredCards}
+            reports={kindCards}
             kind={shownKind}
             onOpenDetails={setDetailsKey}
             shown={feedShown.current.get(feedKey) ?? FEED_PAGE_SIZE}
@@ -6093,8 +5895,9 @@ export default function App() {
                control that tab does not offer. Measured before the gate: a
                `plays=hr` link opened on `kind=pitcher` drew 0 outings. The
                *state* survives the excursion — switching back to batters puts
-               the lens straight back in force — which is `startersOnly`'s own
-               rule for a range with no today in it. */
+               the lens straight back in force. A lens the reader set is still
+               set on the screen that does not offer it; what a control cannot
+               narrow, it does not un-set. */
             playFilter={feedIsBatters ? playFilter : undefined}
             newOnly={feedIsBatters ? feedNewOnly : undefined}
             seenPlays={feedIsBatters ? seenPlays : undefined}

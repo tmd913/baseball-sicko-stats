@@ -839,20 +839,30 @@ export function ScheduleCell({
             className={`sched-cell sched-${g.state}${tier ? ` sched-start sched-start-${tier}` : ''}`}
             title={title}
           >
-            {/* The box is drawn **only on a start day**, and the opponent is
-                the same `<span>` either way — the box is what a legend needs a
+            {/* The box is drawn **only on a start day**, and the two lines are
+                the same `<span>`s either way — the box is what a legend needs a
                 containing block for, and a cell with no start has nothing to
                 legend. Its border is laid out rather than painted, so it is
-                added where it is spoken for rather than reserved everywhere. */}
+                added where it is spoken for rather than reserved everywhere.
+
+                **Both lines go inside it**, the opponent and the man the other
+                club is throwing. The stroke is a mark about a *day*, and the
+                pitcher he is opposed by is a fact about that same day — drawn
+                round the first line alone it read as a box round `vs PIT` with
+                a caption loose underneath, which is the pill-under-the-opponent
+                shape this device replaced, one line lower. */}
             {tier ? (
               <span className={`sched-opp-box sched-opp-box-${tier}`}>
                 <span className="sched-opp">{opp}</span>
+                {vs && <span className={`sched-vs sched-vs-${vs.tier}`}>{vs.label}</span>}
                 <StartChip tier={tier} cadence={rotation?.cadence ?? null} />
               </span>
             ) : (
-              <span className="sched-opp">{ppd ? 'PPD' : opp}</span>
+              <>
+                <span className="sched-opp">{ppd ? 'PPD' : opp}</span>
+                {vs && <span className={`sched-vs sched-vs-${vs.tier}`}>{vs.label}</span>}
+              </>
             )}
-            {vs && <span className={`sched-vs sched-vs-${vs.tier}`}>{vs.label}</span>}
           </span>
         );
       })}

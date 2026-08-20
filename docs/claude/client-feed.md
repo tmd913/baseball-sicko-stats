@@ -262,8 +262,9 @@ one.
 **That is gated on the same flag that draws the control**, and it had to be: a
 `plays=hr` link opened on `kind=pitcher` drew **0 outings** before the gate, the
 filters having been passed through unconditionally. The *state* survives the
-excursion, which is `startersOnly`'s own rule — switching back to batters puts the
-lens straight back in force.
+excursion — a lens the reader set is still set on the tab that does not offer
+it, so switching back to batters puts it straight back in force, and what a
+control cannot narrow it does not un-set.
 
 **The five props are optional and the second caller passes none of them.** A
 matchup team page draws this same component for a leaguemate's week
@@ -291,7 +292,7 @@ state, `mup` and `mt` being the whole of what a matchup link carries.
 **This section used to argue for the split and the split is gone.** What it said:
 *the `Plays` disclosure is in the pinned tab row and the red button is in the
 page, and that is not arbitrary — a control that decides which rows a view shows
-lives with the tabs that select the view (`Starters`, the research board's whole
+lives with the tabs that select the view (the research board's whole
 control set, the include buttons), so the filters do, behind one disclosure with a
 count badge; the red button is* not *a filter, it is news, and it belongs where
 the news landed and where pressing it can also take the reader to it.*
@@ -358,8 +359,8 @@ two values are **peers** — Roster/Feed/Research, Batters/Pitchers, `Next 7` /
 `Next 14` — and these are not peers: newest-first is what makes a stream a
 stream (`byRecency`, and `byPlayOrder`'s own note that a *game* is the thing read
 start to finish), and oldest-first is the departure from it. This app spells a
-departure as a lit toggle whose absence is the default — `Starters`,
-`Watchlist`, `Projected`, `hideil` — and carries only the departure in the URL.
+departure as a lit toggle whose absence is the default — `Watchlist`,
+`Projected`, `hideil` — and carries only the departure in the URL.
 It is also the narrower control, on a row whose kinds already overflow at 320 and
 390: **94px measured**, where a segmented pair has to carry both words at once and
 can never be narrower than the two of them.
@@ -557,7 +558,7 @@ That caller passes `order` and gets the toggle back inside the row, at its right
 end, `flex: none` with `margin-left: auto` outside the scrollport — unchanged
 from where it stood. `compact` is the only difference between the two drawings
 and it is a height: in the tab row it is a bare `.research-toggle`,
-`--control-h` (36px) like `Starters` beside it, and in the navbar it takes
+`--control-h` (36px) like the mode toggles beside it, and in the navbar it takes
 `.feed-filter-pill` so that row is one height. **Measured: 99 × 36 in the tab row
 at 320, 390, 640, 900, 1200 and 1920** — the same box at every width, and the
 same box lit and unlit, which is the *reserve the box* rule the label's own
@@ -1275,8 +1276,9 @@ own wrapper.
 
 **It carries no lineup pip and no status code.** Those are `PhotoStatus`'s marks
 and read off the league-wide `/api/statuses` map, which the feed does not fetch
-(the roster views read each player's own report instead — see **The roster row's
-one filter is `Starters`**), and both would only restate the bar: his pip is `SP`,
+(the roster views read each player's own report instead — see **The roster row
+had one filter, `Starters`, and it is gone**), and both would only restate the
+bar: his pip is `SP`,
 and a man on the IL is not the announced starter.
 
 **`ProbablePitcher` already carried an `id`** — `mlbStats.ts::probablePitcher`

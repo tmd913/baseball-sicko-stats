@@ -1003,7 +1003,7 @@ task is the settings-page mistake that page was created to avoid.
 
 **The swatches are the settings menu's own**, extracted to
 `components/ThemePicker.tsx` when the second caller arrived, which is this app's
-rule for a control drawn twice (`DateControls`, `StartersToggle`,
+rule for a control drawn twice (`DateControls`, `ScheduleControl`,
 `PlayerIdentity`, `ColumnPicker` all moved on the same trigger). It matters more
 than usual here: a swatch's whole claim is that it **is** a picture of the
 palette it selects, and a second copy is a picture that will one day be of
