@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../api';
 import {
   formatStartTime,
@@ -17,17 +17,20 @@ import type {
   PlayerReport,
   ProjectedStart,
   ProjectedStarts,
+  ScheduleWindow,
   SeasonStats,
   StartTier,
-  TeamHitting,
 } from '../types';
+import type { PitcherLookup } from './schedule';
 import { useDelayedFlag } from '../hooks';
-import { LoadingBlock, LoadingLine } from './Loading';
+import { LoadingLine } from './Loading';
 import { GameLogPreview } from './GameLog';
 import { Modal } from './Modal';
-import { OpponentSection } from './OpponentTable';
+import { OpponentRead, useOpponentBoards } from './OpponentTable';
+import type { OppRead } from './OpponentTable';
 import { NewsList } from './PlayerNews';
 import { PlayerDay, playerDayLine } from './PlayerDay';
+import { OVERVIEW_GAMES, UpcomingGames } from './PlayerSchedule';
 
 /**
  * The **Overview** tab: the player as a summary page.
@@ -44,15 +47,23 @@ import { PlayerDay, playerDayLine } from './PlayerDay';
  * 3. **Season** — the box-score line a roster decision turns on, over to Stats.
  * 4. **Last 5 games** — the Game Log's own table, five rows of it.
  *
- * **A rotation starter gets a fifth, and it goes second**: `Projected Starts`,
- * his next five turns — announced where his club has named him, projected from
- * his own rotation slot past that. It is second because "when does he pitch
- * next" is the forward half of *what is he doing*, and the paragraph below is
- * about not splitting those two halves across a page. It is the only block here
- * with no door under it, there being no tab that holds it whole; and it is the
- * only one drawn for one kind of player, because a batter is in every game his
- * club plays and a reliever could be in any of them, so neither has a slot to be
- * projected into.
+ * **There is a fifth between the first two, and which one it is depends on the
+ * man**: a rotation starter gets `Projected Starts`, his next five turns —
+ * announced where his club has named him, projected from his own rotation slot
+ * past that — and everybody else gets `Next 5 games`, the first five rows of
+ * the Schedule tab's fixture list with a `Schedule →` door under the heading.
+ * It sits second either way because "when does he play next" is the forward
+ * half of *what is he doing*, and the paragraph below is about not splitting
+ * those two halves across a page.
+ *
+ * **Two blocks in one slot rather than a block a starter does without.** The
+ * split is the one the day block above has already made: a batter is in every
+ * game his club plays and a reliever could be in any of them, so what either
+ * has coming is the fixture list, where a starter is in one in five and his
+ * turns are the answer (`lib.ts::isRotationStarter`, the app's one definition
+ * of that, read here as it is there). A starter is not shown the fixtures on
+ * *this* tab because the block that would tell him which of them are his is the
+ * one already in the slot; his Schedule tab shows him both.
  *
  * **The day leads, where the season used to.** What a player page is opened
  * with on a game day is *what he is doing* — which is the argument this tab is
@@ -86,6 +97,10 @@ export function OverviewTab({
   starts,
   startsLoading,
   startsFailed,
+  scheduleWindow,
+  scheduleError,
+  onNeedSchedule,
+  pitcherLookup,
   onTab,
   onOpenDetails,
 }: {
@@ -116,8 +131,15 @@ export function OverviewTab({
   starts: ProjectedStarts | null;
   startsLoading: boolean;
   startsFailed: boolean;
+  /** The league-wide window the next-five block draws, handed down exactly as
+   *  it is to the Schedule tab: it takes no parameters, `App` holds one for the
+   *  session and both surfaces ask for it the same way. */
+  scheduleWindow: ScheduleWindow | null;
+  scheduleError: string | null;
+  onNeedSchedule: () => void;
+  pitcherLookup: PitcherLookup;
   /** Switch the page to another tab — what each block's own link does. */
-  onTab: (tab: 'news' | 'stats' | 'gamelog') => void;
+  onTab: (tab: 'news' | 'stats' | 'gamelog' | 'schedule') => void;
   onOpenDetails?: (key: string) => void;
 }) {
   const isPitcher = report.kind === 'pitcher';
@@ -172,8 +194,18 @@ export function OverviewTab({
       </section>
 
       {/* Second, because "when does he pitch next" is the forward half of the
-          question the block above answers — see this file's own head. */}
-      {wantStart && (
+          question the block above answers — see this file's own head.
+
+          **Every player has a block in this slot now, and which one he gets is
+          the same test the day block above him just made.** A rotation starter's
+          forward question is his turns and he gets those; everybody else is in
+          every game his club plays, so his is the fixture list — five rows of
+          it, over to the Schedule tab that holds the fortnight. The two are
+          never both drawn, which is the property that makes this a slot rather
+          than two blocks: the Overview's rhythm is *now → next → what has
+          happened → the record*, and `next` is one block wherever the reader
+          lands. */}
+      {wantStart ? (
         <ProjectedStartsBlock
           playerId={playerId}
           name={name}
@@ -181,6 +213,21 @@ export function OverviewTab({
           info={starts}
           loading={startsLoading}
           failed={startsFailed}
+        />
+      ) : (
+        <UpcomingGames
+          report={report}
+          reportLoading={false}
+          playerId={playerId}
+          name={name}
+          isPitcher={isPitcher}
+          scheduleWindow={scheduleWindow}
+          scheduleError={scheduleError}
+          onNeedSchedule={onNeedSchedule}
+          pitcherLookup={pitcherLookup}
+          limit={OVERVIEW_GAMES}
+          heading={`Next ${OVERVIEW_GAMES} games`}
+          onSeeAll={() => onTab('schedule')}
         />
       )}
 
@@ -538,13 +585,6 @@ function NextGameBlock({ playerId, name }: { playerId: number; name: string }) {
  * what is being read.
  */
 /**
- * What this block knows about one opposing club's season line: nothing yet, a
- * read in flight, a read that threw, or an answer — which may itself be `null`,
- * the server's honest "no board for that club".
- */
-type OppRead = { board?: TeamHitting | null; loading?: boolean; error?: boolean };
-
-/**
  * **Exported, because the Schedule tab is this block and nothing else for a
  * rotation starter** (`PlayerSchedule.tsx`). That is the arrangement News and
  * the Game Log already have — the Overview previews and a tab holds the whole
@@ -592,43 +632,12 @@ export function ProjectedStartsBlock({
 }) {
   const wait = useDelayedFlag(loading);
   // One opposing club's season line per team id, read on the press that opens a
-  // row and then held for the life of the block — see `loadOpponent`.
-  const [opps, setOpps] = useState<Record<number, OppRead>>({});
-  const asked = useRef<Set<number>>(new Set());
-  // A different pitcher is a different list of clubs; the ids would collide
-  // harmlessly (a team's line is a team's line) but the block is about him.
-  useEffect(() => {
-    asked.current = new Set();
-    setOpps({});
-  }, [playerId]);
-
-  /**
-   * **Lazily, on the press, and held.** Five rows against up to five clubs, and
-   * a reader who opens none of them should cost the server nothing — so nothing
-   * is read until a row is pressed. The answer is kept at *block* level rather
-   * than inside the row so that a three-game series (two starts against one
-   * club) costs one read, and so that closing a dialog and reopening it costs
-   * none.
-   *
-   * **The mark comes off on failure**, which is the one departure from the rule
-   * this codebase states at length elsewhere — *never mark a request answered
-   * before it is answered*. Here the mark says "asked", the answer always lands
-   * (this is a press handler, not an effect with a cleanup that could discard
-   * it), and unmarking in the `catch` is what makes the dialog's `Try again`
-   * a retry rather than a no-op.
-   */
-  const loadOpponent = useCallback((teamId: number) => {
-    if (asked.current.has(teamId)) return;
-    asked.current.add(teamId);
-    setOpps((p) => ({ ...p, [teamId]: { loading: true } }));
-    api
-      .teamHitting(teamId, 'season')
-      .then((board) => setOpps((p) => ({ ...p, [teamId]: { board } })))
-      .catch(() => {
-        asked.current.delete(teamId);
-        setOpps((p) => ({ ...p, [teamId]: { error: true } }));
-      });
-  }, []);
+  // row and then held for the life of the block. **The cache moved to
+  // `OpponentTable.tsx`** when the Schedule tab's fixture rows became presses
+  // onto the same dialog: two lists of dated rows reading one club's line is
+  // one behavior, and it now sits beside the table it feeds — see
+  // `useOpponentBoards`, which carries the reasoning this comment used to.
+  const { opps, load: loadOpponent } = useOpponentBoards(playerId);
 
   const starts = info?.starts ?? [];
   const note = headNote(info, starts, name);
@@ -910,7 +919,13 @@ function StartRow({
                 lineup he <em>would</em> face.
               </p>
             )}
-            <StartOpponent opp={opp} start={start} throws={throws} onRetry={onLoad} />
+            <OpponentRead
+              opp={opp}
+              opponent={start.opponent}
+              opponentId={start.opponentId}
+              hand={throws}
+              onRetry={onLoad}
+            />
           </div>
         </Modal>
       )}
@@ -918,51 +933,3 @@ function StartRow({
   );
 }
 
-/**
- * The dialog's body: the same `OpponentSection` a pitcher's Upcoming row opens
- * in the feed, over the club's season line once it has landed.
- *
- * **The same component rather than a thinner one**, which is the whole point of
- * the change — nine cuts, three rows, ten columns, the span and venue controls
- * and the accented hand row are drawn once in the app and read the same wherever
- * a pitcher's opponent is. What this caller supplies that the feed's does not is
- * the *season* board itself, there being no `PlayerGame` here to have carried it.
- *
- * The three states before the table are the app's own loading discipline:
- * nothing at all under `WAIT_DELAY` (a club already read comes back in a tick,
- * and a wait that flashes reads as the page breaking), then the block wait, then
- * an error line with the retry the press has to offer — the row behind the
- * dialog being `inert` while it is open, so there is nowhere else to put one.
- */
-function StartOpponent({
-  opp,
-  start,
-  throws,
-  onRetry,
-}: {
-  opp: OppRead | undefined;
-  start: ProjectedStart;
-  throws: string | null;
-  onRetry: (teamId: number) => void;
-}) {
-  const board = opp && 'board' in opp ? opp.board : undefined;
-  const waiting = useDelayedFlag(board === undefined && !opp?.error);
-  if (board) {
-    return <OpponentSection hitting={board} opponent={start.opponent} hand={throws} />;
-  }
-  if (opp?.error) {
-    return (
-      <div className="details-error opp-status">
-        Couldn&rsquo;t read the opponent&rsquo;s line.{' '}
-        <button type="button" className="ovw-link" onClick={() => onRetry(start.opponentId)}>
-          Try again
-        </button>
-      </div>
-    );
-  }
-  // A board that came back `null` — the server has no row for that club. The row
-  // behind this dialog goes static on the same answer, so this is what a reader
-  // sees once and never again.
-  if (board === null) return <div className="opp-status">No line for {start.opponent}.</div>;
-  return waiting ? <LoadingBlock>Reading the opponent&rsquo;s line</LoadingBlock> : null;
-}

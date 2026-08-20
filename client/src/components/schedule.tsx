@@ -278,6 +278,13 @@ export interface OpposingStarter {
   label: string;
   /** `Sandy Alcantara (RHP)` — the whole of him, for the cell's own title. */
   full: string;
+  /** Which arm he throws with, raw — `R`, `L` or null where the roster has no
+   *  answer. The grid has never needed it (its cell prints `label`), and the
+   *  player page's Schedule tab does: a batter's row opens the half of his
+   *  platoon split this man creates, which is a question about the hand rather
+   *  than about the name. Carried rather than parsed back out of `label`, which
+   *  would be reading a word this file wrote to recover a field it had. */
+  hand: string | null;
   tier: StartTier;
 }
 
@@ -369,7 +376,13 @@ function buildStarters(
     const p = pitchers(id);
     if (!p) return null;
     const hand = handThrows(p.throws);
-    return { id, label: `${hand} ${surname(p.name)}`, full: `${p.name} (${hand})`, tier };
+    return {
+      id,
+      label: `${hand} ${surname(p.name)}`,
+      full: `${p.name} (${hand})`,
+      hand: p.throws,
+      tier,
+    };
   };
   const put = (pk: number, teamId: number, s: OpposingStarter) => {
     let m = out.get(pk);
