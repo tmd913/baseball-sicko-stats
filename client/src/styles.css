@@ -11991,22 +11991,38 @@ button.start-line:focus-visible {
   white-space: nowrap;
   line-height: 1.1;
 }
-/* The three weights are **the `GS` count's own** (`.sched-gs` below), which is
-   the point of taking them rather than inventing a fourth mark: nothing → solid
-   → dashed, so a reader who has learned the ladder on the count reads it here.
-   Nothing is added where his club has named him — an announcement is the fact
-   this grid is otherwise short of, and a fact needs no caveat — an underline
-   says the slot is our reading of *him*, and a dashed one that it is his club's
-   rotation standing in. The sentence is on the cell's own title.
+/* The three weights: nothing where his club has named him — an announcement is
+   the fact this grid is otherwise short of, and a fact needs no caveat —
+   **italic** where the slot is our reading of *him*, and italic under a dashed
+   line where it is his club's rotation standing in. The sentence is on the
+   cell's own title.
 
-   **`text-decoration` rather than a `border-bottom`, and that is a height
+   **Italic rather than the solid underline this carried, and it is the same
+   word doing the work as on the `SP` legend beside it.** Both marks say *nobody
+   has announced this start*, so both say it the same way, and the reader learns
+   one thing rather than two: a slanted name and a slanted `SP` are the same
+   caveat about the same game. The underline it replaces had the additional
+   problem of being the *measured* half of this app's own solid-against-broken
+   ladder spent on the half that is ours — a solid line under a projection is
+   exactly the clothing that rule reserves for a fact.
+
+   **The dashed line stays on the third tier, and only there.** With the solid
+   one gone it is no longer "unannounced" but "his club's rotation, not his
+   own" — the `--faint` dashes are what this app has meant by *estimated* since
+   the percentile card's first dotted bar, and italic alone cannot say which of
+   two unannounced tiers a name is in. Dropping it too was the tidier option and
+   was rejected on that: a 10px caption has room for one more signal and this is
+   the one that costs no height.
+
+   **A painted decoration rather than a `border-bottom`, and that is a height
    decision rather than a stylistic one.** A border is part of the box, so it
-   would have to be reserved `transparent` on the announced tier or a cell would
-   change height as clubs name their probables through the week — and reserved,
-   it costs every one of these lines a pixel on a grid that is 14 columns wide
-   and stacks two of them on a doubleheader. An underline is painted rather than
-   laid out: it costs nothing, on any tier, and the three cannot differ in
-   height by construction.
+   would have to be reserved `transparent` on the two tiers without one or a
+   cell would change height as clubs name their probables through the week — and
+   reserved, it costs every one of these lines a pixel on a grid that is 14
+   columns wide and stacks two of them on a doubleheader. Italic and an
+   underline are both painted rather than laid out: measured, all three tiers
+   render at **11px** either side of this change in the grid, and at **16px**
+   either side of it on the player page's Schedule tab.
 
    **Two surfaces wear these now**, and the second takes them rather than
    restating them: the player page's Schedule tab draws the opposing starter on
@@ -12015,68 +12031,153 @@ button.start-line:focus-visible {
    rotation standing in. Only the two *modifiers* travel; `.sched-vs` itself
    stays with the grid, being the 10px caption that cell's width argues for. */
 .sched-vs-projected {
-  text-decoration: underline solid color-mix(in srgb, var(--muted) 55%, transparent);
-  text-underline-offset: 2px;
+  font-style: italic;
 }
 .sched-vs-estimated {
+  font-style: italic;
   text-decoration: underline dashed color-mix(in srgb, var(--faint) 85%, transparent);
   text-underline-offset: 2px;
 }
-/* He is starting this game. A chip rather than a color on the opponent, because
-   the opponent's color is already spoken for by the game's own state above and a
-   starter can be announced for a game that is live.
+/* He is starting this game — **the opponent inside a box, with `SP` breaking the
+   bottom stroke**, which is a fieldset legend and is the shape the fact wants.
+   The mark is about a *day*, so the border goes round the day; the pill this
+   replaced sat under the opponent as a third thing in the cell and left the
+   reader to pair them.
 
-   **Three weights, because the chip now says three things** — his club has named
+   **It is not a color on the opponent**, for the reason the pill was not: the
+   opponent's color is already spoken for by the game's own state above it —
+   live, final, postponed — and a starter can be announced for a game that is
+   live.
+
+   **Three weights, because the mark says three things** — his club has named
    him, his own rotation slot puts him there, or his club's rotation does (see
    `startTierOn`, and `server/src/rotations.ts` where each is measured). A grid
-   cell has room for two characters and not for a word, so the *weight* carries
-   how sure it is and the chip's own title carries the sentence.
+   cell has room for two characters and not for a word, so the *stroke* carries
+   how sure it is and the legend's own title carries the sentence.
 
-   The ladder is the app's own and is read from the outside in: **filled** is a
-   fact, **outlined** is our measurement of him, **dashed** is a measurement of
-   his club standing in for one of him. That is exactly the progression the
-   percentile card's solid-against-dotted bar already draws and the Splits card's
-   solid-against-hatched fill, so a reader who has learned it anywhere in this app
-   reads it here. Ink stays at full strength on all three: the *number* is not
-   less legible for being less certain, and dimming it would have the reader
-   squinting at the thing they most need to check. */
-.sched-sp {
-  margin-top: 1px;
+   The ladder is the app's own: **accent and solid** is a fact, **muted and
+   solid** is our measurement of him, **dashed** is a measurement of his club
+   standing in for one of him — the progression the percentile card's
+   solid-against-dotted bar draws and the Splits card's solid-against-hatched
+   fill. **And the legend goes italic on the two nobody has announced**, which is
+   the same word `.sched-vs` above now uses for the same fact about the other
+   club's man.
+
+   **The fill the announced pill carried is gone and is not coming back.** A
+   14% accent ground inside a stroke that now encloses `vs PIT` tints the
+   opponent rather than the mark, which is the one thing a border round a cell's
+   own text must not do: it reads as a box that has grown, or worse as a
+   selection — and this table already spends a ground on the zebra stripe and
+   four live-role tints. What the fill said, the accent hue says.
+
+   **The box is the containing block and the reason the row does not grow.**
+   `.sched-sp` is taken out of flow, so the legend costs the cell nothing but the
+   5px the box reserves below itself for the half of it that hangs under the
+   stroke; the pill it replaces was a laid-out third line of 12.8px plus a
+   pixel of margin. Measured on the live roster and the SP board at 1400 / 390 /
+   320: **a start day's row goes 64.19 → 58**, back to the figure the other three
+   wide tables keep, and a start day with no opposing starter named stays at 58.
+   Every start row on both tables is 58 after — 4 of 7 on the roster and 29 of 32
+   on the board were 64.19 before. The cell's own content comes to **32.39px**
+   against the **33px** a 58px row leaves between its 12px paddings and its
+   1px rule — 16.39 of box, 5 of reserved overhang, 11 of caption — and 21.39
+   where no opposing starter is named.
+
+   **The negative right margin is what keeps the column lined up.** A day cell is
+   right-aligned so the abbreviations share one edge down the column (see
+   `.sched-cell`), and 4px of padding plus a 1px stroke would push a start day's
+   `vs PIT` 5px in from every other day's. Pulled back by exactly that, the
+   *text* holds the edge and the stroke overhangs into the cell's own padding.
+   **5px is the number because it is the floor of both gutters**: the summary
+   table's is `clamp(5px, 1.9vw, 28px)` and the board's `clamp(5px, 1.6vw,
+   13px)`, so the stroke can touch a column boundary and can never cross one.
+   Measured at 1400 / 390 / 320 on both tables, a start day's opponent and a
+   plain day's in the same column agree to **0.00px** over 79 pairings on the
+   roster and 1198 on the board; the tightest the stroke ever comes to its own
+   `<td>`'s edge is **0.11px** (the board at 320) and **1.08px** (the roster at
+   320); and page overflow stays **0** at all six. */
+.sched-opp-box {
+  position: relative;
+  /* **`flex` rather than the block a flex item is otherwise blockified into**,
+     and it buys 1.2px of the cell's height budget. A block draws a *strut* off
+     its own inherited font — the td's 13px against the opponent's 12 — so the
+     box came out 17.59px tall round a 14.39px line, which put the cell 0.59px
+     over its budget and the row at 58.59. A flex container has no strut: the box
+     is its content, measured **16.39**, and it cannot drift if the opponent's
+     own size ever changes. */
+  display: flex;
   padding: 0 4px;
-  border-radius: 999px;
+  margin-right: -5px;
+  /* The legend hangs half its 9px line under the stroke; this is the room it
+     hangs into, so the caption below is never crossed by it. */
+  margin-bottom: 5px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+}
+.sched-opp-box-announced {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+/* Our own measurement of his slot: the accent goes, so the box reads as a quiet
+   stroke against the announced one's. `--muted` rather than the accent, which is
+   this view's color for a fact. */
+.sched-opp-box-projected {
+  border-color: color-mix(in srgb, var(--muted) 55%, transparent);
+}
+/* His club's rotation, not his own record — the stroke goes **dashed**, which is
+   what this app has meant by "estimated" since the percentile card's first
+   dotted bar. */
+.sched-opp-box-estimated {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--faint) 85%, transparent);
+}
+/* The legend. `bottom: -0.5px` with a half-height translate puts its own center
+   on the *center* of the 1px stroke rather than on the padding box's edge — the
+   half-pixel is the stroke's own half, and without it the word rides a half
+   pixel high and the line reappears under it.
+
+   **Its ground is `var(--cell-bg)` and that is the whole of how the stroke
+   breaks.** The token is the rule this stylesheet already states for the summary
+   table: a cell's ground is *named* rather than assigned, because two things
+   need the same color and must not be able to disagree — here the cell behind
+   the box and the patch of it painted over the stroke. Assigning `--bg` would
+   put a page-colored notch in every even row's zebra stripe and in all four
+   live-role tints; reading the token, the patch is whatever that row resolved.
+   Checked on both tables at all three widths: every legend's computed
+   `background-color` is byte-identical to its own `<td>`'s — two values in play,
+   `rgb(32,33,34)` on the page and `rgb(18,19,20)` on the stripe — and the
+   legend's center sits **0.00px** off the stroke's.
+
+   **The ink stays `--muted` on the two quiet tiers, and that is measured rather
+   than a preference.** A third step down to `--faint` is the obvious way to draw
+   the third tier and it puts a 9px bold label at **3.18:1 on the zebra stripe**
+   in Midnight (3.72 on the page) — under what a label a reader has to *read*
+   owes them, where the percentile card's own `--faint` badge is a quiet
+   secondary number beside a value. `--muted` measures 6.08:1 on that stripe and
+   7.11 on the page, and 5.88/6.94 in Lavender (where `--faint` is 3.35/3.95). So
+   the ladder is carried by the two structural properties — hue, then stroke
+   style — and the text of all three stays legible in both. */
+.sched-sp {
+  position: absolute;
+  left: 50%;
+  bottom: -0.5px;
+  transform: translate(-50%, 50%);
+  padding: 0 3px;
+  background: var(--cell-bg);
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.04em;
+  /* Declared, so the legend's height is the 9px this box reserves half of
+     rather than whatever `normal` resolves to in a font this app does not
+     choose. */
+  line-height: 1;
   color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
 }
-/* Our own measurement of his slot: the fill goes, so the chip reads as an
-   outline against the announced one's solid ground. `--muted` rather than the
-   accent, which is this view's color for a fact. */
-.sched-sp-projected {
-  color: var(--muted);
-  background: none;
-  border-color: color-mix(in srgb, var(--muted) 55%, transparent);
-}
-/* His club's rotation, not his own record — the border goes **dashed**, which is
-   what this app has meant by "estimated" since the percentile card's first dotted
-   bar.
-
-   **The ink stays `--muted`, and that is measured rather than a preference.** A
-   third step down to `--faint` is the obvious way to draw the third tier and it
-   puts a 9px bold label at **3.18:1 on the zebra stripe** in Midnight (3.72 on
-   the page) — under what a chip a reader has to *read* owes them, where the
-   percentile card's own `--faint` badge is a quiet secondary number beside a
-   value. `--muted` measures 6.08:1 on that stripe and 7.11 on the page, and
-   5.88/6.94 in Lavender (where `--faint` is 3.35/3.95). So the ladder is carried
-   by the two structural properties — fill, then border style — and the text of
-   all three stays legible in both. */
+/* Nobody has announced this one. The italic is the caveat, and it is the same
+   one `.sched-vs-projected` above carries about the other club's man. */
+.sched-sp-projected,
 .sched-sp-estimated {
   color: var(--muted);
-  background: none;
-  border-style: dashed;
-  border-color: color-mix(in srgb, var(--faint) 85%, transparent);
+  font-style: italic;
 }
 
 /* The `GS` count takes the same three weights, so the column and the cells it
