@@ -1497,6 +1497,104 @@ already follows for a half with no matchup period in it.
 
 **`Summary` is the second thing on this page to wear the word**, the strip above having a `Summary` tab, which is the *comparison page* rather than a reading of a team. They are one press apart and both are `.view-switch` pills. What tells them apart is that the strip is *whose page* and this is *what about him*, and their titles say so; the alternative was a second word for one idea, which is worse — a manager reading his own week wants the summary of it, and a synonym invented to protect a layout is the app lying about what a control is. Flagged here rather than hidden, because it is the one part of this that a reader could trip on.
 
+#### The dates bar is the band's next line, not the content after it
+
+**The bar was folded onto the roster's rules and still read as too much
+spacing**, and the reason is that the fold was of the bar and not of the space
+around it. Measured at 1200, every property of the two bars agrees — 53px tall
+against 54, 7px padding either side, a 39px row, a 39px face at 13.33px, 36×36
+arrows, the table 1px below — and the gap *above* them did not: **14 on the
+Roster view, 28 here**.
+
+`.mup-chrome` ends 12px under its tools row and then holds 16px clear of what
+follows. The 12 is load-bearing — it is what keeps the band's inset hairline off
+the pills, and the rule above says why it has to be padding rather than a margin
+— so the 16 is what gives. It is a gap to *content*, which is right for the
+Summary page's card and wrong for this: the dates bar is the same object the
+Roster view carries **inside** `.app-chrome`, one line under the view bar.
+
+`.mup-chrome:has(+ .mup-dates) { margin-bottom: 2px }`, and `0` under 640.
+`:has()` rather than a class because nothing about the chrome changes — what
+changes is what follows it, which is what the selector says.
+
+**Measured, gap above the bar:**
+
+| window | Roster view | matchup (before) | matchup (after) |
+| --- | --- | --- | --- |
+| 1200 | 14 | 28 | **14** |
+| 900 | 14 | 28 | **14** |
+| 390 | 12 | 28 | **12** |
+
+The phone case is two pixels and is taken anyway: the point of the rule is that
+the two bars are one object, and a number that matches at three widths and not
+the fourth is a number somebody will re-derive. The gap *below* is 1 on both at
+every width, and the comparison page's card still clears the chrome by its own
+16 — the `:has()` does not reach it.
+
+#### `Summary` left the pill strip, and the row came back onto one line
+
+**It was never a third pill.** The strip's other two say *what kind of thing
+this page is showing* — a table or a stream — where `Summary` says *over which
+days*, which is the question the bar below answers and the one `Schedule` and
+`Projected` qualify. A reader after the matchup's own totals was reaching past
+`Feed` to find them, and the word collided with the `Summary` **tab** one row up
+(the comparison page) while both were `.view-switch` pills told apart only by
+their titles.
+
+**So it is a toggle, folded onto `.research-toggle` / `.schedule-toggle` /
+`.projected-toggle`'s six selector lists** rather than styled to resemble them,
+and the two `Summary`s are now two different shapes — which is what they always
+were: one is *which page you are on*, the other is *a lens over the page you are
+on*. `MatchupReading` still has its three values; what moved is where the
+control lives, not what the page does. Pressing it while on returns to `roster`,
+the reading it is a lens over, which is why it is `aria-pressed` and not a tab.
+It is drawn and pressable in **every** reading — there is no reading it does not
+answer — so it sits outside both ghosts and has nothing to reserve against.
+
+**The union is four controls now**, so the *previous* section's arithmetic is
+superseded (its rule is not): with words the run is 480 and the row needs
+**789.6px** of a box that caps at 800, so the words fit only at a ~900 window
+and up. Squared, the run is 168 and the row needs **477.6**.
+
+**Two thresholds follow, both container queries on `.mup-tools`**, because this
+box is *narrower than the window it is in* — at a 900 window it is already 800,
+at an 800 window it is 768, and a media query cannot see that:
+
+- **`@container (max-width: 789px)`** squares the whole run. Measured, the
+  crossover lands between **822 and 820** of window: 822 keeps the words (icons
+  480), 820 is squares (icons 168).
+- **`@container (max-width: 477px)`** gives `.kind-switch` `order: 1`. Under
+  ~510 the row must wrap *something* — 130.5 + 155.1 + 168 with two group gaps
+  needs 477.6 of the 398 a 430 window leaves — and wrapping is not the question;
+  *which group* wraps is. `Batters | Pitchers` is the one a reader changes least
+  often here, and the pills and the toggles are one question asked twice, so
+  splitting *those* put half a thought under the other half. By `order` rather
+  than by markup, so the DOM keeps the row's question order for a screen reader
+  and the tab sequence, and only the paint moves.
+
+**Measured, what sits on each line** (`?view=league&mup=111&mt=4`):
+
+| window | band | line 1 | line 2 | line 3 |
+| --- | --- | --- | --- | --- |
+| 1400 / 900 | 36 | pills 131 + kind 155 + icons **480** | — | — |
+| 800 / 600 / 510 | 36 | pills 131 + kind 155 + icons **168** | — | — |
+| 500 / 430 / 390 | 84 | pills 131 + icons 168 | kind 155 | — |
+| 320 | 132 | pills 131 | icons 168 | kind 155 |
+
+**The row is one line from 510 up, where it was one line from 822 up** and two
+lines everywhere below. The band is unchanged at 84 between 390 and 500 — the
+reorder buys no height, it spends the same two lines better.
+
+**At 320 it is three lines and stays three.** 131 + 168 with a 12px gap needs
+311 of the 288 that width leaves, so the pills and the toggles cannot share a
+line there whatever the order. That is stated rather than worked around: the
+alternative is shortening `Roster`/`Feed` or the kind switch to glyphs, which
+buys one line at one width and costs every reader above it a control that no
+longer says what it is.
+
+**Equality across the readings survived all of it** — 36 / 36 / 36 at 1400
+through 641, 84 on all three at 500 through 360, 132 on all three at 320.
+
 #### The third pill took the tools row's slack, and the ghost had to be re-derived
 
 **A third reading pill is 88px, and the row had 40.** `.mup-tools` is capped at the 800px card column, and at 1400 the run was `reading 217 · kind 155 · icons` with two 12px gaps. On the roster reading the icons came to **346** (`Schedule` 111 + `Projected` 114 + `Starters` 105) and the total to **741**; on the Feed reading the ghosted pair was still 233 and the order toggle added 99, so the icons came to **452** and the total to **848** — over the column, so the row wrapped **on that reading alone** and the band went 162 → 210. That is a whole line of pinned chrome appearing under the finger that pressed `Feed`, which is the exact fault the ghost exists to prevent, reintroduced by the pill.
@@ -1526,7 +1624,7 @@ already follows for a half with no matchup period in it.
 
 **The app draws this same bar last in `.app-chrome`, whose `padding-bottom` is 0, so the table starts where the bar ends.** Measured at 1400 on the Roster view: the bar runs to y=**168** and the table head begins at y=**169**. `.mup-dates` carried a 12px bottom margin and the same two boxes measured **231** and **244** — the one control the two surfaces share, spending twelve pixels more on one of them than on the other, which is what "the matchup version has too much spacing" turns out to be when it is measured. Folded onto the roster's rule rather than given a smaller number of its own, because the number is *what the box below has to give* and here as there that is nothing: after, the table head is at **232** at 1400, **280** at 390 and **359** at 320, one pixel under the bar in each — and the bar itself is unmoved at 178 / 226 / 305. The Feed reading is unaffected, its first card keeping the 16px `.feed-filters` puts above itself.
 
-The gap *above* the bar is the band's own 16px margin and is left alone: it is `.mup-chrome`'s, shared with the Summary page's card, and it is 16 against the roster bar's 14 — two pixels, against the twelve below.
+The gap *above* the bar was left alone here on the reasoning that it is `.mup-chrome`'s own 16px margin, shared with the Summary page's card, and 16 against the roster bar's 14 — two pixels. **That was measured wrong and has since been fixed** (see *The dates bar is the band's next line* below): 16 is the margin, but `.mup-chrome` also carries 12px of bottom padding inside the same box, so the gap a reader actually sees was **28** against the roster bar's 14. Two pixels was worth leaving; fourteen was the thing that still read as too much spacing after the bar itself had been folded onto the roster's rules.
 
 ### A settled matchup opens on its own days
 

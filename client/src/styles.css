@@ -6358,7 +6358,8 @@ button.start-line:focus-visible {
    the date bar now, whose two chevrons declare the same thing inline for the
    same reason (see `DateControls.tsx`). */
 .schedule-toggle svg,
-.projected-toggle svg {
+.projected-toggle svg,
+.summary-toggle svg {
   flex: none;
 }
 
@@ -7998,7 +7999,8 @@ button.start-line:focus-visible {
    alone. */
 .research-toggle,
 .schedule-toggle,
-.projected-toggle {
+.projected-toggle,
+.summary-toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -8034,20 +8036,23 @@ button.start-line:focus-visible {
    button on a row of tabs, where nothing beside it would say what the glyph
    meant. */
 .schedule-toggle,
-.projected-toggle {
+.projected-toggle,
+.summary-toggle {
   flex: none;
   white-space: nowrap;
 }
 .research-toggle.on,
 .schedule-toggle.on,
-.projected-toggle.on {
+.projected-toggle.on,
+.summary-toggle.on {
   color: var(--accent);
   border-color: color-mix(in srgb, var(--accent) 50%, transparent);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 .research-toggle:focus-visible,
 .schedule-toggle:focus-visible,
-.projected-toggle:focus-visible {
+.projected-toggle:focus-visible,
+.summary-toggle:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
@@ -8611,6 +8616,7 @@ button.start-line:focus-visible {
   .research-toggle-label,
   .schedule-toggle-label,
   .projected-toggle-label,
+  .summary-toggle-label,
   /* **The Rankings copy of the League page's own toggle**, and only that copy —
      scoped to the row it is in rather than to `.lg-proj-label`, because the
      matchup card's is centered on a row of its own with the width for a word.
@@ -8664,7 +8670,8 @@ button.start-line:focus-visible {
      the header already takes — rather than whatever its padding leaves around a
      15px glyph, so the run reads as a set. */
   .schedule-toggle,
-  .projected-toggle {
+  .projected-toggle,
+  .summary-toggle {
     width: var(--control-h);
     padding: 0;
     justify-content: center;
@@ -13978,6 +13985,42 @@ span.mup-move-name:hover {
     inset 0 -1px 0 var(--border),
     var(--shadow-bar);
 }
+/* **The dates bar is the band's next line, not the content after it.**
+   `.mup-chrome` ends 12px under its tools row (the padding above, which is
+   load-bearing — it is what keeps the band's hairline off the pills) and then
+   holds 16px clear of whatever follows. That 16 is a gap to *content*, and it
+   is right for the Summary page's card; the dates bar is not content. It is the
+   same object the Roster view carries **inside** `.app-chrome`, one line under
+   the view bar, and there the gap is **14**.
+
+   Measured before this rule, at 1200: the app's bar sits 14px under
+   `.view-bar` (100 → 114) and this one sat **28** under `.mup-tools`
+   (150 → 178) — double, and the thing that still read as too much spacing after
+   the bar itself had been folded onto the roster's rules and measured identical
+   to it in every other respect (53px tall, 7px padding, a 39px row, 36px
+   arrows, the table 1px below).
+
+   **The earlier pass looked at the margin and not the gap.** It recorded "16
+   against the roster bar's 14 — two pixels" and left it alone, which is true of
+   `margin-bottom` on its own and misses the 12px of padding above it inside the
+   same box. Two pixels was worth leaving; fourteen was not.
+
+   `:has()` rather than a class, because nothing about the chrome changes — what
+   changes is what follows it, which is exactly what the selector says. */
+.mup-chrome:has(+ .mup-dates) {
+  margin-bottom: 2px;
+}
+/* And 12 on a phone, which is what the Roster view's own gap measures there
+   (14 at 1200 and 900, 12 at 390 — the view bar's narrow rhythm). Two pixels,
+   but the whole point of this rule is that the two bars are one object, and a
+   number that matches at three widths and not the fourth is a number somebody
+   will re-derive. After the base rule it overrides, per the file's standing
+   rule about media queries and specificity. */
+@media (max-width: 640px) {
+  .mup-chrome:has(+ .mup-dates) {
+    margin-bottom: 0;
+  }
+}
 .mup-bar {
   display: flex;
   align-items: center;
@@ -14220,6 +14263,75 @@ span.mup-move-name:hover {
   visibility: hidden;
   order: 1;
 }
+/* **The run goes to squares when its words stop fitting, not at a device
+   width.** `.mup-tools` is a container (see the order toggle's own thresholds
+   below), and this row's four groups are a known arithmetic: the two switches
+   are 130.5 + 155.1 and the icon run is 480 with its words, which with two
+   12px group gaps needs **789.6px** of a box that caps at 800. So the words fit
+   only while the card column is nearly full — at a 900 window and up — and
+   below that the row was wrapping the whole icon run onto a second line while
+   four toggles sat there still spelling themselves out.
+
+   Squared, the run is 168 (four 36px squares and three 8px gaps) and the row
+   needs **477.6**, which it has down to a ~510 window. So the threshold buys
+   one line across the whole span between: measured, the row is one line from
+   **510 up** where it was one line from 822 up and two lines everywhere below.
+
+   **It is a container query and not the 640 media rule** that already squares
+   these three on the Roster view. That rule is a statement about a phone; this
+   is a statement about a card column that caps at 800 and is *narrower than the
+   window it is in* — at a 900 window this box is already 800, and at 800 it is
+   768. A media query cannot see that and would have to guess the difference. */
+@container (max-width: 789px) {
+  .mup-tool-icons .schedule-toggle,
+  .mup-tool-icons .projected-toggle,
+  .mup-tool-icons .summary-toggle,
+  .mup-tool-icons .feed-order {
+    width: var(--control-h);
+    padding: 0;
+    justify-content: center;
+  }
+  .mup-tool-icons .schedule-toggle-label,
+  .mup-tool-icons .projected-toggle-label,
+  .mup-tool-icons .summary-toggle-label,
+  .mup-tool-icons .feed-order-word {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}
+
+/* **Below the width where all three groups fit, the *kind* switch is the one
+   that goes.** Under ~510 the row must wrap something: the two switches are
+   130.5 and 155.1 and the squared icon run is 168, which with two group gaps
+   needs 477.6 of the 398 a 430 window leaves. Wrapping is not the question —
+   which group wraps is.
+
+   It is `Batters | Pitchers`. The reading pills and the toggles are one
+   question asked twice — *what am I looking at, and how* — and splitting them
+   across two lines put the answer to the second half under the first with a
+   line break in the middle of a thought. Which kind of player is a different
+   question, and it is the one a reader changes least often on this page. So it
+   takes the second line whole, by `order` rather than by being moved in the
+   markup: the DOM keeps the row's own question order (which page, which kind,
+   which reading of it, over which days) for a screen reader and for the tab
+   sequence, and only the paint moves.
+
+   Measured at 430: the first line is the pills and the four squares at 310.5 of
+   398, the second is the kind switch. The band is unchanged at 84 — this buys
+   no height, it spends the same two lines better. */
+@container (max-width: 477px) {
+  .mup-tools .kind-switch {
+    order: 1;
+  }
+}
+
 /* **Every reading carries the union**, and the two special cases that used to
    sit here are gone. The Feed reading reserved *one* of the modes, and below
    640 it reserved *nothing*, both on arithmetic that has since stopped being

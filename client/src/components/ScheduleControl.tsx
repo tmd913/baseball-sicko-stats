@@ -55,8 +55,8 @@ export function ScheduleToggle({
     <button
       type="button"
       /* Folded onto `.research-toggle`'s selector list rather than styled anew,
-         so it is the same object as the board's Watchlist button and the roster
-         row's Starters toggle by construction. A plain switch with no panel, so
+         so it is the same object as the board's Watchlist button and the
+         matchup row's Summary toggle by construction. A plain switch with no panel, so
          it takes `.on` and never `.active`. */
       className={`schedule-toggle${on ? ' on' : ''}`}
       aria-pressed={on}
