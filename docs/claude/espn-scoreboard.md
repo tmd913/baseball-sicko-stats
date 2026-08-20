@@ -950,6 +950,56 @@ are the same month. The same figure is a reliever's appearance rate.
 ratio cannot tell *hurt* from *rested* — see *Hurt is not rested* below, which is
 the correction applied to it.
 
+### A reliever's appearance is a share, not a whole outing
+
+**The same figure was applied to a reliever the wrong way round, and on a short
+span it answered nothing at all.** `projectOnePitcher` took his appearance rate,
+rounded the span to a **whole number of outings** — `Math.round(clubGames ×
+rate)` — and projected exactly that many. A bullpen arm is used in something like
+two fifths of his club's games and `Math.round(0.4)` is 0, so over a single date
+he had no appearance to be projected into: `chances` came back 0, the line came
+back null, and the Roster view's projected reading drew him as a row of dashes
+beside a hitter who had a fractional line on the same day. Measured over the
+twelve busiest relievers in baseball on 2026-08-21, every one of their clubs
+playing: **5 of 12 answered `chances 0`**.
+
+**The rounding was wrong on long spans too, and quietly.** It discarded the
+fraction every time — Sam Moll over three days is 3 × 0.44 = 1.32 appearances,
+filed as 1 — and it took `games.slice(0, count)`, the **first** N games of the
+span, so his opponent-quality multipliers came off the front of the week and none
+of the back of it. The per-game `mults` array exists precisely so a soft
+three-game set and a brutal two-game one are projected on both rather than on
+their average; slicing the front is not averaging, it is front-loading.
+
+**So `projectPitcher` gained an `appearanceShare`, which is `projectBatter`'s
+`playShare` arriving on the pitching side.** A starter passes the default 1 and
+`mults` is one entry per *turn*, a turn being a whole outing. A reliever passes
+his rate and `mults` is one entry per *club game*, each worth that share of an
+outing. Every rate under the function is per **out**, so scaling the outs scales
+the whole line; the four per-*appearance* figures (win, loss, save, hold) take
+the share explicitly.
+
+**This is what the seat side of the same file already believed.**
+`pitcherCandidate` values a reliever's day as `day.set(g.date, rate)` — a
+fraction — and *The seat goes by what the day is worth* below compares "a
+0.4-of-an-appearance reliever" against a starter's whole one. The planner and the
+projection were answering one question two ways, in one file.
+
+**Measured, before → after.** On a one-day span, `chances 0` and a null line on
+**5 of 12** busy relievers → **0 of 12**, the rest reading 0.4–0.6 of an
+appearance. On three days the whole numbers become fractions at the same level
+(Moll `1 → 1.4`, Tyler Rogers `2 → 1.5`, Eduard Bazardo `2 → 1.6`); on seven the
+level is where it was (Rogers `3 → 3`, Bazardo `4 → 3.8`, Moll `3 → 3.3`), which
+is the check that this is a change of *resolution* rather than of calibration.
+Starters are untouched to the digit at every span, `appearanceShare` defaulting
+to 1.
+
+**Nothing is versioned by it.** No blob in this file is written to disk — the
+context is memoized in memory on the matchup's own minute — and the wire shape is
+unchanged. The one field whose meaning moves is `EspnProjectedSide.reliefGames`,
+integer to fraction, which `hitterGames` beside it has always been and which
+nothing in either workspace reads.
+
 **No single adjustment may move a figure by more than a fifth** (`ADJ_CLAMP`),
 and every one of them is clamped before use and their product clamped again. Each
 is a ratio of two measured figures and a ratio has no upper bound: a pitcher with

@@ -1,6 +1,6 @@
 ---
 name: sicko-roster
-description: The Roster view — the summary table and its identity block, the headshot marks, the live-role color legend, the opponent cell, the Starters filter, the Schedule view (days ahead in place of stats), the Projected reading, and the full-page mode all three wide tables share. Use when editing SummaryTable.tsx, PlayerIdentity.tsx, PhotoStatus.tsx, schedule.tsx, ScheduleControl.tsx, StartersToggle.tsx or ExpandButton.tsx; when a table row height, column width, sticky column, bleed or seam is wrong; or when adding a column to the roster table.
+description: The Roster view — the summary table and its identity block, the headshot marks, the live-role color legend, the opponent cell, the Schedule view (days ahead in place of stats), the Projected reading, and the full-page mode all three wide tables share. Use when editing SummaryTable.tsx, PlayerIdentity.tsx, PhotoStatus.tsx, schedule.tsx, ScheduleControl.tsx or ExpandButton.tsx; when a table row height, column width, sticky column, bleed or seam is wrong; or when adding a column to the roster table.
 ---
 
 # The Roster view
@@ -19,8 +19,8 @@ from. Do not change a spacing value here without re-measuring the set.
   summary table's columns and the opponent cell in its three states; the shared
   `PlayerIdentity` block (cap logo, position, handedness) and `PhotoStatus`
   marks; the four live-role tints and the legend under the table; the sub-pixel
-  seam cover and why it must go through `--cell-bg`; the `Starters` filter and
-  how it projects days rather than rows; the **Schedule view**; the
+  seam cover and why it must go through `--cell-bg`; the **Schedule view** and
+  the `SP` border round a start day; the
   **Projected** reading and `/api/projection/roster`; and the full-page mode,
   `--table-bleed` and the sticky-column arithmetic shared with the other two
   wide tables.

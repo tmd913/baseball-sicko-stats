@@ -6371,18 +6371,17 @@ button.start-line:focus-visible {
   font-size: 13px;
   font-weight: 700;
 }
-/* `flex: none` is load-bearing on all three, not decoration: an `<svg>` in a
-   flex row is a flex *item*, and its `width` attribute is a basis it will
-   shrink below the moment the line is tight. The starters toggle was missing it
-   and its 20px clipboard rendered **10px wide by 20 tall** — squashed to half
-   its width on the very button where the glyph is all there is. That, rather
-   than the number in the attribute, is why raising it from 15 to 17 to 20 kept
-   looking small.
+/* `flex: none` is load-bearing on both, not decoration: an `<svg>` in a flex
+   row is a flex *item*, and its `width` attribute is a basis it will shrink
+   below the moment the line is tight. Measured on the button this family was
+   first written for, whose 20px glyph was missing it: it rendered **10px wide
+   by 20 tall** — squashed to half its width on the very button where the glyph
+   is all there is. That, rather than the number in the attribute, is why
+   raising it from 15 to 17 to 20 kept looking small.
 
-   The calendar was the fourth member and took a muted fill of its own; it is
+   The calendar was another member and took a muted fill of its own; it is
    the date bar now, whose two chevrons declare the same thing inline for the
    same reason (see `DateControls.tsx`). */
-.starters-toggle svg,
 .schedule-toggle svg,
 .projected-toggle svg {
   flex: none;
@@ -8013,15 +8012,16 @@ button.start-line:focus-visible {
 }
 
 /* ---- Disclosure bar: Search and Filters, each behind its own button ----
-   `.starters-toggle` — the summary table's "only today's starters" filter, up
-   in the roster row — is folded into every one of these lists rather than
-   restyled to resemble them. It is the same object as the board's own
-   Watchlist button: a plain toggle with no panel, deciding who is in a table,
-   which is why it takes `.on` and never `.active` and why it reads identically
-   by construction. (Qualified was the closer twin of the two and is gone —
-   see `research.ts`.) */
+   The roster row's two mode toggles — `.schedule-toggle` and
+   `.projected-toggle` — are folded into every one of these lists rather than
+   restyled to resemble them. They are the same object as the board's own
+   Watchlist button: a plain toggle with no panel, deciding what a table shows,
+   which is why they take `.on` and never `.active` and why they read
+   identically by construction. (Qualified was the closest twin of the family
+   and is gone — see `research.ts`.) The `Starters` filter was the fourth
+   member and is gone with it; nothing in these lists was written for it
+   alone. */
 .research-toggle,
-.starters-toggle,
 .schedule-toggle,
 .projected-toggle {
   display: inline-flex;
@@ -8039,7 +8039,6 @@ button.start-line:focus-visible {
   cursor: pointer;
 }
 .research-toggle:hover,
-.starters-toggle:hover,
 .schedule-toggle:hover,
 .projected-toggle:hover {
   color: var(--text);
@@ -8059,14 +8058,12 @@ button.start-line:focus-visible {
    phone, which is right for four icons in a known run and wrong for a lone
    button on a row of tabs, where nothing beside it would say what the glyph
    meant. */
-.starters-toggle,
 .schedule-toggle,
 .projected-toggle {
   flex: none;
   white-space: nowrap;
 }
 .research-toggle.on,
-.starters-toggle.on,
 .schedule-toggle.on,
 .projected-toggle.on {
   color: var(--accent);
@@ -8074,7 +8071,6 @@ button.start-line:focus-visible {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 .research-toggle:focus-visible,
-.starters-toggle:focus-visible,
 .schedule-toggle:focus-visible,
 .projected-toggle:focus-visible {
   outline: 2px solid var(--accent);
@@ -8668,19 +8664,18 @@ button.start-line:focus-visible {
   }
 }
 
-/* ---- The roster row's filters on a phone ------------------------------------
-   Starters (and the mode toggles beside it) go to their glyphs under 640px,
-   which is what gets the roster tabs and the filters onto one line — the run is
-   84px where two labels alone were 174. The rules live *here*, below the whole
-   `.research-toggle` family, and not up beside the buttons' own base rules
-   where they were first written: a media query adds no specificity, so
-   `padding: 0` there lost to `.research-toggle, .starters-toggle { padding: 0
-   12px }` five hundred lines further down, and the 20px clipboard was
-   overflowing a 12px content box — centered, so it *looked* right, and
-   shrinking to fit it before the glyph was given `flex: none`. That is the same
-   trap `.date-row .date-presets` and the `.research-bar` dropdowns are each
-   written two classes deep to avoid; the honest fix for a whole block is to put
-   it after what it overrides.
+/* ---- The roster row's mode toggles on a phone --------------------------------
+   Schedule and Projected go to their glyphs under 640px, which is what gets the
+   roster tabs and the toggles onto one line — the run is 84px where two labels
+   alone were 174. The rules live *here*, below the whole `.research-toggle`
+   family, and not up beside the buttons' own base rules where they were first
+   written: a media query adds no specificity, so `padding: 0` there lost to
+   `.research-toggle, .schedule-toggle { padding: 0 12px }` five hundred lines
+   further down, and the 20px glyph was overflowing a 12px content box —
+   centered, so it *looked* right, and shrinking to fit it before the glyph was
+   given `flex: none`. That is the same trap `.date-row .date-presets` and the
+   `.research-bar` dropdowns are each written two classes deep to avoid; the
+   honest fix for a whole block is to put it after what it overrides.
 
    **The calendar used to be the second of the pair**, with its range on a
    bubble because it was the one button in the row that could not lose its
@@ -8691,23 +8686,11 @@ button.start-line:focus-visible {
   /* Each becomes the app's own 36px square — the shape every icon button in
      the header already takes — rather than whatever its padding leaves around a
      15px glyph, so the run reads as a set. */
-  .starters-toggle,
   .schedule-toggle,
   .projected-toggle {
     width: var(--control-h);
     padding: 0;
     justify-content: center;
-  }
-  .starters-toggle-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
   }
 }
 
@@ -8855,7 +8838,7 @@ button.start-line:focus-visible {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    /* The trap `.starters-toggle`'s clipboard already documents: an svg in a
+    /* The trap `.research-toggle svg`'s rule already documents: an svg in a
        flex row is a flex item, and its `width` is a basis it will shrink below
        the moment the line is tight — on a button that is nothing but the glyph,
        that is the whole of the button. */
@@ -11953,11 +11936,11 @@ button.start-line:focus-visible {
    table.
 
    **The toggle itself has no rules of its own**: `.schedule-toggle` is folded
-   into `.research-toggle`/`.starters-toggle`'s five selector lists above — the
-   base, the hover, the `flex: none`, the `.on` fill, the focus ring — plus the
-   glyph's `flex: none` and the two narrow-screen blocks, so it is the same
-   object as the board's Watchlist button and the roster row's Starters filter
-   by construction rather than by resemblance. */
+   into `.research-toggle`'s five selector lists above — the base, the hover,
+   the `flex: none`, the `.on` fill, the focus ring — plus the glyph's `flex:
+   none` and the two narrow-screen blocks, so it is the same object as the
+   board's Watchlist button and the roster row's `Projected` toggle by
+   construction rather than by resemblance. */
 
 /* `Next 7` / `Next 14`, the app's segmented switch (it carries `.view-switch`
    and its tabs `.view-tab`, so it inherits outright). `flex: none` for the
@@ -11996,9 +11979,15 @@ button.start-line:focus-visible {
   align-items: flex-end;
   line-height: 1.2;
 }
-/* A doubleheader draws both matchups stacked, so two cells sit in one td. */
+/* A doubleheader draws both matchups stacked, so two cells sit in one td.
+   **5px rather than the 2 it was**, and the number is the `SP` legend's own: on
+   a start day the legend hangs half its 9px line below the box, which is below
+   the *cell* now that the box holds both of the cell's lines (see
+   `.sched-opp-box`). 2px of gap left the top cell's legend crossing the bottom
+   one's opponent; 5 is the same half-legend the box reserves above the stroke,
+   and it is only ever paid on a day a club plays twice. */
 .sched-cell + .sched-cell {
-  margin-top: 2px;
+  margin-top: 5px;
 }
 .sched-opp {
   font-size: 12px;
@@ -12161,16 +12150,46 @@ button.start-line:focus-visible {
      box came out 17.59px tall round a 14.39px line, which put the cell 0.59px
      over its budget and the row at 58.59. A flex container has no strut: the box
      is its content, measured **16.39**, and it cannot drift if the opponent's
-     own size ever changes. */
+     own size ever changes.
+
+     **A column now, because the box holds both lines**: the opponent and the
+     starter the other club is throwing. `flex-end` so the two share the right
+     edge the whole cell is aligned on (`.sched-cell`), which is also what keeps
+     the negative right margin below correct for *both* of them — the pull is
+     4px of padding plus a 1px stroke, and that is the same 5px whichever line
+     happens to be the wider. */
   display: flex;
+  flex-direction: column;
+  align-items: flex-end;
   padding: 0 4px;
   margin-right: -5px;
-  /* The legend hangs half its 9px line under the stroke; this is the room it
-     hangs into, so the caption below is never crossed by it. */
-  margin-bottom: 5px;
+  /* **The room the legend hangs into, moved inside the box.** The legend is
+     centered on the bottom stroke, so half its line falls above that stroke and
+     half below; this is the half above, and it is padding rather than the
+     `margin-bottom: 5px` this replaces because the caption it used to clear is
+     now *inside* the box. Without it the legend's opaque `--cell-bg` patch
+     lands on the bottom four pixels of `RHP Alcantara` and punches a
+     nineteen-pixel notch through the middle of a name (measured: the legend's
+     box and the caption's overlapped by 19.42 × 4.00 before this padding, and
+     by 0 × 0 after).
+
+     **Reserved by arithmetic rather than by a laid-out ghost**, which is the one
+     place this app's "reserve the worst case, don't declare a height" rule is
+     answered with a number: the worst case here is *not* a function of a font
+     nobody chose, because `.sched-sp` declares its own `font-size: 9px` and
+     `line-height: 1` — the legend is 9px tall by construction, and 5 is the half
+     of it that hangs upward. A ghost laid out in the flow would reserve the
+     whole 9 where only half is wanted, and cost the row 4px for nothing.
+
+     The other half hangs *below* the box, out of flow, into the `<td>`'s own
+     12px bottom padding — which is where the 5px margin used to put it, so the
+     cell is the same height either side of this change: **32.39px** on a start
+     day with a starter named, and the row **58**. */
+  padding-bottom: 5px;
   border: 1px solid transparent;
   border-radius: 5px;
 }
+
 .sched-opp-box-announced {
   border-color: color-mix(in srgb, var(--accent) 45%, transparent);
 }
@@ -12519,7 +12538,7 @@ button.start-line:focus-visible {
 /* `.research-toggle` outright — folded onto in the JSX rather than restyled here
    — so it is the app's plain toggle with `.on` for "this is in force". `flex:
    none` and `nowrap` for its place in a wrapping row, the two declarations
-   `.starters-toggle` and (until it became the date bar) `.date-toggle` carry
+   `.schedule-toggle` and (until it became the date bar) `.date-toggle` carry
    for the same reason. */
 .lg-proj-btn {
   flex: none;
@@ -13998,8 +14017,17 @@ span.mup-move-name:hover {
 
    `display: contents` on the reading that has them, so the two buttons are the
    flex items of the run they are in rather than a box inside it — the roster
-   reading's row is laid out exactly as it was before this wrapper existed. */
-.mup-tool-modes {
+   reading's row is laid out exactly as it was before this wrapper existed.
+
+   **`.mup-tool-order` is the same object one reading over**, folded onto this
+   selector list rather than given rules that agree today: the feed's order
+   toggle is now ghosted on the *roster* reading exactly as the pair is ghosted
+   on the feed's. It was not, while the roster reading carried a third toggle
+   and so was the wider run; with that one gone the reservation had to run both
+   ways or the band changed height under the finger that crossed (measured at
+   320: **84 → 132** on a press of `Feed`, and 84 → 84 with this). */
+.mup-tool-modes,
+.mup-tool-order {
   display: contents;
 }
 /* The mode toggles and the filter as one group, so the row breaks between the
@@ -14028,7 +14056,8 @@ span.mup-move-name:hover {
    correct at every width, with no number in it. Measured before it: at 320 the
    feed's lone `Starters` clipboard sat **90px in from the left edge** of its own
    line, the ghost holding its place ahead of it. */
-.mup-tool-modes.mup-tool-ghost {
+.mup-tool-modes.mup-tool-ghost,
+.mup-tool-order.mup-tool-ghost {
   display: flex;
   align-items: center;
   gap: 8px;

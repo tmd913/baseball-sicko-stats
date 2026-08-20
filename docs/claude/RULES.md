@@ -127,8 +127,9 @@ will one day differ.
 **A media query adds no specificity.** A rule inside one loses to a later rule
 of equal specificity, so a narrow-screen block must sit **after** everything it
 overrides. This has bitten five times (the phone rhythm block at the end of the
-file, `.date-row .date-presets` going two classes deep, the `.starters-toggle`
-glyph rules moving below `.research-toggle`, the `text-box` `@supports` block,
+file, `.date-row .date-presets` going two classes deep, the roster row's
+toggle-glyph rules moving below `.research-toggle`, the `text-box` `@supports`
+block,
 the `.mup-*` narrow blocks). The same holds for `@supports`.
 
 **`font: inherit` is a shorthand and resets `font-size`.** Declare

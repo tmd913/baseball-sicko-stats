@@ -69,7 +69,6 @@ export default function LeagueTeam({
   end,
   kind,
   reading,
-  starters,
   lens,
   onLens,
   oldestFirst,
@@ -87,16 +86,11 @@ export default function LeagueTeam({
   kind: PlayerKind;
   /** The table or the stream: the app's own two roster views, as two tabs. */
   reading: 'roster' | 'feed';
-  /** **Only the players this manager actually had in his lineup**, and over a
-   *  range only the days he had them there. The overlay owns the flag so it
-   *  survives crossing from one manager to the other, exactly as the reading,
-   *  the kind and the dates do. */
-  starters: boolean;
   /** **Which kind of play the feed reading draws** — the app's own single-select
    *  lens, `all` being the whole stream. The overlay owns it for the reason it
-   *  owns the reading, the kind, the dates and `starters`; what this page owns
-   *  is *where the row is drawn*, which is at the head of the stream and inside
-   *  the same guard as it. */
+   *  owns the reading, the kind and the dates; what this page owns is *where
+   *  the row is drawn*, which is at the head of the stream and inside the same
+   *  guard as it. */
   lens: FeedLens;
   onLens: (lens: FeedLens) => void;
   /** Which way the stream runs, and the press that turns it — the overlay's,
@@ -248,7 +242,6 @@ export default function LeagueTeam({
   /** The stream's identity: which kind, over which days — App's own `feedKey`,
    *  and what both the remount and the paging position are keyed by. */
   const feedKey = `${kind}-${start}-${end}`;
-  const perDay = byDate !== null && dates.length > 1;
 
   /**
    * **The app's own projection, over somebody else's lineup.**
@@ -266,17 +259,10 @@ export default function LeagueTeam({
     const startingIds = new Set((roster ?? []).flatMap((p) => (p.starting && p.mlbId !== null ? [p.mlbId] : [])));
     return projectStarters(kindCards, dates, byDate, (r) => startingIds.has(r.id));
   }, [kindCards, roster, byDate, dates]);
-  const cards = starters ? starterCards : kindCards;
   /**
    * **The same answer as a set of player keys**, for the summary table's `Total`
    * divider — `SummaryTable.tsx::splitStarters`, and App does this on its own
    * roster in the same two lines.
-   *
-   * Computed whether the button is pressed or not, for the reason it is over
-   * there: the divider needs the set the button uses, and a second test written
-   * for it is a second test that will one day disagree with the button —
-   * silently, the button narrowing to one set while the line above the total
-   * drew another.
    */
   const starterKeys = useMemo(() => new Set(starterCards.map(playerKey)), [starterCards]);
 
@@ -306,35 +292,12 @@ export default function LeagueTeam({
       </div>
     );
   }
-  /* **Two ways to empty this page, two messages**, which is the app's own rule
-     for its own roster views: the message above names the days, and a page
-     narrowed by a button in the row above has to name that button instead. The
-     wording is the one that is true here — it is *his* lineup, not the
-     reader's, so neither of the app's own sentences would do. */
-  if (cards.length === 0) {
-    return (
-      <div className="empty-state">
-        <p className="empty-title">
-          {/* `possessive` rather than a plain `+ "’s"`, which on this league
-              produced `The Homewreckers’s` — the same typo the slot chip's own
-              owner already avoids, and the reason that helper is above. */}
-          {perDay
-            ? `Nothing to show — none of these ${kinds} were in ${possessive(who)} lineup on any of these days`
-            : `Nothing to show — none of these ${kinds} are in ${possessive(who)} lineup`}
-        </p>
-        <p>
-          Turn off “Starters” in the row above to see his whole team — the days he had these
-          players on his bench or his IL are what it is leaving out.
-        </p>
-      </div>
-    );
-  }
 
   return (
     <FantasyRosterContext.Provider value={slots}>
       {reading === 'roster' ? (
         <SummaryTable
-          reports={cards}
+          reports={kindCards}
           onOpenDetails={onOpenDetails}
           schedule={schedule}
           projection={projection}
@@ -360,7 +323,7 @@ export default function LeagueTeam({
               is his whole outing rather than a play, so no pill here could match
               one and passing the lens through would empty the pitcher feed on
               behalf of a control that tab does not offer. The *state* is the
-              overlay's and survives the excursion, exactly as `starters` does. */}
+              overlay's and survives the excursion. */}
           {/* **The order toggle has left this row for `mup-tools`**, which is
               the Feed view's own move one page along: there it went to the
               pinned tab row, here to this page's control run, and the reason is
@@ -377,7 +340,7 @@ export default function LeagueTeam({
                list read through a lens rather than another list, and App does
                not key on it either. */
             key={feedKey}
-            reports={cards}
+            reports={kindCards}
             kind={kind}
             onOpenDetails={onOpenDetails}
             shown={shown.current[feedKey] ?? FEED_PAGE_SIZE}
